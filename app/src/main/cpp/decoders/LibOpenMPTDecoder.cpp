@@ -89,10 +89,5 @@ int LibOpenMPTDecoder::getChannelCount() {
 }
 
 std::vector<std::string> LibOpenMPTDecoder::getSupportedExtensions() {
-    // Common tracker formats
-    return {
-        "mod", "s3m", "xm", "it", "mptm", "stm", "nst", "m15", "wow", "ult", "669",
-        "mtm", "med", "far", "mdl", "ams", "dsm", "amf", "okta", "dmf", "ptm", "dbm",
-        "mt2", "psm", "j2b"
-    };
+    return openmpt::get_supported_extensions();
 }

@@ -262,6 +262,10 @@ int FFmpegDecoder::getChannelCount() {
 
 std::vector<std::string> FFmpegDecoder::getSupportedExtensions() {
     return {
-        "mp3", "flac", "ogg", "m4a", "wav", "aac", "wma", "opus", "ape", "wv"
+        // Common Audio
+        "mp3", "flac", "ogg", "m4a", "wav", "aac", "wma", "opus", "ape", "wv",
+        "alac", "mpc", "aiff", "aif", "amr", "awb", "ac3", "dts", "ra", "rm",
+        "tta", "shn", "voc", "au", "snd", "oga", "mka", "weba", "caf", "qcp",
+        "dsf", "dff", "mlp", "truehd", "mp2", "mp1"
     };
 }

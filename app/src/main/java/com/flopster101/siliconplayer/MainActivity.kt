@@ -12,7 +12,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -1956,11 +1958,11 @@ private fun SettingsScreen(
     onOpenMptSampleRateChanged: (Int) -> Unit,
     onClearRecentHistory: () -> Unit
 ) {
-    val screenTitle = when (route) {
-        SettingsRoute.Root -> "Settings"
+    val secondaryTitle = when (route) {
+        SettingsRoute.Root -> null
         SettingsRoute.AudioPlugins -> "Audio plugins"
-        SettingsRoute.PluginFfmpeg -> "FFmpeg"
-        SettingsRoute.PluginOpenMpt -> "OpenMPT"
+        SettingsRoute.PluginFfmpeg -> "FFmpeg plugin settings"
+        SettingsRoute.PluginOpenMpt -> "OpenMPT plugin settings"
         SettingsRoute.GeneralAudio -> "General audio"
         SettingsRoute.Player -> "Player settings"
         SettingsRoute.Misc -> "Misc settings"
@@ -1971,7 +1973,7 @@ private fun SettingsScreen(
     androidx.compose.material3.Scaffold(
         topBar = {
             androidx.compose.material3.TopAppBar(
-                title = { Text(screenTitle) },
+                title = { Text("Settings") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -1983,45 +1985,79 @@ private fun SettingsScreen(
             )
         }
     ) { paddingValues ->
-        AnimatedContent(
-            targetState = route,
-            transitionSpec = {
-                val forward = settingsRouteOrder(targetState) >= settingsRouteOrder(initialState)
-                val enter = slideInHorizontally(
-                    initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth / 4 },
-                    animationSpec = tween(
-                        durationMillis = PAGE_NAV_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                ) + fadeIn(
-                    animationSpec = tween(
-                        durationMillis = 210,
-                        delayMillis = 60,
-                        easing = LinearOutSlowInEasing
-                    )
-                )
-                val exit = slideOutHorizontally(
-                    targetOffsetX = { fullWidth -> if (forward) -fullWidth / 4 else fullWidth / 4 },
-                    animationSpec = tween(
-                        durationMillis = PAGE_NAV_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                ) + fadeOut(
-                    animationSpec = tween(
-                        durationMillis = 120,
-                        easing = FastOutLinearInEasing
-                    )
-                )
-                enter togetherWith exit
-            },
-            label = "settingsRouteTransition",
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                when (it) {
+            AnimatedVisibility(
+                visible = secondaryTitle != null,
+                enter = fadeIn(animationSpec = tween(160)) + expandVertically(
+                    animationSpec = tween(180, easing = LinearOutSlowInEasing),
+                    expandFrom = Alignment.Top
+                ),
+                exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(
+                    animationSpec = tween(150, easing = FastOutLinearInEasing),
+                    shrinkTowards = Alignment.Top
+                )
+            ) {
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = secondaryTitle.orEmpty(),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                        androidx.compose.material3.HorizontalDivider()
+                    }
+                }
+            }
+
+            AnimatedContent(
+                targetState = route,
+                transitionSpec = {
+                    val forward = settingsRouteOrder(targetState) >= settingsRouteOrder(initialState)
+                    val enter = slideInHorizontally(
+                        initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth / 4 },
+                        animationSpec = tween(
+                            durationMillis = PAGE_NAV_DURATION_MS,
+                            easing = FastOutSlowInEasing
+                        )
+                    ) + fadeIn(
+                        animationSpec = tween(
+                            durationMillis = 210,
+                            delayMillis = 60,
+                            easing = LinearOutSlowInEasing
+                        )
+                    )
+                    val exit = slideOutHorizontally(
+                        targetOffsetX = { fullWidth -> if (forward) -fullWidth / 4 else fullWidth / 4 },
+                        animationSpec = tween(
+                            durationMillis = PAGE_NAV_DURATION_MS,
+                            easing = FastOutSlowInEasing
+                        )
+                    ) + fadeOut(
+                        animationSpec = tween(
+                            durationMillis = 120,
+                            easing = FastOutLinearInEasing
+                        )
+                    )
+                    enter togetherWith exit
+                },
+                label = "settingsRouteTransition",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    when (it) {
                     SettingsRoute.Root -> {
                         SettingsSectionLabel("Audio")
                         SettingsItemCard(
@@ -2183,6 +2219,7 @@ private fun SettingsScreen(
                         onSelectedModeChanged = onThemeModeChanged
                     )
                     SettingsRoute.About -> AboutSettingsBody()
+                }
                 }
             }
         }

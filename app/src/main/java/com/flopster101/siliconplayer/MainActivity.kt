@@ -13,8 +13,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import java.io.File
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import android.os.Environment
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,32 +56,82 @@ fun AppNavigation() {
 
     // Permission handling
     var hasPermission by remember { mutableStateOf(false) }
-    val permissions = if (android.os.Build.VERSION.SDK_INT >= 33) {
-        arrayOf(android.Manifest.permission.READ_MEDIA_AUDIO)
-    } else {
-        arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+
+    // Function to check permissions
+    fun checkPermission(): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= 30) {
+            Environment.isExternalStorageManager()
+        } else {
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.READ_EXTERNAL_STORAGE
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    // Effect to check permission on start and resume
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                hasPermission = checkPermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     val launcher = rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
-    ) { result ->
-        hasPermission = result.values.all { it }
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasPermission = isGranted
     }
 
     LaunchedEffect(Unit) {
-        val allGranted = permissions.all {
-            androidx.core.content.ContextCompat.checkSelfPermission(context, it) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-        if (allGranted) {
-            hasPermission = true
-        } else {
-            launcher.launch(permissions)
+        if (!checkPermission()) {
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                try {
+                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                    intent.addCategory("android.intent.category.DEFAULT")
+                    intent.data = Uri.parse(String.format("package:%s", context.packageName))
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    val intent = Intent()
+                    intent.action = Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
+                    context.startActivity(intent)
+                }
+            } else {
+                launcher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+            }
         }
     }
 
     if (!hasPermission) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Please grant storage permissions to access audio files.")
+            androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Please grant storage permissions to access audio files.")
+                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(16.dp))
+                androidx.compose.material3.Button(onClick = {
+                    if (android.os.Build.VERSION.SDK_INT >= 30) {
+                        try {
+                            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                            intent.addCategory("android.intent.category.DEFAULT")
+                            intent.data = Uri.parse(String.format("package:%s", context.packageName))
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            val intent = Intent()
+                            intent.action = Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
+                            context.startActivity(intent)
+                        }
+                    } else {
+                        launcher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                    }
+                }) {
+                    Text("Grant Permission")
+                }
+            }
         }
         return
     }

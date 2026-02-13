@@ -7,6 +7,20 @@ import android.media.MediaMetadataRetriever
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -87,6 +101,26 @@ private enum class SettingsRoute {
     Ui,
     About
 }
+
+private fun mainViewOrder(view: MainView): Int = when (view) {
+    MainView.Home -> 0
+    MainView.Browser -> 1
+    MainView.Settings -> 2
+}
+
+private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
+    SettingsRoute.Root -> 0
+    SettingsRoute.AudioPlugins -> 1
+    SettingsRoute.PluginFfmpeg -> 2
+    SettingsRoute.PluginOpenMpt -> 2
+    SettingsRoute.GeneralAudio -> 1
+    SettingsRoute.Player -> 1
+    SettingsRoute.Misc -> 1
+    SettingsRoute.Ui -> 1
+    SettingsRoute.About -> 1
+}
+
+private const val PAGE_NAV_DURATION_MS = 300
 
 private object AppPreferenceKeys {
     const val PREFS_NAME = "silicon_player_settings"
@@ -278,7 +312,11 @@ fun AppNavigation() {
     }
 
     val isMiniPlayerVisible = isPlayerSurfaceVisible && !isPlayerExpanded
-    val miniPlayerListInset = if (isMiniPlayerVisible && currentView == MainView.Browser) 108.dp else 0.dp
+    val miniPlayerInsetTarget = if (isMiniPlayerVisible && currentView == MainView.Browser) 108.dp else 0.dp
+    val miniPlayerListInset by animateDpAsState(
+        targetValue = miniPlayerInsetTarget,
+        label = "miniPlayerListInset"
+    )
     val stopAndEmptyTrack: () -> Unit = {
         activity.stopEngine()
         selectedFile = null
@@ -312,75 +350,114 @@ fun AppNavigation() {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        when (currentView) {
-            MainView.Home -> HomeScreen(
-                selectedTrack = selectedFile,
-                onOpenLibrary = { currentView = MainView.Browser },
-                onOpenSettings = {
-                    settingsRoute = SettingsRoute.Root
-                    currentView = MainView.Settings
-                }
-            )
-            MainView.Browser -> com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
-                repository = repository,
-                bottomContentPadding = miniPlayerListInset,
-                backHandlingEnabled = !isPlayerExpanded,
-                onExitBrowser = { currentView = MainView.Home },
-                onOpenSettings = {
-                    settingsRoute = SettingsRoute.Root
-                    currentView = MainView.Settings
-                },
-                onFileSelected = { file ->
-                    activity.stopEngine()
-                    isPlaying = false
-                    selectedFile = file
-                    isPlayerSurfaceVisible = true
-                    activity.loadAudio(file.absolutePath)
-                    metadataTitle = activity.getTrackTitle()
-                    metadataArtist = activity.getTrackArtist()
-                    metadataSampleRate = activity.getTrackSampleRate()
-                    metadataChannelCount = activity.getTrackChannelCount()
-                    metadataBitDepthLabel = activity.getTrackBitDepthLabel()
-                    duration = activity.getDuration()
-                    position = 0.0
-                    artworkBitmap = null
-                    if (autoPlayOnTrackSelect) {
-                        activity.setLooping(looping)
-                        activity.startEngine()
-                        isPlaying = true
+        AnimatedContent(
+            targetState = currentView,
+            transitionSpec = {
+                val forward = mainViewOrder(targetState) >= mainViewOrder(initialState)
+                val enter = slideInHorizontally(
+                    initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth / 4 },
+                    animationSpec = tween(
+                        durationMillis = PAGE_NAV_DURATION_MS,
+                        easing = FastOutSlowInEasing
+                    )
+                ) + fadeIn(
+                    animationSpec = tween(
+                        durationMillis = 210,
+                        delayMillis = 60,
+                        easing = LinearOutSlowInEasing
+                    )
+                )
+                val exit = slideOutHorizontally(
+                    targetOffsetX = { fullWidth -> if (forward) -fullWidth / 4 else fullWidth / 4 },
+                    animationSpec = tween(
+                        durationMillis = PAGE_NAV_DURATION_MS,
+                        easing = FastOutSlowInEasing
+                    )
+                ) + fadeOut(
+                    animationSpec = tween(
+                        durationMillis = 120,
+                        easing = FastOutLinearInEasing
+                    )
+                )
+                enter togetherWith exit
+            },
+            label = "mainViewTransition"
+        ) { targetView ->
+            when (targetView) {
+                MainView.Home -> HomeScreen(
+                    selectedTrack = selectedFile,
+                    onOpenLibrary = { currentView = MainView.Browser },
+                    onOpenSettings = {
+                        settingsRoute = SettingsRoute.Root
+                        currentView = MainView.Settings
                     }
-                    isPlayerExpanded = openPlayerOnTrackSelect
-                }
-            )
-            MainView.Settings -> SettingsScreen(
-                route = settingsRoute,
-                onBack = {
-                    if (settingsRoute != SettingsRoute.Root) {
-                        settingsRoute = when (settingsRoute) {
-                            SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
-                            else -> SettingsRoute.Root
+                )
+                MainView.Browser -> com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
+                    repository = repository,
+                    bottomContentPadding = miniPlayerListInset,
+                    backHandlingEnabled = !isPlayerExpanded,
+                    onExitBrowser = { currentView = MainView.Home },
+                    onOpenSettings = {
+                        settingsRoute = SettingsRoute.Root
+                        currentView = MainView.Settings
+                    },
+                    onFileSelected = { file ->
+                        activity.stopEngine()
+                        isPlaying = false
+                        selectedFile = file
+                        isPlayerSurfaceVisible = true
+                        activity.loadAudio(file.absolutePath)
+                        metadataTitle = activity.getTrackTitle()
+                        metadataArtist = activity.getTrackArtist()
+                        metadataSampleRate = activity.getTrackSampleRate()
+                        metadataChannelCount = activity.getTrackChannelCount()
+                        metadataBitDepthLabel = activity.getTrackBitDepthLabel()
+                        duration = activity.getDuration()
+                        position = 0.0
+                        artworkBitmap = null
+                        if (autoPlayOnTrackSelect) {
+                            activity.setLooping(looping)
+                            activity.startEngine()
+                            isPlaying = true
                         }
-                    } else {
-                        currentView = MainView.Home
+                        isPlayerExpanded = openPlayerOnTrackSelect
                     }
-                },
-                onOpenAudioPlugins = { settingsRoute = SettingsRoute.AudioPlugins },
-                onOpenGeneralAudio = { settingsRoute = SettingsRoute.GeneralAudio },
-                onOpenPlayer = { settingsRoute = SettingsRoute.Player },
-                onOpenMisc = { settingsRoute = SettingsRoute.Misc },
-                onOpenUi = { settingsRoute = SettingsRoute.Ui },
-                onOpenAbout = { settingsRoute = SettingsRoute.About },
-                onOpenFfmpeg = { settingsRoute = SettingsRoute.PluginFfmpeg },
-                onOpenOpenMpt = { settingsRoute = SettingsRoute.PluginOpenMpt },
-                autoPlayOnTrackSelect = autoPlayOnTrackSelect,
-                onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
-                openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it }
-            )
+                )
+                MainView.Settings -> SettingsScreen(
+                    route = settingsRoute,
+                    onBack = {
+                        if (settingsRoute != SettingsRoute.Root) {
+                            settingsRoute = when (settingsRoute) {
+                                SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
+                                else -> SettingsRoute.Root
+                            }
+                        } else {
+                            currentView = MainView.Home
+                        }
+                    },
+                    onOpenAudioPlugins = { settingsRoute = SettingsRoute.AudioPlugins },
+                    onOpenGeneralAudio = { settingsRoute = SettingsRoute.GeneralAudio },
+                    onOpenPlayer = { settingsRoute = SettingsRoute.Player },
+                    onOpenMisc = { settingsRoute = SettingsRoute.Misc },
+                    onOpenUi = { settingsRoute = SettingsRoute.Ui },
+                    onOpenAbout = { settingsRoute = SettingsRoute.About },
+                    onOpenFfmpeg = { settingsRoute = SettingsRoute.PluginFfmpeg },
+                    onOpenOpenMpt = { settingsRoute = SettingsRoute.PluginOpenMpt },
+                    autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+                    onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
+                    openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                    onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it }
+                )
+            }
         }
 
         if (isPlayerSurfaceVisible) {
-            if (!isPlayerExpanded) {
+            AnimatedVisibility(
+                visible = !isPlayerExpanded,
+                enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
                 val dismissState = rememberSwipeToDismissBoxState(
                     positionalThreshold = { totalDistance -> totalDistance * 0.6f },
                     confirmValueChange = { targetValue ->
@@ -397,7 +474,6 @@ fun AppNavigation() {
                 SwipeToDismissBox(
                     state = dismissState,
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
                         .padding(horizontal = 14.dp, vertical = 12.dp),
                     backgroundContent = {},
                     enableDismissFromStartToEnd = !isPlaying,
@@ -433,7 +509,12 @@ fun AppNavigation() {
                         onStopAndClear = stopAndEmptyTrack
                     )
                 }
-            } else {
+            }
+            AnimatedVisibility(
+                visible = isPlayerExpanded,
+                enter = slideInVertically(initialOffsetY = { it / 3 }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it / 3 }) + fadeOut()
+            ) {
                 com.flopster101.siliconplayer.ui.screens.PlayerScreen(
                     file = selectedFile,
                     onBack = { isPlayerExpanded = false },
@@ -624,121 +705,154 @@ private fun SettingsScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        AnimatedContent(
+            targetState = route,
+            transitionSpec = {
+                val forward = settingsRouteOrder(targetState) >= settingsRouteOrder(initialState)
+                val enter = slideInHorizontally(
+                    initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth / 4 },
+                    animationSpec = tween(
+                        durationMillis = PAGE_NAV_DURATION_MS,
+                        easing = FastOutSlowInEasing
+                    )
+                ) + fadeIn(
+                    animationSpec = tween(
+                        durationMillis = 210,
+                        delayMillis = 60,
+                        easing = LinearOutSlowInEasing
+                    )
+                )
+                val exit = slideOutHorizontally(
+                    targetOffsetX = { fullWidth -> if (forward) -fullWidth / 4 else fullWidth / 4 },
+                    animationSpec = tween(
+                        durationMillis = PAGE_NAV_DURATION_MS,
+                        easing = FastOutSlowInEasing
+                    )
+                ) + fadeOut(
+                    animationSpec = tween(
+                        durationMillis = 120,
+                        easing = FastOutLinearInEasing
+                    )
+                )
+                enter togetherWith exit
+            },
+            label = "settingsRouteTransition",
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            when (route) {
-                SettingsRoute.Root -> {
-                    SettingsSectionLabel("Audio")
-                    SettingsItemCard(
-                        title = "Audio plugins",
-                        description = "Configure each playback core/plugin.",
-                        icon = Icons.Default.GraphicEq,
-                        onClick = onOpenAudioPlugins
+            Column(modifier = Modifier.fillMaxSize()) {
+                when (it) {
+                    SettingsRoute.Root -> {
+                        SettingsSectionLabel("Audio")
+                        SettingsItemCard(
+                            title = "Audio plugins",
+                            description = "Configure each playback core/plugin.",
+                            icon = Icons.Default.GraphicEq,
+                            onClick = onOpenAudioPlugins
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "General audio settings",
+                            description = "Global output and playback behavior.",
+                            icon = Icons.Default.Tune,
+                            onClick = onOpenGeneralAudio
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Player settings",
+                            description = "Player behavior and interaction preferences.",
+                            icon = Icons.Default.Slideshow,
+                            onClick = onOpenPlayer
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Misc settings",
+                            description = "Other app-wide preferences and utilities.",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = onOpenMisc
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Interface")
+                        SettingsItemCard(
+                            title = "UI settings",
+                            description = "Appearance and layout preferences.",
+                            icon = Icons.Default.Palette,
+                            onClick = onOpenUi
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Info")
+                        SettingsItemCard(
+                            title = "About",
+                            description = "App information, versions, and credits.",
+                            icon = Icons.Default.Info,
+                            onClick = onOpenAbout
+                        )
+                    }
+                    SettingsRoute.AudioPlugins -> {
+                        SettingsSectionLabel("Plugin configuration")
+                        Text(
+                            text = "This section will also handle enabling/disabling plugins in the future.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "FFmpeg",
+                            description = "Core options for mainstream audio codecs.",
+                            icon = Icons.Default.GraphicEq,
+                            onClick = onOpenFfmpeg
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "OpenMPT",
+                            description = "Core options for tracker/module playback.",
+                            icon = Icons.Default.GraphicEq,
+                            onClick = onOpenOpenMpt
+                        )
+                    }
+                    SettingsRoute.PluginFfmpeg -> SettingsPlaceholderBody(
+                        title = "FFmpeg plugin options",
+                        description = "FFmpeg-specific settings will appear here."
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    SettingsItemCard(
+                    SettingsRoute.PluginOpenMpt -> SettingsPlaceholderBody(
+                        title = "OpenMPT plugin options",
+                        description = "OpenMPT-specific settings will appear here."
+                    )
+                    SettingsRoute.GeneralAudio -> SettingsPlaceholderBody(
                         title = "General audio settings",
-                        description = "Global output and playback behavior.",
-                        icon = Icons.Default.Tune,
-                        onClick = onOpenGeneralAudio
+                        description = "Global audio behavior options will appear here."
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    SettingsItemCard(
-                        title = "Player settings",
-                        description = "Player behavior and interaction preferences.",
-                        icon = Icons.Default.Slideshow,
-                        onClick = onOpenPlayer
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    SettingsItemCard(
+                    SettingsRoute.Player -> {
+                        SettingsSectionLabel("Track selection")
+                        PlayerSettingToggleCard(
+                            title = "Play on track select",
+                            description = "Start playback immediately when a file is tapped.",
+                            checked = autoPlayOnTrackSelect,
+                            onCheckedChange = onAutoPlayOnTrackSelectChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Open player on track select",
+                            description = "Open full player when selecting a file. Disable to keep mini-player only.",
+                            checked = openPlayerOnTrackSelect,
+                            onCheckedChange = onOpenPlayerOnTrackSelectChanged
+                        )
+                    }
+                    SettingsRoute.Misc -> SettingsPlaceholderBody(
                         title = "Misc settings",
-                        description = "Other app-wide preferences and utilities.",
-                        icon = Icons.Default.MoreHoriz,
-                        onClick = onOpenMisc
+                        description = "Additional app options will appear here."
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    SettingsSectionLabel("Interface")
-                    SettingsItemCard(
+                    SettingsRoute.Ui -> SettingsPlaceholderBody(
                         title = "UI settings",
-                        description = "Appearance and layout preferences.",
-                        icon = Icons.Default.Palette,
-                        onClick = onOpenUi
+                        description = "Theme and layout options will appear here."
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    SettingsSectionLabel("Info")
-                    SettingsItemCard(
-                        title = "About",
-                        description = "App information, versions, and credits.",
-                        icon = Icons.Default.Info,
-                        onClick = onOpenAbout
+                    SettingsRoute.About -> SettingsPlaceholderBody(
+                        title = "About Silicon Player",
+                        description = "Version, credits, and technical details will appear here."
                     )
                 }
-                SettingsRoute.AudioPlugins -> {
-                    SettingsSectionLabel("Plugin configuration")
-                    Text(
-                        text = "This section will also handle enabling/disabling plugins in the future.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    SettingsItemCard(
-                        title = "FFmpeg",
-                        description = "Core options for mainstream audio codecs.",
-                        icon = Icons.Default.GraphicEq,
-                        onClick = onOpenFfmpeg
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    SettingsItemCard(
-                        title = "OpenMPT",
-                        description = "Core options for tracker/module playback.",
-                        icon = Icons.Default.GraphicEq,
-                        onClick = onOpenOpenMpt
-                    )
-                }
-                SettingsRoute.PluginFfmpeg -> SettingsPlaceholderBody(
-                    title = "FFmpeg plugin options",
-                    description = "FFmpeg-specific settings will appear here."
-                )
-                SettingsRoute.PluginOpenMpt -> SettingsPlaceholderBody(
-                    title = "OpenMPT plugin options",
-                    description = "OpenMPT-specific settings will appear here."
-                )
-                SettingsRoute.GeneralAudio -> SettingsPlaceholderBody(
-                    title = "General audio settings",
-                    description = "Global audio behavior options will appear here."
-                )
-                SettingsRoute.Player -> {
-                    SettingsSectionLabel("Track selection")
-                    PlayerSettingToggleCard(
-                        title = "Play on track select",
-                        description = "Start playback immediately when a file is tapped.",
-                        checked = autoPlayOnTrackSelect,
-                        onCheckedChange = onAutoPlayOnTrackSelectChanged
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    PlayerSettingToggleCard(
-                        title = "Open player on track select",
-                        description = "Open full player when selecting a file. Disable to keep mini-player only.",
-                        checked = openPlayerOnTrackSelect,
-                        onCheckedChange = onOpenPlayerOnTrackSelectChanged
-                    )
-                }
-                SettingsRoute.Misc -> SettingsPlaceholderBody(
-                    title = "Misc settings",
-                    description = "Additional app options will appear here."
-                )
-                SettingsRoute.Ui -> SettingsPlaceholderBody(
-                    title = "UI settings",
-                    description = "Theme and layout options will appear here."
-                )
-                SettingsRoute.About -> SettingsPlaceholderBody(
-                    title = "About Silicon Player",
-                    description = "Version, credits, and technical details will appear here."
-                )
             }
         }
     }
@@ -953,10 +1067,18 @@ private fun MiniPlayerBar(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onPlayPause, enabled = hasTrack) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play"
-                        )
+                        AnimatedContent(
+                            targetState = isPlaying,
+                            transitionSpec = {
+                                fadeIn() togetherWith fadeOut()
+                            },
+                            label = "miniPlayPauseIcon"
+                        ) { playing ->
+                            Icon(
+                                imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (playing) "Pause" else "Play"
+                            )
+                        }
                     }
                     IconButton(onClick = onStopAndClear) {
                         Icon(

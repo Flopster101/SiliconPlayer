@@ -1,5 +1,10 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.Image
@@ -254,47 +259,49 @@ private fun AlbumArtPlaceholder(
         ),
         shape = MaterialTheme.shapes.extraLarge
     ) {
-        if (artwork != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    bitmap = artwork,
-                    contentDescription = "Album artwork",
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
-                                MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
+        Crossfade(targetState = artwork, label = "albumArtCrossfade") { art ->
+            if (art != null) {
                 Box(
                     modifier = Modifier
-                        .size(120.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = placeholderIcon,
-                        contentDescription = "No album artwork",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(72.dp)
+                    Image(
+                        bitmap = art,
+                        contentDescription = "Album artwork",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxSize()
                     )
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                                    MaterialTheme.colorScheme.surfaceVariant
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(120.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = placeholderIcon,
+                            contentDescription = "No album artwork",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(72.dp)
+                        )
+                    }
                 }
             }
         }
@@ -534,11 +541,17 @@ private fun TransportControls(
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             )
         ) {
-            Icon(
-                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = if (isPlaying) "Pause" else "Play",
-                modifier = Modifier.size(36.dp)
-            )
+            AnimatedContent(
+                targetState = isPlaying,
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "playerPlayPauseIcon"
+            ) { playing ->
+                Icon(
+                    imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (playing) "Pause" else "Play",
+                    modifier = Modifier.size(36.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(18.dp))

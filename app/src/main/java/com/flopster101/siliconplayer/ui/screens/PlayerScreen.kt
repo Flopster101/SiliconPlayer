@@ -20,6 +20,8 @@ fun PlayerScreen(
     onStop: () -> Unit,
     durationSeconds: Double,
     positionSeconds: Double,
+    title: String,
+    artist: String,
     isLooping: Boolean,
     onSeek: (Double) -> Unit,
     onLoopingChanged: (Boolean) -> Unit
@@ -34,6 +36,9 @@ fun PlayerScreen(
         }
     }
 
+    val displayTitle = title.ifBlank { file.nameWithoutExtension.ifBlank { file.name } }
+    val displayArtist = artist.ifBlank { "Unknown Artist" }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -43,7 +48,9 @@ fun PlayerScreen(
     ) {
         Text(text = "Now Playing", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(16.dp))
-        Text(text = file.name, style = MaterialTheme.typography.bodyLarge)
+        Text(text = displayTitle, style = MaterialTheme.typography.bodyLarge)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(text = displayArtist, style = MaterialTheme.typography.bodyMedium)
         Spacer(modifier = Modifier.height(24.dp))
 
         val sliderMax = durationSeconds.coerceAtLeast(0.0)

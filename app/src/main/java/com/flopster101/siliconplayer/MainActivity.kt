@@ -45,6 +45,8 @@ class MainActivity : ComponentActivity() {
     external fun getPosition(): Double
     external fun seekTo(seconds: Double)
     external fun setLooping(enabled: Boolean)
+    external fun getTrackTitle(): String
+    external fun getTrackArtist(): String
 
     companion object {
         init {
@@ -60,6 +62,8 @@ fun AppNavigation() {
     var duration by remember { mutableDoubleStateOf(0.0) }
     var position by remember { mutableDoubleStateOf(0.0) }
     var looping by remember { mutableStateOf(false) }
+    var metadataTitle by remember { mutableStateOf("") }
+    var metadataArtist by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as MainActivity
 
@@ -163,6 +167,8 @@ fun AppNavigation() {
                 repository = repository,
                 onFileSelected = { file ->
                     selectedFile = file
+                    metadataTitle = ""
+                    metadataArtist = ""
                     currentScreen = Screen.Player
                 }
             )
@@ -174,12 +180,16 @@ fun AppNavigation() {
                     onBack = { currentScreen = Screen.FileBrowser },
                     onPlay = {
                         activity.loadAudio(file.absolutePath)
+                        metadataTitle = activity.getTrackTitle()
+                        metadataArtist = activity.getTrackArtist()
                         activity.setLooping(looping)
                         activity.startEngine()
                     },
                     onStop = { activity.stopEngine() },
                     durationSeconds = duration,
                     positionSeconds = position,
+                    title = metadataTitle,
+                    artist = metadataArtist,
                     isLooping = looping,
                     onSeek = { seconds -> activity.seekTo(seconds) },
                     onLoopingChanged = { enabled ->

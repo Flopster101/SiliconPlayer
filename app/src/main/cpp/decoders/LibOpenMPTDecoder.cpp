@@ -7,6 +7,21 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
+namespace {
+std::string getFirstNonEmptyMetadata(openmpt::module* module, const std::initializer_list<const char*>& keys) {
+    if (!module) {
+        return "";
+    }
+    for (const char* key : keys) {
+        std::string value = module->get_metadata(key);
+        if (!value.empty()) {
+            return value;
+        }
+    }
+    return "";
+}
+}
+
 LibOpenMPTDecoder::LibOpenMPTDecoder() {
 }
 
@@ -43,6 +58,8 @@ bool LibOpenMPTDecoder::open(const char* path) {
         module = std::make_unique<openmpt::module>(fileBuffer);
 
         duration = module->get_duration_seconds();
+        title = getFirstNonEmptyMetadata(module.get(), {"title", "songtitle"});
+        artist = getFirstNonEmptyMetadata(module.get(), {"artist", "author", "composer"});
         LOGD("Opened module: %s, duration: %.2f", path, duration);
         return true;
     } catch (const openmpt::exception& e) {
@@ -58,6 +75,9 @@ void LibOpenMPTDecoder::close() {
     // lock should be held by caller or strictly sequential
     module.reset();
     fileBuffer.clear();
+    duration = 0.0;
+    title.clear();
+    artist.clear();
 }
 
 int LibOpenMPTDecoder::read(float* buffer, int numFrames) {
@@ -86,6 +106,16 @@ int LibOpenMPTDecoder::getSampleRate() {
 
 int LibOpenMPTDecoder::getChannelCount() {
     return channels;
+}
+
+std::string LibOpenMPTDecoder::getTitle() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return title;
+}
+
+std::string LibOpenMPTDecoder::getArtist() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return artist;
 }
 
 std::vector<std::string> LibOpenMPTDecoder::getSupportedExtensions() {

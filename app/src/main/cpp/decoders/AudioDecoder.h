@@ -2,6 +2,7 @@
 #define SILICONPLAYER_AUDIODECODER_H
 
 #include <cstdint>
+#include <string>
 
 class AudioDecoder {
 public:
@@ -18,6 +19,8 @@ public:
     virtual double getDuration() = 0;
     virtual int getSampleRate() = 0;
     virtual int getChannelCount() = 0;
+    virtual std::string getTitle() = 0;
+    virtual std::string getArtist() = 0;
 
     // Configuration
     virtual void setOption(const char* /*name*/, const char* /*value*/) {}

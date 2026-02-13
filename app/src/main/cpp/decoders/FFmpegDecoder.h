@@ -25,6 +25,8 @@ public:
     double getDuration() override;
     int getSampleRate() override;
     int getChannelCount() override;
+    std::string getTitle() override;
+    std::string getArtist() override;
 
     // Configuration
     const char* getName() const override { return "FFmpeg"; }
@@ -42,6 +44,8 @@ private:
     double duration = 0.0;
     int outputSampleRate = 48000;
     int outputChannelCount = 2; // Output channels (stereo)
+    std::string title;
+    std::string artist;
 
     // Resampling buffer
     std::vector<float> sampleBuffer;

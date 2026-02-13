@@ -194,3 +194,19 @@ void AudioEngine::seekToSeconds(double seconds) {
 void AudioEngine::setLooping(bool enabled) {
     looping.store(enabled);
 }
+
+std::string AudioEngine::getTitle() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return "";
+    }
+    return decoder->getTitle();
+}
+
+std::string AudioEngine::getArtist() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return "";
+    }
+    return decoder->getArtist();
+}

@@ -21,6 +21,8 @@ public:
     double getPositionSeconds();
     void seekToSeconds(double seconds);
     void setLooping(bool enabled);
+    std::string getTitle();
+    std::string getArtist();
 
 private:
     AAudioStream *stream = nullptr;

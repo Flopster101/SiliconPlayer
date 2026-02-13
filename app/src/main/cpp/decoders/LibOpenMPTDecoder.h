@@ -22,6 +22,8 @@ public:
     double getDuration() override;
     int getSampleRate() override;
     int getChannelCount() override;
+    std::string getTitle() override;
+    std::string getArtist() override;
 
     // Framework
     const char* getName() const override { return "LibOpenMPT"; }
@@ -37,6 +39,8 @@ private:
     double duration = 0.0;
     int sampleRate = 48000;
     int channels = 2; // Stereo
+    std::string title;
+    std::string artist;
 };
 
 #endif //SILICONPLAYER_LIBOPENMPTDECODER_H

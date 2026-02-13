@@ -88,3 +88,21 @@ Java_com_flopster101_siliconplayer_MainActivity_setLooping(JNIEnv* env, jobject,
     }
     audioEngine->setLooping(enabled == JNI_TRUE);
 }
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTrackTitle(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewStringUTF("");
+    }
+    std::string value = audioEngine->getTitle();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTrackArtist(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewStringUTF("");
+    }
+    std::string value = audioEngine->getArtist();
+    return env->NewStringUTF(value.c_str());
+}

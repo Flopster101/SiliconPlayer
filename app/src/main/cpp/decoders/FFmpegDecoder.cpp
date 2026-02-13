@@ -5,6 +5,29 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
+namespace {
+std::string getMetadataValue(AVDictionary* metadata, const char* key) {
+    if (!metadata || !key) {
+        return "";
+    }
+    AVDictionaryEntry* entry = av_dict_get(metadata, key, nullptr, 0);
+    if (!entry || !entry->value) {
+        return "";
+    }
+    return entry->value;
+}
+
+std::string getFirstMetadataValue(AVDictionary* metadata, const std::initializer_list<const char*>& keys) {
+    for (const char* key : keys) {
+        std::string value = getMetadataValue(metadata, key);
+        if (!value.empty()) {
+            return value;
+        }
+    }
+    return "";
+}
+}
+
 FFmpegDecoder::FFmpegDecoder() {
     packet = av_packet_alloc();
     frame = av_frame_alloc();
@@ -80,6 +103,18 @@ bool FFmpegDecoder::open(const char* path) {
         duration = 0.0;
     }
 
+    title = getFirstMetadataValue(formatContext->metadata, {"title"});
+    artist = getFirstMetadataValue(formatContext->metadata, {"artist", "album_artist", "author", "composer"});
+    if (title.empty() || artist.empty()) {
+        AVDictionary* streamMetadata = formatContext->streams[audioStreamIndex]->metadata;
+        if (title.empty()) {
+            title = getFirstMetadataValue(streamMetadata, {"title"});
+        }
+        if (artist.empty()) {
+            artist = getFirstMetadataValue(streamMetadata, {"artist", "album_artist", "author", "composer"});
+        }
+    }
+
     LOGD("Opened file: %s, duration: %.2f", path, duration);
     return true;
 }
@@ -98,6 +133,9 @@ void FFmpegDecoder::close() {
     }
     sampleBuffer.clear();
     sampleBufferCursor = 0;
+    duration = 0.0;
+    title.clear();
+    artist.clear();
 }
 
 bool FFmpegDecoder::initResampler() {
@@ -258,6 +296,16 @@ int FFmpegDecoder::getSampleRate() {
 
 int FFmpegDecoder::getChannelCount() {
     return outputChannelCount;
+}
+
+std::string FFmpegDecoder::getTitle() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return title;
+}
+
+std::string FFmpegDecoder::getArtist() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return artist;
 }
 
 std::vector<std::string> FFmpegDecoder::getSupportedExtensions() {

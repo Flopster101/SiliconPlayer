@@ -43,17 +43,17 @@ ABSOLUTE_PATH="$SCRIPT_DIR"
 build_ffmpeg() {
     local ABI=$1
     echo "Building FFmpeg for $ABI..."
-    
+
     local BUILD_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
-    
+
     mkdir -p "$BUILD_DIR"
-    
+
     cd "$ABSOLUTE_PATH/ffmpeg"
-    
+
     # Always clean
     make clean >/dev/null 2>&1 || true
     make distclean >/dev/null 2>&1 || true
-    
+
     # Configure flags
     EXTRA_FLAGS=""
     if [ "$ABI" = "x86" ] || [ "$ABI" = "x86_64" ]; then
@@ -106,10 +106,10 @@ build_ffmpeg() {
         --enable-mediacodec \
         --extra-cflags="-fPIC" \
         $EXTRA_FLAGS || { echo "Error: FFmpeg configure failed!"; exit 1; }
-        
+
     make -j$(nproc)
     make install
-    
+
     cd ..
 }
 
@@ -119,22 +119,22 @@ build_ffmpeg() {
 build_libopenmpt() {
     local ABI=$1
     echo "Building libopenmpt for $ABI..."
-    
+
     local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
     local PROJECT_PATH="$ABSOLUTE_PATH/libopenmpt"
-    
+
     mkdir -p "$INSTALL_DIR"
-    
+
     # Copy Android.mk/Application.mk to root if not present
     if [ ! -f "$PROJECT_PATH/Android.mk" ]; then
         echo "Copying Android.mk to libopenmpt root..."
         cp "$PROJECT_PATH/build/android_ndk/Android.mk" "$PROJECT_PATH/"
         cp "$PROJECT_PATH/build/android_ndk/Application.mk" "$PROJECT_PATH/"
-        
+
         # Patch to static library
         sed -i 's/BUILD_SHARED_LIBRARY/BUILD_STATIC_LIBRARY/g' "$PROJECT_PATH/Android.mk"
     fi
-    
+
     # Use ndk-build
     "$ANDROID_NDK_HOME/ndk-build" \
         -C "$PROJECT_PATH" \
@@ -185,7 +185,7 @@ for ABI in "${ABIS[@]}"; do
     echo "========================================"
     echo "Processing ABI: $ABI"
     echo "========================================"
-    
+
     # Setup Architecture specific flags
     case $ABI in
         "arm64-v8a")
@@ -217,13 +217,13 @@ for ABI in "${ABIS[@]}"; do
     export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
     export STRIP="$TOOLCHAIN/bin/llvm-strip"
     export NM="$TOOLCHAIN/bin/llvm-nm"
-    
+
     echo "CC is set to: $CC"
-    
+
     if [ "$TARGET_LIB" == "all" ] || [ "$TARGET_LIB" == "ffmpeg" ]; then
         build_ffmpeg "$ABI"
     fi
-    
+
     if [ "$TARGET_LIB" == "all" ] || [ "$TARGET_LIB" == "libopenmpt" ]; then
         build_libopenmpt "$ABI"
     fi

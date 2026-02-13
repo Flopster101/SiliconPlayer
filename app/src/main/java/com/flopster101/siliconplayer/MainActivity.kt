@@ -17,11 +17,15 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MusicNote
@@ -86,6 +90,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavigation() {
     var selectedFile by remember { mutableStateOf<File?>(null) }
@@ -207,6 +212,20 @@ fun AppNavigation() {
 
     val isMiniPlayerVisible = selectedFile != null && !isPlayerExpanded
     val miniPlayerListInset = if (isMiniPlayerVisible) 108.dp else 0.dp
+    val clearCurrentTrack: () -> Unit = {
+        activity.stopEngine()
+        selectedFile = null
+        duration = 0.0
+        position = 0.0
+        isPlaying = false
+        isPlayerExpanded = false
+        metadataTitle = ""
+        metadataArtist = ""
+        metadataSampleRate = 0
+        metadataChannelCount = 0
+        metadataBitDepthLabel = "Unknown"
+        artworkBitmap = null
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
@@ -230,30 +249,50 @@ fun AppNavigation() {
 
         selectedFile?.let { file ->
             if (!isPlayerExpanded) {
-                MiniPlayerBar(
-                    file = file,
-                    title = metadataTitle.ifBlank { file.nameWithoutExtension.ifBlank { file.name } },
-                    artist = metadataArtist.ifBlank { "Unknown Artist" },
-                    artwork = artworkBitmap,
-                    noArtworkIcon = Icons.Default.MusicNote,
-                    isPlaying = isPlaying,
-                    positionSeconds = position,
-                    durationSeconds = duration,
-                    onExpand = { isPlayerExpanded = true },
-                    onPlayStop = {
-                        if (isPlaying) {
-                            activity.stopEngine()
-                            isPlaying = false
+                val dismissState = rememberSwipeToDismissBoxState(
+                    positionalThreshold = { totalDistance -> totalDistance * 0.6f },
+                    confirmValueChange = { targetValue ->
+                        val isDismiss = targetValue == SwipeToDismissBoxValue.StartToEnd ||
+                            targetValue == SwipeToDismissBoxValue.EndToStart
+                        if (isDismiss && !isPlaying) {
+                            clearCurrentTrack()
+                            true
                         } else {
-                            activity.setLooping(looping)
-                            activity.startEngine()
-                            isPlaying = true
+                            false
                         }
-                    },
+                    }
+                )
+                SwipeToDismissBox(
+                    state = dismissState,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(horizontal = 14.dp, vertical = 12.dp)
-                )
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    backgroundContent = {},
+                    enableDismissFromStartToEnd = !isPlaying,
+                    enableDismissFromEndToStart = !isPlaying
+                ) {
+                    MiniPlayerBar(
+                        file = file,
+                        title = metadataTitle.ifBlank { file.nameWithoutExtension.ifBlank { file.name } },
+                        artist = metadataArtist.ifBlank { "Unknown Artist" },
+                        artwork = artworkBitmap,
+                        noArtworkIcon = Icons.Default.MusicNote,
+                        isPlaying = isPlaying,
+                        positionSeconds = position,
+                        durationSeconds = duration,
+                        onExpand = { isPlayerExpanded = true },
+                        onPlayStop = {
+                            if (isPlaying) {
+                                activity.stopEngine()
+                                isPlaying = false
+                            } else {
+                                activity.setLooping(looping)
+                                activity.startEngine()
+                                isPlaying = true
+                            }
+                        }
+                    )
+                }
             } else {
                 com.flopster101.siliconplayer.ui.screens.PlayerScreen(
                     file = file,

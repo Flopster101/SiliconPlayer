@@ -1851,8 +1851,6 @@ private fun MiniPlayerBar(
     val compactControls = LocalConfiguration.current.screenWidthDp <= 420
     val controlButtonSize = if (compactControls) 36.dp else 40.dp
     val controlIconSize = if (compactControls) 20.dp else 22.dp
-    val titleShouldMarquee = title.length > 26
-    val artistShouldMarquee = artist.length > 30
     val density = LocalDensity.current
     val expandSwipeThresholdPx = with(density) { 112.dp.toPx() }
     val screenHeightPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
@@ -1935,35 +1933,55 @@ private fun MiniPlayerBar(
                         .weight(1f)
                         .padding(end = 8.dp)
                 ) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        overflow = if (titleShouldMarquee) TextOverflow.Clip else TextOverflow.Ellipsis,
-                        modifier = if (titleShouldMarquee) {
-                            Modifier.basicMarquee(
-                                iterations = Int.MAX_VALUE,
-                                initialDelayMillis = 900
-                            )
-                        } else {
-                            Modifier
-                        }
-                    )
-                    Text(
-                        text = artist,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = if (artistShouldMarquee) TextOverflow.Clip else TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = if (artistShouldMarquee) {
-                            Modifier.basicMarquee(
-                                iterations = Int.MAX_VALUE,
-                                initialDelayMillis = 1100
-                            )
-                        } else {
-                            Modifier
-                        }
-                    )
+                    AnimatedContent(
+                        targetState = title,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(durationMillis = 170, delayMillis = 35)) togetherWith
+                                fadeOut(animationSpec = tween(durationMillis = 110))
+                        },
+                        label = "miniTitleSwap"
+                    ) { animatedTitle ->
+                        val marquee = animatedTitle.length > 26
+                        Text(
+                            text = animatedTitle,
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = if (marquee) TextOverflow.Clip else TextOverflow.Ellipsis,
+                            modifier = if (marquee) {
+                                Modifier.basicMarquee(
+                                    iterations = Int.MAX_VALUE,
+                                    initialDelayMillis = 900
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
+                    }
+                    AnimatedContent(
+                        targetState = artist,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(durationMillis = 170, delayMillis = 25)) togetherWith
+                                fadeOut(animationSpec = tween(durationMillis = 100))
+                        },
+                        label = "miniArtistSwap"
+                    ) { animatedArtist ->
+                        val marquee = animatedArtist.length > 30
+                        Text(
+                            text = animatedArtist,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = if (marquee) TextOverflow.Clip else TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = if (marquee) {
+                                Modifier.basicMarquee(
+                                    iterations = Int.MAX_VALUE,
+                                    initialDelayMillis = 1100
+                                )
+                            } else {
+                                Modifier
+                            }
+                        )
+                    }
                     Text(
                         text = "$formatLabel • $positionLabel / $durationLabel",
                         style = MaterialTheme.typography.labelSmall,

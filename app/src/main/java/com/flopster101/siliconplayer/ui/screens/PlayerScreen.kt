@@ -543,44 +543,62 @@ private fun TrackInfoChip(
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 private fun TrackMetadataBlock(title: String, artist: String, filename: String) {
-    val shouldMarquee = title.length > 30
-    if (shouldMarquee) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clipToBounds()
-        ) {
+    AnimatedContent(
+        targetState = title,
+        transitionSpec = {
+            fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 40)) togetherWith
+                fadeOut(animationSpec = tween(durationMillis = 120))
+        },
+        label = "trackTitleSwap"
+    ) { animatedTitle ->
+        val shouldMarquee = animatedTitle.length > 30
+        if (shouldMarquee) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clipToBounds()
+            ) {
+                Text(
+                    text = animatedTitle,
+                    style = MaterialTheme.typography.headlineSmall,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.basicMarquee(
+                        iterations = Int.MAX_VALUE,
+                        initialDelayMillis = 900
+                    )
+                )
+            }
+        } else {
             Text(
-                text = title,
+                text = animatedTitle,
                 style = MaterialTheme.typography.headlineSmall,
                 maxLines = 1,
-                softWrap = false,
                 overflow = TextOverflow.Clip,
-                textAlign = TextAlign.Start,
-                modifier = Modifier.basicMarquee(
-                    iterations = Int.MAX_VALUE,
-                    initialDelayMillis = 900
-                )
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
         }
-    } else {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Clip,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
     }
     Spacer(modifier = Modifier.height(8.dp))
-    Text(
-        text = artist,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis
-    )
+    AnimatedContent(
+        targetState = artist,
+        transitionSpec = {
+            fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 30)) togetherWith
+                fadeOut(animationSpec = tween(durationMillis = 110))
+        },
+        label = "trackArtistSwap"
+    ) { animatedArtist ->
+        Text(
+            text = animatedArtist,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
     Spacer(modifier = Modifier.height(6.dp))
     Text(
         text = filename,

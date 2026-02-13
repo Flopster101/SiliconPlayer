@@ -62,6 +62,7 @@ fun PlayerScreen(
     onCollapseBySwipe: () -> Unit = onBack,
     enableCollapseGesture: Boolean = true,
     isPlaying: Boolean,
+    canResumeStoppedTrack: Boolean = false,
     onPlay: () -> Unit,
     onPause: () -> Unit,
     onStopAndClear: () -> Unit,
@@ -241,6 +242,7 @@ fun PlayerScreen(
                         TransportControls(
                             hasTrack = hasTrack,
                             isPlaying = isPlaying,
+                            canResumeStoppedTrack = canResumeStoppedTrack,
                             isLooping = isLooping,
                             canPreviousTrack = canPreviousTrack,
                             canNextTrack = canNextTrack,
@@ -311,6 +313,7 @@ fun PlayerScreen(
                     TransportControls(
                         hasTrack = hasTrack,
                         isPlaying = isPlaying,
+                        canResumeStoppedTrack = canResumeStoppedTrack,
                         isLooping = isLooping,
                         canPreviousTrack = canPreviousTrack,
                         canNextTrack = canNextTrack,
@@ -592,6 +595,7 @@ private fun TrackMetadataBlock(title: String, artist: String, filename: String) 
 private fun TransportControls(
     hasTrack: Boolean,
     isPlaying: Boolean,
+    canResumeStoppedTrack: Boolean,
     isLooping: Boolean,
     canPreviousTrack: Boolean,
     canNextTrack: Boolean,
@@ -689,7 +693,7 @@ private fun TransportControls(
 
                 FilledIconButton(
                     onClick = onPlayPause,
-                    enabled = hasTrack,
+                    enabled = hasTrack || canResumeStoppedTrack,
                     modifier = Modifier.size(playButtonSize),
                     shape = MaterialTheme.shapes.extraLarge,
                     colors = IconButtonDefaults.filledIconButtonColors(

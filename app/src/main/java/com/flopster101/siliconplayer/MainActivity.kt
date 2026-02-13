@@ -260,6 +260,7 @@ private fun AppNavigation(
     var currentView by remember { mutableStateOf(MainView.Home) }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.Root) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
+    var lastStoppedFile by remember { mutableStateOf<File?>(null) }
     var duration by remember { mutableDoubleStateOf(0.0) }
     var position by remember { mutableDoubleStateOf(0.0) }
     var isPlaying by remember { mutableStateOf(false) }
@@ -385,6 +386,7 @@ private fun AppNavigation(
     fun applyTrackSelection(file: File, autoStart: Boolean, expandOverride: Boolean? = null) {
         NativeBridge.stopEngine()
         isPlaying = false
+        lastStoppedFile = null
         selectedFile = file
         isPlayerSurfaceVisible = true
         NativeBridge.loadAudio(file.absolutePath)
@@ -403,6 +405,19 @@ private fun AppNavigation(
         }
         expandOverride?.let { isPlayerExpanded = it }
         syncPlaybackService()
+    }
+
+    fun resumeLastStoppedTrack(autoStart: Boolean = true): Boolean {
+        val resumable = lastStoppedFile?.takeIf { it.exists() && it.isFile } ?: run {
+            lastStoppedFile = null
+            return false
+        }
+        applyTrackSelection(
+            file = resumable,
+            autoStart = autoStart,
+            expandOverride = null
+        )
+        return true
     }
 
     fun currentTrackIndex(): Int {
@@ -596,6 +611,9 @@ private fun AppNavigation(
     val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val miniPreviewLiftPx = with(LocalDensity.current) { 28.dp.toPx() }
     val stopAndEmptyTrack: () -> Unit = {
+        if (selectedFile != null) {
+            lastStoppedFile = selectedFile
+        }
         NativeBridge.stopEngine()
         selectedFile = null
         duration = 0.0
@@ -630,6 +648,9 @@ private fun AppNavigation(
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
                     PlaybackService.ACTION_BROADCAST_CLEARED -> {
+                        if (selectedFile != null) {
+                            lastStoppedFile = selectedFile
+                        }
                         selectedFile = null
                         isPlaying = false
                         duration = 0.0
@@ -851,6 +872,7 @@ private fun AppNavigation(
                         onBack = {},
                         enableCollapseGesture = false,
                         isPlaying = isPlaying,
+                        canResumeStoppedTrack = false,
                         onPlay = {},
                         onPause = {},
                         onStopAndClear = {},
@@ -921,6 +943,7 @@ private fun AppNavigation(
                         artwork = artworkBitmap,
                         noArtworkIcon = Icons.Default.MusicNote,
                         isPlaying = isPlaying,
+                        canResumeStoppedTrack = lastStoppedFile?.exists() == true,
                         positionSeconds = position,
                         durationSeconds = duration,
                         canPreviousTrack = currentTrackIndex() > 0,
@@ -952,7 +975,9 @@ private fun AppNavigation(
                         onPreviousTrack = { playAdjacentTrack(-1) },
                         onNextTrack = { playAdjacentTrack(1) },
                         onPlayPause = {
-                            if (selectedFile != null) {
+                            if (selectedFile == null) {
+                                resumeLastStoppedTrack(autoStart = true)
+                            } else {
                                 if (isPlaying) {
                                     NativeBridge.stopEngine()
                                     isPlaying = false
@@ -994,8 +1019,11 @@ private fun AppNavigation(
                         isPlayerExpanded = false
                     },
                     isPlaying = isPlaying,
+                    canResumeStoppedTrack = lastStoppedFile?.exists() == true,
                     onPlay = {
-                        if (selectedFile != null) {
+                        if (selectedFile == null) {
+                            resumeLastStoppedTrack(autoStart = true)
+                        } else {
                             NativeBridge.setLooping(looping)
                             NativeBridge.startEngine()
                             isPlaying = true
@@ -1792,6 +1820,7 @@ private fun MiniPlayerBar(
     artwork: ImageBitmap?,
     noArtworkIcon: ImageVector,
     isPlaying: Boolean,
+    canResumeStoppedTrack: Boolean,
     positionSeconds: Double,
     durationSeconds: Double,
     canPreviousTrack: Boolean,
@@ -1968,7 +1997,7 @@ private fun MiniPlayerBar(
                     }
                     IconButton(
                         onClick = onPlayPause,
-                        enabled = hasTrack,
+                        enabled = hasTrack || canResumeStoppedTrack,
                         modifier = Modifier.size(controlButtonSize)
                     ) {
                         AnimatedContent(

@@ -94,6 +94,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.vectorResource
 import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import java.io.File
 import android.content.Intent
@@ -136,6 +137,23 @@ private enum class ThemeMode(val storageValue: String, val label: String) {
         fun fromStorage(value: String?): ThemeMode {
             return entries.firstOrNull { it.storageValue == value } ?: Auto
         }
+    }
+}
+
+private val trackerModuleExtensions = setOf(
+    "mod", "xm", "it", "s3m", "mptm", "mtm", "stm", "ult", "ptm", "okt",
+    "amf", "ams", "dbm", "dmf", "dsm", "far", "gdm", "imf", "j2b", "med",
+    "mdl", "mt2", "nst", "psm", "umx", "669", "mo3", "wow", "ice"
+)
+
+@Composable
+private fun placeholderArtworkIconForFile(file: File?): ImageVector {
+    val extension = file?.extension?.lowercase()?.ifBlank { return Icons.Default.MusicNote }
+        ?: return Icons.Default.MusicNote
+    return if (extension in trackerModuleExtensions) {
+        ImageVector.vectorResource(R.drawable.ic_placeholder_tracker_chip)
+    } else {
+        Icons.Default.MusicNote
     }
 }
 
@@ -886,6 +904,7 @@ private fun AppNavigation(
                         channelCount = metadataChannelCount,
                         bitDepthLabel = metadataBitDepthLabel,
                         artwork = artworkBitmap,
+                        noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
                         isLooping = looping,
                         onSeek = {},
                         onPreviousTrack = {},
@@ -941,7 +960,7 @@ private fun AppNavigation(
                             if (selectedFile != null) "Unknown Artist" else "Tap a file to play"
                         },
                         artwork = artworkBitmap,
-                        noArtworkIcon = Icons.Default.MusicNote,
+                        noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
                         isPlaying = isPlaying,
                         canResumeStoppedTrack = lastStoppedFile?.exists() == true,
                         positionSeconds = position,
@@ -1046,6 +1065,7 @@ private fun AppNavigation(
                     channelCount = metadataChannelCount,
                     bitDepthLabel = metadataBitDepthLabel,
                     artwork = artworkBitmap,
+                    noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
                     isLooping = looping,
                     onSeek = { seconds ->
                         NativeBridge.seekTo(seconds)

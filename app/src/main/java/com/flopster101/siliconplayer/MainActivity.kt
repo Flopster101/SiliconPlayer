@@ -3,6 +3,7 @@ package com.flopster101.siliconplayer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -21,6 +22,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.os.Environment
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,6 +41,10 @@ class MainActivity : ComponentActivity() {
     external fun stopEngine()
     external fun loadAudio(path: String)
     external fun getSupportedExtensions(): Array<String>
+    external fun getDuration(): Double
+    external fun getPosition(): Double
+    external fun seekTo(seconds: Double)
+    external fun setLooping(enabled: Boolean)
 
     companion object {
         init {
@@ -51,6 +57,9 @@ class MainActivity : ComponentActivity() {
 fun AppNavigation() {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.FileBrowser) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
+    var duration by remember { mutableDoubleStateOf(0.0) }
+    var position by remember { mutableDoubleStateOf(0.0) }
+    var looping by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as MainActivity
 
@@ -112,9 +121,17 @@ fun AppNavigation() {
         }
     }
 
+    LaunchedEffect(currentScreen, selectedFile) {
+        while (currentScreen is Screen.Player && selectedFile != null) {
+            duration = activity.getDuration()
+            position = activity.getPosition()
+            delay(250)
+        }
+    }
+
     if (!hasPermission) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Please grant storage permissions to access audio files.")
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(16.dp))
                 androidx.compose.material3.Button(onClick = {
@@ -140,7 +157,7 @@ fun AppNavigation() {
         return
     }
 
-    when (val screen = currentScreen) {
+    when (currentScreen) {
         is Screen.FileBrowser -> {
             com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
                 repository = repository,
@@ -157,9 +174,18 @@ fun AppNavigation() {
                     onBack = { currentScreen = Screen.FileBrowser },
                     onPlay = {
                         activity.loadAudio(file.absolutePath)
+                        activity.setLooping(looping)
                         activity.startEngine()
                     },
-                    onStop = { activity.stopEngine() }
+                    onStop = { activity.stopEngine() },
+                    durationSeconds = duration,
+                    positionSeconds = position,
+                    isLooping = looping,
+                    onSeek = { seconds -> activity.seekTo(seconds) },
+                    onLoopingChanged = { enabled ->
+                        looping = enabled
+                        activity.setLooping(enabled)
+                    }
                 )
             }
         }

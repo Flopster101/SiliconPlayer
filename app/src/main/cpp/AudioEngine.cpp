@@ -5,6 +5,7 @@
 #include "decoders/LibOpenMPTDecoder.h"
 #include <android/log.h>
 #include <cmath>
+#include <cstring>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -84,12 +85,41 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
     std::unique_lock<std::mutex> lock(engine->decoderMutex, std::try_to_lock);
 
     if (lock.owns_lock() && engine->decoder) {
-        int framesRead = engine->decoder->read(outputData, numFrames);
+        const int channels = engine->decoder->getChannelCount();
+        const int sampleRate = engine->decoder->getSampleRate();
+        int totalFramesRead = 0;
+        int remainingFrames = numFrames;
+
+        while (remainingFrames > 0) {
+            int framesRead = engine->decoder->read(
+                    outputData + (totalFramesRead * channels),
+                    remainingFrames
+            );
+
+            if (framesRead <= 0) {
+                if (engine->looping.load()) {
+                    engine->decoder->seek(0.0);
+                    engine->positionSeconds.store(0.0);
+                    continue;
+                }
+                break;
+            }
+
+            totalFramesRead += framesRead;
+            remainingFrames -= framesRead;
+        }
+
+        if (sampleRate > 0 && totalFramesRead > 0) {
+            engine->positionSeconds.fetch_add(static_cast<double>(totalFramesRead) / sampleRate);
+        }
 
         // Fill remaining with silence if decoder didn't produce enough
-        if (framesRead < numFrames) {
-             const int channels = 2; // Stereo
-             memset(outputData + (framesRead * channels), 0, (numFrames - framesRead) * channels * sizeof(float));
+        if (totalFramesRead < numFrames) {
+            memset(
+                    outputData + (totalFramesRead * channels),
+                    0,
+                    (numFrames - totalFramesRead) * channels * sizeof(float)
+            );
         }
     } else {
         // Output silence
@@ -126,6 +156,7 @@ void AudioEngine::setUrl(const char* url) {
     if (newDecoder && newDecoder->open(url)) {
         std::lock_guard<std::mutex> lock(decoderMutex);
         decoder = std::move(newDecoder);
+        positionSeconds.store(0.0);
         if (!isPlaying) {
              start();
         }
@@ -137,4 +168,29 @@ void AudioEngine::setUrl(const char* url) {
 void AudioEngine::restart() {
     stop();
     start();
+}
+
+double AudioEngine::getDurationSeconds() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return 0.0;
+    }
+    return decoder->getDuration();
+}
+
+double AudioEngine::getPositionSeconds() {
+    return positionSeconds.load();
+}
+
+void AudioEngine::seekToSeconds(double seconds) {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return;
+    }
+    decoder->seek(seconds);
+    positionSeconds.store(seconds < 0.0 ? 0.0 : seconds);
+}
+
+void AudioEngine::setLooping(bool enabled) {
+    looping.store(enabled);
 }

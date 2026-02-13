@@ -17,10 +17,16 @@ public:
     void stop();
     void restart();
     void setUrl(const char* url);
+    double getDurationSeconds();
+    double getPositionSeconds();
+    void seekToSeconds(double seconds);
+    void setLooping(bool enabled);
 
 private:
     AAudioStream *stream = nullptr;
     std::atomic<bool> isPlaying { false };
+    std::atomic<bool> looping { false };
+    std::atomic<double> positionSeconds { 0.0 };
 
     std::unique_ptr<AudioDecoder> decoder;
     std::mutex decoderMutex;

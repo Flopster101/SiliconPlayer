@@ -56,3 +56,35 @@ Java_com_flopster101_siliconplayer_MainActivity_getSupportedExtensions(JNIEnv* e
 
     return result;
 }
+
+extern "C" JNIEXPORT jdouble JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getDuration(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return 0.0;
+    }
+    return audioEngine->getDurationSeconds();
+}
+
+extern "C" JNIEXPORT jdouble JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getPosition(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return 0.0;
+    }
+    return audioEngine->getPositionSeconds();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_seekTo(JNIEnv* env, jobject, jdouble seconds) {
+    if (audioEngine == nullptr) {
+        return;
+    }
+    audioEngine->seekToSeconds(static_cast<double>(seconds));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_setLooping(JNIEnv* env, jobject, jboolean enabled) {
+    if (audioEngine == nullptr) {
+        return;
+    }
+    audioEngine->setLooping(enabled == JNI_TRUE);
+}

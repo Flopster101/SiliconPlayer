@@ -10,15 +10,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import java.io.File
+import kotlin.math.roundToInt
 
 @Composable
 fun PlayerScreen(
     file: File,
     onBack: () -> Unit,
     onPlay: () -> Unit,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    durationSeconds: Double,
+    positionSeconds: Double,
+    isLooping: Boolean,
+    onSeek: (Double) -> Unit,
+    onLoopingChanged: (Boolean) -> Unit
 ) {
     var isPlaying by remember { mutableStateOf(false) }
+    var sliderPosition by remember { mutableDoubleStateOf(0.0) }
+    var isSeeking by remember { mutableStateOf(false) }
+
+    LaunchedEffect(positionSeconds, isSeeking) {
+        if (!isSeeking) {
+            sliderPosition = positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0))
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -30,9 +44,30 @@ fun PlayerScreen(
         Text(text = "Now Playing", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(16.dp))
         Text(text = file.name, style = MaterialTheme.typography.bodyLarge)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        val sliderMax = durationSeconds.coerceAtLeast(0.0)
+        Slider(
+            value = sliderPosition.toFloat(),
+            onValueChange = { value ->
+                isSeeking = true
+                sliderPosition = value.toDouble().coerceIn(0.0, sliderMax)
+            },
+            onValueChangeFinished = {
+                isSeeking = false
+                onSeek(sliderPosition)
+            },
+            valueRange = 0f..sliderMax.toFloat(),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Text(
+            text = "${formatTime(sliderPosition)} / ${formatTime(durationSeconds)}",
+            style = MaterialTheme.typography.bodyMedium
+        )
         Spacer(modifier = Modifier.height(32.dp))
 
-        Row {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = {
                 if (isPlaying) {
                     onStop()
@@ -49,10 +84,20 @@ fun PlayerScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(text = if (isPlaying) "Stop" else "Play")
             }
+            FilledTonalButton(onClick = { onLoopingChanged(!isLooping) }) {
+                Text(if (isLooping) "Loop On" else "Loop Off")
+            }
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onBack) {
             Text("Back to Files")
         }
     }
+}
+
+private fun formatTime(seconds: Double): String {
+    val safeSeconds = seconds.coerceAtLeast(0.0).roundToInt()
+    val minutes = safeSeconds / 60
+    val remainingSeconds = safeSeconds % 60
+    return "%02d:%02d".format(minutes, remainingSeconds)
 }

@@ -26,6 +26,10 @@ public:
     int getSampleRate() override;
     int getChannelCount() override;
 
+    // Configuration
+    const char* getName() const override { return "FFmpeg"; }
+    static std::vector<std::string> getSupportedExtensions();
+
 private:
     AVFormatContext* formatContext = nullptr;
     AVCodecContext* codecContext = nullptr;

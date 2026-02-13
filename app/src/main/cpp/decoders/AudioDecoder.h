@@ -18,6 +18,10 @@ public:
     virtual double getDuration() = 0;
     virtual int getSampleRate() = 0;
     virtual int getChannelCount() = 0;
+
+    // Configuration
+    virtual void setOption(const char* /*name*/, const char* /*value*/) {}
+    virtual const char* getName() const = 0; // Instance name
 };
 
 #endif //SILICONPLAYER_AUDIODECODER_H

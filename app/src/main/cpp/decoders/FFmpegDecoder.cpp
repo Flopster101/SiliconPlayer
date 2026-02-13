@@ -259,3 +259,9 @@ int FFmpegDecoder::getSampleRate() {
 int FFmpegDecoder::getChannelCount() {
     return outputChannelCount;
 }
+
+std::vector<std::string> FFmpegDecoder::getSupportedExtensions() {
+    return {
+        "mp3", "flac", "ogg", "m4a", "wav", "aac", "wma", "opus", "ape", "wv"
+    };
+}

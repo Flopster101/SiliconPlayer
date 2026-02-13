@@ -1,4 +1,8 @@
 #include "AudioEngine.h"
+#include "decoders/DecoderRegistry.h"
+#include "decoders/DecoderRegistry.h"
+#include "decoders/FFmpegDecoder.h"
+#include "decoders/LibOpenMPTDecoder.h"
 #include <android/log.h>
 #include <cmath>
 
@@ -11,6 +15,15 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 AudioEngine::AudioEngine() {
+    // Register decoders
+    DecoderRegistry::getInstance().registerDecoder("FFmpeg", FFmpegDecoder::getSupportedExtensions(), []() {
+        return std::make_unique<FFmpegDecoder>();
+    }, 0);
+
+    DecoderRegistry::getInstance().registerDecoder("LibOpenMPT", LibOpenMPTDecoder::getSupportedExtensions(), []() {
+        return std::make_unique<LibOpenMPTDecoder>();
+    }, 10); // Higher priority than FFmpeg for supported extensions
+
     createStream();
 }
 
@@ -102,8 +115,8 @@ void AudioEngine::stop() {
 void AudioEngine::setUrl(const char* url) {
     LOGD("URL set to: %s", url);
 
-    auto newDecoder = std::make_unique<FFmpegDecoder>();
-    if (newDecoder->open(url)) {
+    auto newDecoder = DecoderRegistry::getInstance().createDecoder(url);
+    if (newDecoder && newDecoder->open(url)) {
         std::lock_guard<std::mutex> lock(decoderMutex);
         decoder = std::move(newDecoder);
         if (!isPlaying) {

@@ -21,6 +21,8 @@ add_library(
         SiliconPlayerNative.cpp
         AudioEngine.cpp
         decoders/FFmpegDecoder.cpp
+        decoders/DecoderRegistry.cpp
+        decoders/LibOpenMPTDecoder.cpp
 )
 
 include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)

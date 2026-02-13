@@ -1280,6 +1280,12 @@ private fun MiniPlayerBar(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onStopAndClear) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Stop"
+                        )
+                    }
                     IconButton(onClick = onPlayPause, enabled = hasTrack) {
                         AnimatedContent(
                             targetState = isPlaying,
@@ -1293,12 +1299,6 @@ private fun MiniPlayerBar(
                                 contentDescription = if (playing) "Pause" else "Play"
                             )
                         }
-                    }
-                    IconButton(onClick = onStopAndClear) {
-                        Icon(
-                            imageVector = Icons.Default.Stop,
-                            contentDescription = "Stop"
-                        )
                     }
                     IconButton(onClick = onExpand) {
                         Icon(

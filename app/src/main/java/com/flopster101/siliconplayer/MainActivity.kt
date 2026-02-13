@@ -1078,7 +1078,6 @@ private fun AppNavigation(
                 when (targetView) {
                     MainView.Home -> Box(modifier = Modifier.padding(mainPadding)) {
                         HomeScreen(
-                            selectedTrack = selectedFile,
                             currentTrackPath = selectedFile?.absolutePath,
                             currentTrackTitle = metadataTitle,
                             currentTrackArtist = metadataArtist,
@@ -1445,7 +1444,6 @@ private fun AppNavigation(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeScreen(
-    selectedTrack: File?,
     currentTrackPath: String?,
     currentTrackTitle: String,
     currentTrackArtist: String,
@@ -1617,28 +1615,6 @@ private fun HomeScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-            }
-        }
-        selectedTrack?.let { track ->
-            Spacer(modifier = Modifier.height(14.dp))
-            androidx.compose.material3.ElevatedCard(
-                modifier = Modifier.fillMaxWidth(),
-                shape = SettingsCardShape
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Current track",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = track.nameWithoutExtension.ifBlank { track.name },
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
             }
         }
     }

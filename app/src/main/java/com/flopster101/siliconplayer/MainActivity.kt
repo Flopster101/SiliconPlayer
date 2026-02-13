@@ -62,6 +62,7 @@ import androidx.compose.ui.layout.ContentScale
 import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import java.io.File
 import android.content.Intent
+import android.content.Context
 import android.net.Uri
 import android.provider.Settings
 import android.os.Environment
@@ -85,6 +86,12 @@ private enum class SettingsRoute {
     Misc,
     Ui,
     About
+}
+
+private object AppPreferenceKeys {
+    const val PREFS_NAME = "silicon_player_settings"
+    const val AUTO_PLAY_ON_TRACK_SELECT = "auto_play_on_track_select"
+    const val OPEN_PLAYER_ON_TRACK_SELECT = "open_player_on_track_select"
 }
 
 class MainActivity : ComponentActivity() {
@@ -141,10 +148,21 @@ fun AppNavigation() {
     var metadataChannelCount by remember { mutableIntStateOf(0) }
     var metadataBitDepthLabel by remember { mutableStateOf("Unknown") }
     var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    var autoPlayOnTrackSelect by remember { mutableStateOf(true) }
-    var openPlayerOnTrackSelect by remember { mutableStateOf(true) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as MainActivity
+    val prefs = remember(context) {
+        context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    var autoPlayOnTrackSelect by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.AUTO_PLAY_ON_TRACK_SELECT, true)
+        )
+    }
+    var openPlayerOnTrackSelect by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.OPEN_PLAYER_ON_TRACK_SELECT, true)
+        )
+    }
 
     // Get supported extensions from JNI
     val supportedExtensions = remember { activity.getSupportedExtensions().toSet() }
@@ -217,6 +235,18 @@ fun AppNavigation() {
         artworkBitmap = withContext(Dispatchers.IO) {
             selectedFile?.let { loadArtworkForFile(it) }
         }
+    }
+
+    LaunchedEffect(autoPlayOnTrackSelect) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.AUTO_PLAY_ON_TRACK_SELECT, autoPlayOnTrackSelect)
+            .apply()
+    }
+
+    LaunchedEffect(openPlayerOnTrackSelect) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.OPEN_PLAYER_ON_TRACK_SELECT, openPlayerOnTrackSelect)
+            .apply()
     }
 
     if (!hasPermission) {

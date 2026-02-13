@@ -109,6 +109,7 @@ class PlaybackService : Service() {
             currentArtworkPath = newPath
         }
         currentPath = newPath
+        prefs.edit().putString(PREF_SESSION_CURRENT_PATH, currentPath).apply()
         currentTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { "Unknown Title" }
         currentArtist = intent.getStringExtra(EXTRA_ARTIST).orEmpty().ifBlank { "Unknown Artist" }
         durationSeconds = intent.getDoubleExtra(EXTRA_DURATION, 0.0)
@@ -147,6 +148,7 @@ class PlaybackService : Service() {
         NativeBridge.stopEngine()
         isPlaying = false
         currentPath = null
+        prefs.edit().remove(PREF_SESSION_CURRENT_PATH).apply()
         currentTitle = "No track selected"
         currentArtist = "Silicon Player"
         durationSeconds = 0.0
@@ -230,6 +232,8 @@ class PlaybackService : Service() {
 
     private fun buildNotification(): Notification {
         val launchIntent = Intent(this, MainActivity::class.java)
+            .putExtra(EXTRA_OPEN_PLAYER_FROM_NOTIFICATION, true)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         val launchPendingIntent = PendingIntent.getActivity(
             this,
             100,
@@ -367,6 +371,7 @@ class PlaybackService : Service() {
         private const val PREFS_NAME = "silicon_player_settings"
         private const val PREF_RESPOND_MEDIA_BUTTONS = "respond_headphone_media_buttons"
         private const val PREF_PAUSE_ON_DISCONNECT = "pause_on_headphone_disconnect"
+        private const val PREF_SESSION_CURRENT_PATH = "session_current_path"
 
         private const val EXTRA_PATH = "extra_path"
         private const val EXTRA_TITLE = "extra_title"
@@ -382,6 +387,7 @@ class PlaybackService : Service() {
         const val ACTION_STOP_CLEAR = "com.flopster101.siliconplayer.action.STOP_CLEAR"
         const val ACTION_REFRESH_SETTINGS = "com.flopster101.siliconplayer.action.REFRESH_SETTINGS"
         const val ACTION_BROADCAST_CLEARED = "com.flopster101.siliconplayer.action.BROADCAST_CLEARED"
+        const val EXTRA_OPEN_PLAYER_FROM_NOTIFICATION = "extra_open_player_from_notification"
 
         fun syncFromUi(
             context: Context,

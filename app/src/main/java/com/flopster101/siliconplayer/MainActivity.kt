@@ -144,11 +144,20 @@ private object AppPreferenceKeys {
     const val CORE_RATE_OPENMPT = "core_rate_openmpt"
     const val RESPOND_HEADPHONE_MEDIA_BUTTONS = "respond_headphone_media_buttons"
     const val PAUSE_ON_HEADPHONE_DISCONNECT = "pause_on_headphone_disconnect"
+    const val OPEN_PLAYER_FROM_NOTIFICATION = "open_player_from_notification"
+    const val SESSION_CURRENT_PATH = "session_current_path"
 }
 
 class MainActivity : ComponentActivity() {
+    private fun consumeNotificationIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(PlaybackService.EXTRA_OPEN_PLAYER_FROM_NOTIFICATION, false) == true) {
+            notificationOpenPlayerSignal++
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        consumeNotificationIntent(intent)
         setContent {
             SiliconPlayerTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -156,6 +165,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeNotificationIntent(intent)
     }
 
     external fun getStringFromJNI(): String
@@ -177,6 +192,8 @@ class MainActivity : ComponentActivity() {
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
 
     companion object {
+        var notificationOpenPlayerSignal by mutableIntStateOf(0)
+
         init {
             System.loadLibrary("siliconplayer")
         }
@@ -250,6 +267,11 @@ fun AppNavigation() {
             prefs.getBoolean(AppPreferenceKeys.PAUSE_ON_HEADPHONE_DISCONNECT, true)
         )
     }
+    var openPlayerFromNotification by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.OPEN_PLAYER_FROM_NOTIFICATION, true)
+        )
+    }
 
     // Get supported extensions from JNI
     val supportedExtensions = remember { NativeBridge.getSupportedExtensions().toSet() }
@@ -303,6 +325,23 @@ fun AppNavigation() {
             positionSeconds = position,
             isPlaying = isPlaying
         )
+    }
+
+    fun restorePlayerStateFromSessionAndNative(openExpanded: Boolean) {
+        val path = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null)
+        val file = path?.let { File(it) }?.takeIf { it.exists() && it.isFile } ?: return
+        selectedFile = file
+        isPlayerSurfaceVisible = true
+        isPlayerExpanded = openExpanded
+        metadataTitle = NativeBridge.getTrackTitle()
+        metadataArtist = NativeBridge.getTrackArtist()
+        metadataSampleRate = NativeBridge.getTrackSampleRate()
+        metadataChannelCount = NativeBridge.getTrackChannelCount()
+        metadataBitDepthLabel = NativeBridge.getTrackBitDepthLabel()
+        duration = NativeBridge.getDuration()
+        position = NativeBridge.getPosition()
+        isPlaying = NativeBridge.isEnginePlaying()
+        artworkBitmap = null
     }
 
     LaunchedEffect(Unit) {
@@ -401,9 +440,23 @@ fun AppNavigation() {
         PlaybackService.refreshSettings(context)
     }
 
+    LaunchedEffect(openPlayerFromNotification) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.OPEN_PLAYER_FROM_NOTIFICATION, openPlayerFromNotification)
+            .apply()
+    }
+
     LaunchedEffect(selectedFile, isPlaying, metadataTitle, metadataArtist, duration) {
         if (selectedFile != null) {
             syncPlaybackService()
+        }
+    }
+
+    val notificationOpenSignal = MainActivity.notificationOpenPlayerSignal
+    LaunchedEffect(notificationOpenSignal, openPlayerFromNotification) {
+        if (notificationOpenSignal <= 0) return@LaunchedEffect
+        if (openPlayerFromNotification) {
+            restorePlayerStateFromSessionAndNative(openExpanded = true)
         }
     }
 
@@ -619,6 +672,8 @@ fun AppNavigation() {
                     onRespondHeadphoneMediaButtonsChanged = { respondHeadphoneMediaButtons = it },
                     pauseOnHeadphoneDisconnect = pauseOnHeadphoneDisconnect,
                     onPauseOnHeadphoneDisconnectChanged = { pauseOnHeadphoneDisconnect = it },
+                    openPlayerFromNotification = openPlayerFromNotification,
+                    onOpenPlayerFromNotificationChanged = { openPlayerFromNotification = it },
                     rememberBrowserLocation = rememberBrowserLocation,
                     onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
                     ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
@@ -866,6 +921,8 @@ private fun SettingsScreen(
     onRespondHeadphoneMediaButtonsChanged: (Boolean) -> Unit,
     pauseOnHeadphoneDisconnect: Boolean,
     onPauseOnHeadphoneDisconnectChanged: (Boolean) -> Unit,
+    openPlayerFromNotification: Boolean,
+    onOpenPlayerFromNotificationChanged: (Boolean) -> Unit,
     rememberBrowserLocation: Boolean,
     onRememberBrowserLocationChanged: (Boolean) -> Unit,
     ffmpegSampleRateHz: Int,
@@ -1049,6 +1106,13 @@ private fun SettingsScreen(
                             description = "Open full player when selecting a file. Disable to keep mini-player only.",
                             checked = openPlayerOnTrackSelect,
                             onCheckedChange = onOpenPlayerOnTrackSelectChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Open player from notification",
+                            description = "When tapping playback notification, open the full player instead of normal app start destination.",
+                            checked = openPlayerFromNotification,
+                            onCheckedChange = onOpenPlayerFromNotificationChanged
                         )
                     }
                     SettingsRoute.Misc -> {

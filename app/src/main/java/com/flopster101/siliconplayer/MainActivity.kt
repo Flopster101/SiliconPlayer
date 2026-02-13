@@ -67,12 +67,16 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.TabletAndroid
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Slideshow
 import androidx.compose.runtime.* // Import for remember, mutableStateOf
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -85,10 +89,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -108,6 +114,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.Locale
 
 private enum class MainView {
@@ -157,6 +165,192 @@ private fun placeholderArtworkIconForFile(file: File?): ImageVector {
     }
 }
 
+private fun normalizedPath(path: String?): String? {
+    if (path.isNullOrBlank()) return null
+    return try {
+        File(path).canonicalFile.absolutePath
+    } catch (_: Exception) {
+        File(path).absoluteFile.normalize().path
+    }
+}
+
+private fun samePath(a: String?, b: String?): Boolean {
+    val left = normalizedPath(a) ?: return false
+    val right = normalizedPath(b) ?: return false
+    return left == right
+}
+
+private data class RecentPathEntry(
+    val path: String,
+    val locationId: String?,
+    val title: String? = null,
+    val artist: String? = null
+)
+
+private data class StorageDescriptor(
+    val rootPath: String,
+    val label: String,
+    val icon: ImageVector
+)
+
+private data class StoragePresentation(
+    val label: String,
+    val icon: ImageVector
+)
+
+private data class RecentTrackDisplay(
+    val primaryText: String,
+    val includeFilenameInSubtitle: Boolean
+)
+
+private fun buildRecentTrackDisplay(
+    title: String,
+    artist: String,
+    fallback: String
+): RecentTrackDisplay {
+    return when {
+        title.isNotBlank() && artist.isNotBlank() -> {
+            RecentTrackDisplay(
+                primaryText = "$artist - $title",
+                includeFilenameInSubtitle = true
+            )
+        }
+        title.isNotBlank() -> {
+            RecentTrackDisplay(
+                primaryText = "(unknown) - $title",
+                includeFilenameInSubtitle = true
+            )
+        }
+        artist.isNotBlank() -> {
+            RecentTrackDisplay(
+                primaryText = fallback,
+                includeFilenameInSubtitle = false
+            )
+        }
+        else -> {
+            RecentTrackDisplay(
+                primaryText = fallback,
+                includeFilenameInSubtitle = false
+            )
+        }
+    }
+}
+
+private fun resolveStorageRootFromAppDir(appSpecificDir: File): File? {
+    val marker = "/Android/"
+    val absolutePath = appSpecificDir.absolutePath
+    val markerIndex = absolutePath.indexOf(marker)
+    if (markerIndex <= 0) return null
+    return File(absolutePath.substring(0, markerIndex))
+}
+
+private fun detectStorageDescriptors(context: Context): List<StorageDescriptor> {
+    val descriptors = mutableListOf<StorageDescriptor>()
+    val seen = mutableSetOf<String>()
+
+    fun add(path: String, label: String, icon: ImageVector) {
+        if (path in seen) return
+        seen += path
+        descriptors += StorageDescriptor(path, label, icon)
+    }
+
+    add("/", "Root (/)", Icons.Default.Folder)
+    val internalRoot = Environment.getExternalStorageDirectory().absolutePath
+    val internalIcon = if (context.resources.configuration.smallestScreenWidthDp >= 600) {
+        Icons.Default.TabletAndroid
+    } else {
+        Icons.Default.PhoneAndroid
+    }
+    add(internalRoot, "Internal storage", internalIcon)
+
+    context.getExternalFilesDirs(null)
+        .orEmpty()
+        .forEach { externalDir ->
+            if (externalDir == null) return@forEach
+            val volumeRoot = resolveStorageRootFromAppDir(externalDir) ?: return@forEach
+            if (!Environment.isExternalStorageRemovable(externalDir)) return@forEach
+
+            val lower = volumeRoot.absolutePath.lowercase()
+            val isUsb = lower.contains("usb") || lower.contains("otg")
+            val volumeName = volumeRoot.name.ifBlank { volumeRoot.absolutePath }
+            val label = volumeName
+            add(volumeRoot.absolutePath, label, if (isUsb) Icons.Default.Usb else Icons.Default.SdCard)
+        }
+
+    return descriptors
+}
+
+private fun storagePresentationForEntry(
+    entry: RecentPathEntry,
+    descriptors: List<StorageDescriptor>
+): StoragePresentation {
+    entry.locationId?.let { locationId ->
+        descriptors.firstOrNull { it.rootPath == locationId }?.let {
+            return StoragePresentation(label = it.label, icon = it.icon)
+        }
+    }
+    val matching = descriptors
+        .filter { entry.path == it.rootPath || entry.path.startsWith("${it.rootPath}/") }
+        .maxByOrNull { it.rootPath.length }
+    return if (matching != null) {
+        StoragePresentation(label = matching.label, icon = matching.icon)
+    } else {
+        StoragePresentation(label = "Unknown storage", icon = Icons.Default.Folder)
+    }
+}
+
+private fun readRecentEntries(
+    prefs: android.content.SharedPreferences,
+    key: String,
+    maxItems: Int
+): List<RecentPathEntry> {
+    val raw = prefs.getString(key, null) ?: return emptyList()
+    return try {
+        val array = JSONArray(raw)
+        buildList {
+            for (index in 0 until array.length()) {
+                val objectValue = array.optJSONObject(index) ?: continue
+                val path = objectValue.optString("path", "").trim()
+                if (path.isBlank()) continue
+                val locationId = objectValue.optString("locationId", "").ifBlank { null }
+                val title = objectValue.optString("title", "").ifBlank { null }
+                val artist = objectValue.optString("artist", "").ifBlank { null }
+                add(
+                    RecentPathEntry(
+                        path = path,
+                        locationId = locationId,
+                        title = title,
+                        artist = artist
+                    )
+                )
+                if (size >= maxItems) break
+            }
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+private fun writeRecentEntries(
+    prefs: android.content.SharedPreferences,
+    key: String,
+    entries: List<RecentPathEntry>,
+    maxItems: Int
+) {
+    val trimmed = entries.take(maxItems)
+    val array = JSONArray()
+    trimmed.forEach { entry ->
+        array.put(
+            JSONObject()
+                .put("path", entry.path)
+                .put("locationId", entry.locationId ?: "")
+                .put("title", entry.title ?: "")
+                .put("artist", entry.artist ?: "")
+        )
+    }
+    prefs.edit().putString(key, array.toString()).apply()
+}
+
 private fun mainViewOrder(view: MainView): Int = when (view) {
     MainView.Home -> 0
     MainView.Browser -> 1
@@ -176,6 +370,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
 }
 
 private const val PAGE_NAV_DURATION_MS = 300
+private const val RECENTS_LIMIT = 3
 private val SettingsCardShape = RoundedCornerShape(16.dp)
 
 private object AppPreferenceKeys {
@@ -192,6 +387,8 @@ private object AppPreferenceKeys {
     const val OPEN_PLAYER_FROM_NOTIFICATION = "open_player_from_notification"
     const val SESSION_CURRENT_PATH = "session_current_path"
     const val THEME_MODE = "theme_mode"
+    const val RECENT_FOLDERS = "recent_folders"
+    const val RECENT_PLAYED_FILES = "recent_played_files"
 }
 
 class MainActivity : ComponentActivity() {
@@ -292,9 +489,20 @@ private fun AppNavigation(
     var metadataBitDepthLabel by remember { mutableStateOf("Unknown") }
     var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var visiblePlayableFiles by remember { mutableStateOf<List<File>>(emptyList()) }
+    var browserLaunchLocationId by remember { mutableStateOf<String?>(null) }
+    var browserLaunchDirectoryPath by remember { mutableStateOf<String?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val storageDescriptors = remember(context) { detectStorageDescriptors(context) }
+    val appScope = rememberCoroutineScope()
     val prefs = remember(context) {
         context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    val recentLimit = RECENTS_LIMIT
+    var recentFolders by remember {
+        mutableStateOf(readRecentEntries(prefs, AppPreferenceKeys.RECENT_FOLDERS, recentLimit))
+    }
+    var recentPlayedFiles by remember {
+        mutableStateOf(readRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, recentLimit))
     }
     var autoPlayOnTrackSelect by remember {
         mutableStateOf(
@@ -401,6 +609,54 @@ private fun AppNavigation(
         )
     }
 
+    fun addRecentFolder(path: String, locationId: String?) {
+        val normalized = normalizedPath(path) ?: path
+        val updated = listOf(
+            RecentPathEntry(path = normalized, locationId = locationId, title = null, artist = null)
+        ) + recentFolders.filterNot { samePath(it.path, normalized) }
+        recentFolders = updated.take(recentLimit)
+        writeRecentEntries(prefs, AppPreferenceKeys.RECENT_FOLDERS, recentFolders, recentLimit)
+    }
+
+    fun addRecentPlayedTrack(path: String, locationId: String?, title: String? = null, artist: String? = null) {
+        val normalized = normalizedPath(path) ?: path
+        val existing = recentPlayedFiles.firstOrNull { samePath(it.path, normalized) }
+        val resolvedTitle = title?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.title
+        val resolvedArtist = artist?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.artist
+        val updated = listOf(
+            RecentPathEntry(
+                path = normalized,
+                locationId = locationId ?: existing?.locationId,
+                title = resolvedTitle,
+                artist = resolvedArtist
+            )
+        ) +
+            recentPlayedFiles.filterNot { samePath(it.path, normalized) }
+        recentPlayedFiles = updated.take(recentLimit)
+        writeRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, recentPlayedFiles, recentLimit)
+    }
+
+    fun scheduleRecentTrackMetadataRefresh(path: String, locationId: String?) {
+        appScope.launch {
+            repeat(8) { attempt ->
+                delay(if (attempt == 0) 120L else 220L)
+                val current = selectedFile ?: return@launch
+                if (current.absolutePath != path) return@launch
+                val refreshedTitle = NativeBridge.getTrackTitle()
+                val refreshedArtist = NativeBridge.getTrackArtist()
+                addRecentPlayedTrack(
+                    path = path,
+                    locationId = locationId,
+                    title = refreshedTitle,
+                    artist = refreshedArtist
+                )
+                if (refreshedTitle.isNotBlank() || refreshedArtist.isNotBlank()) {
+                    return@launch
+                }
+            }
+        }
+    }
+
     fun applyTrackSelection(file: File, autoStart: Boolean, expandOverride: Boolean? = null) {
         NativeBridge.stopEngine()
         isPlaying = false
@@ -417,9 +673,16 @@ private fun AppNavigation(
         position = 0.0
         artworkBitmap = null
         if (autoStart) {
+            addRecentPlayedTrack(
+                path = file.absolutePath,
+                locationId = lastBrowserLocationId,
+                title = metadataTitle,
+                artist = metadataArtist
+            )
             NativeBridge.setLooping(looping)
             NativeBridge.startEngine()
             isPlaying = true
+            scheduleRecentTrackMetadataRefresh(file.absolutePath, lastBrowserLocationId)
         }
         expandOverride?.let { isPlayerExpanded = it }
         syncPlaybackService()
@@ -503,9 +766,24 @@ private fun AppNavigation(
 
     LaunchedEffect(selectedFile) {
         while (selectedFile != null) {
+            val currentFile = selectedFile
             duration = NativeBridge.getDuration()
             position = NativeBridge.getPosition()
             isPlaying = NativeBridge.isEnginePlaying()
+            val nextTitle = NativeBridge.getTrackTitle()
+            val nextArtist = NativeBridge.getTrackArtist()
+            val titleChanged = nextTitle != metadataTitle
+            val artistChanged = nextArtist != metadataArtist
+            if (titleChanged) metadataTitle = nextTitle
+            if (artistChanged) metadataArtist = nextArtist
+            if ((titleChanged || artistChanged) && currentFile != null) {
+                addRecentPlayedTrack(
+                    path = currentFile.absolutePath,
+                    locationId = lastBrowserLocationId,
+                    title = nextTitle,
+                    artist = nextArtist
+                )
+            }
             delay(if (isPlaying) 80 else 250)
         }
     }
@@ -617,7 +895,11 @@ private fun AppNavigation(
         return
     }
 
-    val miniPlayerInsetTarget = if (isPlayerSurfaceVisible && currentView == MainView.Browser) 108.dp else 0.dp
+    val miniPlayerInsetTarget = when {
+        currentView == MainView.Browser && isPlayerSurfaceVisible -> 108.dp
+        currentView == MainView.Home && isPlayerSurfaceVisible -> 108.dp
+        else -> 0.dp
+    }
     val miniPlayerListInset by animateDpAsState(
         targetValue = miniPlayerInsetTarget,
         label = "miniPlayerListInset"
@@ -797,14 +1079,44 @@ private fun AppNavigation(
                     MainView.Home -> Box(modifier = Modifier.padding(mainPadding)) {
                         HomeScreen(
                             selectedTrack = selectedFile,
-                            onOpenLibrary = { currentView = MainView.Browser }
+                            currentTrackPath = selectedFile?.absolutePath,
+                            currentTrackTitle = metadataTitle,
+                            currentTrackArtist = metadataArtist,
+                            recentFolders = recentFolders,
+                            recentPlayedFiles = recentPlayedFiles,
+                            storagePresentationForEntry = { entry ->
+                                storagePresentationForEntry(entry, storageDescriptors)
+                            },
+                            bottomContentPadding = miniPlayerListInset,
+                            onOpenLibrary = {
+                                browserLaunchLocationId = null
+                                browserLaunchDirectoryPath = null
+                                currentView = MainView.Browser
+                            },
+                            onOpenRecentFolder = { entry ->
+                                browserLaunchLocationId = entry.locationId
+                                browserLaunchDirectoryPath = entry.path
+                                currentView = MainView.Browser
+                            },
+                            onPlayRecentFile = { entry ->
+                                val file = File(entry.path)
+                                if (file.exists() && file.isFile) {
+                                    applyTrackSelection(
+                                        file = file,
+                                        autoStart = true,
+                                        expandOverride = openPlayerOnTrackSelect
+                                    )
+                                }
+                            }
                         )
                     }
                     MainView.Browser -> Box(modifier = Modifier.padding(mainPadding)) {
                         com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
                             repository = repository,
-                            initialLocationId = if (rememberBrowserLocation) lastBrowserLocationId else null,
-                            initialDirectoryPath = if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
+                            initialLocationId = browserLaunchLocationId
+                                ?: if (rememberBrowserLocation) lastBrowserLocationId else null,
+                            initialDirectoryPath = browserLaunchDirectoryPath
+                                ?: if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
                             onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
                             bottomContentPadding = miniPlayerListInset,
                             backHandlingEnabled = !isPlayerExpanded,
@@ -812,6 +1124,13 @@ private fun AppNavigation(
                             onOpenSettings = null,
                             showPrimaryTopBar = false,
                             onBrowserLocationChanged = { locationId, directoryPath ->
+                                if (locationId != null && directoryPath != null) {
+                                    addRecentFolder(directoryPath, locationId)
+                                }
+                                if (browserLaunchLocationId != null || browserLaunchDirectoryPath != null) {
+                                    browserLaunchLocationId = null
+                                    browserLaunchDirectoryPath = null
+                                }
                                 if (!rememberBrowserLocation) return@FileBrowserScreen
                                 lastBrowserLocationId = locationId
                                 lastBrowserDirectoryPath = directoryPath
@@ -866,7 +1185,15 @@ private fun AppNavigation(
                         ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
                         onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
                         openMptSampleRateHz = openMptCoreSampleRateHz,
-                        onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it }
+                        onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it },
+                        onClearRecentHistory = {
+                            recentFolders = emptyList()
+                            recentPlayedFiles = emptyList()
+                            prefs.edit()
+                                .remove(AppPreferenceKeys.RECENT_FOLDERS)
+                                .remove(AppPreferenceKeys.RECENT_PLAYED_FILES)
+                                .apply()
+                        }
                     )
                 }
             }
@@ -1001,9 +1328,23 @@ private fun AppNavigation(
                                     NativeBridge.stopEngine()
                                     isPlaying = false
                                 } else {
+                                    selectedFile?.let {
+                                        addRecentPlayedTrack(
+                                            path = it.absolutePath,
+                                            locationId = lastBrowserLocationId,
+                                            title = metadataTitle,
+                                            artist = metadataArtist
+                                        )
+                                    }
                                     NativeBridge.setLooping(looping)
                                     NativeBridge.startEngine()
                                     isPlaying = true
+                                    selectedFile?.let {
+                                        scheduleRecentTrackMetadataRefresh(
+                                            path = it.absolutePath,
+                                            locationId = lastBrowserLocationId
+                                        )
+                                    }
                                 }
                                 syncPlaybackService()
                             }
@@ -1043,9 +1384,23 @@ private fun AppNavigation(
                         if (selectedFile == null) {
                             resumeLastStoppedTrack(autoStart = true)
                         } else {
+                            selectedFile?.let {
+                                addRecentPlayedTrack(
+                                    path = it.absolutePath,
+                                    locationId = lastBrowserLocationId,
+                                    title = metadataTitle,
+                                    artist = metadataArtist
+                                )
+                            }
                             NativeBridge.setLooping(looping)
                             NativeBridge.startEngine()
                             isPlaying = true
+                            selectedFile?.let {
+                                scheduleRecentTrackMetadataRefresh(
+                                    path = it.absolutePath,
+                                    locationId = lastBrowserLocationId
+                                )
+                            }
                             syncPlaybackService()
                         }
                     },
@@ -1091,12 +1446,23 @@ private fun AppNavigation(
 @Composable
 private fun HomeScreen(
     selectedTrack: File?,
-    onOpenLibrary: () -> Unit
+    currentTrackPath: String?,
+    currentTrackTitle: String,
+    currentTrackArtist: String,
+    recentFolders: List<RecentPathEntry>,
+    recentPlayedFiles: List<RecentPathEntry>,
+    storagePresentationForEntry: (RecentPathEntry) -> StoragePresentation,
+    bottomContentPadding: Dp = 0.dp,
+    onOpenLibrary: () -> Unit,
+    onOpenRecentFolder: (RecentPathEntry) -> Unit,
+    onPlayRecentFile: (RecentPathEntry) -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp)
+            .padding(bottom = bottomContentPadding)
     ) {
         Text(
             text = "Local music library",
@@ -1154,6 +1520,105 @@ private fun HomeScreen(
                 )
             }
         }
+        if (recentFolders.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Recent folders",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            recentFolders.take(RECENTS_LIMIT).forEach { entry ->
+                val folderFile = File(entry.path)
+                val storagePresentation = storagePresentationForEntry(entry)
+                androidx.compose.material3.ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = SettingsCardShape,
+                    onClick = { onOpenRecentFolder(entry) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = folderFile.name.ifBlank { entry.path },
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = storagePresentation.icon,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = storagePresentation.label,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+        if (recentPlayedFiles.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Recently played",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            recentPlayedFiles.take(RECENTS_LIMIT).forEach { entry ->
+                val trackFile = File(entry.path)
+                val storagePresentation = storagePresentationForEntry(entry)
+                val extensionLabel = trackFile.extension.uppercase().ifBlank { "UNKNOWN" }
+                val useLiveMetadata = samePath(currentTrackPath, entry.path)
+                androidx.compose.material3.ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = SettingsCardShape,
+                    onClick = { onPlayRecentFile(entry) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            RecentTrackSummaryText(
+                                file = trackFile,
+                                cachedTitle = if (useLiveMetadata) currentTrackTitle else entry.title,
+                                cachedArtist = if (useLiveMetadata) currentTrackArtist else entry.artist,
+                                storagePresentation = storagePresentation,
+                                extensionLabel = extensionLabel
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
         selectedTrack?.let { track ->
             Spacer(modifier = Modifier.height(14.dp))
             androidx.compose.material3.ElevatedCard(
@@ -1176,6 +1641,117 @@ private fun HomeScreen(
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RecentTrackSummaryText(
+    file: File,
+    cachedTitle: String?,
+    cachedArtist: String?,
+    storagePresentation: StoragePresentation,
+    extensionLabel: String
+) {
+    val fallback = file.nameWithoutExtension.ifBlank { file.name }
+    val display by produceState(
+        initialValue = RecentTrackDisplay(
+            primaryText = fallback,
+            includeFilenameInSubtitle = false
+        ),
+        key1 = file.absolutePath,
+        key2 = cachedTitle,
+        key3 = cachedArtist
+    ) {
+        value = withContext(Dispatchers.IO) {
+            val cachedTitleValue = cachedTitle?.trim().orEmpty()
+            val cachedArtistValue = cachedArtist?.trim().orEmpty()
+            try {
+                val result = if (cachedTitleValue.isNotBlank() || cachedArtistValue.isNotBlank()) {
+                    buildRecentTrackDisplay(
+                        title = cachedTitleValue,
+                        artist = cachedArtistValue,
+                        fallback = fallback
+                    )
+                } else {
+                    val retriever = MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(file.absolutePath)
+                        val title = retriever
+                            .extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                            ?.trim()
+                            .orEmpty()
+                        val artist = retriever
+                            .extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                            ?.trim()
+                            .orEmpty()
+                        buildRecentTrackDisplay(
+                            title = title,
+                            artist = artist,
+                            fallback = fallback
+                        )
+                    } finally {
+                        retriever.release()
+                    }
+                }
+                result
+            } catch (_: Exception) {
+                RecentTrackDisplay(
+                    primaryText = fallback,
+                    includeFilenameInSubtitle = false
+                )
+            }
+        }
+    }
+    val shouldMarquee = display.primaryText.length > 28
+    if (shouldMarquee) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clipToBounds()
+        ) {
+            Text(
+                text = display.primaryText,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+                modifier = Modifier.basicMarquee(
+                    iterations = Int.MAX_VALUE,
+                    initialDelayMillis = 900
+                )
+            )
+        }
+    } else {
+        Text(
+            text = display.primaryText,
+            style = MaterialTheme.typography.titleSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = storagePresentation.icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = buildString {
+                append(storagePresentation.label)
+                append(" • ")
+                append(extensionLabel)
+                if (display.includeFilenameInSubtitle) {
+                    append(" • ")
+                    append(fallback)
+                }
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -1209,7 +1785,8 @@ private fun SettingsScreen(
     ffmpegSampleRateHz: Int,
     onFfmpegSampleRateChanged: (Int) -> Unit,
     openMptSampleRateHz: Int,
-    onOpenMptSampleRateChanged: (Int) -> Unit
+    onOpenMptSampleRateChanged: (Int) -> Unit,
+    onClearRecentHistory: () -> Unit
 ) {
     val screenTitle = when (route) {
         SettingsRoute.Root -> "Settings"
@@ -1403,6 +1980,13 @@ private fun SettingsScreen(
                             description = "Restore last storage and folder when reopening the library browser.",
                             checked = rememberBrowserLocation,
                             onCheckedChange = onRememberBrowserLocationChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Clear home recents",
+                            description = "Remove recent folders and recently played shortcuts from the Home screen.",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = onClearRecentHistory
                         )
                     }
                     SettingsRoute.Ui -> ThemeModeSelectorCard(

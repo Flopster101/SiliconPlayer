@@ -79,6 +79,7 @@ fun FileBrowserScreen(
     initialLocationId: String? = null,
     initialDirectoryPath: String? = null,
     onFileSelected: (File) -> Unit,
+    onVisiblePlayableFilesChanged: (List<File>) -> Unit = {},
     onBrowserLocationChanged: (String?, String?) -> Unit = { _, _ -> },
     bottomContentPadding: Dp = 0.dp,
     backHandlingEnabled: Boolean = true,
@@ -125,6 +126,13 @@ fun FileBrowserScreen(
                 val loadedFiles = withContext(Dispatchers.IO) {
                     repository.getFiles(directory)
                 }
+                onVisiblePlayableFilesChanged(
+                    loadedFiles
+                        .asSequence()
+                        .filter { !it.isDirectory }
+                        .map { it.file }
+                        .toList()
+                )
                 val stillOnSameDirectory = currentDirectory?.absolutePath == targetPath &&
                     selectedLocationId != null
                 if (stillOnSameDirectory) {
@@ -177,6 +185,7 @@ fun FileBrowserScreen(
         selectedLocationId = null
         currentDirectory = null
         fileList.clear()
+        onVisiblePlayableFilesChanged(emptyList())
         onBrowserLocationChanged(null, null)
     }
 

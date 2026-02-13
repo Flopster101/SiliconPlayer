@@ -16,13 +16,17 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowLeft
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
@@ -54,6 +58,8 @@ fun PlayerScreen(
     onPlay: () -> Unit,
     onPause: () -> Unit,
     onStopAndClear: () -> Unit,
+    canPreviousTrack: Boolean,
+    canNextTrack: Boolean,
     durationSeconds: Double,
     positionSeconds: Double,
     title: String,
@@ -65,6 +71,11 @@ fun PlayerScreen(
     noArtworkIcon: ImageVector = Icons.Default.MusicNote,
     isLooping: Boolean,
     onSeek: (Double) -> Unit,
+    onPreviousTrack: () -> Unit,
+    onNextTrack: () -> Unit,
+    onPreviousSubtune: () -> Unit,
+    onNextSubtune: () -> Unit,
+    onOpenSubtuneSelector: () -> Unit,
     onLoopingChanged: (Boolean) -> Unit
 ) {
     var sliderPosition by remember { mutableDoubleStateOf(0.0) }
@@ -173,6 +184,8 @@ fun PlayerScreen(
                             hasTrack = hasTrack,
                             isPlaying = isPlaying,
                             isLooping = isLooping,
+                            canPreviousTrack = canPreviousTrack,
+                            canNextTrack = canNextTrack,
                             onPlayPause = {
                                 if (isPlaying) {
                                     onPause()
@@ -180,6 +193,11 @@ fun PlayerScreen(
                                     onPlay()
                                 }
                             },
+                            onPreviousTrack = onPreviousTrack,
+                            onNextTrack = onNextTrack,
+                            onPreviousSubtune = onPreviousSubtune,
+                            onNextSubtune = onNextSubtune,
+                            onOpenSubtuneSelector = onOpenSubtuneSelector,
                             onStopAndClear = onStopAndClear,
                             onLoopingChanged = { onLoopingChanged(!isLooping) }
                         )
@@ -236,6 +254,8 @@ fun PlayerScreen(
                         hasTrack = hasTrack,
                         isPlaying = isPlaying,
                         isLooping = isLooping,
+                        canPreviousTrack = canPreviousTrack,
+                        canNextTrack = canNextTrack,
                         onPlayPause = {
                             if (isPlaying) {
                                 onPause()
@@ -243,6 +263,11 @@ fun PlayerScreen(
                                 onPlay()
                             }
                         },
+                        onPreviousTrack = onPreviousTrack,
+                        onNextTrack = onNextTrack,
+                        onPreviousSubtune = onPreviousSubtune,
+                        onNextSubtune = onNextSubtune,
+                        onOpenSubtuneSelector = onOpenSubtuneSelector,
                         onStopAndClear = onStopAndClear,
                         onLoopingChanged = { onLoopingChanged(!isLooping) }
                     )
@@ -509,73 +534,220 @@ private fun TransportControls(
     hasTrack: Boolean,
     isPlaying: Boolean,
     isLooping: Boolean,
+    canPreviousTrack: Boolean,
+    canNextTrack: Boolean,
     onPlayPause: () -> Unit,
+    onPreviousTrack: () -> Unit,
+    onNextTrack: () -> Unit,
+    onPreviousSubtune: () -> Unit,
+    onNextSubtune: () -> Unit,
+    onOpenSubtuneSelector: () -> Unit,
     onStopAndClear: () -> Unit,
     onLoopingChanged: () -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        FilledTonalIconButton(
-            onClick = onLoopingChanged,
-            modifier = Modifier.size(72.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                containerColor = if (isLooping) {
-                    MaterialTheme.colorScheme.secondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val tight = maxWidth < 350.dp
+        val compact = !tight && maxWidth < 390.dp
+        val sideButtonSize = when {
+            tight -> 48.dp
+            compact -> 54.dp
+            else -> 62.dp
+        }
+        val playButtonSize = when {
+            tight -> 76.dp
+            compact -> 82.dp
+            else -> 90.dp
+        }
+        val subtuneButtonSize = when {
+            tight -> 46.dp
+            compact -> 52.dp
+            else -> 56.dp
+        }
+        val rowGap = when {
+            tight -> 6.dp
+            compact -> 8.dp
+            else -> 10.dp
+        }
+        val subtuneGap = if (tight) 8.dp else 10.dp
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilledTonalIconButton(
+                        onClick = onPreviousTrack,
+                        enabled = hasTrack && canPreviousTrack,
+                        modifier = Modifier.size(sideButtonSize),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SkipPrevious,
+                            contentDescription = "Previous track"
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(rowGap))
+
+                    FilledTonalIconButton(
+                        onClick = onLoopingChanged,
+                        modifier = Modifier.size(sideButtonSize),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = if (isLooping) {
+                                MaterialTheme.colorScheme.secondaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            }
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Loop,
+                            contentDescription = if (isLooping) "Disable loop" else "Enable loop",
+                            modifier = Modifier.size(
+                                when {
+                                    tight -> 20.dp
+                                    compact -> 22.dp
+                                    else -> 24.dp
+                                }
+                            )
+                        )
+                    }
                 }
-            )
-        ) {
-            Icon(
-                imageVector = Icons.Default.Loop,
-                contentDescription = if (isLooping) "Disable loop" else "Enable loop",
-                modifier = Modifier.size(28.dp)
-            )
-        }
 
-        Spacer(modifier = Modifier.width(18.dp))
+                Spacer(modifier = Modifier.width(rowGap))
 
-        FilledIconButton(
-            onClick = onPlayPause,
-            enabled = hasTrack,
-            modifier = Modifier.size(96.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        ) {
-            AnimatedContent(
-                targetState = isPlaying,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "playerPlayPauseIcon"
-            ) { playing ->
-                Icon(
-                    imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (playing) "Pause" else "Play",
-                    modifier = Modifier.size(36.dp)
-                )
+                FilledIconButton(
+                    onClick = onPlayPause,
+                    enabled = hasTrack,
+                    modifier = Modifier.size(playButtonSize),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                ) {
+                    AnimatedContent(
+                        targetState = isPlaying,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "playerPlayPauseIcon"
+                    ) { playing ->
+                        Icon(
+                            imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (playing) "Pause" else "Play",
+                            modifier = Modifier.size(
+                                when {
+                                    tight -> 28.dp
+                                    compact -> 30.dp
+                                    else -> 34.dp
+                                }
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(rowGap))
+
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilledTonalIconButton(
+                        onClick = onStopAndClear,
+                        modifier = Modifier.size(sideButtonSize),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Stop"
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(rowGap))
+
+                    FilledTonalIconButton(
+                        onClick = onNextTrack,
+                        enabled = hasTrack && canNextTrack,
+                        modifier = Modifier.size(sideButtonSize),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SkipNext,
+                            contentDescription = "Next track"
+                        )
+                    }
+                }
             }
-        }
 
-        Spacer(modifier = Modifier.width(18.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-        FilledTonalIconButton(
-            onClick = onStopAndClear,
-            modifier = Modifier.size(72.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        ) {
-            Icon(
-                imageVector = Icons.Default.Stop,
-                contentDescription = "Stop"
-            )
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilledTonalIconButton(
+                    onClick = onPreviousSubtune,
+                    enabled = false,
+                    modifier = Modifier.size(subtuneButtonSize),
+                    shape = MaterialTheme.shapes.large,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardDoubleArrowLeft,
+                        contentDescription = "Previous subtune"
+                    )
+                }
+                Spacer(modifier = Modifier.width(subtuneGap))
+                FilledTonalIconButton(
+                    onClick = onOpenSubtuneSelector,
+                    enabled = false,
+                    modifier = Modifier.size(subtuneButtonSize),
+                    shape = MaterialTheme.shapes.large,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.List,
+                        contentDescription = "Subtune selector"
+                    )
+                }
+                Spacer(modifier = Modifier.width(subtuneGap))
+                FilledTonalIconButton(
+                    onClick = onNextSubtune,
+                    enabled = false,
+                    modifier = Modifier.size(subtuneButtonSize),
+                    shape = MaterialTheme.shapes.large,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardDoubleArrowRight,
+                        contentDescription = "Next subtune"
+                    )
+                }
+            }
         }
     }
 }

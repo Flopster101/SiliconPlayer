@@ -62,7 +62,9 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Slideshow
@@ -260,6 +262,7 @@ private fun AppNavigation(
     var metadataChannelCount by remember { mutableIntStateOf(0) }
     var metadataBitDepthLabel by remember { mutableStateOf("Unknown") }
     var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    var visiblePlayableFiles by remember { mutableStateOf<List<File>>(emptyList()) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember(context) {
         context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)
@@ -367,6 +370,47 @@ private fun AppNavigation(
             positionSeconds = position,
             isPlaying = isPlaying
         )
+    }
+
+    fun applyTrackSelection(file: File, autoStart: Boolean, expandOverride: Boolean? = null) {
+        NativeBridge.stopEngine()
+        isPlaying = false
+        selectedFile = file
+        isPlayerSurfaceVisible = true
+        NativeBridge.loadAudio(file.absolutePath)
+        metadataTitle = NativeBridge.getTrackTitle()
+        metadataArtist = NativeBridge.getTrackArtist()
+        metadataSampleRate = NativeBridge.getTrackSampleRate()
+        metadataChannelCount = NativeBridge.getTrackChannelCount()
+        metadataBitDepthLabel = NativeBridge.getTrackBitDepthLabel()
+        duration = NativeBridge.getDuration()
+        position = 0.0
+        artworkBitmap = null
+        if (autoStart) {
+            NativeBridge.setLooping(looping)
+            NativeBridge.startEngine()
+            isPlaying = true
+        }
+        expandOverride?.let { isPlayerExpanded = it }
+        syncPlaybackService()
+    }
+
+    fun currentTrackIndex(): Int {
+        val currentPath = selectedFile?.absolutePath ?: return -1
+        return visiblePlayableFiles.indexOfFirst { it.absolutePath == currentPath }
+    }
+
+    fun playAdjacentTrack(offset: Int): Boolean {
+        val index = currentTrackIndex()
+        if (index < 0) return false
+        val targetIndex = index + offset
+        if (targetIndex !in visiblePlayableFiles.indices) return false
+        applyTrackSelection(
+            file = visiblePlayableFiles[targetIndex],
+            autoStart = true,
+            expandOverride = null
+        )
+        return true
     }
 
     fun restorePlayerStateFromSessionAndNative(openExpanded: Boolean) {
@@ -645,6 +689,7 @@ private fun AppNavigation(
                     repository = repository,
                     initialLocationId = if (rememberBrowserLocation) lastBrowserLocationId else null,
                     initialDirectoryPath = if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
+                    onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
                     bottomContentPadding = miniPlayerListInset,
                     backHandlingEnabled = !isPlayerExpanded,
                     onExitBrowser = { currentView = MainView.Home },
@@ -662,26 +707,11 @@ private fun AppNavigation(
                             .apply()
                     },
                     onFileSelected = { file ->
-                        NativeBridge.stopEngine()
-                        isPlaying = false
-                        selectedFile = file
-                        isPlayerSurfaceVisible = true
-                        NativeBridge.loadAudio(file.absolutePath)
-                        metadataTitle = NativeBridge.getTrackTitle()
-                        metadataArtist = NativeBridge.getTrackArtist()
-                        metadataSampleRate = NativeBridge.getTrackSampleRate()
-                        metadataChannelCount = NativeBridge.getTrackChannelCount()
-                        metadataBitDepthLabel = NativeBridge.getTrackBitDepthLabel()
-                        duration = NativeBridge.getDuration()
-                        position = 0.0
-                        artworkBitmap = null
-                        if (autoPlayOnTrackSelect) {
-                            NativeBridge.setLooping(looping)
-                            NativeBridge.startEngine()
-                            isPlaying = true
-                        }
-                        syncPlaybackService()
-                        isPlayerExpanded = openPlayerOnTrackSelect
+                        applyTrackSelection(
+                            file = file,
+                            autoStart = autoPlayOnTrackSelect,
+                            expandOverride = openPlayerOnTrackSelect
+                        )
                     }
                 )
                 MainView.Settings -> SettingsScreen(
@@ -768,7 +798,11 @@ private fun AppNavigation(
                         isPlaying = isPlaying,
                         positionSeconds = position,
                         durationSeconds = duration,
+                        canPreviousTrack = currentTrackIndex() > 0,
+                        canNextTrack = currentTrackIndex() in 0 until (visiblePlayableFiles.size - 1),
                         onExpand = { isPlayerExpanded = true },
+                        onPreviousTrack = { playAdjacentTrack(-1) },
+                        onNextTrack = { playAdjacentTrack(1) },
                         onPlayPause = {
                             if (selectedFile != null) {
                                 if (isPlaying) {
@@ -811,6 +845,8 @@ private fun AppNavigation(
                     onStopAndClear = stopAndEmptyTrack,
                     durationSeconds = duration,
                     positionSeconds = position,
+                    canPreviousTrack = currentTrackIndex() > 0,
+                    canNextTrack = currentTrackIndex() in 0 until (visiblePlayableFiles.size - 1),
                     title = metadataTitle,
                     artist = metadataArtist,
                     sampleRateHz = metadataSampleRate,
@@ -823,6 +859,11 @@ private fun AppNavigation(
                         position = seconds
                         syncPlaybackService()
                     },
+                    onPreviousTrack = { playAdjacentTrack(-1) },
+                    onNextTrack = { playAdjacentTrack(1) },
+                    onPreviousSubtune = {},
+                    onNextSubtune = {},
+                    onOpenSubtuneSelector = {},
                     onLoopingChanged = { enabled ->
                         looping = enabled
                         NativeBridge.setLooping(enabled)
@@ -1605,7 +1646,11 @@ private fun MiniPlayerBar(
     isPlaying: Boolean,
     positionSeconds: Double,
     durationSeconds: Double,
+    canPreviousTrack: Boolean,
+    canNextTrack: Boolean,
     onExpand: () -> Unit,
+    onPreviousTrack: () -> Unit,
+    onNextTrack: () -> Unit,
     onPlayPause: () -> Unit,
     onStopAndClear: () -> Unit,
     modifier: Modifier = Modifier
@@ -1699,6 +1744,15 @@ private fun MiniPlayerBar(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onPreviousTrack,
+                        enabled = hasTrack && canPreviousTrack
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SkipPrevious,
+                            contentDescription = "Previous track"
+                        )
+                    }
                     IconButton(onClick = onStopAndClear) {
                         Icon(
                             imageVector = Icons.Default.Stop,
@@ -1718,6 +1772,15 @@ private fun MiniPlayerBar(
                                 contentDescription = if (playing) "Pause" else "Play"
                             )
                         }
+                    }
+                    IconButton(
+                        onClick = onNextTrack,
+                        enabled = hasTrack && canNextTrack
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SkipNext,
+                            contentDescription = "Next track"
+                        )
                     }
                     IconButton(onClick = onExpand) {
                         Icon(

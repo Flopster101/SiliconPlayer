@@ -34,12 +34,14 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Slideshow
 import androidx.compose.runtime.* // Import for remember, mutableStateOf
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -77,6 +79,8 @@ private enum class SettingsRoute {
     PluginFfmpeg,
     PluginOpenMpt,
     GeneralAudio,
+    Player,
+    Misc,
     Ui,
     About
 }
@@ -317,6 +321,8 @@ fun AppNavigation() {
                 },
                 onOpenAudioPlugins = { settingsRoute = SettingsRoute.AudioPlugins },
                 onOpenGeneralAudio = { settingsRoute = SettingsRoute.GeneralAudio },
+                onOpenPlayer = { settingsRoute = SettingsRoute.Player },
+                onOpenMisc = { settingsRoute = SettingsRoute.Misc },
                 onOpenUi = { settingsRoute = SettingsRoute.Ui },
                 onOpenAbout = { settingsRoute = SettingsRoute.About },
                 onOpenFfmpeg = { settingsRoute = SettingsRoute.PluginFfmpeg },
@@ -520,6 +526,8 @@ private fun SettingsScreen(
     onBack: () -> Unit,
     onOpenAudioPlugins: () -> Unit,
     onOpenGeneralAudio: () -> Unit,
+    onOpenPlayer: () -> Unit,
+    onOpenMisc: () -> Unit,
     onOpenUi: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenFfmpeg: () -> Unit,
@@ -531,6 +539,8 @@ private fun SettingsScreen(
         SettingsRoute.PluginFfmpeg -> "FFmpeg"
         SettingsRoute.PluginOpenMpt -> "OpenMPT"
         SettingsRoute.GeneralAudio -> "General audio"
+        SettingsRoute.Player -> "Player settings"
+        SettingsRoute.Misc -> "Misc settings"
         SettingsRoute.Ui -> "UI settings"
         SettingsRoute.About -> "About"
     }
@@ -571,6 +581,20 @@ private fun SettingsScreen(
                         description = "Global output and playback behavior.",
                         icon = Icons.Default.Tune,
                         onClick = onOpenGeneralAudio
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    SettingsItemCard(
+                        title = "Player settings",
+                        description = "Player behavior and interaction preferences.",
+                        icon = Icons.Default.Slideshow,
+                        onClick = onOpenPlayer
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    SettingsItemCard(
+                        title = "Misc settings",
+                        description = "Other app-wide preferences and utilities.",
+                        icon = Icons.Default.MoreHoriz,
+                        onClick = onOpenMisc
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     SettingsSectionLabel("Interface")
@@ -622,6 +646,14 @@ private fun SettingsScreen(
                 SettingsRoute.GeneralAudio -> SettingsPlaceholderBody(
                     title = "General audio settings",
                     description = "Global audio behavior options will appear here."
+                )
+                SettingsRoute.Player -> SettingsPlaceholderBody(
+                    title = "Player settings",
+                    description = "Player controls and behavior options will appear here."
+                )
+                SettingsRoute.Misc -> SettingsPlaceholderBody(
+                    title = "Misc settings",
+                    description = "Additional app options will appear here."
                 )
                 SettingsRoute.Ui -> SettingsPlaceholderBody(
                     title = "UI settings",

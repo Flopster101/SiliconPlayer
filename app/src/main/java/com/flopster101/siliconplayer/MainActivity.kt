@@ -22,6 +22,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,8 +35,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -65,6 +70,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.dp
@@ -73,6 +79,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import java.io.File
 import android.content.Intent
@@ -83,6 +90,7 @@ import android.os.Environment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import java.util.Locale
 
 private enum class MainView {
     Home,
@@ -129,6 +137,8 @@ private object AppPreferenceKeys {
     const val REMEMBER_BROWSER_LOCATION = "remember_browser_location"
     const val BROWSER_LAST_LOCATION_ID = "browser_last_location_id"
     const val BROWSER_LAST_DIRECTORY_PATH = "browser_last_directory_path"
+    const val CORE_RATE_FFMPEG = "core_rate_ffmpeg"
+    const val CORE_RATE_OPENMPT = "core_rate_openmpt"
 }
 
 class MainActivity : ComponentActivity() {
@@ -159,6 +169,7 @@ class MainActivity : ComponentActivity() {
     external fun getTrackChannelCount(): Int
     external fun getTrackBitDepth(): Int
     external fun getTrackBitDepthLabel(): String
+    external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
 
     companion object {
         init {
@@ -213,6 +224,16 @@ fun AppNavigation() {
     var lastBrowserDirectoryPath by remember {
         mutableStateOf(
             prefs.getString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, null)
+        )
+    }
+    var ffmpegCoreSampleRateHz by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.CORE_RATE_FFMPEG, 0)
+        )
+    }
+    var openMptCoreSampleRateHz by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.CORE_RATE_OPENMPT, 0)
         )
     }
 
@@ -312,6 +333,20 @@ fun AppNavigation() {
                 .remove(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH)
         }
         editor.apply()
+    }
+
+    LaunchedEffect(ffmpegCoreSampleRateHz) {
+        prefs.edit()
+            .putInt(AppPreferenceKeys.CORE_RATE_FFMPEG, ffmpegCoreSampleRateHz)
+            .apply()
+        activity.setCoreOutputSampleRate("FFmpeg", ffmpegCoreSampleRateHz)
+    }
+
+    LaunchedEffect(openMptCoreSampleRateHz) {
+        prefs.edit()
+            .putInt(AppPreferenceKeys.CORE_RATE_OPENMPT, openMptCoreSampleRateHz)
+            .apply()
+        activity.setCoreOutputSampleRate("LibOpenMPT", openMptCoreSampleRateHz)
     }
 
     if (!hasPermission) {
@@ -490,7 +525,11 @@ fun AppNavigation() {
                     openPlayerOnTrackSelect = openPlayerOnTrackSelect,
                     onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
                     rememberBrowserLocation = rememberBrowserLocation,
-                    onRememberBrowserLocationChanged = { rememberBrowserLocation = it }
+                    onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
+                    ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
+                    onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
+                    openMptSampleRateHz = openMptCoreSampleRateHz,
+                    onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it }
                 )
             }
         }
@@ -722,7 +761,11 @@ private fun SettingsScreen(
     openPlayerOnTrackSelect: Boolean,
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
     rememberBrowserLocation: Boolean,
-    onRememberBrowserLocationChanged: (Boolean) -> Unit
+    onRememberBrowserLocationChanged: (Boolean) -> Unit,
+    ffmpegSampleRateHz: Int,
+    onFfmpegSampleRateChanged: (Int) -> Unit,
+    openMptSampleRateHz: Int,
+    onOpenMptSampleRateChanged: (Int) -> Unit
 ) {
     val screenTitle = when (route) {
         SettingsRoute.Root -> "Settings"
@@ -858,13 +901,17 @@ private fun SettingsScreen(
                             onClick = onOpenOpenMpt
                         )
                     }
-                    SettingsRoute.PluginFfmpeg -> SettingsPlaceholderBody(
-                        title = "FFmpeg plugin options",
-                        description = "FFmpeg-specific settings will appear here."
+                    SettingsRoute.PluginFfmpeg -> SampleRateSelectorCard(
+                        title = "Output sample rate",
+                        description = "Preferred output sample rate for this plugin. Auto uses the device/output stream rate.",
+                        selectedHz = ffmpegSampleRateHz,
+                        onSelected = onFfmpegSampleRateChanged
                     )
-                    SettingsRoute.PluginOpenMpt -> SettingsPlaceholderBody(
-                        title = "OpenMPT plugin options",
-                        description = "OpenMPT-specific settings will appear here."
+                    SettingsRoute.PluginOpenMpt -> SampleRateSelectorCard(
+                        title = "Output sample rate",
+                        description = "Preferred output sample rate for this plugin. Auto uses the device/output stream rate.",
+                        selectedHz = openMptSampleRateHz,
+                        onSelected = onOpenMptSampleRateChanged
                     )
                     SettingsRoute.GeneralAudio -> SettingsPlaceholderBody(
                         title = "General audio settings",
@@ -1015,6 +1062,122 @@ private fun SettingsPlaceholderBody(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+private data class SampleRateChoice(val hz: Int, val label: String)
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun SampleRateSelectorCard(
+    title: String,
+    description: String,
+    selectedHz: Int,
+    onSelected: (Int) -> Unit
+) {
+    fun formatSampleRateLabel(hz: Int): String {
+        return if (hz == 0) "Auto" else String.format(Locale.US, "%,d Hz", hz)
+    }
+
+    val configuration = LocalConfiguration.current
+    val options = listOf(
+        SampleRateChoice(0, formatSampleRateLabel(0)),
+        SampleRateChoice(8000, formatSampleRateLabel(8000)),
+        SampleRateChoice(11025, formatSampleRateLabel(11025)),
+        SampleRateChoice(12000, formatSampleRateLabel(12000)),
+        SampleRateChoice(16000, formatSampleRateLabel(16000)),
+        SampleRateChoice(22050, formatSampleRateLabel(22050)),
+        SampleRateChoice(24000, formatSampleRateLabel(24000)),
+        SampleRateChoice(32000, formatSampleRateLabel(32000)),
+        SampleRateChoice(44100, formatSampleRateLabel(44100)),
+        SampleRateChoice(48000, formatSampleRateLabel(48000)),
+        SampleRateChoice(88200, formatSampleRateLabel(88200)),
+        SampleRateChoice(96000, formatSampleRateLabel(96000))
+    )
+    val selectedLabel = options.firstOrNull { it.hz == selectedHz }?.label ?: "Auto"
+    var dialogOpen by remember { mutableStateOf(false) }
+
+    androidx.compose.material3.OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { dialogOpen = true }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = selectedLabel,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+
+    if (dialogOpen) {
+        AlertDialog(
+            onDismissRequest = { dialogOpen = false },
+            title = { Text(title) },
+            text = {
+                val maxDialogListHeight = configuration.screenHeightDp.dp * 0.62f
+                CompositionLocalProvider(
+                    androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement provides false
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = maxDialogListHeight)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        options.forEach { option ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(42.dp)
+                                    .clickable {
+                                        onSelected(option.hz)
+                                        dialogOpen = false
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = option.hz == selectedHz,
+                                    onClick = {
+                                        onSelected(option.hz)
+                                        dialogOpen = false
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = option.label,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dialogOpen = false }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {}
+        )
     }
 }
 

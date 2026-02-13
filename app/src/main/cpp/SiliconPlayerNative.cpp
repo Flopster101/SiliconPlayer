@@ -95,6 +95,17 @@ Java_com_flopster101_siliconplayer_MainActivity_setLooping(JNIEnv* env, jobject,
     audioEngine->setLooping(enabled == JNI_TRUE);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_setCoreOutputSampleRate(
+        JNIEnv* env, jobject, jstring coreName, jint sampleRateHz) {
+    if (audioEngine == nullptr) {
+        audioEngine = new AudioEngine();
+    }
+    const char* nativeCoreName = env->GetStringUTFChars(coreName, 0);
+    audioEngine->setCoreOutputSampleRate(nativeCoreName, static_cast<int>(sampleRateHz));
+    env->ReleaseStringUTFChars(coreName, nativeCoreName);
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getTrackTitle(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {

@@ -173,9 +173,9 @@ void AudioEngine::setUrl(const char* url) {
 
     auto newDecoder = DecoderRegistry::getInstance().createDecoder(url);
     if (newDecoder && newDecoder->open(url)) {
-        const int targetRate = (streamSampleRate > 0) ? streamSampleRate : 48000;
-        newDecoder->setOutputSampleRate(targetRate);
         std::lock_guard<std::mutex> lock(decoderMutex);
+        const int targetRate = resolveOutputSampleRateForCore(newDecoder->getName());
+        newDecoder->setOutputSampleRate(targetRate);
         decoder = std::move(newDecoder);
         positionSeconds.store(0.0);
     } else {
@@ -211,6 +211,26 @@ void AudioEngine::seekToSeconds(double seconds) {
 
 void AudioEngine::setLooping(bool enabled) {
     looping.store(enabled);
+}
+
+int AudioEngine::resolveOutputSampleRateForCore(const std::string& coreName) const {
+    auto it = coreOutputSampleRateHz.find(coreName);
+    if (it != coreOutputSampleRateHz.end() && it->second > 0) {
+        return it->second;
+    }
+    return (streamSampleRate > 0) ? streamSampleRate : 48000;
+}
+
+void AudioEngine::setCoreOutputSampleRate(const std::string& coreName, int sampleRateHz) {
+    if (coreName.empty()) return;
+    const int normalizedRate = sampleRateHz > 0 ? sampleRateHz : 0;
+
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    coreOutputSampleRateHz[coreName] = normalizedRate;
+
+    if (decoder && coreName == decoder->getName()) {
+        decoder->setOutputSampleRate(resolveOutputSampleRateForCore(coreName));
+    }
 }
 
 std::string AudioEngine::getTitle() {

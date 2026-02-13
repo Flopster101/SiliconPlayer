@@ -6,6 +6,7 @@
 #include <atomic>
 #include <mutex>
 #include <memory>
+#include <unordered_map>
 #include "decoders/AudioDecoder.h"
 
 class AudioEngine {
@@ -22,6 +23,7 @@ public:
     double getPositionSeconds();
     void seekToSeconds(double seconds);
     void setLooping(bool enabled);
+    void setCoreOutputSampleRate(const std::string& coreName, int sampleRateHz);
     std::string getTitle();
     std::string getArtist();
     int getSampleRate();
@@ -40,6 +42,9 @@ private:
 
     std::unique_ptr<AudioDecoder> decoder;
     std::mutex decoderMutex;
+    std::unordered_map<std::string, int> coreOutputSampleRateHz;
+
+    int resolveOutputSampleRateForCore(const std::string& coreName) const;
 
     void createStream();
     void closeStream();

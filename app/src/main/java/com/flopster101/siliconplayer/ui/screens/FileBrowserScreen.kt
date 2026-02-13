@@ -4,7 +4,9 @@ import android.content.Context
 import android.content.res.Configuration
 import android.os.Environment
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.data.FileItem
@@ -51,7 +54,6 @@ fun FileBrowserScreen(
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val selectorIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
-    val selectorLabel = selectedLocation?.typeLabel ?: "Home"
 
     fun openBrowserHome() {
         selectedLocationId = null
@@ -104,87 +106,88 @@ fun FileBrowserScreen(
     val subtitle = if (selectedLocation == null) {
         "Storage locations"
     } else {
-        currentDirectory?.name?.ifBlank { currentDirectory?.absolutePath ?: selectedLocation.name } ?: selectedLocation.name
+        currentDirectory?.absolutePath ?: selectedLocation.name
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = "Silicon Player",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                navigationIcon = {
-                    if (selectedLocation != null || onExitBrowser != null) {
-                        val onClick: () -> Unit = { handleBack() }
-                        IconButton(onClick = onClick) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = if (selectedLocation != null) "Navigate up" else "Back to home"
-                            )
+            Column {
+                TopAppBar(
+                    title = {
+                        Text(text = "Silicon Player")
+                    },
+                    actions = {
+                        onOpenSettings?.let { openSettings ->
+                            IconButton(onClick = openSettings) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Open settings"
+                                )
+                            }
                         }
                     }
-                },
-                actions = {
-                    Box {
-                        TextButton(onClick = { selectorExpanded = true }) {
-                            Icon(
-                                imageVector = selectorIcon,
-                                contentDescription = null
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = selectorLabel,
-                                maxLines = 1
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Open location selector"
-                            )
+                )
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(58.dp)
+                            .padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (selectedLocation != null || onExitBrowser != null) {
+                            IconButton(onClick = { handleBack() }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = if (selectedLocation != null) "Navigate up" else "Back to home"
+                                )
+                            }
+                        } else {
+                            Spacer(modifier = Modifier.width(48.dp))
                         }
-                        DropdownMenu(
-                            expanded = selectorExpanded,
-                            onDismissRequest = { selectorExpanded = false }
+
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 2.dp)
                         ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text("Home")
-                                        Text(
-                                            "Storage locations",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                },
-                                leadingIcon = {
+                            Text(
+                                text = "File Browser",
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Box(modifier = Modifier.padding(end = 6.dp)) {
+                            IconButton(onClick = { selectorExpanded = true }) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = Icons.Default.Home,
+                                        imageVector = selectorIcon,
+                                        contentDescription = "Open location selector"
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowDown,
                                         contentDescription = null
                                     )
-                                },
-                                onClick = {
-                                    selectorExpanded = false
-                                    openBrowserHome()
                                 }
-                            )
-                            storageLocations.forEach { location ->
+                            }
+                            DropdownMenu(
+                                expanded = selectorExpanded,
+                                onDismissRequest = { selectorExpanded = false }
+                            ) {
                                 DropdownMenuItem(
                                     text = {
                                         Column {
-                                            Text(location.typeLabel)
+                                            Text("Home")
                                             Text(
-                                                location.name,
+                                                "Storage locations",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -192,28 +195,45 @@ fun FileBrowserScreen(
                                     },
                                     leadingIcon = {
                                         Icon(
-                                            imageVector = iconForStorageKind(location.kind, context),
+                                            imageVector = Icons.Default.Home,
                                             contentDescription = null
                                         )
                                     },
                                     onClick = {
                                         selectorExpanded = false
-                                        openLocation(location)
+                                        openBrowserHome()
                                     }
                                 )
+                                storageLocations.forEach { location ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(location.typeLabel)
+                                                Text(
+                                                    location.name,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = iconForStorageKind(location.kind, context),
+                                                contentDescription = null
+                                            )
+                                        },
+                                        onClick = {
+                                            selectorExpanded = false
+                                            openLocation(location)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
-                    onOpenSettings?.let { openSettings ->
-                        IconButton(onClick = openSettings) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Open settings"
-                            )
-                        }
-                    }
                 }
-            )
+                HorizontalDivider()
+            }
         }
     ) { paddingValues ->
         if (selectedLocation == null) {
@@ -402,11 +422,34 @@ fun FileItemRow(item: FileItem, onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = if (item.isDirectory) Icons.Default.Folder else Icons.Default.AudioFile,
-            contentDescription = if (item.isDirectory) "Directory" else "Audio file",
-            tint = MaterialTheme.colorScheme.primary
-        )
+        Box(
+            modifier = Modifier.size(34.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (item.isDirectory) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(11.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = "Directory",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            } else {
+                Icon(
+                    imageVector = Icons.Default.AudioFile,
+                    contentDescription = "Audio file",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(

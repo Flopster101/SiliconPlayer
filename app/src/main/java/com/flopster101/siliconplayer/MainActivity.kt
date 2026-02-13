@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -237,6 +238,13 @@ fun AppNavigation() {
         metadataChannelCount = 0
         metadataBitDepthLabel = "Unknown"
         artworkBitmap = null
+    }
+
+    BackHandler(enabled = isPlayerExpanded || currentView == MainView.Settings) {
+        when {
+            isPlayerExpanded -> isPlayerExpanded = false
+            currentView == MainView.Settings -> currentView = MainView.Home
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {

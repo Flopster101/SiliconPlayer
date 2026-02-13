@@ -3,6 +3,7 @@ package com.flopster101.siliconplayer.ui.screens
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Environment
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -87,6 +88,19 @@ fun FileBrowserScreen(
         }
     }
 
+    fun handleBack() {
+        if (selectedLocation != null) {
+            navigateUpWithinLocation()
+        } else {
+            onExitBrowser?.invoke()
+        }
+    }
+
+    BackHandler(
+        enabled = selectedLocation != null || onExitBrowser != null,
+        onBack = { handleBack() }
+    )
+
     val subtitle = if (selectedLocation == null) {
         "Storage locations"
     } else {
@@ -111,11 +125,7 @@ fun FileBrowserScreen(
                 },
                 navigationIcon = {
                     if (selectedLocation != null || onExitBrowser != null) {
-                        val onClick: () -> Unit = if (selectedLocation != null) {
-                            { navigateUpWithinLocation() }
-                        } else {
-                            { onExitBrowser?.invoke(); Unit }
-                        }
+                        val onClick: () -> Unit = { handleBack() }
                         IconButton(onClick = onClick) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,

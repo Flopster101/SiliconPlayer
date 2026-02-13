@@ -46,6 +46,12 @@ void AudioEngine::closeStream() {
     }
 }
 
+#include "decoders/FFmpegDecoder.h"
+
+// ... (other includes)
+
+// ...
+
 aaudio_data_callback_result_t AudioEngine::dataCallback(
         AAudioStream *stream,
         void *userData,
@@ -54,24 +60,22 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
     auto *engine = static_cast<AudioEngine *>(userData);
     auto *outputData = static_cast<float *>(audioData);
 
-    // Assuming 48000Hz sample rate (default usually, but good to check)
-    // In a real app we'd get this from stream properties
-    const float sampleRate = 48000.0f;
-    const float frequency = 440.0f; // A4
-    const float amplitude = 0.5f;
+    // output silence to avoid blocking the audio thread.
+    std::unique_lock<std::mutex> lock(engine->decoderMutex, std::try_to_lock);
 
-    for (int i = 0; i < numFrames; i++) {
-        float sample = sinf(engine->phase) * amplitude;
+    if (lock.owns_lock() && engine->decoder) {
+        int framesRead = engine->decoder->read(outputData, numFrames);
 
-        // Stereo output (interleaved)
-        outputData[i * 2] = sample;     // Left
-        outputData[i * 2 + 1] = sample; // Right
-
-        engine->phase += 2.0f * M_PI * frequency / sampleRate;
-        if (engine->phase > 2.0f * M_PI) {
-            engine->phase -= 2.0f * M_PI;
+        // Fill remaining with silence if decoder didn't produce enough
+        if (framesRead < numFrames) {
+             const int channels = 2; // Stereo
+             memset(outputData + (framesRead * channels), 0, (numFrames - framesRead) * channels * sizeof(float));
         }
+    } else {
+        // Output silence
+        memset(outputData, 0, numFrames * 2 * sizeof(float));
     }
+
     return AAUDIO_CALLBACK_RESULT_CONTINUE;
 }
 
@@ -97,7 +101,17 @@ void AudioEngine::stop() {
 
 void AudioEngine::setUrl(const char* url) {
     LOGD("URL set to: %s", url);
-    // TODO: Initialize decoder with this URL
+
+    auto newDecoder = std::make_unique<FFmpegDecoder>();
+    if (newDecoder->open(url)) {
+        std::lock_guard<std::mutex> lock(decoderMutex);
+        decoder = std::move(newDecoder);
+        if (!isPlaying) {
+             start();
+        }
+    } else {
+        LOGE("Failed to open file: %s", url);
+    }
 }
 
 void AudioEngine::restart() {

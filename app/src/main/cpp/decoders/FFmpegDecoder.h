@@ -1,0 +1,53 @@
+#ifndef SILICONPLAYER_FFMPEGDECODER_H
+#define SILICONPLAYER_FFMPEGDECODER_H
+
+#include "AudioDecoder.h"
+#include <vector>
+#include <mutex>
+#include <memory>
+
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libswresample/swresample.h>
+#include <libavutil/opt.h>
+}
+
+class FFmpegDecoder : public AudioDecoder {
+public:
+    FFmpegDecoder();
+    ~FFmpegDecoder() override;
+
+    bool open(const char* path) override;
+    void close() override;
+    int read(float* buffer, int numFrames) override;
+    void seek(double seconds) override;
+    double getDuration() override;
+    int getSampleRate() override;
+    int getChannelCount() override;
+
+private:
+    AVFormatContext* formatContext = nullptr;
+    AVCodecContext* codecContext = nullptr;
+    SwrContext* swrContext = nullptr;
+    int audioStreamIndex = -1;
+
+    AVFrame* frame = nullptr;
+    AVPacket* packet = nullptr;
+
+    double duration = 0.0;
+    int outputSampleRate = 48000;
+    int outputChannelCount = 2; // Output channels (stereo)
+
+    // Resampling buffer
+    std::vector<float> sampleBuffer;
+    size_t sampleBufferCursor = 0; // Current read position in buffer
+
+    std::mutex decodeMutex;
+
+    bool initResampler();
+    void freeResampler();
+    int decodeFrame(); // Decodes one frame and appends to sampleBuffer. Returns 0 on success, <0 on error/EOF
+};
+
+#endif //SILICONPLAYER_FFMPEGDECODER_H

@@ -4,6 +4,9 @@
 #include <aaudio/AAudio.h>
 #include <thread>
 #include <atomic>
+#include <mutex>
+#include <memory>
+#include "decoders/AudioDecoder.h"
 
 class AudioEngine {
 public:
@@ -18,6 +21,9 @@ public:
 private:
     AAudioStream *stream = nullptr;
     std::atomic<bool> isPlaying { false };
+
+    std::unique_ptr<AudioDecoder> decoder;
+    std::mutex decoderMutex;
 
     void createStream();
     void closeStream();

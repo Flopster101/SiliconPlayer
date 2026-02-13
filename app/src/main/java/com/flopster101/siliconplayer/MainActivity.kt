@@ -279,10 +279,6 @@ fun AppNavigation() {
     val supportedExtensions = remember { NativeBridge.getSupportedExtensions().toSet() }
     val repository = remember { com.flopster101.siliconplayer.data.FileRepository(supportedExtensions) }
 
-    // Permission handling
-    var hasPermission by remember { mutableStateOf(false) }
-    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
-
     // Function to check permissions
     fun checkPermission(): Boolean {
         return if (android.os.Build.VERSION.SDK_INT >= 30) {
@@ -294,6 +290,10 @@ fun AppNavigation() {
             ) == android.content.pm.PackageManager.PERMISSION_GRANTED
         }
     }
+
+    // Permission handling
+    var hasPermission by remember { mutableStateOf(checkPermission()) }
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
 
     // Effect to check permission on start and resume
     DisposableEffect(lifecycleOwner) {

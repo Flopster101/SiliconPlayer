@@ -45,36 +45,37 @@ build_ffmpeg() {
     echo "Building FFmpeg for $ABI..."
     
     local BUILD_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
-    # Remove skip check to force rebuild
-    # if [ -f "$BUILD_DIR/lib/libavcodec.so" ] || [ -f "$BUILD_DIR/lib/libavcodec.a" ]; then
-    #    echo "FFmpeg for $ABI already built. Skipping."
-    #    return
-    # fi
+    
     mkdir -p "$BUILD_DIR"
     
     cd "$ABSOLUTE_PATH/ffmpeg"
     
-    # Clean previous build if Makefile exists
-    if [ -f "Makefile" ]; then
-        make clean >/dev/null 2>&1 || true
-        make distclean >/dev/null 2>&1 || true
-    fi
+    # Always clean
+    make clean >/dev/null 2>&1 || true
+    make distclean >/dev/null 2>&1 || true
     
     # Configure flags
     EXTRA_FLAGS=""
-    if [ "$ABI" = "x86" ]; then
+    if [ "$ABI" = "x86" ] || [ "$ABI" = "x86_64" ]; then
         EXTRA_FLAGS="--disable-asm"
     fi
+    if [ "$ABI" = "arm64-v8a" ]; then
+        # Disable ASM for arm64 to avoid relocation R_AARCH64_ADR_PREL_PG_HI21 errors
+        # in tx_float_neon.S when linking static lib into shared lib.
+        EXTRA_FLAGS="--disable-asm"
+    fi
+
+    export ASFLAGS="-fPIC"
 
     ./configure \
         --target-os=android \
         --arch=$ARCH \
         --cpu=$CPU \
-        --cc=$CC \
-        --cxx=$CXX \
-        --ar=$AR \
-        --strip=$STRIP \
-        --nm=$NM \
+        --cc="$CC" \
+        --cxx="$CXX" \
+        --ar="$AR" \
+        --strip="$STRIP" \
+        --nm="$NM" \
         --prefix="$BUILD_DIR" \
         --enable-cross-compile \
         --sysroot="$SYSROOT" \
@@ -168,9 +169,19 @@ build_libopenmpt() {
 }
 
 # -----------------------------------------------------------------------------
+# Argument Parsing
+# -----------------------------------------------------------------------------
+TARGET_ABI=${1:-all}
+TARGET_LIB=${2:-all}
+
+# -----------------------------------------------------------------------------
 # Main Loop
 # -----------------------------------------------------------------------------
 for ABI in "${ABIS[@]}"; do
+    if [ "$TARGET_ABI" != "all" ] && [ "$TARGET_ABI" != "$ABI" ]; then
+        continue
+    fi
+
     echo "========================================"
     echo "Processing ABI: $ABI"
     echo "========================================"
@@ -199,8 +210,8 @@ for ABI in "${ABIS[@]}"; do
             ;;
     esac
 
-    export CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang"
-    export CXX="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang++"
+    export CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang -fPIC"
+    export CXX="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang++ -fPIC"
     export AR="$TOOLCHAIN/bin/llvm-ar"
     export LD="$TOOLCHAIN/bin/ld"
     export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
@@ -209,8 +220,13 @@ for ABI in "${ABIS[@]}"; do
     
     echo "CC is set to: $CC"
     
-    build_ffmpeg "$ABI" 
-    build_libopenmpt "$ABI"
+    if [ "$TARGET_LIB" == "all" ] || [ "$TARGET_LIB" == "ffmpeg" ]; then
+        build_ffmpeg "$ABI"
+    fi
+    
+    if [ "$TARGET_LIB" == "all" ] || [ "$TARGET_LIB" == "libopenmpt" ]; then
+        build_libopenmpt "$ABI"
+    fi
 done
 
 echo "Build complete!"

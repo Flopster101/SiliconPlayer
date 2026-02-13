@@ -606,23 +606,36 @@ private fun AppNavigation(
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action != PlaybackService.ACTION_BROADCAST_CLEARED) return
-                selectedFile = null
-                isPlaying = false
-                duration = 0.0
-                position = 0.0
-                metadataTitle = ""
-                metadataArtist = ""
-                metadataSampleRate = 0
-                metadataChannelCount = 0
-                metadataBitDepthLabel = "Unknown"
-                artworkBitmap = null
+                when (intent?.action) {
+                    PlaybackService.ACTION_BROADCAST_CLEARED -> {
+                        selectedFile = null
+                        isPlaying = false
+                        duration = 0.0
+                        position = 0.0
+                        metadataTitle = ""
+                        metadataArtist = ""
+                        metadataSampleRate = 0
+                        metadataChannelCount = 0
+                        metadataBitDepthLabel = "Unknown"
+                        artworkBitmap = null
+                    }
+                    PlaybackService.ACTION_BROADCAST_PREVIOUS_TRACK_REQUEST -> {
+                        playAdjacentTrack(-1)
+                    }
+                    PlaybackService.ACTION_BROADCAST_NEXT_TRACK_REQUEST -> {
+                        playAdjacentTrack(1)
+                    }
+                }
             }
+        }
+        val playbackFilter = IntentFilter(PlaybackService.ACTION_BROADCAST_CLEARED).apply {
+            addAction(PlaybackService.ACTION_BROADCAST_PREVIOUS_TRACK_REQUEST)
+            addAction(PlaybackService.ACTION_BROADCAST_NEXT_TRACK_REQUEST)
         }
         androidx.core.content.ContextCompat.registerReceiver(
             context,
             receiver,
-            IntentFilter(PlaybackService.ACTION_BROADCAST_CLEARED),
+            playbackFilter,
             androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
         )
         onDispose {

@@ -92,6 +92,10 @@ class PlaybackService : Service() {
             ACTION_PLAY -> playPlayback()
             ACTION_PAUSE -> pausePlayback()
             ACTION_TOGGLE -> if (NativeBridge.isEnginePlaying()) pausePlayback() else playPlayback()
+            ACTION_PREVIOUS_TRACK -> requestAdjacentTrack(-1)
+            ACTION_NEXT_TRACK -> requestAdjacentTrack(1)
+            ACTION_SEEK_BACK -> seekBy(-10.0)
+            ACTION_SEEK_FORWARD -> seekBy(10.0)
             ACTION_STOP_CLEAR -> stopAndClear()
             ACTION_REFRESH_SETTINGS -> {
                 // Settings are read lazily from SharedPreferences in callbacks.
@@ -190,9 +194,62 @@ class PlaybackService : Service() {
                 if (!prefs.getBoolean(PREF_RESPOND_MEDIA_BUTTONS, true)) return
                 stopAndClear()
             }
+
+            override fun onSeekTo(pos: Long) {
+                if (!prefs.getBoolean(PREF_RESPOND_MEDIA_BUTTONS, true)) return
+                seekToPosition(pos / 1000.0)
+            }
+
+            override fun onFastForward() {
+                if (!prefs.getBoolean(PREF_RESPOND_MEDIA_BUTTONS, true)) return
+                seekBy(10.0)
+            }
+
+            override fun onRewind() {
+                if (!prefs.getBoolean(PREF_RESPOND_MEDIA_BUTTONS, true)) return
+                seekBy(-10.0)
+            }
+
+            override fun onSkipToPrevious() {
+                if (!prefs.getBoolean(PREF_RESPOND_MEDIA_BUTTONS, true)) return
+                requestAdjacentTrack(-1)
+            }
+
+            override fun onSkipToNext() {
+                if (!prefs.getBoolean(PREF_RESPOND_MEDIA_BUTTONS, true)) return
+                requestAdjacentTrack(1)
+            }
         })
         session.isActive = true
         mediaSession = session
+    }
+
+    private fun requestAdjacentTrack(offset: Int) {
+        val action = if (offset < 0) {
+            ACTION_BROADCAST_PREVIOUS_TRACK_REQUEST
+        } else {
+            ACTION_BROADCAST_NEXT_TRACK_REQUEST
+        }
+        sendBroadcast(Intent(action).setPackage(packageName))
+    }
+
+    private fun seekBy(deltaSeconds: Double) {
+        if (currentPath == null) return
+        seekToPosition(positionSeconds + deltaSeconds)
+    }
+
+    private fun seekToPosition(seconds: Double) {
+        if (currentPath == null) return
+        val maxDuration = durationSeconds.coerceAtLeast(0.0)
+        val clamped = if (maxDuration > 0.0) {
+            seconds.coerceIn(0.0, maxDuration)
+        } else {
+            seconds.coerceAtLeast(0.0)
+        }
+        NativeBridge.seekTo(clamped)
+        positionSeconds = clamped
+        updateMediaSessionState()
+        pushNotification()
     }
 
     private fun updateMediaSessionState() {
@@ -201,7 +258,12 @@ class PlaybackService : Service() {
                 PlaybackState.ACTION_PLAY or
                     PlaybackState.ACTION_PAUSE or
                     PlaybackState.ACTION_STOP or
-                    PlaybackState.ACTION_PLAY_PAUSE
+                    PlaybackState.ACTION_PLAY_PAUSE or
+                    PlaybackState.ACTION_SEEK_TO or
+                    PlaybackState.ACTION_FAST_FORWARD or
+                    PlaybackState.ACTION_REWIND or
+                    PlaybackState.ACTION_SKIP_TO_PREVIOUS or
+                    PlaybackState.ACTION_SKIP_TO_NEXT
             )
             .setState(
                 if (isPlaying) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED,
@@ -246,10 +308,22 @@ class PlaybackService : Service() {
             Intent(this, PlaybackService::class.java).setAction(ACTION_STOP_CLEAR),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val toggleIntent = PendingIntent.getService(
+        val previousTrackIntent = PendingIntent.getService(
             this,
             102,
+            Intent(this, PlaybackService::class.java).setAction(ACTION_PREVIOUS_TRACK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val toggleIntent = PendingIntent.getService(
+            this,
+            103,
             Intent(this, PlaybackService::class.java).setAction(ACTION_TOGGLE),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val nextTrackIntent = PendingIntent.getService(
+            this,
+            104,
+            Intent(this, PlaybackService::class.java).setAction(ACTION_NEXT_TRACK),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val notificationBuilder = Notification.Builder(this, CHANNEL_ID)
@@ -264,13 +338,13 @@ class PlaybackService : Service() {
             .setStyle(
                 Notification.MediaStyle()
                     .setMediaSession(mediaSession?.sessionToken)
-                    .setShowActionsInCompactView(0, 1)
+                    .setShowActionsInCompactView(0, 1, 2)
             )
             .addAction(
                 Notification.Action.Builder(
-                    android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel),
-                    "Stop",
-                    stopIntent
+                    android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_media_previous),
+                    "Previous track",
+                    previousTrackIntent
                 ).build()
             )
             .addAction(
@@ -281,6 +355,20 @@ class PlaybackService : Service() {
                     ),
                     if (isPlaying) "Pause" else "Play",
                     toggleIntent
+                ).build()
+            )
+            .addAction(
+                Notification.Action.Builder(
+                    android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_media_next),
+                    "Next track",
+                    nextTrackIntent
+                ).build()
+            )
+            .addAction(
+                Notification.Action.Builder(
+                    android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel),
+                    "Stop",
+                    stopIntent
                 ).build()
             )
         return notificationBuilder.build()
@@ -384,9 +472,15 @@ class PlaybackService : Service() {
         const val ACTION_PLAY = "com.flopster101.siliconplayer.action.PLAY"
         const val ACTION_PAUSE = "com.flopster101.siliconplayer.action.PAUSE"
         const val ACTION_TOGGLE = "com.flopster101.siliconplayer.action.TOGGLE"
+        const val ACTION_PREVIOUS_TRACK = "com.flopster101.siliconplayer.action.PREVIOUS_TRACK"
+        const val ACTION_NEXT_TRACK = "com.flopster101.siliconplayer.action.NEXT_TRACK"
+        const val ACTION_SEEK_BACK = "com.flopster101.siliconplayer.action.SEEK_BACK"
+        const val ACTION_SEEK_FORWARD = "com.flopster101.siliconplayer.action.SEEK_FORWARD"
         const val ACTION_STOP_CLEAR = "com.flopster101.siliconplayer.action.STOP_CLEAR"
         const val ACTION_REFRESH_SETTINGS = "com.flopster101.siliconplayer.action.REFRESH_SETTINGS"
         const val ACTION_BROADCAST_CLEARED = "com.flopster101.siliconplayer.action.BROADCAST_CLEARED"
+        const val ACTION_BROADCAST_PREVIOUS_TRACK_REQUEST = "com.flopster101.siliconplayer.action.BROADCAST_PREVIOUS_TRACK_REQUEST"
+        const val ACTION_BROADCAST_NEXT_TRACK_REQUEST = "com.flopster101.siliconplayer.action.BROADCAST_NEXT_TRACK_REQUEST"
         const val EXTRA_OPEN_PLAYER_FROM_NOTIFICATION = "extra_open_player_from_notification"
 
         fun syncFromUi(

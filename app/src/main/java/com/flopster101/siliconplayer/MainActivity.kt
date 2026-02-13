@@ -132,6 +132,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
 }
 
 private const val PAGE_NAV_DURATION_MS = 300
+private val SettingsCardShape = RoundedCornerShape(16.dp)
 
 private object AppPreferenceKeys {
     const val PREFS_NAME = "silicon_player_settings"
@@ -875,8 +876,9 @@ private fun HomeScreen(
             }
             selectedTrack?.let { track ->
                 Spacer(modifier = Modifier.height(14.dp))
-                androidx.compose.material3.OutlinedCard(
-                    modifier = Modifier.fillMaxWidth()
+                androidx.compose.material3.ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = SettingsCardShape
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -1153,8 +1155,9 @@ private fun SettingsItemCard(
     icon: ImageVector,
     onClick: () -> Unit
 ) {
-    androidx.compose.material3.OutlinedCard(
+    androidx.compose.material3.ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
+        shape = SettingsCardShape,
         onClick = onClick
     ) {
         Row(
@@ -1175,7 +1178,7 @@ private fun SettingsItemCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = description,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1195,8 +1198,9 @@ private fun PlayerSettingToggleCard(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    androidx.compose.material3.OutlinedCard(
+    androidx.compose.material3.ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
+        shape = SettingsCardShape,
         onClick = { onCheckedChange(!checked) }
     ) {
         Row(
@@ -1211,7 +1215,7 @@ private fun PlayerSettingToggleCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = description,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1229,7 +1233,10 @@ private fun SettingsPlaceholderBody(
     title: String,
     description: String
 ) {
-    androidx.compose.material3.OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+    androidx.compose.material3.ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = SettingsCardShape
+    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = title,
@@ -1238,7 +1245,7 @@ private fun SettingsPlaceholderBody(
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = description,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -1277,8 +1284,9 @@ private fun SampleRateSelectorCard(
     val selectedLabel = options.firstOrNull { it.hz == selectedHz }?.label ?: "Auto"
     var dialogOpen by remember { mutableStateOf(false) }
 
-    androidx.compose.material3.OutlinedCard(
+    androidx.compose.material3.ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
+        shape = SettingsCardShape,
         onClick = { dialogOpen = true }
     ) {
         Row(
@@ -1295,7 +1303,7 @@ private fun SampleRateSelectorCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = description,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

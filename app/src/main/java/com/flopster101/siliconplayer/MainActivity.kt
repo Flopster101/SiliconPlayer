@@ -1196,11 +1196,26 @@ private fun AppNavigation(
                             onPlayRecentFile = { entry ->
                                 val file = File(entry.path)
                                 if (file.exists() && file.isFile) {
-                                    applyTrackSelection(
-                                        file = file,
-                                        autoStart = true,
-                                        expandOverride = openPlayerOnTrackSelect
-                                    )
+                                    appScope.launch {
+                                        val contextualPlayableFiles = withContext(Dispatchers.IO) {
+                                            val parent = file.parentFile
+                                            if (parent != null && parent.exists() && parent.isDirectory) {
+                                                repository.getFiles(parent)
+                                                    .asSequence()
+                                                    .filterNot { it.isDirectory }
+                                                    .map { it.file }
+                                                    .toList()
+                                            } else {
+                                                listOf(file)
+                                            }
+                                        }
+                                        visiblePlayableFiles = contextualPlayableFiles
+                                        applyTrackSelection(
+                                            file = file,
+                                            autoStart = true,
+                                            expandOverride = openPlayerOnTrackSelect
+                                        )
+                                    }
                                 }
                             }
                         )

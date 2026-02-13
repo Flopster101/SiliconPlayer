@@ -11,13 +11,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.* // Import for remember, mutableStateOf
@@ -31,7 +38,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.layout.ContentScale
 import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import java.io.File
 import android.content.Intent
@@ -218,9 +227,14 @@ fun AppNavigation() {
         selectedFile?.let { file ->
             if (!isPlayerExpanded) {
                 MiniPlayerBar(
+                    file = file,
                     title = metadataTitle.ifBlank { file.nameWithoutExtension.ifBlank { file.name } },
                     artist = metadataArtist.ifBlank { "Unknown Artist" },
+                    artwork = artworkBitmap,
+                    noArtworkIcon = Icons.Default.MusicNote,
                     isPlaying = isPlaying,
+                    positionSeconds = position,
+                    durationSeconds = duration,
                     onExpand = { isPlayerExpanded = true },
                     onPlayStop = {
                         if (isPlaying) {
@@ -272,13 +286,27 @@ fun AppNavigation() {
 
 @Composable
 private fun MiniPlayerBar(
+    file: File,
     title: String,
     artist: String,
+    artwork: ImageBitmap?,
+    noArtworkIcon: ImageVector,
     isPlaying: Boolean,
+    positionSeconds: Double,
+    durationSeconds: Double,
     onExpand: () -> Unit,
     onPlayStop: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val formatLabel = file.extension.uppercase().ifBlank { "UNKNOWN" }
+    val positionLabel = formatTimeForMini(positionSeconds)
+    val durationLabel = formatTimeForMini(durationSeconds)
+    val progress = if (durationSeconds > 0.0) {
+        (positionSeconds / durationSeconds).toFloat().coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
     Surface(
         modifier = modifier,
         tonalElevation = 6.dp,
@@ -286,48 +314,105 @@ private fun MiniPlayerBar(
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onExpand)
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-        ) {
-            Column(
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(end = 96.dp)
+                    .fillMaxWidth()
+                    .clickable(onClick = onExpand)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = artist,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Surface(
+                    modifier = Modifier.size(46.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    if (artwork != null) {
+                        Image(
+                            bitmap = artwork,
+                            contentDescription = "Mini player artwork",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = noArtworkIcon,
+                                contentDescription = "No artwork",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.size(10.dp))
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 8.dp)
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = artist,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "$formatLabel • $positionLabel / $durationLabel",
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onPlayStop) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Stop" else "Play"
+                        )
+                    }
+                    IconButton(onClick = onExpand) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Expand player"
+                        )
+                    }
+                }
             }
 
-            Row(modifier = Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onPlayStop) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Stop" else "Play"
-                    )
-                }
-                IconButton(onClick = onExpand) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
-                        contentDescription = "Expand player"
-                    )
-                }
-            }
+            LinearProgressIndicator(
+                progress = progress,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(2.dp),
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
         }
     }
+}
+
+private fun formatTimeForMini(seconds: Double): String {
+    val safeSeconds = seconds.coerceAtLeast(0.0).toInt()
+    val minutes = safeSeconds / 60
+    val remainingSeconds = safeSeconds % 60
+    return "%02d:%02d".format(minutes, remainingSeconds)
 }
 
 private fun loadArtworkForFile(file: File): ImageBitmap? {

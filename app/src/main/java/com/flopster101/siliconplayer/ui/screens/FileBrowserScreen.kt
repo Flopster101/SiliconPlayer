@@ -18,7 +18,9 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -610,6 +613,7 @@ private fun isWithinRoot(file: File, root: File): Boolean {
     return filePath == rootPath || filePath.startsWith("$rootPath/")
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FileItemRow(item: FileItem, onClick: () -> Unit) {
     val subtitle by produceState(
@@ -664,11 +668,33 @@ fun FileItemRow(item: FileItem, onClick: () -> Unit) {
         }
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = item.name,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1
-            )
+            val shouldMarquee = item.name.length > 28
+            if (shouldMarquee) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clipToBounds()
+                ) {
+                    Text(
+                        text = item.name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip,
+                        modifier = Modifier.basicMarquee(
+                            iterations = Int.MAX_VALUE,
+                            initialDelayMillis = 900
+                        )
+                    )
+                }
+            } else {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = subtitle,

@@ -57,6 +57,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
@@ -643,117 +644,158 @@ private fun AppNavigation(
         }
     }
 
+    val shouldShowBrowserHomeAction = currentView == MainView.Browser
+    val shouldShowSettingsAction = currentView != MainView.Settings
+    val showSettingsBack = currentView == MainView.Settings
+
     Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedContent(
-            targetState = currentView,
-            transitionSpec = {
-                val forward = mainViewOrder(targetState) >= mainViewOrder(initialState)
-                val enter = slideInHorizontally(
-                    initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth / 4 },
-                    animationSpec = tween(
-                        durationMillis = PAGE_NAV_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                ) + fadeIn(
-                    animationSpec = tween(
-                        durationMillis = 210,
-                        delayMillis = 60,
-                        easing = LinearOutSlowInEasing
-                    )
-                )
-                val exit = slideOutHorizontally(
-                    targetOffsetX = { fullWidth -> if (forward) -fullWidth / 4 else fullWidth / 4 },
-                    animationSpec = tween(
-                        durationMillis = PAGE_NAV_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                ) + fadeOut(
-                    animationSpec = tween(
-                        durationMillis = 120,
-                        easing = FastOutLinearInEasing
-                    )
-                )
-                enter togetherWith exit
-            },
-            label = "mainViewTransition"
-        ) { targetView ->
-            when (targetView) {
-                MainView.Home -> HomeScreen(
-                    selectedTrack = selectedFile,
-                    onOpenLibrary = { currentView = MainView.Browser },
-                    onOpenSettings = {
-                        settingsRoute = SettingsRoute.Root
-                        currentView = MainView.Settings
-                    }
-                )
-                MainView.Browser -> com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
-                    repository = repository,
-                    initialLocationId = if (rememberBrowserLocation) lastBrowserLocationId else null,
-                    initialDirectoryPath = if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
-                    onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
-                    bottomContentPadding = miniPlayerListInset,
-                    backHandlingEnabled = !isPlayerExpanded,
-                    onExitBrowser = { currentView = MainView.Home },
-                    onOpenSettings = {
-                        settingsRoute = SettingsRoute.Root
-                        currentView = MainView.Settings
-                    },
-                    onBrowserLocationChanged = { locationId, directoryPath ->
-                        if (!rememberBrowserLocation) return@FileBrowserScreen
-                        lastBrowserLocationId = locationId
-                        lastBrowserDirectoryPath = directoryPath
-                        prefs.edit()
-                            .putString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, locationId)
-                            .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, directoryPath)
-                            .apply()
-                    },
-                    onFileSelected = { file ->
-                        applyTrackSelection(
-                            file = file,
-                            autoStart = autoPlayOnTrackSelect,
-                            expandOverride = openPlayerOnTrackSelect
-                        )
-                    }
-                )
-                MainView.Settings -> SettingsScreen(
-                    route = settingsRoute,
-                    onBack = {
-                        if (settingsRoute != SettingsRoute.Root) {
-                            settingsRoute = when (settingsRoute) {
-                                SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
-                                else -> SettingsRoute.Root
+        androidx.compose.material3.Scaffold(
+            topBar = {
+                androidx.compose.material3.TopAppBar(
+                    title = { Text("Silicon Player") },
+                    navigationIcon = {
+                        if (showSettingsBack) {
+                            IconButton(onClick = {
+                                if (settingsRoute != SettingsRoute.Root) {
+                                    settingsRoute = when (settingsRoute) {
+                                        SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
+                                        else -> SettingsRoute.Root
+                                    }
+                                } else {
+                                    currentView = MainView.Home
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Back"
+                                )
                             }
-                        } else {
-                            currentView = MainView.Home
                         }
                     },
-                    onOpenAudioPlugins = { settingsRoute = SettingsRoute.AudioPlugins },
-                    onOpenGeneralAudio = { settingsRoute = SettingsRoute.GeneralAudio },
-                    onOpenPlayer = { settingsRoute = SettingsRoute.Player },
-                    onOpenMisc = { settingsRoute = SettingsRoute.Misc },
-                    onOpenUi = { settingsRoute = SettingsRoute.Ui },
-                    onOpenAbout = { settingsRoute = SettingsRoute.About },
-                    onOpenFfmpeg = { settingsRoute = SettingsRoute.PluginFfmpeg },
-                    onOpenOpenMpt = { settingsRoute = SettingsRoute.PluginOpenMpt },
-                    autoPlayOnTrackSelect = autoPlayOnTrackSelect,
-                    onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
-                    openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                    onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
-                    respondHeadphoneMediaButtons = respondHeadphoneMediaButtons,
-                    onRespondHeadphoneMediaButtonsChanged = { respondHeadphoneMediaButtons = it },
-                    pauseOnHeadphoneDisconnect = pauseOnHeadphoneDisconnect,
-                    onPauseOnHeadphoneDisconnectChanged = { pauseOnHeadphoneDisconnect = it },
-                    openPlayerFromNotification = openPlayerFromNotification,
-                    onOpenPlayerFromNotificationChanged = { openPlayerFromNotification = it },
-                    themeMode = themeMode,
-                    onThemeModeChanged = onThemeModeChanged,
-                    rememberBrowserLocation = rememberBrowserLocation,
-                    onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
-                    ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
-                    onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
-                    openMptSampleRateHz = openMptCoreSampleRateHz,
-                    onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it }
+                    actions = {
+                        AnimatedVisibility(
+                            visible = shouldShowBrowserHomeAction,
+                            enter = fadeIn(animationSpec = tween(150)),
+                            exit = fadeOut(animationSpec = tween(120))
+                        ) {
+                            IconButton(onClick = { currentView = MainView.Home }) {
+                                Icon(
+                                    imageVector = Icons.Default.Home,
+                                    contentDescription = "Go to app home"
+                                )
+                            }
+                        }
+                        if (shouldShowSettingsAction) {
+                            IconButton(onClick = {
+                                settingsRoute = SettingsRoute.Root
+                                currentView = MainView.Settings
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Open settings"
+                                )
+                            }
+                        }
+                    }
                 )
+            }
+        ) { mainPadding ->
+            AnimatedContent(
+                targetState = currentView,
+                transitionSpec = {
+                    val forward = mainViewOrder(targetState) >= mainViewOrder(initialState)
+                    val enter = slideInHorizontally(
+                        initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth / 4 },
+                        animationSpec = tween(
+                            durationMillis = PAGE_NAV_DURATION_MS,
+                            easing = FastOutSlowInEasing
+                        )
+                    ) + fadeIn(
+                        animationSpec = tween(
+                            durationMillis = 210,
+                            delayMillis = 60,
+                            easing = LinearOutSlowInEasing
+                        )
+                    )
+                    val exit = slideOutHorizontally(
+                        targetOffsetX = { fullWidth -> if (forward) -fullWidth / 4 else fullWidth / 4 },
+                        animationSpec = tween(
+                            durationMillis = PAGE_NAV_DURATION_MS,
+                            easing = FastOutSlowInEasing
+                        )
+                    ) + fadeOut(
+                        animationSpec = tween(
+                            durationMillis = 120,
+                            easing = FastOutLinearInEasing
+                        )
+                    )
+                    enter togetherWith exit
+                },
+                label = "mainViewTransition",
+                modifier = Modifier.padding(mainPadding)
+            ) { targetView ->
+                when (targetView) {
+                    MainView.Home -> HomeScreen(
+                        selectedTrack = selectedFile,
+                        onOpenLibrary = { currentView = MainView.Browser }
+                    )
+                    MainView.Browser -> com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
+                        repository = repository,
+                        initialLocationId = if (rememberBrowserLocation) lastBrowserLocationId else null,
+                        initialDirectoryPath = if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
+                        onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
+                        bottomContentPadding = miniPlayerListInset,
+                        backHandlingEnabled = !isPlayerExpanded,
+                        onExitBrowser = { currentView = MainView.Home },
+                        onOpenSettings = null,
+                        showPrimaryTopBar = false,
+                        onBrowserLocationChanged = { locationId, directoryPath ->
+                            if (!rememberBrowserLocation) return@FileBrowserScreen
+                            lastBrowserLocationId = locationId
+                            lastBrowserDirectoryPath = directoryPath
+                            prefs.edit()
+                                .putString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, locationId)
+                                .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, directoryPath)
+                                .apply()
+                        },
+                        onFileSelected = { file ->
+                            applyTrackSelection(
+                                file = file,
+                                autoStart = autoPlayOnTrackSelect,
+                                expandOverride = openPlayerOnTrackSelect
+                            )
+                        }
+                    )
+                    MainView.Settings -> SettingsScreen(
+                        route = settingsRoute,
+                        onOpenAudioPlugins = { settingsRoute = SettingsRoute.AudioPlugins },
+                        onOpenGeneralAudio = { settingsRoute = SettingsRoute.GeneralAudio },
+                        onOpenPlayer = { settingsRoute = SettingsRoute.Player },
+                        onOpenMisc = { settingsRoute = SettingsRoute.Misc },
+                        onOpenUi = { settingsRoute = SettingsRoute.Ui },
+                        onOpenAbout = { settingsRoute = SettingsRoute.About },
+                        onOpenFfmpeg = { settingsRoute = SettingsRoute.PluginFfmpeg },
+                        onOpenOpenMpt = { settingsRoute = SettingsRoute.PluginOpenMpt },
+                        autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+                        onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
+                        openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                        onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
+                        respondHeadphoneMediaButtons = respondHeadphoneMediaButtons,
+                        onRespondHeadphoneMediaButtonsChanged = { respondHeadphoneMediaButtons = it },
+                        pauseOnHeadphoneDisconnect = pauseOnHeadphoneDisconnect,
+                        onPauseOnHeadphoneDisconnectChanged = { pauseOnHeadphoneDisconnect = it },
+                        openPlayerFromNotification = openPlayerFromNotification,
+                        onOpenPlayerFromNotificationChanged = { openPlayerFromNotification = it },
+                        themeMode = themeMode,
+                        onThemeModeChanged = onThemeModeChanged,
+                        rememberBrowserLocation = rememberBrowserLocation,
+                        onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
+                        ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
+                        onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
+                        openMptSampleRateHz = openMptCoreSampleRateHz,
+                        onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it }
+                    )
+                }
             }
         }
 
@@ -879,106 +921,88 @@ private fun AppNavigation(
 @Composable
 private fun HomeScreen(
     selectedTrack: File?,
-    onOpenLibrary: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenLibrary: () -> Unit
 ) {
-    androidx.compose.material3.Scaffold(
-        topBar = {
-            androidx.compose.material3.TopAppBar(
-                title = { Text("Silicon Player") },
-                actions = {
-                    IconButton(onClick = onOpenSettings) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp, vertical = 16.dp)
+    ) {
+        Text(
+            text = "Local music library",
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Browse files and play mainstream or tracker/module formats.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(18.dp))
+        androidx.compose.material3.ElevatedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(96.dp),
+            onClick = onOpenLibrary
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    modifier = Modifier.size(42.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Open settings"
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = null
                         )
                     }
                 }
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 20.dp, vertical = 16.dp)
-        ) {
-            Text(
-                text = "Local music library",
-                style = MaterialTheme.typography.headlineSmall
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Browse files and play mainstream or tracker/module formats.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(18.dp))
-            androidx.compose.material3.ElevatedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(96.dp),
-                onClick = onOpenLibrary
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 18.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        modifier = Modifier.size(42.dp),
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Folder,
-                                contentDescription = null
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Open Library Browser",
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1
-                        )
-                        Text(
-                            text = "Browse folders and choose a track",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                Spacer(modifier = Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Open Library Browser",
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "Browse folders and choose a track",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
                     )
                 }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            selectedTrack?.let { track ->
-                Spacer(modifier = Modifier.height(14.dp))
-                androidx.compose.material3.ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = SettingsCardShape
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Current track",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = track.nameWithoutExtension.ifBlank { track.name },
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+        }
+        selectedTrack?.let { track ->
+            Spacer(modifier = Modifier.height(14.dp))
+            androidx.compose.material3.ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = SettingsCardShape
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Current track",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = track.nameWithoutExtension.ifBlank { track.name },
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
@@ -989,7 +1013,6 @@ private fun HomeScreen(
 @Composable
 private fun SettingsScreen(
     route: SettingsRoute,
-    onBack: () -> Unit,
     onOpenAudioPlugins: () -> Unit,
     onOpenGeneralAudio: () -> Unit,
     onOpenPlayer: () -> Unit,
@@ -1029,60 +1052,49 @@ private fun SettingsScreen(
         SettingsRoute.About -> "About"
     }
 
-    androidx.compose.material3.Scaffold(
-        topBar = {
-            androidx.compose.material3.TopAppBar(
-                title = { Text(screenTitle) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back to home"
-                        )
-                    }
-                }
+    AnimatedContent(
+        targetState = route,
+        transitionSpec = {
+            val forward = settingsRouteOrder(targetState) >= settingsRouteOrder(initialState)
+            val enter = slideInHorizontally(
+                initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth / 4 },
+                animationSpec = tween(
+                    durationMillis = PAGE_NAV_DURATION_MS,
+                    easing = FastOutSlowInEasing
+                )
+            ) + fadeIn(
+                animationSpec = tween(
+                    durationMillis = 210,
+                    delayMillis = 60,
+                    easing = LinearOutSlowInEasing
+                )
             )
-        }
-    ) { paddingValues ->
-        AnimatedContent(
-            targetState = route,
-            transitionSpec = {
-                val forward = settingsRouteOrder(targetState) >= settingsRouteOrder(initialState)
-                val enter = slideInHorizontally(
-                    initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth / 4 },
-                    animationSpec = tween(
-                        durationMillis = PAGE_NAV_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                ) + fadeIn(
-                    animationSpec = tween(
-                        durationMillis = 210,
-                        delayMillis = 60,
-                        easing = LinearOutSlowInEasing
-                    )
+            val exit = slideOutHorizontally(
+                targetOffsetX = { fullWidth -> if (forward) -fullWidth / 4 else fullWidth / 4 },
+                animationSpec = tween(
+                    durationMillis = PAGE_NAV_DURATION_MS,
+                    easing = FastOutSlowInEasing
                 )
-                val exit = slideOutHorizontally(
-                    targetOffsetX = { fullWidth -> if (forward) -fullWidth / 4 else fullWidth / 4 },
-                    animationSpec = tween(
-                        durationMillis = PAGE_NAV_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                ) + fadeOut(
-                    animationSpec = tween(
-                        durationMillis = 120,
-                        easing = FastOutLinearInEasing
-                    )
+            ) + fadeOut(
+                animationSpec = tween(
+                    durationMillis = 120,
+                    easing = FastOutLinearInEasing
                 )
-                enter togetherWith exit
-            },
-            label = "settingsRouteTransition",
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                when (it) {
+            )
+            enter togetherWith exit
+        },
+        label = "settingsRouteTransition",
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Text(
+                text = screenTitle,
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            when (it) {
                     SettingsRoute.Root -> {
                         SettingsSectionLabel("Audio")
                         SettingsItemCard(
@@ -1216,7 +1228,6 @@ private fun SettingsScreen(
                         onSelectedModeChanged = onThemeModeChanged
                     )
                     SettingsRoute.About -> AboutSettingsBody()
-                }
             }
         }
     }

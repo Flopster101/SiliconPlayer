@@ -84,7 +84,8 @@ fun FileBrowserScreen(
     bottomContentPadding: Dp = 0.dp,
     backHandlingEnabled: Boolean = true,
     onExitBrowser: (() -> Unit)? = null,
-    onOpenSettings: (() -> Unit)? = null
+    onOpenSettings: (() -> Unit)? = null,
+    showPrimaryTopBar: Boolean = true
 ) {
     val context = LocalContext.current
     val storageLocations = remember(context) { detectStorageLocations(context) }
@@ -273,29 +274,31 @@ fun FileBrowserScreen(
     Scaffold(
         topBar = {
             Column {
-                TopAppBar(
-                    title = {
-                        Text(text = "Silicon Player")
-                    },
-                    actions = {
-                        onExitBrowser?.let { exitBrowser ->
-                            IconButton(onClick = exitBrowser) {
-                                Icon(
-                                    imageVector = Icons.Default.Home,
-                                    contentDescription = "Go to app home"
-                                )
+                if (showPrimaryTopBar) {
+                    TopAppBar(
+                        title = {
+                            Text(text = "Silicon Player")
+                        },
+                        actions = {
+                            onExitBrowser?.let { exitBrowser ->
+                                IconButton(onClick = exitBrowser) {
+                                    Icon(
+                                        imageVector = Icons.Default.Home,
+                                        contentDescription = "Go to app home"
+                                    )
+                                }
+                            }
+                            onOpenSettings?.let { openSettings ->
+                                IconButton(onClick = openSettings) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Open settings"
+                                    )
+                                }
                             }
                         }
-                        onOpenSettings?.let { openSettings ->
-                            IconButton(onClick = openSettings) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "Open settings"
-                                )
-                            }
-                        }
-                    }
-                )
+                    )
+                }
                 Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
                     Row(
                         modifier = Modifier

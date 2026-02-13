@@ -3,6 +3,22 @@ plugins {
     alias(libs.plugins.jetbrainsKotlinAndroid)
 }
 
+import java.io.ByteArrayOutputStream
+
+fun gitShortSha(): String {
+    return try {
+        val stdout = ByteArrayOutputStream()
+        exec {
+            commandLine("git", "rev-parse", "--short", "HEAD")
+            standardOutput = stdout
+            isIgnoreExitValue = true
+        }
+        stdout.toString().trim().ifBlank { "nogit" }
+    } catch (_: Exception) {
+        "nogit"
+    }
+}
+
 android {
     namespace = "com.flopster101.siliconplayer"
     compileSdk = 34
@@ -11,8 +27,9 @@ android {
         applicationId = "com.flopster101.siliconplayer"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 1000
+        versionName = "0.1.0"
+        buildConfigField("String", "GIT_SHA", "\"${gitShortSha()}\"")
         ndkVersion = "29.0.14206865"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -47,6 +64,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"

@@ -27,6 +27,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.Switch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -138,6 +139,8 @@ fun AppNavigation() {
     var metadataChannelCount by remember { mutableIntStateOf(0) }
     var metadataBitDepthLabel by remember { mutableStateOf("Unknown") }
     var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    var autoPlayOnTrackSelect by remember { mutableStateOf(true) }
+    var openPlayerOnTrackSelect by remember { mutableStateOf(true) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as MainActivity
 
@@ -304,7 +307,12 @@ fun AppNavigation() {
                     duration = activity.getDuration()
                     position = 0.0
                     artworkBitmap = null
-                    isPlayerExpanded = true
+                    if (autoPlayOnTrackSelect) {
+                        activity.setLooping(looping)
+                        activity.startEngine()
+                        isPlaying = true
+                    }
+                    isPlayerExpanded = openPlayerOnTrackSelect
                 }
             )
             MainView.Settings -> SettingsScreen(
@@ -326,7 +334,11 @@ fun AppNavigation() {
                 onOpenUi = { settingsRoute = SettingsRoute.Ui },
                 onOpenAbout = { settingsRoute = SettingsRoute.About },
                 onOpenFfmpeg = { settingsRoute = SettingsRoute.PluginFfmpeg },
-                onOpenOpenMpt = { settingsRoute = SettingsRoute.PluginOpenMpt }
+                onOpenOpenMpt = { settingsRoute = SettingsRoute.PluginOpenMpt },
+                autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+                onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
+                openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it }
             )
         }
 
@@ -531,7 +543,11 @@ private fun SettingsScreen(
     onOpenUi: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenFfmpeg: () -> Unit,
-    onOpenOpenMpt: () -> Unit
+    onOpenOpenMpt: () -> Unit,
+    autoPlayOnTrackSelect: Boolean,
+    onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
+    openPlayerOnTrackSelect: Boolean,
+    onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit
 ) {
     val screenTitle = when (route) {
         SettingsRoute.Root -> "Settings"
@@ -647,10 +663,22 @@ private fun SettingsScreen(
                     title = "General audio settings",
                     description = "Global audio behavior options will appear here."
                 )
-                SettingsRoute.Player -> SettingsPlaceholderBody(
-                    title = "Player settings",
-                    description = "Player controls and behavior options will appear here."
-                )
+                SettingsRoute.Player -> {
+                    SettingsSectionLabel("Track selection")
+                    PlayerSettingToggleCard(
+                        title = "Play on track select",
+                        description = "Start playback immediately when a file is tapped.",
+                        checked = autoPlayOnTrackSelect,
+                        onCheckedChange = onAutoPlayOnTrackSelectChanged
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    PlayerSettingToggleCard(
+                        title = "Open player on track select",
+                        description = "Open full player when selecting a file. Disable to keep mini-player only.",
+                        checked = openPlayerOnTrackSelect,
+                        onCheckedChange = onOpenPlayerOnTrackSelectChanged
+                    )
+                }
                 SettingsRoute.Misc -> SettingsPlaceholderBody(
                     title = "Misc settings",
                     description = "Additional app options will appear here."
@@ -715,6 +743,42 @@ private fun SettingsItemCard(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlayerSettingToggleCard(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    androidx.compose.material3.OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { onCheckedChange(!checked) }
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange
             )
         }
     }

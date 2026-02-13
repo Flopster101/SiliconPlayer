@@ -14,16 +14,23 @@
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
+// register decoders
+namespace {
+    struct DecoderRegistration {
+        DecoderRegistration() {
+             DecoderRegistry::getInstance().registerDecoder("FFmpeg", FFmpegDecoder::getSupportedExtensions(), []() {
+                return std::make_unique<FFmpegDecoder>();
+            }, 0);
+
+            DecoderRegistry::getInstance().registerDecoder("LibOpenMPT", LibOpenMPTDecoder::getSupportedExtensions(), []() {
+                return std::make_unique<LibOpenMPTDecoder>();
+            }, 10);
+        }
+    };
+    static DecoderRegistration registration;
+}
+
 AudioEngine::AudioEngine() {
-    // Register decoders
-    DecoderRegistry::getInstance().registerDecoder("FFmpeg", FFmpegDecoder::getSupportedExtensions(), []() {
-        return std::make_unique<FFmpegDecoder>();
-    }, 0);
-
-    DecoderRegistry::getInstance().registerDecoder("LibOpenMPT", LibOpenMPTDecoder::getSupportedExtensions(), []() {
-        return std::make_unique<LibOpenMPTDecoder>();
-    }, 10); // Higher priority than FFmpeg for supported extensions
-
     createStream();
 }
 

@@ -2,14 +2,9 @@ package com.flopster101.siliconplayer.data
 
 import java.io.File
 
-class FileRepository {
-
-    private val supportedExtensions = setOf(
-        "mp3", "flac", "ogg", "m4a", "wav", "aac", "wma", "opus", "ape", "wv",
-        "mod", "s3m", "xm", "it", "mptm", "stm", "nst", "m15", "wow", "ult", "669",
-        "mtm", "med", "far", "mdl", "ams", "dsm", "amf", "okta", "dmf", "ptm", "dbm",
-        "mt2", "psm", "j2b"
-    )
+class FileRepository(
+    private val supportedExtensions: Set<String>
+) {
 
     fun getFiles(directory: File): List<FileItem> {
         val files = directory.listFiles() ?: return emptyList()

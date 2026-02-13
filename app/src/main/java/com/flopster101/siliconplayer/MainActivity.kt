@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
     external fun startEngine()
     external fun stopEngine()
     external fun loadAudio(path: String)
+    external fun getSupportedExtensions(): Array<String>
 
     companion object {
         init {
@@ -50,9 +51,12 @@ class MainActivity : ComponentActivity() {
 fun AppNavigation() {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.FileBrowser) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
-    val repository = remember { com.flopster101.siliconplayer.data.FileRepository() }
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as MainActivity
+
+    // Get supported extensions from JNI
+    val supportedExtensions = remember { activity.getSupportedExtensions().toSet() }
+    val repository = remember { com.flopster101.siliconplayer.data.FileRepository(supportedExtensions) }
 
     // Permission handling
     var hasPermission by remember { mutableStateOf(false) }

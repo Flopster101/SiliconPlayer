@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -132,6 +133,7 @@ fun AppNavigation() {
     var position by remember { mutableDoubleStateOf(0.0) }
     var isPlaying by remember { mutableStateOf(false) }
     var isPlayerExpanded by remember { mutableStateOf(false) }
+    var isPlayerSurfaceVisible by remember { mutableStateOf(false) }
     var looping by remember { mutableStateOf(false) }
     var metadataTitle by remember { mutableStateOf("") }
     var metadataArtist by remember { mutableStateOf("") }
@@ -245,21 +247,25 @@ fun AppNavigation() {
         return
     }
 
-    val isMiniPlayerVisible = selectedFile != null && !isPlayerExpanded
+    val isMiniPlayerVisible = isPlayerSurfaceVisible && !isPlayerExpanded
     val miniPlayerListInset = if (isMiniPlayerVisible && currentView == MainView.Browser) 108.dp else 0.dp
-    val clearCurrentTrack: () -> Unit = {
+    val stopAndEmptyTrack: () -> Unit = {
         activity.stopEngine()
         selectedFile = null
         duration = 0.0
         position = 0.0
         isPlaying = false
-        isPlayerExpanded = false
         metadataTitle = ""
         metadataArtist = ""
         metadataSampleRate = 0
         metadataChannelCount = 0
         metadataBitDepthLabel = "Unknown"
         artworkBitmap = null
+    }
+    val hidePlayerSurface: () -> Unit = {
+        stopAndEmptyTrack()
+        isPlayerExpanded = false
+        isPlayerSurfaceVisible = false
     }
 
     BackHandler(enabled = isPlayerExpanded || currentView == MainView.Settings) {
@@ -298,6 +304,7 @@ fun AppNavigation() {
                     activity.stopEngine()
                     isPlaying = false
                     selectedFile = file
+                    isPlayerSurfaceVisible = true
                     activity.loadAudio(file.absolutePath)
                     metadataTitle = activity.getTrackTitle()
                     metadataArtist = activity.getTrackArtist()
@@ -342,7 +349,7 @@ fun AppNavigation() {
             )
         }
 
-        selectedFile?.let { file ->
+        if (isPlayerSurfaceVisible) {
             if (!isPlayerExpanded) {
                 val dismissState = rememberSwipeToDismissBoxState(
                     positionalThreshold = { totalDistance -> totalDistance * 0.6f },
@@ -350,7 +357,7 @@ fun AppNavigation() {
                         val isDismiss = targetValue == SwipeToDismissBoxValue.StartToEnd ||
                             targetValue == SwipeToDismissBoxValue.EndToStart
                         if (isDismiss && !isPlaying) {
-                            clearCurrentTrack()
+                            hidePlayerSurface()
                             true
                         } else {
                             false
@@ -367,41 +374,52 @@ fun AppNavigation() {
                     enableDismissFromEndToStart = !isPlaying
                 ) {
                     MiniPlayerBar(
-                        file = file,
-                        title = metadataTitle.ifBlank { file.nameWithoutExtension.ifBlank { file.name } },
-                        artist = metadataArtist.ifBlank { "Unknown Artist" },
+                        file = selectedFile,
+                        title = metadataTitle.ifBlank {
+                            selectedFile?.nameWithoutExtension?.ifBlank { selectedFile?.name ?: "" }
+                                ?: "No track selected"
+                        },
+                        artist = metadataArtist.ifBlank {
+                            if (selectedFile != null) "Unknown Artist" else "Tap a file to play"
+                        },
                         artwork = artworkBitmap,
                         noArtworkIcon = Icons.Default.MusicNote,
                         isPlaying = isPlaying,
                         positionSeconds = position,
                         durationSeconds = duration,
                         onExpand = { isPlayerExpanded = true },
-                        onPlayStop = {
-                            if (isPlaying) {
-                                activity.stopEngine()
-                                isPlaying = false
-                            } else {
-                                activity.setLooping(looping)
-                                activity.startEngine()
-                                isPlaying = true
+                        onPlayPause = {
+                            if (selectedFile != null) {
+                                if (isPlaying) {
+                                    activity.stopEngine()
+                                    isPlaying = false
+                                } else {
+                                    activity.setLooping(looping)
+                                    activity.startEngine()
+                                    isPlaying = true
+                                }
                             }
-                        }
+                        },
+                        onStopAndClear = stopAndEmptyTrack
                     )
                 }
             } else {
                 com.flopster101.siliconplayer.ui.screens.PlayerScreen(
-                    file = file,
+                    file = selectedFile,
                     onBack = { isPlayerExpanded = false },
                     isPlaying = isPlaying,
                     onPlay = {
-                        activity.setLooping(looping)
-                        activity.startEngine()
-                        isPlaying = true
+                        if (selectedFile != null) {
+                            activity.setLooping(looping)
+                            activity.startEngine()
+                            isPlaying = true
+                        }
                     },
-                    onStop = {
+                    onPause = {
                         activity.stopEngine()
                         isPlaying = false
                     },
+                    onStopAndClear = stopAndEmptyTrack,
                     durationSeconds = duration,
                     positionSeconds = position,
                     title = metadataTitle,
@@ -807,7 +825,7 @@ private fun SettingsPlaceholderBody(
 
 @Composable
 private fun MiniPlayerBar(
-    file: File,
+    file: File?,
     title: String,
     artist: String,
     artwork: ImageBitmap?,
@@ -816,10 +834,12 @@ private fun MiniPlayerBar(
     positionSeconds: Double,
     durationSeconds: Double,
     onExpand: () -> Unit,
-    onPlayStop: () -> Unit,
+    onPlayPause: () -> Unit,
+    onStopAndClear: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val formatLabel = file.extension.uppercase().ifBlank { "UNKNOWN" }
+    val hasTrack = file != null
+    val formatLabel = file?.extension?.uppercase()?.ifBlank { "UNKNOWN" } ?: "EMPTY"
     val positionLabel = formatTimeForMini(positionSeconds)
     val durationLabel = formatTimeForMini(durationSeconds)
     val progress = if (durationSeconds > 0.0) {
@@ -902,10 +922,16 @@ private fun MiniPlayerBar(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onPlayStop) {
+                    IconButton(onClick = onPlayPause, enabled = hasTrack) {
                         Icon(
-                            imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Stop" else "Play"
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play"
+                        )
+                    }
+                    IconButton(onClick = onStopAndClear) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Stop"
                         )
                     }
                     IconButton(onClick = onExpand) {

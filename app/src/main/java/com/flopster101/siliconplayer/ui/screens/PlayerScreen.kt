@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Loop
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
@@ -39,11 +40,12 @@ import kotlin.math.roundToInt
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
-    file: File,
+    file: File?,
     onBack: () -> Unit,
     isPlaying: Boolean,
     onPlay: () -> Unit,
-    onStop: () -> Unit,
+    onPause: () -> Unit,
+    onStopAndClear: () -> Unit,
     durationSeconds: Double,
     positionSeconds: Double,
     title: String,
@@ -68,8 +70,12 @@ fun PlayerScreen(
         }
     }
 
-    val displayTitle = title.ifBlank { file.nameWithoutExtension.ifBlank { file.name } }
-    val displayArtist = artist.ifBlank { "Unknown Artist" }
+    val hasTrack = file != null
+    val displayTitle = title.ifBlank {
+        if (file != null) file.nameWithoutExtension.ifBlank { file.name } else "No track selected"
+    }
+    val displayArtist = artist.ifBlank { if (hasTrack) "Unknown Artist" else "Tap a file to play" }
+    val displayFilename = file?.name ?: "No file loaded"
 
     Scaffold(
         topBar = {
@@ -133,7 +139,7 @@ fun PlayerScreen(
                         TrackMetadataBlock(
                             title = displayTitle,
                             artist = displayArtist,
-                            filename = file.name
+                            filename = displayFilename
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         TimelineSection(
@@ -151,15 +157,17 @@ fun PlayerScreen(
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         TransportControls(
+                            hasTrack = hasTrack,
                             isPlaying = isPlaying,
                             isLooping = isLooping,
-                            onPlayStop = {
+                            onPlayPause = {
                                 if (isPlaying) {
-                                    onStop()
+                                    onPause()
                                 } else {
                                     onPlay()
                                 }
                             },
+                            onStopAndClear = onStopAndClear,
                             onLoopingChanged = { onLoopingChanged(!isLooping) }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
@@ -194,7 +202,7 @@ fun PlayerScreen(
                     TrackMetadataBlock(
                         title = displayTitle,
                         artist = displayArtist,
-                        filename = file.name
+                        filename = displayFilename
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     TimelineSection(
@@ -212,15 +220,17 @@ fun PlayerScreen(
                     )
                     Spacer(modifier = Modifier.height(10.dp))
                     TransportControls(
+                        hasTrack = hasTrack,
                         isPlaying = isPlaying,
                         isLooping = isLooping,
-                        onPlayStop = {
+                        onPlayPause = {
                             if (isPlaying) {
-                                onStop()
+                                onPause()
                             } else {
                                 onPlay()
                             }
                         },
+                        onStopAndClear = onStopAndClear,
                         onLoopingChanged = { onLoopingChanged(!isLooping) }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -293,14 +303,14 @@ private fun AlbumArtPlaceholder(
 
 @Composable
 private fun TrackInfoChips(
-    file: File,
+    file: File?,
     durationSeconds: Double,
     sampleRateHz: Int,
     channelCount: Int,
     bitDepthLabel: String,
     modifier: Modifier = Modifier
 ) {
-    val formatLabel = file.extension.uppercase().ifBlank { "UNKNOWN" }
+    val formatLabel = file?.extension?.uppercase()?.ifBlank { "UNKNOWN" } ?: "EMPTY"
     val durationLabel = if (durationSeconds > 0.0) formatTime(durationSeconds) else "--:--"
     val sampleRateLabel = if (sampleRateHz > 0) {
         if (sampleRateHz % 1000 == 0) {
@@ -481,9 +491,11 @@ private fun TrackMetadataBlock(title: String, artist: String, filename: String) 
 
 @Composable
 private fun TransportControls(
+    hasTrack: Boolean,
     isPlaying: Boolean,
     isLooping: Boolean,
-    onPlayStop: () -> Unit,
+    onPlayPause: () -> Unit,
+    onStopAndClear: () -> Unit,
     onLoopingChanged: () -> Unit
 ) {
     Row(
@@ -513,7 +525,8 @@ private fun TransportControls(
         Spacer(modifier = Modifier.width(18.dp))
 
         FilledIconButton(
-            onClick = onPlayStop,
+            onClick = onPlayPause,
+            enabled = hasTrack,
             modifier = Modifier.size(96.dp),
             shape = MaterialTheme.shapes.extraLarge,
             colors = IconButtonDefaults.filledIconButtonColors(
@@ -522,27 +535,25 @@ private fun TransportControls(
             )
         ) {
             Icon(
-                imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                contentDescription = if (isPlaying) "Stop" else "Play",
+                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                contentDescription = if (isPlaying) "Pause" else "Play",
                 modifier = Modifier.size(36.dp)
             )
         }
 
         Spacer(modifier = Modifier.width(18.dp))
 
-        OutlinedIconButton(
-            onClick = {},
-            enabled = false,
+        FilledTonalIconButton(
+            onClick = onStopAndClear,
             modifier = Modifier.size(72.dp),
             shape = MaterialTheme.shapes.extraLarge,
-            colors = IconButtonDefaults.outlinedIconButtonColors(
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
             )
         ) {
             Icon(
-                imageVector = Icons.Default.SkipNext,
-                contentDescription = "Next track (future)"
+                imageVector = Icons.Default.Stop,
+                contentDescription = "Stop"
             )
         }
     }

@@ -85,6 +85,8 @@ import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import java.io.File
 import android.content.Intent
 import android.content.Context
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.net.Uri
 import android.provider.Settings
 import android.os.Environment
@@ -140,6 +142,8 @@ private object AppPreferenceKeys {
     const val BROWSER_LAST_DIRECTORY_PATH = "browser_last_directory_path"
     const val CORE_RATE_FFMPEG = "core_rate_ffmpeg"
     const val CORE_RATE_OPENMPT = "core_rate_openmpt"
+    const val RESPOND_HEADPHONE_MEDIA_BUTTONS = "respond_headphone_media_buttons"
+    const val PAUSE_ON_HEADPHONE_DISCONNECT = "pause_on_headphone_disconnect"
 }
 
 class MainActivity : ComponentActivity() {
@@ -198,7 +202,6 @@ fun AppNavigation() {
     var metadataBitDepthLabel by remember { mutableStateOf("Unknown") }
     var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
-    val activity = context as MainActivity
     val prefs = remember(context) {
         context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)
     }
@@ -237,9 +240,19 @@ fun AppNavigation() {
             prefs.getInt(AppPreferenceKeys.CORE_RATE_OPENMPT, 0)
         )
     }
+    var respondHeadphoneMediaButtons by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.RESPOND_HEADPHONE_MEDIA_BUTTONS, true)
+        )
+    }
+    var pauseOnHeadphoneDisconnect by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.PAUSE_ON_HEADPHONE_DISCONNECT, true)
+        )
+    }
 
     // Get supported extensions from JNI
-    val supportedExtensions = remember { activity.getSupportedExtensions().toSet() }
+    val supportedExtensions = remember { NativeBridge.getSupportedExtensions().toSet() }
     val repository = remember { com.flopster101.siliconplayer.data.FileRepository(supportedExtensions) }
 
     // Permission handling
@@ -276,6 +289,21 @@ fun AppNavigation() {
     ) { isGranted ->
         hasPermission = isGranted
     }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { }
+
+    fun syncPlaybackService() {
+        PlaybackService.syncFromUi(
+            context = context,
+            path = selectedFile?.absolutePath,
+            title = metadataTitle.ifBlank { selectedFile?.nameWithoutExtension.orEmpty() },
+            artist = metadataArtist.ifBlank { "Unknown Artist" },
+            durationSeconds = duration,
+            positionSeconds = position,
+            isPlaying = isPlaying
+        )
+    }
 
     LaunchedEffect(Unit) {
         if (!checkPermission()) {
@@ -294,13 +322,22 @@ fun AppNavigation() {
                 launcher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
             }
         }
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
     }
 
     LaunchedEffect(selectedFile) {
         while (selectedFile != null) {
-            duration = activity.getDuration()
-            position = activity.getPosition()
-            isPlaying = activity.isEnginePlaying()
+            duration = NativeBridge.getDuration()
+            position = NativeBridge.getPosition()
+            isPlaying = NativeBridge.isEnginePlaying()
             delay(if (isPlaying) 80 else 250)
         }
     }
@@ -340,14 +377,34 @@ fun AppNavigation() {
         prefs.edit()
             .putInt(AppPreferenceKeys.CORE_RATE_FFMPEG, ffmpegCoreSampleRateHz)
             .apply()
-        activity.setCoreOutputSampleRate("FFmpeg", ffmpegCoreSampleRateHz)
+        NativeBridge.setCoreOutputSampleRate("FFmpeg", ffmpegCoreSampleRateHz)
     }
 
     LaunchedEffect(openMptCoreSampleRateHz) {
         prefs.edit()
             .putInt(AppPreferenceKeys.CORE_RATE_OPENMPT, openMptCoreSampleRateHz)
             .apply()
-        activity.setCoreOutputSampleRate("LibOpenMPT", openMptCoreSampleRateHz)
+        NativeBridge.setCoreOutputSampleRate("LibOpenMPT", openMptCoreSampleRateHz)
+    }
+
+    LaunchedEffect(respondHeadphoneMediaButtons) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.RESPOND_HEADPHONE_MEDIA_BUTTONS, respondHeadphoneMediaButtons)
+            .apply()
+        PlaybackService.refreshSettings(context)
+    }
+
+    LaunchedEffect(pauseOnHeadphoneDisconnect) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.PAUSE_ON_HEADPHONE_DISCONNECT, pauseOnHeadphoneDisconnect)
+            .apply()
+        PlaybackService.refreshSettings(context)
+    }
+
+    LaunchedEffect(selectedFile, isPlaying, metadataTitle, metadataArtist, duration) {
+        if (selectedFile != null) {
+            syncPlaybackService()
+        }
     }
 
     if (!hasPermission) {
@@ -385,7 +442,7 @@ fun AppNavigation() {
         label = "miniPlayerListInset"
     )
     val stopAndEmptyTrack: () -> Unit = {
-        activity.stopEngine()
+        NativeBridge.stopEngine()
         selectedFile = null
         duration = 0.0
         position = 0.0
@@ -396,11 +453,43 @@ fun AppNavigation() {
         metadataChannelCount = 0
         metadataBitDepthLabel = "Unknown"
         artworkBitmap = null
+        context.startService(
+            Intent(context, PlaybackService::class.java).setAction(PlaybackService.ACTION_STOP_CLEAR)
+        )
     }
     val hidePlayerSurface: () -> Unit = {
         stopAndEmptyTrack()
         isPlayerExpanded = false
         isPlayerSurfaceVisible = false
+    }
+
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action != PlaybackService.ACTION_BROADCAST_CLEARED) return
+                selectedFile = null
+                isPlaying = false
+                duration = 0.0
+                position = 0.0
+                metadataTitle = ""
+                metadataArtist = ""
+                metadataSampleRate = 0
+                metadataChannelCount = 0
+                metadataBitDepthLabel = "Unknown"
+                artworkBitmap = null
+                isPlayerExpanded = false
+                isPlayerSurfaceVisible = false
+            }
+        }
+        androidx.core.content.ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(PlaybackService.ACTION_BROADCAST_CLEARED),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
     }
 
     BackHandler(enabled = isPlayerExpanded || currentView == MainView.Settings) {
@@ -480,24 +569,25 @@ fun AppNavigation() {
                             .apply()
                     },
                     onFileSelected = { file ->
-                        activity.stopEngine()
+                        NativeBridge.stopEngine()
                         isPlaying = false
                         selectedFile = file
                         isPlayerSurfaceVisible = true
-                        activity.loadAudio(file.absolutePath)
-                        metadataTitle = activity.getTrackTitle()
-                        metadataArtist = activity.getTrackArtist()
-                        metadataSampleRate = activity.getTrackSampleRate()
-                        metadataChannelCount = activity.getTrackChannelCount()
-                        metadataBitDepthLabel = activity.getTrackBitDepthLabel()
-                        duration = activity.getDuration()
+                        NativeBridge.loadAudio(file.absolutePath)
+                        metadataTitle = NativeBridge.getTrackTitle()
+                        metadataArtist = NativeBridge.getTrackArtist()
+                        metadataSampleRate = NativeBridge.getTrackSampleRate()
+                        metadataChannelCount = NativeBridge.getTrackChannelCount()
+                        metadataBitDepthLabel = NativeBridge.getTrackBitDepthLabel()
+                        duration = NativeBridge.getDuration()
                         position = 0.0
                         artworkBitmap = null
                         if (autoPlayOnTrackSelect) {
-                            activity.setLooping(looping)
-                            activity.startEngine()
+                            NativeBridge.setLooping(looping)
+                            NativeBridge.startEngine()
                             isPlaying = true
                         }
+                        syncPlaybackService()
                         isPlayerExpanded = openPlayerOnTrackSelect
                     }
                 )
@@ -525,6 +615,10 @@ fun AppNavigation() {
                     onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
                     openPlayerOnTrackSelect = openPlayerOnTrackSelect,
                     onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
+                    respondHeadphoneMediaButtons = respondHeadphoneMediaButtons,
+                    onRespondHeadphoneMediaButtonsChanged = { respondHeadphoneMediaButtons = it },
+                    pauseOnHeadphoneDisconnect = pauseOnHeadphoneDisconnect,
+                    onPauseOnHeadphoneDisconnectChanged = { pauseOnHeadphoneDisconnect = it },
                     rememberBrowserLocation = rememberBrowserLocation,
                     onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
                     ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
@@ -581,13 +675,14 @@ fun AppNavigation() {
                         onPlayPause = {
                             if (selectedFile != null) {
                                 if (isPlaying) {
-                                    activity.stopEngine()
+                                    NativeBridge.stopEngine()
                                     isPlaying = false
                                 } else {
-                                    activity.setLooping(looping)
-                                    activity.startEngine()
+                                    NativeBridge.setLooping(looping)
+                                    NativeBridge.startEngine()
                                     isPlaying = true
                                 }
+                                syncPlaybackService()
                             }
                         },
                         onStopAndClear = stopAndEmptyTrack
@@ -605,14 +700,16 @@ fun AppNavigation() {
                     isPlaying = isPlaying,
                     onPlay = {
                         if (selectedFile != null) {
-                            activity.setLooping(looping)
-                            activity.startEngine()
+                            NativeBridge.setLooping(looping)
+                            NativeBridge.startEngine()
                             isPlaying = true
+                            syncPlaybackService()
                         }
                     },
                     onPause = {
-                        activity.stopEngine()
+                        NativeBridge.stopEngine()
                         isPlaying = false
+                        syncPlaybackService()
                     },
                     onStopAndClear = stopAndEmptyTrack,
                     durationSeconds = duration,
@@ -624,10 +721,14 @@ fun AppNavigation() {
                     bitDepthLabel = metadataBitDepthLabel,
                     artwork = artworkBitmap,
                     isLooping = looping,
-                    onSeek = { seconds -> activity.seekTo(seconds) },
+                    onSeek = { seconds ->
+                        NativeBridge.seekTo(seconds)
+                        position = seconds
+                        syncPlaybackService()
+                    },
                     onLoopingChanged = { enabled ->
                         looping = enabled
-                        activity.setLooping(enabled)
+                        NativeBridge.setLooping(enabled)
                     }
                 )
             }
@@ -761,6 +862,10 @@ private fun SettingsScreen(
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     openPlayerOnTrackSelect: Boolean,
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
+    respondHeadphoneMediaButtons: Boolean,
+    onRespondHeadphoneMediaButtonsChanged: (Boolean) -> Unit,
+    pauseOnHeadphoneDisconnect: Boolean,
+    onPauseOnHeadphoneDisconnectChanged: (Boolean) -> Unit,
     rememberBrowserLocation: Boolean,
     onRememberBrowserLocationChanged: (Boolean) -> Unit,
     ffmpegSampleRateHz: Int,
@@ -914,10 +1019,22 @@ private fun SettingsScreen(
                         selectedHz = openMptSampleRateHz,
                         onSelected = onOpenMptSampleRateChanged
                     )
-                    SettingsRoute.GeneralAudio -> SettingsPlaceholderBody(
-                        title = "General audio settings",
-                        description = "Global audio behavior options will appear here."
-                    )
+                    SettingsRoute.GeneralAudio -> {
+                        SettingsSectionLabel("Output behavior")
+                        PlayerSettingToggleCard(
+                            title = "Respond to headset media buttons",
+                            description = "Allow headphone/bluetooth media buttons to control playback.",
+                            checked = respondHeadphoneMediaButtons,
+                            onCheckedChange = onRespondHeadphoneMediaButtonsChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Pause on output disconnect",
+                            description = "Pause playback when headphones/output device disconnects.",
+                            checked = pauseOnHeadphoneDisconnect,
+                            onCheckedChange = onPauseOnHeadphoneDisconnectChanged
+                        )
+                    }
                     SettingsRoute.Player -> {
                         SettingsSectionLabel("Track selection")
                         PlayerSettingToggleCard(

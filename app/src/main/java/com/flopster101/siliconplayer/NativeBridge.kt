@@ -1,0 +1,24 @@
+package com.flopster101.siliconplayer
+
+object NativeBridge {
+    init {
+        System.loadLibrary("siliconplayer")
+    }
+
+    external fun startEngine()
+    external fun stopEngine()
+    external fun isEnginePlaying(): Boolean
+    external fun loadAudio(path: String)
+    external fun getSupportedExtensions(): Array<String>
+    external fun getDuration(): Double
+    external fun getPosition(): Double
+    external fun seekTo(seconds: Double)
+    external fun setLooping(enabled: Boolean)
+    external fun getTrackTitle(): String
+    external fun getTrackArtist(): String
+    external fun getTrackSampleRate(): Int
+    external fun getTrackChannelCount(): Int
+    external fun getTrackBitDepth(): Int
+    external fun getTrackBitDepthLabel(): String
+    external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
+}

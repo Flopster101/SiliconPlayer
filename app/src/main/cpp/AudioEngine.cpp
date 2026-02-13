@@ -50,6 +50,7 @@ void AudioEngine::createStream() {
 
     // Set callback
     AAudioStreamBuilder_setDataCallback(builder, dataCallback, this);
+    AAudioStreamBuilder_setErrorCallback(builder, errorCallback, this);
 
     // Open the stream
     aaudio_result_t result = AAudioStreamBuilder_openStream(builder, &stream);
@@ -70,6 +71,46 @@ void AudioEngine::closeStream() {
     if (stream != nullptr) {
         AAudioStream_close(stream);
         stream = nullptr;
+    }
+}
+
+void AudioEngine::errorCallback(
+        AAudioStream * /*stream*/,
+        void *userData,
+        aaudio_result_t error) {
+    auto *engine = static_cast<AudioEngine *>(userData);
+    LOGE("AAudio stream error callback: %s", AAudio_convertResultToText(error));
+    engine->resumeAfterRebuild.store(engine->isPlaying.load());
+    engine->isPlaying.store(false);
+    engine->streamNeedsRebuild.store(true);
+}
+
+void AudioEngine::recoverStreamIfNeeded() {
+    if (!streamNeedsRebuild.load()) {
+        return;
+    }
+
+    closeStream();
+    createStream();
+    streamNeedsRebuild.store(false);
+
+    {
+        std::lock_guard<std::mutex> lock(decoderMutex);
+        if (decoder) {
+            decoder->setOutputSampleRate(resolveOutputSampleRateForCore(decoder->getName()));
+        }
+    }
+
+    if (resumeAfterRebuild.load()) {
+        resumeAfterRebuild.store(false);
+        if (stream != nullptr) {
+            aaudio_result_t result = AAudioStream_requestStart(stream);
+            if (result == AAUDIO_OK) {
+                isPlaying.store(true);
+                return;
+            }
+            LOGE("Failed to auto-resume after stream rebuild: %s", AAudio_convertResultToText(result));
+        }
     }
 }
 
@@ -145,11 +186,43 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
 }
 
 bool AudioEngine::start() {
+    recoverStreamIfNeeded();
+
+    if (stream == nullptr || streamNeedsRebuild.load()) {
+        closeStream();
+        createStream();
+        streamNeedsRebuild.store(false);
+    }
     if (stream != nullptr) {
+        aaudio_stream_state_t state = AAudioStream_getState(stream);
+        if (state == AAUDIO_STREAM_STATE_DISCONNECTED ||
+            state == AAUDIO_STREAM_STATE_CLOSING ||
+            state == AAUDIO_STREAM_STATE_CLOSED) {
+            closeStream();
+            createStream();
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(decoderMutex);
+            if (decoder) {
+                decoder->setOutputSampleRate(resolveOutputSampleRateForCore(decoder->getName()));
+            }
+        }
+
         aaudio_result_t result = AAudioStream_requestStart(stream);
         if (result != AAUDIO_OK) {
             LOGE("Failed to start stream: %s", AAudio_convertResultToText(result));
-            return false;
+            closeStream();
+            createStream();
+            if (stream == nullptr) {
+                return false;
+            }
+            result = AAudioStream_requestStart(stream);
+            if (result != AAUDIO_OK) {
+                LOGE("Retry start failed: %s", AAudio_convertResultToText(result));
+                isPlaying = false;
+                return false;
+            }
         }
         isPlaying = true;
         return true;
@@ -159,6 +232,7 @@ bool AudioEngine::start() {
 
 void AudioEngine::stop() {
     if (stream != nullptr) {
+        resumeAfterRebuild.store(false);
         AAudioStream_requestStop(stream);
         isPlaying = false;
     }
@@ -189,6 +263,7 @@ void AudioEngine::restart() {
 }
 
 double AudioEngine::getDurationSeconds() {
+    const_cast<AudioEngine*>(this)->recoverStreamIfNeeded();
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) {
         return 0.0;
@@ -197,6 +272,7 @@ double AudioEngine::getDurationSeconds() {
 }
 
 double AudioEngine::getPositionSeconds() {
+    recoverStreamIfNeeded();
     return positionSeconds.load();
 }
 

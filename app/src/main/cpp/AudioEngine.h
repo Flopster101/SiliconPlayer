@@ -45,6 +45,7 @@ private:
     std::unordered_map<std::string, int> coreOutputSampleRateHz;
 
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
+    void recoverStreamIfNeeded();
 
     void createStream();
     void closeStream();
@@ -55,8 +56,14 @@ private:
             void *userData,
             void *audioData,
             int32_t numFrames);
+    static void errorCallback(
+            AAudioStream *stream,
+            void *userData,
+            aaudio_result_t error);
 
     float phase = 0.0f;
+    std::atomic<bool> streamNeedsRebuild { false };
+    std::atomic<bool> resumeAfterRebuild { false };
 };
 
 #endif //SILICONPLAYER_AUDIOENGINE_H

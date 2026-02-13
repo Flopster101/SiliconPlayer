@@ -576,8 +576,7 @@ private fun AppNavigation(
         return
     }
 
-    val isMiniPlayerVisible = isPlayerSurfaceVisible && !isPlayerExpanded
-    val miniPlayerInsetTarget = if (isMiniPlayerVisible && currentView == MainView.Browser) 108.dp else 0.dp
+    val miniPlayerInsetTarget = if (isPlayerSurfaceVisible && currentView == MainView.Browser) 108.dp else 0.dp
     val miniPlayerListInset by animateDpAsState(
         targetValue = miniPlayerInsetTarget,
         label = "miniPlayerListInset"

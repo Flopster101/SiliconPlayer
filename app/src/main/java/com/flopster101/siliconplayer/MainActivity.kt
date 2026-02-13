@@ -126,6 +126,9 @@ private object AppPreferenceKeys {
     const val PREFS_NAME = "silicon_player_settings"
     const val AUTO_PLAY_ON_TRACK_SELECT = "auto_play_on_track_select"
     const val OPEN_PLAYER_ON_TRACK_SELECT = "open_player_on_track_select"
+    const val REMEMBER_BROWSER_LOCATION = "remember_browser_location"
+    const val BROWSER_LAST_LOCATION_ID = "browser_last_location_id"
+    const val BROWSER_LAST_DIRECTORY_PATH = "browser_last_directory_path"
 }
 
 class MainActivity : ComponentActivity() {
@@ -195,6 +198,21 @@ fun AppNavigation() {
     var openPlayerOnTrackSelect by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.OPEN_PLAYER_ON_TRACK_SELECT, true)
+        )
+    }
+    var rememberBrowserLocation by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.REMEMBER_BROWSER_LOCATION, true)
+        )
+    }
+    var lastBrowserLocationId by remember {
+        mutableStateOf(
+            prefs.getString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, null)
+        )
+    }
+    var lastBrowserDirectoryPath by remember {
+        mutableStateOf(
+            prefs.getString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, null)
         )
     }
 
@@ -281,6 +299,19 @@ fun AppNavigation() {
         prefs.edit()
             .putBoolean(AppPreferenceKeys.OPEN_PLAYER_ON_TRACK_SELECT, openPlayerOnTrackSelect)
             .apply()
+    }
+
+    LaunchedEffect(rememberBrowserLocation) {
+        val editor = prefs.edit()
+            .putBoolean(AppPreferenceKeys.REMEMBER_BROWSER_LOCATION, rememberBrowserLocation)
+        if (!rememberBrowserLocation) {
+            lastBrowserLocationId = null
+            lastBrowserDirectoryPath = null
+            editor
+                .remove(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID)
+                .remove(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH)
+        }
+        editor.apply()
     }
 
     if (!hasPermission) {
@@ -394,12 +425,23 @@ fun AppNavigation() {
                 )
                 MainView.Browser -> com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
                     repository = repository,
+                    initialLocationId = if (rememberBrowserLocation) lastBrowserLocationId else null,
+                    initialDirectoryPath = if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
                     bottomContentPadding = miniPlayerListInset,
                     backHandlingEnabled = !isPlayerExpanded,
                     onExitBrowser = { currentView = MainView.Home },
                     onOpenSettings = {
                         settingsRoute = SettingsRoute.Root
                         currentView = MainView.Settings
+                    },
+                    onBrowserLocationChanged = { locationId, directoryPath ->
+                        if (!rememberBrowserLocation) return@FileBrowserScreen
+                        lastBrowserLocationId = locationId
+                        lastBrowserDirectoryPath = directoryPath
+                        prefs.edit()
+                            .putString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, locationId)
+                            .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, directoryPath)
+                            .apply()
                     },
                     onFileSelected = { file ->
                         activity.stopEngine()
@@ -446,7 +488,9 @@ fun AppNavigation() {
                     autoPlayOnTrackSelect = autoPlayOnTrackSelect,
                     onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
                     openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                    onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it }
+                    onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
+                    rememberBrowserLocation = rememberBrowserLocation,
+                    onRememberBrowserLocationChanged = { rememberBrowserLocation = it }
                 )
             }
         }
@@ -676,7 +720,9 @@ private fun SettingsScreen(
     autoPlayOnTrackSelect: Boolean,
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     openPlayerOnTrackSelect: Boolean,
-    onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit
+    onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
+    rememberBrowserLocation: Boolean,
+    onRememberBrowserLocationChanged: (Boolean) -> Unit
 ) {
     val screenTitle = when (route) {
         SettingsRoute.Root -> "Settings"
@@ -840,10 +886,15 @@ private fun SettingsScreen(
                             onCheckedChange = onOpenPlayerOnTrackSelectChanged
                         )
                     }
-                    SettingsRoute.Misc -> SettingsPlaceholderBody(
-                        title = "Misc settings",
-                        description = "Additional app options will appear here."
-                    )
+                    SettingsRoute.Misc -> {
+                        SettingsSectionLabel("Browser behavior")
+                        PlayerSettingToggleCard(
+                            title = "Remember browser location",
+                            description = "Restore last storage and folder when reopening the library browser.",
+                            checked = rememberBrowserLocation,
+                            onCheckedChange = onRememberBrowserLocationChanged
+                        )
+                    }
                     SettingsRoute.Ui -> SettingsPlaceholderBody(
                         title = "UI settings",
                         description = "Theme and layout options will appear here."

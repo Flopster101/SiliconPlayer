@@ -76,7 +76,10 @@ private data class BrowserContentState(
 @Composable
 fun FileBrowserScreen(
     repository: FileRepository,
+    initialLocationId: String? = null,
+    initialDirectoryPath: String? = null,
     onFileSelected: (File) -> Unit,
+    onBrowserLocationChanged: (String?, String?) -> Unit = { _, _ -> },
     bottomContentPadding: Dp = 0.dp,
     backHandlingEnabled: Boolean = true,
     onExitBrowser: (() -> Unit)? = null,
@@ -90,6 +93,7 @@ fun FileBrowserScreen(
     var selectorExpanded by remember { mutableStateOf(false) }
     var browserNavDirection by remember { mutableStateOf(BrowserNavDirection.Forward) }
     var isLoadingDirectory by remember { mutableStateOf(false) }
+    var hasRestoredInitialNavigation by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     var directoryLoadJob by remember { mutableStateOf<Job?>(null) }
 
@@ -173,6 +177,7 @@ fun FileBrowserScreen(
         selectedLocationId = null
         currentDirectory = null
         fileList.clear()
+        onBrowserLocationChanged(null, null)
     }
 
     fun openLocation(location: StorageLocation) {
@@ -180,6 +185,7 @@ fun FileBrowserScreen(
         selectedLocationId = location.id
         currentDirectory = location.directory
         loadDirectoryAsync(location.directory)
+        onBrowserLocationChanged(location.id, location.directory.absolutePath)
     }
 
     fun navigateTo(directory: File) {
@@ -193,6 +199,7 @@ fun FileBrowserScreen(
         }
         currentDirectory = directory
         loadDirectoryAsync(directory)
+        onBrowserLocationChanged(selectedLocationId, directory.absolutePath)
     }
 
     fun navigateUpWithinLocation() {
@@ -219,6 +226,28 @@ fun FileBrowserScreen(
         } else {
             onExitBrowser?.invoke()
         }
+    }
+
+    LaunchedEffect(storageLocations, initialLocationId, initialDirectoryPath) {
+        if (hasRestoredInitialNavigation) return@LaunchedEffect
+        hasRestoredInitialNavigation = true
+
+        val initialLocation = initialLocationId?.let { id ->
+            storageLocations.firstOrNull { it.id == id }
+        } ?: return@LaunchedEffect
+
+        val restoredDirectory = initialDirectoryPath
+            ?.let { path -> File(path) }
+            ?.takeIf { file ->
+                file.exists() && file.isDirectory && isWithinRoot(file, initialLocation.directory)
+            }
+            ?: initialLocation.directory
+
+        browserNavDirection = BrowserNavDirection.Forward
+        selectedLocationId = initialLocation.id
+        currentDirectory = restoredDirectory
+        loadDirectoryAsync(restoredDirectory)
+        onBrowserLocationChanged(initialLocation.id, restoredDirectory.absolutePath)
     }
 
     BackHandler(

@@ -530,8 +530,6 @@ fun AppNavigation() {
                 metadataChannelCount = 0
                 metadataBitDepthLabel = "Unknown"
                 artworkBitmap = null
-                isPlayerExpanded = false
-                isPlayerSurfaceVisible = false
             }
         }
         androidx.core.content.ContextCompat.registerReceiver(

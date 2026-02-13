@@ -1,0 +1,25 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Android Module Build
+app/build/
+app/src/main/cpp/prebuilt/
+
+# Native Build Artifacts
+external/libopenmpt/obj/
+external/libopenmpt/libs/
+external/libopenmpt/Android.mk
+external/libopenmpt/Application.mk

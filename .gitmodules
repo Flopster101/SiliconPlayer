@@ -1,0 +1,6 @@
+[submodule "external/ffmpeg"]
+	path = external/ffmpeg
+	url = https://git.ffmpeg.org/ffmpeg.git
+[submodule "external/libopenmpt"]
+	path = external/libopenmpt
+	url = https://github.com/OpenMPT/openmpt.git

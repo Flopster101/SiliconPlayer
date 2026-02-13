@@ -23,6 +23,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -56,7 +58,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
@@ -1636,6 +1637,7 @@ private fun SampleRateSelectorCard(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MiniPlayerBar(
     file: File?,
@@ -1669,6 +1671,11 @@ private fun MiniPlayerBar(
         animationSpec = tween(durationMillis = 140, easing = LinearOutSlowInEasing),
         label = "miniPlayerProgress"
     )
+    val compactControls = LocalConfiguration.current.screenWidthDp <= 420
+    val controlButtonSize = if (compactControls) 36.dp else 40.dp
+    val controlIconSize = if (compactControls) 20.dp else 22.dp
+    val titleShouldMarquee = title.length > 26
+    val artistShouldMarquee = artist.length > 30
 
     Surface(
         modifier = modifier,
@@ -1725,14 +1732,30 @@ private fun MiniPlayerBar(
                         text = title,
                         style = MaterialTheme.typography.titleSmall,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = if (titleShouldMarquee) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        modifier = if (titleShouldMarquee) {
+                            Modifier.basicMarquee(
+                                iterations = Int.MAX_VALUE,
+                                initialDelayMillis = 900
+                            )
+                        } else {
+                            Modifier
+                        }
                     )
                     Text(
                         text = artist,
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        overflow = if (artistShouldMarquee) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = if (artistShouldMarquee) {
+                            Modifier.basicMarquee(
+                                iterations = Int.MAX_VALUE,
+                                initialDelayMillis = 1100
+                            )
+                        } else {
+                            Modifier
+                        }
                     )
                     Text(
                         text = "$formatLabel • $positionLabel / $durationLabel",
@@ -1746,20 +1769,30 @@ private fun MiniPlayerBar(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = onPreviousTrack,
-                        enabled = hasTrack && canPreviousTrack
+                        enabled = hasTrack && canPreviousTrack,
+                        modifier = Modifier.size(controlButtonSize)
                     ) {
                         Icon(
                             imageVector = Icons.Default.SkipPrevious,
-                            contentDescription = "Previous track"
+                            contentDescription = "Previous track",
+                            modifier = Modifier.size(controlIconSize)
                         )
                     }
-                    IconButton(onClick = onStopAndClear) {
+                    IconButton(
+                        onClick = onStopAndClear,
+                        modifier = Modifier.size(controlButtonSize)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Stop,
-                            contentDescription = "Stop"
+                            contentDescription = "Stop",
+                            modifier = Modifier.size(controlIconSize)
                         )
                     }
-                    IconButton(onClick = onPlayPause, enabled = hasTrack) {
+                    IconButton(
+                        onClick = onPlayPause,
+                        enabled = hasTrack,
+                        modifier = Modifier.size(controlButtonSize)
+                    ) {
                         AnimatedContent(
                             targetState = isPlaying,
                             transitionSpec = {
@@ -1769,23 +1802,20 @@ private fun MiniPlayerBar(
                         ) { playing ->
                             Icon(
                                 imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (playing) "Pause" else "Play"
+                                contentDescription = if (playing) "Pause" else "Play",
+                                modifier = Modifier.size(controlIconSize)
                             )
                         }
                     }
                     IconButton(
                         onClick = onNextTrack,
-                        enabled = hasTrack && canNextTrack
+                        enabled = hasTrack && canNextTrack,
+                        modifier = Modifier.size(controlButtonSize)
                     ) {
                         Icon(
                             imageVector = Icons.Default.SkipNext,
-                            contentDescription = "Next track"
-                        )
-                    }
-                    IconButton(onClick = onExpand) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowUp,
-                            contentDescription = "Expand player"
+                            contentDescription = "Next track",
+                            modifier = Modifier.size(controlIconSize)
                         )
                     }
                 }

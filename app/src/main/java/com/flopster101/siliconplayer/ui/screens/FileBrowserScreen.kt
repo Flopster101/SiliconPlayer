@@ -278,6 +278,14 @@ fun FileBrowserScreen(
                         Text(text = "Silicon Player")
                     },
                     actions = {
+                        onExitBrowser?.let { exitBrowser ->
+                            IconButton(onClick = exitBrowser) {
+                                Icon(
+                                    imageVector = Icons.Default.Home,
+                                    contentDescription = "Go to app home"
+                                )
+                            }
+                        }
                         onOpenSettings?.let { openSettings ->
                             IconButton(onClick = openSettings) {
                                 Icon(

@@ -103,6 +103,7 @@ build_ffmpeg() {
         --enable-version3 \
         --enable-jni \
         --enable-mediacodec \
+        --extra-cflags="-fPIC" \
         $EXTRA_FLAGS || { echo "Error: FFmpeg configure failed!"; exit 1; }
         
     make -j$(nproc)

@@ -1,9 +1,9 @@
 package com.flopster101.siliconplayer.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -23,11 +23,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -127,13 +129,13 @@ fun PlayerScreen(
                             channelCount = channelCount,
                             bitDepthLabel = bitDepthLabel
                         )
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         TrackMetadataBlock(
                             title = displayTitle,
                             artist = displayArtist,
                             filename = file.name
                         )
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
                         TimelineSection(
                             sliderPosition = sliderPosition,
                             durationSeconds = durationSeconds,
@@ -147,7 +149,7 @@ fun PlayerScreen(
                                 onSeek(sliderPosition)
                             }
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
                         TransportControls(
                             isPlaying = isPlaying,
                             isLooping = isLooping,
@@ -160,7 +162,7 @@ fun PlayerScreen(
                             },
                             onLoopingChanged = { onLoopingChanged(!isLooping) }
                         )
-                        Spacer(modifier = Modifier.height(14.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         FutureActionStrip()
                     }
                 }
@@ -179,22 +181,22 @@ fun PlayerScreen(
                             .fillMaxWidth(0.86f)
                             .aspectRatio(1f)
                     )
-                    Spacer(modifier = Modifier.height(22.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
                     TrackInfoChips(
                         file = file,
                         durationSeconds = durationSeconds,
                         sampleRateHz = sampleRateHz,
                         channelCount = channelCount,
                         bitDepthLabel = bitDepthLabel,
-                        modifier = Modifier.fillMaxWidth(0.94f)
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     TrackMetadataBlock(
                         title = displayTitle,
                         artist = displayArtist,
                         filename = file.name
                     )
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     TimelineSection(
                         sliderPosition = sliderPosition,
                         durationSeconds = durationSeconds,
@@ -208,7 +210,7 @@ fun PlayerScreen(
                             onSeek(sliderPosition)
                         }
                     )
-                    Spacer(modifier = Modifier.height(22.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     TransportControls(
                         isPlaying = isPlaying,
                         isLooping = isLooping,
@@ -221,7 +223,7 @@ fun PlayerScreen(
                         },
                         onLoopingChanged = { onLoopingChanged(!isLooping) }
                     )
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     FutureActionStrip(modifier = Modifier.fillMaxWidth(0.94f))
                 }
             }
@@ -302,39 +304,56 @@ private fun TrackInfoChips(
     val durationLabel = if (durationSeconds > 0.0) formatTime(durationSeconds) else "--:--"
     val sampleRateLabel = if (sampleRateHz > 0) {
         if (sampleRateHz % 1000 == 0) {
-            "${sampleRateHz / 1000} kHz"
+            "${sampleRateHz / 1000}kHz"
         } else {
-            String.format("%.1f kHz", sampleRateHz / 1000.0)
+            String.format("%.1fkHz", sampleRateHz / 1000.0)
         }
     } else {
-        "-- kHz"
+        "--kHz"
     }
     val depthDisplay = bitDepthLabel.ifBlank { "Unknown" }
     val channelsAndDepth = if (channelCount > 0) {
-        "${channelCount}ch / $depthDisplay"
+        "${channelCount}ch/$depthDisplay"
     } else {
         depthDisplay
     }
 
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val compactLevel = when {
+        screenWidthDp <= 400 -> 2
+        screenWidthDp <= 460 -> 1
+        else -> 0
+    }
     Row(
-        modifier = modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(
+            when (compactLevel) {
+                2 -> 3.dp
+                1 -> 4.dp
+                else -> 6.dp
+            },
+            Alignment.CenterHorizontally
+        )
     ) {
         TrackInfoChip(
             icon = Icons.Default.AudioFile,
-            text = formatLabel
+            text = formatLabel,
+            compactLevel = compactLevel
         )
         TrackInfoChip(
             icon = Icons.Default.Timer,
-            text = durationLabel
+            text = durationLabel,
+            compactLevel = compactLevel
         )
         TrackInfoChip(
             icon = Icons.Default.Equalizer,
-            text = sampleRateLabel
+            text = sampleRateLabel,
+            compactLevel = compactLevel
         )
         TrackInfoChip(
             icon = Icons.Default.Info,
-            text = channelsAndDepth
+            text = channelsAndDepth,
+            compactLevel = compactLevel
         )
     }
 }
@@ -342,41 +361,106 @@ private fun TrackInfoChips(
 @Composable
 private fun TrackInfoChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    text: String
+    text: String,
+    compactLevel: Int
 ) {
+    val iconSize = when (compactLevel) {
+        2 -> 12.dp
+        1 -> 13.dp
+        else -> 14.dp
+    }
+    val iconSlot = when (compactLevel) {
+        2 -> 12.dp
+        else -> 14.dp
+    }
+    val sideInset = when (compactLevel) {
+        2 -> 5.dp
+        1 -> 6.dp
+        else -> 7.dp
+    }
+    val minHeight = when (compactLevel) {
+        2 -> 30.dp
+        1 -> 32.dp
+        else -> 34.dp
+    }
+    val textStartPadding = iconSlot + when (compactLevel) {
+        2 -> 2.dp
+        else -> 3.dp
+    }
+    val textEndPadding = when (compactLevel) {
+        2 -> 1.dp
+        else -> 2.dp
+    }
+    val textStyle = when {
+        compactLevel == 2 -> MaterialTheme.typography.labelSmall
+        compactLevel == 1 && text.length >= 10 -> MaterialTheme.typography.labelSmall
+        else -> MaterialTheme.typography.labelMedium
+    }
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
         shape = MaterialTheme.shapes.large
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        Box(
+            modifier = Modifier
+                .defaultMinSize(minHeight = minHeight)
+                .padding(horizontal = sideInset),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .size(iconSize),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelMedium,
+                style = textStyle,
                 fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Clip,
+                softWrap = false,
+                modifier = Modifier.padding(start = textStartPadding, end = textEndPadding)
             )
         }
     }
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun TrackMetadataBlock(title: String, artist: String, filename: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.headlineSmall,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis
-    )
+    val shouldMarquee = title.length > 30
+    if (shouldMarquee) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clipToBounds()
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
+                textAlign = TextAlign.Start,
+                modifier = Modifier.basicMarquee(
+                    iterations = Int.MAX_VALUE,
+                    initialDelayMillis = 900
+                )
+            )
+        }
+    } else {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.headlineSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
     Spacer(modifier = Modifier.height(8.dp))
     Text(
         text = artist,

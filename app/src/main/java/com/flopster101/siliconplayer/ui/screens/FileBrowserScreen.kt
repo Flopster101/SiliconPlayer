@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.data.FileItem
 import com.flopster101.siliconplayer.data.FileRepository
 import java.io.File
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,6 +76,14 @@ fun FileBrowserScreen(
 
 @Composable
 fun FileItemRow(item: FileItem, onClick: () -> Unit) {
+    val subtitle = remember(item.file.absolutePath, item.isDirectory, item.file.length(), item.file.lastModified()) {
+        if (item.isDirectory) {
+            buildFolderSummary(item.file)
+        } else {
+            formatFileSizeHumanReadable(item.file.length())
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -88,6 +97,54 @@ fun FileItemRow(item: FileItem, onClick: () -> Unit) {
             tint = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.width(16.dp))
-        Text(text = item.name, style = MaterialTheme.typography.bodyLarge)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.name,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
     }
+}
+
+private fun formatFileSizeHumanReadable(bytes: Long): String {
+    val units = arrayOf("B", "KB", "MB", "GB", "TB")
+    var size = bytes.toDouble().coerceAtLeast(0.0)
+    var unitIndex = 0
+
+    while (size >= 1024.0 && unitIndex < units.lastIndex) {
+        size /= 1024.0
+        unitIndex++
+    }
+
+    return if (unitIndex == 0) {
+        String.format(Locale.US, "%.0f %s", size, units[unitIndex])
+    } else {
+        String.format(Locale.US, "%.1f %s", size, units[unitIndex])
+    }
+}
+
+private fun buildFolderSummary(folder: File): String {
+    val children = folder.listFiles().orEmpty()
+    val folderCount = children.count { it.isDirectory }
+    val fileCount = children.count { it.isFile }
+
+    val parts = mutableListOf<String>()
+    if (folderCount > 0) {
+        parts += pluralize(folderCount, "folder")
+    }
+    parts += pluralize(fileCount, "file")
+    return parts.joinToString(" • ")
+}
+
+private fun pluralize(count: Int, singular: String): String {
+    val word = if (count == 1) singular else "${singular}s"
+    return "$count $word"
 }

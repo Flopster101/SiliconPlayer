@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,7 +25,9 @@ import java.util.Locale
 fun FileBrowserScreen(
     repository: FileRepository,
     onFileSelected: (File) -> Unit,
-    bottomContentPadding: Dp = 0.dp
+    bottomContentPadding: Dp = 0.dp,
+    onExitBrowser: (() -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null
 ) {
     var currentDirectory by remember { mutableStateOf(repository.getRootDirectory()) }
     var fileList by remember { mutableStateOf(repository.getFiles(currentDirectory)) }
@@ -41,13 +44,41 @@ fun FileBrowserScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(currentDirectory.name) },
+                title = {
+                    Column {
+                        Text(
+                            text = "Silicon Player",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = currentDirectory.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
                 navigationIcon = {
-                    if (currentDirectory != repository.getRootDirectory()) {
-                        IconButton(onClick = { navigateUp() }) {
+                    val isAtRoot = currentDirectory == repository.getRootDirectory()
+                    if (!isAtRoot || onExitBrowser != null) {
+                        val onClick: () -> Unit = if (!isAtRoot) {
+                            { navigateUp() }
+                        } else {
+                            { onExitBrowser?.invoke(); Unit }
+                        }
+                        IconButton(onClick = onClick) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Navigate up"
+                                contentDescription = if (!isAtRoot) "Navigate up" else "Back to home"
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    onOpenSettings?.let { openSettings ->
+                        IconButton(onClick = openSettings) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Open settings"
                             )
                         }
                     }

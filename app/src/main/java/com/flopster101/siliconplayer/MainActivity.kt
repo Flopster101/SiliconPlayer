@@ -27,9 +27,13 @@ import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.* // Import for remember, mutableStateOf
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -39,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -54,6 +59,12 @@ import android.os.Environment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+
+private enum class MainView {
+    Home,
+    Browser,
+    Settings
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -93,6 +104,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppNavigation() {
+    var currentView by remember { mutableStateOf(MainView.Home) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
     var duration by remember { mutableDoubleStateOf(0.0) }
     var position by remember { mutableDoubleStateOf(0.0) }
@@ -211,7 +223,7 @@ fun AppNavigation() {
     }
 
     val isMiniPlayerVisible = selectedFile != null && !isPlayerExpanded
-    val miniPlayerListInset = if (isMiniPlayerVisible) 108.dp else 0.dp
+    val miniPlayerListInset = if (isMiniPlayerVisible && currentView == MainView.Browser) 108.dp else 0.dp
     val clearCurrentTrack: () -> Unit = {
         activity.stopEngine()
         selectedFile = null
@@ -228,24 +240,36 @@ fun AppNavigation() {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
-            repository = repository,
-            bottomContentPadding = miniPlayerListInset,
-            onFileSelected = { file ->
-                selectedFile = file
-                activity.loadAudio(file.absolutePath)
-                metadataTitle = activity.getTrackTitle()
-                metadataArtist = activity.getTrackArtist()
-                metadataSampleRate = activity.getTrackSampleRate()
-                metadataChannelCount = activity.getTrackChannelCount()
-                metadataBitDepthLabel = activity.getTrackBitDepthLabel()
-                duration = activity.getDuration()
-                position = 0.0
-                isPlaying = false
-                artworkBitmap = null
-                isPlayerExpanded = true
-            }
-        )
+        when (currentView) {
+            MainView.Home -> HomeScreen(
+                selectedTrack = selectedFile,
+                onOpenLibrary = { currentView = MainView.Browser },
+                onOpenSettings = { currentView = MainView.Settings }
+            )
+            MainView.Browser -> com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
+                repository = repository,
+                bottomContentPadding = miniPlayerListInset,
+                onExitBrowser = { currentView = MainView.Home },
+                onOpenSettings = { currentView = MainView.Settings },
+                onFileSelected = { file ->
+                    selectedFile = file
+                    activity.loadAudio(file.absolutePath)
+                    metadataTitle = activity.getTrackTitle()
+                    metadataArtist = activity.getTrackArtist()
+                    metadataSampleRate = activity.getTrackSampleRate()
+                    metadataChannelCount = activity.getTrackChannelCount()
+                    metadataBitDepthLabel = activity.getTrackBitDepthLabel()
+                    duration = activity.getDuration()
+                    position = 0.0
+                    isPlaying = false
+                    artworkBitmap = null
+                    isPlayerExpanded = true
+                }
+            )
+            MainView.Settings -> SettingsScreen(
+                onBack = { currentView = MainView.Home }
+            )
+        }
 
         selectedFile?.let { file ->
             if (!isPlayerExpanded) {
@@ -323,6 +347,193 @@ fun AppNavigation() {
                     }
                 )
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HomeScreen(
+    selectedTrack: File?,
+    onOpenLibrary: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    androidx.compose.material3.Scaffold(
+        topBar = {
+            androidx.compose.material3.TopAppBar(
+                title = { Text("Silicon Player") },
+                actions = {
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Open settings"
+                        )
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+        ) {
+            Text(
+                text = "Local music library",
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Browse files and play mainstream or tracker/module formats.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            androidx.compose.material3.ElevatedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(96.dp),
+                onClick = onOpenLibrary
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 18.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        modifier = Modifier.size(42.dp),
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = null
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Open Library Browser",
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = "Browse folders and choose a track",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            selectedTrack?.let { track ->
+                Spacer(modifier = Modifier.height(14.dp))
+                androidx.compose.material3.OutlinedCard(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Current track",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = track.nameWithoutExtension.ifBlank { track.name },
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsScreen(onBack: () -> Unit) {
+    androidx.compose.material3.Scaffold(
+        topBar = {
+            androidx.compose.material3.TopAppBar(
+                title = { Text("Settings") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back to home"
+                        )
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            SettingsSectionCard(
+                title = "Audio plugins",
+                description = "Core-specific options and decoder/plugin behavior for FFmpeg and OpenMPT."
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            SettingsSectionCard(
+                title = "FFmpeg",
+                description = "Placeholder section for FFmpeg core settings."
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            SettingsSectionCard(
+                title = "OpenMPT",
+                description = "Placeholder section for OpenMPT core settings."
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            SettingsSectionCard(
+                title = "General audio settings",
+                description = "Global playback behavior and output preferences."
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            SettingsSectionCard(
+                title = "UI settings",
+                description = "Appearance and layout preferences."
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            SettingsSectionCard(
+                title = "About",
+                description = "App information, versions, and credits."
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsSectionCard(
+    title: String,
+    description: String
+) {
+    androidx.compose.material3.OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

@@ -6,6 +6,8 @@ import android.os.Environment
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -46,8 +48,19 @@ import com.flopster101.siliconplayer.data.FileItem
 import com.flopster101.siliconplayer.data.FileRepository
 import java.io.File
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.withFrameNanos
+import kotlin.math.min
 
 private const val BROWSER_PAGE_DURATION_MS = 280
+private const val DIRECTORY_CHUNK_SIZE = 48
+private const val MIN_LOADING_SPINNER_MS = 220L
 
 private enum class BrowserNavDirection {
     Forward,
@@ -73,9 +86,12 @@ fun FileBrowserScreen(
     val storageLocations = remember(context) { detectStorageLocations(context) }
     var selectedLocationId by remember { mutableStateOf<String?>(null) }
     var currentDirectory by remember { mutableStateOf<File?>(null) }
-    var fileList by remember { mutableStateOf(emptyList<FileItem>()) }
+    val fileList = remember { mutableStateListOf<FileItem>() }
     var selectorExpanded by remember { mutableStateOf(false) }
     var browserNavDirection by remember { mutableStateOf(BrowserNavDirection.Forward) }
+    var isLoadingDirectory by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+    var directoryLoadJob by remember { mutableStateOf<Job?>(null) }
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val selectorIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
@@ -83,6 +99,65 @@ fun FileBrowserScreen(
         selectedLocationId = selectedLocationId,
         currentDirectoryPath = currentDirectory?.absolutePath
     )
+
+    fun cancelDirectoryLoad() {
+        directoryLoadJob?.cancel()
+        directoryLoadJob = null
+        isLoadingDirectory = false
+    }
+
+    fun loadDirectoryAsync(directory: File) {
+        directoryLoadJob?.cancel()
+        isLoadingDirectory = true
+        fileList.clear()
+
+        val targetPath = directory.absolutePath
+        val loadingStartedAt = System.currentTimeMillis()
+        directoryLoadJob = coroutineScope.launch {
+            try {
+                // Ensure at least one frame is rendered with the spinner before parsing starts.
+                withFrameNanos { }
+                delay(16)
+                val loadedFiles = withContext(Dispatchers.IO) {
+                    repository.getFiles(directory)
+                }
+                val stillOnSameDirectory = currentDirectory?.absolutePath == targetPath &&
+                    selectedLocationId != null
+                if (stillOnSameDirectory) {
+                    // Publish results progressively so large folders don't freeze frames.
+                    fileList.clear()
+                    var index = 0
+                    while (index < loadedFiles.size) {
+                        ensureActive()
+                        if (currentDirectory?.absolutePath != targetPath || selectedLocationId == null) break
+
+                        val end = min(index + DIRECTORY_CHUNK_SIZE, loadedFiles.size)
+                        val chunk = loadedFiles.subList(index, end)
+                        fileList.addAll(chunk)
+                        index = end
+                        // Yield a frame between chunks to keep UI responsive/animated.
+                        withFrameNanos { }
+                    }
+                }
+            } catch (_: CancellationException) {
+                // Directory load was superseded by another navigation action.
+            } finally {
+                if (currentDirectory?.absolutePath == targetPath) {
+                    val elapsed = System.currentTimeMillis() - loadingStartedAt
+                    if (elapsed < MIN_LOADING_SPINNER_MS) {
+                        delay(MIN_LOADING_SPINNER_MS - elapsed)
+                    }
+                    isLoadingDirectory = false
+                }
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            cancelDirectoryLoad()
+        }
+    }
 
     fun relativeDepth(directory: File?, root: File?): Int {
         if (directory == null || root == null) return 0
@@ -93,17 +168,18 @@ fun FileBrowserScreen(
     }
 
     fun openBrowserHome() {
+        cancelDirectoryLoad()
         browserNavDirection = BrowserNavDirection.Backward
         selectedLocationId = null
         currentDirectory = null
-        fileList = emptyList()
+        fileList.clear()
     }
 
     fun openLocation(location: StorageLocation) {
         browserNavDirection = BrowserNavDirection.Forward
         selectedLocationId = location.id
         currentDirectory = location.directory
-        fileList = repository.getFiles(location.directory)
+        loadDirectoryAsync(location.directory)
     }
 
     fun navigateTo(directory: File) {
@@ -116,7 +192,7 @@ fun FileBrowserScreen(
             BrowserNavDirection.Backward
         }
         currentDirectory = directory
-        fileList = repository.getFiles(directory)
+        loadDirectoryAsync(directory)
     }
 
     fun navigateUpWithinLocation() {
@@ -288,6 +364,9 @@ fun FileBrowserScreen(
         AnimatedContent(
             targetState = browserContentState,
             transitionSpec = {
+                if (isLoadingDirectory) {
+                    EnterTransition.None togetherWith ExitTransition.None
+                } else {
                 val forward = browserNavDirection == BrowserNavDirection.Forward
                 val enter = slideInHorizontally(
                     initialOffsetX = { width -> if (forward) width else -width / 4 },
@@ -315,6 +394,7 @@ fun FileBrowserScreen(
                     )
                 )
                 enter togetherWith exit
+                }
             },
             label = "browserContentTransition",
             modifier = Modifier
@@ -387,6 +467,26 @@ fun FileBrowserScreen(
                             }
                         })
                     }
+                }
+            }
+        }
+
+        if (isLoadingDirectory) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.25f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Loading directory...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -492,11 +592,18 @@ private fun isWithinRoot(file: File, root: File): Boolean {
 
 @Composable
 fun FileItemRow(item: FileItem, onClick: () -> Unit) {
-    val subtitle = remember(item.file.absolutePath, item.isDirectory, item.file.length(), item.file.lastModified()) {
-        if (item.isDirectory) {
-            buildFolderSummary(item.file)
-        } else {
-            formatFileSizeHumanReadable(item.file.length())
+    val subtitle by produceState(
+        initialValue = if (item.isDirectory) "Loading..." else formatFileSizeHumanReadable(item.file.length()),
+        key1 = item.file.absolutePath,
+        key2 = item.isDirectory,
+        key3 = item.file.lastModified()
+    ) {
+        value = withContext(Dispatchers.IO) {
+            if (item.isDirectory) {
+                buildFolderSummary(item.file)
+            } else {
+                formatFileSizeHumanReadable(item.file.length())
+            }
         }
     }
 

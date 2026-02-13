@@ -12,14 +12,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowLeft
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.filled.Loop
@@ -37,11 +38,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,6 +59,8 @@ import kotlin.math.roundToInt
 fun PlayerScreen(
     file: File?,
     onBack: () -> Unit,
+    onCollapseBySwipe: () -> Unit = onBack,
+    enableCollapseGesture: Boolean = true,
     isPlaying: Boolean,
     onPlay: () -> Unit,
     onPause: () -> Unit,
@@ -78,10 +85,16 @@ fun PlayerScreen(
     onOpenSubtuneSelector: () -> Unit,
     onLoopingChanged: (Boolean) -> Unit
 ) {
-    var sliderPosition by remember { mutableDoubleStateOf(0.0) }
+    var sliderPosition by remember(file?.absolutePath, durationSeconds) {
+        mutableDoubleStateOf(positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0)))
+    }
     var isSeeking by remember { mutableStateOf(false) }
+    var downwardDragPx by remember { mutableFloatStateOf(0f) }
+    var isDraggingDown by remember { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+    val collapseThresholdPx = with(density) { 132.dp.toPx() }
 
     LaunchedEffect(positionSeconds, isSeeking) {
         if (!isSeeking) {
@@ -93,6 +106,14 @@ fun PlayerScreen(
         animationSpec = tween(durationMillis = 140, easing = LinearOutSlowInEasing),
         label = "playerTimelinePosition"
     )
+    val animatedPanelOffsetPx by animateFloatAsState(
+        targetValue = if (isDraggingDown) downwardDragPx else 0f,
+        animationSpec = tween(durationMillis = 180, easing = LinearOutSlowInEasing),
+        label = "playerCollapseDragOffset"
+    )
+    val panelOffsetPx = if (isDraggingDown) downwardDragPx else animatedPanelOffsetPx
+    val dragFadeProgress = (panelOffsetPx / (collapseThresholdPx * 1.4f)).coerceIn(0f, 1f)
+    val panelAlpha = 1f - (0.22f * dragFadeProgress)
 
     val hasTrack = file != null
     val displayTitle = title.ifBlank {
@@ -101,34 +122,71 @@ fun PlayerScreen(
     val displayArtist = artist.ifBlank { if (hasTrack) "Unknown Artist" else "Tap a file to play" }
     val displayFilename = file?.name ?: "No file loaded"
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Now Playing") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back to files"
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .offset { IntOffset(0, panelOffsetPx.roundToInt()) }
+            .graphicsLayer(alpha = panelAlpha)
+            .then(
+                if (enableCollapseGesture) {
+                    Modifier.pointerInput(collapseThresholdPx) {
+                        detectVerticalDragGestures(
+                            onVerticalDrag = { change, dragAmount ->
+                                val next = (downwardDragPx + dragAmount).coerceAtLeast(0f)
+                                if (next > 0f || downwardDragPx > 0f) {
+                                    isDraggingDown = true
+                                    downwardDragPx = next
+                                    change.consume()
+                                }
+                            },
+                            onDragEnd = {
+                                val shouldCollapse = downwardDragPx >= collapseThresholdPx
+                                if (shouldCollapse) {
+                                    onCollapseBySwipe()
+                                } else {
+                                    isDraggingDown = false
+                                    downwardDragPx = 0f
+                                }
+                            },
+                            onDragCancel = {
+                                isDraggingDown = false
+                                downwardDragPx = 0f
+                            }
                         )
                     }
+                } else {
+                    Modifier
                 }
             )
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.background,
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+    ) {
+        Scaffold(
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = { Text("Now Playing") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack, enabled = enableCollapseGesture) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Minimize player"
+                            )
+                        }
+                    }
+                )
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.background,
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                            )
                         )
                     )
-                )
-        ) {
+            ) {
             if (isLandscape) {
                 Row(
                     modifier = Modifier
@@ -276,6 +334,7 @@ fun PlayerScreen(
                 }
             }
         }
+    }
     }
 }
 

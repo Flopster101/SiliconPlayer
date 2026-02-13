@@ -9,13 +9,16 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -26,6 +29,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
@@ -83,10 +87,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.pointerInput
 import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import java.io.File
 import android.content.Intent
@@ -98,6 +105,7 @@ import android.provider.Settings
 import android.os.Environment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
@@ -581,6 +589,12 @@ private fun AppNavigation(
         targetValue = miniPlayerInsetTarget,
         label = "miniPlayerListInset"
     )
+    var miniExpandPreviewProgress by remember { mutableFloatStateOf(0f) }
+    var expandFromMiniDrag by remember { mutableStateOf(false) }
+    var collapseFromSwipe by remember { mutableStateOf(false) }
+    val uiScope = rememberCoroutineScope()
+    val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    val miniPreviewLiftPx = with(LocalDensity.current) { 28.dp.toPx() }
     val stopAndEmptyTrack: () -> Unit = {
         NativeBridge.stopEngine()
         selectedFile = null
@@ -601,6 +615,14 @@ private fun AppNavigation(
         stopAndEmptyTrack()
         isPlayerExpanded = false
         isPlayerSurfaceVisible = false
+    }
+    LaunchedEffect(isPlayerExpanded) {
+        if (!isPlayerExpanded) {
+            miniExpandPreviewProgress = 0f
+            delay(160)
+            expandFromMiniDrag = false
+            collapseFromSwipe = false
+        }
     }
 
     DisposableEffect(context) {
@@ -811,10 +833,51 @@ private fun AppNavigation(
             }
         }
 
-        if (isPlayerSurfaceVisible) {
+        run {
+            if (isPlayerSurfaceVisible && !isPlayerExpanded && miniExpandPreviewProgress > 0f) {
+                val previewProgress = miniExpandPreviewProgress.coerceIn(0f, 1f)
+                val previewOffsetPx = (1f - previewProgress) * screenHeightPx
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .align(Alignment.BottomCenter)
+                        .graphicsLayer {
+                            translationY = previewOffsetPx
+                            alpha = (previewProgress * 0.98f).coerceIn(0f, 1f)
+                        }
+                ) {
+                    com.flopster101.siliconplayer.ui.screens.PlayerScreen(
+                        file = selectedFile,
+                        onBack = {},
+                        enableCollapseGesture = false,
+                        isPlaying = isPlaying,
+                        onPlay = {},
+                        onPause = {},
+                        onStopAndClear = {},
+                        durationSeconds = duration,
+                        positionSeconds = position,
+                        canPreviousTrack = currentTrackIndex() > 0,
+                        canNextTrack = currentTrackIndex() in 0 until (visiblePlayableFiles.size - 1),
+                        title = metadataTitle,
+                        artist = metadataArtist,
+                        sampleRateHz = metadataSampleRate,
+                        channelCount = metadataChannelCount,
+                        bitDepthLabel = metadataBitDepthLabel,
+                        artwork = artworkBitmap,
+                        isLooping = looping,
+                        onSeek = {},
+                        onPreviousTrack = {},
+                        onNextTrack = {},
+                        onPreviousSubtune = {},
+                        onNextSubtune = {},
+                        onOpenSubtuneSelector = {},
+                        onLoopingChanged = {}
+                    )
+                }
+            }
             AnimatedVisibility(
-                visible = !isPlayerExpanded,
-                enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
+                visible = isPlayerSurfaceVisible && !isPlayerExpanded,
+                enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn() + scaleIn(initialScale = 0.96f),
                 exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(),
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
@@ -834,6 +897,13 @@ private fun AppNavigation(
                 SwipeToDismissBox(
                     state = dismissState,
                     modifier = Modifier
+                        .graphicsLayer {
+                            val dragProgress = miniExpandPreviewProgress.coerceIn(0f, 1f)
+                            val hideMini = expandFromMiniDrag || isPlayerExpanded
+                            val alphaFloor = if (hideMini) 0f else 0.16f
+                            alpha = (1f - dragProgress).coerceIn(alphaFloor, 1f)
+                            translationY = -miniPreviewLiftPx * dragProgress
+                        }
                         .padding(horizontal = 14.dp, vertical = 12.dp),
                     backgroundContent = {},
                     enableDismissFromStartToEnd = !isPlaying,
@@ -855,7 +925,30 @@ private fun AppNavigation(
                         durationSeconds = duration,
                         canPreviousTrack = currentTrackIndex() > 0,
                         canNextTrack = currentTrackIndex() in 0 until (visiblePlayableFiles.size - 1),
-                        onExpand = { isPlayerExpanded = true },
+                        onExpand = {
+                            collapseFromSwipe = false
+                            expandFromMiniDrag = miniExpandPreviewProgress > 0f
+                            miniExpandPreviewProgress = 0f
+                            isPlayerExpanded = true
+                        },
+                        onExpandDragProgress = { progress ->
+                            miniExpandPreviewProgress = progress
+                        },
+                        onExpandDragCommit = {
+                            val start = miniExpandPreviewProgress.coerceIn(0f, 1f)
+                            uiScope.launch {
+                                expandFromMiniDrag = true
+                                val anim = Animatable(start)
+                                anim.animateTo(
+                                    targetValue = 1f,
+                                    animationSpec = tween(durationMillis = 200, easing = LinearOutSlowInEasing)
+                                ) {
+                                    miniExpandPreviewProgress = value
+                                }
+                                collapseFromSwipe = false
+                                isPlayerExpanded = true
+                            }
+                        },
                         onPreviousTrack = { playAdjacentTrack(-1) },
                         onNextTrack = { playAdjacentTrack(1) },
                         onPlayPause = {
@@ -876,13 +969,30 @@ private fun AppNavigation(
                 }
             }
             AnimatedVisibility(
-                visible = isPlayerExpanded,
-                enter = slideInVertically(initialOffsetY = { it / 3 }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it / 3 }) + fadeOut()
+                visible = isPlayerSurfaceVisible && isPlayerExpanded,
+                enter = if (expandFromMiniDrag) {
+                    EnterTransition.None
+                } else {
+                    slideInVertically(initialOffsetY = { it / 3 }) + fadeIn() + scaleIn(initialScale = 0.96f)
+                },
+                exit = if (collapseFromSwipe) {
+                    fadeOut(animationSpec = tween(120))
+                } else {
+                    slideOutVertically(targetOffsetY = { it / 3 }) + fadeOut()
+                }
             ) {
                 com.flopster101.siliconplayer.ui.screens.PlayerScreen(
                     file = selectedFile,
-                    onBack = { isPlayerExpanded = false },
+                    onBack = {
+                        collapseFromSwipe = false
+                        miniExpandPreviewProgress = 0f
+                        isPlayerExpanded = false
+                    },
+                    onCollapseBySwipe = {
+                        collapseFromSwipe = true
+                        miniExpandPreviewProgress = 0f
+                        isPlayerExpanded = false
+                    },
                     isPlaying = isPlaying,
                     onPlay = {
                         if (selectedFile != null) {
@@ -1687,6 +1797,8 @@ private fun MiniPlayerBar(
     canPreviousTrack: Boolean,
     canNextTrack: Boolean,
     onExpand: () -> Unit,
+    onExpandDragProgress: (Float) -> Unit,
+    onExpandDragCommit: () -> Unit,
     onPreviousTrack: () -> Unit,
     onNextTrack: () -> Unit,
     onPlayPause: () -> Unit,
@@ -1712,6 +1824,11 @@ private fun MiniPlayerBar(
     val controlIconSize = if (compactControls) 20.dp else 22.dp
     val titleShouldMarquee = title.length > 26
     val artistShouldMarquee = artist.length > 30
+    val density = LocalDensity.current
+    val expandSwipeThresholdPx = with(density) { 112.dp.toPx() }
+    val screenHeightPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
+    val previewDistancePx = screenHeightPx * 0.72f
+    var upwardDragPx by remember { mutableFloatStateOf(0f) }
 
     Surface(
         modifier = modifier,
@@ -1724,6 +1841,31 @@ private fun MiniPlayerBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .pointerInput(expandSwipeThresholdPx) {
+                        detectVerticalDragGestures(
+                            onVerticalDrag = { change, dragAmount ->
+                                val next = (upwardDragPx - dragAmount).coerceAtLeast(0f)
+                                if (next > 0f || upwardDragPx > 0f) {
+                                    upwardDragPx = next
+                                    onExpandDragProgress((upwardDragPx / previewDistancePx).coerceIn(0f, 1f))
+                                    change.consume()
+                                }
+                            },
+                            onDragEnd = {
+                                if (upwardDragPx >= expandSwipeThresholdPx) {
+                                    onExpandDragCommit()
+                                    upwardDragPx = 0f
+                                    return@detectVerticalDragGestures
+                                }
+                                upwardDragPx = 0f
+                                onExpandDragProgress(0f)
+                            },
+                            onDragCancel = {
+                                upwardDragPx = 0f
+                                onExpandDragProgress(0f)
+                            }
+                        )
+                    }
                     .clickable(onClick = onExpand)
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically

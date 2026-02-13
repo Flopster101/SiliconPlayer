@@ -18,6 +18,7 @@ public:
     virtual void seek(double seconds) = 0;
     virtual double getDuration() = 0;
     virtual int getSampleRate() = 0;
+    virtual int getBitDepth() { return 0; }
     virtual int getChannelCount() = 0;
     virtual std::string getTitle() = 0;
     virtual std::string getArtist() = 0;

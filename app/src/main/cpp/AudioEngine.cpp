@@ -210,3 +210,19 @@ std::string AudioEngine::getArtist() {
     }
     return decoder->getArtist();
 }
+
+int AudioEngine::getSampleRate() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return 0;
+    }
+    return decoder->getSampleRate();
+}
+
+int AudioEngine::getBitDepth() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return 0;
+    }
+    return decoder->getBitDepth();
+}

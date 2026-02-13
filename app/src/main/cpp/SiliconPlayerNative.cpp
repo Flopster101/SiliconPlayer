@@ -106,3 +106,19 @@ Java_com_flopster101_siliconplayer_MainActivity_getTrackArtist(JNIEnv* env, jobj
     std::string value = audioEngine->getArtist();
     return env->NewStringUTF(value.c_str());
 }
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTrackSampleRate(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return 0;
+    }
+    return static_cast<jint>(audioEngine->getSampleRate());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTrackBitDepth(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return 0;
+    }
+    return static_cast<jint>(audioEngine->getBitDepth());
+}

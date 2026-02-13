@@ -104,6 +104,10 @@ int LibOpenMPTDecoder::getSampleRate() {
     return sampleRate;
 }
 
+int LibOpenMPTDecoder::getBitDepth() {
+    return bitDepth;
+}
+
 int LibOpenMPTDecoder::getChannelCount() {
     return channels;
 }

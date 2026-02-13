@@ -23,6 +23,8 @@ public:
     void setLooping(bool enabled);
     std::string getTitle();
     std::string getArtist();
+    int getSampleRate();
+    int getBitDepth();
 
 private:
     AAudioStream *stream = nullptr;

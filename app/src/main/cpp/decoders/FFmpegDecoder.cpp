@@ -103,6 +103,16 @@ bool FFmpegDecoder::open(const char* path) {
         duration = 0.0;
     }
 
+    sourceSampleRate = codecParams->sample_rate > 0 ? codecParams->sample_rate : codecContext->sample_rate;
+    sourceBitDepth = codecParams->bits_per_raw_sample;
+    if (sourceBitDepth <= 0) {
+        sourceBitDepth = codecParams->bits_per_coded_sample;
+    }
+    if (sourceBitDepth <= 0) {
+        int bytesPerSample = av_get_bytes_per_sample(codecContext->sample_fmt);
+        sourceBitDepth = bytesPerSample > 0 ? bytesPerSample * 8 : 0;
+    }
+
     title = getFirstMetadataValue(formatContext->metadata, {"title"});
     artist = getFirstMetadataValue(formatContext->metadata, {"artist", "album_artist", "author", "composer"});
     if (title.empty() || artist.empty()) {
@@ -134,6 +144,8 @@ void FFmpegDecoder::close() {
     sampleBuffer.clear();
     sampleBufferCursor = 0;
     duration = 0.0;
+    sourceSampleRate = 0;
+    sourceBitDepth = 0;
     title.clear();
     artist.clear();
 }
@@ -291,7 +303,11 @@ double FFmpegDecoder::getDuration() {
 }
 
 int FFmpegDecoder::getSampleRate() {
-    return outputSampleRate;
+    return sourceSampleRate > 0 ? sourceSampleRate : outputSampleRate;
+}
+
+int FFmpegDecoder::getBitDepth() {
+    return sourceBitDepth;
 }
 
 int FFmpegDecoder::getChannelCount() {

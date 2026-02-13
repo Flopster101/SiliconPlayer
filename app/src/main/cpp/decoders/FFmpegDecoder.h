@@ -11,6 +11,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libswresample/swresample.h>
 #include <libavutil/opt.h>
+#include <libavutil/samplefmt.h>
 }
 
 class FFmpegDecoder : public AudioDecoder {
@@ -24,6 +25,7 @@ public:
     void seek(double seconds) override;
     double getDuration() override;
     int getSampleRate() override;
+    int getBitDepth() override;
     int getChannelCount() override;
     std::string getTitle() override;
     std::string getArtist() override;
@@ -43,6 +45,8 @@ private:
 
     double duration = 0.0;
     int outputSampleRate = 48000;
+    int sourceSampleRate = 0;
+    int sourceBitDepth = 0;
     int outputChannelCount = 2; // Output channels (stereo)
     std::string title;
     std::string artist;

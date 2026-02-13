@@ -10,6 +10,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -43,14 +44,21 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import android.view.MotionEvent
 import com.flopster101.siliconplayer.RepeatMode
 import java.io.File
 import kotlin.math.roundToInt
@@ -91,6 +99,7 @@ fun PlayerScreen(
         mutableDoubleStateOf(positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0)))
     }
     var isSeeking by remember { mutableStateOf(false) }
+    var isTimelineTouchActive by remember { mutableStateOf(false) }
     var downwardDragPx by remember { mutableFloatStateOf(0f) }
     var isDraggingDown by remember { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
@@ -131,9 +140,10 @@ fun PlayerScreen(
             .graphicsLayer(alpha = panelAlpha)
             .then(
                 if (enableCollapseGesture) {
-                    Modifier.pointerInput(collapseThresholdPx) {
+                    Modifier.pointerInput(collapseThresholdPx, isTimelineTouchActive) {
                         detectVerticalDragGestures(
                             onVerticalDrag = { change, dragAmount ->
+                                if (isTimelineTouchActive) return@detectVerticalDragGestures
                                 val next = (downwardDragPx + dragAmount).coerceAtLeast(0f)
                                 if (next > 0f || downwardDragPx > 0f) {
                                     isDraggingDown = true
@@ -142,6 +152,7 @@ fun PlayerScreen(
                                 }
                             },
                             onDragEnd = {
+                                if (isTimelineTouchActive) return@detectVerticalDragGestures
                                 val shouldCollapse = downwardDragPx >= collapseThresholdPx
                                 if (shouldCollapse) {
                                     onCollapseBySwipe()
@@ -151,6 +162,7 @@ fun PlayerScreen(
                                 }
                             },
                             onDragCancel = {
+                                if (isTimelineTouchActive) return@detectVerticalDragGestures
                                 isDraggingDown = false
                                 downwardDragPx = 0f
                             }
@@ -229,6 +241,7 @@ fun PlayerScreen(
                         TimelineSection(
                             sliderPosition = if (isSeeking) sliderPosition else animatedSliderPosition.toDouble(),
                             durationSeconds = durationSeconds,
+                            onSeekInteractionChanged = { isTimelineTouchActive = it },
                             onSliderValueChange = { value ->
                                 isSeeking = true
                                 val sliderMax = durationSeconds.coerceAtLeast(0.0)
@@ -300,6 +313,7 @@ fun PlayerScreen(
                     TimelineSection(
                         sliderPosition = if (isSeeking) sliderPosition else animatedSliderPosition.toDouble(),
                         durationSeconds = durationSeconds,
+                        onSeekInteractionChanged = { isTimelineTouchActive = it },
                         onSliderValueChange = { value ->
                             isSeeking = true
                             val sliderMax = durationSeconds.coerceAtLeast(0.0)
@@ -898,17 +912,22 @@ private fun FutureActionStrip(modifier: Modifier = Modifier) {
 private fun TimelineSection(
     sliderPosition: Double,
     durationSeconds: Double,
+    onSeekInteractionChanged: (Boolean) -> Unit,
     onSliderValueChange: (Float) -> Unit,
     onSliderValueChangeFinished: () -> Unit
 ) {
     val sliderMax = durationSeconds.coerceAtLeast(0.0).toFloat()
+    val normalizedValue = sliderPosition.toFloat().coerceIn(0f, sliderMax)
     Column(modifier = Modifier.fillMaxWidth()) {
-        Slider(
-            value = sliderPosition.toFloat().coerceIn(0f, sliderMax),
+        LineageStyleSeekBar(
+            value = normalizedValue,
+            maxValue = sliderMax,
+            onSeekInteractionChanged = onSeekInteractionChanged,
             onValueChange = onSliderValueChange,
             onValueChangeFinished = onSliderValueChangeFinished,
-            valueRange = 0f..sliderMax,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(36.dp)
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -923,6 +942,132 @@ private fun TimelineSection(
                 style = MaterialTheme.typography.labelMedium
             )
         }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalComposeUiApi::class)
+private fun LineageStyleSeekBar(
+    value: Float,
+    maxValue: Float,
+    onSeekInteractionChanged: (Boolean) -> Unit,
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val density = LocalDensity.current
+    val trackHeightPx = with(density) { 8.dp.toPx() }
+    val thumbWidthPx = with(density) { 6.dp.toPx() }
+    val thumbHeightPx = with(density) { 26.dp.toPx() }
+    val thumbGrabRadiusPx = with(density) { 20.dp.toPx() }
+    val tapLaneHalfHeightPx = with(density) { 22.dp.toPx() }
+    var barWidthPx by remember { mutableFloatStateOf(0f) }
+    var barHeightPx by remember { mutableFloatStateOf(0f) }
+    var draggingThumb by remember { mutableStateOf(false) }
+    var thumbPressed by remember { mutableStateOf(false) }
+    var thumbHovered by remember { mutableStateOf(false) }
+
+    fun xToValue(x: Float): Float {
+        if (barWidthPx <= 0f || maxValue <= 0f) return 0f
+        val ratio = (x / barWidthPx).coerceIn(0f, 1f)
+        return ratio * maxValue
+    }
+
+    Canvas(
+        modifier = modifier
+            .pointerInteropFilter { event ->
+                if (barWidthPx <= 0f || maxValue <= 0f) return@pointerInteropFilter false
+                val centerY = barHeightPx / 2f
+                val valueRatio = if (maxValue > 0f) (value / maxValue).coerceIn(0f, 1f) else 0f
+                val thumbCenterX = valueRatio * barWidthPx
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        thumbHovered = false
+                        val nearTrackLane = kotlin.math.abs(event.y - centerY) <= tapLaneHalfHeightPx
+                        if (!nearTrackLane) return@pointerInteropFilter false
+                        val nearThumb = kotlin.math.abs(event.x - thumbCenterX) <= thumbGrabRadiusPx
+                        return@pointerInteropFilter if (nearThumb) {
+                            draggingThumb = true
+                            thumbPressed = true
+                            onSeekInteractionChanged(true)
+                            onValueChange(xToValue(event.x))
+                            true
+                        } else {
+                            onValueChange(xToValue(event.x))
+                            onValueChangeFinished()
+                            true
+                        }
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        if (!draggingThumb) return@pointerInteropFilter false
+                        onValueChange(xToValue(event.x))
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        if (!draggingThumb) return@pointerInteropFilter false
+                        draggingThumb = false
+                        thumbPressed = false
+                        onSeekInteractionChanged(false)
+                        onValueChangeFinished()
+                        true
+                    }
+                    MotionEvent.ACTION_HOVER_MOVE, MotionEvent.ACTION_HOVER_ENTER -> {
+                        val nearThumb = kotlin.math.abs(event.x - thumbCenterX) <= thumbGrabRadiusPx
+                        thumbHovered = nearThumb
+                        false
+                    }
+                    MotionEvent.ACTION_HOVER_EXIT -> {
+                        thumbHovered = false
+                        false
+                    }
+                    else -> false
+                }
+            }
+            .onSizeChanged { canvasSize ->
+                barWidthPx = canvasSize.width.toFloat()
+                barHeightPx = canvasSize.height.toFloat()
+            }
+    ) {
+        val centerY = size.height / 2f
+        val top = centerY - trackHeightPx / 2f
+        val trackCorner = CornerRadius(trackHeightPx / 2f, trackHeightPx / 2f)
+        val activeColor = colorScheme.primary
+        val inactiveColor = colorScheme.surfaceVariant
+        val ratio = if (maxValue > 0f) (value / maxValue).coerceIn(0f, 1f) else 0f
+        val activeWidth = size.width * ratio
+
+        drawRoundRect(
+            color = inactiveColor,
+            topLeft = Offset(0f, top),
+            size = Size(size.width, trackHeightPx),
+            cornerRadius = trackCorner
+        )
+        if (activeWidth > 0f) {
+            drawRoundRect(
+                color = activeColor,
+                topLeft = Offset(0f, top),
+                size = Size(activeWidth, trackHeightPx),
+                cornerRadius = trackCorner
+            )
+        }
+
+        val thumbX = activeWidth.coerceIn(0f, size.width)
+        if (thumbHovered || thumbPressed || draggingThumb) {
+            drawCircle(
+                color = activeColor.copy(alpha = 0.22f),
+                radius = with(density) { 14.dp.toPx() },
+                center = Offset(thumbX, centerY)
+            )
+        }
+        val thumbLeft = (thumbX - thumbWidthPx / 2f).coerceIn(0f, size.width - thumbWidthPx)
+        val thumbTop = centerY - thumbHeightPx / 2f
+        drawRoundRect(
+            color = activeColor,
+            topLeft = Offset(thumbLeft, thumbTop),
+            size = Size(thumbWidthPx, thumbHeightPx),
+            cornerRadius = CornerRadius(thumbWidthPx / 2f, thumbWidthPx / 2f)
+        )
     }
 }
 

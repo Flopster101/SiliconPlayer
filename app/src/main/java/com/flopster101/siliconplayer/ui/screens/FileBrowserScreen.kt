@@ -274,31 +274,29 @@ fun FileBrowserScreen(
     Scaffold(
         topBar = {
             Column {
-                if (showPrimaryTopBar) {
-                    TopAppBar(
-                        title = {
-                            Text(text = "Silicon Player")
-                        },
-                        actions = {
-                            onExitBrowser?.let { exitBrowser ->
-                                IconButton(onClick = exitBrowser) {
-                                    Icon(
-                                        imageVector = Icons.Default.Home,
-                                        contentDescription = "Go to app home"
-                                    )
-                                }
-                            }
-                            onOpenSettings?.let { openSettings ->
-                                IconButton(onClick = openSettings) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = "Open settings"
-                                    )
-                                }
+                TopAppBar(
+                    title = {
+                        Text(text = "Silicon Player")
+                    },
+                    actions = {
+                        onExitBrowser?.let { exitBrowser ->
+                            IconButton(onClick = exitBrowser) {
+                                Icon(
+                                    imageVector = Icons.Default.Home,
+                                    contentDescription = "Go to app home"
+                                )
                             }
                         }
-                    )
-                }
+                        onOpenSettings?.let { openSettings ->
+                            IconButton(onClick = openSettings) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Open settings"
+                                )
+                            }
+                        }
+                    }
+                )
                 Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
                     Row(
                         modifier = Modifier
@@ -472,29 +470,22 @@ fun FileBrowserScreen(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = { openLocation(location) }
                         ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = iconForStorageKind(location.kind, context),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
+                            Icon(
+                                imageVector = iconForStorageKind(location.kind, context),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = location.typeLabel,
+                                    style = MaterialTheme.typography.titleSmall
                                 )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = location.typeLabel,
-                                        style = MaterialTheme.typography.titleSmall
-                                    )
-                                    Text(
-                                        text = location.name,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                Text(
+                                    text = location.name,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }
@@ -516,26 +507,6 @@ fun FileBrowserScreen(
                             }
                         })
                     }
-                }
-            }
-        }
-
-        if (isLoadingDirectory) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.25f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator()
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(
-                        text = "Loading directory...",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
         }

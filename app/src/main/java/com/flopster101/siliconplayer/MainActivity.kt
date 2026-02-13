@@ -1349,6 +1349,11 @@ private fun AppNavigation(
                                 .remove(AppPreferenceKeys.RECENT_FOLDERS)
                                 .remove(AppPreferenceKeys.RECENT_PLAYED_FILES)
                                 .apply()
+                            Toast.makeText(
+                                context,
+                                "Home recents cleared",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
                     )
                 }

@@ -6,6 +6,9 @@
 
 class AudioDecoder {
 public:
+    static constexpr int REPEAT_CAP_TRACK = 1 << 0;
+    static constexpr int REPEAT_CAP_LOOP_POINT = 1 << 1;
+
     virtual ~AudioDecoder() = default;
 
     virtual bool open(const char* path) = 0;
@@ -25,6 +28,9 @@ public:
     virtual std::string getTitle() = 0;
     virtual std::string getArtist() = 0;
     virtual void setOutputSampleRate(int /*sampleRate*/) {}
+    virtual void setRepeatMode(int /*mode*/) {}
+    virtual int getRepeatModeCapabilities() const { return REPEAT_CAP_TRACK; }
+    virtual double getPlaybackPositionSeconds() { return -1.0; }
 
     // Configuration
     virtual void setOption(const char* /*name*/, const char* /*value*/) {}

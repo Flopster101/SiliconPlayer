@@ -23,6 +23,8 @@ public:
     double getPositionSeconds();
     void seekToSeconds(double seconds);
     void setLooping(bool enabled);
+    void setRepeatMode(int mode);
+    int getRepeatModeCapabilities();
     void setCoreOutputSampleRate(const std::string& coreName, int sampleRateHz);
     std::string getTitle();
     std::string getArtist();
@@ -38,6 +40,7 @@ private:
     int streamChannelCount = 2;
     std::atomic<bool> isPlaying { false };
     std::atomic<bool> looping { false };
+    std::atomic<int> repeatMode { 0 };
     std::atomic<double> positionSeconds { 0.0 };
 
     std::unique_ptr<AudioDecoder> decoder;

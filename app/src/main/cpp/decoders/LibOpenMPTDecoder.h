@@ -28,6 +28,9 @@ public:
     std::string getTitle() override;
     std::string getArtist() override;
     void setOutputSampleRate(int sampleRate) override;
+    void setRepeatMode(int mode) override;
+    int getRepeatModeCapabilities() const override;
+    double getPlaybackPositionSeconds() override;
 
     // Framework
     const char* getName() const override { return "LibOpenMPT"; }
@@ -46,6 +49,7 @@ private:
     int bitDepth = 32;
     int channels = 2; // Rendered output is stereo
     int moduleChannels = 0;
+    int repeatMode = 0;
     std::string title;
     std::string artist;
 };

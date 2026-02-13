@@ -14,11 +14,13 @@ object NativeBridge {
     external fun getPosition(): Double
     external fun seekTo(seconds: Double)
     external fun setLooping(enabled: Boolean)
+    external fun setRepeatMode(mode: Int)
     external fun getTrackTitle(): String
     external fun getTrackArtist(): String
     external fun getTrackSampleRate(): Int
     external fun getTrackChannelCount(): Int
     external fun getTrackBitDepth(): Int
     external fun getTrackBitDepthLabel(): String
+    external fun getRepeatModeCapabilities(): Int
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
 }

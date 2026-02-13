@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.RepeatMode
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -77,14 +78,14 @@ fun PlayerScreen(
     bitDepthLabel: String,
     artwork: ImageBitmap?,
     noArtworkIcon: ImageVector = Icons.Default.MusicNote,
-    isLooping: Boolean,
+    repeatMode: RepeatMode,
     onSeek: (Double) -> Unit,
     onPreviousTrack: () -> Unit,
     onNextTrack: () -> Unit,
     onPreviousSubtune: () -> Unit,
     onNextSubtune: () -> Unit,
     onOpenSubtuneSelector: () -> Unit,
-    onLoopingChanged: (Boolean) -> Unit
+    onCycleRepeatMode: () -> Unit
 ) {
     var sliderPosition by remember(file?.absolutePath, durationSeconds) {
         mutableDoubleStateOf(positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0)))
@@ -243,7 +244,7 @@ fun PlayerScreen(
                             hasTrack = hasTrack,
                             isPlaying = isPlaying,
                             canResumeStoppedTrack = canResumeStoppedTrack,
-                            isLooping = isLooping,
+                            repeatMode = repeatMode,
                             canPreviousTrack = canPreviousTrack,
                             canNextTrack = canNextTrack,
                             onPlayPause = {
@@ -259,7 +260,7 @@ fun PlayerScreen(
                             onNextSubtune = onNextSubtune,
                             onOpenSubtuneSelector = onOpenSubtuneSelector,
                             onStopAndClear = onStopAndClear,
-                            onLoopingChanged = { onLoopingChanged(!isLooping) }
+                            onCycleRepeatMode = onCycleRepeatMode
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         FutureActionStrip()
@@ -314,7 +315,7 @@ fun PlayerScreen(
                         hasTrack = hasTrack,
                         isPlaying = isPlaying,
                         canResumeStoppedTrack = canResumeStoppedTrack,
-                        isLooping = isLooping,
+                        repeatMode = repeatMode,
                         canPreviousTrack = canPreviousTrack,
                         canNextTrack = canNextTrack,
                         onPlayPause = {
@@ -330,7 +331,7 @@ fun PlayerScreen(
                         onNextSubtune = onNextSubtune,
                         onOpenSubtuneSelector = onOpenSubtuneSelector,
                         onStopAndClear = onStopAndClear,
-                        onLoopingChanged = { onLoopingChanged(!isLooping) }
+                        onCycleRepeatMode = onCycleRepeatMode
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     FutureActionStrip(modifier = Modifier.fillMaxWidth(0.94f))
@@ -614,7 +615,7 @@ private fun TransportControls(
     hasTrack: Boolean,
     isPlaying: Boolean,
     canResumeStoppedTrack: Boolean,
-    isLooping: Boolean,
+    repeatMode: RepeatMode,
     canPreviousTrack: Boolean,
     canNextTrack: Boolean,
     onPlayPause: () -> Unit,
@@ -624,7 +625,7 @@ private fun TransportControls(
     onNextSubtune: () -> Unit,
     onOpenSubtuneSelector: () -> Unit,
     onStopAndClear: () -> Unit,
-    onLoopingChanged: () -> Unit
+    onCycleRepeatMode: () -> Unit
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val tight = maxWidth < 350.dp
@@ -682,28 +683,47 @@ private fun TransportControls(
                     Spacer(modifier = Modifier.width(rowGap))
 
                     FilledTonalIconButton(
-                        onClick = onLoopingChanged,
+                        onClick = onCycleRepeatMode,
                         modifier = Modifier.size(sideButtonSize),
                         shape = MaterialTheme.shapes.extraLarge,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = if (isLooping) {
+                            containerColor = if (repeatMode != RepeatMode.None) {
                                 MaterialTheme.colorScheme.secondaryContainer
                             } else {
                                 MaterialTheme.colorScheme.surfaceVariant
                             }
                         )
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Loop,
-                            contentDescription = if (isLooping) "Disable loop" else "Enable loop",
-                            modifier = Modifier.size(
-                                when {
-                                    tight -> 20.dp
-                                    compact -> 22.dp
-                                    else -> 24.dp
+                        val modeBadge = when (repeatMode) {
+                            RepeatMode.None -> ""
+                            RepeatMode.Track -> "1"
+                            RepeatMode.LoopPoint -> "LP"
+                        }
+                        BadgedBox(
+                            badge = {
+                                if (modeBadge.isNotEmpty()) {
+                                    Badge(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+                                        Text(
+                                            text = modeBadge,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Loop,
+                                contentDescription = "Repeat mode: ${repeatMode.label}",
+                                modifier = Modifier.size(
+                                    when {
+                                        tight -> 20.dp
+                                        compact -> 22.dp
+                                        else -> 24.dp
+                                    }
+                                )
                             )
-                        )
+                        }
                     }
                 }
 

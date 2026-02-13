@@ -56,6 +56,13 @@ bool LibOpenMPTDecoder::open(const char* path) {
 
         // Create module from memory buffer
         module = std::make_unique<openmpt::module>(fileBuffer);
+        if (repeatMode == 2) {
+            module->set_repeat_count(0);
+            module->ctl_set_text("play.at_end", "continue");
+        } else {
+            module->set_repeat_count(0);
+            module->ctl_set_text("play.at_end", "stop");
+        }
 
         duration = module->get_duration_seconds();
         moduleChannels = static_cast<int>(module->get_num_channels());
@@ -110,6 +117,37 @@ void LibOpenMPTDecoder::setOutputSampleRate(int sampleRateHz) {
     if (sampleRateHz <= 0) return;
     std::lock_guard<std::mutex> lock(decodeMutex);
     renderSampleRate = sampleRateHz;
+}
+
+void LibOpenMPTDecoder::setRepeatMode(int mode) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    repeatMode = mode;
+    if (!module) return;
+    if (repeatMode == 2) {
+        module->set_repeat_count(0);
+        module->ctl_set_text("play.at_end", "continue");
+    } else {
+        module->set_repeat_count(0);
+        module->ctl_set_text("play.at_end", "stop");
+    }
+}
+
+int LibOpenMPTDecoder::getRepeatModeCapabilities() const {
+    return REPEAT_CAP_TRACK | REPEAT_CAP_LOOP_POINT;
+}
+
+double LibOpenMPTDecoder::getPlaybackPositionSeconds() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!module) return -1.0;
+    const int order = static_cast<int>(module->get_current_order());
+    const int row = static_cast<int>(module->get_current_row());
+    if (order >= 0 && row >= 0) {
+        const double timelinePosition = module->get_time_at_position(order, row);
+        if (timelinePosition >= 0.0) {
+            return timelinePosition;
+        }
+    }
+    return module->get_position_seconds();
 }
 
 int LibOpenMPTDecoder::getBitDepth() {

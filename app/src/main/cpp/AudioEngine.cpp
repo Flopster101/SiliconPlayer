@@ -147,20 +147,27 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
             );
 
             if (framesRead <= 0) {
-                if (engine->looping.load()) {
+                if (engine->repeatMode.load() == 1) {
                     engine->decoder->seek(0.0);
                     engine->positionSeconds.store(0.0);
                     continue;
                 }
+                if (engine->repeatMode.load() == 2) {
+                    // Loop-point mode may transiently return 0 frames at loop boundaries.
+                    // Keep stream alive and fill the remainder with silence for this callback.
+                    break;
+                }
                 reachedEnd = true;
                 break;
             }
-
             totalFramesRead += framesRead;
             remainingFrames -= framesRead;
         }
 
-        if (outputSampleRate > 0 && totalFramesRead > 0) {
+        const double decoderPosition = engine->decoder->getPlaybackPositionSeconds();
+        if (decoderPosition >= 0.0) {
+            engine->positionSeconds.store(decoderPosition);
+        } else if (outputSampleRate > 0 && totalFramesRead > 0) {
             engine->positionSeconds.fetch_add(static_cast<double>(totalFramesRead) / outputSampleRate);
         }
 
@@ -173,7 +180,11 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
             );
         }
 
-        if (reachedEnd && !engine->looping.load()) {
+        if (reachedEnd && engine->repeatMode.load() != 1) {
+            const double durationAtEnd = engine->decoder->getDuration();
+            if (durationAtEnd > 0.0) {
+                engine->positionSeconds.store(durationAtEnd);
+            }
             engine->isPlaying.store(false);
             return AAUDIO_CALLBACK_RESULT_STOP;
         }
@@ -206,6 +217,11 @@ bool AudioEngine::start() {
             std::lock_guard<std::mutex> lock(decoderMutex);
             if (decoder) {
                 decoder->setOutputSampleRate(resolveOutputSampleRateForCore(decoder->getName()));
+                const double durationNow = decoder->getDuration();
+                if (durationNow > 0.0 && positionSeconds.load() >= (durationNow - 0.01)) {
+                    decoder->seek(0.0);
+                    positionSeconds.store(0.0);
+                }
             }
         }
 
@@ -250,6 +266,7 @@ void AudioEngine::setUrl(const char* url) {
         std::lock_guard<std::mutex> lock(decoderMutex);
         const int targetRate = resolveOutputSampleRateForCore(newDecoder->getName());
         newDecoder->setOutputSampleRate(targetRate);
+        newDecoder->setRepeatMode(repeatMode.load());
         decoder = std::move(newDecoder);
         positionSeconds.store(0.0);
     } else {
@@ -286,7 +303,24 @@ void AudioEngine::seekToSeconds(double seconds) {
 }
 
 void AudioEngine::setLooping(bool enabled) {
-    looping.store(enabled);
+    setRepeatMode(enabled ? 1 : 0);
+}
+
+void AudioEngine::setRepeatMode(int mode) {
+    const int normalized = (mode >= 0 && mode <= 2) ? mode : 0;
+    repeatMode.store(normalized);
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (decoder) {
+        decoder->setRepeatMode(normalized);
+    }
+}
+
+int AudioEngine::getRepeatModeCapabilities() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return AudioDecoder::REPEAT_CAP_TRACK;
+    }
+    return decoder->getRepeatModeCapabilities();
 }
 
 int AudioEngine::resolveOutputSampleRateForCore(const std::string& coreName) const {

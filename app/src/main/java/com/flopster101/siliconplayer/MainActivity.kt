@@ -110,6 +110,7 @@ import android.content.IntentFilter
 import android.net.Uri
 import android.provider.Settings
 import android.os.Environment
+import android.widget.Toast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -147,12 +148,6 @@ private enum class ThemeMode(val storageValue: String, val label: String) {
         }
     }
 }
-
-private val trackerModuleExtensions = setOf(
-    "mod", "xm", "it", "s3m", "mptm", "mtm", "stm", "ult", "ptm", "okt",
-    "amf", "ams", "dbm", "dmf", "dsm", "far", "gdm", "imf", "j2b", "med",
-    "mdl", "mt2", "nst", "psm", "umx", "669", "mo3", "wow", "ice"
-)
 
 @Composable
 private fun placeholderArtworkIconForFile(file: File?): ImageVector {
@@ -234,6 +229,20 @@ private fun buildRecentTrackDisplay(
             )
         }
     }
+}
+
+private fun applyRepeatModeToNative(mode: RepeatMode) {
+    NativeBridge.setRepeatMode(
+        when (mode) {
+            RepeatMode.None -> 0
+            RepeatMode.Track -> 1
+            RepeatMode.LoopPoint -> 2
+        }
+    )
+}
+
+private fun showRepeatModeToast(context: Context, mode: RepeatMode) {
+    Toast.makeText(context, mode.label, Toast.LENGTH_SHORT).show()
 }
 
 private fun resolveStorageRootFromAppDir(appSpecificDir: File): File? {
@@ -385,6 +394,8 @@ private object AppPreferenceKeys {
     const val RESPOND_HEADPHONE_MEDIA_BUTTONS = "respond_headphone_media_buttons"
     const val PAUSE_ON_HEADPHONE_DISCONNECT = "pause_on_headphone_disconnect"
     const val OPEN_PLAYER_FROM_NOTIFICATION = "open_player_from_notification"
+    const val PERSIST_REPEAT_MODE = "persist_repeat_mode"
+    const val PREFERRED_REPEAT_MODE = "preferred_repeat_mode"
     const val SESSION_CURRENT_PATH = "session_current_path"
     const val THEME_MODE = "theme_mode"
     const val RECENT_FOLDERS = "recent_folders"
@@ -449,12 +460,14 @@ class MainActivity : ComponentActivity() {
     external fun getPosition(): Double
     external fun seekTo(seconds: Double)
     external fun setLooping(enabled: Boolean)
+    external fun setRepeatMode(mode: Int)
     external fun getTrackTitle(): String
     external fun getTrackArtist(): String
     external fun getTrackSampleRate(): Int
     external fun getTrackChannelCount(): Int
     external fun getTrackBitDepth(): Int
     external fun getTrackBitDepthLabel(): String
+    external fun getRepeatModeCapabilities(): Int
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
 
     companion object {
@@ -472,6 +485,10 @@ private fun AppNavigation(
     themeMode: ThemeMode,
     onThemeModeChanged: (ThemeMode) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember(context) {
+        context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)
+    }
     var currentView by remember { mutableStateOf(MainView.Home) }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.Root) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
@@ -481,22 +498,31 @@ private fun AppNavigation(
     var isPlaying by remember { mutableStateOf(false) }
     var isPlayerExpanded by remember { mutableStateOf(false) }
     var isPlayerSurfaceVisible by remember { mutableStateOf(false) }
-    var looping by remember { mutableStateOf(false) }
+    var preferredRepeatMode by remember {
+        mutableStateOf(
+            RepeatMode.fromStorage(
+                prefs.getString(AppPreferenceKeys.PREFERRED_REPEAT_MODE, RepeatMode.None.storageValue)
+            )
+        )
+    }
+    var persistRepeatMode by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.PERSIST_REPEAT_MODE, true)
+        )
+    }
+    var activeRepeatMode by remember { mutableStateOf(RepeatMode.None) }
     var metadataTitle by remember { mutableStateOf("") }
     var metadataArtist by remember { mutableStateOf("") }
     var metadataSampleRate by remember { mutableIntStateOf(0) }
     var metadataChannelCount by remember { mutableIntStateOf(0) }
     var metadataBitDepthLabel by remember { mutableStateOf("Unknown") }
+    var repeatModeCapabilitiesFlags by remember { mutableIntStateOf(REPEAT_CAP_TRACK) }
     var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var visiblePlayableFiles by remember { mutableStateOf<List<File>>(emptyList()) }
     var browserLaunchLocationId by remember { mutableStateOf<String?>(null) }
     var browserLaunchDirectoryPath by remember { mutableStateOf<String?>(null) }
-    val context = androidx.compose.ui.platform.LocalContext.current
     val storageDescriptors = remember(context) { detectStorageDescriptors(context) }
     val appScope = rememberCoroutineScope()
-    val prefs = remember(context) {
-        context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)
-    }
     val recentLimit = RECENTS_LIMIT
     var recentFolders by remember {
         mutableStateOf(readRecentEntries(prefs, AppPreferenceKeys.RECENT_FOLDERS, recentLimit))
@@ -657,6 +683,22 @@ private fun AppNavigation(
         }
     }
 
+    fun refreshRepeatModeForTrack() {
+        activeRepeatMode = resolveRepeatModeForFlags(preferredRepeatMode, repeatModeCapabilitiesFlags)
+        applyRepeatModeToNative(activeRepeatMode)
+    }
+
+    fun cycleRepeatMode() {
+        val modes = availableRepeatModesForFlags(repeatModeCapabilitiesFlags)
+        if (modes.isEmpty()) return
+        val currentIndex = modes.indexOf(activeRepeatMode).let { if (it < 0) 0 else it }
+        val next = modes[(currentIndex + 1) % modes.size]
+        preferredRepeatMode = next
+        activeRepeatMode = next
+        applyRepeatModeToNative(next)
+        showRepeatModeToast(context, next)
+    }
+
     fun applyTrackSelection(file: File, autoStart: Boolean, expandOverride: Boolean? = null) {
         NativeBridge.stopEngine()
         isPlaying = false
@@ -669,9 +711,11 @@ private fun AppNavigation(
         metadataSampleRate = NativeBridge.getTrackSampleRate()
         metadataChannelCount = NativeBridge.getTrackChannelCount()
         metadataBitDepthLabel = NativeBridge.getTrackBitDepthLabel()
+        repeatModeCapabilitiesFlags = NativeBridge.getRepeatModeCapabilities()
         duration = NativeBridge.getDuration()
         position = 0.0
         artworkBitmap = null
+        refreshRepeatModeForTrack()
         if (autoStart) {
             addRecentPlayedTrack(
                 path = file.absolutePath,
@@ -679,7 +723,6 @@ private fun AppNavigation(
                 title = metadataTitle,
                 artist = metadataArtist
             )
-            NativeBridge.setLooping(looping)
             NativeBridge.startEngine()
             isPlaying = true
             scheduleRecentTrackMetadataRefresh(file.absolutePath, lastBrowserLocationId)
@@ -730,10 +773,12 @@ private fun AppNavigation(
         metadataSampleRate = NativeBridge.getTrackSampleRate()
         metadataChannelCount = NativeBridge.getTrackChannelCount()
         metadataBitDepthLabel = NativeBridge.getTrackBitDepthLabel()
+        repeatModeCapabilitiesFlags = NativeBridge.getRepeatModeCapabilities()
         duration = NativeBridge.getDuration()
         position = NativeBridge.getPosition()
         isPlaying = NativeBridge.isEnginePlaying()
         artworkBitmap = null
+        refreshRepeatModeForTrack()
     }
 
     LaunchedEffect(Unit) {
@@ -786,6 +831,10 @@ private fun AppNavigation(
             }
             delay(if (isPlaying) 80 else 250)
         }
+    }
+
+    LaunchedEffect(selectedFile, preferredRepeatMode) {
+        refreshRepeatModeForTrack()
     }
 
     LaunchedEffect(selectedFile) {
@@ -851,6 +900,22 @@ private fun AppNavigation(
         prefs.edit()
             .putBoolean(AppPreferenceKeys.OPEN_PLAYER_FROM_NOTIFICATION, openPlayerFromNotification)
             .apply()
+    }
+
+    LaunchedEffect(persistRepeatMode) {
+        val editor = prefs.edit().putBoolean(AppPreferenceKeys.PERSIST_REPEAT_MODE, persistRepeatMode)
+        if (!persistRepeatMode) {
+            editor.remove(AppPreferenceKeys.PREFERRED_REPEAT_MODE)
+        }
+        editor.apply()
+    }
+
+    LaunchedEffect(preferredRepeatMode, persistRepeatMode) {
+        if (persistRepeatMode) {
+            prefs.edit()
+                .putString(AppPreferenceKeys.PREFERRED_REPEAT_MODE, preferredRepeatMode.storageValue)
+                .apply()
+        }
     }
 
     LaunchedEffect(selectedFile, isPlaying, metadataTitle, metadataArtist, duration) {
@@ -924,6 +989,7 @@ private fun AppNavigation(
         metadataSampleRate = 0
         metadataChannelCount = 0
         metadataBitDepthLabel = "Unknown"
+        repeatModeCapabilitiesFlags = REPEAT_CAP_TRACK
         artworkBitmap = null
         context.startService(
             Intent(context, PlaybackService::class.java).setAction(PlaybackService.ACTION_STOP_CLEAR)
@@ -960,6 +1026,7 @@ private fun AppNavigation(
                         metadataSampleRate = 0
                         metadataChannelCount = 0
                         metadataBitDepthLabel = "Unknown"
+                        repeatModeCapabilitiesFlags = REPEAT_CAP_TRACK
                         artworkBitmap = null
                     }
                     PlaybackService.ACTION_BROADCAST_PREVIOUS_TRACK_REQUEST -> {
@@ -1177,6 +1244,8 @@ private fun AppNavigation(
                         onPauseOnHeadphoneDisconnectChanged = { pauseOnHeadphoneDisconnect = it },
                         openPlayerFromNotification = openPlayerFromNotification,
                         onOpenPlayerFromNotificationChanged = { openPlayerFromNotification = it },
+                        persistRepeatMode = persistRepeatMode,
+                        onPersistRepeatModeChanged = { persistRepeatMode = it },
                         themeMode = themeMode,
                         onThemeModeChanged = onThemeModeChanged,
                         rememberBrowserLocation = rememberBrowserLocation,
@@ -1231,14 +1300,14 @@ private fun AppNavigation(
                         bitDepthLabel = metadataBitDepthLabel,
                         artwork = artworkBitmap,
                         noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
-                        isLooping = looping,
+                        repeatMode = activeRepeatMode,
                         onSeek = {},
                         onPreviousTrack = {},
                         onNextTrack = {},
                         onPreviousSubtune = {},
                         onNextSubtune = {},
                         onOpenSubtuneSelector = {},
-                        onLoopingChanged = {}
+                        onCycleRepeatMode = {}
                     )
                 }
             }
@@ -1329,13 +1398,13 @@ private fun AppNavigation(
                                 } else {
                                     selectedFile?.let {
                                         addRecentPlayedTrack(
-                                            path = it.absolutePath,
-                                            locationId = lastBrowserLocationId,
-                                            title = metadataTitle,
-                                            artist = metadataArtist
-                                        )
-                                    }
-                                    NativeBridge.setLooping(looping)
+                                    path = it.absolutePath,
+                                    locationId = lastBrowserLocationId,
+                                    title = metadataTitle,
+                                    artist = metadataArtist
+                                )
+                            }
+                                    applyRepeatModeToNative(activeRepeatMode)
                                     NativeBridge.startEngine()
                                     isPlaying = true
                                     selectedFile?.let {
@@ -1391,7 +1460,7 @@ private fun AppNavigation(
                                     artist = metadataArtist
                                 )
                             }
-                            NativeBridge.setLooping(looping)
+                            applyRepeatModeToNative(activeRepeatMode)
                             NativeBridge.startEngine()
                             isPlaying = true
                             selectedFile?.let {
@@ -1420,7 +1489,7 @@ private fun AppNavigation(
                     bitDepthLabel = metadataBitDepthLabel,
                     artwork = artworkBitmap,
                     noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
-                    isLooping = looping,
+                    repeatMode = activeRepeatMode,
                     onSeek = { seconds ->
                         NativeBridge.seekTo(seconds)
                         position = seconds
@@ -1431,10 +1500,7 @@ private fun AppNavigation(
                     onPreviousSubtune = {},
                     onNextSubtune = {},
                     onOpenSubtuneSelector = {},
-                    onLoopingChanged = { enabled ->
-                        looping = enabled
-                        NativeBridge.setLooping(enabled)
-                    }
+                    onCycleRepeatMode = { cycleRepeatMode() }
                 )
             }
         }
@@ -1754,6 +1820,8 @@ private fun SettingsScreen(
     onPauseOnHeadphoneDisconnectChanged: (Boolean) -> Unit,
     openPlayerFromNotification: Boolean,
     onOpenPlayerFromNotificationChanged: (Boolean) -> Unit,
+    persistRepeatMode: Boolean,
+    onPersistRepeatModeChanged: (Boolean) -> Unit,
     themeMode: ThemeMode,
     onThemeModeChanged: (ThemeMode) -> Unit,
     rememberBrowserLocation: Boolean,
@@ -1947,6 +2015,13 @@ private fun SettingsScreen(
                             description = "When tapping playback notification, open the full player instead of normal app start destination.",
                             checked = openPlayerFromNotification,
                             onCheckedChange = onOpenPlayerFromNotificationChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Persist repeat mode",
+                            description = "Keep selected repeat mode across app restarts.",
+                            checked = persistRepeatMode,
+                            onCheckedChange = onPersistRepeatModeChanged
                         )
                     }
                     SettingsRoute.Misc -> {

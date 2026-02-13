@@ -96,6 +96,14 @@ Java_com_flopster101_siliconplayer_MainActivity_setLooping(JNIEnv* env, jobject,
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_setRepeatMode(JNIEnv* env, jobject, jint mode) {
+    if (audioEngine == nullptr) {
+        return;
+    }
+    audioEngine->setRepeatMode(static_cast<int>(mode));
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_setCoreOutputSampleRate(
         JNIEnv* env, jobject, jstring coreName, jint sampleRateHz) {
     if (audioEngine == nullptr) {
@@ -157,6 +165,14 @@ Java_com_flopster101_siliconplayer_MainActivity_getTrackBitDepthLabel(JNIEnv* en
     return env->NewStringUTF(value.c_str());
 }
 
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getRepeatModeCapabilities(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return 1; // Track repeat support by default.
+    }
+    return static_cast<jint>(audioEngine->getRepeatModeCapabilities());
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_startEngine(JNIEnv* env, jobject thiz) {
     Java_com_flopster101_siliconplayer_MainActivity_startEngine(env, thiz);
@@ -202,6 +218,11 @@ Java_com_flopster101_siliconplayer_NativeBridge_setLooping(JNIEnv* env, jobject 
     Java_com_flopster101_siliconplayer_MainActivity_setLooping(env, thiz, enabled);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setRepeatMode(JNIEnv* env, jobject thiz, jint mode) {
+    Java_com_flopster101_siliconplayer_MainActivity_setRepeatMode(env, thiz, mode);
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getTrackTitle(JNIEnv* env, jobject thiz) {
     return Java_com_flopster101_siliconplayer_MainActivity_getTrackTitle(env, thiz);
@@ -230,6 +251,11 @@ Java_com_flopster101_siliconplayer_NativeBridge_getTrackBitDepth(JNIEnv* env, jo
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getTrackBitDepthLabel(JNIEnv* env, jobject thiz) {
     return Java_com_flopster101_siliconplayer_MainActivity_getTrackBitDepthLabel(env, thiz);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getRepeatModeCapabilities(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getRepeatModeCapabilities(env, thiz);
 }
 
 extern "C" JNIEXPORT void JNICALL

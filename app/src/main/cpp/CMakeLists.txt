@@ -22,16 +22,43 @@ add_library(
         AudioEngine.cpp
 )
 
+include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
+
 # Find Android libraries
 find_library(log-lib log)
 find_library(android-lib android)
 find_library(aaudio-lib aaudio)
 
-# Link libraries
-target_link_libraries(
-        siliconplayer
-        ${log-lib}
-        ${android-lib}
-        ${aaudio-lib}
-        # openmpt # Link our new library
-)
+    set(PREBUILT_DIR ${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI})
+
+    # Import libopenmpt (Static)
+    # Import libopenmpt (Static)
+    add_library(libopenmpt STATIC IMPORTED)
+    set_target_properties(libopenmpt PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/${ANDROID_ABI}/libopenmpt.a")
+    
+    # Import FFmpeg libraries (Static) - Order matters for static linking!
+    add_library(libavformat STATIC IMPORTED)
+    set_target_properties(libavformat PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libavformat.a")
+    
+    add_library(libavcodec STATIC IMPORTED)
+    set_target_properties(libavcodec PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libavcodec.a")
+    
+    add_library(libavutil STATIC IMPORTED)
+    set_target_properties(libavutil PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libavutil.a")
+    
+    add_library(libswresample STATIC IMPORTED)
+    set_target_properties(libswresample PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libswresample.a")
+
+    # Link libraries
+    target_link_libraries(
+            siliconplayer
+            ${log-lib}
+            ${android-lib}
+            ${aaudio-lib}
+            libopenmpt
+            libavformat
+            libavcodec
+            libavutil
+            libswresample
+            z # zlib is needed for openmpt/ffmpeg
+    )

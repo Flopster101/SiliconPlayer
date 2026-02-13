@@ -96,6 +96,7 @@ class MainActivity : ComponentActivity() {
     external fun getStringFromJNI(): String
     external fun startEngine()
     external fun stopEngine()
+    external fun isEnginePlaying(): Boolean
     external fun loadAudio(path: String)
     external fun getSupportedExtensions(): Array<String>
     external fun getDuration(): Double
@@ -194,12 +195,11 @@ fun AppNavigation() {
         }
     }
 
-    LaunchedEffect(selectedFile, isPlaying) {
+    LaunchedEffect(selectedFile) {
         while (selectedFile != null) {
             duration = activity.getDuration()
-            if (isPlaying) {
-                position = activity.getPosition()
-            }
+            position = activity.getPosition()
+            isPlaying = activity.isEnginePlaying()
             delay(250)
         }
     }
@@ -281,12 +281,15 @@ fun AppNavigation() {
             MainView.Browser -> com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
                 repository = repository,
                 bottomContentPadding = miniPlayerListInset,
+                backHandlingEnabled = !isPlayerExpanded,
                 onExitBrowser = { currentView = MainView.Home },
                 onOpenSettings = {
                     settingsRoute = SettingsRoute.Root
                     currentView = MainView.Settings
                 },
                 onFileSelected = { file ->
+                    activity.stopEngine()
+                    isPlaying = false
                     selectedFile = file
                     activity.loadAudio(file.absolutePath)
                     metadataTitle = activity.getTrackTitle()
@@ -296,7 +299,6 @@ fun AppNavigation() {
                     metadataBitDepthLabel = activity.getTrackBitDepthLabel()
                     duration = activity.getDuration()
                     position = 0.0
-                    isPlaying = false
                     artworkBitmap = null
                     isPlayerExpanded = true
                 }

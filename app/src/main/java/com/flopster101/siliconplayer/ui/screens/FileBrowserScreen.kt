@@ -42,6 +42,7 @@ fun FileBrowserScreen(
     repository: FileRepository,
     onFileSelected: (File) -> Unit,
     bottomContentPadding: Dp = 0.dp,
+    backHandlingEnabled: Boolean = true,
     onExitBrowser: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null
 ) {
@@ -99,7 +100,7 @@ fun FileBrowserScreen(
     }
 
     BackHandler(
-        enabled = selectedLocation != null || onExitBrowser != null,
+        enabled = backHandlingEnabled && (selectedLocation != null || onExitBrowser != null),
         onBack = { handleBack() }
     )
 

@@ -97,6 +97,7 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
                 : engine->streamSampleRate;
         int totalFramesRead = 0;
         int remainingFrames = numFrames;
+        bool reachedEnd = false;
 
         while (remainingFrames > 0) {
             int framesRead = engine->decoder->read(
@@ -110,6 +111,7 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
                     engine->positionSeconds.store(0.0);
                     continue;
                 }
+                reachedEnd = true;
                 break;
             }
 
@@ -128,6 +130,11 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
                     0,
                     (numFrames - totalFramesRead) * channels * sizeof(float)
             );
+        }
+
+        if (reachedEnd && !engine->looping.load()) {
+            engine->isPlaying.store(false);
+            return AAUDIO_CALLBACK_RESULT_STOP;
         }
     } else {
         // Output silence
@@ -155,6 +162,10 @@ void AudioEngine::stop() {
         AAudioStream_requestStop(stream);
         isPlaying = false;
     }
+}
+
+bool AudioEngine::isEnginePlaying() const {
+    return isPlaying.load();
 }
 
 void AudioEngine::setUrl(const char* url) {

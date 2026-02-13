@@ -29,6 +29,14 @@ Java_com_flopster101_siliconplayer_MainActivity_stopEngine(JNIEnv* env, jobject)
     }
 }
 
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_isEnginePlaying(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return JNI_FALSE;
+    }
+    return audioEngine->isEnginePlaying() ? JNI_TRUE : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_loadAudio(JNIEnv* env, jobject, jstring path) {
     if (audioEngine == nullptr) {

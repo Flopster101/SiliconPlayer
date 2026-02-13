@@ -15,6 +15,7 @@ public:
 
     bool start();
     void stop();
+    bool isEnginePlaying() const;
     void restart();
     void setUrl(const char* url);
     double getDurationSeconds();

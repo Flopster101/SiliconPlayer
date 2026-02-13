@@ -386,6 +386,7 @@ private object AppPreferenceKeys {
     const val PREFS_NAME = "silicon_player_settings"
     const val AUTO_PLAY_ON_TRACK_SELECT = "auto_play_on_track_select"
     const val OPEN_PLAYER_ON_TRACK_SELECT = "open_player_on_track_select"
+    const val AUTO_PLAY_NEXT_TRACK_ON_END = "auto_play_next_track_on_end"
     const val REMEMBER_BROWSER_LOCATION = "remember_browser_location"
     const val BROWSER_LAST_LOCATION_ID = "browser_last_location_id"
     const val BROWSER_LAST_DIRECTORY_PATH = "browser_last_directory_path"
@@ -540,6 +541,11 @@ private fun AppNavigation(
             prefs.getBoolean(AppPreferenceKeys.OPEN_PLAYER_ON_TRACK_SELECT, true)
         )
     }
+    var autoPlayNextTrackOnEnd by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.AUTO_PLAY_NEXT_TRACK_ON_END, true)
+        )
+    }
     var rememberBrowserLocation by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.REMEMBER_BROWSER_LOCATION, true)
@@ -580,6 +586,8 @@ private fun AppNavigation(
             prefs.getBoolean(AppPreferenceKeys.OPEN_PLAYER_FROM_NOTIFICATION, true)
         )
     }
+    var playbackWatchPath by remember { mutableStateOf<String?>(null) }
+    var playbackWatchWasPlaying by remember { mutableStateOf(false) }
 
     // Get supported extensions from JNI
     val supportedExtensions = remember { NativeBridge.getSupportedExtensions().toSet() }
@@ -812,9 +820,24 @@ private fun AppNavigation(
     LaunchedEffect(selectedFile) {
         while (selectedFile != null) {
             val currentFile = selectedFile
-            duration = NativeBridge.getDuration()
-            position = NativeBridge.getPosition()
-            isPlaying = NativeBridge.isEnginePlaying()
+            val nextDuration = NativeBridge.getDuration()
+            val nextPosition = NativeBridge.getPosition()
+            val nextIsPlaying = NativeBridge.isEnginePlaying()
+            duration = nextDuration
+            position = nextPosition
+            isPlaying = nextIsPlaying
+            val currentPath = currentFile?.absolutePath
+            if (currentPath != playbackWatchPath) {
+                playbackWatchPath = currentPath
+                playbackWatchWasPlaying = nextIsPlaying
+            } else {
+                val atTrackEnd = nextDuration > 0.0 && nextPosition >= (nextDuration - 0.2)
+                val endedNaturally = playbackWatchWasPlaying && !nextIsPlaying && atTrackEnd
+                playbackWatchWasPlaying = nextIsPlaying
+                if (endedNaturally && autoPlayNextTrackOnEnd && playAdjacentTrack(1)) {
+                    continue
+                }
+            }
             val nextTitle = NativeBridge.getTrackTitle()
             val nextArtist = NativeBridge.getTrackArtist()
             val titleChanged = nextTitle != metadataTitle
@@ -852,6 +875,12 @@ private fun AppNavigation(
     LaunchedEffect(openPlayerOnTrackSelect) {
         prefs.edit()
             .putBoolean(AppPreferenceKeys.OPEN_PLAYER_ON_TRACK_SELECT, openPlayerOnTrackSelect)
+            .apply()
+    }
+
+    LaunchedEffect(autoPlayNextTrackOnEnd) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.AUTO_PLAY_NEXT_TRACK_ON_END, autoPlayNextTrackOnEnd)
             .apply()
     }
 
@@ -1238,6 +1267,8 @@ private fun AppNavigation(
                         onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
                         openPlayerOnTrackSelect = openPlayerOnTrackSelect,
                         onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
+                        autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
+                        onAutoPlayNextTrackOnEndChanged = { autoPlayNextTrackOnEnd = it },
                         respondHeadphoneMediaButtons = respondHeadphoneMediaButtons,
                         onRespondHeadphoneMediaButtonsChanged = { respondHeadphoneMediaButtons = it },
                         pauseOnHeadphoneDisconnect = pauseOnHeadphoneDisconnect,
@@ -1814,6 +1845,8 @@ private fun SettingsScreen(
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     openPlayerOnTrackSelect: Boolean,
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
+    autoPlayNextTrackOnEnd: Boolean,
+    onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
     respondHeadphoneMediaButtons: Boolean,
     onRespondHeadphoneMediaButtonsChanged: (Boolean) -> Unit,
     pauseOnHeadphoneDisconnect: Boolean,
@@ -2008,6 +2041,13 @@ private fun SettingsScreen(
                             description = "Open full player when selecting a file. Disable to keep mini-player only.",
                             checked = openPlayerOnTrackSelect,
                             onCheckedChange = onOpenPlayerOnTrackSelectChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Auto-play next track when current ends",
+                            description = "Automatically start the next visible track after natural playback end.",
+                            checked = autoPlayNextTrackOnEnd,
+                            onCheckedChange = onAutoPlayNextTrackOnEndChanged
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         PlayerSettingToggleCard(

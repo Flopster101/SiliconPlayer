@@ -31,11 +31,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.runtime.* // Import for remember, mutableStateOf
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -65,6 +69,16 @@ private enum class MainView {
     Home,
     Browser,
     Settings
+}
+
+private enum class SettingsRoute {
+    Root,
+    AudioPlugins,
+    PluginFfmpeg,
+    PluginOpenMpt,
+    GeneralAudio,
+    Ui,
+    About
 }
 
 class MainActivity : ComponentActivity() {
@@ -106,6 +120,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppNavigation() {
     var currentView by remember { mutableStateOf(MainView.Home) }
+    var settingsRoute by remember { mutableStateOf(SettingsRoute.Root) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
     var duration by remember { mutableDoubleStateOf(0.0) }
     var position by remember { mutableDoubleStateOf(0.0) }
@@ -243,6 +258,12 @@ fun AppNavigation() {
     BackHandler(enabled = isPlayerExpanded || currentView == MainView.Settings) {
         when {
             isPlayerExpanded -> isPlayerExpanded = false
+            currentView == MainView.Settings && settingsRoute != SettingsRoute.Root -> {
+                settingsRoute = when (settingsRoute) {
+                    SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
+                    else -> SettingsRoute.Root
+                }
+            }
             currentView == MainView.Settings -> currentView = MainView.Home
         }
     }
@@ -252,13 +273,19 @@ fun AppNavigation() {
             MainView.Home -> HomeScreen(
                 selectedTrack = selectedFile,
                 onOpenLibrary = { currentView = MainView.Browser },
-                onOpenSettings = { currentView = MainView.Settings }
+                onOpenSettings = {
+                    settingsRoute = SettingsRoute.Root
+                    currentView = MainView.Settings
+                }
             )
             MainView.Browser -> com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
                 repository = repository,
                 bottomContentPadding = miniPlayerListInset,
                 onExitBrowser = { currentView = MainView.Home },
-                onOpenSettings = { currentView = MainView.Settings },
+                onOpenSettings = {
+                    settingsRoute = SettingsRoute.Root
+                    currentView = MainView.Settings
+                },
                 onFileSelected = { file ->
                     selectedFile = file
                     activity.loadAudio(file.absolutePath)
@@ -275,7 +302,23 @@ fun AppNavigation() {
                 }
             )
             MainView.Settings -> SettingsScreen(
-                onBack = { currentView = MainView.Home }
+                route = settingsRoute,
+                onBack = {
+                    if (settingsRoute != SettingsRoute.Root) {
+                        settingsRoute = when (settingsRoute) {
+                            SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
+                            else -> SettingsRoute.Root
+                        }
+                    } else {
+                        currentView = MainView.Home
+                    }
+                },
+                onOpenAudioPlugins = { settingsRoute = SettingsRoute.AudioPlugins },
+                onOpenGeneralAudio = { settingsRoute = SettingsRoute.GeneralAudio },
+                onOpenUi = { settingsRoute = SettingsRoute.Ui },
+                onOpenAbout = { settingsRoute = SettingsRoute.About },
+                onOpenFfmpeg = { settingsRoute = SettingsRoute.PluginFfmpeg },
+                onOpenOpenMpt = { settingsRoute = SettingsRoute.PluginOpenMpt }
             )
         }
 
@@ -470,11 +513,30 @@ private fun HomeScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsScreen(onBack: () -> Unit) {
+private fun SettingsScreen(
+    route: SettingsRoute,
+    onBack: () -> Unit,
+    onOpenAudioPlugins: () -> Unit,
+    onOpenGeneralAudio: () -> Unit,
+    onOpenUi: () -> Unit,
+    onOpenAbout: () -> Unit,
+    onOpenFfmpeg: () -> Unit,
+    onOpenOpenMpt: () -> Unit
+) {
+    val screenTitle = when (route) {
+        SettingsRoute.Root -> "Settings"
+        SettingsRoute.AudioPlugins -> "Audio plugins"
+        SettingsRoute.PluginFfmpeg -> "FFmpeg"
+        SettingsRoute.PluginOpenMpt -> "OpenMPT"
+        SettingsRoute.GeneralAudio -> "General audio"
+        SettingsRoute.Ui -> "UI settings"
+        SettingsRoute.About -> "About"
+    }
+
     androidx.compose.material3.Scaffold(
         topBar = {
             androidx.compose.material3.TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(screenTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -492,46 +554,145 @@ private fun SettingsScreen(onBack: () -> Unit) {
                 .padding(paddingValues)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            SettingsSectionCard(
-                title = "Audio plugins",
-                description = "Core-specific options and decoder/plugin behavior for FFmpeg and OpenMPT."
+            when (route) {
+                SettingsRoute.Root -> {
+                    SettingsSectionLabel("Audio")
+                    SettingsItemCard(
+                        title = "Audio plugins",
+                        description = "Configure each playback core/plugin.",
+                        icon = Icons.Default.GraphicEq,
+                        onClick = onOpenAudioPlugins
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    SettingsItemCard(
+                        title = "General audio settings",
+                        description = "Global output and playback behavior.",
+                        icon = Icons.Default.Tune,
+                        onClick = onOpenGeneralAudio
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SettingsSectionLabel("Interface")
+                    SettingsItemCard(
+                        title = "UI settings",
+                        description = "Appearance and layout preferences.",
+                        icon = Icons.Default.Palette,
+                        onClick = onOpenUi
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SettingsSectionLabel("Info")
+                    SettingsItemCard(
+                        title = "About",
+                        description = "App information, versions, and credits.",
+                        icon = Icons.Default.Info,
+                        onClick = onOpenAbout
+                    )
+                }
+                SettingsRoute.AudioPlugins -> {
+                    SettingsSectionLabel("Plugin configuration")
+                    Text(
+                        text = "This section will also handle enabling/disabling plugins in the future.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    SettingsItemCard(
+                        title = "FFmpeg",
+                        description = "Core options for mainstream audio codecs.",
+                        icon = Icons.Default.GraphicEq,
+                        onClick = onOpenFfmpeg
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    SettingsItemCard(
+                        title = "OpenMPT",
+                        description = "Core options for tracker/module playback.",
+                        icon = Icons.Default.GraphicEq,
+                        onClick = onOpenOpenMpt
+                    )
+                }
+                SettingsRoute.PluginFfmpeg -> SettingsPlaceholderBody(
+                    title = "FFmpeg plugin options",
+                    description = "FFmpeg-specific settings will appear here."
+                )
+                SettingsRoute.PluginOpenMpt -> SettingsPlaceholderBody(
+                    title = "OpenMPT plugin options",
+                    description = "OpenMPT-specific settings will appear here."
+                )
+                SettingsRoute.GeneralAudio -> SettingsPlaceholderBody(
+                    title = "General audio settings",
+                    description = "Global audio behavior options will appear here."
+                )
+                SettingsRoute.Ui -> SettingsPlaceholderBody(
+                    title = "UI settings",
+                    description = "Theme and layout options will appear here."
+                )
+                SettingsRoute.About -> SettingsPlaceholderBody(
+                    title = "About Silicon Player",
+                    description = "Version, credits, and technical details will appear here."
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsSectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+}
+
+@Composable
+private fun SettingsItemCard(
+    title: String,
+    description: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    androidx.compose.material3.OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
             )
-            Spacer(modifier = Modifier.height(10.dp))
-            SettingsSectionCard(
-                title = "FFmpeg",
-                description = "Placeholder section for FFmpeg core settings."
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            SettingsSectionCard(
-                title = "OpenMPT",
-                description = "Placeholder section for OpenMPT core settings."
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            SettingsSectionCard(
-                title = "General audio settings",
-                description = "Global playback behavior and output preferences."
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            SettingsSectionCard(
-                title = "UI settings",
-                description = "Appearance and layout preferences."
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            SettingsSectionCard(
-                title = "About",
-                description = "App information, versions, and credits."
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 }
 
 @Composable
-private fun SettingsSectionCard(
+private fun SettingsPlaceholderBody(
     title: String,
     description: String
 ) {
     androidx.compose.material3.OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium

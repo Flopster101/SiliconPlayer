@@ -342,6 +342,18 @@ std::string FFmpegDecoder::getArtist() {
     return artist;
 }
 
+void FFmpegDecoder::setOutputSampleRate(int sampleRate) {
+    if (sampleRate <= 0) return;
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (outputSampleRate == sampleRate) return;
+    outputSampleRate = sampleRate;
+    if (codecContext) {
+        initResampler();
+        sampleBuffer.clear();
+        sampleBufferCursor = 0;
+    }
+}
+
 std::vector<std::string> FFmpegDecoder::getSupportedExtensions() {
     return {
         // Common Audio

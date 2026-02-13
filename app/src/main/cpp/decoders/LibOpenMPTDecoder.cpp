@@ -87,7 +87,7 @@ int LibOpenMPTDecoder::read(float* buffer, int numFrames) {
     if (!module) return 0;
 
     // render audio
-    size_t count = module->read_interleaved_stereo(sampleRate, numFrames, buffer);
+    size_t count = module->read_interleaved_stereo(renderSampleRate, numFrames, buffer);
 
     return (int)count;
 }
@@ -104,6 +104,12 @@ double LibOpenMPTDecoder::getDuration() {
 
 int LibOpenMPTDecoder::getSampleRate() {
     return sampleRate;
+}
+
+void LibOpenMPTDecoder::setOutputSampleRate(int sampleRateHz) {
+    if (sampleRateHz <= 0) return;
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    renderSampleRate = sampleRateHz;
 }
 
 int LibOpenMPTDecoder::getBitDepth() {

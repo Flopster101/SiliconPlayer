@@ -31,6 +31,8 @@ public:
 
 private:
     AAudioStream *stream = nullptr;
+    int streamSampleRate = 48000;
+    int streamChannelCount = 2;
     std::atomic<bool> isPlaying { false };
     std::atomic<bool> looping { false };
     std::atomic<double> positionSeconds { 0.0 };

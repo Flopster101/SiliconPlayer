@@ -27,6 +27,7 @@ public:
     int getChannelCount() override;
     std::string getTitle() override;
     std::string getArtist() override;
+    void setOutputSampleRate(int sampleRate) override;
 
     // Framework
     const char* getName() const override { return "LibOpenMPT"; }
@@ -40,7 +41,8 @@ private:
     std::vector<char> fileBuffer;
 
     double duration = 0.0;
-    int sampleRate = 48000;
+    int sampleRate = 48000; // Reported playback technical default
+    int renderSampleRate = 48000; // Actual render rate used for output
     int bitDepth = 32;
     int channels = 2; // Rendered output is stereo
     int moduleChannels = 0;

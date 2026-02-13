@@ -55,6 +55,12 @@ void AudioEngine::createStream() {
     aaudio_result_t result = AAudioStreamBuilder_openStream(builder, &stream);
     if (result != AAUDIO_OK) {
         LOGE("Failed to open stream: %s", AAudio_convertResultToText(result));
+    } else {
+        streamSampleRate = AAudioStream_getSampleRate(stream);
+        streamChannelCount = AAudioStream_getChannelCount(stream);
+        if (streamSampleRate <= 0) streamSampleRate = 48000;
+        if (streamChannelCount <= 0) streamChannelCount = 2;
+        LOGD("AAudio stream opened: sampleRate=%d, channels=%d", streamSampleRate, streamChannelCount);
     }
 
     AAudioStreamBuilder_delete(builder);
@@ -86,7 +92,9 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
 
     if (lock.owns_lock() && engine->decoder) {
         const int channels = engine->decoder->getChannelCount();
-        const int sampleRate = engine->decoder->getSampleRate();
+        const int outputSampleRate = AAudioStream_getSampleRate(stream) > 0
+                ? AAudioStream_getSampleRate(stream)
+                : engine->streamSampleRate;
         int totalFramesRead = 0;
         int remainingFrames = numFrames;
 
@@ -109,8 +117,8 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
             remainingFrames -= framesRead;
         }
 
-        if (sampleRate > 0 && totalFramesRead > 0) {
-            engine->positionSeconds.fetch_add(static_cast<double>(totalFramesRead) / sampleRate);
+        if (outputSampleRate > 0 && totalFramesRead > 0) {
+            engine->positionSeconds.fetch_add(static_cast<double>(totalFramesRead) / outputSampleRate);
         }
 
         // Fill remaining with silence if decoder didn't produce enough
@@ -154,6 +162,8 @@ void AudioEngine::setUrl(const char* url) {
 
     auto newDecoder = DecoderRegistry::getInstance().createDecoder(url);
     if (newDecoder && newDecoder->open(url)) {
+        const int targetRate = (streamSampleRate > 0) ? streamSampleRate : 48000;
+        newDecoder->setOutputSampleRate(targetRate);
         std::lock_guard<std::mutex> lock(decoderMutex);
         decoder = std::move(newDecoder);
         positionSeconds.store(0.0);

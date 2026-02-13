@@ -31,6 +31,7 @@ public:
     int getChannelCount() override;
     std::string getTitle() override;
     std::string getArtist() override;
+    void setOutputSampleRate(int sampleRate) override;
 
     // Configuration
     const char* getName() const override { return "FFmpeg"; }

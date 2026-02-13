@@ -24,6 +24,7 @@ public:
     virtual int getChannelCount() = 0;
     virtual std::string getTitle() = 0;
     virtual std::string getArtist() = 0;
+    virtual void setOutputSampleRate(int /*sampleRate*/) {}
 
     // Configuration
     virtual void setOption(const char* /*name*/, const char* /*value*/) {}

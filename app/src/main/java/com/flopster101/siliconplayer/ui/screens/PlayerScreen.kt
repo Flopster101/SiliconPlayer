@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -11,6 +12,7 @@ import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Loop
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
@@ -22,6 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,6 +48,8 @@ fun PlayerScreen(
     sampleRateHz: Int,
     channelCount: Int,
     bitDepthLabel: String,
+    artwork: ImageBitmap?,
+    noArtworkIcon: ImageVector = Icons.Default.MusicNote,
     isLooping: Boolean,
     onSeek: (Double) -> Unit,
     onLoopingChanged: (Boolean) -> Unit
@@ -99,6 +106,8 @@ fun PlayerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     AlbumArtPlaceholder(
+                        artwork = artwork,
+                        placeholderIcon = noArtworkIcon,
                         modifier = Modifier
                             .weight(0.45f)
                             .fillMaxHeight(0.84f)
@@ -166,6 +175,8 @@ fun PlayerScreen(
                     verticalArrangement = Arrangement.Top
                 ) {
                     AlbumArtPlaceholder(
+                        artwork = artwork,
+                        placeholderIcon = noArtworkIcon,
                         modifier = Modifier
                             .fillMaxWidth(0.86f)
                             .aspectRatio(1f)
@@ -223,7 +234,11 @@ fun PlayerScreen(
 }
 
 @Composable
-private fun AlbumArtPlaceholder(modifier: Modifier = Modifier) {
+private fun AlbumArtPlaceholder(
+    artwork: ImageBitmap?,
+    placeholderIcon: ImageVector,
+    modifier: Modifier = Modifier
+) {
     ElevatedCard(
         modifier = modifier,
         colors = CardDefaults.elevatedCardColors(
@@ -231,40 +246,48 @@ private fun AlbumArtPlaceholder(modifier: Modifier = Modifier) {
         ),
         shape = MaterialTheme.shapes.extraLarge
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
-                            MaterialTheme.colorScheme.surfaceVariant
+        if (artwork != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    bitmap = artwork,
+                    contentDescription = "Album artwork",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                                MaterialTheme.colorScheme.surfaceVariant
+                            )
                         )
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
                 Box(
                     modifier = Modifier
-                        .size(72.dp)
+                        .size(120.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Artwork placeholder",
+                        imageVector = placeholderIcon,
+                        contentDescription = "No album artwork",
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(72.dp)
                     )
                 }
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "No artwork",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     }

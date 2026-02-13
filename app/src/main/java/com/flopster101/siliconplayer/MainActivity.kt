@@ -1,6 +1,9 @@
 package com.flopster101.siliconplayer
 
 import android.os.Bundle
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
@@ -16,13 +19,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import java.io.File
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.os.Environment
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,6 +78,7 @@ fun AppNavigation() {
     var metadataSampleRate by remember { mutableIntStateOf(0) }
     var metadataChannelCount by remember { mutableIntStateOf(0) }
     var metadataBitDepthLabel by remember { mutableStateOf("Unknown") }
+    var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as MainActivity
 
@@ -140,6 +148,12 @@ fun AppNavigation() {
         }
     }
 
+    LaunchedEffect(selectedFile) {
+        artworkBitmap = withContext(Dispatchers.IO) {
+            selectedFile?.let { loadArtworkForFile(it) }
+        }
+    }
+
     if (!hasPermission) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -182,6 +196,7 @@ fun AppNavigation() {
                     metadataBitDepthLabel = activity.getTrackBitDepthLabel()
                     duration = activity.getDuration()
                     position = 0.0
+                    artworkBitmap = null
                     currentScreen = Screen.Player
                 }
             )
@@ -203,6 +218,7 @@ fun AppNavigation() {
                     sampleRateHz = metadataSampleRate,
                     channelCount = metadataChannelCount,
                     bitDepthLabel = metadataBitDepthLabel,
+                    artwork = artworkBitmap,
                     isLooping = looping,
                     onSeek = { seconds -> activity.seekTo(seconds) },
                     onLoopingChanged = { enabled ->
@@ -218,4 +234,78 @@ fun AppNavigation() {
 sealed class Screen {
     object FileBrowser : Screen()
     object Player : Screen()
+}
+
+private fun loadArtworkForFile(file: File): ImageBitmap? {
+    loadEmbeddedArtwork(file)?.let { return it.asImageBitmap() }
+    findFolderArtworkFile(file)?.let { folderImage ->
+        decodeScaledBitmapFromFile(folderImage)?.let { return it.asImageBitmap() }
+    }
+    return null
+}
+
+private fun loadEmbeddedArtwork(file: File): Bitmap? {
+    val retriever = MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(file.absolutePath)
+        val embedded = retriever.embeddedPicture ?: return null
+        decodeScaledBitmapFromBytes(embedded)
+    } catch (_: Exception) {
+        null
+    } finally {
+        retriever.release()
+    }
+}
+
+private fun findFolderArtworkFile(trackFile: File): File? {
+    val parent = trackFile.parentFile ?: return null
+    if (!parent.isDirectory) return null
+
+    val allowedNames = setOf(
+        "cover.jpg", "cover.jpeg", "cover.png", "cover.webp",
+        "folder.jpg", "folder.jpeg", "folder.png", "folder.webp",
+        "album.jpg", "album.jpeg", "album.png", "album.webp",
+        "front.jpg", "front.jpeg", "front.png", "front.webp",
+        "artwork.jpg", "artwork.jpeg", "artwork.png", "artwork.webp"
+    )
+
+    return parent.listFiles()
+        ?.firstOrNull { it.isFile && allowedNames.contains(it.name.lowercase()) }
+}
+
+private fun decodeScaledBitmapFromBytes(data: ByteArray, maxSize: Int = 1024): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
+    val sampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, maxSize)
+
+    val options = BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+    }
+    return BitmapFactory.decodeByteArray(data, 0, data.size, options)
+}
+
+private fun decodeScaledBitmapFromFile(file: File, maxSize: Int = 1024): Bitmap? {
+    val path = file.absolutePath
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    val sampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, maxSize)
+
+    val options = BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+    }
+    return BitmapFactory.decodeFile(path, options)
+}
+
+private fun calculateInSampleSize(width: Int, height: Int, maxSize: Int): Int {
+    var sampleSize = 1
+    var currentWidth = width
+    var currentHeight = height
+    while (currentWidth > maxSize || currentHeight > maxSize) {
+        currentWidth /= 2
+        currentHeight /= 2
+        sampleSize *= 2
+    }
+    return sampleSize.coerceAtLeast(1)
 }

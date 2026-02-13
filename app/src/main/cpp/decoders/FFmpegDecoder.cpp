@@ -105,6 +105,9 @@ bool FFmpegDecoder::open(const char* path) {
     }
 
     sourceSampleRate = codecParams->sample_rate > 0 ? codecParams->sample_rate : codecContext->sample_rate;
+    sourceChannelCount = codecParams->ch_layout.nb_channels > 0
+            ? codecParams->ch_layout.nb_channels
+            : codecContext->ch_layout.nb_channels;
     sourceBitDepth = codecParams->bits_per_raw_sample;
     if (sourceBitDepth <= 0) {
         sourceBitDepth = codecParams->bits_per_coded_sample;
@@ -146,6 +149,7 @@ void FFmpegDecoder::close() {
     sampleBufferCursor = 0;
     duration = 0.0;
     sourceSampleRate = 0;
+    sourceChannelCount = 0;
     sourceBitDepth = 0;
     title.clear();
     artist.clear();
@@ -314,14 +318,18 @@ int FFmpegDecoder::getBitDepth() {
 std::string FFmpegDecoder::getBitDepthLabel() {
     if (sourceBitDepth > 0) {
         std::ostringstream ss;
-        ss << sourceBitDepth << "-bit -> 32-bit";
+        ss << sourceBitDepth << "-bit";
         return ss.str();
     }
-    return "? -> 32-bit";
+    return "Unknown";
 }
 
 int FFmpegDecoder::getChannelCount() {
     return outputChannelCount;
+}
+
+int FFmpegDecoder::getDisplayChannelCount() {
+    return sourceChannelCount > 0 ? sourceChannelCount : outputChannelCount;
 }
 
 std::string FFmpegDecoder::getTitle() {

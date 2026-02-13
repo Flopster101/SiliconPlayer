@@ -26,8 +26,6 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_stopEngine(JNIEnv* env, jobject) {
     if (audioEngine != nullptr) {
         audioEngine->stop();
-        delete audioEngine;
-        audioEngine = nullptr;
     }
 }
 
@@ -116,6 +114,14 @@ Java_com_flopster101_siliconplayer_MainActivity_getTrackSampleRate(JNIEnv* env, 
 }
 
 extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTrackChannelCount(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return 0;
+    }
+    return static_cast<jint>(audioEngine->getDisplayChannelCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getTrackBitDepth(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
         return 0;
@@ -126,7 +132,7 @@ Java_com_flopster101_siliconplayer_MainActivity_getTrackBitDepth(JNIEnv* env, jo
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getTrackBitDepthLabel(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("? -> 32-bit");
+        return env->NewStringUTF("Unknown");
     }
     std::string value = audioEngine->getBitDepthLabel();
     return env->NewStringUTF(value.c_str());

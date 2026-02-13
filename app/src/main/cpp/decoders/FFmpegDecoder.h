@@ -27,6 +27,7 @@ public:
     int getSampleRate() override;
     int getBitDepth() override;
     std::string getBitDepthLabel() override;
+    int getDisplayChannelCount() override;
     int getChannelCount() override;
     std::string getTitle() override;
     std::string getArtist() override;
@@ -48,6 +49,7 @@ private:
     int outputSampleRate = 48000;
     int sourceSampleRate = 0;
     int sourceBitDepth = 0;
+    int sourceChannelCount = 0;
     int outputChannelCount = 2; // Output channels (stereo)
     std::string title;
     std::string artist;

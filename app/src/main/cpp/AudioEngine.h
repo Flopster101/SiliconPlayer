@@ -24,6 +24,8 @@ public:
     std::string getTitle();
     std::string getArtist();
     int getSampleRate();
+    int getDisplayChannelCount();
+    int getChannelCount();
     int getBitDepth();
     std::string getBitDepthLabel();
 

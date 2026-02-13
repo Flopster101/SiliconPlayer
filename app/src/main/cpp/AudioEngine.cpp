@@ -157,9 +157,6 @@ void AudioEngine::setUrl(const char* url) {
         std::lock_guard<std::mutex> lock(decoderMutex);
         decoder = std::move(newDecoder);
         positionSeconds.store(0.0);
-        if (!isPlaying) {
-             start();
-        }
     } else {
         LOGE("Failed to open file: %s", url);
     }
@@ -219,6 +216,22 @@ int AudioEngine::getSampleRate() {
     return decoder->getSampleRate();
 }
 
+int AudioEngine::getDisplayChannelCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return 0;
+    }
+    return decoder->getDisplayChannelCount();
+}
+
+int AudioEngine::getChannelCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return 0;
+    }
+    return decoder->getChannelCount();
+}
+
 int AudioEngine::getBitDepth() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) {
@@ -230,7 +243,7 @@ int AudioEngine::getBitDepth() {
 std::string AudioEngine::getBitDepthLabel() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) {
-        return "? -> 32-bit";
+        return "Unknown";
     }
     return decoder->getBitDepthLabel();
 }

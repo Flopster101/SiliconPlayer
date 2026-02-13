@@ -58,6 +58,7 @@ bool LibOpenMPTDecoder::open(const char* path) {
         module = std::make_unique<openmpt::module>(fileBuffer);
 
         duration = module->get_duration_seconds();
+        moduleChannels = static_cast<int>(module->get_num_channels());
         title = getFirstNonEmptyMetadata(module.get(), {"title", "songtitle"});
         artist = getFirstNonEmptyMetadata(module.get(), {"artist", "author", "composer"});
         LOGD("Opened module: %s, duration: %.2f", path, duration);
@@ -76,6 +77,7 @@ void LibOpenMPTDecoder::close() {
     module.reset();
     fileBuffer.clear();
     duration = 0.0;
+    moduleChannels = 0;
     title.clear();
     artist.clear();
 }
@@ -109,11 +111,15 @@ int LibOpenMPTDecoder::getBitDepth() {
 }
 
 std::string LibOpenMPTDecoder::getBitDepthLabel() {
-    return "Mixed -> 32-bit";
+    return "Mixed";
 }
 
 int LibOpenMPTDecoder::getChannelCount() {
     return channels;
+}
+
+int LibOpenMPTDecoder::getDisplayChannelCount() {
+    return moduleChannels > 0 ? moduleChannels : channels;
 }
 
 std::string LibOpenMPTDecoder::getTitle() {

@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
     external fun getTrackTitle(): String
     external fun getTrackArtist(): String
     external fun getTrackSampleRate(): Int
+    external fun getTrackChannelCount(): Int
     external fun getTrackBitDepth(): Int
     external fun getTrackBitDepthLabel(): String
 
@@ -68,7 +69,8 @@ fun AppNavigation() {
     var metadataTitle by remember { mutableStateOf("") }
     var metadataArtist by remember { mutableStateOf("") }
     var metadataSampleRate by remember { mutableIntStateOf(0) }
-    var metadataBitDepthLabel by remember { mutableStateOf("? -> 32-bit") }
+    var metadataChannelCount by remember { mutableIntStateOf(0) }
+    var metadataBitDepthLabel by remember { mutableStateOf("Unknown") }
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as MainActivity
 
@@ -172,10 +174,14 @@ fun AppNavigation() {
                 repository = repository,
                 onFileSelected = { file ->
                     selectedFile = file
-                    metadataTitle = ""
-                    metadataArtist = ""
-                    metadataSampleRate = 0
-                    metadataBitDepthLabel = "? -> 32-bit"
+                    activity.loadAudio(file.absolutePath)
+                    metadataTitle = activity.getTrackTitle()
+                    metadataArtist = activity.getTrackArtist()
+                    metadataSampleRate = activity.getTrackSampleRate()
+                    metadataChannelCount = activity.getTrackChannelCount()
+                    metadataBitDepthLabel = activity.getTrackBitDepthLabel()
+                    duration = activity.getDuration()
+                    position = 0.0
                     currentScreen = Screen.Player
                 }
             )
@@ -186,11 +192,6 @@ fun AppNavigation() {
                     file = file,
                     onBack = { currentScreen = Screen.FileBrowser },
                     onPlay = {
-                        activity.loadAudio(file.absolutePath)
-                        metadataTitle = activity.getTrackTitle()
-                        metadataArtist = activity.getTrackArtist()
-                        metadataSampleRate = activity.getTrackSampleRate()
-                        metadataBitDepthLabel = activity.getTrackBitDepthLabel()
                         activity.setLooping(looping)
                         activity.startEngine()
                     },
@@ -200,6 +201,7 @@ fun AppNavigation() {
                     title = metadataTitle,
                     artist = metadataArtist,
                     sampleRateHz = metadataSampleRate,
+                    channelCount = metadataChannelCount,
                     bitDepthLabel = metadataBitDepthLabel,
                     isLooping = looping,
                     onSeek = { seconds -> activity.seekTo(seconds) },

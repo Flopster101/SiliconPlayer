@@ -380,6 +380,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
 
 private const val PAGE_NAV_DURATION_MS = 300
 private const val RECENTS_LIMIT = 3
+private const val PREVIOUS_RESTART_THRESHOLD_SECONDS = 3.0
 private val SettingsCardShape = RoundedCornerShape(16.dp)
 
 private object AppPreferenceKeys {
@@ -387,6 +388,7 @@ private object AppPreferenceKeys {
     const val AUTO_PLAY_ON_TRACK_SELECT = "auto_play_on_track_select"
     const val OPEN_PLAYER_ON_TRACK_SELECT = "open_player_on_track_select"
     const val AUTO_PLAY_NEXT_TRACK_ON_END = "auto_play_next_track_on_end"
+    const val PREVIOUS_RESTART_AFTER_THRESHOLD = "previous_restart_after_threshold"
     const val REMEMBER_BROWSER_LOCATION = "remember_browser_location"
     const val BROWSER_LAST_LOCATION_ID = "browser_last_location_id"
     const val BROWSER_LAST_DIRECTORY_PATH = "browser_last_directory_path"
@@ -544,6 +546,11 @@ private fun AppNavigation(
     var autoPlayNextTrackOnEnd by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.AUTO_PLAY_NEXT_TRACK_ON_END, true)
+        )
+    }
+    var previousRestartsAfterThreshold by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.PREVIOUS_RESTART_AFTER_THRESHOLD, true)
         )
     }
     var rememberBrowserLocation by remember {
@@ -770,6 +777,30 @@ private fun AppNavigation(
         return true
     }
 
+    fun handlePreviousTrackAction(): Boolean {
+        val hasTrackLoaded = selectedFile != null
+        val shouldRestartCurrent = previousRestartsAfterThreshold &&
+            hasTrackLoaded &&
+            position > PREVIOUS_RESTART_THRESHOLD_SECONDS
+
+        if (shouldRestartCurrent) {
+            NativeBridge.seekTo(0.0)
+            position = 0.0
+            syncPlaybackService()
+            return true
+        }
+
+        if (playAdjacentTrack(-1)) return true
+
+        if (hasTrackLoaded) {
+            NativeBridge.seekTo(0.0)
+            position = 0.0
+            syncPlaybackService()
+            return true
+        }
+        return false
+    }
+
     fun restorePlayerStateFromSessionAndNative(openExpanded: Boolean) {
         val path = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null)
         val file = path?.let { File(it) }?.takeIf { it.exists() && it.isFile } ?: return
@@ -881,6 +912,15 @@ private fun AppNavigation(
     LaunchedEffect(autoPlayNextTrackOnEnd) {
         prefs.edit()
             .putBoolean(AppPreferenceKeys.AUTO_PLAY_NEXT_TRACK_ON_END, autoPlayNextTrackOnEnd)
+            .apply()
+    }
+
+    LaunchedEffect(previousRestartsAfterThreshold) {
+        prefs.edit()
+            .putBoolean(
+                AppPreferenceKeys.PREVIOUS_RESTART_AFTER_THRESHOLD,
+                previousRestartsAfterThreshold
+            )
             .apply()
     }
 
@@ -1059,7 +1099,7 @@ private fun AppNavigation(
                         artworkBitmap = null
                     }
                     PlaybackService.ACTION_BROADCAST_PREVIOUS_TRACK_REQUEST -> {
-                        playAdjacentTrack(-1)
+                        handlePreviousTrackAction()
                     }
                     PlaybackService.ACTION_BROADCAST_NEXT_TRACK_REQUEST -> {
                         playAdjacentTrack(1)
@@ -1284,6 +1324,8 @@ private fun AppNavigation(
                         onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
                         autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
                         onAutoPlayNextTrackOnEndChanged = { autoPlayNextTrackOnEnd = it },
+                        previousRestartsAfterThreshold = previousRestartsAfterThreshold,
+                        onPreviousRestartsAfterThresholdChanged = { previousRestartsAfterThreshold = it },
                         respondHeadphoneMediaButtons = respondHeadphoneMediaButtons,
                         onRespondHeadphoneMediaButtonsChanged = { respondHeadphoneMediaButtons = it },
                         pauseOnHeadphoneDisconnect = pauseOnHeadphoneDisconnect,
@@ -1432,7 +1474,7 @@ private fun AppNavigation(
                                 isPlayerExpanded = true
                             }
                         },
-                        onPreviousTrack = { playAdjacentTrack(-1) },
+                        onPreviousTrack = { handlePreviousTrackAction() },
                         onNextTrack = { playAdjacentTrack(1) },
                         onPlayPause = {
                             if (selectedFile == null) {
@@ -1541,7 +1583,7 @@ private fun AppNavigation(
                         position = seconds
                         syncPlaybackService()
                     },
-                    onPreviousTrack = { playAdjacentTrack(-1) },
+                    onPreviousTrack = { handlePreviousTrackAction() },
                     onNextTrack = { playAdjacentTrack(1) },
                     onPreviousSubtune = {},
                     onNextSubtune = {},
@@ -1862,6 +1904,8 @@ private fun SettingsScreen(
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
     autoPlayNextTrackOnEnd: Boolean,
     onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
+    previousRestartsAfterThreshold: Boolean,
+    onPreviousRestartsAfterThresholdChanged: (Boolean) -> Unit,
     respondHeadphoneMediaButtons: Boolean,
     onRespondHeadphoneMediaButtonsChanged: (Boolean) -> Unit,
     pauseOnHeadphoneDisconnect: Boolean,
@@ -2063,6 +2107,13 @@ private fun SettingsScreen(
                             description = "Automatically start the next visible track after natural playback end.",
                             checked = autoPlayNextTrackOnEnd,
                             onCheckedChange = onAutoPlayNextTrackOnEndChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Previous track button behavior",
+                            description = "If more than 3 seconds have elapsed, the Previous track button restarts the current track instead of moving to the previous track.",
+                            checked = previousRestartsAfterThreshold,
+                            onCheckedChange = onPreviousRestartsAfterThresholdChanged
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         PlayerSettingToggleCard(

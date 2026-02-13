@@ -39,6 +39,7 @@ import kotlin.math.roundToInt
 fun PlayerScreen(
     file: File,
     onBack: () -> Unit,
+    isPlaying: Boolean,
     onPlay: () -> Unit,
     onStop: () -> Unit,
     durationSeconds: Double,
@@ -54,7 +55,6 @@ fun PlayerScreen(
     onSeek: (Double) -> Unit,
     onLoopingChanged: (Boolean) -> Unit
 ) {
-    var isPlaying by remember { mutableStateOf(false) }
     var sliderPosition by remember { mutableDoubleStateOf(0.0) }
     var isSeeking by remember { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
@@ -154,10 +154,8 @@ fun PlayerScreen(
                             onPlayStop = {
                                 if (isPlaying) {
                                     onStop()
-                                    isPlaying = false
                                 } else {
                                     onPlay()
-                                    isPlaying = true
                                 }
                             },
                             onLoopingChanged = { onLoopingChanged(!isLooping) }
@@ -217,10 +215,8 @@ fun PlayerScreen(
                         onPlayStop = {
                             if (isPlaying) {
                                 onStop()
-                                isPlaying = false
                             } else {
                                 onPlay()
-                                isPlaying = true
                             }
                         },
                         onLoopingChanged = { onLoopingChanged(!isLooping) }

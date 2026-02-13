@@ -6,11 +6,20 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.* // Import for remember, mutableStateOf
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,9 +27,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.style.TextOverflow
 import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import java.io.File
 import android.content.Intent
@@ -68,10 +79,11 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppNavigation() {
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.FileBrowser) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
     var duration by remember { mutableDoubleStateOf(0.0) }
     var position by remember { mutableDoubleStateOf(0.0) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var isPlayerExpanded by remember { mutableStateOf(false) }
     var looping by remember { mutableStateOf(false) }
     var metadataTitle by remember { mutableStateOf("") }
     var metadataArtist by remember { mutableStateOf("") }
@@ -140,10 +152,12 @@ fun AppNavigation() {
         }
     }
 
-    LaunchedEffect(currentScreen, selectedFile) {
-        while (currentScreen is Screen.Player && selectedFile != null) {
+    LaunchedEffect(selectedFile, isPlaying) {
+        while (selectedFile != null) {
             duration = activity.getDuration()
-            position = activity.getPosition()
+            if (isPlaying) {
+                position = activity.getPosition()
+            }
             delay(250)
         }
     }
@@ -182,35 +196,60 @@ fun AppNavigation() {
         return
     }
 
-    when (currentScreen) {
-        is Screen.FileBrowser -> {
-            com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
-                repository = repository,
-                onFileSelected = { file ->
-                    selectedFile = file
-                    activity.loadAudio(file.absolutePath)
-                    metadataTitle = activity.getTrackTitle()
-                    metadataArtist = activity.getTrackArtist()
-                    metadataSampleRate = activity.getTrackSampleRate()
-                    metadataChannelCount = activity.getTrackChannelCount()
-                    metadataBitDepthLabel = activity.getTrackBitDepthLabel()
-                    duration = activity.getDuration()
-                    position = 0.0
-                    artworkBitmap = null
-                    currentScreen = Screen.Player
-                }
-            )
-        }
-        is Screen.Player -> {
-            selectedFile?.let { file ->
+    Box(modifier = Modifier.fillMaxSize()) {
+        com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
+            repository = repository,
+            onFileSelected = { file ->
+                selectedFile = file
+                activity.loadAudio(file.absolutePath)
+                metadataTitle = activity.getTrackTitle()
+                metadataArtist = activity.getTrackArtist()
+                metadataSampleRate = activity.getTrackSampleRate()
+                metadataChannelCount = activity.getTrackChannelCount()
+                metadataBitDepthLabel = activity.getTrackBitDepthLabel()
+                duration = activity.getDuration()
+                position = 0.0
+                isPlaying = false
+                artworkBitmap = null
+                isPlayerExpanded = true
+            }
+        )
+
+        selectedFile?.let { file ->
+            if (!isPlayerExpanded) {
+                MiniPlayerBar(
+                    title = metadataTitle.ifBlank { file.nameWithoutExtension.ifBlank { file.name } },
+                    artist = metadataArtist.ifBlank { "Unknown Artist" },
+                    isPlaying = isPlaying,
+                    onExpand = { isPlayerExpanded = true },
+                    onPlayStop = {
+                        if (isPlaying) {
+                            activity.stopEngine()
+                            isPlaying = false
+                        } else {
+                            activity.setLooping(looping)
+                            activity.startEngine()
+                            isPlaying = true
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                )
+            } else {
                 com.flopster101.siliconplayer.ui.screens.PlayerScreen(
                     file = file,
-                    onBack = { currentScreen = Screen.FileBrowser },
+                    onBack = { isPlayerExpanded = false },
+                    isPlaying = isPlaying,
                     onPlay = {
                         activity.setLooping(looping)
                         activity.startEngine()
+                        isPlaying = true
                     },
-                    onStop = { activity.stopEngine() },
+                    onStop = {
+                        activity.stopEngine()
+                        isPlaying = false
+                    },
                     durationSeconds = duration,
                     positionSeconds = position,
                     title = metadataTitle,
@@ -231,9 +270,64 @@ fun AppNavigation() {
     }
 }
 
-sealed class Screen {
-    object FileBrowser : Screen()
-    object Player : Screen()
+@Composable
+private fun MiniPlayerBar(
+    title: String,
+    artist: String,
+    isPlaying: Boolean,
+    onExpand: () -> Unit,
+    onPlayStop: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        tonalElevation = 6.dp,
+        shadowElevation = 6.dp,
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onExpand)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(end = 96.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = artist,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Row(modifier = Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onPlayStop) {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Stop" else "Play"
+                    )
+                }
+                IconButton(onClick = onExpand) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = "Expand player"
+                    )
+                }
+            }
+        }
+    }
 }
 
 private fun loadArtworkForFile(file: File): ImageBitmap? {

@@ -56,8 +56,8 @@ build_ffmpeg() {
     
     # Clean previous build if Makefile exists
     if [ -f "Makefile" ]; then
-        make clean || true
-        make distclean || true
+        make clean >/dev/null 2>&1 || true
+        make distclean >/dev/null 2>&1 || true
     fi
     
     # Configure flags
@@ -84,13 +84,26 @@ build_ffmpeg() {
         --disable-doc \
         --disable-programs \
         --disable-avdevice \
+        --disable-swscale \
+        --disable-avfilter \
+        --disable-network \
+        --disable-hwaccels \
         --disable-encoders \
         --disable-muxers \
+        --disable-decoder=h264 \
+        --disable-decoder=hevc \
+        --disable-decoder=vp8 \
+        --disable-decoder=vp9 \
+        --disable-decoder=av1 \
+        --disable-decoder=mpeg4 \
+        --disable-decoder=mpeg1video \
+        --disable-decoder=mpeg2video \
+        --enable-swresample \
         --enable-gpl \
         --enable-version3 \
         --enable-jni \
         --enable-mediacodec \
-        $EXTRA_FLAGS
+        $EXTRA_FLAGS || { echo "Error: FFmpeg configure failed!"; exit 1; }
         
     make -j$(nproc)
     make install

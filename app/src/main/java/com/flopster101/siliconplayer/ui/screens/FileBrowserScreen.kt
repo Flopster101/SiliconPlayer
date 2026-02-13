@@ -5,8 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -41,7 +42,10 @@ fun FileBrowserScreen(
                 navigationIcon = {
                     if (currentDirectory != repository.getRootDirectory()) {
                         IconButton(onClick = { navigateUp() }) {
-                            Text("Back") // Replace with Icon later
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Navigate up"
+                            )
                         }
                     }
                 }
@@ -76,8 +80,8 @@ fun FileItemRow(item: FileItem, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = if (item.isDirectory) Icons.Default.Home else Icons.Default.Info,
-            contentDescription = if (item.isDirectory) "Directory" else "File",
+            imageVector = if (item.isDirectory) Icons.Default.Folder else Icons.Default.AudioFile,
+            contentDescription = if (item.isDirectory) "Directory" else "Audio file",
             tint = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.width(16.dp))

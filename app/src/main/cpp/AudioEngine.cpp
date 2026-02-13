@@ -226,3 +226,11 @@ int AudioEngine::getBitDepth() {
     }
     return decoder->getBitDepth();
 }
+
+std::string AudioEngine::getBitDepthLabel() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return "? -> 32-bit";
+    }
+    return decoder->getBitDepthLabel();
+}

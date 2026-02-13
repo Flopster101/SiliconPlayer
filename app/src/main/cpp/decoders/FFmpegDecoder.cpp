@@ -1,5 +1,6 @@
 #include "FFmpegDecoder.h"
 #include <android/log.h>
+#include <sstream>
 
 #define LOG_TAG "FFmpegDecoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -308,6 +309,15 @@ int FFmpegDecoder::getSampleRate() {
 
 int FFmpegDecoder::getBitDepth() {
     return sourceBitDepth;
+}
+
+std::string FFmpegDecoder::getBitDepthLabel() {
+    if (sourceBitDepth > 0) {
+        std::ostringstream ss;
+        ss << sourceBitDepth << "-bit -> 32-bit";
+        return ss.str();
+    }
+    return "? -> 32-bit";
 }
 
 int FFmpegDecoder::getChannelCount() {

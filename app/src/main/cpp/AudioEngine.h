@@ -25,6 +25,7 @@ public:
     std::string getArtist();
     int getSampleRate();
     int getBitDepth();
+    std::string getBitDepthLabel();
 
 private:
     AAudioStream *stream = nullptr;

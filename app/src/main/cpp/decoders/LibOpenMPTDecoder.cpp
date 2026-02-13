@@ -108,6 +108,10 @@ int LibOpenMPTDecoder::getBitDepth() {
     return bitDepth;
 }
 
+std::string LibOpenMPTDecoder::getBitDepthLabel() {
+    return "Mixed -> 32-bit";
+}
+
 int LibOpenMPTDecoder::getChannelCount() {
     return channels;
 }

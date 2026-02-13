@@ -19,6 +19,7 @@ public:
     virtual double getDuration() = 0;
     virtual int getSampleRate() = 0;
     virtual int getBitDepth() { return 0; }
+    virtual std::string getBitDepthLabel() { return "? -> 32-bit"; }
     virtual int getChannelCount() = 0;
     virtual std::string getTitle() = 0;
     virtual std::string getArtist() = 0;

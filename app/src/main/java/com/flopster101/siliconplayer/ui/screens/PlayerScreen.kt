@@ -41,7 +41,7 @@ fun PlayerScreen(
     title: String,
     artist: String,
     sampleRateHz: Int,
-    bitDepth: Int,
+    bitDepthLabel: String,
     isLooping: Boolean,
     onSeek: (Double) -> Unit,
     onLoopingChanged: (Boolean) -> Unit
@@ -114,7 +114,7 @@ fun PlayerScreen(
                             file = file,
                             durationSeconds = durationSeconds,
                             sampleRateHz = sampleRateHz,
-                            bitDepth = bitDepth
+                            bitDepthLabel = bitDepthLabel
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         TrackMetadataBlock(
@@ -173,7 +173,7 @@ fun PlayerScreen(
                         file = file,
                         durationSeconds = durationSeconds,
                         sampleRateHz = sampleRateHz,
-                        bitDepth = bitDepth,
+                        bitDepthLabel = bitDepthLabel,
                         modifier = Modifier.fillMaxWidth(0.94f)
                     )
                     Spacer(modifier = Modifier.height(14.dp))
@@ -272,7 +272,7 @@ private fun TrackInfoChips(
     file: File,
     durationSeconds: Double,
     sampleRateHz: Int,
-    bitDepth: Int,
+    bitDepthLabel: String,
     modifier: Modifier = Modifier
 ) {
     val formatLabel = file.extension.uppercase().ifBlank { "UNKNOWN" }
@@ -286,7 +286,7 @@ private fun TrackInfoChips(
     } else {
         "-- kHz"
     }
-    val bitDepthLabel = if (bitDepth > 0) "$bitDepth-bit" else "-- bit"
+    val depthDisplay = bitDepthLabel.ifBlank { "? -> 32-bit" }
 
     Row(
         modifier = modifier.horizontalScroll(rememberScrollState()),
@@ -306,7 +306,7 @@ private fun TrackInfoChips(
         )
         TrackInfoChip(
             icon = Icons.Default.Info,
-            text = bitDepthLabel
+            text = depthDisplay
         )
     }
 }

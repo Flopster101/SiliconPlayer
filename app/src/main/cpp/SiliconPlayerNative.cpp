@@ -122,3 +122,12 @@ Java_com_flopster101_siliconplayer_MainActivity_getTrackBitDepth(JNIEnv* env, jo
     }
     return static_cast<jint>(audioEngine->getBitDepth());
 }
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTrackBitDepthLabel(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewStringUTF("? -> 32-bit");
+    }
+    std::string value = audioEngine->getBitDepthLabel();
+    return env->NewStringUTF(value.c_str());
+}

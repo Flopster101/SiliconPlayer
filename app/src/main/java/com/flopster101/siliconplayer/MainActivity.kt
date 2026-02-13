@@ -16,6 +16,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -300,7 +301,7 @@ fun AppNavigation() {
             duration = activity.getDuration()
             position = activity.getPosition()
             isPlaying = activity.isEnginePlaying()
-            delay(250)
+            delay(if (isPlaying) 80 else 250)
         }
     }
 
@@ -1205,6 +1206,11 @@ private fun MiniPlayerBar(
     } else {
         0f
     }
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 140, easing = LinearOutSlowInEasing),
+        label = "miniPlayerProgress"
+    )
 
     Surface(
         modifier = modifier,
@@ -1310,7 +1316,7 @@ private fun MiniPlayerBar(
             }
 
             LinearProgressIndicator(
-                progress = progress,
+                progress = { animatedProgress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(2.dp),

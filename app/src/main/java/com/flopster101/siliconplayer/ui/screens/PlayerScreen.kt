@@ -5,6 +5,9 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.Image
@@ -74,6 +77,11 @@ fun PlayerScreen(
             sliderPosition = positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0))
         }
     }
+    val animatedSliderPosition by animateFloatAsState(
+        targetValue = sliderPosition.toFloat(),
+        animationSpec = tween(durationMillis = 140, easing = LinearOutSlowInEasing),
+        label = "playerTimelinePosition"
+    )
 
     val hasTrack = file != null
     val displayTitle = title.ifBlank {
@@ -148,7 +156,7 @@ fun PlayerScreen(
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         TimelineSection(
-                            sliderPosition = sliderPosition,
+                            sliderPosition = if (isSeeking) sliderPosition else animatedSliderPosition.toDouble(),
                             durationSeconds = durationSeconds,
                             onSliderValueChange = { value ->
                                 isSeeking = true
@@ -211,7 +219,7 @@ fun PlayerScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     TimelineSection(
-                        sliderPosition = sliderPosition,
+                        sliderPosition = if (isSeeking) sliderPosition else animatedSliderPosition.toDouble(),
                         durationSeconds = durationSeconds,
                         onSliderValueChange = { value ->
                             isSeeking = true

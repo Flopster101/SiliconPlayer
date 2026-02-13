@@ -398,3 +398,11 @@ std::string AudioEngine::getBitDepthLabel() {
     }
     return decoder->getBitDepthLabel();
 }
+
+std::string AudioEngine::getCurrentDecoderName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return "";
+    }
+    return decoder->getName();
+}

@@ -173,6 +173,15 @@ Java_com_flopster101_siliconplayer_MainActivity_getRepeatModeCapabilities(JNIEnv
     return static_cast<jint>(audioEngine->getRepeatModeCapabilities());
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getCurrentDecoderName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewStringUTF("");
+    }
+    std::string value = audioEngine->getCurrentDecoderName();
+    return env->NewStringUTF(value.c_str());
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_startEngine(JNIEnv* env, jobject thiz) {
     Java_com_flopster101_siliconplayer_MainActivity_startEngine(env, thiz);
@@ -256,6 +265,11 @@ Java_com_flopster101_siliconplayer_NativeBridge_getTrackBitDepthLabel(JNIEnv* en
 extern "C" JNIEXPORT jint JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getRepeatModeCapabilities(JNIEnv* env, jobject thiz) {
     return Java_com_flopster101_siliconplayer_MainActivity_getRepeatModeCapabilities(env, thiz);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getCurrentDecoderName(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getCurrentDecoderName(env, thiz);
 }
 
 extern "C" JNIEXPORT void JNICALL

@@ -33,6 +33,7 @@ public:
     int getChannelCount();
     int getBitDepth();
     std::string getBitDepthLabel();
+    std::string getCurrentDecoderName();
 
 private:
     AAudioStream *stream = nullptr;

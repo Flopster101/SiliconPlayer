@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Equalizer
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowLeft
@@ -93,7 +94,9 @@ fun PlayerScreen(
     onPreviousSubtune: () -> Unit,
     onNextSubtune: () -> Unit,
     onOpenSubtuneSelector: () -> Unit,
-    onCycleRepeatMode: () -> Unit
+    onCycleRepeatMode: () -> Unit,
+    canOpenCoreSettings: Boolean,
+    onOpenCoreSettings: () -> Unit
 ) {
     var sliderPosition by remember(file?.absolutePath, durationSeconds) {
         mutableDoubleStateOf(positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0)))
@@ -276,7 +279,10 @@ fun PlayerScreen(
                             onCycleRepeatMode = onCycleRepeatMode
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        FutureActionStrip()
+                        FutureActionStrip(
+                            canOpenCoreSettings = canOpenCoreSettings,
+                            onOpenCoreSettings = onOpenCoreSettings
+                        )
                     }
                 }
             } else {
@@ -348,12 +354,16 @@ fun PlayerScreen(
                         onCycleRepeatMode = onCycleRepeatMode
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    FutureActionStrip(modifier = Modifier.fillMaxWidth(0.94f))
+                    FutureActionStrip(
+                        modifier = Modifier.fillMaxWidth(0.94f),
+                        canOpenCoreSettings = canOpenCoreSettings,
+                        onOpenCoreSettings = onOpenCoreSettings
+                    )
                 }
             }
         }
     }
-    }
+}
 }
 
 @Composable
@@ -868,7 +878,11 @@ private fun TransportControls(
 }
 
 @Composable
-private fun FutureActionStrip(modifier: Modifier = Modifier) {
+private fun FutureActionStrip(
+    modifier: Modifier = Modifier,
+    canOpenCoreSettings: Boolean,
+    onOpenCoreSettings: () -> Unit
+) {
     Surface(
         modifier = modifier,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
@@ -886,10 +900,10 @@ private fun FutureActionStrip(modifier: Modifier = Modifier) {
                 enabled = false,
                 label = { Text("1x") }
             )
-            IconButton(onClick = {}, enabled = false) {
+            IconButton(onClick = onOpenCoreSettings, enabled = canOpenCoreSettings) {
                 Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = "Track info (future)"
+                    imageVector = Icons.Default.Extension,
+                    contentDescription = "Open current core settings"
                 )
             }
             IconButton(onClick = {}, enabled = false) {

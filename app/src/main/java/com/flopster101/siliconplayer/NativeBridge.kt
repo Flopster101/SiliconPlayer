@@ -22,5 +22,6 @@ object NativeBridge {
     external fun getTrackBitDepth(): Int
     external fun getTrackBitDepthLabel(): String
     external fun getRepeatModeCapabilities(): Int
+    external fun getCurrentDecoderName(): String
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
 }

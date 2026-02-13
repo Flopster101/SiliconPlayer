@@ -520,6 +520,7 @@ private fun AppNavigation(
     var metadataChannelCount by remember { mutableIntStateOf(0) }
     var metadataBitDepthLabel by remember { mutableStateOf("Unknown") }
     var repeatModeCapabilitiesFlags by remember { mutableIntStateOf(REPEAT_CAP_TRACK) }
+    var lastUsedCoreName by remember { mutableStateOf<String?>(null) }
     var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var visiblePlayableFiles by remember { mutableStateOf<List<File>>(emptyList()) }
     var browserLaunchLocationId by remember { mutableStateOf<String?>(null) }
@@ -721,6 +722,9 @@ private fun AppNavigation(
         selectedFile = file
         isPlayerSurfaceVisible = true
         NativeBridge.loadAudio(file.absolutePath)
+        NativeBridge.getCurrentDecoderName()
+            .takeIf { it.isNotBlank() }
+            ?.let { lastUsedCoreName = it }
         metadataTitle = NativeBridge.getTrackTitle()
         metadataArtist = NativeBridge.getTrackArtist()
         metadataSampleRate = NativeBridge.getTrackSampleRate()
@@ -807,6 +811,9 @@ private fun AppNavigation(
         selectedFile = file
         isPlayerSurfaceVisible = true
         isPlayerExpanded = openExpanded
+        NativeBridge.getCurrentDecoderName()
+            .takeIf { it.isNotBlank() }
+            ?.let { lastUsedCoreName = it }
         metadataTitle = NativeBridge.getTrackTitle()
         metadataArtist = NativeBridge.getTrackArtist()
         metadataSampleRate = NativeBridge.getTrackSampleRate()
@@ -1063,6 +1070,22 @@ private fun AppNavigation(
         context.startService(
             Intent(context, PlaybackService::class.java).setAction(PlaybackService.ACTION_STOP_CLEAR)
         )
+    }
+    fun settingsRouteForCore(coreName: String?): SettingsRoute? {
+        return when (coreName?.trim()?.lowercase()) {
+            "ffmpeg" -> SettingsRoute.PluginFfmpeg
+            "libopenmpt", "openmpt" -> SettingsRoute.PluginOpenMpt
+            else -> null
+        }
+    }
+    val currentCoreSettingsRoute = settingsRouteForCore(lastUsedCoreName)
+    val canOpenCurrentCoreSettings = currentCoreSettingsRoute != null
+    val openCurrentCoreSettings: () -> Unit = {
+        settingsRouteForCore(lastUsedCoreName)?.let { route ->
+            settingsRoute = route
+            currentView = MainView.Settings
+            isPlayerExpanded = false
+        }
     }
     val hidePlayerSurface: () -> Unit = {
         stopAndEmptyTrack()
@@ -1400,7 +1423,9 @@ private fun AppNavigation(
                         onPreviousSubtune = {},
                         onNextSubtune = {},
                         onOpenSubtuneSelector = {},
-                        onCycleRepeatMode = {}
+                        onCycleRepeatMode = {},
+                        canOpenCoreSettings = canOpenCurrentCoreSettings,
+                        onOpenCoreSettings = openCurrentCoreSettings
                     )
                 }
             }
@@ -1593,7 +1618,9 @@ private fun AppNavigation(
                     onPreviousSubtune = {},
                     onNextSubtune = {},
                     onOpenSubtuneSelector = {},
-                    onCycleRepeatMode = { cycleRepeatMode() }
+                    onCycleRepeatMode = { cycleRepeatMode() },
+                    canOpenCoreSettings = canOpenCurrentCoreSettings,
+                    onOpenCoreSettings = openCurrentCoreSettings
                 )
             }
         }

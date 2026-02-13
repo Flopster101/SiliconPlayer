@@ -47,6 +47,8 @@ class MainActivity : ComponentActivity() {
     external fun setLooping(enabled: Boolean)
     external fun getTrackTitle(): String
     external fun getTrackArtist(): String
+    external fun getTrackSampleRate(): Int
+    external fun getTrackBitDepth(): Int
 
     companion object {
         init {
@@ -64,6 +66,8 @@ fun AppNavigation() {
     var looping by remember { mutableStateOf(false) }
     var metadataTitle by remember { mutableStateOf("") }
     var metadataArtist by remember { mutableStateOf("") }
+    var metadataSampleRate by remember { mutableIntStateOf(0) }
+    var metadataBitDepth by remember { mutableIntStateOf(0) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val activity = context as MainActivity
 
@@ -169,6 +173,8 @@ fun AppNavigation() {
                     selectedFile = file
                     metadataTitle = ""
                     metadataArtist = ""
+                    metadataSampleRate = 0
+                    metadataBitDepth = 0
                     currentScreen = Screen.Player
                 }
             )
@@ -182,6 +188,8 @@ fun AppNavigation() {
                         activity.loadAudio(file.absolutePath)
                         metadataTitle = activity.getTrackTitle()
                         metadataArtist = activity.getTrackArtist()
+                        metadataSampleRate = activity.getTrackSampleRate()
+                        metadataBitDepth = activity.getTrackBitDepth()
                         activity.setLooping(looping)
                         activity.startEngine()
                     },
@@ -190,6 +198,8 @@ fun AppNavigation() {
                     positionSeconds = position,
                     title = metadataTitle,
                     artist = metadataArtist,
+                    sampleRateHz = metadataSampleRate,
+                    bitDepth = metadataBitDepth,
                     isLooping = looping,
                     onSeek = { seconds -> activity.seekTo(seconds) },
                     onLoopingChanged = { enabled ->

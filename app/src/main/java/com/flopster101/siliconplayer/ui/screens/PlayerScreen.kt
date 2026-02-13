@@ -1,10 +1,13 @@
 package com.flopster101.siliconplayer.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Loop
@@ -12,6 +15,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.io.File
@@ -35,6 +40,8 @@ fun PlayerScreen(
     positionSeconds: Double,
     title: String,
     artist: String,
+    sampleRateHz: Int,
+    bitDepth: Int,
     isLooping: Boolean,
     onSeek: (Double) -> Unit,
     onLoopingChanged: (Boolean) -> Unit
@@ -103,6 +110,13 @@ fun PlayerScreen(
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.Start
                     ) {
+                        TrackInfoChips(
+                            file = file,
+                            durationSeconds = durationSeconds,
+                            sampleRateHz = sampleRateHz,
+                            bitDepth = bitDepth
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
                         TrackMetadataBlock(
                             title = displayTitle,
                             artist = displayArtist,
@@ -155,6 +169,14 @@ fun PlayerScreen(
                             .aspectRatio(1f)
                     )
                     Spacer(modifier = Modifier.height(22.dp))
+                    TrackInfoChips(
+                        file = file,
+                        durationSeconds = durationSeconds,
+                        sampleRateHz = sampleRateHz,
+                        bitDepth = bitDepth,
+                        modifier = Modifier.fillMaxWidth(0.94f)
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
                     TrackMetadataBlock(
                         title = displayTitle,
                         artist = displayArtist,
@@ -241,6 +263,80 @@ private fun AlbumArtPlaceholder(modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun TrackInfoChips(
+    file: File,
+    durationSeconds: Double,
+    sampleRateHz: Int,
+    bitDepth: Int,
+    modifier: Modifier = Modifier
+) {
+    val formatLabel = file.extension.uppercase().ifBlank { "UNKNOWN" }
+    val durationLabel = if (durationSeconds > 0.0) formatTime(durationSeconds) else "--:--"
+    val sampleRateLabel = if (sampleRateHz > 0) {
+        if (sampleRateHz % 1000 == 0) {
+            "${sampleRateHz / 1000} kHz"
+        } else {
+            String.format("%.1f kHz", sampleRateHz / 1000.0)
+        }
+    } else {
+        "-- kHz"
+    }
+    val bitDepthLabel = if (bitDepth > 0) "$bitDepth-bit" else "-- bit"
+
+    Row(
+        modifier = modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        TrackInfoChip(
+            icon = Icons.Default.AudioFile,
+            text = formatLabel
+        )
+        TrackInfoChip(
+            icon = Icons.Default.Timer,
+            text = durationLabel
+        )
+        TrackInfoChip(
+            icon = Icons.Default.Equalizer,
+            text = sampleRateLabel
+        )
+        TrackInfoChip(
+            icon = Icons.Default.Info,
+            text = bitDepthLabel
+        )
+    }
+}
+
+@Composable
+private fun TrackInfoChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

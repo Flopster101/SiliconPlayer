@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.data.FileItem
 import com.flopster101.siliconplayer.data.FileRepository
@@ -21,7 +22,8 @@ import java.io.File
 @Composable
 fun FileBrowserScreen(
     repository: FileRepository,
-    onFileSelected: (File) -> Unit
+    onFileSelected: (File) -> Unit,
+    bottomContentPadding: Dp = 0.dp
 ) {
     var currentDirectory by remember { mutableStateOf(repository.getRootDirectory()) }
     var fileList by remember { mutableStateOf(repository.getFiles(currentDirectory)) }
@@ -55,7 +57,8 @@ fun FileBrowserScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(paddingValues),
+            contentPadding = PaddingValues(bottom = bottomContentPadding)
         ) {
             items(fileList) { item ->
                 FileItemRow(item = item, onClick = {

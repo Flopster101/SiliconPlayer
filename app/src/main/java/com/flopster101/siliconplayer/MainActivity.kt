@@ -205,9 +205,13 @@ fun AppNavigation() {
         return
     }
 
+    val isMiniPlayerVisible = selectedFile != null && !isPlayerExpanded
+    val miniPlayerListInset = if (isMiniPlayerVisible) 108.dp else 0.dp
+
     Box(modifier = Modifier.fillMaxSize()) {
         com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
             repository = repository,
+            bottomContentPadding = miniPlayerListInset,
             onFileSelected = { file ->
                 selectedFile = file
                 activity.loadAudio(file.absolutePath)

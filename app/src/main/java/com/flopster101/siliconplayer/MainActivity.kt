@@ -646,58 +646,44 @@ private fun AppNavigation(
 
     val shouldShowBrowserHomeAction = currentView == MainView.Browser
     val shouldShowSettingsAction = currentView != MainView.Settings
-    val showSettingsBack = currentView == MainView.Settings
 
     Box(modifier = Modifier.fillMaxSize()) {
         androidx.compose.material3.Scaffold(
             topBar = {
-                androidx.compose.material3.TopAppBar(
-                    title = { Text("Silicon Player") },
-                    navigationIcon = {
-                        if (showSettingsBack) {
-                            IconButton(onClick = {
-                                if (settingsRoute != SettingsRoute.Root) {
-                                    settingsRoute = when (settingsRoute) {
-                                        SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
-                                        else -> SettingsRoute.Root
-                                    }
-                                } else {
-                                    currentView = MainView.Home
+                AnimatedVisibility(
+                    visible = currentView != MainView.Settings,
+                    enter = fadeIn(animationSpec = tween(140)),
+                    exit = fadeOut(animationSpec = tween(140))
+                ) {
+                    androidx.compose.material3.TopAppBar(
+                        title = { Text("Silicon Player") },
+                        actions = {
+                            AnimatedVisibility(
+                                visible = shouldShowBrowserHomeAction,
+                                enter = fadeIn(animationSpec = tween(150)),
+                                exit = fadeOut(animationSpec = tween(120))
+                            ) {
+                                IconButton(onClick = { currentView = MainView.Home }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Home,
+                                        contentDescription = "Go to app home"
+                                    )
                                 }
-                            }) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Back"
-                                )
+                            }
+                            if (shouldShowSettingsAction) {
+                                IconButton(onClick = {
+                                    settingsRoute = SettingsRoute.Root
+                                    currentView = MainView.Settings
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Open settings"
+                                    )
+                                }
                             }
                         }
-                    },
-                    actions = {
-                        AnimatedVisibility(
-                            visible = shouldShowBrowserHomeAction,
-                            enter = fadeIn(animationSpec = tween(150)),
-                            exit = fadeOut(animationSpec = tween(120))
-                        ) {
-                            IconButton(onClick = { currentView = MainView.Home }) {
-                                Icon(
-                                    imageVector = Icons.Default.Home,
-                                    contentDescription = "Go to app home"
-                                )
-                            }
-                        }
-                        if (shouldShowSettingsAction) {
-                            IconButton(onClick = {
-                                settingsRoute = SettingsRoute.Root
-                                currentView = MainView.Settings
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "Open settings"
-                                )
-                            }
-                        }
-                    }
-                )
+                    )
+                }
             }
         ) { mainPadding ->
             AnimatedContent(
@@ -732,42 +718,56 @@ private fun AppNavigation(
                     enter togetherWith exit
                 },
                 label = "mainViewTransition",
-                modifier = Modifier.padding(mainPadding)
+                modifier = Modifier
             ) { targetView ->
                 when (targetView) {
-                    MainView.Home -> HomeScreen(
-                        selectedTrack = selectedFile,
-                        onOpenLibrary = { currentView = MainView.Browser }
-                    )
-                    MainView.Browser -> com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
-                        repository = repository,
-                        initialLocationId = if (rememberBrowserLocation) lastBrowserLocationId else null,
-                        initialDirectoryPath = if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
-                        onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
-                        bottomContentPadding = miniPlayerListInset,
-                        backHandlingEnabled = !isPlayerExpanded,
-                        onExitBrowser = { currentView = MainView.Home },
-                        onOpenSettings = null,
-                        showPrimaryTopBar = false,
-                        onBrowserLocationChanged = { locationId, directoryPath ->
-                            if (!rememberBrowserLocation) return@FileBrowserScreen
-                            lastBrowserLocationId = locationId
-                            lastBrowserDirectoryPath = directoryPath
-                            prefs.edit()
-                                .putString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, locationId)
-                                .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, directoryPath)
-                                .apply()
-                        },
-                        onFileSelected = { file ->
-                            applyTrackSelection(
-                                file = file,
-                                autoStart = autoPlayOnTrackSelect,
-                                expandOverride = openPlayerOnTrackSelect
-                            )
-                        }
-                    )
+                    MainView.Home -> Box(modifier = Modifier.padding(mainPadding)) {
+                        HomeScreen(
+                            selectedTrack = selectedFile,
+                            onOpenLibrary = { currentView = MainView.Browser }
+                        )
+                    }
+                    MainView.Browser -> Box(modifier = Modifier.padding(mainPadding)) {
+                        com.flopster101.siliconplayer.ui.screens.FileBrowserScreen(
+                            repository = repository,
+                            initialLocationId = if (rememberBrowserLocation) lastBrowserLocationId else null,
+                            initialDirectoryPath = if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
+                            onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
+                            bottomContentPadding = miniPlayerListInset,
+                            backHandlingEnabled = !isPlayerExpanded,
+                            onExitBrowser = { currentView = MainView.Home },
+                            onOpenSettings = null,
+                            showPrimaryTopBar = false,
+                            onBrowserLocationChanged = { locationId, directoryPath ->
+                                if (!rememberBrowserLocation) return@FileBrowserScreen
+                                lastBrowserLocationId = locationId
+                                lastBrowserDirectoryPath = directoryPath
+                                prefs.edit()
+                                    .putString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, locationId)
+                                    .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, directoryPath)
+                                    .apply()
+                            },
+                            onFileSelected = { file ->
+                                applyTrackSelection(
+                                    file = file,
+                                    autoStart = autoPlayOnTrackSelect,
+                                    expandOverride = openPlayerOnTrackSelect
+                                )
+                            }
+                        )
+                    }
                     MainView.Settings -> SettingsScreen(
                         route = settingsRoute,
+                        onBack = {
+                            if (settingsRoute != SettingsRoute.Root) {
+                                settingsRoute = when (settingsRoute) {
+                                    SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
+                                    else -> SettingsRoute.Root
+                                }
+                            } else {
+                                currentView = MainView.Home
+                            }
+                        },
                         onOpenAudioPlugins = { settingsRoute = SettingsRoute.AudioPlugins },
                         onOpenGeneralAudio = { settingsRoute = SettingsRoute.GeneralAudio },
                         onOpenPlayer = { settingsRoute = SettingsRoute.Player },
@@ -1013,6 +1013,7 @@ private fun HomeScreen(
 @Composable
 private fun SettingsScreen(
     route: SettingsRoute,
+    onBack: () -> Unit,
     onOpenAudioPlugins: () -> Unit,
     onOpenGeneralAudio: () -> Unit,
     onOpenPlayer: () -> Unit,
@@ -1052,49 +1053,60 @@ private fun SettingsScreen(
         SettingsRoute.About -> "About"
     }
 
-    AnimatedContent(
-        targetState = route,
-        transitionSpec = {
-            val forward = settingsRouteOrder(targetState) >= settingsRouteOrder(initialState)
-            val enter = slideInHorizontally(
-                initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth / 4 },
-                animationSpec = tween(
-                    durationMillis = PAGE_NAV_DURATION_MS,
-                    easing = FastOutSlowInEasing
-                )
-            ) + fadeIn(
-                animationSpec = tween(
-                    durationMillis = 210,
-                    delayMillis = 60,
-                    easing = LinearOutSlowInEasing
-                )
+    androidx.compose.material3.Scaffold(
+        topBar = {
+            androidx.compose.material3.TopAppBar(
+                title = { Text(screenTitle) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
             )
-            val exit = slideOutHorizontally(
-                targetOffsetX = { fullWidth -> if (forward) -fullWidth / 4 else fullWidth / 4 },
-                animationSpec = tween(
-                    durationMillis = PAGE_NAV_DURATION_MS,
-                    easing = FastOutSlowInEasing
+        }
+    ) { paddingValues ->
+        AnimatedContent(
+            targetState = route,
+            transitionSpec = {
+                val forward = settingsRouteOrder(targetState) >= settingsRouteOrder(initialState)
+                val enter = slideInHorizontally(
+                    initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth / 4 },
+                    animationSpec = tween(
+                        durationMillis = PAGE_NAV_DURATION_MS,
+                        easing = FastOutSlowInEasing
+                    )
+                ) + fadeIn(
+                    animationSpec = tween(
+                        durationMillis = 210,
+                        delayMillis = 60,
+                        easing = LinearOutSlowInEasing
+                    )
                 )
-            ) + fadeOut(
-                animationSpec = tween(
-                    durationMillis = 120,
-                    easing = FastOutLinearInEasing
+                val exit = slideOutHorizontally(
+                    targetOffsetX = { fullWidth -> if (forward) -fullWidth / 4 else fullWidth / 4 },
+                    animationSpec = tween(
+                        durationMillis = PAGE_NAV_DURATION_MS,
+                        easing = FastOutSlowInEasing
+                    )
+                ) + fadeOut(
+                    animationSpec = tween(
+                        durationMillis = 120,
+                        easing = FastOutLinearInEasing
+                    )
                 )
-            )
-            enter togetherWith exit
-        },
-        label = "settingsRouteTransition",
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Text(
-                text = screenTitle,
-                style = MaterialTheme.typography.headlineSmall
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            when (it) {
+                enter togetherWith exit
+            },
+            label = "settingsRouteTransition",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                when (it) {
                     SettingsRoute.Root -> {
                         SettingsSectionLabel("Audio")
                         SettingsItemCard(
@@ -1228,6 +1240,7 @@ private fun SettingsScreen(
                         onSelectedModeChanged = onThemeModeChanged
                     )
                     SettingsRoute.About -> AboutSettingsBody()
+                }
             }
         }
     }

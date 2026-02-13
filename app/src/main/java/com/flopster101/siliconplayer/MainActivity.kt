@@ -22,6 +22,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -114,6 +115,18 @@ private enum class SettingsRoute {
     About
 }
 
+private enum class ThemeMode(val storageValue: String, val label: String) {
+    Auto("auto", "Auto"),
+    Light("light", "Light"),
+    Dark("dark", "Dark");
+
+    companion object {
+        fun fromStorage(value: String?): ThemeMode {
+            return entries.firstOrNull { it.storageValue == value } ?: Auto
+        }
+    }
+}
+
 private fun mainViewOrder(view: MainView): Int = when (view) {
     MainView.Home -> 0
     MainView.Browser -> 1
@@ -148,6 +161,7 @@ private object AppPreferenceKeys {
     const val PAUSE_ON_HEADPHONE_DISCONNECT = "pause_on_headphone_disconnect"
     const val OPEN_PLAYER_FROM_NOTIFICATION = "open_player_from_notification"
     const val SESSION_CURRENT_PATH = "session_current_path"
+    const val THEME_MODE = "theme_mode"
 }
 
 class MainActivity : ComponentActivity() {
@@ -161,9 +175,32 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         consumeNotificationIntent(intent)
         setContent {
-            SiliconPlayerTheme {
+            val prefs = remember {
+                getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)
+            }
+            var themeMode by remember {
+                mutableStateOf(
+                    ThemeMode.fromStorage(
+                        prefs.getString(AppPreferenceKeys.THEME_MODE, ThemeMode.Auto.storageValue)
+                    )
+                )
+            }
+            val darkTheme = when (themeMode) {
+                ThemeMode.Auto -> isSystemInDarkTheme()
+                ThemeMode.Light -> false
+                ThemeMode.Dark -> true
+            }
+            SiliconPlayerTheme(darkTheme = darkTheme) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    AppNavigation()
+                    AppNavigation(
+                        themeMode = themeMode,
+                        onThemeModeChanged = { mode ->
+                            themeMode = mode
+                            prefs.edit()
+                                .putString(AppPreferenceKeys.THEME_MODE, mode.storageValue)
+                                .apply()
+                        }
+                    )
                 }
             }
         }
@@ -204,7 +241,10 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppNavigation() {
+private fun AppNavigation(
+    themeMode: ThemeMode,
+    onThemeModeChanged: (ThemeMode) -> Unit
+) {
     var currentView by remember { mutableStateOf(MainView.Home) }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.Root) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
@@ -674,6 +714,8 @@ fun AppNavigation() {
                     onPauseOnHeadphoneDisconnectChanged = { pauseOnHeadphoneDisconnect = it },
                     openPlayerFromNotification = openPlayerFromNotification,
                     onOpenPlayerFromNotificationChanged = { openPlayerFromNotification = it },
+                    themeMode = themeMode,
+                    onThemeModeChanged = onThemeModeChanged,
                     rememberBrowserLocation = rememberBrowserLocation,
                     onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
                     ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
@@ -924,6 +966,8 @@ private fun SettingsScreen(
     onPauseOnHeadphoneDisconnectChanged: (Boolean) -> Unit,
     openPlayerFromNotification: Boolean,
     onOpenPlayerFromNotificationChanged: (Boolean) -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeChanged: (ThemeMode) -> Unit,
     rememberBrowserLocation: Boolean,
     onRememberBrowserLocationChanged: (Boolean) -> Unit,
     ffmpegSampleRateHz: Int,
@@ -1125,9 +1169,9 @@ private fun SettingsScreen(
                             onCheckedChange = onRememberBrowserLocationChanged
                         )
                     }
-                    SettingsRoute.Ui -> SettingsPlaceholderBody(
-                        title = "UI settings",
-                        description = "Theme and layout options will appear here."
+                    SettingsRoute.Ui -> ThemeModeSelectorCard(
+                        selectedMode = themeMode,
+                        onSelectedModeChanged = onThemeModeChanged
                     )
                     SettingsRoute.About -> AboutSettingsBody()
                 }
@@ -1342,6 +1386,99 @@ private fun AboutSettingsBody() {
 }
 
 private data class SampleRateChoice(val hz: Int, val label: String)
+
+private data class ThemeModeChoice(val mode: ThemeMode, val label: String)
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun ThemeModeSelectorCard(
+    selectedMode: ThemeMode,
+    onSelectedModeChanged: (ThemeMode) -> Unit
+) {
+    val options = listOf(
+        ThemeModeChoice(ThemeMode.Auto, "Auto"),
+        ThemeModeChoice(ThemeMode.Light, "Light"),
+        ThemeModeChoice(ThemeMode.Dark, "Dark")
+    )
+    var dialogOpen by remember { mutableStateOf(false) }
+
+    androidx.compose.material3.ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = SettingsCardShape,
+        onClick = { dialogOpen = true }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "App theme",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Choose Auto, Light, or Dark theme behavior.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = selectedMode.label,
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+    }
+
+    if (dialogOpen) {
+        AlertDialog(
+            onDismissRequest = { dialogOpen = false },
+            title = { Text("App theme") },
+            text = {
+                CompositionLocalProvider(
+                    androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement provides false
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        options.forEach { option ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(42.dp)
+                                    .clickable {
+                                        onSelectedModeChanged(option.mode)
+                                        dialogOpen = false
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = option.mode == selectedMode,
+                                    onClick = {
+                                        onSelectedModeChanged(option.mode)
+                                        dialogOpen = false
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = option.label,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dialogOpen = false }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {}
+        )
+    }
+}
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)

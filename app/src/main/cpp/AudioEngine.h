@@ -62,7 +62,7 @@ private:
     int streamSampleRate = 48000;
     int streamChannelCount = 2;
     int outputBackendPreference = 0; // 0 auto, 1 aaudio, 2 opensl, 3 audiotrack
-    int outputPerformanceMode = 1; // 0 auto, 1 low-latency, 2 none, 3 power-saving
+    int outputPerformanceMode = 2; // 0 auto, 1 low-latency, 2 none, 3 power-saving
     int outputBufferPreset = 0; // 0 auto, 1 small, 2 medium, 3 large
     int outputResamplerPreference = 1; // 1 built-in, 2 sox
     bool outputAllowFallback = true;

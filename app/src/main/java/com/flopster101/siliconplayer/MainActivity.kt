@@ -758,7 +758,7 @@ private fun AppNavigation(
             AudioPerformanceMode.fromStorage(
                 prefs.getString(
                     AppPreferenceKeys.AUDIO_PERFORMANCE_MODE,
-                    AudioPerformanceMode.Auto.storageValue
+                    AudioPerformanceMode.None.storageValue
                 )
             )
         )

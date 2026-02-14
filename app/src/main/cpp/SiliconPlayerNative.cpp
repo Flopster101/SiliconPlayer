@@ -136,6 +136,7 @@ Java_com_flopster101_siliconplayer_MainActivity_setAudioPipelineConfig(
         jint backendPreference,
         jint performanceMode,
         jint bufferPreset,
+        jint resamplerPreference,
         jboolean allowFallback) {
     if (audioEngine == nullptr) {
         audioEngine = new AudioEngine();
@@ -144,6 +145,7 @@ Java_com_flopster101_siliconplayer_MainActivity_setAudioPipelineConfig(
             static_cast<int>(backendPreference),
             static_cast<int>(performanceMode),
             static_cast<int>(bufferPreset),
+            static_cast<int>(resamplerPreference),
             allowFallback == JNI_TRUE
     );
 }
@@ -329,6 +331,7 @@ Java_com_flopster101_siliconplayer_NativeBridge_setAudioPipelineConfig(
         jint backendPreference,
         jint performanceMode,
         jint bufferPreset,
+        jint resamplerPreference,
         jboolean allowFallback) {
     Java_com_flopster101_siliconplayer_MainActivity_setAudioPipelineConfig(
             env,
@@ -336,6 +339,7 @@ Java_com_flopster101_siliconplayer_NativeBridge_setAudioPipelineConfig(
             backendPreference,
             performanceMode,
             bufferPreset,
+            resamplerPreference,
             allowFallback
     );
 }

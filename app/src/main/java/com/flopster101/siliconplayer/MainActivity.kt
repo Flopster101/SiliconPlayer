@@ -483,6 +483,7 @@ class MainActivity : ComponentActivity() {
         backendPreference: Int,
         performanceMode: Int,
         bufferPreset: Int,
+        resamplerPreference: Int,
         allowFallback: Boolean
     )
 
@@ -1260,12 +1261,14 @@ private fun AppNavigation(
         audioBackendPreference,
         audioPerformanceMode,
         audioBufferPreset,
+        audioResamplerPreference,
         audioAllowBackendFallback
     ) {
         NativeBridge.setAudioPipelineConfig(
             backendPreference = audioBackendPreference.nativeValue,
             performanceMode = audioPerformanceMode.nativeValue,
             bufferPreset = audioBufferPreset.nativeValue,
+            resamplerPreference = audioResamplerPreference.nativeValue,
             allowFallback = audioAllowBackendFallback
         )
     }

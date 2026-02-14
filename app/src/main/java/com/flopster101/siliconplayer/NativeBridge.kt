@@ -29,6 +29,7 @@ object NativeBridge {
         backendPreference: Int,
         performanceMode: Int,
         bufferPreset: Int,
+        resamplerPreference: Int,
         allowFallback: Boolean
     )
 }

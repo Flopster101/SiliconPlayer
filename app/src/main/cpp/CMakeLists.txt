@@ -52,6 +52,9 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
     add_library(libswresample STATIC IMPORTED)
     set_target_properties(libswresample PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libswresample.a")
 
+    add_library(libsoxr STATIC IMPORTED)
+    set_target_properties(libsoxr PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libsoxr.a")
+
     # Link libraries
     target_link_libraries(
             siliconplayer
@@ -64,5 +67,6 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
             libavcodec
             libavutil
             libswresample
+            libsoxr
             z # zlib is needed for openmpt/ffmpeg
     )

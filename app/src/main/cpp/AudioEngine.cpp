@@ -1,12 +1,16 @@
 #include "AudioEngine.h"
 #include "decoders/DecoderRegistry.h"
-#include "decoders/DecoderRegistry.h"
 #include "decoders/FFmpegDecoder.h"
 #include "decoders/LibOpenMPTDecoder.h"
 #include <android/log.h>
 #include <cmath>
 #include <cstring>
 #include <algorithm>
+extern "C" {
+#include <libswresample/swresample.h>
+#include <libavutil/opt.h>
+#include <libavutil/channel_layout.h>
+}
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -18,6 +22,10 @@
 
 // register decoders
 namespace {
+    const char* outputResamplerName(int preference) {
+        return preference == 2 ? "SoX" : "Built-in";
+    }
+
     struct DecoderRegistration {
         DecoderRegistration() {
              DecoderRegistry::getInstance().registerDecoder("FFmpeg", FFmpegDecoder::getSupportedExtensions(), []() {
@@ -37,6 +45,8 @@ AudioEngine::AudioEngine() {
 }
 
 AudioEngine::~AudioEngine() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    freeOutputSoxrContextLocked();
     closeStream();
 }
 
@@ -196,6 +206,83 @@ void AudioEngine::resetResamplerStateLocked() {
     resampleInputBuffer.clear();
     resampleInputStartFrame = 0;
     resampleInputPosition = 0.0;
+    resamplerPathLoggedForCurrentTrack = false;
+    resamplerNoOpLoggedForCurrentTrack = false;
+    if (outputSoxrContext != nullptr) {
+        swr_close(outputSoxrContext);
+        swr_init(outputSoxrContext);
+    }
+}
+
+void AudioEngine::freeOutputSoxrContextLocked() {
+    if (outputSoxrContext != nullptr) {
+        swr_free(&outputSoxrContext);
+    }
+    outputSoxrInputRate = 0;
+    outputSoxrOutputRate = 0;
+    outputSoxrChannels = 0;
+}
+
+bool AudioEngine::ensureOutputSoxrContextLocked(int channels, int inputRate, int outputRate) {
+    if (channels <= 0 || inputRate <= 0 || outputRate <= 0) {
+        return false;
+    }
+
+    if (outputSoxrContext != nullptr &&
+        outputSoxrChannels == channels &&
+        outputSoxrInputRate == inputRate &&
+        outputSoxrOutputRate == outputRate) {
+        return true;
+    }
+
+    freeOutputSoxrContextLocked();
+
+    AVChannelLayout inLayout;
+    if (channels == 1) {
+        inLayout = AV_CHANNEL_LAYOUT_MONO;
+    } else {
+        inLayout = AV_CHANNEL_LAYOUT_STEREO;
+    }
+    AVChannelLayout outLayout = inLayout;
+
+    int result = swr_alloc_set_opts2(
+            &outputSoxrContext,
+            &outLayout,
+            AV_SAMPLE_FMT_FLT,
+            outputRate,
+            &inLayout,
+            AV_SAMPLE_FMT_FLT,
+            inputRate,
+            0,
+            nullptr
+    );
+
+    if (result < 0 || outputSoxrContext == nullptr) {
+        LOGE("SoX context allocation failed (channels=%d inRate=%d outRate=%d result=%d)",
+             channels, inputRate, outputRate, result);
+        freeOutputSoxrContextLocked();
+        return false;
+    }
+
+    // Select SoX resampler engine in libswresample.
+    if (av_opt_set_int(outputSoxrContext, "resampler", SWR_ENGINE_SOXR, 0) < 0) {
+        LOGE("Failed to select SWR_ENGINE_SOXR in swresample options");
+        freeOutputSoxrContextLocked();
+        return false;
+    }
+
+    if (swr_init(outputSoxrContext) < 0) {
+        LOGE("SoX swr_init failed (channels=%d inRate=%d outRate=%d)", channels, inputRate, outputRate);
+        freeOutputSoxrContextLocked();
+        return false;
+    }
+
+    LOGD("SoX context ready (channels=%d inRate=%d outRate=%d)", channels, inputRate, outputRate);
+
+    outputSoxrChannels = channels;
+    outputSoxrInputRate = inputRate;
+    outputSoxrOutputRate = outputRate;
+    return true;
 }
 
 int AudioEngine::readFromDecoderLocked(float* buffer, int numFrames, bool& reachedEnd) {
@@ -247,6 +334,16 @@ void AudioEngine::renderResampledLocked(
 
     const int renderRate = decoderRenderSampleRate > 0 ? decoderRenderSampleRate : streamRate;
     if (streamRate <= 0 || renderRate == streamRate) {
+        if (!resamplerNoOpLoggedForCurrentTrack) {
+            LOGD(
+                    "Resampler bypassed: decoderRate=%d streamRate=%d (decoder=%s preference=%s)",
+                    renderRate,
+                    streamRate,
+                    decoder ? decoder->getName() : "none",
+                    outputResamplerName(outputResamplerPreference)
+            );
+            resamplerNoOpLoggedForCurrentTrack = true;
+        }
         int framesRead = readFromDecoderLocked(outputData, numFrames, reachedEnd);
         if (framesRead < numFrames) {
             memset(
@@ -256,6 +353,32 @@ void AudioEngine::renderResampledLocked(
             );
         }
         return;
+    }
+
+    if (outputResamplerPreference == 2 && !outputSoxrUnavailable) {
+        if (!resamplerPathLoggedForCurrentTrack) {
+            LOGD(
+                    "Resampler path selected: SoX (decoderRate=%d -> streamRate=%d, decoder=%s)",
+                    renderRate,
+                    streamRate,
+                    decoder ? decoder->getName() : "none"
+            );
+            resamplerPathLoggedForCurrentTrack = true;
+        }
+        renderSoxrResampledLocked(outputData, numFrames, channels, streamRate, renderRate, reachedEnd);
+        return;
+    }
+
+    if (!resamplerPathLoggedForCurrentTrack) {
+        LOGD(
+                "Resampler path selected: Built-in linear (decoderRate=%d -> streamRate=%d, decoder=%s, pref=%s, soxUnavailable=%d)",
+                renderRate,
+                streamRate,
+                decoder ? decoder->getName() : "none",
+                outputResamplerName(outputResamplerPreference),
+                outputSoxrUnavailable ? 1 : 0
+        );
+        resamplerPathLoggedForCurrentTrack = true;
     }
 
     const double inputPerOutputFrame = static_cast<double>(renderRate) / static_cast<double>(streamRate);
@@ -336,6 +459,79 @@ void AudioEngine::renderResampledLocked(
                 resampleInputBuffer.begin() + (static_cast<size_t>(resampleInputStartFrame) * channels)
         );
         resampleInputStartFrame = 0;
+    }
+}
+
+void AudioEngine::renderSoxrResampledLocked(
+        float* outputData,
+        int32_t numFrames,
+        int channels,
+        int streamRate,
+        int renderRate,
+        bool& reachedEnd) {
+    if (!ensureOutputSoxrContextLocked(channels, renderRate, streamRate)) {
+        outputSoxrUnavailable = true;
+        LOGE("SoX resampler unavailable in current native build, falling back to built-in resampler");
+        renderResampledLocked(outputData, numFrames, channels, streamRate, reachedEnd);
+        return;
+    }
+
+    constexpr int decodeChunkFrames = 1024;
+    const size_t neededScratchSize = static_cast<size_t>(decodeChunkFrames) * channels;
+    if (resampleDecodeScratch.size() < neededScratchSize) {
+        resampleDecodeScratch.resize(neededScratchSize);
+    }
+
+    int outFrame = 0;
+    bool draining = false;
+    int emptyInputRetries = 0;
+
+    while (outFrame < numFrames) {
+        const int outputCapacity = numFrames - outFrame;
+        uint8_t* outData[1] = {
+                reinterpret_cast<uint8_t*>(outputData + static_cast<size_t>(outFrame) * channels)
+        };
+
+        int converted = 0;
+        if (draining) {
+            converted = swr_convert(outputSoxrContext, outData, outputCapacity, nullptr, 0);
+            if (converted < 0 || converted == 0) {
+                break;
+            }
+            outFrame += converted;
+            continue;
+        }
+
+        int decoded = readFromDecoderLocked(resampleDecodeScratch.data(), decodeChunkFrames, reachedEnd);
+        if (decoded > 0) {
+            const uint8_t* inData[1] = {
+                    reinterpret_cast<const uint8_t*>(resampleDecodeScratch.data())
+            };
+            converted = swr_convert(outputSoxrContext, outData, outputCapacity, inData, decoded);
+            if (converted < 0) {
+                break;
+            }
+            outFrame += converted;
+            emptyInputRetries = 0;
+            continue;
+        }
+
+        if (reachedEnd) {
+            draining = true;
+            continue;
+        }
+
+        if (++emptyInputRetries > 4) {
+            break;
+        }
+    }
+
+    if (outFrame < numFrames) {
+        memset(
+                outputData + (static_cast<size_t>(outFrame) * channels),
+                0,
+                (numFrames - outFrame) * channels * sizeof(float)
+        );
     }
 }
 
@@ -557,21 +753,36 @@ void AudioEngine::setAudioPipelineConfig(
         int backendPreference,
         int performanceMode,
         int bufferPreset,
+        int resamplerPreference,
         bool allowFallback) {
     const int normalizedBackend = (backendPreference >= 0 && backendPreference <= 3) ? backendPreference : 0;
     const int normalizedPerformance = (performanceMode >= 0 && performanceMode <= 3) ? performanceMode : 1;
     const int normalizedBufferPreset = (bufferPreset >= 0 && bufferPreset <= 3) ? bufferPreset : 0;
+    const int normalizedResampler = (resamplerPreference >= 1 && resamplerPreference <= 2) ? resamplerPreference : 1;
 
     const bool changed =
             outputBackendPreference != normalizedBackend ||
             outputPerformanceMode != normalizedPerformance ||
             outputBufferPreset != normalizedBufferPreset ||
+            outputResamplerPreference != normalizedResampler ||
             outputAllowFallback != allowFallback;
 
     outputBackendPreference = normalizedBackend;
     outputPerformanceMode = normalizedPerformance;
     outputBufferPreset = normalizedBufferPreset;
+    outputResamplerPreference = normalizedResampler;
     outputAllowFallback = allowFallback;
+    outputSoxrUnavailable = false;
+    LOGD(
+            "Audio pipeline config: backend=%d perf=%d buffer=%d resampler=%s(%d) allowFallback=%d changed=%d",
+            outputBackendPreference,
+            outputPerformanceMode,
+            outputBufferPreset,
+            outputResamplerName(outputResamplerPreference),
+            outputResamplerPreference,
+            outputAllowFallback ? 1 : 0,
+            changed ? 1 : 0
+    );
 
     if (!changed) return;
     reconfigureStream(true);

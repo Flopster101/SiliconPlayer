@@ -4,3 +4,6 @@
 [submodule "external/libopenmpt"]
 	path = external/libopenmpt
 	url = https://github.com/OpenMPT/openmpt.git
+[submodule "external/libsoxr"]
+	path = external/libsoxr
+	url = https://git.code.sf.net/p/soxr/code

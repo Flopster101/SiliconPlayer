@@ -65,6 +65,51 @@ apply_libopenmpt_patches() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build libsoxr (optional, if source is present)
+# -----------------------------------------------------------------------------
+build_libsoxr() {
+    local ABI=$1
+    local PROJECT_PATH="$ABSOLUTE_PATH/libsoxr"
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "libsoxr source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    echo "Building libsoxr for $ABI..."
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
+
+    cmake \
+        -S "$PROJECT_PATH" \
+        -B "$BUILD_DIR" \
+        -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+        -DANDROID_ABI="$ABI" \
+        -DANDROID_PLATFORM="android-$ANDROID_API" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DBUILD_TESTS=OFF \
+        -DBUILD_EXAMPLES=OFF \
+        -DWITH_OPENMP=OFF \
+        -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"
+
+    cmake --build "$BUILD_DIR" -j$(nproc)
+    cmake --install "$BUILD_DIR"
+
+    if [ ! -f "$INSTALL_DIR/lib/libsoxr.a" ]; then
+        local built_lib
+        built_lib="$(find "$BUILD_DIR" -type f -name libsoxr.a | head -n 1)"
+        if [ -n "$built_lib" ]; then
+            mkdir -p "$INSTALL_DIR/lib"
+            cp "$built_lib" "$INSTALL_DIR/lib/libsoxr.a"
+        fi
+    fi
+}
+
+# -----------------------------------------------------------------------------
 # Function: Build FFmpeg
 # -----------------------------------------------------------------------------
 build_ffmpeg() {
@@ -72,6 +117,11 @@ build_ffmpeg() {
     echo "Building FFmpeg for $ABI..."
 
     local BUILD_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local SOXR_CFLAGS=""
+    local SOXR_LDFLAGS=""
+    local SOXR_EXTRA_LIBS=""
+    local SOXR_ENABLE_FLAG=""
+    local FFMPEG_EXTRA_CFLAGS="-fPIC"
 
     mkdir -p "$BUILD_DIR"
 
@@ -93,6 +143,17 @@ build_ffmpeg() {
     fi
 
     export ASFLAGS="-fPIC"
+
+    if [ -f "$BUILD_DIR/lib/libsoxr.a" ] && [ -f "$BUILD_DIR/include/soxr.h" ]; then
+        echo "libsoxr detected for $ABI -> enabling FFmpeg libsoxr support"
+        SOXR_ENABLE_FLAG="--enable-libsoxr"
+        SOXR_CFLAGS="-I$BUILD_DIR/include"
+        SOXR_LDFLAGS="-L$BUILD_DIR/lib"
+        SOXR_EXTRA_LIBS="-lsoxr -lm"
+        FFMPEG_EXTRA_CFLAGS="$FFMPEG_EXTRA_CFLAGS $SOXR_CFLAGS"
+    else
+        echo "libsoxr not available for $ABI -> FFmpeg will use built-in swr resampler only"
+    fi
 
     ./configure \
         --target-os=android \
@@ -129,9 +190,12 @@ build_ffmpeg() {
         --enable-swresample \
         --enable-gpl \
         --enable-version3 \
+        $SOXR_ENABLE_FLAG \
         --enable-jni \
         --enable-mediacodec \
-        --extra-cflags="-fPIC" \
+        --extra-cflags="$FFMPEG_EXTRA_CFLAGS" \
+        --extra-ldflags="$SOXR_LDFLAGS" \
+        --extra-libs="$SOXR_EXTRA_LIBS" \
         $EXTRA_FLAGS || { echo "Error: FFmpeg configure failed!"; exit 1; }
 
     make -j$(nproc)
@@ -202,6 +266,38 @@ build_libopenmpt() {
 TARGET_ABI=${1:-all}
 TARGET_LIB=${2:-all}
 
+normalize_lib_name() {
+    local lib="$1"
+    case "$lib" in
+        sox|soxr)
+            echo "libsoxr"
+            ;;
+        *)
+            echo "$lib"
+            ;;
+    esac
+}
+
+target_has_lib() {
+    local wanted
+    wanted="$(normalize_lib_name "$1")"
+
+    if [ "$TARGET_LIB" = "all" ]; then
+        return 0
+    fi
+
+    IFS=',' read -r -a requested_libs <<< "$TARGET_LIB"
+    for raw in "${requested_libs[@]}"; do
+        local item
+        item="$(echo "$raw" | xargs)"
+        item="$(normalize_lib_name "$item")"
+        if [ "$item" = "$wanted" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 # -----------------------------------------------------------------------------
 # Main Loop
 # -----------------------------------------------------------------------------
@@ -248,11 +344,15 @@ for ABI in "${ABIS[@]}"; do
 
     echo "CC is set to: $CC"
 
-    if [ "$TARGET_LIB" == "all" ] || [ "$TARGET_LIB" == "ffmpeg" ]; then
+    if target_has_lib "libsoxr"; then
+        build_libsoxr "$ABI"
+    fi
+
+    if target_has_lib "ffmpeg"; then
         build_ffmpeg "$ABI"
     fi
 
-    if [ "$TARGET_LIB" == "all" ] || [ "$TARGET_LIB" == "libopenmpt" ]; then
+    if target_has_lib "libopenmpt"; then
         build_libopenmpt "$ABI"
     fi
 done

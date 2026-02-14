@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include "decoders/AudioDecoder.h"
 
+struct SwrContext;
+
 class AudioEngine {
 public:
     AudioEngine();
@@ -28,7 +30,7 @@ public:
     int getRepeatModeCapabilities();
     void setCoreOutputSampleRate(const std::string& coreName, int sampleRateHz);
     void setCoreOption(const std::string& coreName, const std::string& optionName, const std::string& optionValue);
-    void setAudioPipelineConfig(int backendPreference, int performanceMode, int bufferPreset, bool allowFallback);
+    void setAudioPipelineConfig(int backendPreference, int performanceMode, int bufferPreset, int resamplerPreference, bool allowFallback);
     std::string getTitle();
     std::string getArtist();
     int getSampleRate();
@@ -45,6 +47,7 @@ private:
     int outputBackendPreference = 0; // 0 auto, 1 aaudio, 2 opensl, 3 audiotrack
     int outputPerformanceMode = 1; // 0 auto, 1 low-latency, 2 none, 3 power-saving
     int outputBufferPreset = 0; // 0 auto, 1 small, 2 medium, 3 large
+    int outputResamplerPreference = 1; // 1 built-in, 2 sox
     bool outputAllowFallback = true;
     std::atomic<bool> isPlaying { false };
     std::atomic<bool> looping { false };
@@ -60,13 +63,23 @@ private:
     int resampleInputStartFrame = 0;
     double resampleInputPosition = 0.0;
     std::vector<float> resampleDecodeScratch;
+    SwrContext* outputSoxrContext = nullptr;
+    int outputSoxrInputRate = 0;
+    int outputSoxrOutputRate = 0;
+    int outputSoxrChannels = 0;
+    bool outputSoxrUnavailable = false;
+    bool resamplerPathLoggedForCurrentTrack = false;
+    bool resamplerNoOpLoggedForCurrentTrack = false;
 
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
     void reconfigureStream(bool resumePlayback);
     void applyStreamBufferPreset();
     void resetResamplerStateLocked();
+    bool ensureOutputSoxrContextLocked(int channels, int inputRate, int outputRate);
+    void freeOutputSoxrContextLocked();
     int readFromDecoderLocked(float* buffer, int numFrames, bool& reachedEnd);
     void renderResampledLocked(float* outputData, int32_t numFrames, int channels, int streamRate, bool& reachedEnd);
+    void renderSoxrResampledLocked(float* outputData, int32_t numFrames, int channels, int streamRate, int renderRate, bool& reachedEnd);
     void recoverStreamIfNeeded();
 
     void createStream();

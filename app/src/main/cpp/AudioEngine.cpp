@@ -119,6 +119,7 @@ void AudioEngine::recoverStreamIfNeeded() {
 
 void AudioEngine::resetResamplerStateLocked() {
     resampleInputBuffer.clear();
+    resampleInputStartFrame = 0;
     resampleInputPosition = 0.0;
 }
 
@@ -128,6 +129,16 @@ int AudioEngine::readFromDecoderLocked(float* buffer, int numFrames, bool& reach
     int framesRead = decoder->read(buffer, numFrames);
     if (framesRead > 0) {
         return framesRead;
+    }
+
+    if (repeatMode.load() == 2) {
+        // Loop-point mode can return transient 0-frame reads at wrap boundaries.
+        for (int retry = 0; retry < 4; ++retry) {
+            framesRead = decoder->read(buffer, numFrames);
+            if (framesRead > 0) {
+                return framesRead;
+            }
+        }
     }
 
     if (repeatMode.load() == 1) {
@@ -174,28 +185,37 @@ void AudioEngine::renderResampledLocked(
 
     const double inputPerOutputFrame = static_cast<double>(renderRate) / static_cast<double>(streamRate);
     constexpr int decodeChunkFrames = 1024;
-    std::vector<float> decodeChunk(static_cast<size_t>(decodeChunkFrames) * channels);
+    const size_t neededScratchSize = static_cast<size_t>(decodeChunkFrames) * channels;
+    if (resampleDecodeScratch.size() < neededScratchSize) {
+        resampleDecodeScratch.resize(neededScratchSize);
+    }
 
     int outFrame = 0;
     while (outFrame < numFrames) {
-        int availableFrames = static_cast<int>(resampleInputBuffer.size() / channels);
+        int totalFrames = static_cast<int>(resampleInputBuffer.size() / channels);
+        int availableFrames = std::max(0, totalFrames - resampleInputStartFrame);
         int baseFrame = static_cast<int>(std::floor(resampleInputPosition));
 
         while (baseFrame + 1 >= availableFrames) {
-            int decoded = readFromDecoderLocked(decodeChunk.data(), decodeChunkFrames, reachedEnd);
+            int decoded = readFromDecoderLocked(resampleDecodeScratch.data(), decodeChunkFrames, reachedEnd);
             if (decoded <= 0) {
                 break;
             }
-            resampleInputBuffer.insert(
-                    resampleInputBuffer.end(),
-                    decodeChunk.begin(),
-                    decodeChunk.begin() + (static_cast<size_t>(decoded) * channels)
+            const size_t oldSize = resampleInputBuffer.size();
+            const size_t appendCount = static_cast<size_t>(decoded) * channels;
+            resampleInputBuffer.resize(oldSize + appendCount);
+            memcpy(
+                    resampleInputBuffer.data() + oldSize,
+                    resampleDecodeScratch.data(),
+                    appendCount * sizeof(float)
             );
-            availableFrames = static_cast<int>(resampleInputBuffer.size() / channels);
+            totalFrames = static_cast<int>(resampleInputBuffer.size() / channels);
+            availableFrames = std::max(0, totalFrames - resampleInputStartFrame);
             baseFrame = static_cast<int>(std::floor(resampleInputPosition));
         }
 
-        availableFrames = static_cast<int>(resampleInputBuffer.size() / channels);
+        totalFrames = static_cast<int>(resampleInputBuffer.size() / channels);
+        availableFrames = std::max(0, totalFrames - resampleInputStartFrame);
         baseFrame = static_cast<int>(std::floor(resampleInputPosition));
         if (baseFrame >= availableFrames) {
             break;
@@ -204,9 +224,11 @@ void AudioEngine::renderResampledLocked(
         int nextFrame = std::min(baseFrame + 1, availableFrames - 1);
         const double frac = std::clamp(resampleInputPosition - baseFrame, 0.0, 1.0);
 
+        const int absoluteBaseFrame = resampleInputStartFrame + baseFrame;
+        const int absoluteNextFrame = resampleInputStartFrame + nextFrame;
         for (int c = 0; c < channels; ++c) {
-            const float a = resampleInputBuffer[static_cast<size_t>(baseFrame) * channels + c];
-            const float b = resampleInputBuffer[static_cast<size_t>(nextFrame) * channels + c];
+            const float a = resampleInputBuffer[static_cast<size_t>(absoluteBaseFrame) * channels + c];
+            const float b = resampleInputBuffer[static_cast<size_t>(absoluteNextFrame) * channels + c];
             outputData[static_cast<size_t>(outFrame) * channels + c] =
                     static_cast<float>(a + (b - a) * frac);
         }
@@ -223,15 +245,22 @@ void AudioEngine::renderResampledLocked(
         );
     }
 
-    const int availableFrames = static_cast<int>(resampleInputBuffer.size() / channels);
+    const int totalFrames = static_cast<int>(resampleInputBuffer.size() / channels);
+    const int availableFrames = std::max(0, totalFrames - resampleInputStartFrame);
     int trimFrames = std::max(0, static_cast<int>(std::floor(resampleInputPosition)) - 1);
     trimFrames = std::min(trimFrames, availableFrames);
     if (trimFrames > 0) {
+        resampleInputStartFrame += trimFrames;
+        resampleInputPosition -= trimFrames;
+    }
+
+    // Compact infrequently to avoid per-callback front erases.
+    if (resampleInputStartFrame > 4096) {
         resampleInputBuffer.erase(
                 resampleInputBuffer.begin(),
-                resampleInputBuffer.begin() + (static_cast<size_t>(trimFrames) * channels)
+                resampleInputBuffer.begin() + (static_cast<size_t>(resampleInputStartFrame) * channels)
         );
-        resampleInputPosition -= trimFrames;
+        resampleInputStartFrame = 0;
     }
 }
 
@@ -243,10 +272,8 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
     auto *engine = static_cast<AudioEngine *>(userData);
     auto *outputData = static_cast<float *>(audioData);
 
-    // output silence to avoid blocking the audio thread.
-    std::unique_lock<std::mutex> lock(engine->decoderMutex, std::try_to_lock);
-
-    if (lock.owns_lock() && engine->decoder) {
+    std::lock_guard<std::mutex> lock(engine->decoderMutex);
+    if (engine->decoder) {
         const int channels = engine->decoder->getChannelCount();
         const int outputSampleRate = AAudioStream_getSampleRate(stream) > 0
                 ? AAudioStream_getSampleRate(stream)

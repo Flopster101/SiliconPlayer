@@ -52,7 +52,9 @@ private:
     std::unordered_map<std::string, std::unordered_map<std::string, std::string>> coreOptions;
     int decoderRenderSampleRate = 48000;
     std::vector<float> resampleInputBuffer;
+    int resampleInputStartFrame = 0;
     double resampleInputPosition = 0.0;
+    std::vector<float> resampleDecodeScratch;
 
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
     void resetResamplerStateLocked();

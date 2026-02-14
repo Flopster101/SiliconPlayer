@@ -1611,6 +1611,84 @@ private fun AppNavigation(
                                 "Home recents cleared",
                                 Toast.LENGTH_SHORT
                             ).show()
+                        },
+                        onClearAllSettings = {
+                            val pluginSnapshot = mapOf(
+                                AppPreferenceKeys.CORE_RATE_FFMPEG to ffmpegCoreSampleRateHz,
+                                AppPreferenceKeys.CORE_RATE_OPENMPT to openMptCoreSampleRateHz,
+                                AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT to openMptStereoSeparationPercent,
+                                AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT to openMptStereoSeparationAmigaPercent,
+                                AppPreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH to openMptInterpolationFilterLength,
+                                AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE to openMptAmigaResamplerMode,
+                                AppPreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH to openMptVolumeRampingStrength,
+                                AppPreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL to openMptMasterGainMilliBel
+                            )
+                            val pluginBooleanSnapshot = mapOf(
+                                AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES to openMptAmigaResamplerApplyAllModules,
+                                AppPreferenceKeys.OPENMPT_SURROUND_ENABLED to openMptSurroundEnabled
+                            )
+
+                            prefs.edit().clear().apply()
+
+                            val restoreEditor = prefs.edit()
+                            pluginSnapshot.forEach { (key, value) -> restoreEditor.putInt(key, value) }
+                            pluginBooleanSnapshot.forEach { (key, value) -> restoreEditor.putBoolean(key, value) }
+                            restoreEditor.apply()
+
+                            autoPlayOnTrackSelect = true
+                            openPlayerOnTrackSelect = true
+                            autoPlayNextTrackOnEnd = true
+                            previousRestartsAfterThreshold = true
+                            respondHeadphoneMediaButtons = true
+                            pauseOnHeadphoneDisconnect = true
+                            openPlayerFromNotification = true
+                            persistRepeatMode = true
+                            preferredRepeatMode = RepeatMode.None
+                            rememberBrowserLocation = true
+                            lastBrowserLocationId = null
+                            lastBrowserDirectoryPath = null
+                            recentFolders = emptyList()
+                            recentPlayedFiles = emptyList()
+                            browserLaunchLocationId = null
+                            browserLaunchDirectoryPath = null
+                            onThemeModeChanged(ThemeMode.Auto)
+
+                            Toast.makeText(
+                                context,
+                                "All app settings cleared",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        },
+                        onClearAllPluginSettings = {
+                            ffmpegCoreSampleRateHz = 0
+                            openMptCoreSampleRateHz = 0
+                            openMptStereoSeparationPercent = 100
+                            openMptStereoSeparationAmigaPercent = 100
+                            openMptInterpolationFilterLength = 0
+                            openMptAmigaResamplerMode = 2
+                            openMptAmigaResamplerApplyAllModules = false
+                            openMptVolumeRampingStrength = -1
+                            openMptMasterGainMilliBel = 0
+                            openMptSurroundEnabled = false
+
+                            prefs.edit()
+                                .remove(AppPreferenceKeys.CORE_RATE_FFMPEG)
+                                .remove(AppPreferenceKeys.CORE_RATE_OPENMPT)
+                                .remove(AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT)
+                                .remove(AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT)
+                                .remove(AppPreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH)
+                                .remove(AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE)
+                                .remove(AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES)
+                                .remove(AppPreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH)
+                                .remove(AppPreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL)
+                                .remove(AppPreferenceKeys.OPENMPT_SURROUND_ENABLED)
+                                .apply()
+
+                            Toast.makeText(
+                                context,
+                                "Plugin settings cleared",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
                     )
                 }
@@ -2205,8 +2283,11 @@ private fun SettingsScreen(
     onOpenMptMasterGainMilliBelChanged: (Int) -> Unit,
     openMptSurroundEnabled: Boolean,
     onOpenMptSurroundEnabledChanged: (Boolean) -> Unit,
-    onClearRecentHistory: () -> Unit
+    onClearRecentHistory: () -> Unit,
+    onClearAllSettings: () -> Unit,
+    onClearAllPluginSettings: () -> Unit
 ) {
+    var pendingResetAction by remember { mutableStateOf<SettingsResetAction?>(null) }
     val secondaryTitle = when (route) {
         SettingsRoute.Root -> null
         SettingsRoute.AudioPlugins -> "Audio plugins"
@@ -2356,6 +2437,14 @@ private fun SettingsScreen(
                             icon = Icons.Default.Info,
                             onClick = onOpenAbout
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Danger zone")
+                        SettingsItemCard(
+                            title = "Clear all app settings",
+                            description = "Reset app settings to defaults. Plugin/core settings are kept.",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { pendingResetAction = SettingsResetAction.ClearAllSettings }
+                        )
                     }
                     SettingsRoute.AudioPlugins -> {
                         SettingsSectionLabel("Plugin configuration")
@@ -2377,6 +2466,14 @@ private fun SettingsScreen(
                             description = "Core options for tracker/module playback.",
                             icon = Icons.Default.GraphicEq,
                             onClick = onOpenOpenMpt
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Danger zone")
+                        SettingsItemCard(
+                            title = "Clear all plugin settings",
+                            description = "Reset all plugin/core settings to defaults without changing app settings.",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { pendingResetAction = SettingsResetAction.ClearPluginSettings }
                         )
                     }
                     SettingsRoute.PluginFfmpeg -> SampleRateSelectorCard(
@@ -2558,6 +2655,46 @@ private fun SettingsScreen(
                 }
             }
         }
+    }
+
+    pendingResetAction?.let { action ->
+        val title: String
+        val message: String
+        val confirmText: String
+        val onConfirm: () -> Unit
+        when (action) {
+            SettingsResetAction.ClearAllSettings -> {
+                title = "Clear all app settings?"
+                message = "This resets app settings to defaults and keeps plugin settings unchanged."
+                confirmText = "Clear app settings"
+                onConfirm = onClearAllSettings
+            }
+            SettingsResetAction.ClearPluginSettings -> {
+                title = "Clear all plugin settings?"
+                message = "This resets all plugin/core settings to defaults and keeps app settings unchanged."
+                confirmText = "Clear plugin settings"
+                onConfirm = onClearAllPluginSettings
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = { pendingResetAction = null },
+            title = { Text(title) },
+            text = { Text(message) },
+            dismissButton = {
+                TextButton(onClick = { pendingResetAction = null }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onConfirm()
+                    pendingResetAction = null
+                }) {
+                    Text(confirmText)
+                }
+            }
+        )
     }
 }
 
@@ -2780,6 +2917,11 @@ private fun formatMilliBelAsDbLabel(milliBel: Int): String {
 private enum class CoreOptionApplyPolicy {
     Live,
     RequiresPlaybackRestart
+}
+
+private enum class SettingsResetAction {
+    ClearAllSettings,
+    ClearPluginSettings
 }
 
 @Composable

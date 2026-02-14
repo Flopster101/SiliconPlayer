@@ -223,15 +223,13 @@ build_libopenmpt() {
     mkdir -p "$INSTALL_DIR"
     mkdir -p "$INSTALL_DIR"
 
-    # Copy Android.mk/Application.mk to root if not present
-    if [ ! -f "$PROJECT_PATH/Android.mk" ]; then
-        echo "Copying Android.mk to libopenmpt root..."
-        cp "$PROJECT_PATH/build/android_ndk/Android.mk" "$PROJECT_PATH/"
-        cp "$PROJECT_PATH/build/android_ndk/Application.mk" "$PROJECT_PATH/"
+    # Always Copy Android.mk/Application.mk to root to ensure we have latest source list
+    echo "Copying Android.mk to libopenmpt root..."
+    cp "$PROJECT_PATH/build/android_ndk/Android.mk" "$PROJECT_PATH/"
+    cp "$PROJECT_PATH/build/android_ndk/Application.mk" "$PROJECT_PATH/"
 
-        # Patch to static library
-        sed -i 's/BUILD_SHARED_LIBRARY/BUILD_STATIC_LIBRARY/g' "$PROJECT_PATH/Android.mk"
-    fi
+    # Patch to static library
+    sed -i 's/BUILD_SHARED_LIBRARY/BUILD_STATIC_LIBRARY/g' "$PROJECT_PATH/Android.mk"
 
     # Use ndk-build
     "$ANDROID_NDK_HOME/ndk-build" \

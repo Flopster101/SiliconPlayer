@@ -669,7 +669,7 @@ private fun AppNavigation(
     }
     var openMptVolumeRampingStrength by remember {
         mutableIntStateOf(
-            prefs.getInt(AppPreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH, -1)
+            prefs.getInt(AppPreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH, 0)
         )
     }
     var openMptMasterGainMilliBel by remember {
@@ -1813,7 +1813,7 @@ private fun AppNavigation(
                             openMptInterpolationFilterLength = 0
                             openMptAmigaResamplerMode = 2
                             openMptAmigaResamplerApplyAllModules = false
-                            openMptVolumeRampingStrength = -1
+                            openMptVolumeRampingStrength = 0
                             openMptMasterGainMilliBel = 0
                             openMptSurroundEnabled = false
 

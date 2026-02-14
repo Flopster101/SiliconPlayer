@@ -504,6 +504,8 @@ private fun AppNavigation(
     }
     var currentView by remember { mutableStateOf(MainView.Home) }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.Root) }
+    var settingsLaunchedFromPlayer by remember { mutableStateOf(false) }
+    var settingsReturnView by remember { mutableStateOf(MainView.Home) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
     var lastStoppedFile by remember { mutableStateOf<File?>(null) }
     var duration by remember { mutableDoubleStateOf(0.0) }
@@ -1204,8 +1206,16 @@ private fun AppNavigation(
     }
     val currentCoreSettingsRoute = settingsRouteForCore(lastUsedCoreName)
     val canOpenCurrentCoreSettings = currentCoreSettingsRoute != null
+    val exitSettingsToReturnView: () -> Unit = {
+        val target = if (settingsLaunchedFromPlayer) settingsReturnView else MainView.Home
+        settingsLaunchedFromPlayer = false
+        settingsRoute = SettingsRoute.Root
+        currentView = target
+    }
     val openCurrentCoreSettings: () -> Unit = {
         settingsRouteForCore(lastUsedCoreName)?.let { route ->
+            settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
+            settingsLaunchedFromPlayer = true
             settingsRoute = route
             currentView = MainView.Settings
             isPlayerExpanded = false
@@ -1272,13 +1282,14 @@ private fun AppNavigation(
     BackHandler(enabled = isPlayerExpanded || currentView == MainView.Settings) {
         when {
             isPlayerExpanded -> isPlayerExpanded = false
+            currentView == MainView.Settings && settingsLaunchedFromPlayer -> exitSettingsToReturnView()
             currentView == MainView.Settings && settingsRoute != SettingsRoute.Root -> {
                 settingsRoute = when (settingsRoute) {
                     SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
                     else -> SettingsRoute.Root
                 }
             }
-            currentView == MainView.Settings -> currentView = MainView.Home
+            currentView == MainView.Settings -> exitSettingsToReturnView()
         }
     }
 
@@ -1310,6 +1321,7 @@ private fun AppNavigation(
                             }
                             if (shouldShowSettingsAction) {
                                 IconButton(onClick = {
+                                    settingsLaunchedFromPlayer = false
                                     settingsRoute = SettingsRoute.Root
                                     currentView = MainView.Settings
                                 }) {
@@ -1448,13 +1460,17 @@ private fun AppNavigation(
                     MainView.Settings -> SettingsScreen(
                         route = settingsRoute,
                         onBack = {
+                            if (settingsLaunchedFromPlayer) {
+                                exitSettingsToReturnView()
+                                return@SettingsScreen
+                            }
                             if (settingsRoute != SettingsRoute.Root) {
                                 settingsRoute = when (settingsRoute) {
                                     SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
                                     else -> SettingsRoute.Root
                                 }
                             } else {
-                                currentView = MainView.Home
+                                exitSettingsToReturnView()
                             }
                         },
                         onOpenAudioPlugins = { settingsRoute = SettingsRoute.AudioPlugins },

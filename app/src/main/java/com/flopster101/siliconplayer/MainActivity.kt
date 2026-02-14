@@ -959,6 +959,12 @@ private fun AppNavigation(
         selectedFile = file
         isPlayerSurfaceVisible = true
         isPlayerExpanded = openExpanded
+
+        val isLoaded = NativeBridge.getTrackSampleRate() > 0
+        if (!isLoaded) {
+            NativeBridge.loadAudio(file.absolutePath)
+        }
+
         applyNativeTrackSnapshot(readNativeTrackSnapshot())
         position = NativeBridge.getPosition()
         isPlaying = NativeBridge.isEnginePlaying()
@@ -1322,6 +1328,13 @@ private fun AppNavigation(
     }
 
     val notificationOpenSignal = MainActivity.notificationOpenPlayerSignal
+
+    LaunchedEffect(Unit) {
+        if (notificationOpenSignal == 0) {
+            restorePlayerStateFromSessionAndNative(openExpanded = false)
+        }
+    }
+
     LaunchedEffect(notificationOpenSignal, openPlayerFromNotification) {
         if (notificationOpenSignal <= 0) return@LaunchedEffect
         if (openPlayerFromNotification) {

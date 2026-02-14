@@ -277,29 +277,31 @@ fun FileBrowserScreen(
     Scaffold(
         topBar = {
             Column {
-                TopAppBar(
-                    title = {
-                        Text(text = "Silicon Player")
-                    },
-                    actions = {
-                        onExitBrowser?.let { exitBrowser ->
-                            IconButton(onClick = exitBrowser) {
-                                Icon(
-                                    imageVector = Icons.Default.Home,
-                                    contentDescription = "Go to app home"
-                                )
+                if (showPrimaryTopBar) {
+                    TopAppBar(
+                        title = {
+                            Text(text = "Silicon Player")
+                        },
+                        actions = {
+                            onExitBrowser?.let { exitBrowser ->
+                                IconButton(onClick = exitBrowser) {
+                                    Icon(
+                                        imageVector = Icons.Default.Home,
+                                        contentDescription = "Go to app home"
+                                    )
+                                }
+                            }
+                            onOpenSettings?.let { openSettings ->
+                                IconButton(onClick = openSettings) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Open settings"
+                                    )
+                                }
                             }
                         }
-                        onOpenSettings?.let { openSettings ->
-                            IconButton(onClick = openSettings) {
-                                Icon(
-                                    imageVector = Icons.Default.Settings,
-                                    contentDescription = "Open settings"
-                                )
-                            }
-                        }
-                    }
-                )
+                    )
+                }
                 Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
                     Row(
                         modifier = Modifier
@@ -473,22 +475,29 @@ fun FileBrowserScreen(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = { openLocation(location) }
                         ) {
-                            Icon(
-                                imageVector = iconForStorageKind(location.kind, context),
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = location.typeLabel,
-                                    style = MaterialTheme.typography.titleSmall
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp, horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = iconForStorageKind(location.kind, context),
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
-                                Text(
-                                    text = location.name,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = location.typeLabel,
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        text = location.name,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }

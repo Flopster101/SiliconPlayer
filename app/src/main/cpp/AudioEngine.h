@@ -28,6 +28,7 @@ public:
     int getRepeatModeCapabilities();
     void setCoreOutputSampleRate(const std::string& coreName, int sampleRateHz);
     void setCoreOption(const std::string& coreName, const std::string& optionName, const std::string& optionValue);
+    void setAudioPipelineConfig(int backendPreference, int performanceMode, int bufferPreset, bool allowFallback);
     std::string getTitle();
     std::string getArtist();
     int getSampleRate();
@@ -41,6 +42,10 @@ private:
     AAudioStream *stream = nullptr;
     int streamSampleRate = 48000;
     int streamChannelCount = 2;
+    int outputBackendPreference = 0; // 0 auto, 1 aaudio, 2 opensl, 3 audiotrack
+    int outputPerformanceMode = 1; // 0 auto, 1 low-latency, 2 none, 3 power-saving
+    int outputBufferPreset = 0; // 0 auto, 1 small, 2 medium, 3 large
+    bool outputAllowFallback = true;
     std::atomic<bool> isPlaying { false };
     std::atomic<bool> looping { false };
     std::atomic<int> repeatMode { 0 };
@@ -57,6 +62,8 @@ private:
     std::vector<float> resampleDecodeScratch;
 
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
+    void reconfigureStream(bool resumePlayback);
+    void applyStreamBufferPreset();
     void resetResamplerStateLocked();
     int readFromDecoderLocked(float* buffer, int numFrames, bool& reachedEnd);
     void renderResampledLocked(float* outputData, int32_t numFrames, int channels, int streamRate, bool& reachedEnd);

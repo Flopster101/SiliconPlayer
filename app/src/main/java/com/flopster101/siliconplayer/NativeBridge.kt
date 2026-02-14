@@ -25,4 +25,10 @@ object NativeBridge {
     external fun getCurrentDecoderName(): String
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
     external fun setCoreOption(coreName: String, optionName: String, optionValue: String)
+    external fun setAudioPipelineConfig(
+        backendPreference: Int,
+        performanceMode: Int,
+        bufferPreset: Int,
+        allowFallback: Boolean
+    )
 }

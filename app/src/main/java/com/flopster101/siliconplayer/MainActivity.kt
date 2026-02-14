@@ -152,6 +152,45 @@ private enum class ThemeMode(val storageValue: String, val label: String) {
     }
 }
 
+private enum class AudioBackendPreference(val storageValue: String, val label: String, val nativeValue: Int) {
+    Auto("auto", "Auto", 0),
+    AAudio("aaudio", "AAudio", 1),
+    OpenSLES("opensl", "OpenSL ES", 2),
+    AudioTrack("audiotrack", "AudioTrack", 3);
+
+    companion object {
+        fun fromStorage(value: String?): AudioBackendPreference {
+            return entries.firstOrNull { it.storageValue == value } ?: Auto
+        }
+    }
+}
+
+private enum class AudioPerformanceMode(val storageValue: String, val label: String, val nativeValue: Int) {
+    Auto("auto", "Auto", 0),
+    LowLatency("low_latency", "Low latency", 1),
+    None("none", "None", 2),
+    PowerSaving("power_saving", "Power saving", 3);
+
+    companion object {
+        fun fromStorage(value: String?): AudioPerformanceMode {
+            return entries.firstOrNull { it.storageValue == value } ?: Auto
+        }
+    }
+}
+
+private enum class AudioBufferPreset(val storageValue: String, val label: String, val nativeValue: Int) {
+    Auto("auto", "Auto", 0),
+    Small("small", "Small", 1),
+    Medium("medium", "Medium", 2),
+    Large("large", "Large", 3);
+
+    companion object {
+        fun fromStorage(value: String?): AudioBufferPreset {
+            return entries.firstOrNull { it.storageValue == value } ?: Auto
+        }
+    }
+}
+
 @Composable
 private fun placeholderArtworkIconForFile(file: File?): ImageVector {
     val extension = file?.extension?.lowercase()?.ifBlank { return Icons.Default.MusicNote }
@@ -407,6 +446,10 @@ private object AppPreferenceKeys {
     const val OPENMPT_SURROUND_ENABLED = "openmpt_surround_enabled"
     const val RESPOND_HEADPHONE_MEDIA_BUTTONS = "respond_headphone_media_buttons"
     const val PAUSE_ON_HEADPHONE_DISCONNECT = "pause_on_headphone_disconnect"
+    const val AUDIO_BACKEND_PREFERENCE = "audio_backend_preference"
+    const val AUDIO_PERFORMANCE_MODE = "audio_performance_mode"
+    const val AUDIO_BUFFER_PRESET = "audio_buffer_preset"
+    const val AUDIO_ALLOW_BACKEND_FALLBACK = "audio_allow_backend_fallback"
     const val OPEN_PLAYER_FROM_NOTIFICATION = "open_player_from_notification"
     const val PERSIST_REPEAT_MODE = "persist_repeat_mode"
     const val PREFERRED_REPEAT_MODE = "preferred_repeat_mode"
@@ -484,6 +527,12 @@ class MainActivity : ComponentActivity() {
     external fun getRepeatModeCapabilities(): Int
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
     external fun setCoreOption(coreName: String, optionName: String, optionValue: String)
+    external fun setAudioPipelineConfig(
+        backendPreference: Int,
+        performanceMode: Int,
+        bufferPreset: Int,
+        allowFallback: Boolean
+    )
 
     companion object {
         var notificationOpenPlayerSignal by mutableIntStateOf(0)
@@ -641,6 +690,41 @@ private fun AppNavigation(
     var pauseOnHeadphoneDisconnect by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.PAUSE_ON_HEADPHONE_DISCONNECT, true)
+        )
+    }
+    var audioBackendPreference by remember {
+        mutableStateOf(
+            AudioBackendPreference.fromStorage(
+                prefs.getString(
+                    AppPreferenceKeys.AUDIO_BACKEND_PREFERENCE,
+                    AudioBackendPreference.Auto.storageValue
+                )
+            )
+        )
+    }
+    var audioPerformanceMode by remember {
+        mutableStateOf(
+            AudioPerformanceMode.fromStorage(
+                prefs.getString(
+                    AppPreferenceKeys.AUDIO_PERFORMANCE_MODE,
+                    AudioPerformanceMode.Auto.storageValue
+                )
+            )
+        )
+    }
+    var audioBufferPreset by remember {
+        mutableStateOf(
+            AudioBufferPreset.fromStorage(
+                prefs.getString(
+                    AppPreferenceKeys.AUDIO_BUFFER_PRESET,
+                    AudioBufferPreset.Auto.storageValue
+                )
+            )
+        )
+    }
+    var audioAllowBackendFallback by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.AUDIO_ALLOW_BACKEND_FALLBACK, true)
         )
     }
     var openPlayerFromNotification by remember {
@@ -1174,6 +1258,56 @@ private fun AppNavigation(
         PlaybackService.refreshSettings(context)
     }
 
+    LaunchedEffect(audioBackendPreference) {
+        prefs.edit()
+            .putString(
+                AppPreferenceKeys.AUDIO_BACKEND_PREFERENCE,
+                audioBackendPreference.storageValue
+            )
+            .apply()
+    }
+
+    LaunchedEffect(audioPerformanceMode) {
+        prefs.edit()
+            .putString(
+                AppPreferenceKeys.AUDIO_PERFORMANCE_MODE,
+                audioPerformanceMode.storageValue
+            )
+            .apply()
+    }
+
+    LaunchedEffect(audioBufferPreset) {
+        prefs.edit()
+            .putString(
+                AppPreferenceKeys.AUDIO_BUFFER_PRESET,
+                audioBufferPreset.storageValue
+            )
+            .apply()
+    }
+
+    LaunchedEffect(audioAllowBackendFallback) {
+        prefs.edit()
+            .putBoolean(
+                AppPreferenceKeys.AUDIO_ALLOW_BACKEND_FALLBACK,
+                audioAllowBackendFallback
+            )
+            .apply()
+    }
+
+    LaunchedEffect(
+        audioBackendPreference,
+        audioPerformanceMode,
+        audioBufferPreset,
+        audioAllowBackendFallback
+    ) {
+        NativeBridge.setAudioPipelineConfig(
+            backendPreference = audioBackendPreference.nativeValue,
+            performanceMode = audioPerformanceMode.nativeValue,
+            bufferPreset = audioBufferPreset.nativeValue,
+            allowFallback = audioAllowBackendFallback
+        )
+    }
+
     LaunchedEffect(openPlayerFromNotification) {
         prefs.edit()
             .putBoolean(AppPreferenceKeys.OPEN_PLAYER_FROM_NOTIFICATION, openPlayerFromNotification)
@@ -1571,6 +1705,14 @@ private fun AppNavigation(
                         onRespondHeadphoneMediaButtonsChanged = { respondHeadphoneMediaButtons = it },
                         pauseOnHeadphoneDisconnect = pauseOnHeadphoneDisconnect,
                         onPauseOnHeadphoneDisconnectChanged = { pauseOnHeadphoneDisconnect = it },
+                        audioBackendPreference = audioBackendPreference,
+                        onAudioBackendPreferenceChanged = { audioBackendPreference = it },
+                        audioPerformanceMode = audioPerformanceMode,
+                        onAudioPerformanceModeChanged = { audioPerformanceMode = it },
+                        audioBufferPreset = audioBufferPreset,
+                        onAudioBufferPresetChanged = { audioBufferPreset = it },
+                        audioAllowBackendFallback = audioAllowBackendFallback,
+                        onAudioAllowBackendFallbackChanged = { audioAllowBackendFallback = it },
                         openPlayerFromNotification = openPlayerFromNotification,
                         onOpenPlayerFromNotificationChanged = { openPlayerFromNotification = it },
                         persistRepeatMode = persistRepeatMode,
@@ -1641,6 +1783,10 @@ private fun AppNavigation(
                             previousRestartsAfterThreshold = true
                             respondHeadphoneMediaButtons = true
                             pauseOnHeadphoneDisconnect = true
+                            audioBackendPreference = AudioBackendPreference.Auto
+                            audioPerformanceMode = AudioPerformanceMode.Auto
+                            audioBufferPreset = AudioBufferPreset.Auto
+                            audioAllowBackendFallback = true
                             openPlayerFromNotification = true
                             persistRepeatMode = true
                             preferredRepeatMode = RepeatMode.None
@@ -2255,6 +2401,14 @@ private fun SettingsScreen(
     onRespondHeadphoneMediaButtonsChanged: (Boolean) -> Unit,
     pauseOnHeadphoneDisconnect: Boolean,
     onPauseOnHeadphoneDisconnectChanged: (Boolean) -> Unit,
+    audioBackendPreference: AudioBackendPreference,
+    onAudioBackendPreferenceChanged: (AudioBackendPreference) -> Unit,
+    audioPerformanceMode: AudioPerformanceMode,
+    onAudioPerformanceModeChanged: (AudioPerformanceMode) -> Unit,
+    audioBufferPreset: AudioBufferPreset,
+    onAudioBufferPresetChanged: (AudioBufferPreset) -> Unit,
+    audioAllowBackendFallback: Boolean,
+    onAudioAllowBackendFallbackChanged: (Boolean) -> Unit,
     openPlayerFromNotification: Boolean,
     onOpenPlayerFromNotificationChanged: (Boolean) -> Unit,
     persistRepeatMode: Boolean,
@@ -2585,6 +2739,29 @@ private fun SettingsScreen(
                             checked = pauseOnHeadphoneDisconnect,
                             onCheckedChange = onPauseOnHeadphoneDisconnectChanged
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Audio output pipeline")
+                        AudioBackendSelectorCard(
+                            selectedPreference = audioBackendPreference,
+                            onSelectedPreferenceChanged = onAudioBackendPreferenceChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        AudioPerformanceModeSelectorCard(
+                            selectedMode = audioPerformanceMode,
+                            onSelectedModeChanged = onAudioPerformanceModeChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        AudioBufferPresetSelectorCard(
+                            selectedPreset = audioBufferPreset,
+                            onSelectedPresetChanged = onAudioBufferPresetChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Allow backend fallback",
+                            description = "If selected backend is unavailable, fall back automatically to a working output backend.",
+                            checked = audioAllowBackendFallback,
+                            onCheckedChange = onAudioAllowBackendFallbackChanged
+                        )
                     }
                     SettingsRoute.Player -> {
                         SettingsSectionLabel("Track selection")
@@ -2909,6 +3086,8 @@ private data class ThemeModeChoice(val mode: ThemeMode, val label: String)
 
 private data class IntChoice(val value: Int, val label: String)
 
+private data class EnumChoice<T>(val value: T, val label: String)
+
 private fun formatMilliBelAsDbLabel(milliBel: Int): String {
     val db = milliBel / 100.0
     return String.format(Locale.US, "%+.1f dB", db)
@@ -2922,6 +3101,104 @@ private enum class CoreOptionApplyPolicy {
 private enum class SettingsResetAction {
     ClearAllSettings,
     ClearPluginSettings
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun <T> SettingsEnumSelectorCard(
+    title: String,
+    description: String,
+    selectedValue: T,
+    options: List<EnumChoice<T>>,
+    onSelected: (T) -> Unit
+) {
+    val selectedLabel = options.firstOrNull { it.value == selectedValue }?.label
+        ?: options.firstOrNull()?.label.orEmpty()
+    var dialogOpen by remember { mutableStateOf(false) }
+    val configuration = LocalConfiguration.current
+
+    androidx.compose.material3.ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = SettingsCardShape,
+        onClick = { dialogOpen = true }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = selectedLabel,
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+    }
+
+    if (dialogOpen) {
+        AlertDialog(
+            onDismissRequest = { dialogOpen = false },
+            title = { Text(title) },
+            text = {
+                val maxDialogListHeight = configuration.screenHeightDp.dp * 0.62f
+                CompositionLocalProvider(
+                    androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement provides false
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = maxDialogListHeight)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        options.forEach { option ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(42.dp)
+                                    .clickable {
+                                        onSelected(option.value)
+                                        dialogOpen = false
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = option.value == selectedValue,
+                                    onClick = {
+                                        onSelected(option.value)
+                                        dialogOpen = false
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = option.label,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dialogOpen = false }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {}
+        )
+    }
 }
 
 @Composable
@@ -3013,6 +3290,63 @@ private fun ThemeModeSelectorCard(
             confirmButton = {}
         )
     }
+}
+
+@Composable
+private fun AudioBackendSelectorCard(
+    selectedPreference: AudioBackendPreference,
+    onSelectedPreferenceChanged: (AudioBackendPreference) -> Unit
+) {
+    SettingsEnumSelectorCard(
+        title = "Audio output backend",
+        description = "Preferred output backend implementation.",
+        selectedValue = selectedPreference,
+        options = listOf(
+            EnumChoice(AudioBackendPreference.Auto, AudioBackendPreference.Auto.label),
+            EnumChoice(AudioBackendPreference.AAudio, AudioBackendPreference.AAudio.label),
+            EnumChoice(AudioBackendPreference.OpenSLES, AudioBackendPreference.OpenSLES.label),
+            EnumChoice(AudioBackendPreference.AudioTrack, AudioBackendPreference.AudioTrack.label)
+        ),
+        onSelected = onSelectedPreferenceChanged
+    )
+}
+
+@Composable
+private fun AudioPerformanceModeSelectorCard(
+    selectedMode: AudioPerformanceMode,
+    onSelectedModeChanged: (AudioPerformanceMode) -> Unit
+) {
+    SettingsEnumSelectorCard(
+        title = "Audio performance mode",
+        description = "Tune output stream behavior for latency vs efficiency.",
+        selectedValue = selectedMode,
+        options = listOf(
+            EnumChoice(AudioPerformanceMode.Auto, AudioPerformanceMode.Auto.label),
+            EnumChoice(AudioPerformanceMode.LowLatency, AudioPerformanceMode.LowLatency.label),
+            EnumChoice(AudioPerformanceMode.None, AudioPerformanceMode.None.label),
+            EnumChoice(AudioPerformanceMode.PowerSaving, AudioPerformanceMode.PowerSaving.label)
+        ),
+        onSelected = onSelectedModeChanged
+    )
+}
+
+@Composable
+private fun AudioBufferPresetSelectorCard(
+    selectedPreset: AudioBufferPreset,
+    onSelectedPresetChanged: (AudioBufferPreset) -> Unit
+) {
+    SettingsEnumSelectorCard(
+        title = "Audio buffer preset",
+        description = "Choose output buffer sizing profile for stability vs latency.",
+        selectedValue = selectedPreset,
+        options = listOf(
+            EnumChoice(AudioBufferPreset.Auto, AudioBufferPreset.Auto.label),
+            EnumChoice(AudioBufferPreset.Small, AudioBufferPreset.Small.label),
+            EnumChoice(AudioBufferPreset.Medium, AudioBufferPreset.Medium.label),
+            EnumChoice(AudioBufferPreset.Large, AudioBufferPreset.Large.label)
+        ),
+        onSelected = onSelectedPresetChanged
+    )
 }
 
 @Composable

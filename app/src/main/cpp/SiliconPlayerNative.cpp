@@ -129,6 +129,25 @@ Java_com_flopster101_siliconplayer_MainActivity_setCoreOption(
     env->ReleaseStringUTFChars(coreName, nativeCoreName);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_setAudioPipelineConfig(
+        JNIEnv*,
+        jobject,
+        jint backendPreference,
+        jint performanceMode,
+        jint bufferPreset,
+        jboolean allowFallback) {
+    if (audioEngine == nullptr) {
+        audioEngine = new AudioEngine();
+    }
+    audioEngine->setAudioPipelineConfig(
+            static_cast<int>(backendPreference),
+            static_cast<int>(performanceMode),
+            static_cast<int>(bufferPreset),
+            allowFallback == JNI_TRUE
+    );
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getTrackTitle(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
@@ -300,5 +319,23 @@ Java_com_flopster101_siliconplayer_NativeBridge_setCoreOption(
         JNIEnv* env, jobject thiz, jstring coreName, jstring optionName, jstring optionValue) {
     Java_com_flopster101_siliconplayer_MainActivity_setCoreOption(
             env, thiz, coreName, optionName, optionValue
+    );
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setAudioPipelineConfig(
+        JNIEnv* env,
+        jobject thiz,
+        jint backendPreference,
+        jint performanceMode,
+        jint bufferPreset,
+        jboolean allowFallback) {
+    Java_com_flopster101_siliconplayer_MainActivity_setAudioPipelineConfig(
+            env,
+            thiz,
+            backendPreference,
+            performanceMode,
+            bufferPreset,
+            allowFallback
     );
 }

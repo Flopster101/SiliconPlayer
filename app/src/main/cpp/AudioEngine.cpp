@@ -47,7 +47,14 @@ void AudioEngine::createStream() {
     // Set parameters
     AAudioStreamBuilder_setFormat(builder, AAUDIO_FORMAT_PCM_FLOAT);
     AAudioStreamBuilder_setChannelCount(builder, 2);
-    AAudioStreamBuilder_setPerformanceMode(builder, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY);
+    const int configuredPerformanceMode = outputPerformanceMode;
+    aaudio_performance_mode_t performanceMode = AAUDIO_PERFORMANCE_MODE_LOW_LATENCY;
+    if (configuredPerformanceMode == 2) {
+        performanceMode = AAUDIO_PERFORMANCE_MODE_NONE;
+    } else if (configuredPerformanceMode == 3) {
+        performanceMode = AAUDIO_PERFORMANCE_MODE_POWER_SAVING;
+    }
+    AAudioStreamBuilder_setPerformanceMode(builder, performanceMode);
 
     // Set callback
     AAudioStreamBuilder_setDataCallback(builder, dataCallback, this);
@@ -62,10 +69,78 @@ void AudioEngine::createStream() {
         streamChannelCount = AAudioStream_getChannelCount(stream);
         if (streamSampleRate <= 0) streamSampleRate = 48000;
         if (streamChannelCount <= 0) streamChannelCount = 2;
-        LOGD("AAudio stream opened: sampleRate=%d, channels=%d", streamSampleRate, streamChannelCount);
+        applyStreamBufferPreset();
+        LOGD(
+                "AAudio stream opened: sampleRate=%d, channels=%d, backendPref=%d, perfMode=%d, bufferPreset=%d, allowFallback=%d",
+                streamSampleRate,
+                streamChannelCount,
+                outputBackendPreference,
+                outputPerformanceMode,
+                outputBufferPreset,
+                outputAllowFallback ? 1 : 0
+        );
     }
 
     AAudioStreamBuilder_delete(builder);
+}
+
+void AudioEngine::applyStreamBufferPreset() {
+    if (stream == nullptr) return;
+    if (outputBufferPreset == 0) return;
+
+    const int32_t burstFrames = AAudioStream_getFramesPerBurst(stream);
+    const int32_t bufferCapacity = AAudioStream_getBufferCapacityInFrames(stream);
+    if (burstFrames <= 0 || bufferCapacity <= 0) return;
+
+    int multiplier = 2;
+    if (outputBufferPreset == 2) {
+        multiplier = 4;
+    } else if (outputBufferPreset == 3) {
+        multiplier = 8;
+    }
+
+    const int32_t target = std::clamp(
+            burstFrames * multiplier,
+            burstFrames,
+            bufferCapacity
+    );
+    const int32_t applied = AAudioStream_setBufferSizeInFrames(stream, target);
+    LOGD(
+            "AAudio buffer preset applied: burst=%d capacity=%d target=%d applied=%d",
+            burstFrames,
+            bufferCapacity,
+            target,
+            applied
+    );
+}
+
+void AudioEngine::reconfigureStream(bool resumePlayback) {
+    const bool shouldResume = resumePlayback && isPlaying.load();
+    if (stream != nullptr) {
+        AAudioStream_requestStop(stream);
+    }
+    isPlaying.store(false);
+
+    closeStream();
+    createStream();
+
+    {
+        std::lock_guard<std::mutex> lock(decoderMutex);
+        if (decoder) {
+            decoderRenderSampleRate = resolveOutputSampleRateForCore(decoder->getName());
+            decoder->setOutputSampleRate(decoderRenderSampleRate);
+            resetResamplerStateLocked();
+        }
+    }
+
+    if (shouldResume && stream != nullptr) {
+        const aaudio_result_t result = AAudioStream_requestStart(stream);
+        if (result == AAUDIO_OK) {
+            isPlaying.store(true);
+        } else {
+            LOGE("Failed to resume stream after reconfigure: %s", AAudio_convertResultToText(result));
+        }
+    }
 }
 
 void AudioEngine::closeStream() {
@@ -476,6 +551,30 @@ void AudioEngine::setCoreOption(
     if (decoder && coreName == decoder->getName()) {
         decoder->setOption(optionName.c_str(), optionValue.c_str());
     }
+}
+
+void AudioEngine::setAudioPipelineConfig(
+        int backendPreference,
+        int performanceMode,
+        int bufferPreset,
+        bool allowFallback) {
+    const int normalizedBackend = (backendPreference >= 0 && backendPreference <= 3) ? backendPreference : 0;
+    const int normalizedPerformance = (performanceMode >= 0 && performanceMode <= 3) ? performanceMode : 1;
+    const int normalizedBufferPreset = (bufferPreset >= 0 && bufferPreset <= 3) ? bufferPreset : 0;
+
+    const bool changed =
+            outputBackendPreference != normalizedBackend ||
+            outputPerformanceMode != normalizedPerformance ||
+            outputBufferPreset != normalizedBufferPreset ||
+            outputAllowFallback != allowFallback;
+
+    outputBackendPreference = normalizedBackend;
+    outputPerformanceMode = normalizedPerformance;
+    outputBufferPreset = normalizedBufferPreset;
+    outputAllowFallback = allowFallback;
+
+    if (!changed) return;
+    reconfigureStream(true);
 }
 
 std::string AudioEngine::getTitle() {

@@ -52,14 +52,20 @@ apply_libopenmpt_patches() {
         local patch_name
         patch_name="$(basename "$patch_file")"
 
-        if patch -p1 --forward --dry-run -d "$PROJECT_PATH" < "$patch_file" >/dev/null 2>&1; then
-            echo "Applying libopenmpt patch: $patch_name"
-            patch -p1 --forward -d "$PROJECT_PATH" < "$patch_file"
-        elif patch -p1 --reverse --dry-run -d "$PROJECT_PATH" < "$patch_file" >/dev/null 2>&1; then
-            echo "libopenmpt patch already applied: $patch_name"
+        # Check if patch is already applied by looking for the commit subject in git log
+        # Extract subject from patch file (Subject: ...)
+        local subject
+        subject=$(grep "^Subject: " "$patch_file" | sed 's/^Subject: \[PATCH[^]]*\] //')
+        
+        if git -C "$PROJECT_PATH" log -1 --grep="$subject" >/dev/null 2>&1; then
+             echo "libopenmpt patch already applied: $patch_name"
         else
-            echo "Error: could not apply or validate libopenmpt patch: $patch_name"
-            exit 1
+             echo "Applying libopenmpt patch: $patch_name"
+             git -C "$PROJECT_PATH" am "$patch_file" || {
+                 echo "Error applying patch $patch_name"
+                 git -C "$PROJECT_PATH" am --abort
+                 exit 1
+             }
         fi
     done
 }
@@ -215,7 +221,7 @@ build_libopenmpt() {
     local PROJECT_PATH="$ABSOLUTE_PATH/libopenmpt"
 
     mkdir -p "$INSTALL_DIR"
-    apply_libopenmpt_patches
+    mkdir -p "$INSTALL_DIR"
 
     # Copy Android.mk/Application.mk to root if not present
     if [ ! -f "$PROJECT_PATH/Android.mk" ]; then
@@ -297,6 +303,13 @@ target_has_lib() {
     done
     return 1
 }
+
+# -----------------------------------------------------------------------------
+# Pre-build setup (Apply patches once)
+# -----------------------------------------------------------------------------
+if target_has_lib "libopenmpt"; then
+    apply_libopenmpt_patches
+fi
 
 # -----------------------------------------------------------------------------
 # Main Loop

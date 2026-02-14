@@ -1,7 +1,18 @@
+From bc58d2818193b6cf167fbbcc2d9d9b26b1488b27 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Sat, 14 Feb 2026 16:20:31 -0300
+Subject: [PATCH 2/2] soundlib: Allow Amiga resampler on all module types
+
+---
+ soundlib/Sndfile.cpp | 2 +-
+ soundlib/Sndmix.cpp  | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
 diff --git a/soundlib/Sndfile.cpp b/soundlib/Sndfile.cpp
+index 96273f8a1..3b863bcba 100644
 --- a/soundlib/Sndfile.cpp
 +++ b/soundlib/Sndfile.cpp
-@@ -1461,7 +1461,7 @@
+@@ -1462,7 +1462,7 @@ const char *CSoundFile::GetInstrumentName(INSTRUMENTINDEX nInstr) const
  
  void CSoundFile::InitAmigaResampler()
  {
@@ -11,9 +22,10 @@ diff --git a/soundlib/Sndfile.cpp b/soundlib/Sndfile.cpp
  		const Paula::State defaultState(GetSampleRate());
  		for(auto &chn : m_PlayState.Chn)
 diff --git a/soundlib/Sndmix.cpp b/soundlib/Sndmix.cpp
+index 4ed19cdf6..32bf40bb0 100644
 --- a/soundlib/Sndmix.cpp
 +++ b/soundlib/Sndmix.cpp
-@@ -2550,7 +2550,7 @@
+@@ -2550,7 +2550,7 @@ bool CSoundFile::ReadNote()
  			} else if(Resampling::IsKnownMode(m_nResampling))
  			{
  				chn.resamplingMode = m_nResampling;
@@ -22,3 +34,6 @@ diff --git a/soundlib/Sndmix.cpp b/soundlib/Sndmix.cpp
  			{
  				// Enforce Amiga resampler for Amiga modules
  				chn.resamplingMode = SRCMODE_AMIGA;
+-- 
+2.53.0
+

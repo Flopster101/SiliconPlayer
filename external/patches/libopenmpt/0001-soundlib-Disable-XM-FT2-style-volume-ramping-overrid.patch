@@ -1,3 +1,12 @@
+From 14788dadffd12220b610e30ed6e17b12500317b5 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Sat, 14 Feb 2026 16:20:31 -0300
+Subject: [PATCH 1/2] soundlib: Disable XM FT2-style volume ramping override
+
+---
+ soundlib/Sndmix.cpp | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
 diff --git a/soundlib/Sndmix.cpp b/soundlib/Sndmix.cpp
 index 34fbb1b6f..4ed19cdf6 100644
 --- a/soundlib/Sndmix.cpp
@@ -17,3 +26,6 @@ index 34fbb1b6f..4ed19cdf6 100644
  
  		if(chn.pModInstrument != nullptr && rampUp)
  		{
+-- 
+2.53.0
+

@@ -201,6 +201,18 @@ enum class AudioResamplerPreference(val storageValue: String, val label: String,
     }
 }
 
+enum class FilenameDisplayMode(val storageValue: String, val label: String) {
+    Always("always", "Always"),
+    Never("never", "Never"),
+    TrackerOnly("tracker_only", "Tracker/Chiptune formats only");
+
+    companion object {
+        fun fromStorage(value: String?): FilenameDisplayMode {
+            return entries.firstOrNull { it.storageValue == value } ?: Always
+        }
+    }
+}
+
 private fun normalizedPath(path: String?): String? {
     if (path.isNullOrBlank()) return null
     return try {
@@ -414,6 +426,7 @@ private object AppPreferenceKeys {
     const val AUDIO_MASTER_VOLUME_DB = "audio_master_volume_db"
     const val AUDIO_PLUGIN_VOLUME_DB = "audio_plugin_volume_db"
     const val AUDIO_FORCE_MONO = "audio_force_mono"
+    const val FILENAME_DISPLAY_MODE = "filename_display_mode"
 }
 
 class MainActivity : ComponentActivity() {
@@ -661,6 +674,13 @@ private fun AppNavigation(
     var audioDucking by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.AUDIO_DUCKING, true)
+        )
+    }
+    var filenameDisplayMode by remember {
+        mutableStateOf(
+            FilenameDisplayMode.fromStorage(
+                prefs.getString(AppPreferenceKeys.FILENAME_DISPLAY_MODE, FilenameDisplayMode.Always.storageValue)
+            )
         )
     }
     var ffmpegCoreSampleRateHz by remember {
@@ -1779,6 +1799,11 @@ private fun AppNavigation(
                         onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
                         keepScreenOn = keepScreenOn,
                         onKeepScreenOnChanged = { keepScreenOn = it },
+                        filenameDisplayMode = filenameDisplayMode,
+                        onFilenameDisplayModeChanged = { mode ->
+                            filenameDisplayMode = mode
+                            prefs.edit().putString(AppPreferenceKeys.FILENAME_DISPLAY_MODE, mode.storageValue).apply()
+                        },
                         audioFocusInterrupt = audioFocusInterrupt,
                         onAudioFocusInterruptChanged = {
                             audioFocusInterrupt = it
@@ -1872,6 +1897,7 @@ private fun AppNavigation(
                             recentFolders = emptyList()
                             recentPlayedFiles = emptyList()
                             keepScreenOn = false
+                            filenameDisplayMode = FilenameDisplayMode.Always
                             browserLaunchLocationId = null
                             browserLaunchDirectoryPath = null
                             onThemeModeChanged(ThemeMode.Auto)
@@ -1973,7 +1999,8 @@ private fun AppNavigation(
                             tempSongVolumeDb = songVolumeDb
                             tempForceMono = forceMono
                             showAudioEffectsDialog = true
-                        }
+                        },
+                        filenameDisplayMode = filenameDisplayMode
                     )
                 }
             }
@@ -2180,7 +2207,8 @@ private fun AppNavigation(
                         tempSongVolumeDb = songVolumeDb
                         tempForceMono = forceMono
                         showAudioEffectsDialog = true
-                    }
+                    },
+                    filenameDisplayMode = filenameDisplayMode
                 )
             }
 

@@ -140,6 +140,8 @@ fun SettingsScreen(
     onRememberBrowserLocationChanged: (Boolean) -> Unit,
     keepScreenOn: Boolean,
     onKeepScreenOnChanged: (Boolean) -> Unit,
+    filenameDisplayMode: FilenameDisplayMode,
+    onFilenameDisplayModeChanged: (FilenameDisplayMode) -> Unit,
     ffmpegSampleRateHz: Int,
     ffmpegCapabilities: Int,
     onFfmpegSampleRateChanged: (Int) -> Unit,
@@ -582,6 +584,28 @@ fun SettingsScreen(
                             checked = keepScreenOn,
                             onCheckedChange = onKeepScreenOnChanged
                         )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        var showFilenameDisplayDialog by remember { mutableStateOf(false) }
+                        SettingsItemCard(
+                            title = "Show filename",
+                            description = when (filenameDisplayMode) {
+                                FilenameDisplayMode.Always -> "Always show filename"
+                                FilenameDisplayMode.Never -> "Never show filename"
+                                FilenameDisplayMode.TrackerOnly -> "Show for tracker/chiptune formats only"
+                            },
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showFilenameDisplayDialog = true }
+                        )
+                        if (showFilenameDisplayDialog) {
+                            FilenameDisplayModeDialog(
+                                currentMode = filenameDisplayMode,
+                                onModeSelected = { mode ->
+                                    onFilenameDisplayModeChanged(mode)
+                                    showFilenameDisplayDialog = false
+                                },
+                                onDismiss = { showFilenameDisplayDialog = false }
+                            )
+                        }
                     }
                     SettingsRoute.Misc -> {
                         SettingsSectionLabel("Browser behavior")
@@ -1637,4 +1661,42 @@ private fun ClearAudioParametersCard(
             }
         )
     }
+}
+
+
+@Composable
+private fun FilenameDisplayModeDialog(
+    currentMode: FilenameDisplayMode,
+    onModeSelected: (FilenameDisplayMode) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Show filename") },
+        text = {
+            Column {
+                FilenameDisplayMode.entries.forEach { mode ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onModeSelected(mode) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = mode == currentMode,
+                            onClick = { onModeSelected(mode) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(mode.label)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
 }

@@ -103,7 +103,8 @@ fun PlayerScreen(
     onCycleRepeatMode: () -> Unit,
     canOpenCoreSettings: Boolean,
     onOpenCoreSettings: () -> Unit,
-    onOpenAudioEffects: () -> Unit
+    onOpenAudioEffects: () -> Unit,
+    filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode = com.flopster101.siliconplayer.FilenameDisplayMode.Always
 ) {
     var sliderPosition by remember(file?.absolutePath, durationSeconds) {
         mutableDoubleStateOf(positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0)))
@@ -246,7 +247,9 @@ fun PlayerScreen(
                         TrackMetadataBlock(
                             title = displayTitle,
                             artist = displayArtist,
-                            filename = displayFilename
+                            filename = displayFilename,
+                            filenameDisplayMode = filenameDisplayMode,
+                            decoderName = decoderName
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         TimelineSection(
@@ -328,7 +331,9 @@ fun PlayerScreen(
                     TrackMetadataBlock(
                         title = displayTitle,
                         artist = displayArtist,
-                        filename = displayFilename
+                        filename = displayFilename,
+                        filenameDisplayMode = filenameDisplayMode,
+                        decoderName = decoderName
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     TimelineSection(
@@ -607,7 +612,24 @@ private fun TrackInfoChip(
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun TrackMetadataBlock(title: String, artist: String, filename: String) {
+private fun TrackMetadataBlock(
+    title: String,
+    artist: String,
+    filename: String,
+    filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode,
+    decoderName: String?
+) {
+    val shouldShowFilename = remember(filenameDisplayMode, decoderName) {
+        when (filenameDisplayMode) {
+            com.flopster101.siliconplayer.FilenameDisplayMode.Always -> true
+            com.flopster101.siliconplayer.FilenameDisplayMode.Never -> false
+            com.flopster101.siliconplayer.FilenameDisplayMode.TrackerOnly -> {
+                val decoder = decoderName?.lowercase() ?: ""
+                decoder.contains("openmpt") || decoder.contains("libopenmpt")
+            }
+        }
+    }
+
     AnimatedContent(
         targetState = title,
         transitionSpec = {
@@ -664,14 +686,16 @@ private fun TrackMetadataBlock(title: String, artist: String, filename: String) 
             overflow = TextOverflow.Ellipsis
         )
     }
-    Spacer(modifier = Modifier.height(6.dp))
-    Text(
-        text = filename,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis
-    )
+    if (shouldShowFilename) {
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = filename,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
 }
 
 @Composable

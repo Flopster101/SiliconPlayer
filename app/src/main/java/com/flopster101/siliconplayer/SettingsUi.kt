@@ -34,6 +34,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Slideshow
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -93,6 +95,9 @@ fun SettingsScreen(
     onOpenAudioPlugins: () -> Unit,
     onOpenGeneralAudio: () -> Unit,
     onOpenAudioEffects: () -> Unit,
+    onClearAllAudioParameters: () -> Unit,
+    onClearPluginAudioParameters: () -> Unit,
+    onClearSongAudioParameters: () -> Unit,
     onOpenPlayer: () -> Unit,
     onOpenMisc: () -> Unit,
     onOpenUi: () -> Unit,
@@ -482,6 +487,12 @@ fun SettingsScreen(
                             description = "Volume controls and audio processing.",
                             icon = Icons.Default.Tune,
                             onClick = onOpenAudioEffects
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        ClearAudioParametersCard(
+                            onClearAll = onClearAllAudioParameters,
+                            onClearPlugins = onClearPluginAudioParameters,
+                            onClearSongs = onClearSongAudioParameters
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Audio output pipeline")
@@ -1525,6 +1536,97 @@ private fun OpenMptVolumeRampingCard(
                     dialogOpen = false
                 }) {
                     Text("Apply")
+                }
+            }
+        )
+    }
+}
+
+
+@Composable
+private fun ClearAudioParametersCard(
+    onClearAll: () -> Unit,
+    onClearPlugins: () -> Unit,
+    onClearSongs: () -> Unit
+) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    androidx.compose.material3.ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = SettingsCardShape,
+        onClick = { showDialog = true }
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Clear saved parameters",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Reset volume settings for all, plugins, or songs",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Clear saved parameters") },
+            text = {
+                Column {
+                    Text("Choose which audio parameters to reset:")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextButton(
+                        onClick = {
+                            onClearAll()
+                            showDialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Clear all")
+                    }
+                    TextButton(
+                        onClick = {
+                            onClearPlugins()
+                            showDialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Clear plugin volumes")
+                    }
+                    TextButton(
+                        onClick = {
+                            onClearSongs()
+                            showDialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Clear song volumes")
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("Cancel")
                 }
             }
         )

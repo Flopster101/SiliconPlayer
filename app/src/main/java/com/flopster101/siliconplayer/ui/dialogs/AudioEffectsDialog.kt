@@ -16,50 +16,66 @@ fun AudioEffectsDialog(
     pluginVolumeDb: Float,
     songVolumeDb: Float,
     forceMono: Boolean,
+    hasActiveCore: Boolean,
+    hasActiveSong: Boolean,
+    currentCoreName: String?,
     onMasterVolumeChange: (Float) -> Unit,
     onPluginVolumeChange: (Float) -> Unit,
     onSongVolumeChange: (Float) -> Unit,
     onForceMonoChange: (Boolean) -> Unit,
+    onReset: () -> Unit,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Audio Parameters") },
+        title = { Text("Audio effects") },
         text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                VolumeSliderRow(
-                    label = "Master Volume",
-                    valueDb = masterVolumeDb,
-                    onValueChange = onMasterVolumeChange
-                )
-
-                VolumeSliderRow(
-                    label = "Plugin Volume",
-                    valueDb = pluginVolumeDb,
-                    onValueChange = onPluginVolumeChange
-                )
-
-                VolumeSliderRow(
-                    label = "Song Volume",
-                    valueDb = songVolumeDb,
-                    onValueChange = onSongVolumeChange
-                )
-
-                Row(
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text("Force Mono", style = MaterialTheme.typography.bodyMedium)
-                    Switch(
-                        checked = forceMono,
-                        onCheckedChange = onForceMonoChange
+                    VolumeSliderRow(
+                        label = "Master Volume",
+                        valueDb = masterVolumeDb,
+                        onValueChange = onMasterVolumeChange
                     )
+
+                    VolumeSliderRow(
+                        label = "Plugin Volume",
+                        valueDb = pluginVolumeDb,
+                        onValueChange = onPluginVolumeChange,
+                        enabled = hasActiveCore
+                    )
+
+                    VolumeSliderRow(
+                        label = "Song Volume",
+                        valueDb = songVolumeDb,
+                        onValueChange = onSongVolumeChange,
+                        enabled = hasActiveSong
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Force Mono", style = MaterialTheme.typography.bodyMedium)
+                        Switch(
+                            checked = forceMono,
+                            onCheckedChange = onForceMonoChange
+                        )
+                    }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Core: ${currentCoreName ?: "(none)"}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         },
         confirmButton = {
@@ -68,8 +84,13 @@ fun AudioEffectsDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onReset) {
+                    Text("Reset")
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
             }
         }
     )
@@ -79,19 +100,26 @@ fun AudioEffectsDialog(
 private fun VolumeSliderRow(
     label: String,
     valueDb: Float,
-    onValueChange: (Float) -> Unit
+    onValueChange: (Float) -> Unit,
+    enabled: Boolean = true
 ) {
+    val contentAlpha = if (enabled) 1f else 0.38f
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
+            )
             Text(
                 text = String.format("%.1f dB", valueDb),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
             )
         }
 
@@ -104,7 +132,8 @@ private fun VolumeSliderRow(
         ) {
             IconButton(
                 onClick = { onValueChange((valueDb - 1f).coerceIn(-20f, 20f)) },
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(36.dp),
+                enabled = enabled
             ) {
                 Icon(
                     imageVector = Icons.Default.Remove,
@@ -117,12 +146,14 @@ private fun VolumeSliderRow(
                 onValueChange = onValueChange,
                 valueRange = -20f..20f,
                 steps = 39,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                enabled = enabled
             )
 
             IconButton(
                 onClick = { onValueChange((valueDb + 1f).coerceIn(-20f, 20f)) },
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(36.dp),
+                enabled = enabled
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,

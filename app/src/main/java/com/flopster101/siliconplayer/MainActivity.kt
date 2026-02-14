@@ -1696,6 +1696,43 @@ private fun AppNavigation(
                             tempForceMono = forceMono
                             showAudioEffectsDialog = true
                         },
+                        onClearAllAudioParameters = {
+                            // Clear all: master, plugin volumes and force mono from preferences, and all song volumes from database
+                            prefs.edit().apply {
+                                remove(AppPreferenceKeys.AUDIO_MASTER_VOLUME_DB)
+                                remove(AppPreferenceKeys.AUDIO_PLUGIN_VOLUME_DB)
+                                remove(AppPreferenceKeys.AUDIO_FORCE_MONO)
+                                apply()
+                            }
+                            volumeDatabase.resetAllSongVolumes()
+                            // Reset state and native layer
+                            masterVolumeDb = 0f
+                            pluginVolumeDb = 0f
+                            songVolumeDb = 0f
+                            forceMono = false
+                            NativeBridge.setMasterGain(0f)
+                            NativeBridge.setPluginGain(0f)
+                            NativeBridge.setSongGain(0f)
+                            NativeBridge.setForceMono(false)
+                            Toast.makeText(context, "All audio parameters cleared", Toast.LENGTH_SHORT).show()
+                        },
+                        onClearPluginAudioParameters = {
+                            // Clear plugin volume only
+                            prefs.edit().apply {
+                                remove(AppPreferenceKeys.AUDIO_PLUGIN_VOLUME_DB)
+                                apply()
+                            }
+                            pluginVolumeDb = 0f
+                            NativeBridge.setPluginGain(0f)
+                            Toast.makeText(context, "Plugin volume cleared", Toast.LENGTH_SHORT).show()
+                        },
+                        onClearSongAudioParameters = {
+                            // Clear all song volumes from database
+                            volumeDatabase.resetAllSongVolumes()
+                            songVolumeDb = 0f
+                            NativeBridge.setSongGain(0f)
+                            Toast.makeText(context, "All song volumes cleared", Toast.LENGTH_SHORT).show()
+                        },
                         onOpenPlayer = { settingsRoute = SettingsRoute.Player },
                         onOpenMisc = { settingsRoute = SettingsRoute.Misc },
                         onOpenUi = { settingsRoute = SettingsRoute.Ui },
@@ -2161,6 +2198,9 @@ private fun AppNavigation(
                     pluginVolumeDb = tempPluginVolumeDb,
                     songVolumeDb = tempSongVolumeDb,
                     forceMono = tempForceMono,
+                    hasActiveCore = lastUsedCoreName != null,
+                    hasActiveSong = selectedFile != null,
+                    currentCoreName = lastUsedCoreName,
                     onMasterVolumeChange = {
                         tempMasterVolumeDb = it
                         NativeBridge.setMasterGain(it)
@@ -2176,6 +2216,17 @@ private fun AppNavigation(
                     onForceMonoChange = {
                         tempForceMono = it
                         NativeBridge.setForceMono(it)
+                    },
+                    onReset = {
+                        // Reset all values to 0dB / false
+                        tempMasterVolumeDb = 0f
+                        tempPluginVolumeDb = 0f
+                        tempSongVolumeDb = 0f
+                        tempForceMono = false
+                        NativeBridge.setMasterGain(0f)
+                        NativeBridge.setPluginGain(0f)
+                        NativeBridge.setSongGain(0f)
+                        NativeBridge.setForceMono(false)
                     },
                     onDismiss = {
                         // Cancel: revert to original values

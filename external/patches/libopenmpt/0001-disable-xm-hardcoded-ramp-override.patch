@@ -1,0 +1,19 @@
+diff --git a/soundlib/Sndmix.cpp b/soundlib/Sndmix.cpp
+index 34fbb1b6f..4ed19cdf6 100644
+--- a/soundlib/Sndmix.cpp
++++ b/soundlib/Sndmix.cpp
+@@ -1971,11 +1971,9 @@ void CSoundFile::ProcessRamping(ModChannel &chn) const
+ 		rampLength = globalRampLength = (rampUp ? m_MixerSettings.GetVolumeRampUpSamples() : m_MixerSettings.GetVolumeRampDownSamples());
+ 		//XXXih: add real support for bidi ramping here
+ 
+-		if(m_playBehaviour[kFT2VolumeRamping] && (GetType() & MOD_TYPE_XM))
+-		{
+-			// apply FT2-style super-soft volume ramping (5ms), overriding openmpt settings
+-			rampLength = globalRampLength = Util::muldivr(5, m_MixerSettings.gdwMixingFreq, 1000);
+-		}
++		// NOTE(Silicon Player): Intentionally do not force FT2 XM ramp override here.
++		// Keep using libopenmpt render-param ramp settings so app/user ramp control
++		// has consistent effect across module formats.
+ 
+ 		if(chn.pModInstrument != nullptr && rampUp)
+ 		{

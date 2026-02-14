@@ -36,6 +36,33 @@ export PATH="$TOOLCHAIN/bin:$PATH"
 ABIS=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 ABSOLUTE_PATH="$SCRIPT_DIR"
+PATCHES_DIR="$ABSOLUTE_PATH/patches/libopenmpt"
+
+# -----------------------------------------------------------------------------
+# Function: Apply libopenmpt patches (idempotent)
+# -----------------------------------------------------------------------------
+apply_libopenmpt_patches() {
+    local PROJECT_PATH="$ABSOLUTE_PATH/libopenmpt"
+    if [ ! -d "$PATCHES_DIR" ]; then
+        return
+    fi
+
+    for patch_file in "$PATCHES_DIR"/*.patch; do
+        [ -e "$patch_file" ] || continue
+        local patch_name
+        patch_name="$(basename "$patch_file")"
+
+        if patch -p1 --forward --dry-run -d "$PROJECT_PATH" < "$patch_file" >/dev/null 2>&1; then
+            echo "Applying libopenmpt patch: $patch_name"
+            patch -p1 --forward -d "$PROJECT_PATH" < "$patch_file"
+        elif patch -p1 --reverse --dry-run -d "$PROJECT_PATH" < "$patch_file" >/dev/null 2>&1; then
+            echo "libopenmpt patch already applied: $patch_name"
+        else
+            echo "Error: could not apply or validate libopenmpt patch: $patch_name"
+            exit 1
+        fi
+    done
+}
 
 # -----------------------------------------------------------------------------
 # Function: Build FFmpeg
@@ -124,6 +151,7 @@ build_libopenmpt() {
     local PROJECT_PATH="$ABSOLUTE_PATH/libopenmpt"
 
     mkdir -p "$INSTALL_DIR"
+    apply_libopenmpt_patches
 
     # Copy Android.mk/Application.mk to root if not present
     if [ ! -f "$PROJECT_PATH/Android.mk" ]; then

@@ -191,6 +191,17 @@ enum class AudioBufferPreset(val storageValue: String, val label: String, val na
     }
 }
 
+enum class AudioResamplerPreference(val storageValue: String, val label: String, val nativeValue: Int) {
+    BuiltIn("builtin", "Built-in", 1),
+    Sox("sox", "SoX", 2);
+
+    companion object {
+        fun fromStorage(value: String?): AudioResamplerPreference {
+            return entries.firstOrNull { it.storageValue == value } ?: BuiltIn
+        }
+    }
+}
+
 private fun normalizedPath(path: String?): String? {
     if (path.isNullOrBlank()) return null
     return try {
@@ -389,6 +400,7 @@ private object AppPreferenceKeys {
     const val AUDIO_BACKEND_PREFERENCE = "audio_backend_preference"
     const val AUDIO_PERFORMANCE_MODE = "audio_performance_mode"
     const val AUDIO_BUFFER_PRESET = "audio_buffer_preset"
+    const val AUDIO_RESAMPLER_PREFERENCE = "audio_resampler_preference"
     const val AUDIO_ALLOW_BACKEND_FALLBACK = "audio_allow_backend_fallback"
     const val OPEN_PLAYER_FROM_NOTIFICATION = "open_player_from_notification"
     const val PERSIST_REPEAT_MODE = "persist_repeat_mode"
@@ -681,6 +693,16 @@ private fun AppNavigation(
                 prefs.getString(
                     AppPreferenceKeys.AUDIO_BUFFER_PRESET,
                     AudioBufferPreset.Auto.storageValue
+                )
+            )
+        )
+    }
+    var audioResamplerPreference by remember {
+        mutableStateOf(
+            AudioResamplerPreference.fromStorage(
+                prefs.getString(
+                    AppPreferenceKeys.AUDIO_RESAMPLER_PREFERENCE,
+                    AudioResamplerPreference.BuiltIn.storageValue
                 )
             )
         )
@@ -1216,6 +1238,15 @@ private fun AppNavigation(
             .apply()
     }
 
+    LaunchedEffect(audioResamplerPreference) {
+        prefs.edit()
+            .putString(
+                AppPreferenceKeys.AUDIO_RESAMPLER_PREFERENCE,
+                audioResamplerPreference.storageValue
+            )
+            .apply()
+    }
+
     LaunchedEffect(audioAllowBackendFallback) {
         prefs.edit()
             .putBoolean(
@@ -1563,6 +1594,8 @@ private fun AppNavigation(
                         onAudioPerformanceModeChanged = { audioPerformanceMode = it },
                         audioBufferPreset = audioBufferPreset,
                         onAudioBufferPresetChanged = { audioBufferPreset = it },
+                        audioResamplerPreference = audioResamplerPreference,
+                        onAudioResamplerPreferenceChanged = { audioResamplerPreference = it },
                         audioAllowBackendFallback = audioAllowBackendFallback,
                         onAudioAllowBackendFallbackChanged = { audioAllowBackendFallback = it },
                         openPlayerFromNotification = openPlayerFromNotification,
@@ -1641,6 +1674,7 @@ private fun AppNavigation(
                             audioBackendPreference = AudioBackendPreference.Auto
                             audioPerformanceMode = AudioPerformanceMode.Auto
                             audioBufferPreset = AudioBufferPreset.Auto
+                            audioResamplerPreference = AudioResamplerPreference.BuiltIn
                             audioAllowBackendFallback = true
                             openPlayerFromNotification = true
                             persistRepeatMode = true

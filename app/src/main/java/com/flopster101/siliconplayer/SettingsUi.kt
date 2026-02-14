@@ -115,6 +115,8 @@ fun SettingsScreen(
     onAudioPerformanceModeChanged: (AudioPerformanceMode) -> Unit,
     audioBufferPreset: AudioBufferPreset,
     onAudioBufferPresetChanged: (AudioBufferPreset) -> Unit,
+    audioResamplerPreference: AudioResamplerPreference,
+    onAudioResamplerPreferenceChanged: (AudioResamplerPreference) -> Unit,
     audioAllowBackendFallback: Boolean,
     onAudioAllowBackendFallbackChanged: (Boolean) -> Unit,
     openPlayerFromNotification: Boolean,
@@ -471,6 +473,11 @@ fun SettingsScreen(
                         AudioBufferPresetSelectorCard(
                             selectedPreset = audioBufferPreset,
                             onSelectedPresetChanged = onAudioBufferPresetChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        AudioResamplerSelectorCard(
+                            selectedPreference = audioResamplerPreference,
+                            onSelectedPreferenceChanged = onAudioResamplerPreferenceChanged
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         PlayerSettingToggleCard(
@@ -1063,6 +1070,23 @@ private fun AudioBufferPresetSelectorCard(
             EnumChoice(AudioBufferPreset.Large, AudioBufferPreset.Large.label)
         ),
         onSelected = onSelectedPresetChanged
+    )
+}
+
+@Composable
+private fun AudioResamplerSelectorCard(
+    selectedPreference: AudioResamplerPreference,
+    onSelectedPreferenceChanged: (AudioResamplerPreference) -> Unit
+) {
+    SettingsEnumSelectorCard(
+        title = "Output resampler",
+        description = "Choose the resampler implementation used by the output pipeline.",
+        selectedValue = selectedPreference,
+        options = listOf(
+            EnumChoice(AudioResamplerPreference.BuiltIn, AudioResamplerPreference.BuiltIn.label),
+            EnumChoice(AudioResamplerPreference.Sox, AudioResamplerPreference.Sox.label)
+        ),
+        onSelected = onSelectedPreferenceChanged
     )
 }
 

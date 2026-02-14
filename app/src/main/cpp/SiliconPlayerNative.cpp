@@ -137,6 +137,18 @@ Java_com_flopster101_siliconplayer_MainActivity_setCoreOption(
     env->ReleaseStringUTFChars(coreName, nativeCoreName);
 }
 
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getCoreCapabilities(
+        JNIEnv* env, jobject, jstring coreName) {
+    if (audioEngine == nullptr) {
+        audioEngine = new AudioEngine();
+    }
+    const char* nativeCoreName = env->GetStringUTFChars(coreName, 0);
+    int caps = audioEngine->getCoreCapabilities(nativeCoreName);
+    env->ReleaseStringUTFChars(coreName, nativeCoreName);
+    return static_cast<jint>(caps);
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_setAudioPipelineConfig(
         JNIEnv*,
@@ -352,6 +364,12 @@ Java_com_flopster101_siliconplayer_NativeBridge_setCoreOption(
     Java_com_flopster101_siliconplayer_MainActivity_setCoreOption(
             env, thiz, coreName, optionName, optionValue
     );
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getCoreCapabilities(
+        JNIEnv* env, jobject thiz, jstring coreName) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getCoreCapabilities(env, thiz, coreName);
 }
 
 extern "C" JNIEXPORT void JNICALL

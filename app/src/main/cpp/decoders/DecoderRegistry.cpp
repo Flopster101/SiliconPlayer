@@ -76,6 +76,15 @@ std::unique_ptr<AudioDecoder> DecoderRegistry::createDecoder(const char* path) {
     return nullptr;
 }
 
+std::unique_ptr<AudioDecoder> DecoderRegistry::createDecoderByName(const std::string& name) {
+    for (const auto& info : decoders) {
+        if (info.name == name) {
+            return info.factory();
+        }
+    }
+    return nullptr;
+}
+
 std::vector<std::string> DecoderRegistry::getSupportedExtensions() {
     std::vector<std::string> allExtensions;
     for (const auto& info : decoders) {

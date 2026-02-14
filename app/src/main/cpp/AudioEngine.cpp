@@ -1005,6 +1005,25 @@ void AudioEngine::setCoreOption(
     }
 }
 
+int AudioEngine::getCoreCapabilities(const std::string& coreName) {
+    if (coreName.empty()) return 0;
+
+    // Check if we already have this decoder loaded to avoid re-creation
+    {
+        std::lock_guard<std::mutex> lock(decoderMutex);
+        if (decoder && decoder->getName() == coreName) {
+            return decoder->getPlaybackCapabilities();
+        }
+    }
+
+    // Create a temporary instance to query capabilities
+    auto tempDecoder = DecoderRegistry::getInstance().createDecoderByName(coreName);
+    if (tempDecoder) {
+        return tempDecoder->getPlaybackCapabilities();
+    }
+    return 0;
+}
+
 void AudioEngine::setAudioPipelineConfig(
         int backendPreference,
         int performanceMode,

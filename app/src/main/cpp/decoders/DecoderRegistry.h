@@ -24,6 +24,7 @@ public:
     void registerDecoder(const std::string& name, const std::vector<std::string>& extensions, DecoderFactory factory, int priority = 0);
 
     std::unique_ptr<AudioDecoder> createDecoder(const char* path);
+    std::unique_ptr<AudioDecoder> createDecoderByName(const std::string& name);
 
     // List supported extensions
     std::vector<std::string> getSupportedExtensions();

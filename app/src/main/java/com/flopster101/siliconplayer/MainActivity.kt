@@ -479,6 +479,7 @@ class MainActivity : ComponentActivity() {
     external fun getTrackBitDepthLabel(): String
     external fun getRepeatModeCapabilities(): Int
     external fun getPlaybackCapabilities(): Int
+    external fun getCoreCapabilities(coreName: String): Int
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
     external fun setCoreOption(coreName: String, optionName: String, optionValue: String)
     external fun setAudioPipelineConfig(
@@ -552,6 +553,17 @@ private fun AppNavigation(
     var browserLaunchDirectoryPath by remember { mutableStateOf<String?>(null) }
     val storageDescriptors = remember(context) { detectStorageDescriptors(context) }
     val appScope = rememberCoroutineScope()
+
+    var ffmpegCapabilities by remember { mutableIntStateOf(0) }
+    var openMptCapabilities by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            ffmpegCapabilities = NativeBridge.getCoreCapabilities("FFmpeg")
+            openMptCapabilities = NativeBridge.getCoreCapabilities("LibOpenMPT")
+        }
+    }
+
     val recentLimit = RECENTS_LIMIT
     var recentFolders by remember {
         mutableStateOf(readRecentEntries(prefs, AppPreferenceKeys.RECENT_FOLDERS, recentLimit))
@@ -1648,8 +1660,10 @@ private fun AppNavigation(
                         rememberBrowserLocation = rememberBrowserLocation,
                         onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
                         ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
+                        ffmpegCapabilities = ffmpegCapabilities,
                         onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
                         openMptSampleRateHz = openMptCoreSampleRateHz,
+                        openMptCapabilities = openMptCapabilities,
                         onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it },
                         openMptStereoSeparationPercent = openMptStereoSeparationPercent,
                         onOpenMptStereoSeparationPercentChanged = { openMptStereoSeparationPercent = it },

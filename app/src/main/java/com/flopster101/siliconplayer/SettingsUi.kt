@@ -129,8 +129,10 @@ fun SettingsScreen(
     rememberBrowserLocation: Boolean,
     onRememberBrowserLocationChanged: (Boolean) -> Unit,
     ffmpegSampleRateHz: Int,
+    ffmpegCapabilities: Int,
     onFfmpegSampleRateChanged: (Int) -> Unit,
     openMptSampleRateHz: Int,
+    openMptCapabilities: Int,
     onOpenMptSampleRateChanged: (Int) -> Unit,
     openMptStereoSeparationPercent: Int,
     onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
@@ -347,6 +349,7 @@ fun SettingsScreen(
                         title = "Render sample rate",
                         description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
                         selectedHz = ffmpegSampleRateHz,
+                        enabled = supportsCustomSampleRate(ffmpegCapabilities),
                         onSelected = onFfmpegSampleRateChanged
                     )
                     SettingsRoute.PluginOpenMpt -> {
@@ -441,6 +444,7 @@ fun SettingsScreen(
                             title = "Render sample rate",
                             description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
                             selectedHz = openMptSampleRateHz,
+                            enabled = supportsCustomSampleRate(openMptCapabilities),
                             onSelected = onOpenMptSampleRateChanged
                         )
                     }
@@ -1097,6 +1101,7 @@ private fun SampleRateSelectorCard(
     title: String,
     description: String,
     selectedHz: Int,
+    enabled: Boolean = true,
     onSelected: (Int) -> Unit
 ) {
     fun formatSampleRateLabel(hz: Int): String {
@@ -1118,13 +1123,20 @@ private fun SampleRateSelectorCard(
         SampleRateChoice(88200, formatSampleRateLabel(88200)),
         SampleRateChoice(96000, formatSampleRateLabel(96000))
     )
-    val selectedLabel = options.firstOrNull { it.hz == selectedHz }?.label ?: "Auto"
+    val selectedLabel = if (enabled) {
+        options.firstOrNull { it.hz == selectedHz }?.label ?: "Auto"
+    } else {
+        "Auto (Fixed)"
+    }
     var dialogOpen by remember { mutableStateOf(false) }
+
+    val contentAlpha = if (enabled) 1f else 0.38f
 
     androidx.compose.material3.ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = SettingsCardShape,
-        onClick = { dialogOpen = true }
+        onClick = { if (enabled) dialogOpen = true },
+        enabled = enabled
     ) {
         Row(
             modifier = Modifier
@@ -1135,20 +1147,21 @@ private fun SampleRateSelectorCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = selectedLabel,
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
             )
         }
     }

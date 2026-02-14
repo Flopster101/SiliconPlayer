@@ -17,6 +17,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.focusable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AudioFile
@@ -52,6 +53,12 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.style.TextAlign
@@ -145,9 +152,85 @@ fun PlayerScreen(
     val displayArtist = artist.ifBlank { if (hasTrack) "Unknown Artist" else "Tap a file to play" }
     val displayFilename = file?.name ?: "No file loaded"
 
+    // Focus management for keyboard input
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onPreviewKeyEvent { keyEvent ->
+                // Only handle key down events to avoid double-triggering
+                if (keyEvent.nativeKeyEvent.action != android.view.KeyEvent.ACTION_DOWN) {
+                    return@onPreviewKeyEvent false
+                }
+
+                when (keyEvent.key) {
+                    // Spacebar: Play/Pause
+                    Key.Spacebar -> {
+                        if (hasTrack || canResumeStoppedTrack) {
+                            if (isPlaying) onPause() else onPlay()
+                            true
+                        } else false
+                    }
+                    // Left Arrow: Seek backward 5 seconds (without Ctrl)
+                    Key.DirectionLeft -> {
+                        if (!keyEvent.isCtrlPressed && canSeek && hasReliableDuration) {
+                            val newPosition = (positionSeconds - 5.0).coerceAtLeast(0.0)
+                            onSeek(newPosition)
+                            true
+                        } else false
+                        // Note: Ctrl+Left for previous subtune not implemented yet (subtunes not ready)
+                    }
+                    // Right Arrow: Seek forward 5 seconds (without Ctrl)
+                    Key.DirectionRight -> {
+                        if (!keyEvent.isCtrlPressed && canSeek && hasReliableDuration) {
+                            val newPosition = (positionSeconds + 5.0).coerceAtMost(durationSeconds)
+                            onSeek(newPosition)
+                            true
+                        } else false
+                        // Note: Ctrl+Right for next subtune not implemented yet (subtunes not ready)
+                    }
+                    // Page Up: Previous track
+                    Key.PageUp -> {
+                        if (hasTrack && canPreviousTrack) {
+                            onPreviousTrack()
+                            true
+                        } else false
+                    }
+                    // Page Down: Next track
+                    Key.PageDown -> {
+                        if (hasTrack && canNextTrack) {
+                            onNextTrack()
+                            true
+                        } else false
+                    }
+                    // Home: Restart song (seek to 0)
+                    Key.MoveHome -> {
+                        if (canSeek && hasReliableDuration) {
+                            onSeek(0.0)
+                            true
+                        } else false
+                    }
+                    // R: Cycle repeat mode
+                    Key.R -> {
+                        if (hasTrack && canCycleRepeatMode) {
+                            onCycleRepeatMode()
+                            true
+                        } else false
+                    }
+                    // Backspace: Stop
+                    Key.Backspace -> {
+                        onStopAndClear()
+                        true
+                    }
+                    else -> false
+                }
+            }
             .offset { IntOffset(0, panelOffsetPx.roundToInt()) }
             .graphicsLayer(alpha = panelAlpha)
             .then(

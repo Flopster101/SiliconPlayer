@@ -517,7 +517,9 @@ class MainActivity : ComponentActivity() {
                             prefs.edit()
                                 .putString(AppPreferenceKeys.THEME_MODE, mode.storageValue)
                                 .apply()
-                        }
+                        },
+                        initialFileToOpen = initialFileToOpen,
+                        initialFileFromExternalIntent = initialFileFromExternalIntent
                     )
                 }
             }
@@ -575,7 +577,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppNavigation(
     themeMode: ThemeMode,
-    onThemeModeChanged: (ThemeMode) -> Unit
+    onThemeModeChanged: (ThemeMode) -> Unit,
+    initialFileToOpen: File?,
+    initialFileFromExternalIntent: Boolean
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember(context) {
@@ -933,8 +937,6 @@ private fun AppNavigation(
 
                 pendingFileToOpen = null
                 pendingFileFromExternalIntent = false
-                initialFileToOpen = null
-                initialFileFromExternalIntent = false
             }
         }
     }

@@ -434,16 +434,6 @@ private object AppPreferenceKeys {
     const val REMEMBER_BROWSER_LOCATION = "remember_browser_location"
     const val BROWSER_LAST_LOCATION_ID = "browser_last_location_id"
     const val BROWSER_LAST_DIRECTORY_PATH = "browser_last_directory_path"
-    const val CORE_RATE_FFMPEG = "core_rate_ffmpeg"
-    const val CORE_RATE_OPENMPT = "core_rate_openmpt"
-    const val OPENMPT_STEREO_SEPARATION_PERCENT = "openmpt_stereo_separation_percent"
-    const val OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT = "openmpt_stereo_separation_amiga_percent"
-    const val OPENMPT_INTERPOLATION_FILTER_LENGTH = "openmpt_interpolation_filter_length"
-    const val OPENMPT_AMIGA_RESAMPLER_MODE = "openmpt_amiga_resampler_mode"
-    const val OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES = "openmpt_amiga_resampler_apply_all_modules"
-    const val OPENMPT_VOLUME_RAMPING_STRENGTH = "openmpt_volume_ramping_strength"
-    const val OPENMPT_MASTER_GAIN_MILLIBEL = "openmpt_master_gain_millibel"
-    const val OPENMPT_SURROUND_ENABLED = "openmpt_surround_enabled"
     const val RESPOND_HEADPHONE_MEDIA_BUTTONS = "respond_headphone_media_buttons"
     const val PAUSE_ON_HEADPHONE_DISCONNECT = "pause_on_headphone_disconnect"
     const val AUDIO_BACKEND_PREFERENCE = "audio_backend_preference"
@@ -634,52 +624,67 @@ private fun AppNavigation(
     }
     var ffmpegCoreSampleRateHz by remember {
         mutableIntStateOf(
-            prefs.getInt(AppPreferenceKeys.CORE_RATE_FFMPEG, 0)
+            prefs.getInt(CorePreferenceKeys.CORE_RATE_FFMPEG, FfmpegDefaults.coreSampleRateHz)
         )
     }
     var openMptCoreSampleRateHz by remember {
         mutableIntStateOf(
-            prefs.getInt(AppPreferenceKeys.CORE_RATE_OPENMPT, 0)
+            prefs.getInt(CorePreferenceKeys.CORE_RATE_OPENMPT, OpenMptDefaults.coreSampleRateHz)
         )
     }
     var openMptStereoSeparationPercent by remember {
         mutableIntStateOf(
-            prefs.getInt(AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT, 100)
+            prefs.getInt(
+                CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT,
+                OpenMptDefaults.stereoSeparationPercent
+            )
         )
     }
     var openMptStereoSeparationAmigaPercent by remember {
         mutableIntStateOf(
-            prefs.getInt(AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT, 100)
+            prefs.getInt(
+                CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT,
+                OpenMptDefaults.stereoSeparationAmigaPercent
+            )
         )
     }
     var openMptInterpolationFilterLength by remember {
         mutableIntStateOf(
-            prefs.getInt(AppPreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH, 0)
+            prefs.getInt(
+                CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH,
+                OpenMptDefaults.interpolationFilterLength
+            )
         )
     }
     var openMptAmigaResamplerMode by remember {
         mutableIntStateOf(
-            prefs.getInt(AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE, 2)
+            prefs.getInt(CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE, OpenMptDefaults.amigaResamplerMode)
         )
     }
     var openMptAmigaResamplerApplyAllModules by remember {
         mutableStateOf(
-            prefs.getBoolean(AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES, false)
+            prefs.getBoolean(
+                CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES,
+                OpenMptDefaults.amigaResamplerApplyAllModules
+            )
         )
     }
     var openMptVolumeRampingStrength by remember {
         mutableIntStateOf(
-            prefs.getInt(AppPreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH, 0)
+            prefs.getInt(
+                CorePreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH,
+                OpenMptDefaults.volumeRampingStrength
+            )
         )
     }
     var openMptMasterGainMilliBel by remember {
         mutableIntStateOf(
-            prefs.getInt(AppPreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL, 0)
+            prefs.getInt(CorePreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL, OpenMptDefaults.masterGainMilliBel)
         )
     }
     var openMptSurroundEnabled by remember {
         mutableStateOf(
-            prefs.getBoolean(AppPreferenceKeys.OPENMPT_SURROUND_ENABLED, false)
+            prefs.getBoolean(CorePreferenceKeys.OPENMPT_SURROUND_ENABLED, OpenMptDefaults.surroundEnabled)
         )
     }
     var respondHeadphoneMediaButtons by remember {
@@ -1104,14 +1109,14 @@ private fun AppNavigation(
 
     LaunchedEffect(ffmpegCoreSampleRateHz) {
         prefs.edit()
-            .putInt(AppPreferenceKeys.CORE_RATE_FFMPEG, ffmpegCoreSampleRateHz)
+            .putInt(CorePreferenceKeys.CORE_RATE_FFMPEG, ffmpegCoreSampleRateHz)
             .apply()
         NativeBridge.setCoreOutputSampleRate("FFmpeg", ffmpegCoreSampleRateHz)
     }
 
     LaunchedEffect(openMptCoreSampleRateHz) {
         prefs.edit()
-            .putInt(AppPreferenceKeys.CORE_RATE_OPENMPT, openMptCoreSampleRateHz)
+            .putInt(CorePreferenceKeys.CORE_RATE_OPENMPT, openMptCoreSampleRateHz)
             .apply()
         NativeBridge.setCoreOutputSampleRate("LibOpenMPT", openMptCoreSampleRateHz)
     }
@@ -1119,7 +1124,7 @@ private fun AppNavigation(
     LaunchedEffect(openMptStereoSeparationPercent) {
         prefs.edit()
             .putInt(
-                AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT,
+                CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT,
                 openMptStereoSeparationPercent
             )
             .apply()
@@ -1135,7 +1140,7 @@ private fun AppNavigation(
     LaunchedEffect(openMptStereoSeparationAmigaPercent) {
         prefs.edit()
             .putInt(
-                AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT,
+                CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT,
                 openMptStereoSeparationAmigaPercent
             )
             .apply()
@@ -1151,7 +1156,7 @@ private fun AppNavigation(
     LaunchedEffect(openMptInterpolationFilterLength) {
         prefs.edit()
             .putInt(
-                AppPreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH,
+                CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH,
                 openMptInterpolationFilterLength
             )
             .apply()
@@ -1167,7 +1172,7 @@ private fun AppNavigation(
     LaunchedEffect(openMptAmigaResamplerMode) {
         prefs.edit()
             .putInt(
-                AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE,
+                CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE,
                 openMptAmigaResamplerMode
             )
             .apply()
@@ -1183,7 +1188,7 @@ private fun AppNavigation(
     LaunchedEffect(openMptAmigaResamplerApplyAllModules) {
         prefs.edit()
             .putBoolean(
-                AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES,
+                CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES,
                 openMptAmigaResamplerApplyAllModules
             )
             .apply()
@@ -1199,7 +1204,7 @@ private fun AppNavigation(
     LaunchedEffect(openMptVolumeRampingStrength) {
         prefs.edit()
             .putInt(
-                AppPreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH,
+                CorePreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH,
                 openMptVolumeRampingStrength
             )
             .apply()
@@ -1215,7 +1220,7 @@ private fun AppNavigation(
     LaunchedEffect(openMptMasterGainMilliBel) {
         prefs.edit()
             .putInt(
-                AppPreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL,
+                CorePreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL,
                 openMptMasterGainMilliBel
             )
             .apply()
@@ -1231,7 +1236,7 @@ private fun AppNavigation(
     LaunchedEffect(openMptSurroundEnabled) {
         prefs.edit()
             .putBoolean(
-                AppPreferenceKeys.OPENMPT_SURROUND_ENABLED,
+                CorePreferenceKeys.OPENMPT_SURROUND_ENABLED,
                 openMptSurroundEnabled
             )
             .apply()
@@ -1756,18 +1761,18 @@ private fun AppNavigation(
                         },
                         onClearAllSettings = {
                             val pluginSnapshot = mapOf(
-                                AppPreferenceKeys.CORE_RATE_FFMPEG to ffmpegCoreSampleRateHz,
-                                AppPreferenceKeys.CORE_RATE_OPENMPT to openMptCoreSampleRateHz,
-                                AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT to openMptStereoSeparationPercent,
-                                AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT to openMptStereoSeparationAmigaPercent,
-                                AppPreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH to openMptInterpolationFilterLength,
-                                AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE to openMptAmigaResamplerMode,
-                                AppPreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH to openMptVolumeRampingStrength,
-                                AppPreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL to openMptMasterGainMilliBel
+                                CorePreferenceKeys.CORE_RATE_FFMPEG to ffmpegCoreSampleRateHz,
+                                CorePreferenceKeys.CORE_RATE_OPENMPT to openMptCoreSampleRateHz,
+                                CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT to openMptStereoSeparationPercent,
+                                CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT to openMptStereoSeparationAmigaPercent,
+                                CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH to openMptInterpolationFilterLength,
+                                CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE to openMptAmigaResamplerMode,
+                                CorePreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH to openMptVolumeRampingStrength,
+                                CorePreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL to openMptMasterGainMilliBel
                             )
                             val pluginBooleanSnapshot = mapOf(
-                                AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES to openMptAmigaResamplerApplyAllModules,
-                                AppPreferenceKeys.OPENMPT_SURROUND_ENABLED to openMptSurroundEnabled
+                                CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES to openMptAmigaResamplerApplyAllModules,
+                                CorePreferenceKeys.OPENMPT_SURROUND_ENABLED to openMptSurroundEnabled
                             )
 
                             prefs.edit().clear().apply()
@@ -1807,27 +1812,27 @@ private fun AppNavigation(
                         },
                         onClearAllPluginSettings = {
                             ffmpegCoreSampleRateHz = 0
-                            openMptCoreSampleRateHz = 0
-                            openMptStereoSeparationPercent = 100
-                            openMptStereoSeparationAmigaPercent = 100
-                            openMptInterpolationFilterLength = 0
-                            openMptAmigaResamplerMode = 2
-                            openMptAmigaResamplerApplyAllModules = false
-                            openMptVolumeRampingStrength = 0
-                            openMptMasterGainMilliBel = 0
-                            openMptSurroundEnabled = false
+                            openMptCoreSampleRateHz = OpenMptDefaults.coreSampleRateHz
+                            openMptStereoSeparationPercent = OpenMptDefaults.stereoSeparationPercent
+                            openMptStereoSeparationAmigaPercent = OpenMptDefaults.stereoSeparationAmigaPercent
+                            openMptInterpolationFilterLength = OpenMptDefaults.interpolationFilterLength
+                            openMptAmigaResamplerMode = OpenMptDefaults.amigaResamplerMode
+                            openMptAmigaResamplerApplyAllModules = OpenMptDefaults.amigaResamplerApplyAllModules
+                            openMptVolumeRampingStrength = OpenMptDefaults.volumeRampingStrength
+                            openMptMasterGainMilliBel = OpenMptDefaults.masterGainMilliBel
+                            openMptSurroundEnabled = OpenMptDefaults.surroundEnabled
 
                             prefs.edit()
-                                .remove(AppPreferenceKeys.CORE_RATE_FFMPEG)
-                                .remove(AppPreferenceKeys.CORE_RATE_OPENMPT)
-                                .remove(AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT)
-                                .remove(AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT)
-                                .remove(AppPreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH)
-                                .remove(AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE)
-                                .remove(AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES)
-                                .remove(AppPreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH)
-                                .remove(AppPreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL)
-                                .remove(AppPreferenceKeys.OPENMPT_SURROUND_ENABLED)
+                                .remove(CorePreferenceKeys.CORE_RATE_FFMPEG)
+                                .remove(CorePreferenceKeys.CORE_RATE_OPENMPT)
+                                .remove(CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT)
+                                .remove(CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT)
+                                .remove(CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH)
+                                .remove(CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE)
+                                .remove(CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES)
+                                .remove(CorePreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH)
+                                .remove(CorePreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL)
+                                .remove(CorePreferenceKeys.OPENMPT_SURROUND_ENABLED)
                                 .apply()
 
                             Toast.makeText(

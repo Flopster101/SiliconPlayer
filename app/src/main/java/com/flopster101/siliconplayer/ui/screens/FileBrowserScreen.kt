@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.SdCard
@@ -88,7 +89,8 @@ fun FileBrowserScreen(
     backHandlingEnabled: Boolean = true,
     onExitBrowser: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
-    showPrimaryTopBar: Boolean = true
+    showPrimaryTopBar: Boolean = true,
+    playingFile: File? = null
 ) {
     val context = LocalContext.current
     val storageLocations = remember(context) { detectStorageLocations(context) }
@@ -511,13 +513,17 @@ fun FileBrowserScreen(
                         items = fileList,
                         key = { it.file.absolutePath }
                     ) { item ->
-                        FileItemRow(item = item, onClick = {
-                            if (item.isDirectory) {
-                                navigateTo(item.file)
-                            } else {
-                                onFileSelected(item.file)
+                        FileItemRow(
+                            item = item,
+                            isPlaying = item.file == playingFile,
+                            onClick = {
+                                if (item.isDirectory) {
+                                    navigateTo(item.file)
+                                } else {
+                                    onFileSelected(item.file)
+                                }
                             }
-                        })
+                        )
                     }
                 }
             }
@@ -624,7 +630,7 @@ private fun isWithinRoot(file: File, root: File): Boolean {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun FileItemRow(item: FileItem, onClick: () -> Unit) {
+fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
     val subtitle by produceState(
         initialValue = if (item.isDirectory) "Loading..." else formatFileSizeHumanReadable(item.file.length()),
         key1 = item.file.absolutePath,
@@ -710,6 +716,15 @@ fun FileItemRow(item: FileItem, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1
+            )
+        }
+        if (isPlaying) {
+            Spacer(modifier = Modifier.width(12.dp))
+            Icon(
+                imageVector = Icons.Default.PlayArrow,
+                contentDescription = "Playing",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp)
             )
         }
     }

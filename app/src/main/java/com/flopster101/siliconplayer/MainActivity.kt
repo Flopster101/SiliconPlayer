@@ -1597,6 +1597,7 @@ private fun AppNavigation(
                             onExitBrowser = { currentView = MainView.Home },
                             onOpenSettings = null,
                             showPrimaryTopBar = false,
+                            playingFile = selectedFile,
                             onBrowserLocationChanged = { locationId, directoryPath ->
                                 if (locationId != null && directoryPath != null) {
                                     addRecentFolder(directoryPath, locationId)

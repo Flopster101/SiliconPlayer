@@ -757,6 +757,26 @@ private fun AppNavigation(
         showRepeatModeToast(context, next)
     }
 
+    fun applyCoreOptionWithPolicy(
+        coreName: String,
+        optionName: String,
+        optionValue: String,
+        policy: CoreOptionApplyPolicy,
+        optionLabel: String? = null
+    ) {
+        NativeBridge.setCoreOption(coreName, optionName, optionValue)
+        if (policy != CoreOptionApplyPolicy.RequiresPlaybackRestart) return
+        if (!isPlaying || selectedFile == null) return
+        val currentDecoderName = NativeBridge.getCurrentDecoderName()
+        if (!currentDecoderName.equals(coreName, ignoreCase = true)) return
+        val name = optionLabel?.ifBlank { null } ?: "This option"
+        Toast.makeText(
+            context,
+            "$name will apply after restarting playback",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
     fun applyTrackSelection(file: File, autoStart: Boolean, expandOverride: Boolean? = null) {
         NativeBridge.stopEngine()
         isPlaying = false
@@ -1007,10 +1027,12 @@ private fun AppNavigation(
                 openMptStereoSeparationPercent
             )
             .apply()
-        NativeBridge.setCoreOption(
+        applyCoreOptionWithPolicy(
             "LibOpenMPT",
             "openmpt.stereo_separation_percent",
-            openMptStereoSeparationPercent.toString()
+            openMptStereoSeparationPercent.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Stereo separation"
         )
     }
 
@@ -1021,10 +1043,12 @@ private fun AppNavigation(
                 openMptInterpolationFilterLength
             )
             .apply()
-        NativeBridge.setCoreOption(
+        applyCoreOptionWithPolicy(
             "LibOpenMPT",
             "openmpt.interpolation_filter_length",
-            openMptInterpolationFilterLength.toString()
+            openMptInterpolationFilterLength.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Interpolation filter"
         )
     }
 
@@ -1035,10 +1059,12 @@ private fun AppNavigation(
                 openMptAmigaResamplerMode
             )
             .apply()
-        NativeBridge.setCoreOption(
+        applyCoreOptionWithPolicy(
             "LibOpenMPT",
             "openmpt.amiga_resampler_mode",
-            openMptAmigaResamplerMode.toString()
+            openMptAmigaResamplerMode.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Amiga resampler"
         )
     }
 
@@ -1049,10 +1075,12 @@ private fun AppNavigation(
                 openMptVolumeRampingStrength
             )
             .apply()
-        NativeBridge.setCoreOption(
+        applyCoreOptionWithPolicy(
             "LibOpenMPT",
             "openmpt.volume_ramping_strength",
-            openMptVolumeRampingStrength.toString()
+            openMptVolumeRampingStrength.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Volume ramping strength"
         )
     }
 
@@ -1063,10 +1091,12 @@ private fun AppNavigation(
                 openMptMasterGainMilliBel
             )
             .apply()
-        NativeBridge.setCoreOption(
+        applyCoreOptionWithPolicy(
             "LibOpenMPT",
             "openmpt.master_gain_millibel",
-            openMptMasterGainMilliBel.toString()
+            openMptMasterGainMilliBel.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Master gain"
         )
     }
 
@@ -1077,10 +1107,12 @@ private fun AppNavigation(
                 openMptSurroundEnabled
             )
             .apply()
-        NativeBridge.setCoreOption(
+        applyCoreOptionWithPolicy(
             "LibOpenMPT",
             "openmpt.surround_enabled",
-            openMptSurroundEnabled.toString()
+            openMptSurroundEnabled.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Enable surround sound"
         )
     }
 
@@ -2674,6 +2706,11 @@ private data class IntChoice(val value: Int, val label: String)
 private fun formatMilliBelAsDbLabel(milliBel: Int): String {
     val db = milliBel / 100.0
     return String.format(Locale.US, "%+.1f dB", db)
+}
+
+private enum class CoreOptionApplyPolicy {
+    Live,
+    RequiresPlaybackRestart
 }
 
 @Composable

@@ -702,43 +702,7 @@ private fun AppNavigation(
     val supportedExtensions = remember { NativeBridge.getSupportedExtensions().toSet() }
     val repository = remember { com.flopster101.siliconplayer.data.FileRepository(supportedExtensions) }
 
-    // Function to check permissions
-    fun checkPermission(): Boolean {
-        return if (android.os.Build.VERSION.SDK_INT >= 30) {
-            Environment.isExternalStorageManager()
-        } else {
-            androidx.core.content.ContextCompat.checkSelfPermission(
-                context,
-                android.Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    // Permission handling
-    var hasPermission by remember { mutableStateOf(checkPermission()) }
-    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
-
-    // Effect to check permission on start and resume
-    DisposableEffect(lifecycleOwner) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                hasPermission = checkPermission()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
-    val launcher = rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        hasPermission = isGranted
-    }
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { }
+    val storagePermissionState = rememberStoragePermissionState(context)
 
     fun syncPlaybackService() {
         syncPlaybackServiceForState(
@@ -962,34 +926,6 @@ private fun AppNavigation(
         isPlaying = NativeBridge.isEnginePlaying()
         artworkBitmap = null
         refreshRepeatModeForTrack()
-    }
-
-    LaunchedEffect(Unit) {
-        if (!checkPermission()) {
-            if (android.os.Build.VERSION.SDK_INT >= 30) {
-                try {
-                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                    intent.addCategory("android.intent.category.DEFAULT")
-                    intent.data = Uri.parse(String.format("package:%s", context.packageName))
-                    context.startActivity(intent)
-                } catch (e: Exception) {
-                    val intent = Intent()
-                    intent.action = Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
-                    context.startActivity(intent)
-                }
-            } else {
-                launcher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
-            }
-        }
-        if (android.os.Build.VERSION.SDK_INT >= 33) {
-            val granted = androidx.core.content.ContextCompat.checkSelfPermission(
-                context,
-                android.Manifest.permission.POST_NOTIFICATIONS
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (!granted) {
-                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-            }
-        }
     }
 
     LaunchedEffect(selectedFile) {
@@ -1339,31 +1275,10 @@ private fun AppNavigation(
         }
     }
 
-    if (!hasPermission) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Please grant storage permissions to access audio files.")
-                androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(16.dp))
-                androidx.compose.material3.Button(onClick = {
-                    if (android.os.Build.VERSION.SDK_INT >= 30) {
-                        try {
-                            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-                            intent.addCategory("android.intent.category.DEFAULT")
-                            intent.data = Uri.parse(String.format("package:%s", context.packageName))
-                            context.startActivity(intent)
-                        } catch (e: Exception) {
-                            val intent = Intent()
-                            intent.action = Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
-                            context.startActivity(intent)
-                        }
-                    } else {
-                        launcher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
-                    }
-                }) {
-                    Text("Grant Permission")
-                }
-            }
-        }
+    if (!storagePermissionState.hasPermission) {
+        StoragePermissionRequiredScreen(
+            onRequestPermission = storagePermissionState.requestPermission
+        )
         return
     }
 
@@ -1420,36 +1335,12 @@ private fun AppNavigation(
         }
     }
 
-    DisposableEffect(context) {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                when (intent?.action) {
-                    PlaybackService.ACTION_BROADCAST_CLEARED -> {
-                        resetAndOptionallyKeepLastTrack(keepLastTrack = true)
-                    }
-                    PlaybackService.ACTION_BROADCAST_PREVIOUS_TRACK_REQUEST -> {
-                        handlePreviousTrackAction()
-                    }
-                    PlaybackService.ACTION_BROADCAST_NEXT_TRACK_REQUEST -> {
-                        playAdjacentTrack(1)
-                    }
-                }
-            }
-        }
-        val playbackFilter = IntentFilter(PlaybackService.ACTION_BROADCAST_CLEARED).apply {
-            addAction(PlaybackService.ACTION_BROADCAST_PREVIOUS_TRACK_REQUEST)
-            addAction(PlaybackService.ACTION_BROADCAST_NEXT_TRACK_REQUEST)
-        }
-        androidx.core.content.ContextCompat.registerReceiver(
-            context,
-            receiver,
-            playbackFilter,
-            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
-        )
-        onDispose {
-            context.unregisterReceiver(receiver)
-        }
-    }
+    RegisterPlaybackBroadcastReceiver(
+        context = context,
+        onCleared = { resetAndOptionallyKeepLastTrack(keepLastTrack = true) },
+        onPreviousTrackRequested = { handlePreviousTrackAction() },
+        onNextTrackRequested = { playAdjacentTrack(1) }
+    )
 
     BackHandler(enabled = isPlayerExpanded || currentView == MainView.Settings) {
         when {

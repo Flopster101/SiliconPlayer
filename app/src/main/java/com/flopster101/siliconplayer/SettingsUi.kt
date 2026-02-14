@@ -128,6 +128,8 @@ fun SettingsScreen(
     onThemeModeChanged: (ThemeMode) -> Unit,
     rememberBrowserLocation: Boolean,
     onRememberBrowserLocationChanged: (Boolean) -> Unit,
+    keepScreenOn: Boolean,
+    onKeepScreenOnChanged: (Boolean) -> Unit,
     ffmpegSampleRateHz: Int,
     ffmpegCapabilities: Int,
     onFfmpegSampleRateChanged: (Int) -> Unit,
@@ -534,6 +536,13 @@ fun SettingsScreen(
                             description = "Keep selected repeat mode across app restarts.",
                             checked = persistRepeatMode,
                             onCheckedChange = onPersistRepeatModeChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Keep screen on",
+                            description = "Prevent screen from turning off when the player is expanded.",
+                            checked = keepScreenOn,
+                            onCheckedChange = onKeepScreenOnChanged
                         )
                     }
                     SettingsRoute.Misc -> {

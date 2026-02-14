@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -409,6 +410,7 @@ private object AppPreferenceKeys {
     const val THEME_MODE = "theme_mode"
     const val RECENT_FOLDERS = "recent_folders"
     const val RECENT_PLAYED_FILES = "recent_played_files"
+    const val KEEP_SCREEN_ON = "keep_screen_on"
 }
 
 class MainActivity : ComponentActivity() {
@@ -604,6 +606,11 @@ private fun AppNavigation(
     var lastBrowserDirectoryPath by remember {
         mutableStateOf(
             prefs.getString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, null)
+        )
+    }
+    var keepScreenOn by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.KEEP_SCREEN_ON, false)
         )
     }
     var ffmpegCoreSampleRateHz by remember {
@@ -1400,6 +1407,22 @@ private fun AppNavigation(
             isPlayerExpanded = false
         }
     }
+
+    LaunchedEffect(keepScreenOn, isPlayerExpanded) {
+        val window = (context as? ComponentActivity)?.window ?: return@LaunchedEffect
+        if (keepScreenOn && isPlayerExpanded) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    LaunchedEffect(keepScreenOn) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.KEEP_SCREEN_ON, keepScreenOn)
+            .apply()
+    }
+
     val hidePlayerSurface: () -> Unit = {
         stopAndEmptyTrack()
         isPlayerExpanded = false
@@ -1659,6 +1682,8 @@ private fun AppNavigation(
                         onThemeModeChanged = onThemeModeChanged,
                         rememberBrowserLocation = rememberBrowserLocation,
                         onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
+                        keepScreenOn = keepScreenOn,
+                        onKeepScreenOnChanged = { keepScreenOn = it },
                         ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
                         ffmpegCapabilities = ffmpegCapabilities,
                         onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
@@ -1739,6 +1764,7 @@ private fun AppNavigation(
                             lastBrowserDirectoryPath = null
                             recentFolders = emptyList()
                             recentPlayedFiles = emptyList()
+                            keepScreenOn = false
                             browserLaunchLocationId = null
                             browserLaunchDirectoryPath = null
                             onThemeModeChanged(ThemeMode.Auto)

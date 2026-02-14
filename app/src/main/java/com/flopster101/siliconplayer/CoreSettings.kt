@@ -21,7 +21,7 @@ object OpenMptDefaults {
     const val interpolationFilterLength = 0
     const val amigaResamplerMode = 2
     const val amigaResamplerApplyAllModules = false
-    const val volumeRampingStrength = 0
+    const val volumeRampingStrength = 1
     const val ft2XmVolumeRamping = false
     const val masterGainMilliBel = 0
     const val surroundEnabled = false

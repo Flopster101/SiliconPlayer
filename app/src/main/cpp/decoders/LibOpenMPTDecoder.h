@@ -55,7 +55,7 @@ private:
     int stereoSeparationPercent = 100;
     int stereoSeparationAmigaPercent = 100;
     int interpolationFilterLength = 0;
-    int volumeRampingStrength = 0;
+    int volumeRampingStrength = 1;
     int masterGainMilliBel = 0;
     int amigaResamplerMode = 2; // 0 None, 1 Unfiltered, 2 A500, 3 A1200
     bool applyAmigaResamplerToAllModules = false;

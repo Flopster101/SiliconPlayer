@@ -632,7 +632,10 @@ private fun isWithinRoot(file: File, root: File): Boolean {
 @Composable
 fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
     val subtitle by produceState(
-        initialValue = if (item.isDirectory) "Loading..." else formatFileSizeHumanReadable(item.file.length()),
+        initialValue = if (item.isDirectory) "Loading..." else {
+            val format = item.file.extension.uppercase().ifBlank { "UNKNOWN" }
+            "$format • ${formatFileSizeHumanReadable(item.file.length())}"
+        },
         key1 = item.file.absolutePath,
         key2 = item.isDirectory,
         key3 = item.file.lastModified()
@@ -641,7 +644,8 @@ fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
             if (item.isDirectory) {
                 buildFolderSummary(item.file)
             } else {
-                formatFileSizeHumanReadable(item.file.length())
+                val format = item.file.extension.uppercase().ifBlank { "UNKNOWN" }
+                "$format • ${formatFileSizeHumanReadable(item.file.length())}"
             }
         }
     }

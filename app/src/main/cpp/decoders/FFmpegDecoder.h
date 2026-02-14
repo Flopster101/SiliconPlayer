@@ -5,6 +5,7 @@
 #include <vector>
 #include <mutex>
 #include <memory>
+#include <cstdint>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -32,6 +33,7 @@ public:
     std::string getTitle() override;
     std::string getArtist() override;
     void setOutputSampleRate(int sampleRate) override;
+    double getPlaybackPositionSeconds() override;
 
     // Configuration
     const char* getName() const override { return "FFmpeg"; }
@@ -58,6 +60,8 @@ private:
     // Resampling buffer
     std::vector<float> sampleBuffer;
     size_t sampleBufferCursor = 0; // Current read position in buffer
+    bool decoderDrainStarted = false;
+    int64_t totalFramesOutput = 0; // Total frames output for position tracking
 
     std::mutex decodeMutex;
 

@@ -10,6 +10,7 @@ extern "C" {
 #include <libswresample/swresample.h>
 #include <libavutil/opt.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/mathematics.h>
 }
 
 #ifndef M_PI
@@ -139,7 +140,8 @@ void AudioEngine::reconfigureStream(bool resumePlayback) {
         if (decoder) {
             decoderRenderSampleRate = resolveOutputSampleRateForCore(decoder->getName());
             decoder->setOutputSampleRate(decoderRenderSampleRate);
-            resetResamplerStateLocked();
+            // When only resampler preference changed, preserve the buffer to maintain position
+            resetResamplerStateLocked(true);
         }
     }
 
@@ -185,7 +187,8 @@ void AudioEngine::recoverStreamIfNeeded() {
         if (decoder) {
             decoderRenderSampleRate = resolveOutputSampleRateForCore(decoder->getName());
             decoder->setOutputSampleRate(decoderRenderSampleRate);
-            resetResamplerStateLocked();
+            // Preserve resampler state during stream recovery to maintain position
+            resetResamplerStateLocked(true);
         }
     }
 
@@ -202,15 +205,26 @@ void AudioEngine::recoverStreamIfNeeded() {
     }
 }
 
-void AudioEngine::resetResamplerStateLocked() {
-    resampleInputBuffer.clear();
-    resampleInputStartFrame = 0;
-    resampleInputPosition = 0.0;
+void AudioEngine::resetResamplerStateLocked(bool preserveBuffer) {
+    if (!preserveBuffer) {
+        resampleInputBuffer.clear();
+        resampleInputStartFrame = 0;
+        resampleInputPosition = 0.0;
+        sharedAbsoluteInputPosition = 0;
+    } else {
+        // When switching resamplers, preserve the tracking but reset the buffer
+        // New buffer starts empty, so position relative to buffer start is 0
+        resampleInputBuffer.clear();
+        resampleInputStartFrame = 0;
+        resampleInputPosition = 0.0;
+    }
     resamplerPathLoggedForCurrentTrack = false;
     resamplerNoOpLoggedForCurrentTrack = false;
     if (outputSoxrContext != nullptr) {
         swr_close(outputSoxrContext);
         swr_init(outputSoxrContext);
+        // SoX uses internal buffering, so we don't set position explicitly.
+        // It will continue processing from the next frame read from decoder.
     }
 }
 
@@ -399,6 +413,7 @@ void AudioEngine::renderResampledLocked(
             if (decoded <= 0) {
                 break;
             }
+            sharedAbsoluteInputPosition += decoded;  // Track total frames consumed
             const size_t oldSize = resampleInputBuffer.size();
             const size_t appendCount = static_cast<size_t>(decoded) * channels;
             resampleInputBuffer.resize(oldSize + appendCount);
@@ -484,7 +499,6 @@ void AudioEngine::renderSoxrResampledLocked(
 
     int outFrame = 0;
     bool draining = false;
-    int emptyInputRetries = 0;
 
     while (outFrame < numFrames) {
         const int outputCapacity = numFrames - outFrame;
@@ -492,38 +506,66 @@ void AudioEngine::renderSoxrResampledLocked(
                 reinterpret_cast<uint8_t*>(outputData + static_cast<size_t>(outFrame) * channels)
         };
 
-        int converted = 0;
-        if (draining) {
-            converted = swr_convert(outputSoxrContext, outData, outputCapacity, nullptr, 0);
-            if (converted < 0 || converted == 0) {
-                break;
+        const int64_t delay = swr_get_delay(outputSoxrContext, renderRate);
+        const int64_t bufferedOutput = av_rescale_rnd(delay, streamRate, renderRate, AV_ROUND_DOWN);
+
+        const uint8_t* inData[1] = { nullptr };
+        int inCount = 0;
+        bool didRead = false;
+
+        // Only read more input if the buffer is insufficient for the requested output.
+        if (bufferedOutput < outputCapacity && !draining) {
+            int decoded = readFromDecoderLocked(resampleDecodeScratch.data(), decodeChunkFrames, reachedEnd);
+            if (decoded > 0) {
+                sharedAbsoluteInputPosition += decoded;
+                inData[0] = reinterpret_cast<const uint8_t*>(resampleDecodeScratch.data());
+                inCount = decoded;
+                didRead = true;
+            } else if (reachedEnd) {
+                draining = true;
             }
-            outFrame += converted;
-            continue;
         }
 
-        int decoded = readFromDecoderLocked(resampleDecodeScratch.data(), decodeChunkFrames, reachedEnd);
-        if (decoded > 0) {
-            const uint8_t* inData[1] = {
-                    reinterpret_cast<const uint8_t*>(resampleDecodeScratch.data())
-            };
-            converted = swr_convert(outputSoxrContext, outData, outputCapacity, inData, decoded);
-            if (converted < 0) {
-                break;
-            }
-            outFrame += converted;
-            emptyInputRetries = 0;
-            continue;
-        }
-
-        if (reachedEnd) {
-            draining = true;
-            continue;
-        }
-
-        if (++emptyInputRetries > 4) {
+        int converted = swr_convert(outputSoxrContext, outData, outputCapacity, inData, inCount);
+        if (converted < 0) {
+            LOGE("swr_convert failed: %d", converted);
             break;
         }
+
+        outFrame += converted;
+
+        if (converted == 0 && !didRead && !draining) {
+            // Estimated buffer was sufficient, but resampler produced no output.
+            // Force a read to advance the pipeline.
+            int decoded = readFromDecoderLocked(resampleDecodeScratch.data(), decodeChunkFrames, reachedEnd);
+            if (decoded > 0) {
+                sharedAbsoluteInputPosition += decoded;
+                inData[0] = reinterpret_cast<const uint8_t*>(resampleDecodeScratch.data());
+                inCount = decoded;
+                didRead = true;
+                // Retry conversion immediately
+                converted = swr_convert(outputSoxrContext, outData, outputCapacity, inData, inCount);
+                if (converted > 0) {
+                    outFrame += converted;
+                }
+            } else if (reachedEnd) {
+                draining = true;
+                // Retry conversion in draining mode
+                converted = swr_convert(outputSoxrContext, outData, outputCapacity, nullptr, 0);
+                if (converted > 0) {
+                    outFrame += converted;
+                }
+            }
+        }
+
+        // Check for completion or stall
+        if (outFrame >= numFrames) break;
+
+        if (draining && converted == 0) break; // Drain complete
+
+        // If input was provided but no output produced (filter priming), continue loop.
+        // If force-read failed (EOF/error), terminate.
+        if (didRead && inCount == 0 && !draining) break;
     }
 
     if (outFrame < numFrames) {
@@ -552,8 +594,16 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         bool reachedEnd = false;
         engine->renderResampledLocked(outputData, numFrames, channels, outputSampleRate, reachedEnd);
 
+        // Calculate position based on frames consumed by resampler at decoder rate
+        double calculatedPosition = -1.0;
+        if (engine->decoderRenderSampleRate > 0) {
+            calculatedPosition = static_cast<double>(engine->sharedAbsoluteInputPosition) / engine->decoderRenderSampleRate;
+        }
         const double decoderPosition = engine->decoder->getPlaybackPositionSeconds();
-        if (decoderPosition >= 0.0) {
+        // Prefer calculated position from resampler, fallback to decoder's position
+        if (calculatedPosition >= 0.0 && engine->sharedAbsoluteInputPosition > 0) {
+            engine->positionSeconds.store(calculatedPosition);
+        } else if (decoderPosition >= 0.0) {
             engine->positionSeconds.store(decoderPosition);
         } else if (outputSampleRate > 0 && numFrames > 0 && !reachedEnd) {
             engine->positionSeconds.fetch_add(static_cast<double>(numFrames) / outputSampleRate);

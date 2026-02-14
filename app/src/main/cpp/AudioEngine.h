@@ -63,6 +63,7 @@ private:
     int resampleInputStartFrame = 0;
     double resampleInputPosition = 0.0;
     std::vector<float> resampleDecodeScratch;
+    int64_t sharedAbsoluteInputPosition = 0;  // Frames consumed, shared between resamplers
     SwrContext* outputSoxrContext = nullptr;
     int outputSoxrInputRate = 0;
     int outputSoxrOutputRate = 0;
@@ -74,7 +75,7 @@ private:
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
     void reconfigureStream(bool resumePlayback);
     void applyStreamBufferPreset();
-    void resetResamplerStateLocked();
+    void resetResamplerStateLocked(bool preserveBuffer = false);
     bool ensureOutputSoxrContextLocked(int channels, int inputRate, int outputRate);
     void freeOutputSoxrContextLocked();
     int readFromDecoderLocked(float* buffer, int numFrames, bool& reachedEnd);

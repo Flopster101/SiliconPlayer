@@ -43,6 +43,7 @@ FFmpegDecoder::~FFmpegDecoder() {
 bool FFmpegDecoder::open(const char* path) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     close(); // close if already open
+    decoderDrainStarted = false;
 
     // Open input
     if (avformat_open_input(&formatContext, path, nullptr, nullptr) != 0) {
@@ -129,6 +130,7 @@ bool FFmpegDecoder::open(const char* path) {
         }
     }
 
+    totalFramesOutput = 0;
     LOGD("Opened file: %s, duration: %.2f", path, duration);
     return true;
 }
@@ -147,6 +149,7 @@ void FFmpegDecoder::close() {
     }
     sampleBuffer.clear();
     sampleBufferCursor = 0;
+    decoderDrainStarted = false;
     duration = 0.0;
     sourceSampleRate = 0;
     sourceChannelCount = 0;
@@ -234,6 +237,8 @@ int FFmpegDecoder::read(float* buffer, int numFrames) {
             }
         }
     }
+    // Track total frames output for position calculation
+    totalFramesOutput += framesRead;
     return framesRead;
 }
 
@@ -267,7 +272,10 @@ int FFmpegDecoder::decodeFrame() {
              }
              continue;
         } else if (ret == AVERROR(EAGAIN)) {
-             // Need new packet
+             // Need more input unless we've already started draining.
+             if (decoderDrainStarted) {
+                 return -1;
+             }
         } else if (ret == AVERROR_EOF) {
              return -1; // EOF
         } else {
@@ -277,8 +285,13 @@ int FFmpegDecoder::decodeFrame() {
 
         // Read packet
         if (av_read_frame(formatContext, packet) < 0) {
-             // EOF or error
-              return -1;
+             // No more packets: flush buffered decoder frames once.
+             if (!decoderDrainStarted) {
+                 decoderDrainStarted = true;
+                 avcodec_send_packet(codecContext, nullptr);
+                 continue;
+             }
+             return -1;
         }
 
         if (packet->stream_index == audioStreamIndex) {
@@ -301,6 +314,13 @@ void FFmpegDecoder::seek(double seconds) {
     avcodec_flush_buffers(codecContext);
     sampleBuffer.clear();
     sampleBufferCursor = 0;
+    decoderDrainStarted = false;
+    // Reset frame counter to match seek position
+    if (outputSampleRate > 0) {
+        totalFramesOutput = static_cast<int64_t>(seconds * outputSampleRate);
+    } else {
+        totalFramesOutput = 0;
+    }
 }
 
 double FFmpegDecoder::getDuration() {
@@ -352,6 +372,15 @@ void FFmpegDecoder::setOutputSampleRate(int sampleRate) {
         sampleBuffer.clear();
         sampleBufferCursor = 0;
     }
+}
+
+double FFmpegDecoder::getPlaybackPositionSeconds() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    // Calculate position from total frames output divided by sample rate
+    if (outputSampleRate > 0) {
+        return static_cast<double>(totalFramesOutput) / outputSampleRate;
+    }
+    return 0.0;
 }
 
 std::vector<std::string> FFmpegDecoder::getSupportedExtensions() {

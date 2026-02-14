@@ -4,7 +4,16 @@
 #include "decoders/DecoderRegistry.h"
 #include <vector>
 
+#include <mutex>
 static AudioEngine *audioEngine = nullptr;
+static std::mutex engineMutex;
+
+static void ensureEngine() {
+    std::lock_guard<std::mutex> lock(engineMutex);
+    if (audioEngine == nullptr) {
+        audioEngine = new AudioEngine();
+    }
+}
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_stringFromJNI(
@@ -16,9 +25,7 @@ Java_com_flopster101_siliconplayer_MainActivity_stringFromJNI(
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_startEngine(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) {
-        audioEngine = new AudioEngine();
-    }
+    ensureEngine();
     audioEngine->start();
 }
 
@@ -39,9 +46,7 @@ Java_com_flopster101_siliconplayer_MainActivity_isEnginePlaying(JNIEnv* env, job
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_loadAudio(JNIEnv* env, jobject, jstring path) {
-    if (audioEngine == nullptr) {
-        audioEngine = new AudioEngine();
-    }
+    ensureEngine();
     const char *nativePath = env->GetStringUTFChars(path, 0);
     audioEngine->setUrl(nativePath);
     env->ReleaseStringUTFChars(path, nativePath);
@@ -114,9 +119,7 @@ Java_com_flopster101_siliconplayer_MainActivity_setRepeatMode(JNIEnv* env, jobje
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_setCoreOutputSampleRate(
         JNIEnv* env, jobject, jstring coreName, jint sampleRateHz) {
-    if (audioEngine == nullptr) {
-        audioEngine = new AudioEngine();
-    }
+    ensureEngine();
     const char* nativeCoreName = env->GetStringUTFChars(coreName, 0);
     audioEngine->setCoreOutputSampleRate(nativeCoreName, static_cast<int>(sampleRateHz));
     env->ReleaseStringUTFChars(coreName, nativeCoreName);
@@ -125,9 +128,7 @@ Java_com_flopster101_siliconplayer_MainActivity_setCoreOutputSampleRate(
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_setCoreOption(
         JNIEnv* env, jobject, jstring coreName, jstring optionName, jstring optionValue) {
-    if (audioEngine == nullptr) {
-        audioEngine = new AudioEngine();
-    }
+    ensureEngine();
     const char* nativeCoreName = env->GetStringUTFChars(coreName, 0);
     const char* nativeOptionName = env->GetStringUTFChars(optionName, 0);
     const char* nativeOptionValue = env->GetStringUTFChars(optionValue, 0);
@@ -140,9 +141,7 @@ Java_com_flopster101_siliconplayer_MainActivity_setCoreOption(
 extern "C" JNIEXPORT jint JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getCoreCapabilities(
         JNIEnv* env, jobject, jstring coreName) {
-    if (audioEngine == nullptr) {
-        audioEngine = new AudioEngine();
-    }
+    ensureEngine();
     const char* nativeCoreName = env->GetStringUTFChars(coreName, 0);
     int caps = audioEngine->getCoreCapabilities(nativeCoreName);
     env->ReleaseStringUTFChars(coreName, nativeCoreName);
@@ -158,9 +157,7 @@ Java_com_flopster101_siliconplayer_MainActivity_setAudioPipelineConfig(
         jint bufferPreset,
         jint resamplerPreference,
         jboolean allowFallback) {
-    if (audioEngine == nullptr) {
-        audioEngine = new AudioEngine();
-    }
+    ensureEngine();
     audioEngine->setAudioPipelineConfig(
             static_cast<int>(backendPreference),
             static_cast<int>(performanceMode),

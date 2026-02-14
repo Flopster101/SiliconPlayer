@@ -1081,7 +1081,7 @@ private fun AudioResamplerSelectorCard(
 ) {
     SettingsEnumSelectorCard(
         title = "Output resampler",
-        description = "Choose the resampler implementation used by the output pipeline.",
+        description = "Choose the output resampler. SoX is experimental and falls back to built-in for discontinuous timeline cores.",
         selectedValue = selectedPreference,
         options = listOf(
             EnumChoice(AudioResamplerPreference.BuiltIn, AudioResamplerPreference.BuiltIn.label),

@@ -223,6 +223,8 @@ void AudioEngine::resetResamplerStateLocked(bool preserveBuffer) {
         resampleInputPosition = 0.0;
     }
     timelineSmootherInitialized = false;
+    pendingBackwardTimelineTargetSeconds = -1.0;
+    pendingBackwardTimelineConfirmations = 0;
     resamplerPathLoggedForCurrentTrack = false;
     resamplerNoOpLoggedForCurrentTrack = false;
     if (outputSoxrContext != nullptr) {
@@ -375,7 +377,10 @@ void AudioEngine::renderResampledLocked(
         return;
     }
 
-    if (outputResamplerPreference == 2 && !outputSoxrUnavailable) {
+    const bool decoderHasDiscontinuousTimeline =
+            decoder->getTimelineMode() == AudioDecoder::TimelineMode::Discontinuous;
+    const bool allowSoxForCurrentDecoder = !decoderHasDiscontinuousTimeline;
+    if (outputResamplerPreference == 2 && !outputSoxrUnavailable && allowSoxForCurrentDecoder) {
         if (!resamplerPathLoggedForCurrentTrack) {
             LOGD(
                     "Resampler path selected: SoX (decoderRate=%d -> streamRate=%d, decoder=%s)",
@@ -387,6 +392,16 @@ void AudioEngine::renderResampledLocked(
         }
         renderSoxrResampledLocked(outputData, numFrames, channels, streamRate, renderRate, reachedEnd);
         return;
+    }
+
+    if (outputResamplerPreference == 2 && decoderHasDiscontinuousTimeline && !resamplerPathLoggedForCurrentTrack) {
+        LOGD(
+                "Resampler path selected: Built-in linear (SoX experimental guard, decoderRate=%d -> streamRate=%d, decoder=%s)",
+                renderRate,
+                streamRate,
+                decoder ? decoder->getName() : "none"
+        );
+        resamplerPathLoggedForCurrentTrack = true;
     }
 
     if (!resamplerPathLoggedForCurrentTrack) {
@@ -607,24 +622,56 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
             engine->outputClockSeconds += callbackDeltaSeconds;
         }
 
+        // Compensate timeline by SoX internal delay so UI follows audible output.
+        double soxDelaySeconds = 0.0;
+        if (engine->outputResamplerPreference == 2 &&
+            engine->outputSoxrContext != nullptr &&
+            engine->decoderRenderSampleRate > 0 &&
+            engine->decoderRenderSampleRate != outputSampleRate) {
+            const int64_t soxDelayFrames = swr_get_delay(engine->outputSoxrContext, engine->decoderRenderSampleRate);
+            if (soxDelayFrames > 0) {
+                soxDelaySeconds = static_cast<double>(soxDelayFrames) / engine->decoderRenderSampleRate;
+            }
+        }
+
         // Calculate position based on frames consumed by resampler at decoder rate
         double calculatedPosition = -1.0;
         if (engine->decoderRenderSampleRate > 0) {
             calculatedPosition =
                     engine->sharedAbsoluteInputPositionBaseSeconds +
                     (static_cast<double>(engine->sharedAbsoluteInputPosition) / engine->decoderRenderSampleRate);
+            if (soxDelaySeconds > 0.0) {
+                calculatedPosition -= soxDelaySeconds;
+            }
+            if (calculatedPosition < 0.0) {
+                calculatedPosition = 0.0;
+            }
         }
-        const double decoderPosition = engine->decoder->getPlaybackPositionSeconds();
+        double decoderPosition = engine->decoder->getPlaybackPositionSeconds();
+        if (decoderPosition >= 0.0 && soxDelaySeconds > 0.0) {
+            decoderPosition -= soxDelaySeconds;
+            if (decoderPosition < 0.0) {
+                decoderPosition = 0.0;
+            }
+        }
         const AudioDecoder::TimelineMode timelineMode = engine->decoder->getTimelineMode();
 
         if (timelineMode == AudioDecoder::TimelineMode::Discontinuous) {
+            auto clearPendingBackwardJump = [&]() {
+                engine->pendingBackwardTimelineTargetSeconds = -1.0;
+                engine->pendingBackwardTimelineConfirmations = 0;
+            };
             if (!engine->timelineSmootherInitialized) {
-                if (decoderPosition >= 0.0) {
-                    engine->timelineSmoothedSeconds = decoderPosition;
-                } else if (calculatedPosition >= 0.0 && engine->sharedAbsoluteInputPosition > 0) {
+                if (calculatedPosition >= 0.0 && engine->sharedAbsoluteInputPosition > 0) {
                     engine->timelineSmoothedSeconds = calculatedPosition;
                 } else {
                     engine->timelineSmoothedSeconds = engine->outputClockSeconds;
+                }
+                if (decoderPosition >= 0.0) {
+                    const double initDiff = std::fabs(decoderPosition - engine->timelineSmoothedSeconds);
+                    if (initDiff <= 0.30) {
+                        engine->timelineSmoothedSeconds = decoderPosition;
+                    }
                 }
                 engine->timelineSmootherInitialized = true;
             }
@@ -634,16 +681,54 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
                 nextPosition += callbackDeltaSeconds;
             }
 
+            bool usedDecoderReference = false;
             if (decoderPosition >= 0.0) {
+                usedDecoderReference = true;
                 const double correction = decoderPosition - nextPosition;
-                constexpr double hardJumpThresholdSeconds = 0.35;
-                constexpr double softBlendRatio = 0.18;
-                if (std::fabs(correction) >= hardJumpThresholdSeconds || correction < -0.08) {
-                    nextPosition = decoderPosition;
+                if (correction >= 0.0) {
+                    clearPendingBackwardJump();
+                    constexpr double forwardBlendRatio = 0.12;
+                    const double maxForwardStep = std::max(callbackDeltaSeconds * 2.5, 0.03);
+                    nextPosition += std::min(correction * forwardBlendRatio, maxForwardStep);
                 } else {
-                    nextPosition += correction * softBlendRatio;
+                    constexpr double backwardConfirmToleranceSeconds = 0.15;
+                    const double backwardSnapFloorSeconds = std::max(callbackDeltaSeconds * 2.0, 0.03);
+                    int requiredConfirmations = 1;
+                    if (soxDelaySeconds > 0.0 && callbackDeltaSeconds > 0.0) {
+                        requiredConfirmations = std::max(
+                                static_cast<int>(std::ceil((soxDelaySeconds + 0.02) / callbackDeltaSeconds)),
+                                1
+                        );
+                    }
+                    requiredConfirmations = std::clamp(requiredConfirmations, 1, 64);
+
+                    const bool sameTarget =
+                            engine->pendingBackwardTimelineTargetSeconds >= 0.0 &&
+                            std::fabs(engine->pendingBackwardTimelineTargetSeconds - decoderPosition) <=
+                                    backwardConfirmToleranceSeconds;
+                    if (sameTarget) {
+                        engine->pendingBackwardTimelineConfirmations += 1;
+                    } else {
+                        engine->pendingBackwardTimelineTargetSeconds = decoderPosition;
+                        engine->pendingBackwardTimelineConfirmations = 1;
+                    }
+
+                    const bool allowSnapNow =
+                            (-correction >= backwardSnapFloorSeconds) &&
+                            (engine->pendingBackwardTimelineConfirmations >= requiredConfirmations);
+                    if (allowSnapNow) {
+                        nextPosition = decoderPosition;
+                        clearPendingBackwardJump();
+                    } else {
+                        // Avoid pre-loop "drift backwards"; only snap once target is stable.
+                        // Tiny backward corrections are still blended to avoid visible stiction.
+                        if (-correction <= std::max(callbackDeltaSeconds * 0.5, 0.01)) {
+                            nextPosition += correction * 0.10;
+                        }
+                    }
                 }
             } else if (calculatedPosition >= 0.0 && engine->sharedAbsoluteInputPosition > 0) {
+                clearPendingBackwardJump();
                 const double correction = calculatedPosition - nextPosition;
                 constexpr double fallbackBlendRatio = 0.10;
                 if (std::fabs(correction) >= 0.75) {
@@ -651,17 +736,17 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
                 } else {
                     nextPosition += correction * fallbackBlendRatio;
                 }
+            } else {
+                clearPendingBackwardJump();
             }
 
             const double durationNow = engine->decoder->getDuration();
             if (durationNow > 0.0) {
-                if (engine->repeatMode.load() == 2) {
-                    nextPosition = std::fmod(nextPosition, durationNow);
-                    if (nextPosition < 0.0) {
-                        nextPosition += durationNow;
-                    }
-                } else {
+                if (engine->repeatMode.load() != 2) {
                     nextPosition = std::clamp(nextPosition, 0.0, durationNow);
+                } else if (!usedDecoderReference && nextPosition > durationNow) {
+                    // Fallback wrap only when decoder timeline is unavailable.
+                    nextPosition = std::fmod(nextPosition, durationNow);
                 }
             } else if (nextPosition < 0.0) {
                 nextPosition = 0.0;
@@ -670,8 +755,33 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
             engine->timelineSmoothedSeconds = nextPosition;
             engine->positionSeconds.store(nextPosition);
         } else if (calculatedPosition >= 0.0 && engine->sharedAbsoluteInputPosition > 0) {
-            // Continuous timelines (or unknown fallback) track consumed input frames.
-            engine->positionSeconds.store(calculatedPosition);
+            // Continuous timelines generally track consumed input frames directly.
+            // With SoX this can become "chunky" due internal buffering, so smooth toward it.
+            if (engine->outputResamplerPreference == 2 &&
+                engine->outputSoxrContext != nullptr &&
+                callbackDeltaSeconds > 0.0) {
+                double nextPosition = engine->positionSeconds.load();
+                if (!reachedEnd) {
+                    nextPosition += callbackDeltaSeconds;
+                }
+                const double correction = calculatedPosition - nextPosition;
+                const double maxStep = std::max(callbackDeltaSeconds * 3.0, 0.04);
+                const double blendedStep = std::clamp(correction * 0.20, -maxStep, maxStep);
+                nextPosition += blendedStep;
+                const double durationNow = engine->decoder->getDuration();
+                if (durationNow > 0.0) {
+                    if (engine->repeatMode.load() != 2) {
+                        nextPosition = std::clamp(nextPosition, 0.0, durationNow);
+                    } else if (nextPosition > durationNow) {
+                        nextPosition = std::fmod(nextPosition, durationNow);
+                    }
+                } else if (nextPosition < 0.0) {
+                    nextPosition = 0.0;
+                }
+                engine->positionSeconds.store(nextPosition);
+            } else {
+                engine->positionSeconds.store(calculatedPosition);
+            }
         } else if (decoderPosition >= 0.0) {
             engine->positionSeconds.store(decoderPosition);
         } else if (!reachedEnd && callbackDeltaSeconds > 0.0) {

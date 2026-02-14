@@ -74,6 +74,8 @@ private:
     bool outputSoxrUnavailable = false;
     bool resamplerPathLoggedForCurrentTrack = false;
     bool resamplerNoOpLoggedForCurrentTrack = false;
+    double pendingBackwardTimelineTargetSeconds = -1.0;
+    int pendingBackwardTimelineConfirmations = 0;
     double outputClockSeconds = 0.0;
     bool timelineSmootherInitialized = false;
     double timelineSmoothedSeconds = 0.0;

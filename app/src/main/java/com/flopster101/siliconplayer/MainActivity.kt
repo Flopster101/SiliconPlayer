@@ -193,7 +193,7 @@ enum class AudioBufferPreset(val storageValue: String, val label: String, val na
 
 enum class AudioResamplerPreference(val storageValue: String, val label: String, val nativeValue: Int) {
     BuiltIn("builtin", "Built-in", 1),
-    Sox("sox", "SoX", 2);
+    Sox("sox", "SoX (Experimental)", 2);
 
     companion object {
         fun fromStorage(value: String?): AudioResamplerPreference {

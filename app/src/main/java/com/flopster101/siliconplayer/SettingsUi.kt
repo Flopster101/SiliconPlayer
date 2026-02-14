@@ -1069,7 +1069,6 @@ private fun AudioBackendSelectorCard(
         description = "Preferred output backend implementation.",
         selectedValue = selectedPreference,
         options = listOf(
-            EnumChoice(AudioBackendPreference.Auto, AudioBackendPreference.Auto.label),
             EnumChoice(AudioBackendPreference.AAudio, AudioBackendPreference.AAudio.label),
             EnumChoice(AudioBackendPreference.OpenSLES, AudioBackendPreference.OpenSLES.label),
             EnumChoice(AudioBackendPreference.AudioTrack, AudioBackendPreference.AudioTrack.label)
@@ -1088,7 +1087,6 @@ private fun AudioPerformanceModeSelectorCard(
         description = "Tune output stream behavior for latency vs efficiency.",
         selectedValue = selectedMode,
         options = listOf(
-            EnumChoice(AudioPerformanceMode.Auto, AudioPerformanceMode.Auto.label),
             EnumChoice(AudioPerformanceMode.LowLatency, AudioPerformanceMode.LowLatency.label),
             EnumChoice(AudioPerformanceMode.None, AudioPerformanceMode.None.label),
             EnumChoice(AudioPerformanceMode.PowerSaving, AudioPerformanceMode.PowerSaving.label)
@@ -1107,7 +1105,6 @@ private fun AudioBufferPresetSelectorCard(
         description = "Choose output buffer sizing profile for stability vs latency.",
         selectedValue = selectedPreset,
         options = listOf(
-            EnumChoice(AudioBufferPreset.Auto, AudioBufferPreset.Auto.label),
             EnumChoice(AudioBufferPreset.Small, AudioBufferPreset.Small.label),
             EnumChoice(AudioBufferPreset.Medium, AudioBufferPreset.Medium.label),
             EnumChoice(AudioBufferPreset.Large, AudioBufferPreset.Large.label)

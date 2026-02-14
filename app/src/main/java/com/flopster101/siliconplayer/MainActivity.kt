@@ -155,40 +155,37 @@ enum class ThemeMode(val storageValue: String, val label: String) {
 }
 
 enum class AudioBackendPreference(val storageValue: String, val label: String, val nativeValue: Int) {
-    Auto("auto", "Auto", 0),
     AAudio("aaudio", "AAudio", 1),
     OpenSLES("opensl", "OpenSL ES", 2),
     AudioTrack("audiotrack", "AudioTrack", 3);
 
     companion object {
         fun fromStorage(value: String?): AudioBackendPreference {
-            return entries.firstOrNull { it.storageValue == value } ?: Auto
+            return entries.firstOrNull { it.storageValue == value } ?: AAudio
         }
     }
 }
 
 enum class AudioPerformanceMode(val storageValue: String, val label: String, val nativeValue: Int) {
-    Auto("auto", "Auto", 0),
     LowLatency("low_latency", "Low latency", 1),
     None("none", "None", 2),
     PowerSaving("power_saving", "Power saving", 3);
 
     companion object {
         fun fromStorage(value: String?): AudioPerformanceMode {
-            return entries.firstOrNull { it.storageValue == value } ?: Auto
+            return entries.firstOrNull { it.storageValue == value } ?: None
         }
     }
 }
 
 enum class AudioBufferPreset(val storageValue: String, val label: String, val nativeValue: Int) {
-    Auto("auto", "Auto", 0),
     Small("small", "Small", 1),
     Medium("medium", "Medium", 2),
     Large("large", "Large", 3);
 
     companion object {
         fun fromStorage(value: String?): AudioBufferPreset {
-            return entries.firstOrNull { it.storageValue == value } ?: Auto
+            return entries.firstOrNull { it.storageValue == value } ?: Medium
         }
     }
 }
@@ -748,7 +745,7 @@ private fun AppNavigation(
             AudioBackendPreference.fromStorage(
                 prefs.getString(
                     AppPreferenceKeys.AUDIO_BACKEND_PREFERENCE,
-                    AudioBackendPreference.Auto.storageValue
+                    AudioBackendPreference.AAudio.storageValue
                 )
             )
         )
@@ -768,7 +765,7 @@ private fun AppNavigation(
             AudioBufferPreset.fromStorage(
                 prefs.getString(
                     AppPreferenceKeys.AUDIO_BUFFER_PRESET,
-                    AudioBufferPreset.Auto.storageValue
+                    AudioBufferPreset.Medium.storageValue
                 )
             )
         )
@@ -1849,9 +1846,9 @@ private fun AppNavigation(
                             previousRestartsAfterThreshold = true
                             respondHeadphoneMediaButtons = true
                             pauseOnHeadphoneDisconnect = true
-                            audioBackendPreference = AudioBackendPreference.Auto
-                            audioPerformanceMode = AudioPerformanceMode.Auto
-                            audioBufferPreset = AudioBufferPreset.Auto
+                            audioBackendPreference = AudioBackendPreference.AAudio
+                            audioPerformanceMode = AudioPerformanceMode.None
+                            audioBufferPreset = AudioBufferPreset.Medium
                             audioResamplerPreference = AudioResamplerPreference.BuiltIn
                             audioAllowBackendFallback = true
                             openPlayerFromNotification = true

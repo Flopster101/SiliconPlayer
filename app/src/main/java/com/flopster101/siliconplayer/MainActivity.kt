@@ -412,6 +412,9 @@ private object AppPreferenceKeys {
     const val RECENT_PLAYED_FILES = "recent_played_files"
     const val KEEP_SCREEN_ON = "keep_screen_on"
     const val AUDIO_FOCUS_INTERRUPT = "audio_focus_interrupt"
+    const val AUDIO_MASTER_VOLUME_DB = "audio_master_volume_db"
+    const val AUDIO_PLUGIN_VOLUME_DB = "audio_plugin_volume_db"
+    const val AUDIO_FORCE_MONO = "audio_force_mono"
 }
 
 class MainActivity : ComponentActivity() {
@@ -511,6 +514,9 @@ private fun AppNavigation(
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember(context) {
         context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    val volumeDatabase = remember(context) {
+        VolumeDatabase.getInstance(context)
     }
     var currentView by remember { mutableStateOf(MainView.Home) }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.Root) }

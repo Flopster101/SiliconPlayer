@@ -110,6 +110,8 @@ fun SettingsScreen(
     onRespondHeadphoneMediaButtonsChanged: (Boolean) -> Unit,
     pauseOnHeadphoneDisconnect: Boolean,
     onPauseOnHeadphoneDisconnectChanged: (Boolean) -> Unit,
+    audioFocusInterrupt: Boolean,
+    onAudioFocusInterruptChanged: (Boolean) -> Unit,
     audioBackendPreference: AudioBackendPreference,
     onAudioBackendPreferenceChanged: (AudioBackendPreference) -> Unit,
     audioPerformanceMode: AudioPerformanceMode,
@@ -464,6 +466,13 @@ fun SettingsScreen(
                             description = "Pause playback when headphones/output device disconnects.",
                             checked = pauseOnHeadphoneDisconnect,
                             onCheckedChange = onPauseOnHeadphoneDisconnectChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Allow interruption by other apps",
+                            description = "Pause playback when another app starts playing audio.",
+                            checked = audioFocusInterrupt,
+                            onCheckedChange = onAudioFocusInterruptChanged
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Audio output pipeline")

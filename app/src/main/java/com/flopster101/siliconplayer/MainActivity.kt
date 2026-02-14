@@ -411,6 +411,7 @@ private object AppPreferenceKeys {
     const val RECENT_FOLDERS = "recent_folders"
     const val RECENT_PLAYED_FILES = "recent_played_files"
     const val KEEP_SCREEN_ON = "keep_screen_on"
+    const val AUDIO_FOCUS_INTERRUPT = "audio_focus_interrupt"
 }
 
 class MainActivity : ComponentActivity() {
@@ -611,6 +612,11 @@ private fun AppNavigation(
     var keepScreenOn by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.KEEP_SCREEN_ON, false)
+        )
+    }
+    var audioFocusInterrupt by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.AUDIO_FOCUS_INTERRUPT, true)
         )
     }
     var ffmpegCoreSampleRateHz by remember {
@@ -1685,6 +1691,12 @@ private fun AppNavigation(
                         onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
                         keepScreenOn = keepScreenOn,
                         onKeepScreenOnChanged = { keepScreenOn = it },
+                        audioFocusInterrupt = audioFocusInterrupt,
+                        onAudioFocusInterruptChanged = {
+                            audioFocusInterrupt = it
+                            prefs.edit().putBoolean(AppPreferenceKeys.AUDIO_FOCUS_INTERRUPT, it).apply()
+                            com.flopster101.siliconplayer.PlaybackService.refreshSettings(context)
+                        },
                         ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
                         ffmpegCapabilities = ffmpegCapabilities,
                         onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },

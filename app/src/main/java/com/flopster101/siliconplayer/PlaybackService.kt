@@ -12,6 +12,8 @@ import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaMetadataRetriever
 import android.media.session.MediaSession
@@ -34,6 +36,33 @@ class PlaybackService : Service() {
     private val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
     private var mediaSession: MediaSession? = null
+    private var audioFocusRequest: AudioFocusRequest? = null // For Android O+
+    private var resumeOnFocusGain = false
+
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        if (!prefs.getBoolean(PREF_AUDIO_FOCUS_INTERRUPT, true)) return@OnAudioFocusChangeListener
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                resumeOnFocusGain = false
+                pausePlayback(abandonFocus = true)
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                resumeOnFocusGain = true
+                pausePlayback(abandonFocus = false)
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                // Determine if we should duck or pause. For now, pause is safer.
+                resumeOnFocusGain = true
+                pausePlayback(abandonFocus = false)
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                if (resumeOnFocusGain) {
+                    resumeOnFocusGain = false
+                    playPlayback()
+                }
+            }
+        }
+    }
 
     private var currentPath: String? = null
     private var currentTitle: String = "No track selected"
@@ -118,7 +147,17 @@ class PlaybackService : Service() {
         currentArtist = intent.getStringExtra(EXTRA_ARTIST).orEmpty().ifBlank { "Unknown Artist" }
         durationSeconds = intent.getDoubleExtra(EXTRA_DURATION, 0.0)
         positionSeconds = intent.getDoubleExtra(EXTRA_POSITION, 0.0)
+        val wasPlaying = isPlaying
         isPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, false)
+
+        // Request audio focus when transitioning from not playing to playing
+        if (isPlaying && !wasPlaying && currentPath != null) {
+            requestAudioFocus()
+        } else if (!isPlaying && wasPlaying) {
+            abandonAudioFocus()
+            resumeOnFocusGain = false
+        }
+
         if (currentPath == null) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             notificationManager.cancel(NOTIFICATION_ID)
@@ -135,13 +174,18 @@ class PlaybackService : Service() {
 
     private fun playPlayback() {
         if (currentPath == null) return
+        requestAudioFocus()
         NativeBridge.startEngine()
         isPlaying = true
         updateMediaSessionState()
         pushNotification()
     }
 
-    private fun pausePlayback() {
+    private fun pausePlayback(abandonFocus: Boolean = true) {
+        if (abandonFocus) {
+            abandonAudioFocus()
+            resumeOnFocusGain = false
+        }
         NativeBridge.stopEngine()
         isPlaying = false
         updateMediaSessionState()
@@ -149,6 +193,8 @@ class PlaybackService : Service() {
     }
 
     private fun stopAndClear() {
+        abandonAudioFocus()
+        resumeOnFocusGain = false
         NativeBridge.stopEngine()
         isPlaying = false
         currentPath = null
@@ -452,6 +498,41 @@ class PlaybackService : Service() {
         return bitmap
     }
 
+    private fun requestAudioFocus(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setOnAudioFocusChangeListener(audioFocusChangeListener, Handler(Looper.getMainLooper()))
+                .build()
+            audioFocusRequest = request
+            val result = audioManager.requestAudioFocus(request)
+            return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        } else {
+            @Suppress("DEPRECATION")
+            val result = audioManager.requestAudioFocus(
+                audioFocusChangeListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+            return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            audioFocusRequest = null
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(audioFocusChangeListener)
+        }
+    }
+
     companion object {
         private const val CHANNEL_ID = "silicon_player_playback"
         private const val NOTIFICATION_ID = 1101
@@ -459,6 +540,7 @@ class PlaybackService : Service() {
         private const val PREFS_NAME = "silicon_player_settings"
         private const val PREF_RESPOND_MEDIA_BUTTONS = "respond_headphone_media_buttons"
         private const val PREF_PAUSE_ON_DISCONNECT = "pause_on_headphone_disconnect"
+        private const val PREF_AUDIO_FOCUS_INTERRUPT = "audio_focus_interrupt"
         private const val PREF_SESSION_CURRENT_PATH = "session_current_path"
 
         private const val EXTRA_PATH = "extra_path"

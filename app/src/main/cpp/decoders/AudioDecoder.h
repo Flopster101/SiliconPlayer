@@ -8,6 +8,14 @@ class AudioDecoder {
 public:
     static constexpr int REPEAT_CAP_TRACK = 1 << 0;
     static constexpr int REPEAT_CAP_LOOP_POINT = 1 << 1;
+    static constexpr int PLAYBACK_CAP_SEEK = 1 << 0;
+    static constexpr int PLAYBACK_CAP_RELIABLE_DURATION = 1 << 1;
+    static constexpr int PLAYBACK_CAP_LIVE_REPEAT_MODE = 1 << 2;
+    enum class TimelineMode {
+        Unknown = 0,
+        ContinuousLinear = 1,
+        Discontinuous = 2
+    };
 
     virtual ~AudioDecoder() = default;
 
@@ -30,7 +38,11 @@ public:
     virtual void setOutputSampleRate(int /*sampleRate*/) {}
     virtual void setRepeatMode(int /*mode*/) {}
     virtual int getRepeatModeCapabilities() const { return REPEAT_CAP_TRACK; }
+    virtual int getPlaybackCapabilities() const {
+        return PLAYBACK_CAP_SEEK | PLAYBACK_CAP_RELIABLE_DURATION | PLAYBACK_CAP_LIVE_REPEAT_MODE;
+    }
     virtual double getPlaybackPositionSeconds() { return -1.0; }
+    virtual TimelineMode getTimelineMode() const { return TimelineMode::Unknown; }
 
     // Configuration
     virtual void setOption(const char* /*name*/, const char* /*value*/) {}

@@ -31,6 +31,7 @@ public:
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     double getPlaybackPositionSeconds() override;
+    TimelineMode getTimelineMode() const override { return TimelineMode::Discontinuous; }
     void setOption(const char* name, const char* value) override;
 
     // Framework

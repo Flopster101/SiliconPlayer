@@ -76,6 +76,7 @@ internal fun MiniPlayerBar(
     canResumeStoppedTrack: Boolean,
     positionSeconds: Double,
     durationSeconds: Double,
+    hasReliableDuration: Boolean,
     canPreviousTrack: Boolean,
     canNextTrack: Boolean,
     onExpand: () -> Unit,
@@ -90,8 +91,12 @@ internal fun MiniPlayerBar(
     val hasTrack = file != null
     val formatLabel = file?.extension?.uppercase()?.ifBlank { "UNKNOWN" } ?: "EMPTY"
     val positionLabel = formatTimeForMini(positionSeconds)
-    val durationLabel = formatTimeForMini(durationSeconds)
-    val progress = if (durationSeconds > 0.0) {
+    val durationLabel = if (hasReliableDuration && durationSeconds > 0.0) {
+        formatTimeForMini(durationSeconds)
+    } else {
+        "-:--"
+    }
+    val progress = if (hasReliableDuration && durationSeconds > 0.0) {
         (positionSeconds / durationSeconds).toFloat().coerceIn(0f, 1f)
     } else {
         0f

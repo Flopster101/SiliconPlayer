@@ -467,6 +467,7 @@ class MainActivity : ComponentActivity() {
     external fun getSupportedExtensions(): Array<String>
     external fun getDuration(): Double
     external fun getPosition(): Double
+    external fun consumeNaturalEndEvent(): Boolean
     external fun seekTo(seconds: Double)
     external fun setLooping(enabled: Boolean)
     external fun setRepeatMode(mode: Int)
@@ -477,6 +478,7 @@ class MainActivity : ComponentActivity() {
     external fun getTrackBitDepth(): Int
     external fun getTrackBitDepthLabel(): String
     external fun getRepeatModeCapabilities(): Int
+    external fun getPlaybackCapabilities(): Int
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
     external fun setCoreOption(coreName: String, optionName: String, optionValue: String)
     external fun setAudioPipelineConfig(
@@ -536,6 +538,13 @@ private fun AppNavigation(
     var metadataChannelCount by remember { mutableIntStateOf(0) }
     var metadataBitDepthLabel by remember { mutableStateOf("Unknown") }
     var repeatModeCapabilitiesFlags by remember { mutableIntStateOf(REPEAT_CAP_TRACK) }
+    var playbackCapabilitiesFlags by remember {
+        mutableIntStateOf(
+            PLAYBACK_CAP_SEEK or
+                PLAYBACK_CAP_RELIABLE_DURATION or
+                PLAYBACK_CAP_LIVE_REPEAT_MODE
+        )
+    }
     var lastUsedCoreName by remember { mutableStateOf<String?>(null) }
     var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var visiblePlayableFiles by remember { mutableStateOf<List<File>>(emptyList()) }
@@ -719,7 +728,6 @@ private fun AppNavigation(
         )
     }
     var playbackWatchPath by remember { mutableStateOf<String?>(null) }
-    var playbackWatchWasPlaying by remember { mutableStateOf(false) }
 
     // Get supported extensions from JNI
     val supportedExtensions = remember { NativeBridge.getSupportedExtensions().toSet() }
@@ -793,6 +801,7 @@ private fun AppNavigation(
     }
 
     fun cycleRepeatMode() {
+        if (!supportsLiveRepeatMode(playbackCapabilitiesFlags)) return
         val next = cycleRepeatModeValue(
             activeRepeatMode = activeRepeatMode,
             repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags
@@ -829,6 +838,7 @@ private fun AppNavigation(
         metadataChannelCount = snapshot.channelCount
         metadataBitDepthLabel = snapshot.bitDepthLabel
         repeatModeCapabilitiesFlags = snapshot.repeatModeCapabilitiesFlags
+        playbackCapabilitiesFlags = snapshot.playbackCapabilitiesFlags
         duration = snapshot.durationSeconds
     }
 
@@ -843,6 +853,9 @@ private fun AppNavigation(
         metadataChannelCount = 0
         metadataBitDepthLabel = "Unknown"
         repeatModeCapabilitiesFlags = REPEAT_CAP_TRACK
+        playbackCapabilitiesFlags = PLAYBACK_CAP_SEEK or
+            PLAYBACK_CAP_RELIABLE_DURATION or
+            PLAYBACK_CAP_LIVE_REPEAT_MODE
         artworkBitmap = null
     }
 
@@ -963,11 +976,8 @@ private fun AppNavigation(
             val currentPath = currentFile?.absolutePath
             if (currentPath != playbackWatchPath) {
                 playbackWatchPath = currentPath
-                playbackWatchWasPlaying = nextIsPlaying
             } else {
-                val atTrackEnd = nextDuration > 0.0 && nextPosition >= (nextDuration - 0.2)
-                val endedNaturally = playbackWatchWasPlaying && !nextIsPlaying && atTrackEnd
-                playbackWatchWasPlaying = nextIsPlaying
+                val endedNaturally = NativeBridge.consumeNaturalEndEvent()
                 if (endedNaturally && autoPlayNextTrackOnEnd && playAdjacentTrack(1)) {
                     continue
                 }
@@ -1769,6 +1779,9 @@ private fun AppNavigation(
                         artwork = artworkBitmap,
                         noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
                         repeatMode = activeRepeatMode,
+                        canCycleRepeatMode = supportsLiveRepeatMode(playbackCapabilitiesFlags),
+                        canSeek = canSeekPlayback(playbackCapabilitiesFlags),
+                        hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
                         onSeek = {},
                         onPreviousTrack = {},
                         onNextTrack = {},
@@ -1830,6 +1843,7 @@ private fun AppNavigation(
                         canResumeStoppedTrack = lastStoppedFile?.exists() == true,
                         positionSeconds = position,
                         durationSeconds = duration,
+                        hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
                         canPreviousTrack = currentTrackIndex() > 0,
                         canNextTrack = currentTrackIndex() in 0 until (visiblePlayableFiles.size - 1),
                         onExpand = {
@@ -1960,6 +1974,9 @@ private fun AppNavigation(
                     artwork = artworkBitmap,
                     noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
                     repeatMode = activeRepeatMode,
+                    canCycleRepeatMode = supportsLiveRepeatMode(playbackCapabilitiesFlags),
+                    canSeek = canSeekPlayback(playbackCapabilitiesFlags),
+                    hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
                     onSeek = { seconds ->
                         NativeBridge.seekTo(seconds)
                         position = seconds

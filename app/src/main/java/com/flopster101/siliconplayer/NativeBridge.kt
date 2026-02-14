@@ -12,6 +12,7 @@ object NativeBridge {
     external fun getSupportedExtensions(): Array<String>
     external fun getDuration(): Double
     external fun getPosition(): Double
+    external fun consumeNaturalEndEvent(): Boolean
     external fun seekTo(seconds: Double)
     external fun setLooping(enabled: Boolean)
     external fun setRepeatMode(mode: Int)
@@ -22,6 +23,7 @@ object NativeBridge {
     external fun getTrackBitDepth(): Int
     external fun getTrackBitDepthLabel(): String
     external fun getRepeatModeCapabilities(): Int
+    external fun getPlaybackCapabilities(): Int
     external fun getCurrentDecoderName(): String
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
     external fun setCoreOption(coreName: String, optionName: String, optionValue: String)

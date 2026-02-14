@@ -88,6 +88,9 @@ fun PlayerScreen(
     artwork: ImageBitmap?,
     noArtworkIcon: ImageVector = Icons.Default.MusicNote,
     repeatMode: RepeatMode,
+    canCycleRepeatMode: Boolean,
+    canSeek: Boolean,
+    hasReliableDuration: Boolean,
     onSeek: (Double) -> Unit,
     onPreviousTrack: () -> Unit,
     onNextTrack: () -> Unit,
@@ -228,11 +231,12 @@ fun PlayerScreen(
                         horizontalAlignment = Alignment.Start
                     ) {
                         TrackInfoChips(
-                            file = file,
-                            durationSeconds = durationSeconds,
-                            sampleRateHz = sampleRateHz,
-                            channelCount = channelCount,
-                            bitDepthLabel = bitDepthLabel
+                        file = file,
+                        durationSeconds = durationSeconds,
+                        hasReliableDuration = hasReliableDuration,
+                        sampleRateHz = sampleRateHz,
+                        channelCount = channelCount,
+                        bitDepthLabel = bitDepthLabel
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         TrackMetadataBlock(
@@ -244,6 +248,8 @@ fun PlayerScreen(
                         TimelineSection(
                             sliderPosition = if (isSeeking) sliderPosition else animatedSliderPosition.toDouble(),
                             durationSeconds = durationSeconds,
+                            canSeek = canSeek,
+                            hasReliableDuration = hasReliableDuration,
                             onSeekInteractionChanged = { isTimelineTouchActive = it },
                             onSliderValueChange = { value ->
                                 isSeeking = true
@@ -252,7 +258,9 @@ fun PlayerScreen(
                             },
                             onSliderValueChangeFinished = {
                                 isSeeking = false
-                                onSeek(sliderPosition)
+                                if (canSeek && hasReliableDuration) {
+                                    onSeek(sliderPosition)
+                                }
                             }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
@@ -263,6 +271,7 @@ fun PlayerScreen(
                             repeatMode = repeatMode,
                             canPreviousTrack = canPreviousTrack,
                             canNextTrack = canNextTrack,
+                            canCycleRepeatMode = canCycleRepeatMode,
                             onPlayPause = {
                                 if (isPlaying) {
                                     onPause()
@@ -304,6 +313,7 @@ fun PlayerScreen(
                     TrackInfoChips(
                         file = file,
                         durationSeconds = durationSeconds,
+                        hasReliableDuration = hasReliableDuration,
                         sampleRateHz = sampleRateHz,
                         channelCount = channelCount,
                         bitDepthLabel = bitDepthLabel,
@@ -319,6 +329,8 @@ fun PlayerScreen(
                     TimelineSection(
                         sliderPosition = if (isSeeking) sliderPosition else animatedSliderPosition.toDouble(),
                         durationSeconds = durationSeconds,
+                        canSeek = canSeek,
+                        hasReliableDuration = hasReliableDuration,
                         onSeekInteractionChanged = { isTimelineTouchActive = it },
                         onSliderValueChange = { value ->
                             isSeeking = true
@@ -327,7 +339,9 @@ fun PlayerScreen(
                         },
                         onSliderValueChangeFinished = {
                             isSeeking = false
-                            onSeek(sliderPosition)
+                            if (canSeek && hasReliableDuration) {
+                                onSeek(sliderPosition)
+                            }
                         }
                     )
                     Spacer(modifier = Modifier.height(10.dp))
@@ -338,6 +352,7 @@ fun PlayerScreen(
                         repeatMode = repeatMode,
                         canPreviousTrack = canPreviousTrack,
                         canNextTrack = canNextTrack,
+                        canCycleRepeatMode = canCycleRepeatMode,
                         onPlayPause = {
                             if (isPlaying) {
                                 onPause()
@@ -432,13 +447,18 @@ private fun AlbumArtPlaceholder(
 private fun TrackInfoChips(
     file: File?,
     durationSeconds: Double,
+    hasReliableDuration: Boolean,
     sampleRateHz: Int,
     channelCount: Int,
     bitDepthLabel: String,
     modifier: Modifier = Modifier
 ) {
     val formatLabel = file?.extension?.uppercase()?.ifBlank { "UNKNOWN" } ?: "EMPTY"
-    val durationLabel = if (durationSeconds > 0.0) formatTime(durationSeconds) else "--:--"
+    val durationLabel = if (hasReliableDuration && durationSeconds > 0.0) {
+        formatTime(durationSeconds)
+    } else {
+        "--:--"
+    }
     val sampleRateLabel = if (sampleRateHz > 0) {
         if (sampleRateHz % 1000 == 0) {
             "${sampleRateHz / 1000}kHz"
@@ -642,6 +662,7 @@ private fun TransportControls(
     repeatMode: RepeatMode,
     canPreviousTrack: Boolean,
     canNextTrack: Boolean,
+    canCycleRepeatMode: Boolean,
     onPlayPause: () -> Unit,
     onPreviousTrack: () -> Unit,
     onNextTrack: () -> Unit,
@@ -708,6 +729,7 @@ private fun TransportControls(
 
                     FilledTonalIconButton(
                         onClick = onCycleRepeatMode,
+                        enabled = hasTrack && canCycleRepeatMode,
                         modifier = Modifier.size(sideButtonSize),
                         shape = MaterialTheme.shapes.extraLarge,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
@@ -926,16 +948,25 @@ private fun FutureActionStrip(
 private fun TimelineSection(
     sliderPosition: Double,
     durationSeconds: Double,
+    canSeek: Boolean,
+    hasReliableDuration: Boolean,
     onSeekInteractionChanged: (Boolean) -> Unit,
     onSliderValueChange: (Float) -> Unit,
     onSliderValueChangeFinished: () -> Unit
 ) {
     val sliderMax = durationSeconds.coerceAtLeast(0.0).toFloat()
     val normalizedValue = sliderPosition.toFloat().coerceIn(0f, sliderMax)
+    val seekEnabled = canSeek && hasReliableDuration && durationSeconds > 0.0
+    val durationText = if (hasReliableDuration && durationSeconds > 0.0) {
+        formatTime(durationSeconds)
+    } else {
+        "-:--"
+    }
     Column(modifier = Modifier.fillMaxWidth()) {
         LineageStyleSeekBar(
             value = normalizedValue,
             maxValue = sliderMax,
+            enabled = seekEnabled,
             onSeekInteractionChanged = onSeekInteractionChanged,
             onValueChange = onSliderValueChange,
             onValueChangeFinished = onSliderValueChangeFinished,
@@ -952,7 +983,7 @@ private fun TimelineSection(
                 style = MaterialTheme.typography.labelMedium
             )
             Text(
-                text = formatTime(durationSeconds),
+                text = durationText,
                 style = MaterialTheme.typography.labelMedium
             )
         }
@@ -964,6 +995,7 @@ private fun TimelineSection(
 private fun LineageStyleSeekBar(
     value: Float,
     maxValue: Float,
+    enabled: Boolean,
     onSeekInteractionChanged: (Boolean) -> Unit,
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: () -> Unit,
@@ -991,7 +1023,7 @@ private fun LineageStyleSeekBar(
     Canvas(
         modifier = modifier
             .pointerInteropFilter { event ->
-                if (barWidthPx <= 0f || maxValue <= 0f) return@pointerInteropFilter false
+                if (!enabled || barWidthPx <= 0f || maxValue <= 0f) return@pointerInteropFilter false
                 val centerY = barHeightPx / 2f
                 val valueRatio = if (maxValue > 0f) (value / maxValue).coerceIn(0f, 1f) else 0f
                 val thumbCenterX = valueRatio * barWidthPx

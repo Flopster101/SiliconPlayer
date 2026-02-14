@@ -12,6 +12,7 @@ internal data class NativeTrackSnapshot(
     val channelCount: Int,
     val bitDepthLabel: String,
     val repeatModeCapabilitiesFlags: Int,
+    val playbackCapabilitiesFlags: Int,
     val durationSeconds: Double
 )
 
@@ -25,6 +26,7 @@ internal fun readNativeTrackSnapshot(): NativeTrackSnapshot {
         channelCount = NativeBridge.getTrackChannelCount(),
         bitDepthLabel = NativeBridge.getTrackBitDepthLabel(),
         repeatModeCapabilitiesFlags = NativeBridge.getRepeatModeCapabilities(),
+        playbackCapabilitiesFlags = NativeBridge.getPlaybackCapabilities(),
         durationSeconds = NativeBridge.getDuration()
     )
 }

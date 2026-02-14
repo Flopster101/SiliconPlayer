@@ -34,6 +34,7 @@ public:
     std::string getArtist() override;
     void setOutputSampleRate(int sampleRate) override;
     double getPlaybackPositionSeconds() override;
+    TimelineMode getTimelineMode() const override { return TimelineMode::ContinuousLinear; }
 
     // Configuration
     const char* getName() const override { return "FFmpeg"; }

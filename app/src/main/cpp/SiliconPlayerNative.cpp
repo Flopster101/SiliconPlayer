@@ -79,6 +79,14 @@ Java_com_flopster101_siliconplayer_MainActivity_getPosition(JNIEnv* env, jobject
     return audioEngine->getPositionSeconds();
 }
 
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_consumeNaturalEndEvent(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return JNI_FALSE;
+    }
+    return audioEngine->consumeNaturalEndEvent() ? JNI_TRUE : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_seekTo(JNIEnv* env, jobject, jdouble seconds) {
     if (audioEngine == nullptr) {
@@ -209,6 +217,18 @@ Java_com_flopster101_siliconplayer_MainActivity_getRepeatModeCapabilities(JNIEnv
     return static_cast<jint>(audioEngine->getRepeatModeCapabilities());
 }
 
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getPlaybackCapabilities(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return static_cast<jint>(
+                AudioDecoder::PLAYBACK_CAP_SEEK |
+                AudioDecoder::PLAYBACK_CAP_RELIABLE_DURATION |
+                AudioDecoder::PLAYBACK_CAP_LIVE_REPEAT_MODE
+        );
+    }
+    return static_cast<jint>(audioEngine->getPlaybackCapabilities());
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getCurrentDecoderName(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
@@ -251,6 +271,11 @@ Java_com_flopster101_siliconplayer_NativeBridge_getDuration(JNIEnv* env, jobject
 extern "C" JNIEXPORT jdouble JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getPosition(JNIEnv* env, jobject thiz) {
     return Java_com_flopster101_siliconplayer_MainActivity_getPosition(env, thiz);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_consumeNaturalEndEvent(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_consumeNaturalEndEvent(env, thiz);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -301,6 +326,11 @@ Java_com_flopster101_siliconplayer_NativeBridge_getTrackBitDepthLabel(JNIEnv* en
 extern "C" JNIEXPORT jint JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getRepeatModeCapabilities(JNIEnv* env, jobject thiz) {
     return Java_com_flopster101_siliconplayer_MainActivity_getRepeatModeCapabilities(env, thiz);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getPlaybackCapabilities(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getPlaybackCapabilities(env, thiz);
 }
 
 extern "C" JNIEXPORT jstring JNICALL

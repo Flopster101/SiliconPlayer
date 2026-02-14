@@ -28,9 +28,11 @@ public:
     void setLooping(bool enabled);
     void setRepeatMode(int mode);
     int getRepeatModeCapabilities();
+    int getPlaybackCapabilities();
     void setCoreOutputSampleRate(const std::string& coreName, int sampleRateHz);
     void setCoreOption(const std::string& coreName, const std::string& optionName, const std::string& optionValue);
     void setAudioPipelineConfig(int backendPreference, int performanceMode, int bufferPreset, int resamplerPreference, bool allowFallback);
+    bool consumeNaturalEndEvent();
     std::string getTitle();
     std::string getArtist();
     int getSampleRate();
@@ -71,6 +73,10 @@ private:
     bool outputSoxrUnavailable = false;
     bool resamplerPathLoggedForCurrentTrack = false;
     bool resamplerNoOpLoggedForCurrentTrack = false;
+    double outputClockSeconds = 0.0;
+    bool timelineSmootherInitialized = false;
+    double timelineSmoothedSeconds = 0.0;
+    std::atomic<bool> naturalEndPending { false };
 
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
     void reconfigureStream(bool resumePlayback);

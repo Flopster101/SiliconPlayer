@@ -211,6 +211,9 @@ void AudioEngine::resetResamplerStateLocked(bool preserveBuffer) {
         resampleInputStartFrame = 0;
         resampleInputPosition = 0.0;
         sharedAbsoluteInputPosition = 0;
+        const double currentPosition = positionSeconds.load();
+        outputClockSeconds = currentPosition >= 0.0 ? currentPosition : 0.0;
+        timelineSmoothedSeconds = outputClockSeconds;
     } else {
         // When switching resamplers, preserve the tracking but reset the buffer
         // New buffer starts empty, so position relative to buffer start is 0
@@ -218,6 +221,7 @@ void AudioEngine::resetResamplerStateLocked(bool preserveBuffer) {
         resampleInputStartFrame = 0;
         resampleInputPosition = 0.0;
     }
+    timelineSmootherInitialized = false;
     resamplerPathLoggedForCurrentTrack = false;
     resamplerNoOpLoggedForCurrentTrack = false;
     if (outputSoxrContext != nullptr) {
@@ -594,25 +598,89 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         bool reachedEnd = false;
         engine->renderResampledLocked(outputData, numFrames, channels, outputSampleRate, reachedEnd);
 
+        const double callbackDeltaSeconds = (outputSampleRate > 0 && numFrames > 0)
+                ? static_cast<double>(numFrames) / outputSampleRate
+                : 0.0;
+        if (!reachedEnd && callbackDeltaSeconds > 0.0) {
+            engine->outputClockSeconds += callbackDeltaSeconds;
+        }
+
         // Calculate position based on frames consumed by resampler at decoder rate
         double calculatedPosition = -1.0;
         if (engine->decoderRenderSampleRate > 0) {
             calculatedPosition = static_cast<double>(engine->sharedAbsoluteInputPosition) / engine->decoderRenderSampleRate;
         }
         const double decoderPosition = engine->decoder->getPlaybackPositionSeconds();
-        // Prefer calculated position from resampler, fallback to decoder's position
-        if (calculatedPosition >= 0.0 && engine->sharedAbsoluteInputPosition > 0) {
+        const AudioDecoder::TimelineMode timelineMode = engine->decoder->getTimelineMode();
+
+        if (timelineMode == AudioDecoder::TimelineMode::Discontinuous) {
+            if (!engine->timelineSmootherInitialized) {
+                if (decoderPosition >= 0.0) {
+                    engine->timelineSmoothedSeconds = decoderPosition;
+                } else if (calculatedPosition >= 0.0 && engine->sharedAbsoluteInputPosition > 0) {
+                    engine->timelineSmoothedSeconds = calculatedPosition;
+                } else {
+                    engine->timelineSmoothedSeconds = engine->outputClockSeconds;
+                }
+                engine->timelineSmootherInitialized = true;
+            }
+
+            double nextPosition = engine->timelineSmoothedSeconds;
+            if (!reachedEnd && callbackDeltaSeconds > 0.0) {
+                nextPosition += callbackDeltaSeconds;
+            }
+
+            if (decoderPosition >= 0.0) {
+                const double correction = decoderPosition - nextPosition;
+                constexpr double hardJumpThresholdSeconds = 0.35;
+                constexpr double softBlendRatio = 0.18;
+                if (std::fabs(correction) >= hardJumpThresholdSeconds || correction < -0.08) {
+                    nextPosition = decoderPosition;
+                } else {
+                    nextPosition += correction * softBlendRatio;
+                }
+            } else if (calculatedPosition >= 0.0 && engine->sharedAbsoluteInputPosition > 0) {
+                const double correction = calculatedPosition - nextPosition;
+                constexpr double fallbackBlendRatio = 0.10;
+                if (std::fabs(correction) >= 0.75) {
+                    nextPosition = calculatedPosition;
+                } else {
+                    nextPosition += correction * fallbackBlendRatio;
+                }
+            }
+
+            const double durationNow = engine->decoder->getDuration();
+            if (durationNow > 0.0) {
+                if (engine->repeatMode.load() == 2) {
+                    nextPosition = std::fmod(nextPosition, durationNow);
+                    if (nextPosition < 0.0) {
+                        nextPosition += durationNow;
+                    }
+                } else {
+                    nextPosition = std::clamp(nextPosition, 0.0, durationNow);
+                }
+            } else if (nextPosition < 0.0) {
+                nextPosition = 0.0;
+            }
+
+            engine->timelineSmoothedSeconds = nextPosition;
+            engine->positionSeconds.store(nextPosition);
+        } else if (calculatedPosition >= 0.0 && engine->sharedAbsoluteInputPosition > 0) {
+            // Continuous timelines (or unknown fallback) track consumed input frames.
             engine->positionSeconds.store(calculatedPosition);
         } else if (decoderPosition >= 0.0) {
             engine->positionSeconds.store(decoderPosition);
-        } else if (outputSampleRate > 0 && numFrames > 0 && !reachedEnd) {
-            engine->positionSeconds.fetch_add(static_cast<double>(numFrames) / outputSampleRate);
+        } else if (!reachedEnd && callbackDeltaSeconds > 0.0) {
+            engine->positionSeconds.fetch_add(callbackDeltaSeconds);
         }
 
         if (reachedEnd && engine->repeatMode.load() != 1) {
             const double durationAtEnd = engine->decoder->getDuration();
             if (durationAtEnd > 0.0) {
                 engine->positionSeconds.store(durationAtEnd);
+            }
+            if (engine->repeatMode.load() == 0) {
+                engine->naturalEndPending.store(true);
             }
             engine->isPlaying.store(false);
             return AAUDIO_CALLBACK_RESULT_STOP;
@@ -673,6 +741,7 @@ bool AudioEngine::start() {
             }
         }
         isPlaying = true;
+        naturalEndPending.store(false);
         return true;
     }
     return false;
@@ -683,6 +752,7 @@ void AudioEngine::stop() {
         resumeAfterRebuild.store(false);
         AAudioStream_requestStop(stream);
         isPlaying = false;
+        naturalEndPending.store(false);
     }
 }
 
@@ -709,6 +779,10 @@ void AudioEngine::setUrl(const char* url) {
         decoder = std::move(newDecoder);
         resetResamplerStateLocked();
         positionSeconds.store(0.0);
+        outputClockSeconds = 0.0;
+        timelineSmoothedSeconds = 0.0;
+        timelineSmootherInitialized = false;
+        naturalEndPending.store(false);
     } else {
         LOGE("Failed to open file: %s", url);
     }
@@ -740,7 +814,12 @@ void AudioEngine::seekToSeconds(double seconds) {
     }
     decoder->seek(seconds);
     resetResamplerStateLocked();
-    positionSeconds.store(seconds < 0.0 ? 0.0 : seconds);
+    const double clamped = seconds < 0.0 ? 0.0 : seconds;
+    positionSeconds.store(clamped);
+    outputClockSeconds = clamped;
+    timelineSmoothedSeconds = clamped;
+    timelineSmootherInitialized = false;
+    naturalEndPending.store(false);
 }
 
 void AudioEngine::setLooping(bool enabled) {
@@ -762,6 +841,16 @@ int AudioEngine::getRepeatModeCapabilities() {
         return AudioDecoder::REPEAT_CAP_TRACK;
     }
     return decoder->getRepeatModeCapabilities();
+}
+
+int AudioEngine::getPlaybackCapabilities() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return AudioDecoder::PLAYBACK_CAP_SEEK |
+               AudioDecoder::PLAYBACK_CAP_RELIABLE_DURATION |
+               AudioDecoder::PLAYBACK_CAP_LIVE_REPEAT_MODE;
+    }
+    return decoder->getPlaybackCapabilities();
 }
 
 int AudioEngine::resolveOutputSampleRateForCore(const std::string& coreName) const {
@@ -836,6 +925,10 @@ void AudioEngine::setAudioPipelineConfig(
 
     if (!changed) return;
     reconfigureStream(true);
+}
+
+bool AudioEngine::consumeNaturalEndEvent() {
+    return naturalEndPending.exchange(false);
 }
 
 std::string AudioEngine::getTitle() {

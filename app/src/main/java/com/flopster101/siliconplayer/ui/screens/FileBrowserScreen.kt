@@ -760,7 +760,10 @@ private fun buildFolderSummary(folder: File): String {
     if (folderCount > 0) {
         parts += pluralize(folderCount, "folder")
     }
-    parts += pluralize(fileCount, "file")
+    // Only show file count if there are files OR if there are no folders
+    if (fileCount > 0 || folderCount == 0) {
+        parts += pluralize(fileCount, "file")
+    }
     return parts.joinToString(" • ")
 }
 

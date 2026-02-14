@@ -28,6 +28,43 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Intent filter for opening audio files -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+
+            <!-- Intent filter for specific audio file extensions -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:host="*" />
+                <!-- Common audio formats -->
+                <data android:pathPattern=".*\\.mp3" />
+                <data android:pathPattern=".*\\.flac" />
+                <data android:pathPattern=".*\\.ogg" />
+                <data android:pathPattern=".*\\.wav" />
+                <data android:pathPattern=".*\\.m4a" />
+                <data android:pathPattern=".*\\.aac" />
+                <data android:pathPattern=".*\\.opus" />
+                <data android:pathPattern=".*\\.wma" />
+                <data android:pathPattern=".*\\.ape" />
+                <data android:pathPattern=".*\\.wv" />
+                <!-- Tracker/Module formats -->
+                <data android:pathPattern=".*\\.mod" />
+                <data android:pathPattern=".*\\.xm" />
+                <data android:pathPattern=".*\\.it" />
+                <data android:pathPattern=".*\\.s3m" />
+                <data android:pathPattern=".*\\.mptm" />
+            </intent-filter>
         </activity>
 
         <service

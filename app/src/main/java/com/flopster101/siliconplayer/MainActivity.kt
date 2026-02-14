@@ -120,6 +120,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale
@@ -431,15 +433,65 @@ private object AppPreferenceKeys {
 }
 
 class MainActivity : ComponentActivity() {
+    private var initialFileToOpen: File? = null
+    private var initialFileFromExternalIntent: Boolean = false
+
     private fun consumeNotificationIntent(intent: Intent?) {
         if (intent?.getBooleanExtra(PlaybackService.EXTRA_OPEN_PLAYER_FROM_NOTIFICATION, false) == true) {
             notificationOpenPlayerSignal++
         }
     }
 
+    private fun consumeFileOpenIntent(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_VIEW) {
+            val uri = intent.data
+            if (uri != null) {
+                try {
+                    val file = when (uri.scheme) {
+                        "file" -> File(uri.path ?: return)
+                        "content" -> {
+                            // For content URIs, we need to get the real path
+                            val path = getRealPathFromURI(uri)
+                            if (path != null) File(path) else null
+                        }
+                        else -> null
+                    }
+                    if (file?.exists() == true) {
+                        initialFileToOpen = file
+                        initialFileFromExternalIntent = true
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    private fun getRealPathFromURI(uri: Uri): String? {
+        return try {
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val columnIndex = cursor.getColumnIndex("_data")
+                    if (columnIndex >= 0) {
+                        cursor.getString(columnIndex)
+                    } else {
+                        // Fallback: try to use the URI path directly
+                        uri.path
+                    }
+                } else {
+                    uri.path
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            uri.path
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         consumeNotificationIntent(intent)
+        consumeFileOpenIntent(intent)
         setContent {
             val prefs = remember {
                 getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)
@@ -476,6 +528,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         consumeNotificationIntent(intent)
+        consumeFileOpenIntent(intent)
     }
 
     external fun getStringFromJNI(): String
@@ -829,6 +882,62 @@ private fun AppNavigation(
     // Get supported extensions from JNI
     val supportedExtensions = remember { NativeBridge.getSupportedExtensions().toSet() }
     val repository = remember { com.flopster101.siliconplayer.data.FileRepository(supportedExtensions) }
+
+    // Handle pending file from intent
+    var pendingFileToOpen by remember { mutableStateOf<File?>(initialFileToOpen) }
+    var pendingFileFromExternalIntent by remember { mutableStateOf(initialFileFromExternalIntent) }
+    LaunchedEffect(pendingFileToOpen) {
+        pendingFileToOpen?.let { file ->
+            if (file.exists() && supportedExtensions.contains(file.extension.lowercase())) {
+                selectedFile = file
+
+                // Load and start playback immediately
+                if (autoPlayOnTrackSelect) {
+                    NativeBridge.loadAudio(file.absolutePath)
+                    applyRepeatModeToNative(activeRepeatMode)
+                    NativeBridge.startEngine()
+                    isPlaying = true
+                }
+                if (openPlayerOnTrackSelect) {
+                    isPlayerExpanded = true
+                }
+                isPlayerSurfaceVisible = true
+
+                // Async: Load directory context for prev/next controls if from external intent
+                if (pendingFileFromExternalIntent) {
+                    launch {
+                        try {
+                            withTimeout(15_000) { // 15 second timeout
+                                val parentDir = file.parentFile
+                                if (parentDir?.exists() == true && parentDir.isDirectory) {
+                                    val loadedFiles = withContext(Dispatchers.IO) {
+                                        repository.getFiles(parentDir)
+                                    }
+                                    // Filter to playable files only
+                                    val playableFiles = loadedFiles
+                                        .asSequence()
+                                        .filter { !it.isDirectory }
+                                        .map { it.file }
+                                        .toList()
+                                    visiblePlayableFiles = playableFiles
+                                }
+                            }
+                        } catch (e: TimeoutCancellationException) {
+                            // Timeout - prev/next stay disabled, no error shown
+                        } catch (e: Exception) {
+                            // Other error - prev/next stay disabled
+                            e.printStackTrace()
+                        }
+                    }
+                }
+
+                pendingFileToOpen = null
+                pendingFileFromExternalIntent = false
+                initialFileToOpen = null
+                initialFileFromExternalIntent = false
+            }
+        }
+    }
 
     val storagePermissionState = rememberStoragePermissionState(context)
 

@@ -1165,6 +1165,7 @@ private fun AppNavigation(
     val miniPlayerInsetTarget = when {
         currentView == MainView.Browser && isPlayerSurfaceVisible -> 108.dp
         currentView == MainView.Home && isPlayerSurfaceVisible -> 108.dp
+        currentView == MainView.Settings && isPlayerSurfaceVisible -> 108.dp
         else -> 0.dp
     }
     val miniPlayerListInset by animateDpAsState(
@@ -1459,6 +1460,7 @@ private fun AppNavigation(
                     }
                     MainView.Settings -> SettingsScreen(
                         route = settingsRoute,
+                        bottomContentPadding = miniPlayerListInset,
                         onBack = {
                             if (settingsLaunchedFromPlayer) {
                                 exitSettingsToReturnView()
@@ -2073,6 +2075,7 @@ private fun RecentTrackSummaryText(
 @Composable
 private fun SettingsScreen(
     route: SettingsRoute,
+    bottomContentPadding: Dp = 0.dp,
     onBack: () -> Unit,
     onOpenAudioPlugins: () -> Unit,
     onOpenGeneralAudio: () -> Unit,
@@ -2216,9 +2219,13 @@ private fun SettingsScreen(
                 label = "settingsRouteTransition",
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = bottomContentPadding)
             ) {
-                Column(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
                     when (it) {
                     SettingsRoute.Root -> {
                         SettingsSectionLabel("Audio")

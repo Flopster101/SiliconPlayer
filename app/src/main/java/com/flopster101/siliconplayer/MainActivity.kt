@@ -430,6 +430,62 @@ private object AppPreferenceKeys {
     const val AUDIO_FORCE_MONO = "audio_force_mono"
     const val FILENAME_DISPLAY_MODE = "filename_display_mode"
     const val FILENAME_ONLY_WHEN_TITLE_MISSING = "filename_only_when_title_missing"
+
+    // Plugin management keys
+    fun decoderEnabledKey(decoderName: String) = "decoder_${decoderName}_enabled"
+    fun decoderPriorityKey(decoderName: String) = "decoder_${decoderName}_priority"
+    fun decoderEnabledExtensionsKey(decoderName: String) = "decoder_${decoderName}_enabled_extensions"
+}
+
+// Plugin configuration helpers
+private fun loadPluginConfigurations(prefs: android.content.SharedPreferences) {
+    val decoderNames = NativeBridge.getRegisteredDecoderNames()
+
+    for (decoderName in decoderNames) {
+        // Load enabled state (default true)
+        val enabled = prefs.getBoolean(AppPreferenceKeys.decoderEnabledKey(decoderName), true)
+        NativeBridge.setDecoderEnabled(decoderName, enabled)
+
+        // Load priority (use current priority as default)
+        val currentPriority = NativeBridge.getDecoderPriority(decoderName)
+        val priority = prefs.getInt(AppPreferenceKeys.decoderPriorityKey(decoderName), currentPriority)
+        if (priority != currentPriority) {
+            NativeBridge.setDecoderPriority(decoderName, priority)
+        }
+
+        // Load enabled extensions (empty string means all enabled)
+        val extensionsString = prefs.getString(AppPreferenceKeys.decoderEnabledExtensionsKey(decoderName), "")
+        if (!extensionsString.isNullOrEmpty()) {
+            val extensions = extensionsString.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toTypedArray()
+            NativeBridge.setDecoderEnabledExtensions(decoderName, extensions)
+        }
+    }
+}
+
+private fun savePluginConfiguration(prefs: android.content.SharedPreferences, decoderName: String) {
+    val editor = prefs.edit()
+
+    // Save enabled state
+    val enabled = NativeBridge.isDecoderEnabled(decoderName)
+    editor.putBoolean(AppPreferenceKeys.decoderEnabledKey(decoderName), enabled)
+
+    // Save priority
+    val priority = NativeBridge.getDecoderPriority(decoderName)
+    editor.putInt(AppPreferenceKeys.decoderPriorityKey(decoderName), priority)
+
+    // Save enabled extensions
+    val enabledExtensions = NativeBridge.getDecoderEnabledExtensions(decoderName)
+    val supportedExtensions = NativeBridge.getDecoderSupportedExtensions(decoderName)
+
+    // Only save if not all extensions are enabled (optimization)
+    if (enabledExtensions.size < supportedExtensions.size) {
+        val extensionsString = enabledExtensions.joinToString(",")
+        editor.putString(AppPreferenceKeys.decoderEnabledExtensionsKey(decoderName), extensionsString)
+    } else {
+        editor.remove(AppPreferenceKeys.decoderEnabledExtensionsKey(decoderName))
+    }
+
+    editor.apply()
 }
 
 class MainActivity : ComponentActivity() {
@@ -667,6 +723,11 @@ private fun AppNavigation(
         NativeBridge.setMasterGain(masterVolumeDb)
         NativeBridge.setPluginGain(pluginVolumeDb)
         NativeBridge.setForceMono(forceMono)
+
+        // Load plugin configurations
+        withContext(Dispatchers.IO) {
+            loadPluginConfigurations(prefs)
+        }
     }
 
     // Load per-song volume when track changes

@@ -47,4 +47,14 @@ object NativeBridge {
     external fun getPluginGain(): Float
     external fun getSongGain(): Float
     external fun getForceMono(): Boolean
+
+    // Decoder Registry management methods
+    external fun getRegisteredDecoderNames(): Array<String>
+    external fun setDecoderEnabled(decoderName: String, enabled: Boolean)
+    external fun isDecoderEnabled(decoderName: String): Boolean
+    external fun setDecoderPriority(decoderName: String, priority: Int)
+    external fun getDecoderPriority(decoderName: String): Int
+    external fun getDecoderSupportedExtensions(decoderName: String): Array<String>
+    external fun getDecoderEnabledExtensions(decoderName: String): Array<String>
+    external fun setDecoderEnabledExtensions(decoderName: String, extensions: Array<String>)
 }

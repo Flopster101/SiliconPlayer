@@ -465,3 +465,115 @@ Java_com_flopster101_siliconplayer_NativeBridge_getForceMono(
     }
     return audioEngine->getForceMono() ? JNI_TRUE : JNI_FALSE;
 }
+
+// ============================================================================
+// Decoder Registry Management JNI Methods
+// ============================================================================
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getRegisteredDecoderNames(
+        JNIEnv* env, jobject thiz) {
+    std::vector<std::string> names = DecoderRegistry::getInstance().getRegisteredDecoderNames();
+
+    jclass stringClass = env->FindClass("java/lang/String");
+    jobjectArray result = env->NewObjectArray(names.size(), stringClass, nullptr);
+
+    for (size_t i = 0; i < names.size(); ++i) {
+        jstring name = env->NewStringUTF(names[i].c_str());
+        env->SetObjectArrayElement(result, i, name);
+        env->DeleteLocalRef(name);
+    }
+
+    return result;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDecoderEnabled(
+        JNIEnv* env, jobject thiz, jstring decoderName, jboolean enabled) {
+    const char* name = env->GetStringUTFChars(decoderName, 0);
+    DecoderRegistry::getInstance().setDecoderEnabled(name, enabled == JNI_TRUE);
+    env->ReleaseStringUTFChars(decoderName, name);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_isDecoderEnabled(
+        JNIEnv* env, jobject thiz, jstring decoderName) {
+    const char* name = env->GetStringUTFChars(decoderName, 0);
+    bool enabled = DecoderRegistry::getInstance().isDecoderEnabled(name);
+    env->ReleaseStringUTFChars(decoderName, name);
+    return enabled ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDecoderPriority(
+        JNIEnv* env, jobject thiz, jstring decoderName, jint priority) {
+    const char* name = env->GetStringUTFChars(decoderName, 0);
+    DecoderRegistry::getInstance().setDecoderPriority(name, static_cast<int>(priority));
+    env->ReleaseStringUTFChars(decoderName, name);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDecoderPriority(
+        JNIEnv* env, jobject thiz, jstring decoderName) {
+    const char* name = env->GetStringUTFChars(decoderName, 0);
+    int priority = DecoderRegistry::getInstance().getDecoderPriority(name);
+    env->ReleaseStringUTFChars(decoderName, name);
+    return static_cast<jint>(priority);
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDecoderSupportedExtensions(
+        JNIEnv* env, jobject thiz, jstring decoderName) {
+    const char* name = env->GetStringUTFChars(decoderName, 0);
+    std::vector<std::string> extensions = DecoderRegistry::getInstance().getDecoderSupportedExtensions(name);
+    env->ReleaseStringUTFChars(decoderName, name);
+
+    jclass stringClass = env->FindClass("java/lang/String");
+    jobjectArray result = env->NewObjectArray(extensions.size(), stringClass, nullptr);
+
+    for (size_t i = 0; i < extensions.size(); ++i) {
+        jstring ext = env->NewStringUTF(extensions[i].c_str());
+        env->SetObjectArrayElement(result, i, ext);
+        env->DeleteLocalRef(ext);
+    }
+
+    return result;
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDecoderEnabledExtensions(
+        JNIEnv* env, jobject thiz, jstring decoderName) {
+    const char* name = env->GetStringUTFChars(decoderName, 0);
+    std::vector<std::string> extensions = DecoderRegistry::getInstance().getDecoderEnabledExtensions(name);
+    env->ReleaseStringUTFChars(decoderName, name);
+
+    jclass stringClass = env->FindClass("java/lang/String");
+    jobjectArray result = env->NewObjectArray(extensions.size(), stringClass, nullptr);
+
+    for (size_t i = 0; i < extensions.size(); ++i) {
+        jstring ext = env->NewStringUTF(extensions[i].c_str());
+        env->SetObjectArrayElement(result, i, ext);
+        env->DeleteLocalRef(ext);
+    }
+
+    return result;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDecoderEnabledExtensions(
+        JNIEnv* env, jobject thiz, jstring decoderName, jobjectArray extensions) {
+    const char* name = env->GetStringUTFChars(decoderName, 0);
+
+    std::vector<std::string> extVector;
+    jsize length = env->GetArrayLength(extensions);
+    for (jsize i = 0; i < length; ++i) {
+        jstring ext = (jstring) env->GetObjectArrayElement(extensions, i);
+        const char* extChars = env->GetStringUTFChars(ext, 0);
+        extVector.push_back(extChars);
+        env->ReleaseStringUTFChars(ext, extChars);
+        env->DeleteLocalRef(ext);
+    }
+
+    DecoderRegistry::getInstance().setDecoderEnabledExtensions(name, extVector);
+    env->ReleaseStringUTFChars(decoderName, name);
+}

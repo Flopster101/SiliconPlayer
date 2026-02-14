@@ -6,6 +6,7 @@
 #include <android/log.h>
 #include <cmath>
 #include <cstring>
+#include <algorithm>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -97,7 +98,9 @@ void AudioEngine::recoverStreamIfNeeded() {
     {
         std::lock_guard<std::mutex> lock(decoderMutex);
         if (decoder) {
-            decoder->setOutputSampleRate(resolveOutputSampleRateForCore(decoder->getName()));
+            decoderRenderSampleRate = resolveOutputSampleRateForCore(decoder->getName());
+            decoder->setOutputSampleRate(decoderRenderSampleRate);
+            resetResamplerStateLocked();
         }
     }
 
@@ -114,11 +117,123 @@ void AudioEngine::recoverStreamIfNeeded() {
     }
 }
 
-#include "decoders/FFmpegDecoder.h"
+void AudioEngine::resetResamplerStateLocked() {
+    resampleInputBuffer.clear();
+    resampleInputPosition = 0.0;
+}
 
-// ... (other includes)
+int AudioEngine::readFromDecoderLocked(float* buffer, int numFrames, bool& reachedEnd) {
+    if (!decoder || !buffer || numFrames <= 0) return 0;
 
-// ...
+    int framesRead = decoder->read(buffer, numFrames);
+    if (framesRead > 0) {
+        return framesRead;
+    }
+
+    if (repeatMode.load() == 1) {
+        decoder->seek(0.0);
+        positionSeconds.store(0.0);
+        resetResamplerStateLocked();
+        framesRead = decoder->read(buffer, numFrames);
+        if (framesRead > 0) {
+            return framesRead;
+        }
+    }
+
+    if (repeatMode.load() != 2) {
+        reachedEnd = true;
+    }
+    return 0;
+}
+
+void AudioEngine::renderResampledLocked(
+        float* outputData,
+        int32_t numFrames,
+        int channels,
+        int streamRate,
+        bool& reachedEnd) {
+    if (!decoder || !outputData || numFrames <= 0 || channels <= 0) {
+        if (outputData && numFrames > 0) {
+            memset(outputData, 0, numFrames * std::max(channels, 1) * sizeof(float));
+        }
+        return;
+    }
+
+    const int renderRate = decoderRenderSampleRate > 0 ? decoderRenderSampleRate : streamRate;
+    if (streamRate <= 0 || renderRate == streamRate) {
+        int framesRead = readFromDecoderLocked(outputData, numFrames, reachedEnd);
+        if (framesRead < numFrames) {
+            memset(
+                    outputData + (framesRead * channels),
+                    0,
+                    (numFrames - framesRead) * channels * sizeof(float)
+            );
+        }
+        return;
+    }
+
+    const double inputPerOutputFrame = static_cast<double>(renderRate) / static_cast<double>(streamRate);
+    constexpr int decodeChunkFrames = 1024;
+    std::vector<float> decodeChunk(static_cast<size_t>(decodeChunkFrames) * channels);
+
+    int outFrame = 0;
+    while (outFrame < numFrames) {
+        int availableFrames = static_cast<int>(resampleInputBuffer.size() / channels);
+        int baseFrame = static_cast<int>(std::floor(resampleInputPosition));
+
+        while (baseFrame + 1 >= availableFrames) {
+            int decoded = readFromDecoderLocked(decodeChunk.data(), decodeChunkFrames, reachedEnd);
+            if (decoded <= 0) {
+                break;
+            }
+            resampleInputBuffer.insert(
+                    resampleInputBuffer.end(),
+                    decodeChunk.begin(),
+                    decodeChunk.begin() + (static_cast<size_t>(decoded) * channels)
+            );
+            availableFrames = static_cast<int>(resampleInputBuffer.size() / channels);
+            baseFrame = static_cast<int>(std::floor(resampleInputPosition));
+        }
+
+        availableFrames = static_cast<int>(resampleInputBuffer.size() / channels);
+        baseFrame = static_cast<int>(std::floor(resampleInputPosition));
+        if (baseFrame >= availableFrames) {
+            break;
+        }
+
+        int nextFrame = std::min(baseFrame + 1, availableFrames - 1);
+        const double frac = std::clamp(resampleInputPosition - baseFrame, 0.0, 1.0);
+
+        for (int c = 0; c < channels; ++c) {
+            const float a = resampleInputBuffer[static_cast<size_t>(baseFrame) * channels + c];
+            const float b = resampleInputBuffer[static_cast<size_t>(nextFrame) * channels + c];
+            outputData[static_cast<size_t>(outFrame) * channels + c] =
+                    static_cast<float>(a + (b - a) * frac);
+        }
+
+        outFrame++;
+        resampleInputPosition += inputPerOutputFrame;
+    }
+
+    if (outFrame < numFrames) {
+        memset(
+                outputData + (static_cast<size_t>(outFrame) * channels),
+                0,
+                (numFrames - outFrame) * channels * sizeof(float)
+        );
+    }
+
+    const int availableFrames = static_cast<int>(resampleInputBuffer.size() / channels);
+    int trimFrames = std::max(0, static_cast<int>(std::floor(resampleInputPosition)) - 1);
+    trimFrames = std::min(trimFrames, availableFrames);
+    if (trimFrames > 0) {
+        resampleInputBuffer.erase(
+                resampleInputBuffer.begin(),
+                resampleInputBuffer.begin() + (static_cast<size_t>(trimFrames) * channels)
+        );
+        resampleInputPosition -= trimFrames;
+    }
+}
 
 aaudio_data_callback_result_t AudioEngine::dataCallback(
         AAudioStream *stream,
@@ -136,48 +251,14 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         const int outputSampleRate = AAudioStream_getSampleRate(stream) > 0
                 ? AAudioStream_getSampleRate(stream)
                 : engine->streamSampleRate;
-        int totalFramesRead = 0;
-        int remainingFrames = numFrames;
         bool reachedEnd = false;
-
-        while (remainingFrames > 0) {
-            int framesRead = engine->decoder->read(
-                    outputData + (totalFramesRead * channels),
-                    remainingFrames
-            );
-
-            if (framesRead <= 0) {
-                if (engine->repeatMode.load() == 1) {
-                    engine->decoder->seek(0.0);
-                    engine->positionSeconds.store(0.0);
-                    continue;
-                }
-                if (engine->repeatMode.load() == 2) {
-                    // Loop-point mode may transiently return 0 frames at loop boundaries.
-                    // Keep stream alive and fill the remainder with silence for this callback.
-                    break;
-                }
-                reachedEnd = true;
-                break;
-            }
-            totalFramesRead += framesRead;
-            remainingFrames -= framesRead;
-        }
+        engine->renderResampledLocked(outputData, numFrames, channels, outputSampleRate, reachedEnd);
 
         const double decoderPosition = engine->decoder->getPlaybackPositionSeconds();
         if (decoderPosition >= 0.0) {
             engine->positionSeconds.store(decoderPosition);
-        } else if (outputSampleRate > 0 && totalFramesRead > 0) {
-            engine->positionSeconds.fetch_add(static_cast<double>(totalFramesRead) / outputSampleRate);
-        }
-
-        // Fill remaining with silence if decoder didn't produce enough
-        if (totalFramesRead < numFrames) {
-            memset(
-                    outputData + (totalFramesRead * channels),
-                    0,
-                    (numFrames - totalFramesRead) * channels * sizeof(float)
-            );
+        } else if (outputSampleRate > 0 && numFrames > 0 && !reachedEnd) {
+            engine->positionSeconds.fetch_add(static_cast<double>(numFrames) / outputSampleRate);
         }
 
         if (reachedEnd && engine->repeatMode.load() != 1) {
@@ -216,11 +297,14 @@ bool AudioEngine::start() {
         {
             std::lock_guard<std::mutex> lock(decoderMutex);
             if (decoder) {
-                decoder->setOutputSampleRate(resolveOutputSampleRateForCore(decoder->getName()));
+                decoderRenderSampleRate = resolveOutputSampleRateForCore(decoder->getName());
+                decoder->setOutputSampleRate(decoderRenderSampleRate);
+                resetResamplerStateLocked();
                 const double durationNow = decoder->getDuration();
                 if (durationNow > 0.0 && positionSeconds.load() >= (durationNow - 0.01)) {
                     decoder->seek(0.0);
                     positionSeconds.store(0.0);
+                    resetResamplerStateLocked();
                 }
             }
         }
@@ -266,6 +350,7 @@ void AudioEngine::setUrl(const char* url) {
         std::lock_guard<std::mutex> lock(decoderMutex);
         const int targetRate = resolveOutputSampleRateForCore(newDecoder->getName());
         newDecoder->setOutputSampleRate(targetRate);
+        decoderRenderSampleRate = targetRate;
         newDecoder->setRepeatMode(repeatMode.load());
         const auto optionsIt = coreOptions.find(newDecoder->getName());
         if (optionsIt != coreOptions.end()) {
@@ -274,6 +359,7 @@ void AudioEngine::setUrl(const char* url) {
             }
         }
         decoder = std::move(newDecoder);
+        resetResamplerStateLocked();
         positionSeconds.store(0.0);
     } else {
         LOGE("Failed to open file: %s", url);
@@ -305,6 +391,7 @@ void AudioEngine::seekToSeconds(double seconds) {
         return;
     }
     decoder->seek(seconds);
+    resetResamplerStateLocked();
     positionSeconds.store(seconds < 0.0 ? 0.0 : seconds);
 }
 
@@ -345,7 +432,9 @@ void AudioEngine::setCoreOutputSampleRate(const std::string& coreName, int sampl
     coreOutputSampleRateHz[coreName] = normalizedRate;
 
     if (decoder && coreName == decoder->getName()) {
-        decoder->setOutputSampleRate(resolveOutputSampleRateForCore(coreName));
+        decoderRenderSampleRate = resolveOutputSampleRateForCore(coreName);
+        decoder->setOutputSampleRate(decoderRenderSampleRate);
+        resetResamplerStateLocked();
     }
 }
 

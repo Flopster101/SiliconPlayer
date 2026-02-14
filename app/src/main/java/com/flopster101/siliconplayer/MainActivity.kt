@@ -2477,8 +2477,8 @@ private fun SettingsScreen(
                         )
                     }
                     SettingsRoute.PluginFfmpeg -> SampleRateSelectorCard(
-                        title = "Output sample rate",
-                        description = "Preferred output sample rate for this plugin. Auto uses the device/output stream rate.",
+                        title = "Render sample rate",
+                        description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
                         selectedHz = ffmpegSampleRateHz,
                         onSelected = onFfmpegSampleRateChanged
                     )
@@ -2564,8 +2564,8 @@ private fun SettingsScreen(
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Generic output options")
                         SampleRateSelectorCard(
-                            title = "Output sample rate",
-                            description = "Preferred output sample rate for this plugin. Auto uses the device/output stream rate.",
+                            title = "Render sample rate",
+                            description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
                             selectedHz = openMptSampleRateHz,
                             onSelected = onOpenMptSampleRateChanged
                         )

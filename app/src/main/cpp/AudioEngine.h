@@ -6,6 +6,7 @@
 #include <atomic>
 #include <mutex>
 #include <memory>
+#include <vector>
 #include <unordered_map>
 #include "decoders/AudioDecoder.h"
 
@@ -49,8 +50,14 @@ private:
     std::mutex decoderMutex;
     std::unordered_map<std::string, int> coreOutputSampleRateHz;
     std::unordered_map<std::string, std::unordered_map<std::string, std::string>> coreOptions;
+    int decoderRenderSampleRate = 48000;
+    std::vector<float> resampleInputBuffer;
+    double resampleInputPosition = 0.0;
 
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
+    void resetResamplerStateLocked();
+    int readFromDecoderLocked(float* buffer, int numFrames, bool& reachedEnd);
+    void renderResampledLocked(float* outputData, int32_t numFrames, int channels, int streamRate, bool& reachedEnd);
     void recoverStreamIfNeeded();
 
     void createStream();

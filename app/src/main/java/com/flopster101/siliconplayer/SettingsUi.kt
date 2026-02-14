@@ -55,7 +55,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import java.util.Locale
+import kotlin.math.roundToInt
 
 private const val SETTINGS_PAGE_NAV_DURATION_MS = 300
 private val SettingsCardShape = RoundedCornerShape(16.dp)
@@ -1347,23 +1348,24 @@ private fun OpenMptDialogSliderCard(
     }
 
     if (dialogOpen) {
-        var sliderValue by remember(value) { mutableFloatStateOf(coercedValue.toFloat()) }
+        var sliderValue by remember(value) { mutableIntStateOf(coercedValue) }
         AlertDialog(
             onDismissRequest = { dialogOpen = false },
             title = { Text(title) },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = valueLabel(sliderValue.toInt()),
+                        text = valueLabel(sliderValue),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Slider(
-                        value = sliderValue,
+                        value = sliderValue.toFloat(),
                         onValueChange = { raw ->
-                            val snapped = (((raw.toInt() - valueRange.first + (step / 2)) / step) * step) + valueRange.first
-                            sliderValue = snapped.coerceIn(valueRange.first, valueRange.last).toFloat()
+                            val stepsFromStart = ((raw - valueRange.first.toFloat()) / step.toFloat()).roundToInt()
+                            val snapped = valueRange.first + (stepsFromStart * step)
+                            sliderValue = snapped.coerceIn(valueRange.first, valueRange.last)
                         },
                         valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
                         steps = sliderSteps
@@ -1377,7 +1379,7 @@ private fun OpenMptDialogSliderCard(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    onValueChanged(sliderValue.toInt())
+                    onValueChanged(sliderValue)
                     dialogOpen = false
                 }) {
                     Text("Apply")
@@ -1432,7 +1434,7 @@ private fun OpenMptVolumeRampingCard(
 
     if (dialogOpen) {
         var autoState by remember(value) { mutableStateOf(value < 0) }
-        var sliderValue by remember(value) { mutableStateOf(value.coerceIn(0, 10).toFloat()) }
+        var sliderValue by remember(value) { mutableIntStateOf(value.coerceIn(0, 10)) }
         AlertDialog(
             onDismissRequest = { dialogOpen = false },
             title = { Text(title) },
@@ -1456,15 +1458,15 @@ private fun OpenMptVolumeRampingCard(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = if (autoState) "Current: Auto" else "Current: ${sliderValue.toInt()}",
+                        text = if (autoState) "Current: Auto" else "Current: $sliderValue",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Slider(
-                        value = sliderValue,
+                        value = sliderValue.toFloat(),
                         onValueChange = { raw ->
-                            sliderValue = raw.coerceIn(0f, 10f)
+                            sliderValue = raw.roundToInt().coerceIn(0, 10)
                         },
                         valueRange = 0f..10f,
                         steps = 9,
@@ -1479,7 +1481,7 @@ private fun OpenMptVolumeRampingCard(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    onValueChanged(if (autoState) -1 else sliderValue.toInt())
+                    onValueChanged(if (autoState) -1 else sliderValue)
                     dialogOpen = false
                 }) {
                     Text("Apply")

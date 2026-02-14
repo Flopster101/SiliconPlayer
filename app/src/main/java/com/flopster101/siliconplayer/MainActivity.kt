@@ -677,6 +677,14 @@ private fun AppNavigation(
             )
         )
     }
+    var openMptFt2XmVolumeRamping by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                CorePreferenceKeys.OPENMPT_FT2_XM_VOLUME_RAMPING,
+                OpenMptDefaults.ft2XmVolumeRamping
+            )
+        )
+    }
     var openMptMasterGainMilliBel by remember {
         mutableIntStateOf(
             prefs.getInt(CorePreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL, OpenMptDefaults.masterGainMilliBel)
@@ -1217,6 +1225,22 @@ private fun AppNavigation(
         )
     }
 
+    LaunchedEffect(openMptFt2XmVolumeRamping) {
+        prefs.edit()
+            .putBoolean(
+                CorePreferenceKeys.OPENMPT_FT2_XM_VOLUME_RAMPING,
+                openMptFt2XmVolumeRamping
+            )
+            .apply()
+        applyCoreOptionWithPolicy(
+            "LibOpenMPT",
+            "openmpt.ft2_xm_volume_ramping",
+            openMptFt2XmVolumeRamping.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "FT2 5ms XM ramping"
+        )
+    }
+
     LaunchedEffect(openMptMasterGainMilliBel) {
         prefs.edit()
             .putInt(
@@ -1742,6 +1766,8 @@ private fun AppNavigation(
                         onOpenMptAmigaResamplerApplyAllModulesChanged = { openMptAmigaResamplerApplyAllModules = it },
                         openMptVolumeRampingStrength = openMptVolumeRampingStrength,
                         onOpenMptVolumeRampingStrengthChanged = { openMptVolumeRampingStrength = it },
+                        openMptFt2XmVolumeRamping = openMptFt2XmVolumeRamping,
+                        onOpenMptFt2XmVolumeRampingChanged = { openMptFt2XmVolumeRamping = it },
                         openMptMasterGainMilliBel = openMptMasterGainMilliBel,
                         onOpenMptMasterGainMilliBelChanged = { openMptMasterGainMilliBel = it },
                         openMptSurroundEnabled = openMptSurroundEnabled,
@@ -1772,6 +1798,7 @@ private fun AppNavigation(
                             )
                             val pluginBooleanSnapshot = mapOf(
                                 CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES to openMptAmigaResamplerApplyAllModules,
+                                CorePreferenceKeys.OPENMPT_FT2_XM_VOLUME_RAMPING to openMptFt2XmVolumeRamping,
                                 CorePreferenceKeys.OPENMPT_SURROUND_ENABLED to openMptSurroundEnabled
                             )
 
@@ -1819,6 +1846,7 @@ private fun AppNavigation(
                             openMptAmigaResamplerMode = OpenMptDefaults.amigaResamplerMode
                             openMptAmigaResamplerApplyAllModules = OpenMptDefaults.amigaResamplerApplyAllModules
                             openMptVolumeRampingStrength = OpenMptDefaults.volumeRampingStrength
+                            openMptFt2XmVolumeRamping = OpenMptDefaults.ft2XmVolumeRamping
                             openMptMasterGainMilliBel = OpenMptDefaults.masterGainMilliBel
                             openMptSurroundEnabled = OpenMptDefaults.surroundEnabled
 
@@ -1831,6 +1859,7 @@ private fun AppNavigation(
                                 .remove(CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE)
                                 .remove(CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES)
                                 .remove(CorePreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH)
+                                .remove(CorePreferenceKeys.OPENMPT_FT2_XM_VOLUME_RAMPING)
                                 .remove(CorePreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL)
                                 .remove(CorePreferenceKeys.OPENMPT_SURROUND_ENABLED)
                                 .apply()
@@ -2438,6 +2467,8 @@ private fun SettingsScreen(
     onOpenMptAmigaResamplerApplyAllModulesChanged: (Boolean) -> Unit,
     openMptVolumeRampingStrength: Int,
     onOpenMptVolumeRampingStrengthChanged: (Int) -> Unit,
+    openMptFt2XmVolumeRamping: Boolean,
+    onOpenMptFt2XmVolumeRampingChanged: (Boolean) -> Unit,
     openMptMasterGainMilliBel: Int,
     onOpenMptMasterGainMilliBelChanged: (Int) -> Unit,
     openMptSurroundEnabled: Boolean,
@@ -2702,6 +2733,13 @@ private fun SettingsScreen(
                             description = "Controls smoothing strength for volume changes.",
                             value = openMptVolumeRampingStrength,
                             onValueChanged = onOpenMptVolumeRampingStrengthChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "FT2 5ms XM ramping",
+                            description = "Apply classic FT2-style 5ms ramping for XM modules only.",
+                            checked = openMptFt2XmVolumeRamping,
+                            onCheckedChange = onOpenMptFt2XmVolumeRampingChanged
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         OpenMptDialogSliderCard(

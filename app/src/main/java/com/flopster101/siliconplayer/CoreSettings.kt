@@ -9,6 +9,7 @@ object CorePreferenceKeys {
     const val OPENMPT_AMIGA_RESAMPLER_MODE = "openmpt_amiga_resampler_mode"
     const val OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES = "openmpt_amiga_resampler_apply_all_modules"
     const val OPENMPT_VOLUME_RAMPING_STRENGTH = "openmpt_volume_ramping_strength"
+    const val OPENMPT_FT2_XM_VOLUME_RAMPING = "openmpt_ft2_xm_volume_ramping"
     const val OPENMPT_MASTER_GAIN_MILLIBEL = "openmpt_master_gain_millibel"
     const val OPENMPT_SURROUND_ENABLED = "openmpt_surround_enabled"
 }
@@ -21,6 +22,7 @@ object OpenMptDefaults {
     const val amigaResamplerMode = 2
     const val amigaResamplerApplyAllModules = false
     const val volumeRampingStrength = 0
+    const val ft2XmVolumeRamping = false
     const val masterGainMilliBel = 0
     const val surroundEnabled = false
 }

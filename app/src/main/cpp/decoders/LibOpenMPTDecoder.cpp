@@ -73,6 +73,24 @@ bool detectAmigaModule(const std::string& path, openmpt::module* module) {
            type.find("okt") != std::string::npos ||
            typeLong.find("amiga") != std::string::npos;
 }
+
+bool detectXmModule(const std::string& path, openmpt::module* module) {
+    const std::filesystem::path fsPath(path);
+    const std::string ext = toLowerAscii(fsPath.extension().string());
+    if (!ext.empty()) {
+        const std::string extNoDot = ext[0] == '.' ? ext.substr(1) : ext;
+        if (extNoDot == "xm") {
+            return true;
+        }
+    }
+    if (!module) return false;
+    const std::string type = toLowerAscii(module->get_metadata("type"));
+    const std::string typeLong = toLowerAscii(module->get_metadata("type_long"));
+    return type == "xm" ||
+           type.find("fasttracker") != std::string::npos ||
+           typeLong.find("xm") != std::string::npos ||
+           typeLong.find("fasttracker") != std::string::npos;
+}
 }
 
 LibOpenMPTDecoder::LibOpenMPTDecoder() {
@@ -109,6 +127,8 @@ bool LibOpenMPTDecoder::open(const char* path) {
 
         // Create module from memory buffer
         module = std::make_unique<openmpt::module>(fileBuffer);
+        isAmigaModule = detectAmigaModule(path ? path : "", module.get());
+        isXmModule = detectXmModule(path ? path : "", module.get());
         applyRenderSettingsLocked();
         if (repeatMode == 2) {
             module->set_repeat_count(0);
@@ -122,7 +142,6 @@ bool LibOpenMPTDecoder::open(const char* path) {
         moduleChannels = static_cast<int>(module->get_num_channels());
         title = getFirstNonEmptyMetadata(module.get(), {"title", "songtitle"});
         artist = getFirstNonEmptyMetadata(module.get(), {"artist", "author", "composer"});
-        isAmigaModule = detectAmigaModule(path ? path : "", module.get());
         LOGD("Opened module: %s, duration: %.2f", path, duration);
         return true;
     } catch (const openmpt::exception& e) {
@@ -141,6 +160,7 @@ void LibOpenMPTDecoder::close() {
     duration = 0.0;
     moduleChannels = 0;
     isAmigaModule = false;
+    isXmModule = false;
     title.clear();
     artist.clear();
 }
@@ -251,6 +271,8 @@ void LibOpenMPTDecoder::setOption(const char* name, const char* value) {
         interpolationFilterLength = std::max(0, parseIntString(optionValue, interpolationFilterLength));
     } else if (optionName == "openmpt.volume_ramping_strength") {
         volumeRampingStrength = std::clamp(parseIntString(optionValue, volumeRampingStrength), -1, 10);
+    } else if (optionName == "openmpt.ft2_xm_volume_ramping") {
+        ft2XmVolumeRamping = parseBoolString(optionValue, ft2XmVolumeRamping);
     } else if (optionName == "openmpt.master_gain_millibel") {
         masterGainMilliBel = parseIntString(optionValue, masterGainMilliBel);
     } else if (optionName == "openmpt.amiga_resampler_mode") {
@@ -270,6 +292,8 @@ void LibOpenMPTDecoder::setOption(const char* name, const char* value) {
 void LibOpenMPTDecoder::applyRenderSettingsLocked() {
     if (!module) return;
     try {
+        const int effectiveVolumeRamping =
+                (ft2XmVolumeRamping && isXmModule) ? 5 : volumeRampingStrength;
         module->set_render_param(
                 openmpt::module::RENDER_STEREOSEPARATION_PERCENT,
                 isAmigaModule ? stereoSeparationAmigaPercent : stereoSeparationPercent
@@ -280,7 +304,7 @@ void LibOpenMPTDecoder::applyRenderSettingsLocked() {
         );
         module->set_render_param(
                 openmpt::module::RENDER_VOLUMERAMPING_STRENGTH,
-                volumeRampingStrength
+                effectiveVolumeRamping
         );
         module->set_render_param(
                 openmpt::module::RENDER_MASTERGAIN_MILLIBEL,

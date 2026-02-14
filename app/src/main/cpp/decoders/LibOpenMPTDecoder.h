@@ -58,8 +58,10 @@ private:
     int masterGainMilliBel = 0;
     int amigaResamplerMode = 2; // 0 None, 1 Unfiltered, 2 A500, 3 A1200
     bool applyAmigaResamplerToAllModules = false;
+    bool ft2XmVolumeRamping = false;
     bool surroundEnabled = false;
     bool isAmigaModule = false;
+    bool isXmModule = false;
     std::string title;
     std::string artist;
 

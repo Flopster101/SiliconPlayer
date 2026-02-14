@@ -3,6 +3,7 @@
 #include <fstream>
 #include <algorithm>
 #include <cctype>
+#include <unordered_set>
 
 #define LOG_TAG "LibOpenMPTDecoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -43,6 +44,34 @@ int parseIntString(const std::string& value, int fallback) {
     } catch (...) {
         return fallback;
     }
+}
+
+std::string toLowerAscii(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return value;
+}
+
+bool detectAmigaModule(const std::string& path, openmpt::module* module) {
+    static const std::unordered_set<std::string> amigaExtensions = {
+            "mod", "m15", "stk", "st26", "ice", "dbm", "med", "okt", "sfx"
+    };
+    const std::filesystem::path fsPath(path);
+    const std::string ext = toLowerAscii(fsPath.extension().string());
+    if (!ext.empty()) {
+        const std::string extNoDot = ext[0] == '.' ? ext.substr(1) : ext;
+        if (amigaExtensions.find(extNoDot) != amigaExtensions.end()) {
+            return true;
+        }
+    }
+    if (!module) return false;
+    const std::string type = toLowerAscii(module->get_metadata("type"));
+    const std::string typeLong = toLowerAscii(module->get_metadata("type_long"));
+    return type.find("mod") != std::string::npos ||
+           type.find("med") != std::string::npos ||
+           type.find("okt") != std::string::npos ||
+           typeLong.find("amiga") != std::string::npos;
 }
 }
 
@@ -93,6 +122,7 @@ bool LibOpenMPTDecoder::open(const char* path) {
         moduleChannels = static_cast<int>(module->get_num_channels());
         title = getFirstNonEmptyMetadata(module.get(), {"title", "songtitle"});
         artist = getFirstNonEmptyMetadata(module.get(), {"artist", "author", "composer"});
+        isAmigaModule = detectAmigaModule(path ? path : "", module.get());
         LOGD("Opened module: %s, duration: %.2f", path, duration);
         return true;
     } catch (const openmpt::exception& e) {
@@ -110,6 +140,7 @@ void LibOpenMPTDecoder::close() {
     fileBuffer.clear();
     duration = 0.0;
     moduleChannels = 0;
+    isAmigaModule = false;
     title.clear();
     artist.clear();
 }
@@ -214,6 +245,8 @@ void LibOpenMPTDecoder::setOption(const char* name, const char* value) {
 
     if (optionName == "openmpt.stereo_separation_percent") {
         stereoSeparationPercent = std::clamp(parseIntString(optionValue, stereoSeparationPercent), 0, 200);
+    } else if (optionName == "openmpt.stereo_separation_amiga_percent") {
+        stereoSeparationAmigaPercent = std::clamp(parseIntString(optionValue, stereoSeparationAmigaPercent), 0, 200);
     } else if (optionName == "openmpt.interpolation_filter_length") {
         interpolationFilterLength = std::max(0, parseIntString(optionValue, interpolationFilterLength));
     } else if (optionName == "openmpt.volume_ramping_strength") {
@@ -222,6 +255,8 @@ void LibOpenMPTDecoder::setOption(const char* name, const char* value) {
         masterGainMilliBel = parseIntString(optionValue, masterGainMilliBel);
     } else if (optionName == "openmpt.amiga_resampler_mode") {
         amigaResamplerMode = std::clamp(parseIntString(optionValue, amigaResamplerMode), 0, 3);
+    } else if (optionName == "openmpt.amiga_resampler_apply_all_modules") {
+        applyAmigaResamplerToAllModules = parseBoolString(optionValue, applyAmigaResamplerToAllModules);
     } else if (optionName == "openmpt.surround_enabled") {
         // Stored for forward compatibility. Actual surround rendering path will be added later.
         surroundEnabled = parseBoolString(optionValue, surroundEnabled);
@@ -237,7 +272,7 @@ void LibOpenMPTDecoder::applyRenderSettingsLocked() {
     try {
         module->set_render_param(
                 openmpt::module::RENDER_STEREOSEPARATION_PERCENT,
-                stereoSeparationPercent
+                isAmigaModule ? stereoSeparationAmigaPercent : stereoSeparationPercent
         );
         module->set_render_param(
                 openmpt::module::RENDER_INTERPOLATIONFILTER_LENGTH,
@@ -251,7 +286,9 @@ void LibOpenMPTDecoder::applyRenderSettingsLocked() {
                 openmpt::module::RENDER_MASTERGAIN_MILLIBEL,
                 masterGainMilliBel
         );
-        if (amigaResamplerMode <= 0) {
+        const bool shouldEnableAmigaResampler =
+                amigaResamplerMode > 0 && (applyAmigaResamplerToAllModules || isAmigaModule);
+        if (!shouldEnableAmigaResampler) {
             module->ctl_set_boolean("render.resampler.emulate_amiga", false);
         } else {
             module->ctl_set_boolean("render.resampler.emulate_amiga", true);

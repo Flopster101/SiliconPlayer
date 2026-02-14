@@ -398,8 +398,10 @@ private object AppPreferenceKeys {
     const val CORE_RATE_FFMPEG = "core_rate_ffmpeg"
     const val CORE_RATE_OPENMPT = "core_rate_openmpt"
     const val OPENMPT_STEREO_SEPARATION_PERCENT = "openmpt_stereo_separation_percent"
+    const val OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT = "openmpt_stereo_separation_amiga_percent"
     const val OPENMPT_INTERPOLATION_FILTER_LENGTH = "openmpt_interpolation_filter_length"
     const val OPENMPT_AMIGA_RESAMPLER_MODE = "openmpt_amiga_resampler_mode"
+    const val OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES = "openmpt_amiga_resampler_apply_all_modules"
     const val OPENMPT_VOLUME_RAMPING_STRENGTH = "openmpt_volume_ramping_strength"
     const val OPENMPT_MASTER_GAIN_MILLIBEL = "openmpt_master_gain_millibel"
     const val OPENMPT_SURROUND_ENABLED = "openmpt_surround_enabled"
@@ -596,6 +598,11 @@ private fun AppNavigation(
             prefs.getInt(AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT, 100)
         )
     }
+    var openMptStereoSeparationAmigaPercent by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT, 100)
+        )
+    }
     var openMptInterpolationFilterLength by remember {
         mutableIntStateOf(
             prefs.getInt(AppPreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH, 0)
@@ -604,6 +611,11 @@ private fun AppNavigation(
     var openMptAmigaResamplerMode by remember {
         mutableIntStateOf(
             prefs.getInt(AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE, 2)
+        )
+    }
+    var openMptAmigaResamplerApplyAllModules by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES, false)
         )
     }
     var openMptVolumeRampingStrength by remember {
@@ -1036,6 +1048,22 @@ private fun AppNavigation(
         )
     }
 
+    LaunchedEffect(openMptStereoSeparationAmigaPercent) {
+        prefs.edit()
+            .putInt(
+                AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT,
+                openMptStereoSeparationAmigaPercent
+            )
+            .apply()
+        applyCoreOptionWithPolicy(
+            "LibOpenMPT",
+            "openmpt.stereo_separation_amiga_percent",
+            openMptStereoSeparationAmigaPercent.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Amiga stereo separation"
+        )
+    }
+
     LaunchedEffect(openMptInterpolationFilterLength) {
         prefs.edit()
             .putInt(
@@ -1065,6 +1093,22 @@ private fun AppNavigation(
             openMptAmigaResamplerMode.toString(),
             policy = CoreOptionApplyPolicy.Live,
             optionLabel = "Amiga resampler"
+        )
+    }
+
+    LaunchedEffect(openMptAmigaResamplerApplyAllModules) {
+        prefs.edit()
+            .putBoolean(
+                AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES,
+                openMptAmigaResamplerApplyAllModules
+            )
+            .apply()
+        applyCoreOptionWithPolicy(
+            "LibOpenMPT",
+            "openmpt.amiga_resampler_apply_all_modules",
+            openMptAmigaResamplerApplyAllModules.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Apply Amiga resampler to all modules"
         )
     }
 
@@ -1541,10 +1585,14 @@ private fun AppNavigation(
                         onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it },
                         openMptStereoSeparationPercent = openMptStereoSeparationPercent,
                         onOpenMptStereoSeparationPercentChanged = { openMptStereoSeparationPercent = it },
+                        openMptStereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
+                        onOpenMptStereoSeparationAmigaPercentChanged = { openMptStereoSeparationAmigaPercent = it },
                         openMptInterpolationFilterLength = openMptInterpolationFilterLength,
                         onOpenMptInterpolationFilterLengthChanged = { openMptInterpolationFilterLength = it },
                         openMptAmigaResamplerMode = openMptAmigaResamplerMode,
                         onOpenMptAmigaResamplerModeChanged = { openMptAmigaResamplerMode = it },
+                        openMptAmigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
+                        onOpenMptAmigaResamplerApplyAllModulesChanged = { openMptAmigaResamplerApplyAllModules = it },
                         openMptVolumeRampingStrength = openMptVolumeRampingStrength,
                         onOpenMptVolumeRampingStrengthChanged = { openMptVolumeRampingStrength = it },
                         openMptMasterGainMilliBel = openMptMasterGainMilliBel,
@@ -2143,10 +2191,14 @@ private fun SettingsScreen(
     onOpenMptSampleRateChanged: (Int) -> Unit,
     openMptStereoSeparationPercent: Int,
     onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
+    openMptStereoSeparationAmigaPercent: Int,
+    onOpenMptStereoSeparationAmigaPercentChanged: (Int) -> Unit,
     openMptInterpolationFilterLength: Int,
     onOpenMptInterpolationFilterLengthChanged: (Int) -> Unit,
     openMptAmigaResamplerMode: Int,
     onOpenMptAmigaResamplerModeChanged: (Int) -> Unit,
+    openMptAmigaResamplerApplyAllModules: Boolean,
+    onOpenMptAmigaResamplerApplyAllModulesChanged: (Boolean) -> Unit,
     openMptVolumeRampingStrength: Int,
     onOpenMptVolumeRampingStrengthChanged: (Int) -> Unit,
     openMptMasterGainMilliBel: Int,
@@ -2345,6 +2397,16 @@ private fun SettingsScreen(
                             onValueChanged = onOpenMptStereoSeparationPercentChanged
                         )
                         Spacer(modifier = Modifier.height(10.dp))
+                        OpenMptDialogSliderCard(
+                            title = "Amiga stereo separation",
+                            description = "Stereo separation used specifically for Amiga modules.",
+                            value = openMptStereoSeparationAmigaPercent,
+                            valueRange = 0..200,
+                            step = 5,
+                            valueLabel = { "$it%" },
+                            onValueChanged = onOpenMptStereoSeparationAmigaPercentChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
                         OpenMptChoiceSelectorCard(
                             title = "Interpolation filter",
                             description = "Selects interpolation quality for module playback.",
@@ -2370,6 +2432,13 @@ private fun SettingsScreen(
                                 IntChoice(3, "Amiga 1200")
                             ),
                             onSelected = onOpenMptAmigaResamplerModeChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Apply Amiga resampler to all modules",
+                            description = "When disabled, Amiga resampler is used only on Amiga module formats.",
+                            checked = openMptAmigaResamplerApplyAllModules,
+                            onCheckedChange = onOpenMptAmigaResamplerApplyAllModulesChanged
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         OpenMptVolumeRampingCard(

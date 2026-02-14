@@ -615,6 +615,10 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         bool reachedEnd = false;
         engine->renderResampledLocked(outputData, numFrames, channels, outputSampleRate, reachedEnd);
 
+        // Apply gain and mono downmix
+        engine->applyGain(outputData, numFrames, channels);
+        engine->applyMonoDownmix(outputData, numFrames, channels);
+
         const double callbackDeltaSeconds = (outputSampleRate > 0 && numFrames > 0)
                 ? static_cast<double>(numFrames) / outputSampleRate
                 : 0.0;
@@ -1129,4 +1133,77 @@ std::string AudioEngine::getCurrentDecoderName() {
         return "";
     }
     return decoder->getName();
+}
+
+// Gain control implementation
+void AudioEngine::setMasterGain(float gainDb) {
+    masterGainDb.store(gainDb);
+}
+
+void AudioEngine::setPluginGain(float gainDb) {
+    pluginGainDb.store(gainDb);
+}
+
+void AudioEngine::setSongGain(float gainDb) {
+    songGainDb.store(gainDb);
+}
+
+void AudioEngine::setForceMono(bool enabled) {
+    forceMono.store(enabled);
+}
+
+float AudioEngine::getMasterGain() const {
+    return masterGainDb.load();
+}
+
+float AudioEngine::getPluginGain() const {
+    return pluginGainDb.load();
+}
+
+float AudioEngine::getSongGain() const {
+    return songGainDb.load();
+}
+
+bool AudioEngine::getForceMono() const {
+    return forceMono.load();
+}
+
+// Convert dB to linear gain
+float AudioEngine::dbToGain(float db) {
+    return std::pow(10.0f, db / 20.0f);
+}
+
+// Apply two-stage gain pipeline: Master → (Plugin or Song)
+void AudioEngine::applyGain(float* buffer, int numFrames, int channels) {
+    const float masterDb = masterGainDb.load();
+    const float pluginDb = pluginGainDb.load();
+    const float songDb = songGainDb.load();
+
+    // Calculate total gain
+    const float masterGain = dbToGain(masterDb);
+    // Song volume overrides plugin volume when not at neutral (0dB)
+    const float secondaryGain = (songDb != 0.0f) ? dbToGain(songDb) : dbToGain(pluginDb);
+    const float totalGain = masterGain * secondaryGain;
+
+    // Apply gain if not unity (1.0)
+    if (totalGain != 1.0f) {
+        const int totalSamples = numFrames * channels;
+        for (int i = 0; i < totalSamples; i++) {
+            buffer[i] *= totalGain;
+        }
+    }
+}
+
+// Downmix stereo to mono
+void AudioEngine::applyMonoDownmix(float* buffer, int numFrames, int channels) {
+    if (!forceMono.load() || channels != 2) {
+        return;
+    }
+
+    // Average left and right channels
+    for (int i = 0; i < numFrames; i++) {
+        const float mono = (buffer[i * 2] + buffer[i * 2 + 1]) * 0.5f;
+        buffer[i * 2] = mono;
+        buffer[i * 2 + 1] = mono;
+    }
 }

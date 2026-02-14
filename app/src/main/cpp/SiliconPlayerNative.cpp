@@ -388,3 +388,68 @@ Java_com_flopster101_siliconplayer_NativeBridge_setAudioPipelineConfig(
             allowFallback
     );
 }
+
+// Gain control JNI methods
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setMasterGain(
+        JNIEnv* env, jobject thiz, jfloat gainDb) {
+    ensureEngine();
+    audioEngine->setMasterGain(static_cast<float>(gainDb));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setPluginGain(
+        JNIEnv* env, jobject thiz, jfloat gainDb) {
+    ensureEngine();
+    audioEngine->setPluginGain(static_cast<float>(gainDb));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setSongGain(
+        JNIEnv* env, jobject thiz, jfloat gainDb) {
+    ensureEngine();
+    audioEngine->setSongGain(static_cast<float>(gainDb));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setForceMono(
+        JNIEnv* env, jobject thiz, jboolean enabled) {
+    ensureEngine();
+    audioEngine->setForceMono(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT jfloat JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getMasterGain(
+        JNIEnv* env, jobject thiz) {
+    if (audioEngine == nullptr) {
+        return 0.0f;
+    }
+    return static_cast<jfloat>(audioEngine->getMasterGain());
+}
+
+extern "C" JNIEXPORT jfloat JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getPluginGain(
+        JNIEnv* env, jobject thiz) {
+    if (audioEngine == nullptr) {
+        return 0.0f;
+    }
+    return static_cast<jfloat>(audioEngine->getPluginGain());
+}
+
+extern "C" JNIEXPORT jfloat JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSongGain(
+        JNIEnv* env, jobject thiz) {
+    if (audioEngine == nullptr) {
+        return 0.0f;
+    }
+    return static_cast<jfloat>(audioEngine->getSongGain());
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getForceMono(
+        JNIEnv* env, jobject thiz) {
+    if (audioEngine == nullptr) {
+        return JNI_FALSE;
+    }
+    return audioEngine->getForceMono() ? JNI_TRUE : JNI_FALSE;
+}

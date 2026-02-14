@@ -43,6 +43,16 @@ public:
     std::string getBitDepthLabel();
     std::string getCurrentDecoderName();
 
+    // Gain control
+    void setMasterGain(float gainDb);
+    void setPluginGain(float gainDb);
+    void setSongGain(float gainDb);
+    void setForceMono(bool enabled);
+    float getMasterGain() const;
+    float getPluginGain() const;
+    float getSongGain() const;
+    bool getForceMono() const;
+
 private:
     AAudioStream *stream = nullptr;
     int streamSampleRate = 48000;
@@ -82,6 +92,12 @@ private:
     double timelineSmoothedSeconds = 0.0;
     std::atomic<bool> naturalEndPending { false };
 
+    // Gain control state
+    std::atomic<float> masterGainDb { 0.0f };
+    std::atomic<float> pluginGainDb { 0.0f };
+    std::atomic<float> songGainDb { 0.0f };
+    std::atomic<bool> forceMono { false };
+
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
     void reconfigureStream(bool resumePlayback);
     void applyStreamBufferPreset();
@@ -95,6 +111,11 @@ private:
 
     void createStream();
     void closeStream();
+
+    // Gain processing helpers
+    static float dbToGain(float db);
+    void applyGain(float* buffer, int numFrames, int channels);
+    void applyMonoDownmix(float* buffer, int numFrames, int channels);
 
     // Callback
     static aaudio_data_callback_result_t dataCallback(

@@ -35,4 +35,14 @@ object NativeBridge {
         resamplerPreference: Int,
         allowFallback: Boolean
     )
+
+    // Gain control methods
+    external fun setMasterGain(gainDb: Float)
+    external fun setPluginGain(gainDb: Float)
+    external fun setSongGain(gainDb: Float)
+    external fun setForceMono(enabled: Boolean)
+    external fun getMasterGain(): Float
+    external fun getPluginGain(): Float
+    external fun getSongGain(): Float
+    external fun getForceMono(): Boolean
 }

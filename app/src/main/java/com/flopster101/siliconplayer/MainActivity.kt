@@ -717,6 +717,8 @@ private fun AppNavigation(
             )
         )
     }
+    var pendingSoxExperimentalDialog by remember { mutableStateOf(false) }
+    var showSoxExperimentalDialog by remember { mutableStateOf(false) }
     var audioAllowBackendFallback by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.AUDIO_ALLOW_BACKEND_FALLBACK, true)
@@ -1258,6 +1260,14 @@ private fun AppNavigation(
             .apply()
     }
 
+    LaunchedEffect(pendingSoxExperimentalDialog) {
+        if (!pendingSoxExperimentalDialog) return@LaunchedEffect
+        // Defer so the enum picker can close first, then show warning popup.
+        delay(120)
+        showSoxExperimentalDialog = true
+        pendingSoxExperimentalDialog = false
+    }
+
     LaunchedEffect(audioAllowBackendFallback) {
         prefs.edit()
             .putBoolean(
@@ -1608,7 +1618,12 @@ private fun AppNavigation(
                         audioBufferPreset = audioBufferPreset,
                         onAudioBufferPresetChanged = { audioBufferPreset = it },
                         audioResamplerPreference = audioResamplerPreference,
-                        onAudioResamplerPreferenceChanged = { audioResamplerPreference = it },
+                        onAudioResamplerPreferenceChanged = {
+                            audioResamplerPreference = it
+                            if (it == AudioResamplerPreference.Sox) {
+                                pendingSoxExperimentalDialog = true
+                            }
+                        },
                         audioAllowBackendFallback = audioAllowBackendFallback,
                         onAudioAllowBackendFallbackChanged = { audioAllowBackendFallback = it },
                         openPlayerFromNotification = openPlayerFromNotification,
@@ -1990,6 +2005,25 @@ private fun AppNavigation(
                     onCycleRepeatMode = { cycleRepeatMode() },
                     canOpenCoreSettings = canOpenCurrentCoreSettings,
                     onOpenCoreSettings = openCurrentCoreSettings
+                )
+            }
+
+            if (showSoxExperimentalDialog) {
+                AlertDialog(
+                    onDismissRequest = { showSoxExperimentalDialog = false },
+                    title = { Text("SoX is experimental") },
+                    text = {
+                        Text(
+                            "SoX output resampling may cause unstable timeline behavior on some content. " +
+                                "For discontinuous timeline cores (like module pattern jumps/loop points), " +
+                                "the engine automatically falls back to Built-in for stability."
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showSoxExperimentalDialog = false }) {
+                            Text("OK")
+                        }
+                    }
                 )
             }
         }

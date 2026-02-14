@@ -104,7 +104,8 @@ fun PlayerScreen(
     canOpenCoreSettings: Boolean,
     onOpenCoreSettings: () -> Unit,
     onOpenAudioEffects: () -> Unit,
-    filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode = com.flopster101.siliconplayer.FilenameDisplayMode.Always
+    filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode = com.flopster101.siliconplayer.FilenameDisplayMode.Always,
+    filenameOnlyWhenTitleMissing: Boolean = false
 ) {
     var sliderPosition by remember(file?.absolutePath, durationSeconds) {
         mutableDoubleStateOf(positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0)))
@@ -249,7 +250,8 @@ fun PlayerScreen(
                             artist = displayArtist,
                             filename = displayFilename,
                             filenameDisplayMode = filenameDisplayMode,
-                            decoderName = decoderName
+                            decoderName = decoderName,
+                            filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         TimelineSection(
@@ -333,7 +335,8 @@ fun PlayerScreen(
                         artist = displayArtist,
                         filename = displayFilename,
                         filenameDisplayMode = filenameDisplayMode,
-                        decoderName = decoderName
+                        decoderName = decoderName,
+                        filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     TimelineSection(
@@ -617,15 +620,29 @@ private fun TrackMetadataBlock(
     artist: String,
     filename: String,
     filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode,
-    decoderName: String?
+    decoderName: String?,
+    filenameOnlyWhenTitleMissing: Boolean
 ) {
-    val shouldShowFilename = remember(filenameDisplayMode, decoderName) {
+    val shouldShowFilename = remember(filenameDisplayMode, decoderName, title, filenameOnlyWhenTitleMissing) {
         when (filenameDisplayMode) {
-            com.flopster101.siliconplayer.FilenameDisplayMode.Always -> true
+            com.flopster101.siliconplayer.FilenameDisplayMode.Always -> {
+                // If "only when title missing" is enabled, check if title is blank
+                if (filenameOnlyWhenTitleMissing) {
+                    title.isBlank()
+                } else {
+                    true
+                }
+            }
             com.flopster101.siliconplayer.FilenameDisplayMode.Never -> false
             com.flopster101.siliconplayer.FilenameDisplayMode.TrackerOnly -> {
                 val decoder = decoderName?.lowercase() ?: ""
-                decoder.contains("openmpt") || decoder.contains("libopenmpt")
+                val isTracker = decoder.contains("openmpt") || decoder.contains("libopenmpt")
+                // If tracker format, apply the "only when title missing" logic
+                if (isTracker && filenameOnlyWhenTitleMissing) {
+                    title.isBlank()
+                } else {
+                    isTracker
+                }
             }
         }
     }

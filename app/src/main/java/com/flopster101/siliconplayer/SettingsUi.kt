@@ -142,6 +142,8 @@ fun SettingsScreen(
     onKeepScreenOnChanged: (Boolean) -> Unit,
     filenameDisplayMode: FilenameDisplayMode,
     onFilenameDisplayModeChanged: (FilenameDisplayMode) -> Unit,
+    filenameOnlyWhenTitleMissing: Boolean,
+    onFilenameOnlyWhenTitleMissingChanged: (Boolean) -> Unit,
     ffmpegSampleRateHz: Int,
     ffmpegCapabilities: Int,
     onFfmpegSampleRateChanged: (Int) -> Unit,
@@ -606,6 +608,14 @@ fun SettingsScreen(
                                 onDismiss = { showFilenameDisplayDialog = false }
                             )
                         }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Show filename only when title missing",
+                            description = "Only display filename when track has no title metadata.",
+                            checked = filenameOnlyWhenTitleMissing,
+                            onCheckedChange = onFilenameOnlyWhenTitleMissingChanged,
+                            enabled = filenameDisplayMode != FilenameDisplayMode.Never
+                        )
                     }
                     SettingsRoute.Misc -> {
                         SettingsSectionLabel("Browser behavior")
@@ -733,12 +743,13 @@ private fun PlayerSettingToggleCard(
     title: String,
     description: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
 ) {
     androidx.compose.material3.ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = SettingsCardShape,
-        onClick = { onCheckedChange(!checked) }
+        onClick = { if (enabled) onCheckedChange(!checked) }
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -747,19 +758,21 @@ private fun PlayerSettingToggleCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
                 checked = checked,
-                onCheckedChange = onCheckedChange
+                onCheckedChange = onCheckedChange,
+                enabled = enabled
             )
         }
     }

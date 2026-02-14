@@ -427,6 +427,7 @@ private object AppPreferenceKeys {
     const val AUDIO_PLUGIN_VOLUME_DB = "audio_plugin_volume_db"
     const val AUDIO_FORCE_MONO = "audio_force_mono"
     const val FILENAME_DISPLAY_MODE = "filename_display_mode"
+    const val FILENAME_ONLY_WHEN_TITLE_MISSING = "filename_only_when_title_missing"
 }
 
 class MainActivity : ComponentActivity() {
@@ -681,6 +682,11 @@ private fun AppNavigation(
             FilenameDisplayMode.fromStorage(
                 prefs.getString(AppPreferenceKeys.FILENAME_DISPLAY_MODE, FilenameDisplayMode.Always.storageValue)
             )
+        )
+    }
+    var filenameOnlyWhenTitleMissing by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.FILENAME_ONLY_WHEN_TITLE_MISSING, false)
         )
     }
     var ffmpegCoreSampleRateHz by remember {
@@ -1804,6 +1810,11 @@ private fun AppNavigation(
                             filenameDisplayMode = mode
                             prefs.edit().putString(AppPreferenceKeys.FILENAME_DISPLAY_MODE, mode.storageValue).apply()
                         },
+                        filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
+                        onFilenameOnlyWhenTitleMissingChanged = { enabled ->
+                            filenameOnlyWhenTitleMissing = enabled
+                            prefs.edit().putBoolean(AppPreferenceKeys.FILENAME_ONLY_WHEN_TITLE_MISSING, enabled).apply()
+                        },
                         audioFocusInterrupt = audioFocusInterrupt,
                         onAudioFocusInterruptChanged = {
                             audioFocusInterrupt = it
@@ -1898,6 +1909,7 @@ private fun AppNavigation(
                             recentPlayedFiles = emptyList()
                             keepScreenOn = false
                             filenameDisplayMode = FilenameDisplayMode.Always
+                            filenameOnlyWhenTitleMissing = false
                             browserLaunchLocationId = null
                             browserLaunchDirectoryPath = null
                             onThemeModeChanged(ThemeMode.Auto)
@@ -2000,7 +2012,8 @@ private fun AppNavigation(
                             tempForceMono = forceMono
                             showAudioEffectsDialog = true
                         },
-                        filenameDisplayMode = filenameDisplayMode
+                        filenameDisplayMode = filenameDisplayMode,
+                        filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
                     )
                 }
             }
@@ -2208,7 +2221,8 @@ private fun AppNavigation(
                         tempForceMono = forceMono
                         showAudioEffectsDialog = true
                     },
-                    filenameDisplayMode = filenameDisplayMode
+                    filenameDisplayMode = filenameDisplayMode,
+                    filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
                 )
             }
 

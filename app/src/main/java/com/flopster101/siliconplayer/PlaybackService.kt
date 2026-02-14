@@ -38,24 +38,37 @@ class PlaybackService : Service() {
     private var mediaSession: MediaSession? = null
     private var audioFocusRequest: AudioFocusRequest? = null // For Android O+
     private var resumeOnFocusGain = false
+    private var isDucked = false
+    private var originalMasterVolume = 0f
 
     private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         if (!prefs.getBoolean(PREF_AUDIO_FOCUS_INTERRUPT, true)) return@OnAudioFocusChangeListener
+        val enableDucking = prefs.getBoolean(PREF_AUDIO_DUCKING, true)
+
         when (focusChange) {
             AudioManager.AUDIOFOCUS_LOSS -> {
                 resumeOnFocusGain = false
+                unduckAudio()
                 pausePlayback(abandonFocus = true)
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
                 resumeOnFocusGain = true
+                unduckAudio()
                 pausePlayback(abandonFocus = false)
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                // Determine if we should duck or pause. For now, pause is safer.
-                resumeOnFocusGain = true
-                pausePlayback(abandonFocus = false)
+                if (enableDucking) {
+                    // Duck audio instead of pausing
+                    duckAudio()
+                    resumeOnFocusGain = false
+                } else {
+                    // Pause as before
+                    resumeOnFocusGain = true
+                    pausePlayback(abandonFocus = false)
+                }
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
+                unduckAudio()
                 if (resumeOnFocusGain) {
                     resumeOnFocusGain = false
                     playPlayback()
@@ -533,6 +546,20 @@ class PlaybackService : Service() {
         }
     }
 
+    private fun duckAudio() {
+        if (isDucked) return
+        isDucked = true
+        originalMasterVolume = NativeBridge.getMasterGain()
+        // Duck to -12dB (about 25% volume)
+        NativeBridge.setMasterGain(originalMasterVolume - 12f)
+    }
+
+    private fun unduckAudio() {
+        if (!isDucked) return
+        isDucked = false
+        NativeBridge.setMasterGain(originalMasterVolume)
+    }
+
     companion object {
         private const val CHANNEL_ID = "silicon_player_playback"
         private const val NOTIFICATION_ID = 1101
@@ -541,6 +568,7 @@ class PlaybackService : Service() {
         private const val PREF_RESPOND_MEDIA_BUTTONS = "respond_headphone_media_buttons"
         private const val PREF_PAUSE_ON_DISCONNECT = "pause_on_headphone_disconnect"
         private const val PREF_AUDIO_FOCUS_INTERRUPT = "audio_focus_interrupt"
+        private const val PREF_AUDIO_DUCKING = "audio_ducking"
         private const val PREF_SESSION_CURRENT_PATH = "session_current_path"
 
         private const val EXTRA_PATH = "extra_path"

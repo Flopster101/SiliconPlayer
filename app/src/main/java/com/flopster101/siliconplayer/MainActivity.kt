@@ -410,6 +410,7 @@ private object AppPreferenceKeys {
     const val RECENT_PLAYED_FILES = "recent_played_files"
     const val KEEP_SCREEN_ON = "keep_screen_on"
     const val AUDIO_FOCUS_INTERRUPT = "audio_focus_interrupt"
+    const val AUDIO_DUCKING = "audio_ducking"
     const val AUDIO_MASTER_VOLUME_DB = "audio_master_volume_db"
     const val AUDIO_PLUGIN_VOLUME_DB = "audio_plugin_volume_db"
     const val AUDIO_FORCE_MONO = "audio_force_mono"
@@ -655,6 +656,11 @@ private fun AppNavigation(
     var audioFocusInterrupt by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.AUDIO_FOCUS_INTERRUPT, true)
+        )
+    }
+    var audioDucking by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.AUDIO_DUCKING, true)
         )
     }
     var ffmpegCoreSampleRateHz by remember {
@@ -1777,6 +1783,12 @@ private fun AppNavigation(
                         onAudioFocusInterruptChanged = {
                             audioFocusInterrupt = it
                             prefs.edit().putBoolean(AppPreferenceKeys.AUDIO_FOCUS_INTERRUPT, it).apply()
+                            com.flopster101.siliconplayer.PlaybackService.refreshSettings(context)
+                        },
+                        audioDucking = audioDucking,
+                        onAudioDuckingChanged = {
+                            audioDucking = it
+                            prefs.edit().putBoolean(AppPreferenceKeys.AUDIO_DUCKING, it).apply()
                             com.flopster101.siliconplayer.PlaybackService.refreshSettings(context)
                         },
                         ffmpegSampleRateHz = ffmpegCoreSampleRateHz,

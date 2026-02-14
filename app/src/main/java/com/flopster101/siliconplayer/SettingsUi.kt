@@ -118,6 +118,8 @@ fun SettingsScreen(
     onPauseOnHeadphoneDisconnectChanged: (Boolean) -> Unit,
     audioFocusInterrupt: Boolean,
     onAudioFocusInterruptChanged: (Boolean) -> Unit,
+    audioDucking: Boolean,
+    onAudioDuckingChanged: (Boolean) -> Unit,
     audioBackendPreference: AudioBackendPreference,
     onAudioBackendPreferenceChanged: (AudioBackendPreference) -> Unit,
     audioPerformanceMode: AudioPerformanceMode,
@@ -479,6 +481,13 @@ fun SettingsScreen(
                             description = "Pause playback when another app starts playing audio.",
                             checked = audioFocusInterrupt,
                             onCheckedChange = onAudioFocusInterruptChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Duck audio instead of pausing",
+                            description = "Lower volume temporarily for brief interruptions (e.g., notifications) instead of pausing.",
+                            checked = audioDucking,
+                            onCheckedChange = onAudioDuckingChanged
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Audio processing")

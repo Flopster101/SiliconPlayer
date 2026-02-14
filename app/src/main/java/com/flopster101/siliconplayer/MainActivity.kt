@@ -191,17 +191,6 @@ enum class AudioBufferPreset(val storageValue: String, val label: String, val na
     }
 }
 
-@Composable
-private fun placeholderArtworkIconForFile(file: File?): ImageVector {
-    val extension = file?.extension?.lowercase()?.ifBlank { return Icons.Default.MusicNote }
-        ?: return Icons.Default.MusicNote
-    return if (extension in trackerModuleExtensions) {
-        ImageVector.vectorResource(R.drawable.ic_placeholder_tracker_chip)
-    } else {
-        Icons.Default.MusicNote
-    }
-}
-
 private fun normalizedPath(path: String?): String? {
     if (path.isNullOrBlank()) return null
     return try {
@@ -211,13 +200,13 @@ private fun normalizedPath(path: String?): String? {
     }
 }
 
-private fun samePath(a: String?, b: String?): Boolean {
+internal fun samePath(a: String?, b: String?): Boolean {
     val left = normalizedPath(a) ?: return false
     val right = normalizedPath(b) ?: return false
     return left == right
 }
 
-private data class RecentPathEntry(
+internal data class RecentPathEntry(
     val path: String,
     val locationId: String?,
     val title: String? = null,
@@ -230,48 +219,10 @@ private data class StorageDescriptor(
     val icon: ImageVector
 )
 
-private data class StoragePresentation(
+internal data class StoragePresentation(
     val label: String,
     val icon: ImageVector
 )
-
-private data class RecentTrackDisplay(
-    val primaryText: String,
-    val includeFilenameInSubtitle: Boolean
-)
-
-private fun buildRecentTrackDisplay(
-    title: String,
-    artist: String,
-    fallback: String
-): RecentTrackDisplay {
-    return when {
-        title.isNotBlank() && artist.isNotBlank() -> {
-            RecentTrackDisplay(
-                primaryText = "$artist - $title",
-                includeFilenameInSubtitle = true
-            )
-        }
-        title.isNotBlank() -> {
-            RecentTrackDisplay(
-                primaryText = "(unknown) - $title",
-                includeFilenameInSubtitle = true
-            )
-        }
-        artist.isNotBlank() -> {
-            RecentTrackDisplay(
-                primaryText = fallback,
-                includeFilenameInSubtitle = false
-            )
-        }
-        else -> {
-            RecentTrackDisplay(
-                primaryText = fallback,
-                includeFilenameInSubtitle = false
-            )
-        }
-    }
-}
 
 private fun applyRepeatModeToNative(mode: RepeatMode) {
     NativeBridge.setRepeatMode(
@@ -421,9 +372,8 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
 }
 
 private const val PAGE_NAV_DURATION_MS = 300
-private const val RECENTS_LIMIT = 3
-private const val PREVIOUS_RESTART_THRESHOLD_SECONDS = 3.0
-private val SettingsCardShape = RoundedCornerShape(16.dp)
+internal const val RECENTS_LIMIT = 3
+internal const val PREVIOUS_RESTART_THRESHOLD_SECONDS = 3.0
 
 private object AppPreferenceKeys {
     const val PREFS_NAME = "silicon_player_settings"
@@ -791,11 +741,11 @@ private fun AppNavigation(
     ) { }
 
     fun syncPlaybackService() {
-        PlaybackService.syncFromUi(
+        syncPlaybackServiceForState(
             context = context,
-            path = selectedFile?.absolutePath,
-            title = metadataTitle.ifBlank { selectedFile?.nameWithoutExtension.orEmpty() },
-            artist = metadataArtist.ifBlank { "Unknown Artist" },
+            selectedFile = selectedFile,
+            metadataTitle = metadataTitle,
+            metadataArtist = metadataArtist,
             durationSeconds = duration,
             positionSeconds = position,
             isPlaying = isPlaying
@@ -851,15 +801,15 @@ private fun AppNavigation(
     }
 
     fun refreshRepeatModeForTrack() {
-        activeRepeatMode = resolveRepeatModeForFlags(preferredRepeatMode, repeatModeCapabilitiesFlags)
+        activeRepeatMode = resolveActiveRepeatMode(preferredRepeatMode, repeatModeCapabilitiesFlags)
         applyRepeatModeToNative(activeRepeatMode)
     }
 
     fun cycleRepeatMode() {
-        val modes = availableRepeatModesForFlags(repeatModeCapabilitiesFlags)
-        if (modes.isEmpty()) return
-        val currentIndex = modes.indexOf(activeRepeatMode).let { if (it < 0) 0 else it }
-        val next = modes[(currentIndex + 1) % modes.size]
+        val next = cycleRepeatModeValue(
+            activeRepeatMode = activeRepeatMode,
+            repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags
+        ) ?: return
         preferredRepeatMode = next
         activeRepeatMode = next
         applyRepeatModeToNative(next)
@@ -874,35 +824,55 @@ private fun AppNavigation(
         optionLabel: String? = null
     ) {
         NativeBridge.setCoreOption(coreName, optionName, optionValue)
-        if (policy != CoreOptionApplyPolicy.RequiresPlaybackRestart) return
-        if (!isPlaying || selectedFile == null) return
-        val currentDecoderName = NativeBridge.getCurrentDecoderName()
-        if (!currentDecoderName.equals(coreName, ignoreCase = true)) return
-        val name = optionLabel?.ifBlank { null } ?: "This option"
-        Toast.makeText(
+        maybeShowCoreOptionRestartToast(
             context,
-            "$name will apply after restarting playback",
-            Toast.LENGTH_SHORT
-        ).show()
+            coreName = coreName,
+            selectedFile = selectedFile,
+            isPlaying = isPlaying,
+            policy = policy,
+            optionLabel = optionLabel
+        )
+    }
+
+    fun applyNativeTrackSnapshot(snapshot: NativeTrackSnapshot) {
+        snapshot.decoderName?.let { lastUsedCoreName = it }
+        metadataTitle = snapshot.title
+        metadataArtist = snapshot.artist
+        metadataSampleRate = snapshot.sampleRateHz
+        metadataChannelCount = snapshot.channelCount
+        metadataBitDepthLabel = snapshot.bitDepthLabel
+        repeatModeCapabilitiesFlags = snapshot.repeatModeCapabilitiesFlags
+        duration = snapshot.durationSeconds
+    }
+
+    fun clearPlaybackMetadataState() {
+        selectedFile = null
+        duration = 0.0
+        position = 0.0
+        isPlaying = false
+        metadataTitle = ""
+        metadataArtist = ""
+        metadataSampleRate = 0
+        metadataChannelCount = 0
+        metadataBitDepthLabel = "Unknown"
+        repeatModeCapabilitiesFlags = REPEAT_CAP_TRACK
+        artworkBitmap = null
+    }
+
+    fun resetAndOptionallyKeepLastTrack(keepLastTrack: Boolean) {
+        if (keepLastTrack && selectedFile != null) {
+            lastStoppedFile = selectedFile
+        }
+        NativeBridge.stopEngine()
+        clearPlaybackMetadataState()
     }
 
     fun applyTrackSelection(file: File, autoStart: Boolean, expandOverride: Boolean? = null) {
-        NativeBridge.stopEngine()
-        isPlaying = false
-        lastStoppedFile = null
+        resetAndOptionallyKeepLastTrack(keepLastTrack = false)
         selectedFile = file
         isPlayerSurfaceVisible = true
         NativeBridge.loadAudio(file.absolutePath)
-        NativeBridge.getCurrentDecoderName()
-            .takeIf { it.isNotBlank() }
-            ?.let { lastUsedCoreName = it }
-        metadataTitle = NativeBridge.getTrackTitle()
-        metadataArtist = NativeBridge.getTrackArtist()
-        metadataSampleRate = NativeBridge.getTrackSampleRate()
-        metadataChannelCount = NativeBridge.getTrackChannelCount()
-        metadataBitDepthLabel = NativeBridge.getTrackBitDepthLabel()
-        repeatModeCapabilitiesFlags = NativeBridge.getRepeatModeCapabilities()
-        duration = NativeBridge.getDuration()
+        applyNativeTrackSnapshot(readNativeTrackSnapshot())
         position = 0.0
         artworkBitmap = null
         refreshRepeatModeForTrack()
@@ -935,17 +905,20 @@ private fun AppNavigation(
     }
 
     fun currentTrackIndex(): Int {
-        val currentPath = selectedFile?.absolutePath ?: return -1
-        return visiblePlayableFiles.indexOfFirst { it.absolutePath == currentPath }
+        return currentTrackIndexForList(
+            selectedFile = selectedFile,
+            visiblePlayableFiles = visiblePlayableFiles
+        )
     }
 
     fun playAdjacentTrack(offset: Int): Boolean {
-        val index = currentTrackIndex()
-        if (index < 0) return false
-        val targetIndex = index + offset
-        if (targetIndex !in visiblePlayableFiles.indices) return false
+        val target = adjacentTrackForOffset(
+            selectedFile = selectedFile,
+            visiblePlayableFiles = visiblePlayableFiles,
+            offset = offset
+        ) ?: return false
         applyTrackSelection(
-            file = visiblePlayableFiles[targetIndex],
+            file = target,
             autoStart = true,
             expandOverride = null
         )
@@ -954,9 +927,11 @@ private fun AppNavigation(
 
     fun handlePreviousTrackAction(): Boolean {
         val hasTrackLoaded = selectedFile != null
-        val shouldRestartCurrent = previousRestartsAfterThreshold &&
-            hasTrackLoaded &&
-            position > PREVIOUS_RESTART_THRESHOLD_SECONDS
+        val shouldRestartCurrent = shouldRestartCurrentTrackOnPrevious(
+            previousRestartsAfterThreshold = previousRestartsAfterThreshold,
+            hasTrackLoaded = hasTrackLoaded,
+            positionSeconds = position
+        )
 
         if (shouldRestartCurrent) {
             NativeBridge.seekTo(0.0)
@@ -982,16 +957,7 @@ private fun AppNavigation(
         selectedFile = file
         isPlayerSurfaceVisible = true
         isPlayerExpanded = openExpanded
-        NativeBridge.getCurrentDecoderName()
-            .takeIf { it.isNotBlank() }
-            ?.let { lastUsedCoreName = it }
-        metadataTitle = NativeBridge.getTrackTitle()
-        metadataArtist = NativeBridge.getTrackArtist()
-        metadataSampleRate = NativeBridge.getTrackSampleRate()
-        metadataChannelCount = NativeBridge.getTrackChannelCount()
-        metadataBitDepthLabel = NativeBridge.getTrackBitDepthLabel()
-        repeatModeCapabilitiesFlags = NativeBridge.getRepeatModeCapabilities()
-        duration = NativeBridge.getDuration()
+        applyNativeTrackSnapshot(readNativeTrackSnapshot())
         position = NativeBridge.getPosition()
         isPlaying = NativeBridge.isEnginePlaying()
         artworkBitmap = null
@@ -1418,33 +1384,12 @@ private fun AppNavigation(
     val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val miniPreviewLiftPx = with(LocalDensity.current) { 28.dp.toPx() }
     val stopAndEmptyTrack: () -> Unit = {
-        if (selectedFile != null) {
-            lastStoppedFile = selectedFile
-        }
-        NativeBridge.stopEngine()
-        selectedFile = null
-        duration = 0.0
-        position = 0.0
-        isPlaying = false
-        metadataTitle = ""
-        metadataArtist = ""
-        metadataSampleRate = 0
-        metadataChannelCount = 0
-        metadataBitDepthLabel = "Unknown"
-        repeatModeCapabilitiesFlags = REPEAT_CAP_TRACK
-        artworkBitmap = null
+        resetAndOptionallyKeepLastTrack(keepLastTrack = true)
         context.startService(
             Intent(context, PlaybackService::class.java).setAction(PlaybackService.ACTION_STOP_CLEAR)
         )
     }
-    fun settingsRouteForCore(coreName: String?): SettingsRoute? {
-        return when (coreName?.trim()?.lowercase()) {
-            "ffmpeg" -> SettingsRoute.PluginFfmpeg
-            "libopenmpt", "openmpt" -> SettingsRoute.PluginOpenMpt
-            else -> null
-        }
-    }
-    val currentCoreSettingsRoute = settingsRouteForCore(lastUsedCoreName)
+    val currentCoreSettingsRoute = settingsRouteForCoreName(lastUsedCoreName)
     val canOpenCurrentCoreSettings = currentCoreSettingsRoute != null
     val exitSettingsToReturnView: () -> Unit = {
         val target = if (settingsLaunchedFromPlayer) settingsReturnView else MainView.Home
@@ -1453,7 +1398,7 @@ private fun AppNavigation(
         currentView = target
     }
     val openCurrentCoreSettings: () -> Unit = {
-        settingsRouteForCore(lastUsedCoreName)?.let { route ->
+        settingsRouteForCoreName(lastUsedCoreName)?.let { route ->
             settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
             settingsLaunchedFromPlayer = true
             settingsRoute = route
@@ -1480,20 +1425,7 @@ private fun AppNavigation(
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
                     PlaybackService.ACTION_BROADCAST_CLEARED -> {
-                        if (selectedFile != null) {
-                            lastStoppedFile = selectedFile
-                        }
-                        selectedFile = null
-                        isPlaying = false
-                        duration = 0.0
-                        position = 0.0
-                        metadataTitle = ""
-                        metadataArtist = ""
-                        metadataSampleRate = 0
-                        metadataChannelCount = 0
-                        metadataBitDepthLabel = "Unknown"
-                        repeatModeCapabilitiesFlags = REPEAT_CAP_TRACK
-                        artworkBitmap = null
+                        resetAndOptionallyKeepLastTrack(keepLastTrack = true)
                     }
                     PlaybackService.ACTION_BROADCAST_PREVIOUS_TRACK_REQUEST -> {
                         handlePreviousTrackAction()
@@ -2117,622 +2049,4 @@ private fun AppNavigation(
             }
         }
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun HomeScreen(
-    currentTrackPath: String?,
-    currentTrackTitle: String,
-    currentTrackArtist: String,
-    recentFolders: List<RecentPathEntry>,
-    recentPlayedFiles: List<RecentPathEntry>,
-    storagePresentationForEntry: (RecentPathEntry) -> StoragePresentation,
-    bottomContentPadding: Dp = 0.dp,
-    onOpenLibrary: () -> Unit,
-    onOpenRecentFolder: (RecentPathEntry) -> Unit,
-    onPlayRecentFile: (RecentPathEntry) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 16.dp)
-            .padding(bottom = bottomContentPadding)
-    ) {
-        Text(
-            text = "Local music library",
-            style = MaterialTheme.typography.headlineSmall
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Browse files and play mainstream or tracker/module formats.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(18.dp))
-        androidx.compose.material3.ElevatedCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(96.dp),
-            onClick = onOpenLibrary
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 18.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    modifier = Modifier.size(42.dp),
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Folder,
-                            contentDescription = null
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(14.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Open Library Browser",
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1
-                    )
-                    Text(
-                        text = "Browse folders and choose a track",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
-                }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        if (recentFolders.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Recent folders",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            recentFolders.take(RECENTS_LIMIT).forEach { entry ->
-                val folderFile = File(entry.path)
-                val storagePresentation = storagePresentationForEntry(entry)
-                androidx.compose.material3.ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = SettingsCardShape,
-                    onClick = { onOpenRecentFolder(entry) }
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Folder,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = folderFile.name.ifBlank { entry.path },
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = storagePresentation.icon,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = storagePresentation.label,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-        }
-        if (recentPlayedFiles.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Recently played",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            recentPlayedFiles.take(RECENTS_LIMIT).forEach { entry ->
-                val trackFile = File(entry.path)
-                val storagePresentation = storagePresentationForEntry(entry)
-                val extensionLabel = trackFile.extension.uppercase().ifBlank { "UNKNOWN" }
-                val useLiveMetadata = samePath(currentTrackPath, entry.path)
-                androidx.compose.material3.ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = SettingsCardShape,
-                    onClick = { onPlayRecentFile(entry) }
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            RecentTrackSummaryText(
-                                file = trackFile,
-                                cachedTitle = if (useLiveMetadata) currentTrackTitle else entry.title,
-                                cachedArtist = if (useLiveMetadata) currentTrackArtist else entry.artist,
-                                storagePresentation = storagePresentation,
-                                extensionLabel = extensionLabel
-                            )
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun RecentTrackSummaryText(
-    file: File,
-    cachedTitle: String?,
-    cachedArtist: String?,
-    storagePresentation: StoragePresentation,
-    extensionLabel: String
-) {
-    val fallback = file.nameWithoutExtension.ifBlank { file.name }
-    val display by produceState(
-        initialValue = RecentTrackDisplay(
-            primaryText = fallback,
-            includeFilenameInSubtitle = false
-        ),
-        key1 = file.absolutePath,
-        key2 = cachedTitle,
-        key3 = cachedArtist
-    ) {
-        value = withContext(Dispatchers.IO) {
-            val cachedTitleValue = cachedTitle?.trim().orEmpty()
-            val cachedArtistValue = cachedArtist?.trim().orEmpty()
-            try {
-                val result = if (cachedTitleValue.isNotBlank() || cachedArtistValue.isNotBlank()) {
-                    buildRecentTrackDisplay(
-                        title = cachedTitleValue,
-                        artist = cachedArtistValue,
-                        fallback = fallback
-                    )
-                } else {
-                    val retriever = MediaMetadataRetriever()
-                    try {
-                        retriever.setDataSource(file.absolutePath)
-                        val title = retriever
-                            .extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-                            ?.trim()
-                            .orEmpty()
-                        val artist = retriever
-                            .extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-                            ?.trim()
-                            .orEmpty()
-                        buildRecentTrackDisplay(
-                            title = title,
-                            artist = artist,
-                            fallback = fallback
-                        )
-                    } finally {
-                        retriever.release()
-                    }
-                }
-                result
-            } catch (_: Exception) {
-                RecentTrackDisplay(
-                    primaryText = fallback,
-                    includeFilenameInSubtitle = false
-                )
-            }
-        }
-    }
-    val shouldMarquee = display.primaryText.length > 28
-    if (shouldMarquee) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clipToBounds()
-        ) {
-            Text(
-                text = display.primaryText,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Clip,
-                modifier = Modifier.basicMarquee(
-                    iterations = Int.MAX_VALUE,
-                    initialDelayMillis = 900
-                )
-            )
-        }
-    } else {
-        Text(
-            text = display.primaryText,
-            style = MaterialTheme.typography.titleSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            imageVector = storagePresentation.icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(14.dp)
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(
-            text = buildString {
-                append(storagePresentation.label)
-                append(" • ")
-                append(extensionLabel)
-                if (display.includeFilenameInSubtitle) {
-                    append(" • ")
-                    append(fallback)
-                }
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun MiniPlayerBar(
-    file: File?,
-    title: String,
-    artist: String,
-    artwork: ImageBitmap?,
-    noArtworkIcon: ImageVector,
-    isPlaying: Boolean,
-    canResumeStoppedTrack: Boolean,
-    positionSeconds: Double,
-    durationSeconds: Double,
-    canPreviousTrack: Boolean,
-    canNextTrack: Boolean,
-    onExpand: () -> Unit,
-    onExpandDragProgress: (Float) -> Unit,
-    onExpandDragCommit: () -> Unit,
-    onPreviousTrack: () -> Unit,
-    onNextTrack: () -> Unit,
-    onPlayPause: () -> Unit,
-    onStopAndClear: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val hasTrack = file != null
-    val formatLabel = file?.extension?.uppercase()?.ifBlank { "UNKNOWN" } ?: "EMPTY"
-    val positionLabel = formatTimeForMini(positionSeconds)
-    val durationLabel = formatTimeForMini(durationSeconds)
-    val progress = if (durationSeconds > 0.0) {
-        (positionSeconds / durationSeconds).toFloat().coerceIn(0f, 1f)
-    } else {
-        0f
-    }
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(durationMillis = 140, easing = LinearOutSlowInEasing),
-        label = "miniPlayerProgress"
-    )
-    val compactControls = LocalConfiguration.current.screenWidthDp <= 420
-    val controlButtonSize = if (compactControls) 36.dp else 40.dp
-    val controlIconSize = if (compactControls) 20.dp else 22.dp
-    val density = LocalDensity.current
-    val expandSwipeThresholdPx = with(density) { 112.dp.toPx() }
-    val screenHeightPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
-    val previewDistancePx = screenHeightPx * 0.72f
-    var upwardDragPx by remember { mutableFloatStateOf(0f) }
-
-    Surface(
-        modifier = modifier,
-        tonalElevation = 6.dp,
-        shadowElevation = 6.dp,
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pointerInput(expandSwipeThresholdPx) {
-                        detectVerticalDragGestures(
-                            onVerticalDrag = { change, dragAmount ->
-                                val next = (upwardDragPx - dragAmount).coerceAtLeast(0f)
-                                if (next > 0f || upwardDragPx > 0f) {
-                                    upwardDragPx = next
-                                    onExpandDragProgress((upwardDragPx / previewDistancePx).coerceIn(0f, 1f))
-                                    change.consume()
-                                }
-                            },
-                            onDragEnd = {
-                                if (upwardDragPx >= expandSwipeThresholdPx) {
-                                    onExpandDragCommit()
-                                    upwardDragPx = 0f
-                                    return@detectVerticalDragGestures
-                                }
-                                upwardDragPx = 0f
-                                onExpandDragProgress(0f)
-                            },
-                            onDragCancel = {
-                                upwardDragPx = 0f
-                                onExpandDragProgress(0f)
-                            }
-                        )
-                    }
-                    .clickable(onClick = onExpand)
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    modifier = Modifier.size(46.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    if (artwork != null) {
-                        Image(
-                            bitmap = artwork,
-                            contentDescription = "Mini player artwork",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = noArtworkIcon,
-                                contentDescription = "No artwork",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.size(10.dp))
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = 8.dp)
-                ) {
-                    AnimatedContent(
-                        targetState = title,
-                        transitionSpec = {
-                            fadeIn(animationSpec = tween(durationMillis = 170, delayMillis = 35)) togetherWith
-                                fadeOut(animationSpec = tween(durationMillis = 110))
-                        },
-                        label = "miniTitleSwap"
-                    ) { animatedTitle ->
-                        val marquee = animatedTitle.length > 26
-                        Text(
-                            text = animatedTitle,
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            overflow = if (marquee) TextOverflow.Clip else TextOverflow.Ellipsis,
-                            modifier = if (marquee) {
-                                Modifier.basicMarquee(
-                                    iterations = Int.MAX_VALUE,
-                                    initialDelayMillis = 900
-                                )
-                            } else {
-                                Modifier
-                            }
-                        )
-                    }
-                    AnimatedContent(
-                        targetState = artist,
-                        transitionSpec = {
-                            fadeIn(animationSpec = tween(durationMillis = 170, delayMillis = 25)) togetherWith
-                                fadeOut(animationSpec = tween(durationMillis = 100))
-                        },
-                        label = "miniArtistSwap"
-                    ) { animatedArtist ->
-                        val marquee = animatedArtist.length > 30
-                        Text(
-                            text = animatedArtist,
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1,
-                            overflow = if (marquee) TextOverflow.Clip else TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = if (marquee) {
-                                Modifier.basicMarquee(
-                                    iterations = Int.MAX_VALUE,
-                                    initialDelayMillis = 1100
-                                )
-                            } else {
-                                Modifier
-                            }
-                        )
-                    }
-                    Text(
-                        text = "$formatLabel • $positionLabel / $durationLabel",
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onPreviousTrack,
-                        enabled = hasTrack && canPreviousTrack,
-                        modifier = Modifier.size(controlButtonSize)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipPrevious,
-                            contentDescription = "Previous track",
-                            modifier = Modifier.size(controlIconSize)
-                        )
-                    }
-                    IconButton(
-                        onClick = onStopAndClear,
-                        modifier = Modifier.size(controlButtonSize)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Stop,
-                            contentDescription = "Stop",
-                            modifier = Modifier.size(controlIconSize)
-                        )
-                    }
-                    IconButton(
-                        onClick = onPlayPause,
-                        enabled = hasTrack || canResumeStoppedTrack,
-                        modifier = Modifier.size(controlButtonSize)
-                    ) {
-                        AnimatedContent(
-                            targetState = isPlaying,
-                            transitionSpec = {
-                                fadeIn() togetherWith fadeOut()
-                            },
-                            label = "miniPlayPauseIcon"
-                        ) { playing ->
-                            Icon(
-                                imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (playing) "Pause" else "Play",
-                                modifier = Modifier.size(controlIconSize)
-                            )
-                        }
-                    }
-                    IconButton(
-                        onClick = onNextTrack,
-                        enabled = hasTrack && canNextTrack,
-                        modifier = Modifier.size(controlButtonSize)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipNext,
-                            contentDescription = "Next track",
-                            modifier = Modifier.size(controlIconSize)
-                        )
-                    }
-                }
-            }
-
-            LinearProgressIndicator(
-                progress = { animatedProgress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
-        }
-    }
-}
-
-private fun formatTimeForMini(seconds: Double): String {
-    val safeSeconds = seconds.coerceAtLeast(0.0).toInt()
-    val minutes = safeSeconds / 60
-    val remainingSeconds = safeSeconds % 60
-    return "%02d:%02d".format(minutes, remainingSeconds)
-}
-
-private fun loadArtworkForFile(file: File): ImageBitmap? {
-    loadEmbeddedArtwork(file)?.let { return it.asImageBitmap() }
-    findFolderArtworkFile(file)?.let { folderImage ->
-        decodeScaledBitmapFromFile(folderImage)?.let { return it.asImageBitmap() }
-    }
-    return null
-}
-
-private fun loadEmbeddedArtwork(file: File): Bitmap? {
-    val retriever = MediaMetadataRetriever()
-    return try {
-        retriever.setDataSource(file.absolutePath)
-        val embedded = retriever.embeddedPicture ?: return null
-        decodeScaledBitmapFromBytes(embedded)
-    } catch (_: Exception) {
-        null
-    } finally {
-        retriever.release()
-    }
-}
-
-private fun findFolderArtworkFile(trackFile: File): File? {
-    val parent = trackFile.parentFile ?: return null
-    if (!parent.isDirectory) return null
-
-    val allowedNames = setOf(
-        "cover.jpg", "cover.jpeg", "cover.png", "cover.webp",
-        "folder.jpg", "folder.jpeg", "folder.png", "folder.webp",
-        "album.jpg", "album.jpeg", "album.png", "album.webp",
-        "front.jpg", "front.jpeg", "front.png", "front.webp",
-        "artwork.jpg", "artwork.jpeg", "artwork.png", "artwork.webp"
-    )
-
-    return parent.listFiles()
-        ?.firstOrNull { it.isFile && allowedNames.contains(it.name.lowercase()) }
-}
-
-private fun decodeScaledBitmapFromBytes(data: ByteArray, maxSize: Int = 1024): Bitmap? {
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeByteArray(data, 0, data.size, bounds)
-    val sampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, maxSize)
-
-    val options = BitmapFactory.Options().apply {
-        inSampleSize = sampleSize
-        inPreferredConfig = Bitmap.Config.ARGB_8888
-    }
-    return BitmapFactory.decodeByteArray(data, 0, data.size, options)
-}
-
-private fun decodeScaledBitmapFromFile(file: File, maxSize: Int = 1024): Bitmap? {
-    val path = file.absolutePath
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(path, bounds)
-    val sampleSize = calculateInSampleSize(bounds.outWidth, bounds.outHeight, maxSize)
-
-    val options = BitmapFactory.Options().apply {
-        inSampleSize = sampleSize
-        inPreferredConfig = Bitmap.Config.ARGB_8888
-    }
-    return BitmapFactory.decodeFile(path, options)
-}
-
-private fun calculateInSampleSize(width: Int, height: Int, maxSize: Int): Int {
-    var sampleSize = 1
-    var currentWidth = width
-    var currentHeight = height
-    while (currentWidth > maxSize || currentHeight > maxSize) {
-        currentWidth /= 2
-        currentHeight /= 2
-        sampleSize *= 2
-    }
-    return sampleSize.coerceAtLeast(1)
 }

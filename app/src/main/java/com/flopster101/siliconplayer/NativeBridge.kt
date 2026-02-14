@@ -24,4 +24,5 @@ object NativeBridge {
     external fun getRepeatModeCapabilities(): Int
     external fun getCurrentDecoderName(): String
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
+    external fun setCoreOption(coreName: String, optionName: String, optionValue: String)
 }

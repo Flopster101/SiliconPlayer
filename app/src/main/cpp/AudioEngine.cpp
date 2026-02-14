@@ -267,6 +267,12 @@ void AudioEngine::setUrl(const char* url) {
         const int targetRate = resolveOutputSampleRateForCore(newDecoder->getName());
         newDecoder->setOutputSampleRate(targetRate);
         newDecoder->setRepeatMode(repeatMode.load());
+        const auto optionsIt = coreOptions.find(newDecoder->getName());
+        if (optionsIt != coreOptions.end()) {
+            for (const auto& [name, value] : optionsIt->second) {
+                newDecoder->setOption(name.c_str(), value.c_str());
+            }
+        }
         decoder = std::move(newDecoder);
         positionSeconds.store(0.0);
     } else {
@@ -340,6 +346,19 @@ void AudioEngine::setCoreOutputSampleRate(const std::string& coreName, int sampl
 
     if (decoder && coreName == decoder->getName()) {
         decoder->setOutputSampleRate(resolveOutputSampleRateForCore(coreName));
+    }
+}
+
+void AudioEngine::setCoreOption(
+        const std::string& coreName,
+        const std::string& optionName,
+        const std::string& optionValue) {
+    if (coreName.empty() || optionName.empty()) return;
+
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    coreOptions[coreName][optionName] = optionValue;
+    if (decoder && coreName == decoder->getName()) {
+        decoder->setOption(optionName.c_str(), optionValue.c_str());
     }
 }
 

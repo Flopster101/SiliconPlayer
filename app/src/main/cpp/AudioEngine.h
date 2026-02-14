@@ -26,6 +26,7 @@ public:
     void setRepeatMode(int mode);
     int getRepeatModeCapabilities();
     void setCoreOutputSampleRate(const std::string& coreName, int sampleRateHz);
+    void setCoreOption(const std::string& coreName, const std::string& optionName, const std::string& optionValue);
     std::string getTitle();
     std::string getArtist();
     int getSampleRate();
@@ -47,6 +48,7 @@ private:
     std::unique_ptr<AudioDecoder> decoder;
     std::mutex decoderMutex;
     std::unordered_map<std::string, int> coreOutputSampleRateHz;
+    std::unordered_map<std::string, std::unordered_map<std::string, std::string>> coreOptions;
 
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
     void recoverStreamIfNeeded();

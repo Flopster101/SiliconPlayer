@@ -114,6 +114,21 @@ Java_com_flopster101_siliconplayer_MainActivity_setCoreOutputSampleRate(
     env->ReleaseStringUTFChars(coreName, nativeCoreName);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_setCoreOption(
+        JNIEnv* env, jobject, jstring coreName, jstring optionName, jstring optionValue) {
+    if (audioEngine == nullptr) {
+        audioEngine = new AudioEngine();
+    }
+    const char* nativeCoreName = env->GetStringUTFChars(coreName, 0);
+    const char* nativeOptionName = env->GetStringUTFChars(optionName, 0);
+    const char* nativeOptionValue = env->GetStringUTFChars(optionValue, 0);
+    audioEngine->setCoreOption(nativeCoreName, nativeOptionName, nativeOptionValue);
+    env->ReleaseStringUTFChars(optionValue, nativeOptionValue);
+    env->ReleaseStringUTFChars(optionName, nativeOptionName);
+    env->ReleaseStringUTFChars(coreName, nativeCoreName);
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getTrackTitle(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
@@ -277,5 +292,13 @@ Java_com_flopster101_siliconplayer_NativeBridge_setCoreOutputSampleRate(
         JNIEnv* env, jobject thiz, jstring coreName, jint sampleRateHz) {
     Java_com_flopster101_siliconplayer_MainActivity_setCoreOutputSampleRate(
             env, thiz, coreName, sampleRateHz
+    );
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setCoreOption(
+        JNIEnv* env, jobject thiz, jstring coreName, jstring optionName, jstring optionValue) {
+    Java_com_flopster101_siliconplayer_MainActivity_setCoreOption(
+            env, thiz, coreName, optionName, optionValue
     );
 }

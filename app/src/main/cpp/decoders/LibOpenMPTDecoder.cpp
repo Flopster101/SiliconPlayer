@@ -2,6 +2,7 @@
 #include <android/log.h>
 #include <fstream>
 #include <algorithm>
+#include <cctype>
 
 #define LOG_TAG "LibOpenMPTDecoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -19,6 +20,29 @@ std::string getFirstNonEmptyMetadata(openmpt::module* module, const std::initial
         }
     }
     return "";
+}
+
+bool parseBoolString(const std::string& value, bool fallback) {
+    std::string normalized;
+    normalized.reserve(value.size());
+    for (char c : value) {
+        normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    }
+    if (normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on") {
+        return true;
+    }
+    if (normalized == "0" || normalized == "false" || normalized == "no" || normalized == "off") {
+        return false;
+    }
+    return fallback;
+}
+
+int parseIntString(const std::string& value, int fallback) {
+    try {
+        return std::stoi(value);
+    } catch (...) {
+        return fallback;
+    }
 }
 }
 
@@ -56,6 +80,7 @@ bool LibOpenMPTDecoder::open(const char* path) {
 
         // Create module from memory buffer
         module = std::make_unique<openmpt::module>(fileBuffer);
+        applyRenderSettingsLocked();
         if (repeatMode == 2) {
             module->set_repeat_count(0);
             module->ctl_set_text("play.at_end", "continue");
@@ -178,4 +203,74 @@ std::string LibOpenMPTDecoder::getArtist() {
 
 std::vector<std::string> LibOpenMPTDecoder::getSupportedExtensions() {
     return openmpt::get_supported_extensions();
+}
+
+void LibOpenMPTDecoder::setOption(const char* name, const char* value) {
+    if (!name || !value) return;
+    std::lock_guard<std::mutex> lock(decodeMutex);
+
+    const std::string optionName(name);
+    const std::string optionValue(value);
+
+    if (optionName == "openmpt.stereo_separation_percent") {
+        stereoSeparationPercent = std::clamp(parseIntString(optionValue, stereoSeparationPercent), 0, 200);
+    } else if (optionName == "openmpt.interpolation_filter_length") {
+        interpolationFilterLength = std::max(0, parseIntString(optionValue, interpolationFilterLength));
+    } else if (optionName == "openmpt.volume_ramping_strength") {
+        volumeRampingStrength = std::clamp(parseIntString(optionValue, volumeRampingStrength), -1, 10);
+    } else if (optionName == "openmpt.master_gain_millibel") {
+        masterGainMilliBel = parseIntString(optionValue, masterGainMilliBel);
+    } else if (optionName == "openmpt.amiga_resampler_mode") {
+        amigaResamplerMode = std::clamp(parseIntString(optionValue, amigaResamplerMode), 0, 3);
+    } else if (optionName == "openmpt.surround_enabled") {
+        // Stored for forward compatibility. Actual surround rendering path will be added later.
+        surroundEnabled = parseBoolString(optionValue, surroundEnabled);
+    } else {
+        return;
+    }
+
+    applyRenderSettingsLocked();
+}
+
+void LibOpenMPTDecoder::applyRenderSettingsLocked() {
+    if (!module) return;
+    try {
+        module->set_render_param(
+                openmpt::module::RENDER_STEREOSEPARATION_PERCENT,
+                stereoSeparationPercent
+        );
+        module->set_render_param(
+                openmpt::module::RENDER_INTERPOLATIONFILTER_LENGTH,
+                interpolationFilterLength
+        );
+        module->set_render_param(
+                openmpt::module::RENDER_VOLUMERAMPING_STRENGTH,
+                volumeRampingStrength
+        );
+        module->set_render_param(
+                openmpt::module::RENDER_MASTERGAIN_MILLIBEL,
+                masterGainMilliBel
+        );
+        if (amigaResamplerMode <= 0) {
+            module->ctl_set_boolean("render.resampler.emulate_amiga", false);
+        } else {
+            module->ctl_set_boolean("render.resampler.emulate_amiga", true);
+            switch (amigaResamplerMode) {
+                case 1:
+                    module->ctl_set_text("render.resampler.emulate_amiga_type", "unfiltered");
+                    break;
+                case 3:
+                    module->ctl_set_text("render.resampler.emulate_amiga_type", "a1200");
+                    break;
+                case 2:
+                default:
+                    module->ctl_set_text("render.resampler.emulate_amiga_type", "a500");
+                    break;
+            }
+        }
+    } catch (const openmpt::exception& e) {
+        LOGE("Failed to apply render settings: %s", e.what());
+    } catch (...) {
+        LOGE("Failed to apply render settings: unknown error");
+    }
 }

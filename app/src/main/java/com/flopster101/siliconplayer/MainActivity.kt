@@ -58,6 +58,7 @@ import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Slider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -396,6 +397,12 @@ private object AppPreferenceKeys {
     const val BROWSER_LAST_DIRECTORY_PATH = "browser_last_directory_path"
     const val CORE_RATE_FFMPEG = "core_rate_ffmpeg"
     const val CORE_RATE_OPENMPT = "core_rate_openmpt"
+    const val OPENMPT_STEREO_SEPARATION_PERCENT = "openmpt_stereo_separation_percent"
+    const val OPENMPT_INTERPOLATION_FILTER_LENGTH = "openmpt_interpolation_filter_length"
+    const val OPENMPT_AMIGA_RESAMPLER_MODE = "openmpt_amiga_resampler_mode"
+    const val OPENMPT_VOLUME_RAMPING_STRENGTH = "openmpt_volume_ramping_strength"
+    const val OPENMPT_MASTER_GAIN_MILLIBEL = "openmpt_master_gain_millibel"
+    const val OPENMPT_SURROUND_ENABLED = "openmpt_surround_enabled"
     const val RESPOND_HEADPHONE_MEDIA_BUTTONS = "respond_headphone_media_buttons"
     const val PAUSE_ON_HEADPHONE_DISCONNECT = "pause_on_headphone_disconnect"
     const val OPEN_PLAYER_FROM_NOTIFICATION = "open_player_from_notification"
@@ -474,6 +481,7 @@ class MainActivity : ComponentActivity() {
     external fun getTrackBitDepthLabel(): String
     external fun getRepeatModeCapabilities(): Int
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
+    external fun setCoreOption(coreName: String, optionName: String, optionValue: String)
 
     companion object {
         var notificationOpenPlayerSignal by mutableIntStateOf(0)
@@ -579,6 +587,36 @@ private fun AppNavigation(
     var openMptCoreSampleRateHz by remember {
         mutableIntStateOf(
             prefs.getInt(AppPreferenceKeys.CORE_RATE_OPENMPT, 0)
+        )
+    }
+    var openMptStereoSeparationPercent by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT, 100)
+        )
+    }
+    var openMptInterpolationFilterLength by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH, 0)
+        )
+    }
+    var openMptAmigaResamplerMode by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE, 2)
+        )
+    }
+    var openMptVolumeRampingStrength by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH, -1)
+        )
+    }
+    var openMptMasterGainMilliBel by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL, 0)
+        )
+    }
+    var openMptSurroundEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.OPENMPT_SURROUND_ENABLED, false)
         )
     }
     var respondHeadphoneMediaButtons by remember {
@@ -958,6 +996,90 @@ private fun AppNavigation(
             .putInt(AppPreferenceKeys.CORE_RATE_OPENMPT, openMptCoreSampleRateHz)
             .apply()
         NativeBridge.setCoreOutputSampleRate("LibOpenMPT", openMptCoreSampleRateHz)
+    }
+
+    LaunchedEffect(openMptStereoSeparationPercent) {
+        prefs.edit()
+            .putInt(
+                AppPreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT,
+                openMptStereoSeparationPercent
+            )
+            .apply()
+        NativeBridge.setCoreOption(
+            "LibOpenMPT",
+            "openmpt.stereo_separation_percent",
+            openMptStereoSeparationPercent.toString()
+        )
+    }
+
+    LaunchedEffect(openMptInterpolationFilterLength) {
+        prefs.edit()
+            .putInt(
+                AppPreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH,
+                openMptInterpolationFilterLength
+            )
+            .apply()
+        NativeBridge.setCoreOption(
+            "LibOpenMPT",
+            "openmpt.interpolation_filter_length",
+            openMptInterpolationFilterLength.toString()
+        )
+    }
+
+    LaunchedEffect(openMptAmigaResamplerMode) {
+        prefs.edit()
+            .putInt(
+                AppPreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE,
+                openMptAmigaResamplerMode
+            )
+            .apply()
+        NativeBridge.setCoreOption(
+            "LibOpenMPT",
+            "openmpt.amiga_resampler_mode",
+            openMptAmigaResamplerMode.toString()
+        )
+    }
+
+    LaunchedEffect(openMptVolumeRampingStrength) {
+        prefs.edit()
+            .putInt(
+                AppPreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH,
+                openMptVolumeRampingStrength
+            )
+            .apply()
+        NativeBridge.setCoreOption(
+            "LibOpenMPT",
+            "openmpt.volume_ramping_strength",
+            openMptVolumeRampingStrength.toString()
+        )
+    }
+
+    LaunchedEffect(openMptMasterGainMilliBel) {
+        prefs.edit()
+            .putInt(
+                AppPreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL,
+                openMptMasterGainMilliBel
+            )
+            .apply()
+        NativeBridge.setCoreOption(
+            "LibOpenMPT",
+            "openmpt.master_gain_millibel",
+            openMptMasterGainMilliBel.toString()
+        )
+    }
+
+    LaunchedEffect(openMptSurroundEnabled) {
+        prefs.edit()
+            .putBoolean(
+                AppPreferenceKeys.OPENMPT_SURROUND_ENABLED,
+                openMptSurroundEnabled
+            )
+            .apply()
+        NativeBridge.setCoreOption(
+            "LibOpenMPT",
+            "openmpt.surround_enabled",
+            openMptSurroundEnabled.toString()
+        )
     }
 
     LaunchedEffect(respondHeadphoneMediaButtons) {
@@ -1367,6 +1489,18 @@ private fun AppNavigation(
                         onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
                         openMptSampleRateHz = openMptCoreSampleRateHz,
                         onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it },
+                        openMptStereoSeparationPercent = openMptStereoSeparationPercent,
+                        onOpenMptStereoSeparationPercentChanged = { openMptStereoSeparationPercent = it },
+                        openMptInterpolationFilterLength = openMptInterpolationFilterLength,
+                        onOpenMptInterpolationFilterLengthChanged = { openMptInterpolationFilterLength = it },
+                        openMptAmigaResamplerMode = openMptAmigaResamplerMode,
+                        onOpenMptAmigaResamplerModeChanged = { openMptAmigaResamplerMode = it },
+                        openMptVolumeRampingStrength = openMptVolumeRampingStrength,
+                        onOpenMptVolumeRampingStrengthChanged = { openMptVolumeRampingStrength = it },
+                        openMptMasterGainMilliBel = openMptMasterGainMilliBel,
+                        onOpenMptMasterGainMilliBelChanged = { openMptMasterGainMilliBel = it },
+                        openMptSurroundEnabled = openMptSurroundEnabled,
+                        onOpenMptSurroundEnabledChanged = { openMptSurroundEnabled = it },
                         onClearRecentHistory = {
                             recentFolders = emptyList()
                             recentPlayedFiles = emptyList()
@@ -1956,6 +2090,18 @@ private fun SettingsScreen(
     onFfmpegSampleRateChanged: (Int) -> Unit,
     openMptSampleRateHz: Int,
     onOpenMptSampleRateChanged: (Int) -> Unit,
+    openMptStereoSeparationPercent: Int,
+    onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
+    openMptInterpolationFilterLength: Int,
+    onOpenMptInterpolationFilterLengthChanged: (Int) -> Unit,
+    openMptAmigaResamplerMode: Int,
+    onOpenMptAmigaResamplerModeChanged: (Int) -> Unit,
+    openMptVolumeRampingStrength: Int,
+    onOpenMptVolumeRampingStrengthChanged: (Int) -> Unit,
+    openMptMasterGainMilliBel: Int,
+    onOpenMptMasterGainMilliBelChanged: (Int) -> Unit,
+    openMptSurroundEnabled: Boolean,
+    onOpenMptSurroundEnabledChanged: (Boolean) -> Unit,
     onClearRecentHistory: () -> Unit
 ) {
     val secondaryTitle = when (route) {
@@ -2132,12 +2278,77 @@ private fun SettingsScreen(
                         selectedHz = ffmpegSampleRateHz,
                         onSelected = onFfmpegSampleRateChanged
                     )
-                    SettingsRoute.PluginOpenMpt -> SampleRateSelectorCard(
-                        title = "Output sample rate",
-                        description = "Preferred output sample rate for this plugin. Auto uses the device/output stream rate.",
-                        selectedHz = openMptSampleRateHz,
-                        onSelected = onOpenMptSampleRateChanged
-                    )
+                    SettingsRoute.PluginOpenMpt -> {
+                        SettingsSectionLabel("Core options")
+                        OpenMptDialogSliderCard(
+                            title = "Stereo separation",
+                            description = "Sets mixer stereo separation.",
+                            value = openMptStereoSeparationPercent,
+                            valueRange = 0..200,
+                            step = 5,
+                            valueLabel = { "$it%" },
+                            onValueChanged = onOpenMptStereoSeparationPercentChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OpenMptChoiceSelectorCard(
+                            title = "Interpolation filter",
+                            description = "Selects interpolation quality for module playback.",
+                            selectedValue = openMptInterpolationFilterLength,
+                            options = listOf(
+                                IntChoice(0, "Auto"),
+                                IntChoice(1, "None"),
+                                IntChoice(2, "Linear"),
+                                IntChoice(4, "Cubic"),
+                                IntChoice(8, "Sinc (8-tap)")
+                            ),
+                            onSelected = onOpenMptInterpolationFilterLengthChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OpenMptChoiceSelectorCard(
+                            title = "Amiga resampler",
+                            description = "Choose Amiga resampler mode. None uses interpolation filter.",
+                            selectedValue = openMptAmigaResamplerMode,
+                            options = listOf(
+                                IntChoice(0, "None"),
+                                IntChoice(1, "Unfiltered"),
+                                IntChoice(2, "Amiga 500"),
+                                IntChoice(3, "Amiga 1200")
+                            ),
+                            onSelected = onOpenMptAmigaResamplerModeChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OpenMptVolumeRampingCard(
+                            title = "Volume ramping strength",
+                            description = "Controls smoothing strength for volume changes.",
+                            value = openMptVolumeRampingStrength,
+                            onValueChanged = onOpenMptVolumeRampingStrengthChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OpenMptDialogSliderCard(
+                            title = "Master gain",
+                            description = "Applies decoder gain before output.",
+                            value = openMptMasterGainMilliBel,
+                            valueRange = -1200..1200,
+                            step = 100,
+                            valueLabel = { formatMilliBelAsDbLabel(it) },
+                            onValueChanged = onOpenMptMasterGainMilliBelChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Enable surround sound",
+                            description = "Enable surround rendering mode when supported by the playback path.",
+                            checked = openMptSurroundEnabled,
+                            onCheckedChange = onOpenMptSurroundEnabledChanged
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Generic output options")
+                        SampleRateSelectorCard(
+                            title = "Output sample rate",
+                            description = "Preferred output sample rate for this plugin. Auto uses the device/output stream rate.",
+                            selectedHz = openMptSampleRateHz,
+                            onSelected = onOpenMptSampleRateChanged
+                        )
+                    }
                     SettingsRoute.GeneralAudio -> {
                         SettingsSectionLabel("Output behavior")
                         PlayerSettingToggleCard(
@@ -2435,6 +2646,13 @@ private data class SampleRateChoice(val hz: Int, val label: String)
 
 private data class ThemeModeChoice(val mode: ThemeMode, val label: String)
 
+private data class IntChoice(val value: Int, val label: String)
+
+private fun formatMilliBelAsDbLabel(milliBel: Int): String {
+    val db = milliBel / 100.0
+    return String.format(Locale.US, "%+.1f dB", db)
+}
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun ThemeModeSelectorCard(
@@ -2637,6 +2855,290 @@ private fun SampleRateSelectorCard(
                 }
             },
             confirmButton = {}
+        )
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun OpenMptChoiceSelectorCard(
+    title: String,
+    description: String,
+    selectedValue: Int,
+    options: List<IntChoice>,
+    onSelected: (Int) -> Unit
+) {
+    val selectedLabel = options.firstOrNull { it.value == selectedValue }?.label ?: options.firstOrNull()?.label.orEmpty()
+    var dialogOpen by remember { mutableStateOf(false) }
+    val configuration = LocalConfiguration.current
+
+    androidx.compose.material3.ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = SettingsCardShape,
+        onClick = { dialogOpen = true }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = selectedLabel,
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+    }
+
+    if (dialogOpen) {
+        AlertDialog(
+            onDismissRequest = { dialogOpen = false },
+            title = { Text(title) },
+            text = {
+                val maxDialogListHeight = configuration.screenHeightDp.dp * 0.62f
+                CompositionLocalProvider(
+                    androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement provides false
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = maxDialogListHeight)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        options.forEach { option ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(42.dp)
+                                    .clickable {
+                                        onSelected(option.value)
+                                        dialogOpen = false
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = option.value == selectedValue,
+                                    onClick = {
+                                        onSelected(option.value)
+                                        dialogOpen = false
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = option.label,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dialogOpen = false }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {}
+        )
+    }
+}
+
+@Composable
+private fun OpenMptDialogSliderCard(
+    title: String,
+    description: String,
+    value: Int,
+    valueRange: IntRange,
+    step: Int,
+    valueLabel: (Int) -> String,
+    onValueChanged: (Int) -> Unit
+) {
+    val coercedValue = value.coerceIn(valueRange.first, valueRange.last)
+    val sliderSteps = ((valueRange.last - valueRange.first) / step).coerceAtLeast(1) - 1
+    var dialogOpen by remember { mutableStateOf(false) }
+    androidx.compose.material3.ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = SettingsCardShape,
+        onClick = { dialogOpen = true }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = valueLabel(coercedValue),
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+    }
+
+    if (dialogOpen) {
+        var sliderValue by remember(value) { mutableFloatStateOf(coercedValue.toFloat()) }
+        AlertDialog(
+            onDismissRequest = { dialogOpen = false },
+            title = { Text(title) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = valueLabel(sliderValue.toInt()),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Slider(
+                        value = sliderValue,
+                        onValueChange = { raw ->
+                            val snapped = (((raw.toInt() - valueRange.first + (step / 2)) / step) * step) + valueRange.first
+                            sliderValue = snapped.coerceIn(valueRange.first, valueRange.last).toFloat()
+                        },
+                        valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
+                        steps = sliderSteps
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dialogOpen = false }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onValueChanged(sliderValue.toInt())
+                    dialogOpen = false
+                }) {
+                    Text("Apply")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun OpenMptVolumeRampingCard(
+    title: String,
+    description: String,
+    value: Int,
+    onValueChanged: (Int) -> Unit
+) {
+    var dialogOpen by remember { mutableStateOf(false) }
+    val autoEnabled = value < 0
+    val displayedValue = if (autoEnabled) "Auto" else value.toString()
+
+    androidx.compose.material3.ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = SettingsCardShape,
+        onClick = { dialogOpen = true }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = displayedValue,
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
+    }
+
+    if (dialogOpen) {
+        var autoState by remember(value) { mutableStateOf(value < 0) }
+        var sliderValue by remember(value) { mutableStateOf(value.coerceIn(0, 10).toFloat()) }
+        AlertDialog(
+            onDismissRequest = { dialogOpen = false },
+            title = { Text(title) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Auto",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = autoState,
+                            onCheckedChange = { enabled ->
+                                autoState = enabled
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (autoState) "Current: Auto" else "Current: ${sliderValue.toInt()}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Slider(
+                        value = sliderValue,
+                        onValueChange = { raw ->
+                            sliderValue = raw.coerceIn(0f, 10f)
+                        },
+                        valueRange = 0f..10f,
+                        steps = 9,
+                        enabled = !autoState
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dialogOpen = false }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onValueChanged(if (autoState) -1 else sliderValue.toInt())
+                    dialogOpen = false
+                }) {
+                    Text("Apply")
+                }
+            }
         )
     }
 }

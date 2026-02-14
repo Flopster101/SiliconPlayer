@@ -31,6 +31,7 @@ public:
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     double getPlaybackPositionSeconds() override;
+    void setOption(const char* name, const char* value) override;
 
     // Framework
     const char* getName() const override { return "LibOpenMPT"; }
@@ -50,8 +51,16 @@ private:
     int channels = 2; // Rendered output is stereo
     int moduleChannels = 0;
     int repeatMode = 0;
+    int stereoSeparationPercent = 100;
+    int interpolationFilterLength = 0;
+    int volumeRampingStrength = -1;
+    int masterGainMilliBel = 0;
+    int amigaResamplerMode = 2; // 0 None, 1 Unfiltered, 2 A500, 3 A1200
+    bool surroundEnabled = false;
     std::string title;
     std::string artist;
+
+    void applyRenderSettingsLocked();
 };
 
 #endif //SILICONPLAYER_LIBOPENMPTDECODER_H

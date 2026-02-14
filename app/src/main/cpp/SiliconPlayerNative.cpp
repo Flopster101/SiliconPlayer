@@ -347,6 +347,18 @@ Java_com_flopster101_siliconplayer_NativeBridge_getCurrentDecoderName(JNIEnv* en
     return Java_com_flopster101_siliconplayer_MainActivity_getCurrentDecoderName(env, thiz);
 }
 
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getTrackBitrate(JNIEnv* env, jobject thiz) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jlong>(audioEngine->getTrackBitrate());
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_isTrackVBR(JNIEnv* env, jobject thiz) {
+    if (audioEngine == nullptr) return JNI_FALSE;
+    return audioEngine->isTrackVBR() ? JNI_TRUE : JNI_FALSE;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_setCoreOutputSampleRate(
         JNIEnv* env, jobject thiz, jstring coreName, jint sampleRateHz) {

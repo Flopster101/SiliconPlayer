@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import com.flopster101.siliconplayer.NativeBridge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
@@ -86,6 +87,7 @@ fun PlayerScreen(
     sampleRateHz: Int,
     channelCount: Int,
     bitDepthLabel: String,
+    decoderName: String?,
     artwork: ImageBitmap?,
     noArtworkIcon: ImageVector = Icons.Default.MusicNote,
     repeatMode: RepeatMode,
@@ -234,8 +236,8 @@ fun PlayerScreen(
                     ) {
                         TrackInfoChips(
                         file = file,
-                        durationSeconds = durationSeconds,
-                        hasReliableDuration = hasReliableDuration,
+                        decoderName = decoderName,
+                        fileSizeBytes = file?.length() ?: 0L,
                         sampleRateHz = sampleRateHz,
                         channelCount = channelCount,
                         bitDepthLabel = bitDepthLabel
@@ -315,8 +317,8 @@ fun PlayerScreen(
                     Spacer(modifier = Modifier.height(14.dp))
                     TrackInfoChips(
                         file = file,
-                        durationSeconds = durationSeconds,
-                        hasReliableDuration = hasReliableDuration,
+                        decoderName = decoderName,
+                        fileSizeBytes = file?.length() ?: 0L,
                         sampleRateHz = sampleRateHz,
                         channelCount = channelCount,
                         bitDepthLabel = bitDepthLabel,
@@ -450,19 +452,30 @@ private fun AlbumArtPlaceholder(
 @Composable
 private fun TrackInfoChips(
     file: File?,
-    durationSeconds: Double,
-    hasReliableDuration: Boolean,
+    decoderName: String?,
+    fileSizeBytes: Long,
     sampleRateHz: Int,
     channelCount: Int,
     bitDepthLabel: String,
     modifier: Modifier = Modifier
 ) {
     val formatLabel = file?.extension?.uppercase()?.ifBlank { "UNKNOWN" } ?: "EMPTY"
-    val durationLabel = if (hasReliableDuration && durationSeconds > 0.0) {
-        formatTime(durationSeconds)
-    } else {
-        "--:--"
+
+    // Bitrate or file size based on decoder
+    val bitrateOrSize = remember(file, decoderName, fileSizeBytes) {
+        when {
+            decoderName.equals("FFmpeg", ignoreCase = true) -> {
+                val bitrate = NativeBridge.getTrackBitrate()
+                val isVBR = NativeBridge.isTrackVBR()
+                if (bitrate > 0) {
+                    formatBitrate(bitrate, isVBR)
+                } else null
+            }
+            fileSizeBytes > 0 -> formatFileSize(fileSizeBytes)
+            else -> null
+        }
     }
+
     val sampleRateLabel = if (sampleRateHz > 0) {
         if (sampleRateHz % 1000 == 0) {
             "${sampleRateHz / 1000}kHz"
@@ -501,11 +514,14 @@ private fun TrackInfoChips(
             text = formatLabel,
             compactLevel = compactLevel
         )
-        TrackInfoChip(
-            icon = Icons.Default.Timer,
-            text = durationLabel,
-            compactLevel = compactLevel
-        )
+        if (bitrateOrSize != null) {
+            TrackInfoChip(
+                icon = if (decoderName.equals("FFmpeg", ignoreCase = true))
+                    Icons.Default.Speed else Icons.Default.Info,
+                text = bitrateOrSize,
+                compactLevel = compactLevel
+            )
+        }
         TrackInfoChip(
             icon = Icons.Default.Equalizer,
             text = sampleRateLabel,
@@ -1127,4 +1143,31 @@ private fun formatTime(seconds: Double): String {
     val minutes = safeSeconds / 60
     val remainingSeconds = safeSeconds % 60
     return "%02d:%02d".format(minutes, remainingSeconds)
+}
+
+private fun formatBitrate(bitrateInBitsPerSecond: Long, isVBR: Boolean): String {
+    val kbps = bitrateInBitsPerSecond / 1000.0
+    val prefix = if (isVBR) "~" else ""
+
+    return when {
+        kbps >= 1000 -> String.format(java.util.Locale.US, "%s%.1f Mbps", prefix, kbps / 1000.0)
+        else -> String.format(java.util.Locale.US, "%s%.0f kbps", prefix, kbps)
+    }
+}
+
+private fun formatFileSize(bytes: Long): String {
+    val units = arrayOf("B", "KB", "MB", "GB")
+    var size = bytes.toDouble().coerceAtLeast(0.0)
+    var unitIndex = 0
+
+    while (size >= 1024.0 && unitIndex < units.lastIndex) {
+        size /= 1024.0
+        unitIndex++
+    }
+
+    return if (unitIndex == 0) {
+        String.format(java.util.Locale.US, "%.0f %s", size, units[unitIndex])
+    } else {
+        String.format(java.util.Locale.US, "%.1f %s", size, units[unitIndex])
+    }
 }

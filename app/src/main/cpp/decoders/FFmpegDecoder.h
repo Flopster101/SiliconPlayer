@@ -36,6 +36,10 @@ public:
     double getPlaybackPositionSeconds() override;
     TimelineMode getTimelineMode() const override { return TimelineMode::ContinuousLinear; }
 
+    // Bitrate information
+    int64_t getBitrate() const;
+    bool isVBR() const;
+
     // Configuration
     const char* getName() const override { return "FFmpeg"; }
     static std::vector<std::string> getSupportedExtensions();
@@ -57,6 +61,8 @@ private:
     int outputChannelCount = 2; // Output channels (stereo)
     std::string title;
     std::string artist;
+    int64_t bitrate = 0;
+    bool vbr = false;
 
     // Resampling buffer
     std::vector<float> sampleBuffer;

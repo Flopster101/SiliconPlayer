@@ -43,6 +43,10 @@ public:
     std::string getBitDepthLabel();
     std::string getCurrentDecoderName();
 
+    // Bitrate information
+    int64_t getTrackBitrate();
+    bool isTrackVBR();
+
     // Gain control
     void setMasterGain(float gainDb);
     void setPluginGain(float gainDb);

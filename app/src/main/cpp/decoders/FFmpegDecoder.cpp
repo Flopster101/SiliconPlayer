@@ -130,6 +130,15 @@ bool FFmpegDecoder::open(const char* path) {
         }
     }
 
+    // Extract bitrate information
+    bitrate = codecParams->bit_rate;
+    if (bitrate <= 0 && formatContext->bit_rate > 0) {
+        bitrate = formatContext->bit_rate;
+    }
+
+    // Detect VBR: bitrate is 0 or max_rate differs from bit_rate
+    vbr = (bitrate == 0) || (codecContext->rc_max_rate > 0 && codecContext->rc_max_rate != bitrate);
+
     totalFramesOutput = 0;
     LOGD("Opened file: %s, duration: %.2f", path, duration);
     return true;
@@ -156,6 +165,8 @@ void FFmpegDecoder::close() {
     sourceBitDepth = 0;
     title.clear();
     artist.clear();
+    bitrate = 0;
+    vbr = false;
 }
 
 bool FFmpegDecoder::initResampler() {
@@ -399,4 +410,12 @@ std::vector<std::string> FFmpegDecoder::getSupportedExtensions() {
         "tta", "shn", "voc", "au", "snd", "oga", "mka", "weba", "caf", "qcp",
         "dsf", "dff", "mlp", "truehd", "mp2", "mp1"
     };
+}
+
+int64_t FFmpegDecoder::getBitrate() const {
+    return bitrate;
+}
+
+bool FFmpegDecoder::isVBR() const {
+    return vbr;
 }

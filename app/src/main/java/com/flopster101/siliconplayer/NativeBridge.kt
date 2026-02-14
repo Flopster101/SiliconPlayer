@@ -25,6 +25,8 @@ object NativeBridge {
     external fun getRepeatModeCapabilities(): Int
     external fun getPlaybackCapabilities(): Int
     external fun getCurrentDecoderName(): String
+    external fun getTrackBitrate(): Long
+    external fun isTrackVBR(): Boolean
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
     external fun setCoreOption(coreName: String, optionName: String, optionValue: String)
     external fun getCoreCapabilities(coreName: String): Int

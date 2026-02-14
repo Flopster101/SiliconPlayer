@@ -1207,3 +1207,30 @@ void AudioEngine::applyMonoDownmix(float* buffer, int numFrames, int channels) {
         buffer[i * 2 + 1] = mono;
     }
 }
+
+// Bitrate information
+int64_t AudioEngine::getTrackBitrate() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return 0;
+    }
+    // Check if decoder is FFmpegDecoder
+    FFmpegDecoder* ffmpegDecoder = dynamic_cast<FFmpegDecoder*>(decoder.get());
+    if (ffmpegDecoder) {
+        return ffmpegDecoder->getBitrate();
+    }
+    return 0;
+}
+
+bool AudioEngine::isTrackVBR() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return false;
+    }
+    // Check if decoder is FFmpegDecoder
+    FFmpegDecoder* ffmpegDecoder = dynamic_cast<FFmpegDecoder*>(decoder.get());
+    if (ffmpegDecoder) {
+        return ffmpegDecoder->isVBR();
+    }
+    return false;
+}

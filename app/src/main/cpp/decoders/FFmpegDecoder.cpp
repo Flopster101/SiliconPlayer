@@ -366,6 +366,14 @@ void FFmpegDecoder::setOutputSampleRate(int sampleRate) {
     if (sampleRate <= 0) return;
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (outputSampleRate == sampleRate) return;
+    // Preserve timeline continuity when render sample rate changes.
+    // totalFramesOutput is tracked in units of outputSampleRate.
+    if (outputSampleRate > 0 && totalFramesOutput > 0) {
+        const double seconds = static_cast<double>(totalFramesOutput) / outputSampleRate;
+        totalFramesOutput = static_cast<int64_t>(seconds * sampleRate);
+    } else {
+        totalFramesOutput = 0;
+    }
     outputSampleRate = sampleRate;
     if (codecContext) {
         initResampler();

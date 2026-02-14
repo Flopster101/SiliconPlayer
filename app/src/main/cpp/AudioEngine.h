@@ -66,6 +66,7 @@ private:
     double resampleInputPosition = 0.0;
     std::vector<float> resampleDecodeScratch;
     int64_t sharedAbsoluteInputPosition = 0;  // Frames consumed, shared between resamplers
+    double sharedAbsoluteInputPositionBaseSeconds = 0.0;
     SwrContext* outputSoxrContext = nullptr;
     int outputSoxrInputRate = 0;
     int outputSoxrOutputRate = 0;

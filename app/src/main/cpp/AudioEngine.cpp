@@ -212,6 +212,7 @@ void AudioEngine::resetResamplerStateLocked(bool preserveBuffer) {
         resampleInputPosition = 0.0;
         sharedAbsoluteInputPosition = 0;
         const double currentPosition = positionSeconds.load();
+        sharedAbsoluteInputPositionBaseSeconds = currentPosition >= 0.0 ? currentPosition : 0.0;
         outputClockSeconds = currentPosition >= 0.0 ? currentPosition : 0.0;
         timelineSmoothedSeconds = outputClockSeconds;
     } else {
@@ -325,6 +326,7 @@ int AudioEngine::readFromDecoderLocked(float* buffer, int numFrames, bool& reach
         decoder->seek(0.0);
         positionSeconds.store(0.0);
         resetResamplerStateLocked();
+        sharedAbsoluteInputPositionBaseSeconds = 0.0;
         framesRead = decoder->read(buffer, numFrames);
         if (framesRead > 0) {
             return framesRead;
@@ -608,7 +610,9 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         // Calculate position based on frames consumed by resampler at decoder rate
         double calculatedPosition = -1.0;
         if (engine->decoderRenderSampleRate > 0) {
-            calculatedPosition = static_cast<double>(engine->sharedAbsoluteInputPosition) / engine->decoderRenderSampleRate;
+            calculatedPosition =
+                    engine->sharedAbsoluteInputPositionBaseSeconds +
+                    (static_cast<double>(engine->sharedAbsoluteInputPosition) / engine->decoderRenderSampleRate);
         }
         const double decoderPosition = engine->decoder->getPlaybackPositionSeconds();
         const AudioDecoder::TimelineMode timelineMode = engine->decoder->getTimelineMode();
@@ -721,6 +725,7 @@ bool AudioEngine::start() {
                     decoder->seek(0.0);
                     positionSeconds.store(0.0);
                     resetResamplerStateLocked();
+                    sharedAbsoluteInputPositionBaseSeconds = 0.0;
                 }
             }
         }
@@ -779,6 +784,7 @@ void AudioEngine::setUrl(const char* url) {
         decoder = std::move(newDecoder);
         resetResamplerStateLocked();
         positionSeconds.store(0.0);
+        sharedAbsoluteInputPositionBaseSeconds = 0.0;
         outputClockSeconds = 0.0;
         timelineSmoothedSeconds = 0.0;
         timelineSmootherInitialized = false;
@@ -816,6 +822,7 @@ void AudioEngine::seekToSeconds(double seconds) {
     resetResamplerStateLocked();
     const double clamped = seconds < 0.0 ? 0.0 : seconds;
     positionSeconds.store(clamped);
+    sharedAbsoluteInputPositionBaseSeconds = clamped;
     outputClockSeconds = clamped;
     timelineSmoothedSeconds = clamped;
     timelineSmootherInitialized = false;

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -99,7 +100,8 @@ fun PlayerScreen(
     onOpenSubtuneSelector: () -> Unit,
     onCycleRepeatMode: () -> Unit,
     canOpenCoreSettings: Boolean,
-    onOpenCoreSettings: () -> Unit
+    onOpenCoreSettings: () -> Unit,
+    onOpenAudioEffects: () -> Unit
 ) {
     var sliderPosition by remember(file?.absolutePath, durationSeconds) {
         mutableDoubleStateOf(positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0)))
@@ -290,7 +292,8 @@ fun PlayerScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         FutureActionStrip(
                             canOpenCoreSettings = canOpenCoreSettings,
-                            onOpenCoreSettings = onOpenCoreSettings
+                            onOpenCoreSettings = onOpenCoreSettings,
+                            onOpenAudioEffects = onOpenAudioEffects
                         )
                     }
                 }
@@ -372,7 +375,8 @@ fun PlayerScreen(
                     FutureActionStrip(
                         modifier = Modifier.fillMaxWidth(0.94f),
                         canOpenCoreSettings = canOpenCoreSettings,
-                        onOpenCoreSettings = onOpenCoreSettings
+                        onOpenCoreSettings = onOpenCoreSettings,
+                        onOpenAudioEffects = onOpenAudioEffects
                     )
                 }
             }
@@ -903,7 +907,8 @@ private fun TransportControls(
 private fun FutureActionStrip(
     modifier: Modifier = Modifier,
     canOpenCoreSettings: Boolean,
-    onOpenCoreSettings: () -> Unit
+    onOpenCoreSettings: () -> Unit,
+    onOpenAudioEffects: () -> Unit
 ) {
     Surface(
         modifier = modifier,
@@ -928,10 +933,10 @@ private fun FutureActionStrip(
                     contentDescription = "Open current core settings"
                 )
             }
-            IconButton(onClick = {}, enabled = false) {
+            IconButton(onClick = onOpenAudioEffects, enabled = true) {
                 Icon(
-                    imageVector = Icons.Default.Equalizer,
-                    contentDescription = "Core details (future)"
+                    imageVector = Icons.Default.Tune,
+                    contentDescription = "Audio effects"
                 )
             }
             IconButton(onClick = {}, enabled = false) {

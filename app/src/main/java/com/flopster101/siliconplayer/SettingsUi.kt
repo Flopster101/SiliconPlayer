@@ -92,6 +92,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenAudioPlugins: () -> Unit,
     onOpenGeneralAudio: () -> Unit,
+    onOpenAudioEffects: () -> Unit,
     onOpenPlayer: () -> Unit,
     onOpenMisc: () -> Unit,
     onOpenUi: () -> Unit,
@@ -473,6 +474,14 @@ fun SettingsScreen(
                             description = "Pause playback when another app starts playing audio.",
                             checked = audioFocusInterrupt,
                             onCheckedChange = onAudioFocusInterruptChanged
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Audio processing")
+                        SettingsItemCard(
+                            title = "Audio effects",
+                            description = "Volume controls and audio processing.",
+                            icon = Icons.Default.Tune,
+                            onClick = onOpenAudioEffects
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Audio output pipeline")

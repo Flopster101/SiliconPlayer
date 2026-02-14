@@ -106,6 +106,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.vectorResource
 import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
+import com.flopster101.siliconplayer.ui.dialogs.AudioEffectsDialog
 import java.io.File
 import android.content.Intent
 import android.content.Context
@@ -518,6 +519,20 @@ private fun AppNavigation(
     val volumeDatabase = remember(context) {
         VolumeDatabase.getInstance(context)
     }
+
+    // Audio effects state
+    var masterVolumeDb by remember { mutableFloatStateOf(0f) }
+    var pluginVolumeDb by remember { mutableFloatStateOf(0f) }
+    var songVolumeDb by remember { mutableFloatStateOf(0f) }
+    var forceMono by remember { mutableStateOf(false) }
+    var showAudioEffectsDialog by remember { mutableStateOf(false) }
+
+    // Temporary state for dialog (to support Cancel)
+    var tempMasterVolumeDb by remember { mutableFloatStateOf(0f) }
+    var tempPluginVolumeDb by remember { mutableFloatStateOf(0f) }
+    var tempSongVolumeDb by remember { mutableFloatStateOf(0f) }
+    var tempForceMono by remember { mutableStateOf(false) }
+
     var currentView by remember { mutableStateOf(MainView.Home) }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.Root) }
     var settingsLaunchedFromPlayer by remember { mutableStateOf(false) }
@@ -570,6 +585,26 @@ private fun AppNavigation(
         withContext(Dispatchers.IO) {
             ffmpegCapabilities = NativeBridge.getCoreCapabilities("FFmpeg")
             openMptCapabilities = NativeBridge.getCoreCapabilities("LibOpenMPT")
+        }
+    }
+
+    // Load audio effects preferences on startup
+    LaunchedEffect(Unit) {
+        masterVolumeDb = prefs.getFloat(AppPreferenceKeys.AUDIO_MASTER_VOLUME_DB, 0f)
+        pluginVolumeDb = prefs.getFloat(AppPreferenceKeys.AUDIO_PLUGIN_VOLUME_DB, 0f)
+        forceMono = prefs.getBoolean(AppPreferenceKeys.AUDIO_FORCE_MONO, false)
+
+        // Apply to native layer
+        NativeBridge.setMasterGain(masterVolumeDb)
+        NativeBridge.setPluginGain(pluginVolumeDb)
+        NativeBridge.setForceMono(forceMono)
+    }
+
+    // Load per-song volume when track changes
+    LaunchedEffect(selectedFile?.absolutePath) {
+        selectedFile?.absolutePath?.let { path ->
+            songVolumeDb = volumeDatabase.getSongVolume(path) ?: 0f
+            NativeBridge.setSongGain(songVolumeDb)
         }
     }
 
@@ -1654,6 +1689,13 @@ private fun AppNavigation(
                         },
                         onOpenAudioPlugins = { settingsRoute = SettingsRoute.AudioPlugins },
                         onOpenGeneralAudio = { settingsRoute = SettingsRoute.GeneralAudio },
+                        onOpenAudioEffects = {
+                            tempMasterVolumeDb = masterVolumeDb
+                            tempPluginVolumeDb = pluginVolumeDb
+                            tempSongVolumeDb = songVolumeDb
+                            tempForceMono = forceMono
+                            showAudioEffectsDialog = true
+                        },
                         onOpenPlayer = { settingsRoute = SettingsRoute.Player },
                         onOpenMisc = { settingsRoute = SettingsRoute.Misc },
                         onOpenUi = { settingsRoute = SettingsRoute.Ui },
@@ -1877,7 +1919,14 @@ private fun AppNavigation(
                         onOpenSubtuneSelector = {},
                         onCycleRepeatMode = {},
                         canOpenCoreSettings = canOpenCurrentCoreSettings,
-                        onOpenCoreSettings = openCurrentCoreSettings
+                        onOpenCoreSettings = openCurrentCoreSettings,
+                        onOpenAudioEffects = {
+                            tempMasterVolumeDb = masterVolumeDb
+                            tempPluginVolumeDb = pluginVolumeDb
+                            tempSongVolumeDb = songVolumeDb
+                            tempForceMono = forceMono
+                            showAudioEffectsDialog = true
+                        }
                     )
                 }
             }
@@ -2076,7 +2125,14 @@ private fun AppNavigation(
                     onOpenSubtuneSelector = {},
                     onCycleRepeatMode = { cycleRepeatMode() },
                     canOpenCoreSettings = canOpenCurrentCoreSettings,
-                    onOpenCoreSettings = openCurrentCoreSettings
+                    onOpenCoreSettings = openCurrentCoreSettings,
+                    onOpenAudioEffects = {
+                        tempMasterVolumeDb = masterVolumeDb
+                        tempPluginVolumeDb = pluginVolumeDb
+                        tempSongVolumeDb = songVolumeDb
+                        tempForceMono = forceMono
+                        showAudioEffectsDialog = true
+                    }
                 )
             }
 
@@ -2095,6 +2151,61 @@ private fun AppNavigation(
                         TextButton(onClick = { showSoxExperimentalDialog = false }) {
                             Text("OK")
                         }
+                    }
+                )
+            }
+
+            if (showAudioEffectsDialog) {
+                AudioEffectsDialog(
+                    masterVolumeDb = tempMasterVolumeDb,
+                    pluginVolumeDb = tempPluginVolumeDb,
+                    songVolumeDb = tempSongVolumeDb,
+                    forceMono = tempForceMono,
+                    onMasterVolumeChange = {
+                        tempMasterVolumeDb = it
+                        NativeBridge.setMasterGain(it)
+                    },
+                    onPluginVolumeChange = {
+                        tempPluginVolumeDb = it
+                        NativeBridge.setPluginGain(it)
+                    },
+                    onSongVolumeChange = {
+                        tempSongVolumeDb = it
+                        NativeBridge.setSongGain(it)
+                    },
+                    onForceMonoChange = {
+                        tempForceMono = it
+                        NativeBridge.setForceMono(it)
+                    },
+                    onDismiss = {
+                        // Cancel: revert to original values
+                        NativeBridge.setMasterGain(masterVolumeDb)
+                        NativeBridge.setPluginGain(pluginVolumeDb)
+                        NativeBridge.setSongGain(songVolumeDb)
+                        NativeBridge.setForceMono(forceMono)
+                        showAudioEffectsDialog = false
+                    },
+                    onConfirm = {
+                        // OK: save changes
+                        masterVolumeDb = tempMasterVolumeDb
+                        pluginVolumeDb = tempPluginVolumeDb
+                        songVolumeDb = tempSongVolumeDb
+                        forceMono = tempForceMono
+
+                        // Save to preferences
+                        prefs.edit().apply {
+                            putFloat(AppPreferenceKeys.AUDIO_MASTER_VOLUME_DB, masterVolumeDb)
+                            putFloat(AppPreferenceKeys.AUDIO_PLUGIN_VOLUME_DB, pluginVolumeDb)
+                            putBoolean(AppPreferenceKeys.AUDIO_FORCE_MONO, forceMono)
+                            apply()
+                        }
+
+                        // Save song volume to database
+                        selectedFile?.absolutePath?.let { path ->
+                            volumeDatabase.setSongVolume(path, songVolumeDb)
+                        }
+
+                        showAudioEffectsDialog = false
                     }
                 )
             }

@@ -1,0 +1,24 @@
+diff --git a/soundlib/Sndfile.cpp b/soundlib/Sndfile.cpp
+--- a/soundlib/Sndfile.cpp
++++ b/soundlib/Sndfile.cpp
+@@ -1461,7 +1461,7 @@
+ 
+ void CSoundFile::InitAmigaResampler()
+ {
+-	if(m_SongFlags[SONG_ISAMIGA] && m_Resampler.m_Settings.emulateAmiga != Resampling::AmigaFilter::Off)
++	if(m_Resampler.m_Settings.emulateAmiga != Resampling::AmigaFilter::Off)
+ 	{
+ 		const Paula::State defaultState(GetSampleRate());
+ 		for(auto &chn : m_PlayState.Chn)
+diff --git a/soundlib/Sndmix.cpp b/soundlib/Sndmix.cpp
+--- a/soundlib/Sndmix.cpp
++++ b/soundlib/Sndmix.cpp
+@@ -2550,7 +2550,7 @@
+ 			} else if(Resampling::IsKnownMode(m_nResampling))
+ 			{
+ 				chn.resamplingMode = m_nResampling;
+-			} else if(m_SongFlags[SONG_ISAMIGA] && m_Resampler.m_Settings.emulateAmiga != Resampling::AmigaFilter::Off)
++			} else if(m_Resampler.m_Settings.emulateAmiga != Resampling::AmigaFilter::Off)
+ 			{
+ 				// Enforce Amiga resampler for Amiga modules
+ 				chn.resamplingMode = SRCMODE_AMIGA;

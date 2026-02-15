@@ -4,6 +4,7 @@ object CorePreferenceKeys {
     const val CORE_RATE_FFMPEG = "core_rate_ffmpeg"
     const val CORE_RATE_OPENMPT = "core_rate_openmpt"
     const val CORE_RATE_VGMPLAY = "core_rate_vgmplay"
+    const val CORE_RATE_GME = "core_rate_gme"
     const val OPENMPT_STEREO_SEPARATION_PERCENT = "openmpt_stereo_separation_percent"
     const val OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT = "openmpt_stereo_separation_amiga_percent"
     const val OPENMPT_INTERPOLATION_FILTER_LENGTH = "openmpt_interpolation_filter_length"
@@ -47,4 +48,8 @@ object VgmPlayDefaults {
     const val resampleMode = 0
     const val chipSampleMode = 0
     const val chipSampleRate = 48000
+}
+
+object GmeDefaults {
+    const val coreSampleRateHz = 0
 }

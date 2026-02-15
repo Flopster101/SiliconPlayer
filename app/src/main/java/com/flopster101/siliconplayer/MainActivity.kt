@@ -825,6 +825,11 @@ private fun AppNavigation(
             prefs.getInt(CorePreferenceKeys.CORE_RATE_VGMPLAY, VgmPlayDefaults.coreSampleRateHz)
         )
     }
+    var gmeCoreSampleRateHz by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.CORE_RATE_GME, GmeDefaults.coreSampleRateHz)
+        )
+    }
     var vgmPlayLoopCount by remember {
         mutableIntStateOf(
             prefs.getInt(CorePreferenceKeys.VGMPLAY_LOOP_COUNT, VgmPlayDefaults.loopCount)
@@ -1402,6 +1407,13 @@ private fun AppNavigation(
             .putInt(CorePreferenceKeys.CORE_RATE_VGMPLAY, vgmPlayCoreSampleRateHz)
             .apply()
         NativeBridge.setCoreOutputSampleRate("VGMPlay", vgmPlayCoreSampleRateHz)
+    }
+
+    LaunchedEffect(gmeCoreSampleRateHz) {
+        prefs.edit()
+            .putInt(CorePreferenceKeys.CORE_RATE_GME, gmeCoreSampleRateHz)
+            .apply()
+        NativeBridge.setCoreOutputSampleRate("Game Music Emu", gmeCoreSampleRateHz)
     }
 
     LaunchedEffect(vgmPlayLoopCount) {
@@ -2229,6 +2241,8 @@ private fun AppNavigation(
                         vgmPlaySampleRateHz = vgmPlayCoreSampleRateHz,
                         vgmPlayCapabilities = vgmPlayCapabilities,
                         onVgmPlaySampleRateChanged = { vgmPlayCoreSampleRateHz = it },
+                        gmeSampleRateHz = gmeCoreSampleRateHz,
+                        onGmeSampleRateChanged = { gmeCoreSampleRateHz = it },
                         vgmPlayLoopCount = vgmPlayLoopCount,
                         onVgmPlayLoopCountChanged = { vgmPlayLoopCount = it },
                         vgmPlayAllowNonLoopingLoop = vgmPlayAllowNonLoopingLoop,
@@ -2281,6 +2295,7 @@ private fun AppNavigation(
                                 CorePreferenceKeys.CORE_RATE_FFMPEG to ffmpegCoreSampleRateHz,
                                 CorePreferenceKeys.CORE_RATE_OPENMPT to openMptCoreSampleRateHz,
                                 CorePreferenceKeys.CORE_RATE_VGMPLAY to vgmPlayCoreSampleRateHz,
+                                CorePreferenceKeys.CORE_RATE_GME to gmeCoreSampleRateHz,
                                 CorePreferenceKeys.VGMPLAY_LOOP_COUNT to vgmPlayLoopCount,
                                 CorePreferenceKeys.VGMPLAY_VSYNC_RATE to vgmPlayVsyncRate,
                                 CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE to vgmPlayResampleMode,
@@ -2347,6 +2362,7 @@ private fun AppNavigation(
                             ffmpegCoreSampleRateHz = 0
                             openMptCoreSampleRateHz = OpenMptDefaults.coreSampleRateHz
                             vgmPlayCoreSampleRateHz = VgmPlayDefaults.coreSampleRateHz
+                            gmeCoreSampleRateHz = GmeDefaults.coreSampleRateHz
                             vgmPlayLoopCount = VgmPlayDefaults.loopCount
                             vgmPlayAllowNonLoopingLoop = VgmPlayDefaults.allowNonLoopingLoop
                             vgmPlayVsyncRate = VgmPlayDefaults.vsyncRate
@@ -2368,6 +2384,7 @@ private fun AppNavigation(
                                 remove(CorePreferenceKeys.CORE_RATE_FFMPEG)
                                 remove(CorePreferenceKeys.CORE_RATE_OPENMPT)
                                 remove(CorePreferenceKeys.CORE_RATE_VGMPLAY)
+                                remove(CorePreferenceKeys.CORE_RATE_GME)
                                 remove(CorePreferenceKeys.VGMPLAY_LOOP_COUNT)
                                 remove(CorePreferenceKeys.VGMPLAY_ALLOW_NON_LOOPING_LOOP)
                                 remove(CorePreferenceKeys.VGMPLAY_VSYNC_RATE)

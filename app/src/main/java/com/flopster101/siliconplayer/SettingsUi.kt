@@ -197,6 +197,8 @@ fun SettingsScreen(
     vgmPlaySampleRateHz: Int,
     vgmPlayCapabilities: Int,
     onVgmPlaySampleRateChanged: (Int) -> Unit,
+    gmeSampleRateHz: Int,
+    onGmeSampleRateChanged: (Int) -> Unit,
     vgmPlayLoopCount: Int,
     onVgmPlayLoopCountChanged: (Int) -> Unit,
     vgmPlayAllowNonLoopingLoop: Boolean,
@@ -689,12 +691,14 @@ fun SettingsScreen(
                                 "FFmpeg" -> ffmpegSampleRateHz
                                 "LibOpenMPT" -> openMptSampleRateHz
                                 "VGMPlay" -> vgmPlaySampleRateHz
+                                "Game Music Emu" -> gmeSampleRateHz
                                 else -> fixedSampleRateHz
                             }
                             val onSampleRateSelected: ((Int) -> Unit)? = when (selectedPluginName) {
                                 "FFmpeg" -> onFfmpegSampleRateChanged
                                 "LibOpenMPT" -> onOpenMptSampleRateChanged
                                 "VGMPlay" -> onVgmPlaySampleRateChanged
+                                "Game Music Emu" -> onGmeSampleRateChanged
                                 else -> null
                             }
                             val fixedRateLabel = if (fixedSampleRateHz > 0) {

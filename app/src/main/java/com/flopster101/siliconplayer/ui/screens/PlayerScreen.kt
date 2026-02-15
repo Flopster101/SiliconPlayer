@@ -1320,13 +1320,36 @@ private fun TrackMetadataBlock(
     }
     if (shouldShowFilename) {
         Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = filename,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        val shouldMarqueeFilename = filename.length > 42
+        if (shouldMarqueeFilename) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clipToBounds()
+            ) {
+                Text(
+                    text = filename,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.basicMarquee(
+                        iterations = 3,
+                        initialDelayMillis = 1100
+                    )
+                )
+            }
+        } else {
+            Text(
+                text = filename,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

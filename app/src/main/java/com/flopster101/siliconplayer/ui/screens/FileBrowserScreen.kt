@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AudioFile
@@ -101,6 +102,8 @@ fun FileBrowserScreen(
     var browserNavDirection by remember { mutableStateOf(BrowserNavDirection.Forward) }
     var isLoadingDirectory by remember { mutableStateOf(false) }
     var hasRestoredInitialNavigation by remember { mutableStateOf(false) }
+    val directoryListState = rememberLazyListState()
+    var launchAutoScrollTargetKey by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
     var directoryLoadJob by remember { mutableStateOf<Job?>(null) }
 
@@ -187,6 +190,7 @@ fun FileBrowserScreen(
 
     fun openBrowserHome() {
         cancelDirectoryLoad()
+        launchAutoScrollTargetKey = null
         browserNavDirection = BrowserNavDirection.Backward
         selectedLocationId = null
         currentDirectory = null
@@ -196,6 +200,7 @@ fun FileBrowserScreen(
     }
 
     fun openLocation(location: StorageLocation) {
+        launchAutoScrollTargetKey = null
         browserNavDirection = BrowserNavDirection.Forward
         selectedLocationId = location.id
         currentDirectory = location.directory
@@ -204,6 +209,7 @@ fun FileBrowserScreen(
     }
 
     fun navigateTo(directory: File) {
+        launchAutoScrollTargetKey = null
         val root = selectedLocation?.directory
         val previousDepth = relativeDepth(currentDirectory, root)
         val nextDepth = relativeDepth(directory, root)
@@ -263,12 +269,41 @@ fun FileBrowserScreen(
         currentDirectory = restoredDirectory
         loadDirectoryAsync(restoredDirectory)
         onBrowserLocationChanged(initialLocation.id, restoredDirectory.absolutePath)
+
+        val playingPath = playingFile?.absolutePath
+        val playingParentPath = playingFile?.parentFile?.absolutePath
+        launchAutoScrollTargetKey = if (
+            playingPath != null &&
+            playingParentPath == restoredDirectory.absolutePath
+        ) {
+            "${restoredDirectory.absolutePath}|$playingPath"
+        } else {
+            null
+        }
     }
 
     BackHandler(
         enabled = backHandlingEnabled && (selectedLocation != null || onExitBrowser != null),
         onBack = { handleBack() }
     )
+
+    LaunchedEffect(launchAutoScrollTargetKey, fileList.size) {
+        val targetKey = launchAutoScrollTargetKey ?: return@LaunchedEffect
+        val targetPath = targetKey.substringAfter('|', missingDelimiterValue = "")
+        if (targetPath.isBlank()) {
+            launchAutoScrollTargetKey = null
+            return@LaunchedEffect
+        }
+        val targetIndex = fileList.indexOfFirst { !it.isDirectory && it.file.absolutePath == targetPath }
+        if (targetIndex < 0) return@LaunchedEffect
+
+        val visible = directoryListState.layoutInfo.visibleItemsInfo.any { it.index == targetIndex }
+        if (!visible) {
+            // Keep a little context above the playing row when jumping.
+            directoryListState.animateScrollToItem((targetIndex - 2).coerceAtLeast(0))
+        }
+        launchAutoScrollTargetKey = null
+    }
 
     val subtitle = if (selectedLocation == null) {
         "Storage locations"
@@ -507,6 +542,7 @@ fun FileBrowserScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
+                    state = directoryListState,
                     contentPadding = PaddingValues(bottom = bottomContentPadding)
                 ) {
                     items(

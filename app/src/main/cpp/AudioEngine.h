@@ -31,6 +31,7 @@ public:
     int getPlaybackCapabilities();
     void setCoreOutputSampleRate(const std::string& coreName, int sampleRateHz);
     void setCoreOption(const std::string& coreName, const std::string& optionName, const std::string& optionValue);
+    int getCoreOptionApplyPolicy(const std::string& coreName, const std::string& optionName);
     int getCoreCapabilities(const std::string& coreName);
     int getCoreFixedSampleRateHz(const std::string& coreName);
     void setAudioPipelineConfig(int backendPreference, int performanceMode, int bufferPreset, int resamplerPreference, bool allowFallback);

@@ -360,6 +360,23 @@ void LibOpenMPTDecoder::setOption(const char* name, const char* value) {
     applyRenderSettingsLocked();
 }
 
+int LibOpenMPTDecoder::getOptionApplyPolicy(const char* name) const {
+    if (!name) return OPTION_APPLY_LIVE;
+    const std::string optionName(name);
+    if (optionName == "openmpt.stereo_separation_percent" ||
+        optionName == "openmpt.stereo_separation_amiga_percent" ||
+        optionName == "openmpt.interpolation_filter_length" ||
+        optionName == "openmpt.volume_ramping_strength" ||
+        optionName == "openmpt.ft2_xm_volume_ramping" ||
+        optionName == "openmpt.master_gain_millibel" ||
+        optionName == "openmpt.amiga_resampler_mode" ||
+        optionName == "openmpt.amiga_resampler_apply_all_modules" ||
+        optionName == "openmpt.surround_enabled") {
+        return OPTION_APPLY_LIVE;
+    }
+    return OPTION_APPLY_LIVE;
+}
+
 void LibOpenMPTDecoder::applyRenderSettingsLocked() {
     if (!module) return;
     try {

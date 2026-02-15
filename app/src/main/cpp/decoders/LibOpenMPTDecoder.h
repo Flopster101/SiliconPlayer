@@ -49,6 +49,7 @@ public:
     double getPlaybackPositionSeconds() override;
     TimelineMode getTimelineMode() const override { return TimelineMode::Discontinuous; }
     void setOption(const char* name, const char* value) override;
+    int getOptionApplyPolicy(const char* name) const override;
 
     // Framework
     const char* getName() const override { return "LibOpenMPT"; }

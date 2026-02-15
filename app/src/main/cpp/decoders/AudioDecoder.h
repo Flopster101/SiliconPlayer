@@ -14,6 +14,8 @@ public:
     static constexpr int PLAYBACK_CAP_CUSTOM_SAMPLE_RATE = 1 << 3;
     static constexpr int PLAYBACK_CAP_LIVE_SAMPLE_RATE_CHANGE = 1 << 4;
     static constexpr int PLAYBACK_CAP_FIXED_SAMPLE_RATE = 1 << 5;
+    static constexpr int OPTION_APPLY_LIVE = 0;
+    static constexpr int OPTION_APPLY_REQUIRES_PLAYBACK_RESTART = 1;
     enum class TimelineMode {
         Unknown = 0,
         ContinuousLinear = 1,
@@ -52,6 +54,7 @@ public:
 
     // Configuration
     virtual void setOption(const char* /*name*/, const char* /*value*/) {}
+    virtual int getOptionApplyPolicy(const char* /*name*/) const { return OPTION_APPLY_LIVE; }
     virtual const char* getName() const = 0; // Instance name
 };
 

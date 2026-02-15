@@ -30,6 +30,7 @@ public:
     std::string getGenre() override;
     void setOutputSampleRate(int sampleRate) override;
     void setOption(const char* name, const char* value) override;
+    int getOptionApplyPolicy(const char* name) const override;
     int getPlaybackCapabilities() const override {
         return PLAYBACK_CAP_SEEK |
                PLAYBACK_CAP_RELIABLE_DURATION |

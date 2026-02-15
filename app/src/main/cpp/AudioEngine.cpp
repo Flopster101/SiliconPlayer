@@ -1027,6 +1027,27 @@ void AudioEngine::setCoreOption(
     }
 }
 
+int AudioEngine::getCoreOptionApplyPolicy(
+        const std::string& coreName,
+        const std::string& optionName) {
+    if (coreName.empty() || optionName.empty()) {
+        return AudioDecoder::OPTION_APPLY_LIVE;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(decoderMutex);
+        if (decoder && decoder->getName() == coreName) {
+            return decoder->getOptionApplyPolicy(optionName.c_str());
+        }
+    }
+
+    auto tempDecoder = DecoderRegistry::getInstance().createDecoderByName(coreName);
+    if (tempDecoder) {
+        return tempDecoder->getOptionApplyPolicy(optionName.c_str());
+    }
+    return AudioDecoder::OPTION_APPLY_LIVE;
+}
+
 int AudioEngine::getCoreCapabilities(const std::string& coreName) {
     if (coreName.empty()) return 0;
 

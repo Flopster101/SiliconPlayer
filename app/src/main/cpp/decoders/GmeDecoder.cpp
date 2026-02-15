@@ -344,6 +344,18 @@ void GmeDecoder::setOption(const char* name, const char* value) {
     applyCoreOptionsLocked();
 }
 
+int GmeDecoder::getOptionApplyPolicy(const char* name) const {
+    if (!name) return OPTION_APPLY_LIVE;
+    const std::string optionName(name);
+    if (optionName == "gme.tempo" ||
+        optionName == "gme.stereo_separation" ||
+        optionName == "gme.echo_enabled" ||
+        optionName == "gme.accuracy_enabled") {
+        return OPTION_APPLY_LIVE;
+    }
+    return OPTION_APPLY_LIVE;
+}
+
 void GmeDecoder::setRepeatMode(int mode) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     repeatMode.store(mode);

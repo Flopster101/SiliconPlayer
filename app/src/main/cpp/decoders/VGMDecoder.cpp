@@ -610,6 +610,24 @@ void VGMDecoder::setOption(const char* name, const char* value) {
     }
 }
 
+int VGMDecoder::getOptionApplyPolicy(const char* name) const {
+    if (!name) return OPTION_APPLY_LIVE;
+    const std::string optionName(name);
+
+    if (optionName == "vgmplay.loop_count" ||
+        optionName == "vgmplay.allow_non_looping_loop" ||
+        optionName == "vgmplay.vsync_rate_hz") {
+        return OPTION_APPLY_LIVE;
+    }
+    if (optionName == "vgmplay.resample_mode" ||
+        optionName == "vgmplay.chip_sample_mode" ||
+        optionName == "vgmplay.chip_sample_rate_hz" ||
+        startsWith(optionName, "vgmplay.chip_core.")) {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    return OPTION_APPLY_LIVE;
+}
+
 void VGMDecoder::applyPlayerOptionsLocked() {
     PlayerBase* playerBase = player ? player->GetPlayer() : nullptr;
     auto* vgmPlayer = dynamic_cast<VGMPlayer*>(playerBase);

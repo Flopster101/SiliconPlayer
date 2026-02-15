@@ -149,6 +149,18 @@ Java_com_flopster101_siliconplayer_MainActivity_getCoreCapabilities(
 }
 
 extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getCoreOptionApplyPolicy(
+        JNIEnv* env, jobject, jstring coreName, jstring optionName) {
+    ensureEngine();
+    const char* nativeCoreName = env->GetStringUTFChars(coreName, 0);
+    const char* nativeOptionName = env->GetStringUTFChars(optionName, 0);
+    const int policy = audioEngine->getCoreOptionApplyPolicy(nativeCoreName, nativeOptionName);
+    env->ReleaseStringUTFChars(optionName, nativeOptionName);
+    env->ReleaseStringUTFChars(coreName, nativeCoreName);
+    return static_cast<jint>(policy);
+}
+
+extern "C" JNIEXPORT jint JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getCoreFixedSampleRateHz(
         JNIEnv* env, jobject, jstring coreName) {
     ensureEngine();
@@ -622,6 +634,14 @@ extern "C" JNIEXPORT jint JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getCoreCapabilities(
         JNIEnv* env, jobject thiz, jstring coreName) {
     return Java_com_flopster101_siliconplayer_MainActivity_getCoreCapabilities(env, thiz, coreName);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getCoreOptionApplyPolicy(
+        JNIEnv* env, jobject thiz, jstring coreName, jstring optionName) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getCoreOptionApplyPolicy(
+            env, thiz, coreName, optionName
+    );
 }
 
 extern "C" JNIEXPORT void JNICALL

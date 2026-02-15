@@ -617,6 +617,7 @@ class MainActivity : ComponentActivity() {
     external fun getRepeatModeCapabilities(): Int
     external fun getPlaybackCapabilities(): Int
     external fun getCoreCapabilities(coreName: String): Int
+    external fun getCoreOptionApplyPolicy(coreName: String, optionName: String): Int
     external fun getCoreFixedSampleRateHz(coreName: String): Int
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
     external fun setCoreOption(coreName: String, optionName: String, optionValue: String)
@@ -1173,12 +1174,20 @@ private fun AppNavigation(
         optionLabel: String? = null
     ) {
         NativeBridge.setCoreOption(coreName, optionName, optionValue)
+        val resolvedPolicy = try {
+            when (NativeBridge.getCoreOptionApplyPolicy(coreName, optionName)) {
+                1 -> CoreOptionApplyPolicy.RequiresPlaybackRestart
+                else -> CoreOptionApplyPolicy.Live
+            }
+        } catch (_: Throwable) {
+            policy
+        }
         maybeShowCoreOptionRestartToast(
             context,
             coreName = coreName,
             selectedFile = selectedFile,
             isPlaying = isPlaying,
-            policy = policy,
+            policy = resolvedPolicy,
             optionLabel = optionLabel
         )
     }

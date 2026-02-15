@@ -376,7 +376,7 @@ double FFmpegDecoder::getDuration() {
 }
 
 int FFmpegDecoder::getSampleRate() {
-    return sourceSampleRate > 0 ? sourceSampleRate : outputSampleRate;
+    return outputSampleRate;
 }
 
 int FFmpegDecoder::getBitDepth() {

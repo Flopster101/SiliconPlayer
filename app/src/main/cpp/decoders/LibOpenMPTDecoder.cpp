@@ -208,7 +208,7 @@ double LibOpenMPTDecoder::getDuration() {
 }
 
 int LibOpenMPTDecoder::getSampleRate() {
-    return sampleRate;
+    return renderSampleRate;
 }
 
 void LibOpenMPTDecoder::setOutputSampleRate(int sampleRateHz) {

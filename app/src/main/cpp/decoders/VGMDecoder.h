@@ -32,6 +32,15 @@ public:
     int getChannelCount() override;
     std::string getTitle() override;
     std::string getArtist() override;
+    std::string getGameName();
+    std::string getSystemName();
+    std::string getReleaseDate();
+    std::string getEncodedBy();
+    std::string getNotes();
+    std::string getFileVersion();
+    int getDeviceCount();
+    std::string getUsedChipList();
+    bool hasLoopPoint();
     void setOutputSampleRate(int sampleRate) override;
     int getPlaybackCapabilities() const override {
         return PLAYBACK_CAP_SEEK |
@@ -66,6 +75,13 @@ private:
     std::string artist;
     std::string gameName;
     std::string systemName;
+    std::string releaseDate;
+    std::string encodedBy;
+    std::string notes;
+    uint16_t fileVersionMajorBcd = 0;
+    uint16_t fileVersionMinorBcd = 0;
+    uint32_t deviceCount = 0;
+    std::string usedChipList;
 
     // Playback state
     uint32_t currentLoop = 0;

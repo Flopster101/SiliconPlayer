@@ -56,6 +56,15 @@ public:
     int getOpenMptSampleCount();
     std::string getOpenMptInstrumentNames();
     std::string getOpenMptSampleNames();
+    std::string getVgmGameName();
+    std::string getVgmSystemName();
+    std::string getVgmReleaseDate();
+    std::string getVgmEncodedBy();
+    std::string getVgmNotes();
+    std::string getVgmFileVersion();
+    int getVgmDeviceCount();
+    std::string getVgmUsedChipList();
+    bool getVgmHasLoopPoint();
 
     // Bitrate information
     int64_t getTrackBitrate();

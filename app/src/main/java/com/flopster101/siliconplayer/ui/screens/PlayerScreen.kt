@@ -684,6 +684,15 @@ private fun TrackInfoDetailsDialog(
     var openMptSampleCount by remember { mutableIntStateOf(0) }
     var openMptInstrumentNames by remember { mutableStateOf("") }
     var openMptSampleNames by remember { mutableStateOf("") }
+    var vgmGameName by remember { mutableStateOf("") }
+    var vgmSystemName by remember { mutableStateOf("") }
+    var vgmReleaseDate by remember { mutableStateOf("") }
+    var vgmEncodedBy by remember { mutableStateOf("") }
+    var vgmNotes by remember { mutableStateOf("") }
+    var vgmFileVersion by remember { mutableStateOf("") }
+    var vgmDeviceCount by remember { mutableIntStateOf(0) }
+    var vgmUsedChipList by remember { mutableStateOf("") }
+    var vgmHasLoopPoint by remember { mutableStateOf(false) }
     val detailsScrollState = rememberScrollState()
     var detailsViewportHeightPx by remember { mutableIntStateOf(0) }
 
@@ -715,6 +724,27 @@ private fun TrackInfoDetailsDialog(
                 openMptSampleCount = 0
                 openMptInstrumentNames = ""
                 openMptSampleNames = ""
+            }
+            if (decoderName.equals("VGMPlay", ignoreCase = true)) {
+                vgmGameName = NativeBridge.getVgmGameName()
+                vgmSystemName = NativeBridge.getVgmSystemName()
+                vgmReleaseDate = NativeBridge.getVgmReleaseDate()
+                vgmEncodedBy = NativeBridge.getVgmEncodedBy()
+                vgmNotes = NativeBridge.getVgmNotes()
+                vgmFileVersion = NativeBridge.getVgmFileVersion()
+                vgmDeviceCount = NativeBridge.getVgmDeviceCount()
+                vgmUsedChipList = NativeBridge.getVgmUsedChipList()
+                vgmHasLoopPoint = NativeBridge.getVgmHasLoopPoint()
+            } else {
+                vgmGameName = ""
+                vgmSystemName = ""
+                vgmReleaseDate = ""
+                vgmEncodedBy = ""
+                vgmNotes = ""
+                vgmFileVersion = ""
+                vgmDeviceCount = 0
+                vgmUsedChipList = ""
+                vgmHasLoopPoint = false
             }
             delay(500)
         }
@@ -803,6 +833,39 @@ private fun TrackInfoDetailsDialog(
                         }
                         if (openMptSampleNames.isNotBlank()) {
                             TrackInfoDetailsRow("Sample names", openMptSampleNames)
+                        }
+                    }
+                    if (decoderName.equals("VGMPlay", ignoreCase = true)) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "VGMPlay",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (vgmGameName.isNotBlank()) {
+                            TrackInfoDetailsRow("Game", vgmGameName)
+                        }
+                        if (vgmSystemName.isNotBlank()) {
+                            TrackInfoDetailsRow("System", vgmSystemName)
+                        }
+                        if (vgmReleaseDate.isNotBlank()) {
+                            TrackInfoDetailsRow("Release date", vgmReleaseDate)
+                        }
+                        if (vgmEncodedBy.isNotBlank()) {
+                            TrackInfoDetailsRow("Encoded by", vgmEncodedBy)
+                        }
+                        if (vgmFileVersion.isNotBlank()) {
+                            TrackInfoDetailsRow("VGM version", vgmFileVersion)
+                        }
+                        if (vgmDeviceCount > 0) {
+                            TrackInfoDetailsRow("Used chips", vgmDeviceCount.toString())
+                        }
+                        if (vgmUsedChipList.isNotBlank()) {
+                            TrackInfoDetailsRow("Chip list", vgmUsedChipList)
+                        }
+                        TrackInfoDetailsRow("Has loop point", if (vgmHasLoopPoint) "Yes" else "No")
+                        if (vgmNotes.isNotBlank()) {
+                            TrackInfoDetailsRow("Notes", vgmNotes)
                         }
                     }
                 }

@@ -38,6 +38,15 @@ object NativeBridge {
     external fun getOpenMptSampleCount(): Int
     external fun getOpenMptInstrumentNames(): String
     external fun getOpenMptSampleNames(): String
+    external fun getVgmGameName(): String
+    external fun getVgmSystemName(): String
+    external fun getVgmReleaseDate(): String
+    external fun getVgmEncodedBy(): String
+    external fun getVgmNotes(): String
+    external fun getVgmFileVersion(): String
+    external fun getVgmDeviceCount(): Int
+    external fun getVgmUsedChipList(): String
+    external fun getVgmHasLoopPoint(): Boolean
     external fun getTrackBitrate(): Long
     external fun isTrackVBR(): Boolean
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)

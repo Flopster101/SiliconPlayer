@@ -1248,6 +1248,69 @@ std::string AudioEngine::getOpenMptSampleNames() {
     return openMptDecoder ? openMptDecoder->getSampleNames() : "";
 }
 
+std::string AudioEngine::getVgmGameName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* vgmDecoder = dynamic_cast<VGMDecoder*>(decoder.get());
+    return vgmDecoder ? vgmDecoder->getGameName() : "";
+}
+
+std::string AudioEngine::getVgmSystemName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* vgmDecoder = dynamic_cast<VGMDecoder*>(decoder.get());
+    return vgmDecoder ? vgmDecoder->getSystemName() : "";
+}
+
+std::string AudioEngine::getVgmReleaseDate() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* vgmDecoder = dynamic_cast<VGMDecoder*>(decoder.get());
+    return vgmDecoder ? vgmDecoder->getReleaseDate() : "";
+}
+
+std::string AudioEngine::getVgmEncodedBy() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* vgmDecoder = dynamic_cast<VGMDecoder*>(decoder.get());
+    return vgmDecoder ? vgmDecoder->getEncodedBy() : "";
+}
+
+std::string AudioEngine::getVgmNotes() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* vgmDecoder = dynamic_cast<VGMDecoder*>(decoder.get());
+    return vgmDecoder ? vgmDecoder->getNotes() : "";
+}
+
+std::string AudioEngine::getVgmFileVersion() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* vgmDecoder = dynamic_cast<VGMDecoder*>(decoder.get());
+    return vgmDecoder ? vgmDecoder->getFileVersion() : "";
+}
+
+int AudioEngine::getVgmDeviceCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* vgmDecoder = dynamic_cast<VGMDecoder*>(decoder.get());
+    return vgmDecoder ? vgmDecoder->getDeviceCount() : 0;
+}
+
+std::string AudioEngine::getVgmUsedChipList() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* vgmDecoder = dynamic_cast<VGMDecoder*>(decoder.get());
+    return vgmDecoder ? vgmDecoder->getUsedChipList() : "";
+}
+
+bool AudioEngine::getVgmHasLoopPoint() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return false;
+    auto* vgmDecoder = dynamic_cast<VGMDecoder*>(decoder.get());
+    return vgmDecoder ? vgmDecoder->hasLoopPoint() : false;
+}
+
 // Gain control implementation
 void AudioEngine::setMasterGain(float gainDb) {
     masterGainDb.store(gainDb);

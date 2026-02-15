@@ -6,6 +6,8 @@
 #include <limits>
 #include <cctype>
 #include <vector>
+#include <sstream>
+#include <iomanip>
 
 // libvgm includes
 #include <vgm/emu/EmuCores.h>
@@ -48,6 +50,40 @@ int parseIntString(const std::string& value, int fallback) {
 
 bool startsWith(const std::string& value, const std::string& prefix) {
     return value.rfind(prefix, 0) == 0;
+}
+
+std::string bcdToString(uint16_t bcdValue) {
+    std::ostringstream out;
+    bool started = false;
+    for (int shift = 12; shift >= 0; shift -= 4) {
+        uint8_t digit = static_cast<uint8_t>((bcdValue >> shift) & 0x0F);
+        if (!started && digit == 0 && shift > 0) {
+            continue;
+        }
+        started = true;
+        out << static_cast<char>('0' + std::min<uint8_t>(digit, 9));
+    }
+    return started ? out.str() : "0";
+}
+
+std::string fallbackChipName(uint8_t type) {
+    switch (type) {
+        case DEVID_SN76496: return "SN76496";
+        case DEVID_YM2413: return "YM2413";
+        case DEVID_YM2612: return "YM2612";
+        case DEVID_YM2151: return "YM2151";
+        case DEVID_YM2203: return "YM2203";
+        case DEVID_YM2608: return "YM2608";
+        case DEVID_YM2610: return "YM2610";
+        case DEVID_YM3812: return "YM3812";
+        case DEVID_YMF262: return "YMF262";
+        case DEVID_AY8910: return "AY8910";
+        case DEVID_NES_APU: return "NES APU";
+        case DEVID_QSOUND: return "QSound";
+        case DEVID_SAA1099: return "SAA1099";
+        case DEVID_C6280: return "HuC6280";
+        default: return "Unknown chip";
+    }
 }
 }
 
@@ -153,6 +189,12 @@ bool VGMDecoder::open(const char* path) {
                 if (gameName.empty()) gameName = value;
             } else if (std::strcmp(key, "SYSTEM") == 0 || std::strcmp(key, "SYSTEM-JPN") == 0) {
                 if (systemName.empty()) systemName = value;
+            } else if (std::strcmp(key, "DATE") == 0) {
+                if (releaseDate.empty()) releaseDate = value;
+            } else if (std::strcmp(key, "ENCODED_BY") == 0) {
+                if (encodedBy.empty()) encodedBy = value;
+            } else if (std::strcmp(key, "COMMENT") == 0) {
+                if (notes.empty()) notes = value;
             }
         }
     }
@@ -160,8 +202,34 @@ bool VGMDecoder::open(const char* path) {
     PLR_SONG_INFO songInfo{};
     if (vgmPlayer->GetSongInfo(songInfo) == 0x00) {
         songHasLoopPoint = songInfo.loopTick != static_cast<uint32_t>(-1);
+        fileVersionMajorBcd = songInfo.fileVerMaj;
+        fileVersionMinorBcd = songInfo.fileVerMin;
+        deviceCount = songInfo.deviceCnt;
         const double totalTime = player->GetTotalTime(PLAYTIME_LOOP_EXCL);
         duration = totalTime > 0.0 ? totalTime : 0.0;
+    }
+    std::vector<PLR_DEV_INFO> deviceInfos;
+    if (vgmPlayer->GetSongDeviceInfo(deviceInfos) == 0x00) {
+        std::ostringstream chipsOut;
+        int visibleIndex = 0;
+        for (const auto& dev : deviceInfos) {
+            if (dev.parentIdx != std::numeric_limits<uint32_t>::max()) {
+                continue; // Skip linked devices; present only main chips.
+            }
+            if (visibleIndex > 0) chipsOut << '\n';
+            const char* declName = (dev.devDecl && dev.devDecl->name)
+                    ? dev.devDecl->name(dev.devCfg)
+                    : nullptr;
+            const std::string chipName = (declName && declName[0] != '\0')
+                    ? std::string(declName)
+                    : fallbackChipName(dev.type);
+            chipsOut << (visibleIndex + 1) << ". " << chipName;
+            if (dev.instance != 0xFFFF && dev.instance > 0) {
+                chipsOut << " #" << static_cast<int>(dev.instance + 1);
+            }
+            visibleIndex++;
+        }
+        usedChipList = chipsOut.str();
     }
 
     applyPlayerOptionsLocked();
@@ -187,6 +255,13 @@ void VGMDecoder::closeInternal() {
     artist.clear();
     gameName.clear();
     systemName.clear();
+    releaseDate.clear();
+    encodedBy.clear();
+    notes.clear();
+    fileVersionMajorBcd = 0;
+    fileVersionMinorBcd = 0;
+    deviceCount = 0;
+    usedChipList.clear();
     duration = 0.0;
     currentLoop = 0;
     hasLooped = false;
@@ -330,6 +405,50 @@ std::string VGMDecoder::getArtist() {
         return gameName;
     }
     return "";
+}
+
+std::string VGMDecoder::getGameName() {
+    return gameName;
+}
+
+std::string VGMDecoder::getSystemName() {
+    return systemName;
+}
+
+std::string VGMDecoder::getReleaseDate() {
+    return releaseDate;
+}
+
+std::string VGMDecoder::getEncodedBy() {
+    return encodedBy;
+}
+
+std::string VGMDecoder::getNotes() {
+    return notes;
+}
+
+std::string VGMDecoder::getFileVersion() {
+    if (fileVersionMajorBcd == 0 && fileVersionMinorBcd == 0) {
+        return "";
+    }
+    std::ostringstream out;
+    out << bcdToString(fileVersionMajorBcd);
+    if (fileVersionMinorBcd != 0) {
+        out << "." << bcdToString(fileVersionMinorBcd);
+    }
+    return out.str();
+}
+
+int VGMDecoder::getDeviceCount() {
+    return static_cast<int>(deviceCount);
+}
+
+std::string VGMDecoder::getUsedChipList() {
+    return usedChipList;
+}
+
+bool VGMDecoder::hasLoopPoint() {
+    return songHasLoopPoint;
 }
 
 void VGMDecoder::setOutputSampleRate(int rate) {

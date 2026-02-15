@@ -137,12 +137,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.net.URLDecoder
 import java.util.Locale
-import java.security.MessageDigest
 
 private const val URL_SOURCE_TAG = "UrlSource"
-private const val REMOTE_SOURCE_CACHE_DIR = "remote_sources"
 
 private enum class RemoteLoadPhase {
     Connecting,
@@ -178,6 +175,7 @@ private fun formatByteCount(bytes: Long): String {
     return String.format(Locale.US, "%.1f %s", value, units[unitIndex])
 }
 
+
 private enum class MainView {
     Home,
     Browser,
@@ -192,6 +190,7 @@ enum class SettingsRoute {
     PluginFfmpeg,
     PluginOpenMpt,
     PluginVgmPlay,
+    UrlCache,
     GeneralAudio,
     Player,
     Misc,
@@ -336,63 +335,6 @@ private fun resolvePlaybackSourceLabel(
     }
 }
 
-private fun sha1Hex(value: String): String {
-    val digest = MessageDigest.getInstance("SHA-1").digest(value.toByteArray())
-    return digest.joinToString("") { "%02x".format(it) }
-}
-
-private fun sanitizeRemoteLeafName(raw: String?): String? {
-    val trimmed = raw?.trim()?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: return null
-    return trimmed.replace(Regex("""[\\/:*?"<>|]"""), "_")
-}
-
-private fun stripUrlFragment(url: String): String {
-    val parsed = Uri.parse(url)
-    if (parsed.fragment.isNullOrBlank()) return url
-    return parsed.buildUpon().fragment(null).build().toString()
-}
-
-private fun remoteFilenameHintFromUri(uri: Uri): String? {
-    val fragmentHint = sanitizeRemoteLeafName(uri.fragment)
-        ?.takeIf { it.contains('.') }
-    if (fragmentHint != null) return fragmentHint
-
-    val queryHint = listOf("filename", "file", "name")
-        .firstNotNullOfOrNull { key ->
-            sanitizeRemoteLeafName(uri.getQueryParameter(key))
-                ?.takeIf { it.contains('.') }
-        }
-    if (queryHint != null) return queryHint
-
-    return sanitizeRemoteLeafName(uri.lastPathSegment)
-}
-
-private fun filenameFromContentDisposition(headerValue: String?): String? {
-    if (headerValue.isNullOrBlank()) return null
-    val filenameStar = Regex("""filename\*\s*=\s*([^;]+)""", RegexOption.IGNORE_CASE)
-        .find(headerValue)
-        ?.groupValues
-        ?.getOrNull(1)
-        ?.trim()
-        ?.trim('"')
-        ?.let { value ->
-            value.substringAfter("''", value)
-        }
-    if (!filenameStar.isNullOrBlank()) {
-        return try {
-            sanitizeRemoteLeafName(URLDecoder.decode(filenameStar, "UTF-8"))
-        } catch (_: Throwable) {
-            sanitizeRemoteLeafName(filenameStar)
-        }
-    }
-
-    val filename = Regex("""filename\s*=\s*("?)([^";]+)\1""", RegexOption.IGNORE_CASE)
-        .find(headerValue)
-        ?.groupValues
-        ?.getOrNull(2)
-    return sanitizeRemoteLeafName(filename)
-}
-
 private fun resolveManualSourceInput(rawInput: String): ManualSourceResolution? {
     val trimmed = rawInput.trim()
     if (trimmed.isEmpty()) return null
@@ -475,23 +417,6 @@ internal data class StoragePresentation(
     val qualifier: String? = null
 )
 
-private fun remoteCacheFileForUrl(cacheRoot: File, url: String): File {
-    if (!cacheRoot.exists()) {
-        cacheRoot.mkdirs()
-    }
-    val uri = Uri.parse(url)
-    val safeLeaf = remoteFilenameHintFromUri(uri)
-        ?: sanitizeRemoteLeafName(uri.host)
-        ?: "remote"
-    return File(cacheRoot, "${sha1Hex(url)}_$safeLeaf")
-}
-
-private fun isRemoteUrlCached(context: Context, url: String): Boolean {
-    val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
-    val cachedFile = remoteCacheFileForUrl(cacheRoot, url)
-    return cachedFile.exists() && cachedFile.length() > 0L
-}
-
 private fun applyRepeatModeToNative(mode: RepeatMode) {
     NativeBridge.setRepeatMode(
         when (mode) {
@@ -560,7 +485,7 @@ private fun storagePresentationForEntry(
     if (scheme == "http" || scheme == "https") {
         val hostLabel = parsed.host?.takeIf { it.isNotBlank() } ?: "unknown host"
         val protocolLabel = scheme.uppercase(Locale.ROOT)
-        val qualifier = if (isRemoteUrlCached(context, entry.path)) "Cached" else null
+        val qualifier = if (isRemoteSourceCached(context, entry.path)) "Cached" else null
         return StoragePresentation(
             label = "$protocolLabel ($hostLabel)",
             icon = Icons.Default.Public,
@@ -654,6 +579,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.PluginFfmpeg -> 2
     SettingsRoute.PluginOpenMpt -> 2
     SettingsRoute.PluginVgmPlay -> 2
+    SettingsRoute.UrlCache -> 1
     SettingsRoute.GeneralAudio -> 1
     SettingsRoute.Player -> 1
     SettingsRoute.Misc -> 1
@@ -695,6 +621,9 @@ private object AppPreferenceKeys {
     const val AUDIO_PLUGIN_VOLUME_DB = "audio_plugin_volume_db"
     const val AUDIO_FORCE_MONO = "audio_force_mono"
     const val URL_PATH_FORCE_CACHING = "url_path_force_caching"
+    const val URL_CACHE_CLEAR_ON_LAUNCH = "url_cache_clear_on_launch"
+    const val URL_CACHE_MAX_TRACKS = "url_cache_max_tracks"
+    const val URL_CACHE_MAX_BYTES = "url_cache_max_bytes"
     const val FILENAME_DISPLAY_MODE = "filename_display_mode"
     const val FILENAME_ONLY_WHEN_TITLE_MISSING = "filename_only_when_title_missing"
 
@@ -759,15 +688,42 @@ class MainActivity : ComponentActivity() {
     private var initialFileToOpen: File? = null
     private var initialFileFromExternalIntent: Boolean = false
 
-    private fun clearRemoteSourceCacheOnLaunch() {
+    private fun applyRemoteSourceCachePolicyOnLaunch() {
+        val prefs = getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)
+        val clearOnLaunch = prefs.getBoolean(AppPreferenceKeys.URL_CACHE_CLEAR_ON_LAUNCH, false)
+        val maxTracks = prefs.getInt(AppPreferenceKeys.URL_CACHE_MAX_TRACKS, SOURCE_CACHE_MAX_TRACKS_DEFAULT)
+        val maxBytes = prefs.getLong(AppPreferenceKeys.URL_CACHE_MAX_BYTES, SOURCE_CACHE_MAX_BYTES_DEFAULT)
         val cacheRoot = File(cacheDir, REMOTE_SOURCE_CACHE_DIR)
         if (!cacheRoot.exists()) return
-        val entries = cacheRoot.listFiles().orEmpty()
-        var deleted = 0
-        entries.forEach { file ->
-            if (file.deleteRecursively()) deleted++
+        val sessionPath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null)
+        val protectedPaths = buildSet {
+            sessionPath
+                ?.takeIf { it.startsWith(cacheRoot.absolutePath) }
+                ?.let { add(it) }
         }
-        Log.d(URL_SOURCE_TAG, "Cleared remote cache on launch: deleted=$deleted path=${cacheRoot.absolutePath}")
+        if (clearOnLaunch) {
+            val result = clearRemoteCacheFiles(
+                cacheRoot = cacheRoot,
+                protectedPaths = protectedPaths
+            )
+            Log.d(
+                URL_SOURCE_TAG,
+                "Cleared remote cache on launch: deleted=${result.deletedFiles} skipped=${result.skippedFiles} freed=${result.freedBytes} path=${cacheRoot.absolutePath}"
+            )
+            return
+        }
+        val result = enforceRemoteCacheLimits(
+            cacheRoot = cacheRoot,
+            maxTracks = maxTracks,
+            maxBytes = maxBytes,
+            protectedPaths = protectedPaths
+        )
+        if (result.deletedFiles > 0) {
+            Log.d(
+                URL_SOURCE_TAG,
+                "Pruned remote cache on launch: deleted=${result.deletedFiles} freed=${result.freedBytes} path=${cacheRoot.absolutePath} limits=(tracks=$maxTracks bytes=$maxBytes)"
+            )
+        }
     }
 
     private fun consumeNotificationIntent(intent: Intent?) {
@@ -824,7 +780,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        clearRemoteSourceCacheOnLaunch()
+        applyRemoteSourceCachePolicyOnLaunch()
         consumeNotificationIntent(intent)
         consumeFileOpenIntent(intent)
         setContent {
@@ -1318,6 +1274,21 @@ private fun AppNavigation(
             prefs.getBoolean(AppPreferenceKeys.URL_PATH_FORCE_CACHING, false)
         )
     }
+    var urlCacheClearOnLaunch by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.URL_CACHE_CLEAR_ON_LAUNCH, false)
+        )
+    }
+    var urlCacheMaxTracks by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.URL_CACHE_MAX_TRACKS, SOURCE_CACHE_MAX_TRACKS_DEFAULT)
+        )
+    }
+    var urlCacheMaxBytes by remember {
+        mutableLongStateOf(
+            prefs.getLong(AppPreferenceKeys.URL_CACHE_MAX_BYTES, SOURCE_CACHE_MAX_BYTES_DEFAULT)
+        )
+    }
     var audioAllowBackendFallback by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.AUDIO_ALLOW_BACKEND_FALLBACK, true)
@@ -1357,15 +1328,16 @@ private fun AppNavigation(
         onStatus: suspend (RemoteLoadUiState) -> Unit
     ): RemoteDownloadResult = withContext(Dispatchers.IO) {
         val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
-        var target = remoteCacheFileForUrl(cacheRoot, url)
+        var target = remoteCacheFileForSource(cacheRoot, url)
         suspend fun emitStatus(state: RemoteLoadUiState) {
             withContext(Dispatchers.Main.immediate) {
                 onStatus(state)
             }
         }
-        if (target.exists() && target.length() > 0L) {
-            Log.d(URL_SOURCE_TAG, "Using existing cached file: ${target.absolutePath} (${target.length()} bytes)")
-            return@withContext RemoteDownloadResult(file = target)
+        findExistingCachedFileForSource(cacheRoot, url)?.let { existing ->
+            existing.setLastModified(System.currentTimeMillis())
+            Log.d(URL_SOURCE_TAG, "Using existing cached file: ${existing.absolutePath} (${existing.length()} bytes)")
+            return@withContext RemoteDownloadResult(file = existing)
         }
 
         var temp = File(target.absolutePath + ".part")
@@ -1436,12 +1408,13 @@ private fun AppNavigation(
                     if (resolvedTarget.absolutePath != target.absolutePath) {
                         target = resolvedTarget
                         temp = File(target.absolutePath + ".part")
-                        if (target.exists() && target.length() > 0L) {
+                        findExistingCachedFileForSource(cacheRoot, url)?.let { existing ->
+                            existing.setLastModified(System.currentTimeMillis())
                             Log.d(
                                 URL_SOURCE_TAG,
-                                "Using existing cached file after Content-Disposition resolution: ${target.absolutePath} (${target.length()} bytes)"
+                                "Using existing cached file after Content-Disposition resolution: ${existing.absolutePath} (${existing.length()} bytes)"
                             )
-                            return@withContext RemoteDownloadResult(file = target)
+                            return@withContext RemoteDownloadResult(file = existing)
                         }
                     }
                 }
@@ -1967,6 +1940,25 @@ private fun AppNavigation(
                     Log.e(URL_SOURCE_TAG, "Cache download/open failed for URL: ${resolved.sourceId} reason=$reason")
                     failOpen(reason)
                     return@launch
+                }
+
+                withContext(Dispatchers.IO) {
+                    val protectedPaths = buildSet {
+                        add(cachedFile.absolutePath)
+                        selectedFile?.absolutePath?.let { add(it) }
+                    }
+                    val pruned = enforceRemoteCacheLimits(
+                        cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
+                        maxTracks = urlCacheMaxTracks,
+                        maxBytes = urlCacheMaxBytes,
+                        protectedPaths = protectedPaths
+                    )
+                    if (pruned.deletedFiles > 0) {
+                        Log.d(
+                            URL_SOURCE_TAG,
+                            "Pruned remote cache after download: deleted=${pruned.deletedFiles} freed=${pruned.freedBytes} limits=(tracks=$urlCacheMaxTracks bytes=$urlCacheMaxBytes)"
+                        )
+                    }
                 }
 
                 Log.d(URL_SOURCE_TAG, "Opening downloaded cached file: ${cachedFile.absolutePath}")
@@ -3067,6 +3059,7 @@ private fun AppNavigation(
                         },
                         onOpenPlayer = { settingsRoute = SettingsRoute.Player },
                         onOpenMisc = { settingsRoute = SettingsRoute.Misc },
+                        onOpenUrlCache = { settingsRoute = SettingsRoute.UrlCache },
                         onOpenUi = { settingsRoute = SettingsRoute.Ui },
                         onOpenAbout = { settingsRoute = SettingsRoute.About },
                         onOpenVgmPlayChipSettings = { settingsRoute = SettingsRoute.PluginVgmPlayChipSettings },
@@ -3122,6 +3115,61 @@ private fun AppNavigation(
                         onThemeModeChanged = onThemeModeChanged,
                         rememberBrowserLocation = rememberBrowserLocation,
                         onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
+                        urlCacheClearOnLaunch = urlCacheClearOnLaunch,
+                        onUrlCacheClearOnLaunchChanged = { enabled ->
+                            urlCacheClearOnLaunch = enabled
+                            prefs.edit().putBoolean(AppPreferenceKeys.URL_CACHE_CLEAR_ON_LAUNCH, enabled).apply()
+                        },
+                        urlCacheMaxTracks = urlCacheMaxTracks,
+                        onUrlCacheMaxTracksChanged = { value ->
+                            urlCacheMaxTracks = value.coerceAtLeast(1)
+                            prefs.edit().putInt(AppPreferenceKeys.URL_CACHE_MAX_TRACKS, urlCacheMaxTracks).apply()
+                            appScope.launch(Dispatchers.IO) {
+                                enforceRemoteCacheLimits(
+                                    cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
+                                    maxTracks = urlCacheMaxTracks,
+                                    maxBytes = urlCacheMaxBytes
+                                )
+                            }
+                        },
+                        urlCacheMaxBytes = urlCacheMaxBytes,
+                        onUrlCacheMaxBytesChanged = { value ->
+                            urlCacheMaxBytes = value.coerceAtLeast(1L)
+                            prefs.edit().putLong(AppPreferenceKeys.URL_CACHE_MAX_BYTES, urlCacheMaxBytes).apply()
+                            appScope.launch(Dispatchers.IO) {
+                                enforceRemoteCacheLimits(
+                                    cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
+                                    maxTracks = urlCacheMaxTracks,
+                                    maxBytes = urlCacheMaxBytes
+                                )
+                            }
+                        },
+                        onClearUrlCacheNow = {
+                            appScope.launch(Dispatchers.IO) {
+                                val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
+                                val sessionPath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null)
+                                val protectedPaths = buildSet {
+                                    selectedFile?.absolutePath
+                                        ?.takeIf { it.startsWith(cacheRoot.absolutePath) }
+                                        ?.let { add(it) }
+                                    sessionPath
+                                        ?.takeIf { it.startsWith(cacheRoot.absolutePath) }
+                                        ?.let { add(it) }
+                                }
+                                val result = clearRemoteCacheFiles(
+                                    cacheRoot = cacheRoot,
+                                    protectedPaths = protectedPaths
+                                )
+                                withContext(Dispatchers.Main) {
+                                    val suffix = if (result.skippedFiles > 0) " (kept current track)" else ""
+                                    Toast.makeText(
+                                        context,
+                                        "Cache cleared (${result.deletedFiles} files)$suffix",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        },
                         keepScreenOn = keepScreenOn,
                         onKeepScreenOnChanged = { keepScreenOn = it },
                         filenameDisplayMode = filenameDisplayMode,
@@ -3282,6 +3330,9 @@ private fun AppNavigation(
                             persistRepeatMode = true
                             preferredRepeatMode = RepeatMode.None
                             rememberBrowserLocation = true
+                            urlCacheClearOnLaunch = false
+                            urlCacheMaxTracks = SOURCE_CACHE_MAX_TRACKS_DEFAULT
+                            urlCacheMaxBytes = SOURCE_CACHE_MAX_BYTES_DEFAULT
                             lastBrowserLocationId = null
                             lastBrowserDirectoryPath = null
                             recentFolders = emptyList()

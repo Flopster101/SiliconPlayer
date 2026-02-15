@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
@@ -116,6 +117,14 @@ import kotlin.math.roundToInt
 private const val SETTINGS_PAGE_NAV_DURATION_MS = 300
 private val SettingsCardShape = RoundedCornerShape(16.dp)
 
+private enum class CacheSizeUnit(
+    val label: String,
+    val bytesPerUnit: Double
+) {
+    MB("MB", 1024.0 * 1024.0),
+    GB("GB", 1024.0 * 1024.0 * 1024.0)
+}
+
 private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.Root -> 0
     SettingsRoute.AudioPlugins -> 1
@@ -124,6 +133,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.PluginFfmpeg -> 2
     SettingsRoute.PluginOpenMpt -> 2
     SettingsRoute.PluginVgmPlay -> 2
+    SettingsRoute.UrlCache -> 1
     SettingsRoute.GeneralAudio -> 1
     SettingsRoute.Player -> 1
     SettingsRoute.Misc -> 1
@@ -145,6 +155,7 @@ fun SettingsScreen(
     onClearSongAudioParameters: () -> Unit,
     onOpenPlayer: () -> Unit,
     onOpenMisc: () -> Unit,
+    onOpenUrlCache: () -> Unit,
     onOpenUi: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenVgmPlayChipSettings: () -> Unit,
@@ -187,6 +198,13 @@ fun SettingsScreen(
     onThemeModeChanged: (ThemeMode) -> Unit,
     rememberBrowserLocation: Boolean,
     onRememberBrowserLocationChanged: (Boolean) -> Unit,
+    urlCacheClearOnLaunch: Boolean,
+    onUrlCacheClearOnLaunchChanged: (Boolean) -> Unit,
+    urlCacheMaxTracks: Int,
+    onUrlCacheMaxTracksChanged: (Int) -> Unit,
+    urlCacheMaxBytes: Long,
+    onUrlCacheMaxBytesChanged: (Long) -> Unit,
+    onClearUrlCacheNow: () -> Unit,
     keepScreenOn: Boolean,
     onKeepScreenOnChanged: (Boolean) -> Unit,
     filenameDisplayMode: FilenameDisplayMode,
@@ -275,6 +293,7 @@ fun SettingsScreen(
         SettingsRoute.PluginFfmpeg -> "FFmpeg plugin settings"
         SettingsRoute.PluginOpenMpt -> "OpenMPT plugin settings"
         SettingsRoute.PluginVgmPlay -> "VGMPlay plugin settings"
+        SettingsRoute.UrlCache -> "Cache settings"
         SettingsRoute.GeneralAudio -> "General audio"
         SettingsRoute.Player -> "Player settings"
         SettingsRoute.Misc -> "Misc settings"
@@ -450,6 +469,14 @@ fun SettingsScreen(
                             description = "Other app-wide preferences and utilities.",
                             icon = Icons.Default.MoreHoriz,
                             onClick = onOpenMisc
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Other")
+                        SettingsItemCard(
+                            title = "Cache settings",
+                            description = "Cached file behavior, limits, and cleanup.",
+                            icon = Icons.Default.Link,
+                            onClick = onOpenUrlCache
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Interface")
@@ -1138,6 +1165,193 @@ fun SettingsScreen(
                             icon = Icons.Default.MoreHoriz,
                             onClick = onClearRecentHistory
                         )
+                    }
+
+                    SettingsRoute.UrlCache -> {
+                        val context = LocalContext.current
+                        var showCacheTrackLimitDialog by remember { mutableStateOf(false) }
+                        var showCacheSizeLimitDialog by remember { mutableStateOf(false) }
+                        var showClearCacheConfirmDialog by remember { mutableStateOf(false) }
+                        SettingsSectionLabel("Cache behavior")
+                        PlayerSettingToggleCard(
+                            title = "Clear cache on app launch",
+                            description = "Delete all cached files each time the app starts.",
+                            checked = urlCacheClearOnLaunch,
+                            onCheckedChange = onUrlCacheClearOnLaunchChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsSectionLabel("Limits")
+                        SettingsItemCard(
+                            title = "Cache song limit",
+                            description = "$urlCacheMaxTracks songs",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showCacheTrackLimitDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Cache size limit",
+                            description = String.format(Locale.US, "%.2f GB", urlCacheMaxBytes / (1024.0 * 1024.0 * 1024.0)),
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showCacheSizeLimitDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Manage cached files",
+                            description = "Browse cached files, multi-select delete, and export to storage (TODO).",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = {
+                                Toast.makeText(context, "Cached file manager coming soon", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Danger zone")
+                        SettingsItemCard(
+                            title = "Clear cache now",
+                            description = "Delete all currently cached files immediately.",
+                            icon = Icons.Default.Delete,
+                            onClick = { showClearCacheConfirmDialog = true }
+                        )
+
+                        if (showCacheTrackLimitDialog) {
+                            var input by remember { mutableStateOf(urlCacheMaxTracks.toString()) }
+                            AlertDialog(
+                                onDismissRequest = { showCacheTrackLimitDialog = false },
+                                title = { Text("Cache song limit") },
+                                text = {
+                                    OutlinedTextField(
+                                        value = input,
+                                        onValueChange = { input = it },
+                                        singleLine = true,
+                                        label = { Text("Max songs") },
+                                        placeholder = { Text("100") }
+                                    )
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showCacheTrackLimitDialog = false }) { Text("Cancel") }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        val parsed = input.trim().toIntOrNull()
+                                        if (parsed != null && parsed > 0) {
+                                            onUrlCacheMaxTracksChanged(parsed)
+                                            showCacheTrackLimitDialog = false
+                                        }
+                                    }) {
+                                        Text("Save")
+                                    }
+                                }
+                            )
+                        }
+
+                        if (showCacheSizeLimitDialog) {
+                            var unit by remember {
+                                mutableStateOf(
+                                    if (urlCacheMaxBytes < CacheSizeUnit.GB.bytesPerUnit.toLong()) CacheSizeUnit.MB else CacheSizeUnit.GB
+                                )
+                            }
+                            var input by remember {
+                                mutableStateOf(
+                                    String.format(Locale.US, "%.2f", urlCacheMaxBytes / unit.bytesPerUnit)
+                                )
+                            }
+                            AlertDialog(
+                                onDismissRequest = { showCacheSizeLimitDialog = false },
+                                title = { Text("Cache size limit") },
+                                text = {
+                                    Column {
+                                        OutlinedTextField(
+                                            value = input,
+                                            onValueChange = { input = it },
+                                            singleLine = true,
+                                            label = { Text("Max size (${unit.label})") },
+                                            placeholder = { Text("1.00") }
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            CacheSizeUnit.values().forEach { candidate ->
+                                                Row(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .clickable {
+                                                            if (candidate != unit) {
+                                                                val parsed = input.trim().replace(',', '.').toDoubleOrNull()
+                                                                val currentBytes = if (parsed != null && parsed > 0.0) {
+                                                                    parsed * unit.bytesPerUnit
+                                                                } else {
+                                                                    urlCacheMaxBytes.toDouble()
+                                                                }
+                                                                unit = candidate
+                                                                input = String.format(Locale.US, "%.2f", currentBytes / candidate.bytesPerUnit)
+                                                            }
+                                                        }
+                                                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    RadioButton(
+                                                        selected = unit == candidate,
+                                                        onClick = {
+                                                            if (candidate != unit) {
+                                                                val parsed = input.trim().replace(',', '.').toDoubleOrNull()
+                                                                val currentBytes = if (parsed != null && parsed > 0.0) {
+                                                                    parsed * unit.bytesPerUnit
+                                                                } else {
+                                                                    urlCacheMaxBytes.toDouble()
+                                                                }
+                                                                unit = candidate
+                                                                input = String.format(Locale.US, "%.2f", currentBytes / candidate.bytesPerUnit)
+                                                            }
+                                                        }
+                                                    )
+                                                    Text(
+                                                        text = candidate.label,
+                                                        style = MaterialTheme.typography.bodyMedium
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showCacheSizeLimitDialog = false }) { Text("Cancel") }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        val parsed = input.trim().replace(',', '.').toDoubleOrNull()
+                                        if (parsed != null && parsed > 0.0) {
+                                            val bytes = (parsed * unit.bytesPerUnit).toLong().coerceAtLeast(1L)
+                                            onUrlCacheMaxBytesChanged(bytes)
+                                            showCacheSizeLimitDialog = false
+                                        }
+                                    }) {
+                                        Text("Save")
+                                    }
+                                }
+                            )
+                        }
+
+                        if (showClearCacheConfirmDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showClearCacheConfirmDialog = false },
+                                title = { Text("Clear cached files now?") },
+                                text = { Text("This will remove all cached files, except the currently active one if it is being played.") },
+                                dismissButton = {
+                                    TextButton(onClick = { showClearCacheConfirmDialog = false }) {
+                                        Text("Cancel")
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        onClearUrlCacheNow()
+                                        showClearCacheConfirmDialog = false
+                                    }) {
+                                        Text("Clear cache")
+                                    }
+                                }
+                            )
+                        }
                     }
                     SettingsRoute.Ui -> ThemeModeSelectorCard(
                         selectedMode = themeMode,

@@ -27,6 +27,15 @@ public:
     int getChannelCount() override;
     std::string getTitle() override;
     std::string getArtist() override;
+    std::string getModuleTypeLong();
+    std::string getTracker();
+    std::string getSongMessage();
+    int getOrderCount();
+    int getPatternCount();
+    int getInstrumentCount();
+    int getSampleCount();
+    std::string getInstrumentNames();
+    std::string getSampleNames();
     void setOutputSampleRate(int sampleRate) override;
     int getPlaybackCapabilities() const override {
         return PLAYBACK_CAP_SEEK |
@@ -72,6 +81,11 @@ private:
     bool isXmModule = false;
     std::string title;
     std::string artist;
+    std::string moduleTypeLong;
+    std::string tracker;
+    std::string songMessage;
+    std::string instrumentNames;
+    std::string sampleNames;
 
     void applyRenderSettingsLocked();
 };

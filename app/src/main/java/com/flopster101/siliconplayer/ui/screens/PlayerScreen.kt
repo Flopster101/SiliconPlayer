@@ -675,6 +675,15 @@ private fun TrackInfoDetailsDialog(
     var liveOutputRateHz by remember { mutableIntStateOf(0) }
     var liveComposer by remember { mutableStateOf("") }
     var liveGenre by remember { mutableStateOf("") }
+    var openMptTypeLong by remember { mutableStateOf("") }
+    var openMptTracker by remember { mutableStateOf("") }
+    var openMptSongMessage by remember { mutableStateOf("") }
+    var openMptOrderCount by remember { mutableIntStateOf(0) }
+    var openMptPatternCount by remember { mutableIntStateOf(0) }
+    var openMptInstrumentCount by remember { mutableIntStateOf(0) }
+    var openMptSampleCount by remember { mutableIntStateOf(0) }
+    var openMptInstrumentNames by remember { mutableStateOf("") }
+    var openMptSampleNames by remember { mutableStateOf("") }
     val detailsScrollState = rememberScrollState()
     var detailsViewportHeightPx by remember { mutableIntStateOf(0) }
 
@@ -686,6 +695,27 @@ private fun TrackInfoDetailsDialog(
             liveOutputRateHz = NativeBridge.getOutputStreamSampleRateHz()
             liveComposer = NativeBridge.getTrackComposer()
             liveGenre = NativeBridge.getTrackGenre()
+            if (decoderName.equals("LibOpenMPT", ignoreCase = true)) {
+                openMptTypeLong = NativeBridge.getOpenMptModuleTypeLong()
+                openMptTracker = NativeBridge.getOpenMptTracker()
+                openMptSongMessage = NativeBridge.getOpenMptSongMessage()
+                openMptOrderCount = NativeBridge.getOpenMptOrderCount()
+                openMptPatternCount = NativeBridge.getOpenMptPatternCount()
+                openMptInstrumentCount = NativeBridge.getOpenMptInstrumentCount()
+                openMptSampleCount = NativeBridge.getOpenMptSampleCount()
+                openMptInstrumentNames = NativeBridge.getOpenMptInstrumentNames()
+                openMptSampleNames = NativeBridge.getOpenMptSampleNames()
+            } else {
+                openMptTypeLong = ""
+                openMptTracker = ""
+                openMptSongMessage = ""
+                openMptOrderCount = 0
+                openMptPatternCount = 0
+                openMptInstrumentCount = 0
+                openMptSampleCount = 0
+                openMptInstrumentNames = ""
+                openMptSampleNames = ""
+            }
             delay(500)
         }
     }
@@ -748,6 +778,33 @@ private fun TrackInfoDetailsDialog(
                     TrackInfoDetailsRow("Length", lengthLabel)
                     TrackInfoDetailsRow("Audio channels", channelsLabel)
                     TrackInfoDetailsRow("Bit depth", depthLabel)
+                    if (decoderName.equals("LibOpenMPT", ignoreCase = true)) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "OpenMPT",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (openMptTypeLong.isNotBlank()) {
+                            TrackInfoDetailsRow("Module type", openMptTypeLong)
+                        }
+                        if (openMptTracker.isNotBlank()) {
+                            TrackInfoDetailsRow("Tracker", openMptTracker)
+                        }
+                        TrackInfoDetailsRow("Orders", openMptOrderCount.toString())
+                        TrackInfoDetailsRow("Patterns", openMptPatternCount.toString())
+                        TrackInfoDetailsRow("Instruments", openMptInstrumentCount.toString())
+                        TrackInfoDetailsRow("Samples", openMptSampleCount.toString())
+                        if (openMptSongMessage.isNotBlank()) {
+                            TrackInfoDetailsRow("Message", openMptSongMessage)
+                        }
+                        if (openMptInstrumentNames.isNotBlank()) {
+                            TrackInfoDetailsRow("Instrument names", openMptInstrumentNames)
+                        }
+                        if (openMptSampleNames.isNotBlank()) {
+                            TrackInfoDetailsRow("Sample names", openMptSampleNames)
+                        }
+                    }
                 }
                 if (detailsScrollState.maxValue > 0 && detailsViewportHeightPx > 0) {
                     TrackInfoDetailsScrollbar(

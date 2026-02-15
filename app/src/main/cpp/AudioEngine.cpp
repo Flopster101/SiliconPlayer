@@ -1185,6 +1185,69 @@ int AudioEngine::getOutputStreamSampleRateHz() const {
     return streamSampleRate;
 }
 
+std::string AudioEngine::getOpenMptModuleTypeLong() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
+    return openMptDecoder ? openMptDecoder->getModuleTypeLong() : "";
+}
+
+std::string AudioEngine::getOpenMptTracker() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
+    return openMptDecoder ? openMptDecoder->getTracker() : "";
+}
+
+std::string AudioEngine::getOpenMptSongMessage() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
+    return openMptDecoder ? openMptDecoder->getSongMessage() : "";
+}
+
+int AudioEngine::getOpenMptOrderCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
+    return openMptDecoder ? openMptDecoder->getOrderCount() : 0;
+}
+
+int AudioEngine::getOpenMptPatternCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
+    return openMptDecoder ? openMptDecoder->getPatternCount() : 0;
+}
+
+int AudioEngine::getOpenMptInstrumentCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
+    return openMptDecoder ? openMptDecoder->getInstrumentCount() : 0;
+}
+
+int AudioEngine::getOpenMptSampleCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
+    return openMptDecoder ? openMptDecoder->getSampleCount() : 0;
+}
+
+std::string AudioEngine::getOpenMptInstrumentNames() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
+    return openMptDecoder ? openMptDecoder->getInstrumentNames() : "";
+}
+
+std::string AudioEngine::getOpenMptSampleNames() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
+    return openMptDecoder ? openMptDecoder->getSampleNames() : "";
+}
+
 // Gain control implementation
 void AudioEngine::setMasterGain(float gainDb) {
     masterGainDb.store(gainDb);

@@ -29,6 +29,15 @@ object NativeBridge {
     external fun getCurrentDecoderName(): String
     external fun getDecoderRenderSampleRateHz(): Int
     external fun getOutputStreamSampleRateHz(): Int
+    external fun getOpenMptModuleTypeLong(): String
+    external fun getOpenMptTracker(): String
+    external fun getOpenMptSongMessage(): String
+    external fun getOpenMptOrderCount(): Int
+    external fun getOpenMptPatternCount(): Int
+    external fun getOpenMptInstrumentCount(): Int
+    external fun getOpenMptSampleCount(): Int
+    external fun getOpenMptInstrumentNames(): String
+    external fun getOpenMptSampleNames(): String
     external fun getTrackBitrate(): Long
     external fun isTrackVBR(): Boolean
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)

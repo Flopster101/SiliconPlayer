@@ -291,6 +291,83 @@ Java_com_flopster101_siliconplayer_MainActivity_getOutputStreamSampleRateHz(JNIE
     return static_cast<jint>(audioEngine->getOutputStreamSampleRateHz());
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptModuleTypeLong(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewStringUTF("");
+    }
+    std::string value = audioEngine->getOpenMptModuleTypeLong();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptTracker(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewStringUTF("");
+    }
+    std::string value = audioEngine->getOpenMptTracker();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptSongMessage(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewStringUTF("");
+    }
+    std::string value = audioEngine->getOpenMptSongMessage();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptOrderCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) {
+        return 0;
+    }
+    return static_cast<jint>(audioEngine->getOpenMptOrderCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptPatternCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) {
+        return 0;
+    }
+    return static_cast<jint>(audioEngine->getOpenMptPatternCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptInstrumentCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) {
+        return 0;
+    }
+    return static_cast<jint>(audioEngine->getOpenMptInstrumentCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptSampleCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) {
+        return 0;
+    }
+    return static_cast<jint>(audioEngine->getOpenMptSampleCount());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptInstrumentNames(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewStringUTF("");
+    }
+    std::string value = audioEngine->getOpenMptInstrumentNames();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptSampleNames(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewStringUTF("");
+    }
+    std::string value = audioEngine->getOpenMptSampleNames();
+    return env->NewStringUTF(value.c_str());
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_startEngine(JNIEnv* env, jobject thiz) {
     Java_com_flopster101_siliconplayer_MainActivity_startEngine(env, thiz);

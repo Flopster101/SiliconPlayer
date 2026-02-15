@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <unordered_set>
+#include <sstream>
 
 #define LOG_TAG "LibOpenMPTDecoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -91,6 +92,17 @@ bool detectXmModule(const std::string& path, openmpt::module* module) {
            typeLong.find("xm") != std::string::npos ||
            typeLong.find("fasttracker") != std::string::npos;
 }
+
+std::string joinNamedEntries(const std::vector<std::string>& names) {
+    if (names.empty()) return "";
+    std::ostringstream out;
+    for (size_t i = 0; i < names.size(); ++i) {
+        if (i > 0) out << '\n';
+        const std::string& rawName = names[i];
+        out << (i + 1) << ". " << rawName;
+    }
+    return out.str();
+}
 }
 
 LibOpenMPTDecoder::LibOpenMPTDecoder() {
@@ -142,6 +154,11 @@ bool LibOpenMPTDecoder::open(const char* path) {
         moduleChannels = static_cast<int>(module->get_num_channels());
         title = getFirstNonEmptyMetadata(module.get(), {"title", "songtitle"});
         artist = getFirstNonEmptyMetadata(module.get(), {"artist", "author", "composer"});
+        moduleTypeLong = getFirstNonEmptyMetadata(module.get(), {"type_long", "type"});
+        tracker = getFirstNonEmptyMetadata(module.get(), {"tracker"});
+        songMessage = getFirstNonEmptyMetadata(module.get(), {"message_raw", "message"});
+        instrumentNames = joinNamedEntries(module->get_instrument_names());
+        sampleNames = joinNamedEntries(module->get_sample_names());
         LOGD("Opened module: %s, duration: %.2f", path, duration);
         return true;
     } catch (const openmpt::exception& e) {
@@ -163,6 +180,11 @@ void LibOpenMPTDecoder::close() {
     isXmModule = false;
     title.clear();
     artist.clear();
+    moduleTypeLong.clear();
+    tracker.clear();
+    songMessage.clear();
+    instrumentNames.clear();
+    sampleNames.clear();
 }
 
 int LibOpenMPTDecoder::read(float* buffer, int numFrames) {
@@ -250,6 +272,55 @@ std::string LibOpenMPTDecoder::getTitle() {
 std::string LibOpenMPTDecoder::getArtist() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return artist;
+}
+
+std::string LibOpenMPTDecoder::getModuleTypeLong() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return moduleTypeLong;
+}
+
+std::string LibOpenMPTDecoder::getTracker() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return tracker;
+}
+
+std::string LibOpenMPTDecoder::getSongMessage() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return songMessage;
+}
+
+int LibOpenMPTDecoder::getOrderCount() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!module) return 0;
+    return static_cast<int>(module->get_num_orders());
+}
+
+int LibOpenMPTDecoder::getPatternCount() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!module) return 0;
+    return static_cast<int>(module->get_num_patterns());
+}
+
+int LibOpenMPTDecoder::getInstrumentCount() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!module) return 0;
+    return static_cast<int>(module->get_num_instruments());
+}
+
+int LibOpenMPTDecoder::getSampleCount() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!module) return 0;
+    return static_cast<int>(module->get_num_samples());
+}
+
+std::string LibOpenMPTDecoder::getInstrumentNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return instrumentNames;
+}
+
+std::string LibOpenMPTDecoder::getSampleNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return sampleNames;
 }
 
 std::vector<std::string> LibOpenMPTDecoder::getSupportedExtensions() {

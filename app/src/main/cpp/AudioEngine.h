@@ -47,6 +47,15 @@ public:
     std::string getCurrentDecoderName();
     int getDecoderRenderSampleRateHz() const;
     int getOutputStreamSampleRateHz() const;
+    std::string getOpenMptModuleTypeLong();
+    std::string getOpenMptTracker();
+    std::string getOpenMptSongMessage();
+    int getOpenMptOrderCount();
+    int getOpenMptPatternCount();
+    int getOpenMptInstrumentCount();
+    int getOpenMptSampleCount();
+    std::string getOpenMptInstrumentNames();
+    std::string getOpenMptSampleNames();
 
     // Bitrate information
     int64_t getTrackBitrate();

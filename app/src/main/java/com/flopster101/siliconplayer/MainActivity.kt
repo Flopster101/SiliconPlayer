@@ -2170,17 +2170,32 @@ private fun AppNavigation(
     }
 
     fun restorePlayerStateFromSessionAndNative(openExpanded: Boolean) {
-        val path = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null)
-        val file = path?.let { File(it) }?.takeIf { it.exists() && it.isFile } ?: return
-        selectedFile = file
-        currentPlaybackSourceId = file.absolutePath
+        val sourcePath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null)?.trim()
+            ?.takeIf { it.isNotBlank() } ?: return
+        val normalizedSource = normalizeSourceIdentity(sourcePath) ?: sourcePath
+        val sourceUri = Uri.parse(normalizedSource)
+        val sourceScheme = sourceUri.scheme?.lowercase(Locale.ROOT)
+        val isRemoteSource = sourceScheme == "http" || sourceScheme == "https"
+        val displayFile = if (isRemoteSource) {
+            val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
+            findExistingCachedFileForSource(cacheRoot, normalizedSource)
+                ?: File("/virtual/remote/${remoteFilenameHintFromUri(sourceUri) ?: "remote"}")
+        } else {
+            val localPath = when (sourceScheme) {
+                "file" -> sourceUri.path
+                else -> normalizedSource
+            }
+            localPath?.let { File(it) } ?: File(normalizedSource)
+        }
+        selectedFile = displayFile
+        currentPlaybackSourceId = normalizedSource
         isPlayerSurfaceVisible = true
         isPlayerExpanded = openExpanded
 
         val isLoaded = NativeBridge.getTrackSampleRate() > 0
-        if (!isLoaded) {
-            loadSongVolumeForFile(file.absolutePath)
-            NativeBridge.loadAudio(file.absolutePath)
+        if (!isLoaded && displayFile.exists() && displayFile.isFile) {
+            loadSongVolumeForFile(displayFile.absolutePath)
+            NativeBridge.loadAudio(displayFile.absolutePath)
         }
 
         applyNativeTrackSnapshot(readNativeTrackSnapshot())
@@ -2837,14 +2852,14 @@ private fun AppNavigation(
 
     val notificationOpenSignal = MainActivity.notificationOpenPlayerSignal
 
-    LaunchedEffect(Unit) {
-        if (notificationOpenSignal == 0) {
-            restorePlayerStateFromSessionAndNative(openExpanded = false)
-        }
+    LaunchedEffect(Unit, notificationOpenSignal, openPlayerFromNotification) {
+        val shouldOpenExpandedFromSignal = notificationOpenSignal > 0 && openPlayerFromNotification
+        restorePlayerStateFromSessionAndNative(openExpanded = shouldOpenExpandedFromSignal)
     }
 
-    LaunchedEffect(notificationOpenSignal, openPlayerFromNotification) {
+    LaunchedEffect(notificationOpenSignal, openPlayerFromNotification, selectedFile) {
         if (notificationOpenSignal <= 0) return@LaunchedEffect
+        if (selectedFile == null) return@LaunchedEffect
         if (openPlayerFromNotification) {
             restorePlayerStateFromSessionAndNative(openExpanded = true)
         }

@@ -57,6 +57,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -274,6 +275,10 @@ private data class ManualSourceResolution(
     val localFile: File?,
     val directoryPath: String?,
     val displayFile: File?
+)
+
+private data class ManualSourceOpenOptions(
+    val forceCaching: Boolean = false
 )
 
 private fun resolvePlaybackSourceLabel(
@@ -597,6 +602,7 @@ private object AppPreferenceKeys {
     const val AUDIO_MASTER_VOLUME_DB = "audio_master_volume_db"
     const val AUDIO_PLUGIN_VOLUME_DB = "audio_plugin_volume_db"
     const val AUDIO_FORCE_MONO = "audio_force_mono"
+    const val URL_PATH_FORCE_CACHING = "url_path_force_caching"
     const val FILENAME_DISPLAY_MODE = "filename_display_mode"
     const val FILENAME_ONLY_WHEN_TITLE_MISSING = "filename_only_when_title_missing"
 
@@ -1213,6 +1219,11 @@ private fun AppNavigation(
     var showSoxExperimentalDialog by remember { mutableStateOf(false) }
     var showUrlOrPathDialog by remember { mutableStateOf(false) }
     var urlOrPathInput by remember { mutableStateOf("") }
+    var urlOrPathForceCaching by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.URL_PATH_FORCE_CACHING, false)
+        )
+    }
     var audioAllowBackendFallback by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.AUDIO_ALLOW_BACKEND_FALLBACK, true)
@@ -1574,7 +1585,10 @@ private fun AppNavigation(
         syncPlaybackService()
     }
 
-    fun applyManualInputSelection(rawInput: String) {
+    fun applyManualInputSelection(
+        rawInput: String,
+        options: ManualSourceOpenOptions = ManualSourceOpenOptions()
+    ) {
         val resolved = resolveManualSourceInput(rawInput)
         if (resolved == null) {
             Toast.makeText(
@@ -1632,53 +1646,57 @@ private fun AppNavigation(
 
         appScope.launch {
             var openedByStreaming = false
-            try {
-                Log.d(URL_SOURCE_TAG, "Attempting direct stream open: ${resolved.sourceId}")
-                resetAndOptionallyKeepLastTrack(keepLastTrack = false)
-                selectedFile = resolved.displayFile
-                currentPlaybackSourceId = resolved.sourceId
-                visiblePlayableFiles = emptyList()
-                isPlayerSurfaceVisible = true
-                songVolumeDb = 0f
-                NativeBridge.setSongGain(0f)
-                NativeBridge.loadAudio(resolved.sourceId)
-                val snapshot = readNativeTrackSnapshot()
-                if (snapshot.sampleRateHz > 0 || snapshot.durationSeconds > 0.0 ||
-                    snapshot.title.isNotBlank() || snapshot.artist.isNotBlank()
-                ) {
-                    Log.d(
+            if (!options.forceCaching) {
+                try {
+                    Log.d(URL_SOURCE_TAG, "Attempting direct stream open: ${resolved.sourceId}")
+                    resetAndOptionallyKeepLastTrack(keepLastTrack = false)
+                    selectedFile = resolved.displayFile
+                    currentPlaybackSourceId = resolved.sourceId
+                    visiblePlayableFiles = emptyList()
+                    isPlayerSurfaceVisible = true
+                    songVolumeDb = 0f
+                    NativeBridge.setSongGain(0f)
+                    NativeBridge.loadAudio(resolved.sourceId)
+                    val snapshot = readNativeTrackSnapshot()
+                    if (snapshot.sampleRateHz > 0 || snapshot.durationSeconds > 0.0 ||
+                        snapshot.title.isNotBlank() || snapshot.artist.isNotBlank()
+                    ) {
+                        Log.d(
+                            URL_SOURCE_TAG,
+                            "Direct stream open appears successful (sampleRate=${snapshot.sampleRateHz}, duration=${snapshot.durationSeconds})"
+                        )
+                        applyNativeTrackSnapshot(snapshot)
+                        position = 0.0
+                        artworkBitmap = null
+                        refreshRepeatModeForTrack()
+                        addRecentPlayedTrack(
+                            path = resolved.sourceId,
+                            locationId = null,
+                            title = metadataTitle,
+                            artist = metadataArtist
+                        )
+                        applyRepeatModeToNative(activeRepeatMode)
+                        NativeBridge.startEngine()
+                        isPlaying = true
+                        scheduleRecentTrackMetadataRefresh(
+                            sourceId = resolved.sourceId,
+                            locationId = null
+                        )
+                        isPlayerExpanded = openPlayerOnTrackSelect
+                        syncPlaybackService()
+                        openedByStreaming = true
+                    } else {
+                        Log.d(URL_SOURCE_TAG, "Direct stream open returned empty snapshot; falling back to cache download")
+                    }
+                } catch (t: Throwable) {
+                    Log.e(
                         URL_SOURCE_TAG,
-                        "Direct stream open appears successful (sampleRate=${snapshot.sampleRateHz}, duration=${snapshot.durationSeconds})"
+                        "Direct stream open threw ${t::class.java.simpleName}: ${t.message}; falling back to cache download"
                     )
-                    applyNativeTrackSnapshot(snapshot)
-                    position = 0.0
-                    artworkBitmap = null
-                    refreshRepeatModeForTrack()
-                    addRecentPlayedTrack(
-                        path = resolved.sourceId,
-                        locationId = null,
-                        title = metadataTitle,
-                        artist = metadataArtist
-                    )
-                    applyRepeatModeToNative(activeRepeatMode)
-                    NativeBridge.startEngine()
-                    isPlaying = true
-                    scheduleRecentTrackMetadataRefresh(
-                        sourceId = resolved.sourceId,
-                        locationId = null
-                    )
-                    isPlayerExpanded = openPlayerOnTrackSelect
-                    syncPlaybackService()
-                    openedByStreaming = true
-                } else {
-                    Log.d(URL_SOURCE_TAG, "Direct stream open returned empty snapshot; falling back to cache download")
+                    openedByStreaming = false
                 }
-            } catch (t: Throwable) {
-                Log.e(
-                    URL_SOURCE_TAG,
-                    "Direct stream open threw ${t::class.java.simpleName}: ${t.message}; falling back to cache download"
-                )
-                openedByStreaming = false
+            } else {
+                Log.d(URL_SOURCE_TAG, "Force caching enabled; skipping direct stream open for: ${resolved.sourceId}")
             }
 
             if (openedByStreaming) return@launch
@@ -3514,6 +3532,33 @@ private fun AppNavigation(
                                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
                                 )
                             )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val next = !urlOrPathForceCaching
+                                        urlOrPathForceCaching = next
+                                        prefs.edit()
+                                            .putBoolean(AppPreferenceKeys.URL_PATH_FORCE_CACHING, next)
+                                            .apply()
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = urlOrPathForceCaching,
+                                    onCheckedChange = { checked ->
+                                        urlOrPathForceCaching = checked
+                                        prefs.edit()
+                                            .putBoolean(AppPreferenceKeys.URL_PATH_FORCE_CACHING, checked)
+                                            .apply()
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Force caching",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
                         }
                     },
                     confirmButton = {
@@ -3521,8 +3566,9 @@ private fun AppNavigation(
                             enabled = urlOrPathInput.isNotBlank(),
                             onClick = {
                                 val input = urlOrPathInput
+                                val openOptions = ManualSourceOpenOptions(forceCaching = urlOrPathForceCaching)
                                 showUrlOrPathDialog = false
-                                applyManualInputSelection(input)
+                                applyManualInputSelection(input, openOptions)
                             }
                         ) {
                             Text("Open")

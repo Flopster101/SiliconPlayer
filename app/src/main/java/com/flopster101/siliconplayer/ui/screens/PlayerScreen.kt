@@ -346,6 +346,7 @@ fun PlayerScreen(
                         Spacer(modifier = Modifier.height(14.dp))
                         TimelineSection(
                             sliderPosition = if (isSeeking) sliderPosition else animatedSliderPosition.toDouble(),
+                            elapsedPositionSeconds = if (isSeeking) sliderPosition else positionSeconds,
                             durationSeconds = durationSeconds,
                             canSeek = canSeek,
                             hasReliableDuration = hasReliableDuration,
@@ -432,6 +433,7 @@ fun PlayerScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                     TimelineSection(
                         sliderPosition = if (isSeeking) sliderPosition else animatedSliderPosition.toDouble(),
+                        elapsedPositionSeconds = if (isSeeking) sliderPosition else positionSeconds,
                         durationSeconds = durationSeconds,
                         canSeek = canSeek,
                         hasReliableDuration = hasReliableDuration,
@@ -1444,6 +1446,7 @@ private fun FutureActionStrip(
 @Composable
 private fun TimelineSection(
     sliderPosition: Double,
+    elapsedPositionSeconds: Double,
     durationSeconds: Double,
     canSeek: Boolean,
     hasReliableDuration: Boolean,
@@ -1476,7 +1479,7 @@ private fun TimelineSection(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = formatTime(sliderPosition),
+                text = formatTime(elapsedPositionSeconds),
                 style = MaterialTheme.typography.labelMedium
             )
             Text(

@@ -208,6 +208,16 @@ fun SettingsScreen(
     onGmeEchoEnabledChanged: (Boolean) -> Unit,
     gmeAccuracyEnabled: Boolean,
     onGmeAccuracyEnabledChanged: (Boolean) -> Unit,
+    gmeEqTrebleDecibel: Int,
+    onGmeEqTrebleDecibelChanged: (Int) -> Unit,
+    gmeEqBassHz: Int,
+    onGmeEqBassHzChanged: (Int) -> Unit,
+    gmeSpcUseBuiltInFade: Boolean,
+    onGmeSpcUseBuiltInFadeChanged: (Boolean) -> Unit,
+    gmeSpcInterpolation: Int,
+    onGmeSpcInterpolationChanged: (Int) -> Unit,
+    gmeSpcUseNativeSampleRate: Boolean,
+    onGmeSpcUseNativeSampleRateChanged: (Boolean) -> Unit,
     vgmPlayLoopCount: Int,
     onVgmPlayLoopCountChanged: (Int) -> Unit,
     vgmPlayAllowNonLoopingLoop: Boolean,
@@ -781,10 +791,20 @@ fun SettingsScreen(
                                     stereoSeparationPercent = gmeStereoSeparationPercent,
                                     echoEnabled = gmeEchoEnabled,
                                     accuracyEnabled = gmeAccuracyEnabled,
+                                    eqTrebleDecibel = gmeEqTrebleDecibel,
+                                    eqBassHz = gmeEqBassHz,
+                                    spcUseBuiltInFade = gmeSpcUseBuiltInFade,
+                                    spcInterpolation = gmeSpcInterpolation,
+                                    spcUseNativeSampleRate = gmeSpcUseNativeSampleRate,
                                     onTempoPercentChanged = onGmeTempoPercentChanged,
                                     onStereoSeparationPercentChanged = onGmeStereoSeparationPercentChanged,
                                     onEchoEnabledChanged = onGmeEchoEnabledChanged,
-                                    onAccuracyEnabledChanged = onGmeAccuracyEnabledChanged
+                                    onAccuracyEnabledChanged = onGmeAccuracyEnabledChanged,
+                                    onEqTrebleDecibelChanged = onGmeEqTrebleDecibelChanged,
+                                    onEqBassHzChanged = onGmeEqBassHzChanged,
+                                    onSpcUseBuiltInFadeChanged = onGmeSpcUseBuiltInFadeChanged,
+                                    onSpcInterpolationChanged = onGmeSpcInterpolationChanged,
+                                    onSpcUseNativeSampleRateChanged = onGmeSpcUseNativeSampleRateChanged
                                 )
                                 else -> null
                             }

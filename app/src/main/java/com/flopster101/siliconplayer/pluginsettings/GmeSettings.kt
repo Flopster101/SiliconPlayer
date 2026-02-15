@@ -1,6 +1,8 @@
 package com.flopster101.siliconplayer.pluginsettings
 
 import androidx.compose.runtime.Composable
+import com.flopster101.siliconplayer.IntChoice
+import com.flopster101.siliconplayer.OpenMptChoiceSelectorCard
 import com.flopster101.siliconplayer.OpenMptDialogSliderCard
 import com.flopster101.siliconplayer.PlayerSettingToggleCard
 
@@ -9,10 +11,20 @@ internal class GmeSettings(
     private val stereoSeparationPercent: Int,
     private val echoEnabled: Boolean,
     private val accuracyEnabled: Boolean,
+    private val eqTrebleDecibel: Int,
+    private val eqBassHz: Int,
+    private val spcUseBuiltInFade: Boolean,
+    private val spcInterpolation: Int,
+    private val spcUseNativeSampleRate: Boolean,
     private val onTempoPercentChanged: (Int) -> Unit,
     private val onStereoSeparationPercentChanged: (Int) -> Unit,
     private val onEchoEnabledChanged: (Boolean) -> Unit,
-    private val onAccuracyEnabledChanged: (Boolean) -> Unit
+    private val onAccuracyEnabledChanged: (Boolean) -> Unit,
+    private val onEqTrebleDecibelChanged: (Int) -> Unit,
+    private val onEqBassHzChanged: (Int) -> Unit,
+    private val onSpcUseBuiltInFadeChanged: (Boolean) -> Unit,
+    private val onSpcInterpolationChanged: (Int) -> Unit,
+    private val onSpcUseNativeSampleRateChanged: (Boolean) -> Unit
 ) : PluginSettings {
 
     @Composable
@@ -45,7 +57,7 @@ internal class GmeSettings(
             custom {
                 PlayerSettingToggleCard(
                     title = "SPC echo",
-                    description = "Enable DSP echo for SPC playback.",
+                    description = "Enable libgme SPC DSP echo.",
                     checked = echoEnabled,
                     onCheckedChange = onEchoEnabledChanged
                 )
@@ -57,6 +69,64 @@ internal class GmeSettings(
                     description = "Enable libgme high-accuracy emulation path.",
                     checked = accuracyEnabled,
                     onCheckedChange = onAccuracyEnabledChanged
+                )
+            }
+            spacer()
+            custom {
+                OpenMptDialogSliderCard(
+                    title = "EQ treble",
+                    description = "libgme equalizer treble gain.",
+                    value = eqTrebleDecibel,
+                    valueRange = -50..5,
+                    step = 1,
+                    valueLabel = { "${it} dB" },
+                    onValueChanged = onEqTrebleDecibelChanged
+                )
+            }
+            spacer()
+            custom {
+                OpenMptDialogSliderCard(
+                    title = "EQ bass",
+                    description = "libgme equalizer bass cutoff frequency.",
+                    value = eqBassHz,
+                    valueRange = 1..1000,
+                    step = 1,
+                    valueLabel = { "${it} Hz" },
+                    onValueChanged = onEqBassHzChanged
+                )
+            }
+            spacer()
+            custom {
+                PlayerSettingToggleCard(
+                    title = "SPC built-in fade",
+                    description = "Use libgme SPC tagged fade behavior instead of app fade override.",
+                    checked = spcUseBuiltInFade,
+                    onCheckedChange = onSpcUseBuiltInFadeChanged
+                )
+            }
+            spacer()
+            custom {
+                OpenMptChoiceSelectorCard(
+                    title = "SPC interpolation",
+                    description = "SPC interpolation mode.",
+                    selectedValue = spcInterpolation,
+                    options = listOf(
+                        IntChoice(-2, "None"),
+                        IntChoice(-1, "Linear"),
+                        IntChoice(0, "Gaussian"),
+                        IntChoice(1, "Cubic"),
+                        IntChoice(2, "Sinc")
+                    ),
+                    onSelected = onSpcInterpolationChanged
+                )
+            }
+            spacer()
+            custom {
+                PlayerSettingToggleCard(
+                    title = "Use native SPC sample rate",
+                    description = "Force 32,000 Hz render rate for SPC files.",
+                    checked = spcUseNativeSampleRate,
+                    onCheckedChange = onSpcUseNativeSampleRateChanged
                 )
             }
         }

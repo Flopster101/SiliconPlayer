@@ -854,6 +854,34 @@ private fun AppNavigation(
             prefs.getBoolean(CorePreferenceKeys.GME_ACCURACY_ENABLED, GmeDefaults.accuracyEnabled)
         )
     }
+    var gmeEqTrebleDecibel by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.GME_EQ_TREBLE_DECIBEL, GmeDefaults.eqTrebleDecibel)
+        )
+    }
+    var gmeEqBassHz by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.GME_EQ_BASS_HZ, GmeDefaults.eqBassHz)
+        )
+    }
+    var gmeSpcUseBuiltInFade by remember {
+        mutableStateOf(
+            prefs.getBoolean(CorePreferenceKeys.GME_SPC_USE_BUILTIN_FADE, GmeDefaults.spcUseBuiltInFade)
+        )
+    }
+    var gmeSpcInterpolation by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.GME_SPC_INTERPOLATION, GmeDefaults.spcInterpolation)
+        )
+    }
+    var gmeSpcUseNativeSampleRate by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE,
+                GmeDefaults.spcUseNativeSampleRate
+            )
+        )
+    }
     var vgmPlayLoopCount by remember {
         mutableIntStateOf(
             prefs.getInt(CorePreferenceKeys.VGMPLAY_LOOP_COUNT, VgmPlayDefaults.loopCount)
@@ -1507,6 +1535,86 @@ private fun AppNavigation(
             optionValue = gmeAccuracyEnabled.toString(),
             policy = CoreOptionApplyPolicy.Live,
             optionLabel = "High accuracy emulation"
+        )
+    }
+
+    LaunchedEffect(gmeEqTrebleDecibel) {
+        val normalized = gmeEqTrebleDecibel.coerceIn(-50, 5)
+        if (normalized != gmeEqTrebleDecibel) {
+            gmeEqTrebleDecibel = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.GME_EQ_TREBLE_DECIBEL, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Game Music Emu",
+            optionName = GmeOptionKeys.EQ_TREBLE_DB,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "EQ treble"
+        )
+    }
+
+    LaunchedEffect(gmeEqBassHz) {
+        val normalized = gmeEqBassHz.coerceIn(1, 1000)
+        if (normalized != gmeEqBassHz) {
+            gmeEqBassHz = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.GME_EQ_BASS_HZ, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Game Music Emu",
+            optionName = GmeOptionKeys.EQ_BASS_HZ,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "EQ bass"
+        )
+    }
+
+    LaunchedEffect(gmeSpcUseBuiltInFade) {
+        prefs.edit()
+            .putBoolean(CorePreferenceKeys.GME_SPC_USE_BUILTIN_FADE, gmeSpcUseBuiltInFade)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Game Music Emu",
+            optionName = GmeOptionKeys.SPC_USE_BUILTIN_FADE,
+            optionValue = gmeSpcUseBuiltInFade.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "SPC built-in fade"
+        )
+    }
+
+    LaunchedEffect(gmeSpcInterpolation) {
+        val normalized = gmeSpcInterpolation.coerceIn(-2, 2)
+        if (normalized != gmeSpcInterpolation) {
+            gmeSpcInterpolation = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.GME_SPC_INTERPOLATION, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Game Music Emu",
+            optionName = GmeOptionKeys.SPC_INTERPOLATION,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "SPC interpolation"
+        )
+    }
+
+    LaunchedEffect(gmeSpcUseNativeSampleRate) {
+        prefs.edit()
+            .putBoolean(CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE, gmeSpcUseNativeSampleRate)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Game Music Emu",
+            optionName = GmeOptionKeys.SPC_USE_NATIVE_SAMPLE_RATE,
+            optionValue = gmeSpcUseNativeSampleRate.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Use native SPC sample rate"
         )
     }
 
@@ -2345,6 +2453,16 @@ private fun AppNavigation(
                         onGmeEchoEnabledChanged = { gmeEchoEnabled = it },
                         gmeAccuracyEnabled = gmeAccuracyEnabled,
                         onGmeAccuracyEnabledChanged = { gmeAccuracyEnabled = it },
+                        gmeEqTrebleDecibel = gmeEqTrebleDecibel,
+                        onGmeEqTrebleDecibelChanged = { gmeEqTrebleDecibel = it },
+                        gmeEqBassHz = gmeEqBassHz,
+                        onGmeEqBassHzChanged = { gmeEqBassHz = it },
+                        gmeSpcUseBuiltInFade = gmeSpcUseBuiltInFade,
+                        onGmeSpcUseBuiltInFadeChanged = { gmeSpcUseBuiltInFade = it },
+                        gmeSpcInterpolation = gmeSpcInterpolation,
+                        onGmeSpcInterpolationChanged = { gmeSpcInterpolation = it },
+                        gmeSpcUseNativeSampleRate = gmeSpcUseNativeSampleRate,
+                        onGmeSpcUseNativeSampleRateChanged = { gmeSpcUseNativeSampleRate = it },
                         vgmPlayLoopCount = vgmPlayLoopCount,
                         onVgmPlayLoopCountChanged = { vgmPlayLoopCount = it },
                         vgmPlayAllowNonLoopingLoop = vgmPlayAllowNonLoopingLoop,
@@ -2405,6 +2523,9 @@ private fun AppNavigation(
                                 CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_RATE to vgmPlayChipSampleRate,
                                 CorePreferenceKeys.GME_TEMPO_PERCENT to gmeTempoPercent,
                                 CorePreferenceKeys.GME_STEREO_SEPARATION_PERCENT to gmeStereoSeparationPercent,
+                                CorePreferenceKeys.GME_EQ_TREBLE_DECIBEL to gmeEqTrebleDecibel,
+                                CorePreferenceKeys.GME_EQ_BASS_HZ to gmeEqBassHz,
+                                CorePreferenceKeys.GME_SPC_INTERPOLATION to gmeSpcInterpolation,
                                 CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT to openMptStereoSeparationPercent,
                                 CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT to openMptStereoSeparationAmigaPercent,
                                 CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH to openMptInterpolationFilterLength,
@@ -2416,6 +2537,8 @@ private fun AppNavigation(
                                 CorePreferenceKeys.VGMPLAY_ALLOW_NON_LOOPING_LOOP to vgmPlayAllowNonLoopingLoop,
                                 CorePreferenceKeys.GME_ECHO_ENABLED to gmeEchoEnabled,
                                 CorePreferenceKeys.GME_ACCURACY_ENABLED to gmeAccuracyEnabled,
+                                CorePreferenceKeys.GME_SPC_USE_BUILTIN_FADE to gmeSpcUseBuiltInFade,
+                                CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE to gmeSpcUseNativeSampleRate,
                                 CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES to openMptAmigaResamplerApplyAllModules,
                                 CorePreferenceKeys.OPENMPT_FT2_XM_VOLUME_RAMPING to openMptFt2XmVolumeRamping,
                                 CorePreferenceKeys.OPENMPT_SURROUND_ENABLED to openMptSurroundEnabled
@@ -2473,6 +2596,11 @@ private fun AppNavigation(
                             gmeStereoSeparationPercent = GmeDefaults.stereoSeparationPercent
                             gmeEchoEnabled = GmeDefaults.echoEnabled
                             gmeAccuracyEnabled = GmeDefaults.accuracyEnabled
+                            gmeEqTrebleDecibel = GmeDefaults.eqTrebleDecibel
+                            gmeEqBassHz = GmeDefaults.eqBassHz
+                            gmeSpcUseBuiltInFade = GmeDefaults.spcUseBuiltInFade
+                            gmeSpcInterpolation = GmeDefaults.spcInterpolation
+                            gmeSpcUseNativeSampleRate = GmeDefaults.spcUseNativeSampleRate
                             vgmPlayLoopCount = VgmPlayDefaults.loopCount
                             vgmPlayAllowNonLoopingLoop = VgmPlayDefaults.allowNonLoopingLoop
                             vgmPlayVsyncRate = VgmPlayDefaults.vsyncRate
@@ -2499,6 +2627,11 @@ private fun AppNavigation(
                                 remove(CorePreferenceKeys.GME_STEREO_SEPARATION_PERCENT)
                                 remove(CorePreferenceKeys.GME_ECHO_ENABLED)
                                 remove(CorePreferenceKeys.GME_ACCURACY_ENABLED)
+                                remove(CorePreferenceKeys.GME_EQ_TREBLE_DECIBEL)
+                                remove(CorePreferenceKeys.GME_EQ_BASS_HZ)
+                                remove(CorePreferenceKeys.GME_SPC_USE_BUILTIN_FADE)
+                                remove(CorePreferenceKeys.GME_SPC_INTERPOLATION)
+                                remove(CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE)
                                 remove(CorePreferenceKeys.VGMPLAY_LOOP_COUNT)
                                 remove(CorePreferenceKeys.VGMPLAY_ALLOW_NON_LOOPING_LOOP)
                                 remove(CorePreferenceKeys.VGMPLAY_VSYNC_RATE)

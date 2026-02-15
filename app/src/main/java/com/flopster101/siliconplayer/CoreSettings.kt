@@ -24,6 +24,11 @@ object CorePreferenceKeys {
     const val GME_STEREO_SEPARATION_PERCENT = "gme_stereo_separation_percent"
     const val GME_ECHO_ENABLED = "gme_echo_enabled"
     const val GME_ACCURACY_ENABLED = "gme_accuracy_enabled"
+    const val GME_EQ_TREBLE_DECIBEL = "gme_eq_treble_decibel"
+    const val GME_EQ_BASS_HZ = "gme_eq_bass_hz"
+    const val GME_SPC_USE_BUILTIN_FADE = "gme_spc_use_builtin_fade"
+    const val GME_SPC_INTERPOLATION = "gme_spc_interpolation"
+    const val GME_SPC_USE_NATIVE_SAMPLE_RATE = "gme_spc_use_native_sample_rate"
     fun vgmPlayChipCoreKey(chipKey: String) = "vgmplay_chip_core_$chipKey"
 }
 
@@ -60,4 +65,9 @@ object GmeDefaults {
     const val stereoSeparationPercent = 0
     const val echoEnabled = true
     const val accuracyEnabled = false
+    const val eqTrebleDecibel = 0
+    const val eqBassHz = 90
+    const val spcUseBuiltInFade = false
+    const val spcInterpolation = 0
+    const val spcUseNativeSampleRate = true
 }

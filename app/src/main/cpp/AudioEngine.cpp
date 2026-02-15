@@ -148,8 +148,9 @@ void AudioEngine::reconfigureStream(bool resumePlayback) {
     {
         std::lock_guard<std::mutex> lock(decoderMutex);
         if (decoder) {
-            decoderRenderSampleRate = resolveOutputSampleRateForCore(decoder->getName());
-            decoder->setOutputSampleRate(decoderRenderSampleRate);
+            const int desiredRate = resolveOutputSampleRateForCore(decoder->getName());
+            decoder->setOutputSampleRate(desiredRate);
+            decoderRenderSampleRate = decoder->getSampleRate();
             // When only resampler preference changed, preserve the buffer to maintain position
             resetResamplerStateLocked(true);
         }
@@ -195,8 +196,9 @@ void AudioEngine::recoverStreamIfNeeded() {
     {
         std::lock_guard<std::mutex> lock(decoderMutex);
         if (decoder) {
-            decoderRenderSampleRate = resolveOutputSampleRateForCore(decoder->getName());
-            decoder->setOutputSampleRate(decoderRenderSampleRate);
+            const int desiredRate = resolveOutputSampleRateForCore(decoder->getName());
+            decoder->setOutputSampleRate(desiredRate);
+            decoderRenderSampleRate = decoder->getSampleRate();
             // Preserve resampler state during stream recovery to maintain position
             resetResamplerStateLocked(true);
         }
@@ -841,8 +843,9 @@ bool AudioEngine::start() {
         {
             std::lock_guard<std::mutex> lock(decoderMutex);
             if (decoder) {
-                decoderRenderSampleRate = resolveOutputSampleRateForCore(decoder->getName());
-                decoder->setOutputSampleRate(decoderRenderSampleRate);
+                const int desiredRate = resolveOutputSampleRateForCore(decoder->getName());
+                decoder->setOutputSampleRate(desiredRate);
+                decoderRenderSampleRate = decoder->getSampleRate();
                 resetResamplerStateLocked();
                 const double durationNow = decoder->getDuration();
                 if (durationNow > 0.0 && positionSeconds.load() >= (durationNow - 0.01)) {
@@ -895,17 +898,30 @@ void AudioEngine::setUrl(const char* url) {
     auto newDecoder = DecoderRegistry::getInstance().createDecoder(url);
     if (newDecoder) {
         const int targetRate = resolveOutputSampleRateForCore(newDecoder->getName());
+        std::unordered_map<std::string, std::string> optionsForDecoder;
+        {
+            std::lock_guard<std::mutex> lock(decoderMutex);
+            const auto optionsIt = coreOptions.find(newDecoder->getName());
+            if (optionsIt != coreOptions.end()) {
+                optionsForDecoder = optionsIt->second;
+            }
+        }
+
         newDecoder->setOutputSampleRate(targetRate);
+        if (!optionsForDecoder.empty() && std::string(newDecoder->getName()) == "Game Music Emu") {
+            for (const auto& [name, value] : optionsForDecoder) {
+                newDecoder->setOption(name.c_str(), value.c_str());
+            }
+        }
         if (!newDecoder->open(url)) {
             LOGE("Failed to open file: %s", url);
             return;
         }
         std::lock_guard<std::mutex> lock(decoderMutex);
-        decoderRenderSampleRate = targetRate;
+        decoderRenderSampleRate = newDecoder->getSampleRate();
         newDecoder->setRepeatMode(repeatMode.load());
-        const auto optionsIt = coreOptions.find(newDecoder->getName());
-        if (optionsIt != coreOptions.end()) {
-            for (const auto& [name, value] : optionsIt->second) {
+        if (!optionsForDecoder.empty()) {
+            for (const auto& [name, value] : optionsForDecoder) {
                 newDecoder->setOption(name.c_str(), value.c_str());
             }
         }
@@ -1007,8 +1023,9 @@ void AudioEngine::setCoreOutputSampleRate(const std::string& coreName, int sampl
         const bool supportsLiveRateChange =
                 (decoder->getPlaybackCapabilities() & AudioDecoder::PLAYBACK_CAP_LIVE_SAMPLE_RATE_CHANGE) != 0;
         if (supportsLiveRateChange) {
-            decoderRenderSampleRate = resolveOutputSampleRateForCore(coreName);
-            decoder->setOutputSampleRate(decoderRenderSampleRate);
+            const int desiredRate = resolveOutputSampleRateForCore(coreName);
+            decoder->setOutputSampleRate(desiredRate);
+            decoderRenderSampleRate = decoder->getSampleRate();
             resetResamplerStateLocked();
         }
     }

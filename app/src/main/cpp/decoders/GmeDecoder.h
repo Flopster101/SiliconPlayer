@@ -50,7 +50,6 @@ private:
     std::mutex decodeMutex;
 
     double duration = 0.0;
-    int sampleRate = 48000;
     int bitDepth = 16;
     int channels = 2;
     int trackCount = 0;
@@ -60,12 +59,16 @@ private:
     int loopStartMs = -1;
     int loopLengthMs = -1;
     bool hasLoopPoint = false;
+    bool isSpcTrack = false;
     double playbackPositionSeconds = 0.0;
     int lastTellMs = -1;
     double tempo = 1.0;
     double stereoDepth = 0.0;
     bool echoEnabled = true;
     bool accuracyEnabled = false;
+    double eqTrebleDb = 0.0;
+    double eqBassHz = 90.0;
+    bool spcUseBuiltInFade = false;
 
     std::string title;
     std::string artist;
@@ -75,6 +78,13 @@ private:
     void closeInternal();
     void applyRepeatBehaviorLocked();
     void applyCoreOptionsLocked();
+    int resolveOpenSampleRateLocked(const char* path) const;
+
+    int requestedSampleRate = 48000;
+    int activeSampleRate = 48000;
+    int spcInterpolation = 0;
+    bool spcUseNativeSampleRate = true;
+    bool loggedSpcInterpolationCompat = false;
 };
 
 #endif // SILICONPLAYER_GMEDECODER_H

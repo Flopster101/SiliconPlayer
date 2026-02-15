@@ -12,6 +12,7 @@ extern "C" {
 
 #define LOG_TAG "GmeDecoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 
 namespace {
 constexpr int kRenderBlockFrames = 512;
@@ -58,6 +59,16 @@ bool parseBoolString(const std::string& value, bool fallback) {
     if (normalized == "0" || normalized == "false" || normalized == "no" || normalized == "off") return false;
     return fallback;
 }
+
+bool hasExtension(const char* path, const char* extensionWithDot) {
+    if (!path || !extensionWithDot) return false;
+    std::string lowerPath(path);
+    lowerPath = toLowerAscii(lowerPath);
+    std::string lowerExt(extensionWithDot);
+    lowerExt = toLowerAscii(lowerExt);
+    if (lowerPath.size() < lowerExt.size()) return false;
+    return lowerPath.compare(lowerPath.size() - lowerExt.size(), lowerExt.size(), lowerExt) == 0;
+}
 }
 
 GmeDecoder::GmeDecoder() = default;
@@ -74,12 +85,15 @@ bool GmeDecoder::open(const char* path) {
         return false;
     }
 
-    const gme_err_t openErr = gme_open_file(path, &emu, sampleRate);
+    const int openSampleRate = resolveOpenSampleRateLocked(path);
+    const gme_err_t openErr = gme_open_file(path, &emu, openSampleRate);
     if (openErr != nullptr || emu == nullptr) {
         LOGE("gme_open_file failed: %s", openErr ? openErr : "unknown error");
         emu = nullptr;
         return false;
     }
+    activeSampleRate = openSampleRate;
+    loggedSpcInterpolationCompat = false;
 
     trackCount = std::max(1, gme_track_count(emu));
     activeTrack = 0;
@@ -87,8 +101,10 @@ bool GmeDecoder::open(const char* path) {
     loopStartMs = -1;
     loopLengthMs = -1;
     hasLoopPoint = false;
+    isSpcTrack = false;
     playbackPositionSeconds = 0.0;
     lastTellMs = 0;
+    isSpcTrack = gme_type(emu) == gme_spc_type;
 
     // Must be applied before start_track(): libgme sets fade/end behavior there.
     applyRepeatBehaviorLocked();
@@ -123,6 +139,27 @@ bool GmeDecoder::open(const char* path) {
         duration = 0.0;
     }
 
+    if (isSpcTrack && spcUseNativeSampleRate && activeSampleRate != 32000) {
+        gme_delete(emu);
+        emu = nullptr;
+        const gme_err_t reopenErr = gme_open_file(path, &emu, 32000);
+        if (reopenErr != nullptr || emu == nullptr) {
+            LOGE("gme_open_file(SPC native sample rate) failed: %s", reopenErr ? reopenErr : "unknown error");
+            emu = nullptr;
+            closeInternal();
+            return false;
+        }
+        activeSampleRate = 32000;
+        applyRepeatBehaviorLocked();
+        applyCoreOptionsLocked();
+        const gme_err_t restartErr = gme_start_track(emu, activeTrack);
+        if (restartErr != nullptr) {
+            LOGE("gme_start_track(reopen) failed: %s", restartErr);
+            closeInternal();
+            return false;
+        }
+    }
+
     applyRepeatBehaviorLocked();
     applyCoreOptionsLocked();
     return true;
@@ -141,6 +178,9 @@ void GmeDecoder::closeInternal() {
     loopStartMs = -1;
     loopLengthMs = -1;
     hasLoopPoint = false;
+    isSpcTrack = false;
+    activeSampleRate = requestedSampleRate;
+    loggedSpcInterpolationCompat = false;
     playbackPositionSeconds = 0.0;
     lastTellMs = -1;
     title.clear();
@@ -236,7 +276,7 @@ int GmeDecoder::read(float* buffer, int numFrames) {
             } else {
                 // Some tracks keep rendering but gme_tell() stalls at tagged end.
                 // Keep LP timeline moving from rendered frames.
-                playbackPositionSeconds += static_cast<double>(framesRead) / sampleRate;
+                playbackPositionSeconds += static_cast<double>(framesRead) / activeSampleRate;
             }
 
             if (hasLoopPoint && loopLengthMs > 0) {
@@ -275,7 +315,7 @@ double GmeDecoder::getDuration() {
 }
 
 int GmeDecoder::getSampleRate() {
-    return sampleRate;
+    return emu ? activeSampleRate : requestedSampleRate;
 }
 
 int GmeDecoder::getBitDepth() {
@@ -319,7 +359,10 @@ void GmeDecoder::setOutputSampleRate(int rate) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     // libgme sample rate is selected when opening the file.
     // Keep this value for the next open().
-    sampleRate = rate;
+    requestedSampleRate = rate;
+    if (!emu) {
+        activeSampleRate = rate;
+    }
 }
 
 void GmeDecoder::setOption(const char* name, const char* value) {
@@ -337,6 +380,17 @@ void GmeDecoder::setOption(const char* name, const char* value) {
         echoEnabled = parseBoolString(optionValue, echoEnabled);
     } else if (optionName == "gme.accuracy_enabled") {
         accuracyEnabled = parseBoolString(optionValue, accuracyEnabled);
+    } else if (optionName == "gme.eq_treble_db") {
+        eqTrebleDb = std::clamp(parseDoubleString(optionValue, eqTrebleDb), -50.0, 5.0);
+    } else if (optionName == "gme.eq_bass_hz") {
+        eqBassHz = std::clamp(parseDoubleString(optionValue, eqBassHz), 1.0, 16000.0);
+    } else if (optionName == "gme.spc_use_builtin_fade") {
+        spcUseBuiltInFade = parseBoolString(optionValue, spcUseBuiltInFade);
+        applyRepeatBehaviorLocked();
+    } else if (optionName == "gme.spc_interpolation") {
+        spcInterpolation = std::clamp(static_cast<int>(parseDoubleString(optionValue, spcInterpolation)), -2, 2);
+    } else if (optionName == "gme.spc_use_native_sample_rate") {
+        spcUseNativeSampleRate = parseBoolString(optionValue, spcUseNativeSampleRate);
     } else {
         return;
     }
@@ -350,8 +404,17 @@ int GmeDecoder::getOptionApplyPolicy(const char* name) const {
     if (optionName == "gme.tempo" ||
         optionName == "gme.stereo_separation" ||
         optionName == "gme.echo_enabled" ||
-        optionName == "gme.accuracy_enabled") {
+        optionName == "gme.accuracy_enabled" ||
+        optionName == "gme.eq_treble_db" ||
+        optionName == "gme.eq_bass_hz") {
         return OPTION_APPLY_LIVE;
+    }
+    if (optionName == "gme.spc_use_builtin_fade") {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    if (optionName == "gme.spc_interpolation" ||
+        optionName == "gme.spc_use_native_sample_rate") {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
     }
     return OPTION_APPLY_LIVE;
 }
@@ -412,7 +475,7 @@ void GmeDecoder::applyRepeatBehaviorLocked() {
     } else {
         gme_set_autoload_playback_limit(emu, 1);
         gme_ignore_silence(emu, 0);
-        if (duration > 0.0) {
+        if (duration > 0.0 && !(isSpcTrack && spcUseBuiltInFade)) {
             const int fadeStartMs = static_cast<int>(duration * 1000.0);
             gme_set_fade_msecs(emu, fadeStartMs, 50);
         }
@@ -425,4 +488,20 @@ void GmeDecoder::applyCoreOptionsLocked() {
     gme_set_stereo_depth(emu, stereoDepth);
     gme_disable_echo(emu, echoEnabled ? 0 : 1);
     gme_enable_accuracy(emu, accuracyEnabled ? 1 : 0);
+    gme_equalizer_t eq{};
+    eq.treble = eqTrebleDb;
+    eq.bass = eqBassHz;
+    gme_set_equalizer(emu, &eq);
+
+    if (isSpcTrack && spcInterpolation != 0 && !loggedSpcInterpolationCompat) {
+        LOGW("SPC interpolation option (%d) requested, but current libgme API exposes no runtime SPC interpolation control. Using library default.", spcInterpolation);
+        loggedSpcInterpolationCompat = true;
+    }
+}
+
+int GmeDecoder::resolveOpenSampleRateLocked(const char* path) const {
+    if (spcUseNativeSampleRate && hasExtension(path, ".spc")) {
+        return 32000;
+    }
+    return requestedSampleRate;
 }

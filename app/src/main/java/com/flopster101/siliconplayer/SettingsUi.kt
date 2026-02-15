@@ -88,6 +88,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.onSizeChanged
@@ -2209,6 +2210,7 @@ private fun PluginListItemCard(
             .fillMaxWidth()
             .zIndex(if (isDragging) 100f else 0f)
             .alpha(contentAlpha)
+            .clip(SettingsCardShape)
             .offset { IntOffset(x = 0, y = displayOffsetY.roundToInt()) }
             .let { base ->
                 if (editMode && enableInteractions) {

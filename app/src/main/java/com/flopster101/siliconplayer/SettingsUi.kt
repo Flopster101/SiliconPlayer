@@ -77,6 +77,10 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.flopster101.siliconplayer.pluginsettings.OpenMptSettings
+import com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings
+import com.flopster101.siliconplayer.pluginsettings.VgmPlayChipSettingsScreen
+import com.flopster101.siliconplayer.pluginsettings.VgmPlaySettings
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -87,6 +91,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.Root -> 0
     SettingsRoute.AudioPlugins -> 1
     SettingsRoute.PluginDetail -> 2
+    SettingsRoute.PluginVgmPlayChipSettings -> 3
     SettingsRoute.PluginFfmpeg -> 2
     SettingsRoute.PluginOpenMpt -> 2
     SettingsRoute.PluginVgmPlay -> 2
@@ -113,9 +118,7 @@ fun SettingsScreen(
     onOpenMisc: () -> Unit,
     onOpenUi: () -> Unit,
     onOpenAbout: () -> Unit,
-    onOpenFfmpeg: () -> Unit,
-    onOpenOpenMpt: () -> Unit,
-    onOpenVgmPlay: () -> Unit,
+    onOpenVgmPlayChipSettings: () -> Unit,
     selectedPluginName: String?,
     onPluginSelected: (String) -> Unit,
     onPluginEnabledChanged: (String, Boolean) -> Unit,
@@ -170,6 +173,20 @@ fun SettingsScreen(
     vgmPlaySampleRateHz: Int,
     vgmPlayCapabilities: Int,
     onVgmPlaySampleRateChanged: (Int) -> Unit,
+    vgmPlayLoopCount: Int,
+    onVgmPlayLoopCountChanged: (Int) -> Unit,
+    vgmPlayAllowNonLoopingLoop: Boolean,
+    onVgmPlayAllowNonLoopingLoopChanged: (Boolean) -> Unit,
+    vgmPlayVsyncRate: Int,
+    onVgmPlayVsyncRateChanged: (Int) -> Unit,
+    vgmPlayResampleMode: Int,
+    onVgmPlayResampleModeChanged: (Int) -> Unit,
+    vgmPlayChipSampleMode: Int,
+    onVgmPlayChipSampleModeChanged: (Int) -> Unit,
+    vgmPlayChipSampleRate: Int,
+    onVgmPlayChipSampleRateChanged: (Int) -> Unit,
+    vgmPlayChipCoreSelections: Map<String, Int>,
+    onVgmPlayChipCoreChanged: (String, Int) -> Unit,
     openMptStereoSeparationPercent: Int,
     onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
     openMptStereoSeparationAmigaPercent: Int,
@@ -197,6 +214,7 @@ fun SettingsScreen(
         SettingsRoute.Root -> null
         SettingsRoute.AudioPlugins -> "Audio plugins"
         SettingsRoute.PluginDetail -> selectedPluginName?.let { "$it plugin settings" } ?: "Plugin settings"
+        SettingsRoute.PluginVgmPlayChipSettings -> "VGMPlay chip settings"
         SettingsRoute.PluginFfmpeg -> "FFmpeg plugin settings"
         SettingsRoute.PluginOpenMpt -> "OpenMPT plugin settings"
         SettingsRoute.PluginVgmPlay -> "VGMPlay plugin settings"
@@ -444,8 +462,8 @@ fun SettingsScreen(
                                 else -> "Not configurable"
                             }
 
-                            if (selectedPluginName == "LibOpenMPT") {
-                                val pluginSettings = com.flopster101.siliconplayer.pluginsettings.OpenMptSettings(
+                            val pluginSettings: com.flopster101.siliconplayer.pluginsettings.PluginSettings? = when (selectedPluginName) {
+                                "LibOpenMPT" -> OpenMptSettings(
                                     sampleRateHz = openMptSampleRateHz,
                                     capabilities = openMptCapabilities,
                                     stereoSeparationPercent = openMptStereoSeparationPercent,
@@ -469,7 +487,30 @@ fun SettingsScreen(
                                     onSurroundEnabledChanged = onOpenMptSurroundEnabledChanged,
                                     includeSampleRateControl = false
                                 )
-                                com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings(
+                                "VGMPlay" -> VgmPlaySettings(
+                                    sampleRateHz = vgmPlaySampleRateHz,
+                                    capabilities = vgmPlayCapabilities,
+                                    loopCount = vgmPlayLoopCount,
+                                    allowNonLoopingLoop = vgmPlayAllowNonLoopingLoop,
+                                    vsyncRate = vgmPlayVsyncRate,
+                                    resampleMode = vgmPlayResampleMode,
+                                    chipSampleMode = vgmPlayChipSampleMode,
+                                    chipSampleRate = vgmPlayChipSampleRate,
+                                    onSampleRateChanged = onVgmPlaySampleRateChanged,
+                                    onLoopCountChanged = onVgmPlayLoopCountChanged,
+                                    onAllowNonLoopingLoopChanged = onVgmPlayAllowNonLoopingLoopChanged,
+                                    onVsyncRateChanged = onVgmPlayVsyncRateChanged,
+                                    onResampleModeChanged = onVgmPlayResampleModeChanged,
+                                    onChipSampleModeChanged = onVgmPlayChipSampleModeChanged,
+                                    onChipSampleRateChanged = onVgmPlayChipSampleRateChanged,
+                                    onOpenChipSettings = onOpenVgmPlayChipSettings,
+                                    includeSampleRateControl = false
+                                )
+                                else -> null
+                            }
+
+                            if (pluginSettings != null) {
+                                RenderPluginSettings(
                                     pluginSettings = pluginSettings,
                                     settingsSectionLabel = { label -> SettingsSectionLabel(label) }
                                 )
@@ -486,6 +527,14 @@ fun SettingsScreen(
                                 onSelected = { hz -> onSampleRateSelected?.invoke(hz) }
                             )
                         }
+                    }
+                    SettingsRoute.PluginVgmPlayChipSettings -> {
+                        SettingsSectionLabel("Chip settings")
+                        VgmPlayChipSettingsScreen(
+                            chipCoreSpecs = VgmPlayConfig.chipCoreSpecs,
+                            chipCoreSelections = vgmPlayChipCoreSelections,
+                            onChipCoreChanged = onVgmPlayChipCoreChanged
+                        )
                     }
                     SettingsRoute.PluginFfmpeg -> SampleRateSelectorCard(
                         title = "Render sample rate",

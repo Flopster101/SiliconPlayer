@@ -136,6 +136,7 @@ enum class SettingsRoute {
     Root,
     AudioPlugins,
     PluginDetail, // Generic plugin detail screen (plugin name passed separately)
+    PluginVgmPlayChipSettings,
     PluginFfmpeg,
     PluginOpenMpt,
     PluginVgmPlay,
@@ -389,6 +390,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.Root -> 0
     SettingsRoute.AudioPlugins -> 1
     SettingsRoute.PluginDetail -> 2
+    SettingsRoute.PluginVgmPlayChipSettings -> 3
     SettingsRoute.PluginFfmpeg -> 2
     SettingsRoute.PluginOpenMpt -> 2
     SettingsRoute.PluginVgmPlay -> 2
@@ -820,6 +822,46 @@ private fun AppNavigation(
     var vgmPlayCoreSampleRateHz by remember {
         mutableIntStateOf(
             prefs.getInt(CorePreferenceKeys.CORE_RATE_VGMPLAY, VgmPlayDefaults.coreSampleRateHz)
+        )
+    }
+    var vgmPlayLoopCount by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.VGMPLAY_LOOP_COUNT, VgmPlayDefaults.loopCount)
+        )
+    }
+    var vgmPlayAllowNonLoopingLoop by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                CorePreferenceKeys.VGMPLAY_ALLOW_NON_LOOPING_LOOP,
+                VgmPlayDefaults.allowNonLoopingLoop
+            )
+        )
+    }
+    var vgmPlayVsyncRate by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.VGMPLAY_VSYNC_RATE, VgmPlayDefaults.vsyncRate)
+        )
+    }
+    var vgmPlayResampleMode by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE, VgmPlayDefaults.resampleMode)
+        )
+    }
+    var vgmPlayChipSampleMode by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_MODE, VgmPlayDefaults.chipSampleMode)
+        )
+    }
+    var vgmPlayChipSampleRate by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_RATE, VgmPlayDefaults.chipSampleRate)
+        )
+    }
+    var vgmPlayChipCoreSelections by remember {
+        mutableStateOf(
+            VgmPlayConfig.defaultChipCoreSelections().mapValues { (chipKey, defaultValue) ->
+                prefs.getInt(CorePreferenceKeys.vgmPlayChipCoreKey(chipKey), defaultValue)
+            }
         )
     }
     var openMptStereoSeparationPercent by remember {
@@ -1361,6 +1403,129 @@ private fun AppNavigation(
         NativeBridge.setCoreOutputSampleRate("VGMPlay", vgmPlayCoreSampleRateHz)
     }
 
+    LaunchedEffect(vgmPlayLoopCount) {
+        val normalized = vgmPlayLoopCount.coerceIn(1, 99)
+        if (normalized != vgmPlayLoopCount) {
+            vgmPlayLoopCount = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.VGMPLAY_LOOP_COUNT, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "VGMPlay",
+            optionName = VgmPlayOptionKeys.LOOP_COUNT,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Loop count"
+        )
+    }
+
+    LaunchedEffect(vgmPlayAllowNonLoopingLoop) {
+        prefs.edit()
+            .putBoolean(CorePreferenceKeys.VGMPLAY_ALLOW_NON_LOOPING_LOOP, vgmPlayAllowNonLoopingLoop)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "VGMPlay",
+            optionName = VgmPlayOptionKeys.ALLOW_NON_LOOPING_LOOP,
+            optionValue = vgmPlayAllowNonLoopingLoop.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Allow non-looping loop"
+        )
+    }
+
+    LaunchedEffect(vgmPlayVsyncRate) {
+        val normalized = when (vgmPlayVsyncRate) {
+            50, 60 -> vgmPlayVsyncRate
+            else -> 0
+        }
+        if (normalized != vgmPlayVsyncRate) {
+            vgmPlayVsyncRate = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.VGMPLAY_VSYNC_RATE, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "VGMPlay",
+            optionName = VgmPlayOptionKeys.VSYNC_RATE_HZ,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "VSync mode"
+        )
+    }
+
+    LaunchedEffect(vgmPlayResampleMode) {
+        val normalized = vgmPlayResampleMode.coerceIn(0, 2)
+        if (normalized != vgmPlayResampleMode) {
+            vgmPlayResampleMode = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "VGMPlay",
+            optionName = VgmPlayOptionKeys.RESAMPLE_MODE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Resampling mode"
+        )
+    }
+
+    LaunchedEffect(vgmPlayChipSampleMode) {
+        val normalized = vgmPlayChipSampleMode.coerceIn(0, 2)
+        if (normalized != vgmPlayChipSampleMode) {
+            vgmPlayChipSampleMode = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_MODE, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "VGMPlay",
+            optionName = VgmPlayOptionKeys.CHIP_SAMPLE_MODE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Chip sample mode"
+        )
+    }
+
+    LaunchedEffect(vgmPlayChipSampleRate) {
+        val normalized = vgmPlayChipSampleRate.coerceIn(8000, 192000)
+        if (normalized != vgmPlayChipSampleRate) {
+            vgmPlayChipSampleRate = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_RATE, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "VGMPlay",
+            optionName = VgmPlayOptionKeys.CHIP_SAMPLE_RATE_HZ,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Chip sample rate"
+        )
+    }
+
+    LaunchedEffect(vgmPlayChipCoreSelections) {
+        val editor = prefs.edit()
+        vgmPlayChipCoreSelections.forEach { (chipKey, selectedValue) ->
+            editor.putInt(CorePreferenceKeys.vgmPlayChipCoreKey(chipKey), selectedValue)
+        }
+        editor.apply()
+        vgmPlayChipCoreSelections.forEach { (chipKey, selectedValue) ->
+            applyCoreOptionWithPolicy(
+                coreName = "VGMPlay",
+                optionName = "${VgmPlayOptionKeys.CHIP_CORE_PREFIX}$chipKey",
+                optionValue = selectedValue.toString(),
+                policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+                optionLabel = "$chipKey emulator core"
+            )
+        }
+    }
+
     LaunchedEffect(openMptStereoSeparationPercent) {
         prefs.edit()
             .putInt(
@@ -1721,6 +1886,7 @@ private fun AppNavigation(
             currentView == MainView.Settings && settingsLaunchedFromPlayer -> exitSettingsToReturnView()
             currentView == MainView.Settings && settingsRoute != SettingsRoute.Root -> {
                 settingsRoute = when (settingsRoute) {
+                    SettingsRoute.PluginVgmPlayChipSettings -> SettingsRoute.PluginDetail
                     SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt, SettingsRoute.PluginVgmPlay -> SettingsRoute.AudioPlugins
                     else -> SettingsRoute.Root
                 }
@@ -1904,6 +2070,7 @@ private fun AppNavigation(
                             }
                             if (settingsRoute != SettingsRoute.Root) {
                                 settingsRoute = when (settingsRoute) {
+                                    SettingsRoute.PluginVgmPlayChipSettings -> SettingsRoute.PluginDetail
                                     SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt, SettingsRoute.PluginVgmPlay -> SettingsRoute.AudioPlugins
                                     else -> SettingsRoute.Root
                                 }
@@ -1961,9 +2128,7 @@ private fun AppNavigation(
                         onOpenMisc = { settingsRoute = SettingsRoute.Misc },
                         onOpenUi = { settingsRoute = SettingsRoute.Ui },
                         onOpenAbout = { settingsRoute = SettingsRoute.About },
-                        onOpenFfmpeg = { settingsRoute = SettingsRoute.PluginFfmpeg },
-                        onOpenOpenMpt = { settingsRoute = SettingsRoute.PluginOpenMpt },
-                        onOpenVgmPlay = { settingsRoute = SettingsRoute.PluginVgmPlay },
+                        onOpenVgmPlayChipSettings = { settingsRoute = SettingsRoute.PluginVgmPlayChipSettings },
                         selectedPluginName = selectedPluginName,
                         onPluginSelected = { pluginName ->
                             selectedPluginName = pluginName
@@ -2049,6 +2214,22 @@ private fun AppNavigation(
                         vgmPlaySampleRateHz = vgmPlayCoreSampleRateHz,
                         vgmPlayCapabilities = vgmPlayCapabilities,
                         onVgmPlaySampleRateChanged = { vgmPlayCoreSampleRateHz = it },
+                        vgmPlayLoopCount = vgmPlayLoopCount,
+                        onVgmPlayLoopCountChanged = { vgmPlayLoopCount = it },
+                        vgmPlayAllowNonLoopingLoop = vgmPlayAllowNonLoopingLoop,
+                        onVgmPlayAllowNonLoopingLoopChanged = { vgmPlayAllowNonLoopingLoop = it },
+                        vgmPlayVsyncRate = vgmPlayVsyncRate,
+                        onVgmPlayVsyncRateChanged = { vgmPlayVsyncRate = it },
+                        vgmPlayResampleMode = vgmPlayResampleMode,
+                        onVgmPlayResampleModeChanged = { vgmPlayResampleMode = it },
+                        vgmPlayChipSampleMode = vgmPlayChipSampleMode,
+                        onVgmPlayChipSampleModeChanged = { vgmPlayChipSampleMode = it },
+                        vgmPlayChipSampleRate = vgmPlayChipSampleRate,
+                        onVgmPlayChipSampleRateChanged = { vgmPlayChipSampleRate = it },
+                        vgmPlayChipCoreSelections = vgmPlayChipCoreSelections,
+                        onVgmPlayChipCoreChanged = { chipKey, selectedValue ->
+                            vgmPlayChipCoreSelections = vgmPlayChipCoreSelections + (chipKey to selectedValue)
+                        },
                         openMptStereoSeparationPercent = openMptStereoSeparationPercent,
                         onOpenMptStereoSeparationPercentChanged = { openMptStereoSeparationPercent = it },
                         openMptStereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
@@ -2085,6 +2266,11 @@ private fun AppNavigation(
                                 CorePreferenceKeys.CORE_RATE_FFMPEG to ffmpegCoreSampleRateHz,
                                 CorePreferenceKeys.CORE_RATE_OPENMPT to openMptCoreSampleRateHz,
                                 CorePreferenceKeys.CORE_RATE_VGMPLAY to vgmPlayCoreSampleRateHz,
+                                CorePreferenceKeys.VGMPLAY_LOOP_COUNT to vgmPlayLoopCount,
+                                CorePreferenceKeys.VGMPLAY_VSYNC_RATE to vgmPlayVsyncRate,
+                                CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE to vgmPlayResampleMode,
+                                CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_MODE to vgmPlayChipSampleMode,
+                                CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_RATE to vgmPlayChipSampleRate,
                                 CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT to openMptStereoSeparationPercent,
                                 CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT to openMptStereoSeparationAmigaPercent,
                                 CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH to openMptInterpolationFilterLength,
@@ -2093,16 +2279,21 @@ private fun AppNavigation(
                                 CorePreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL to openMptMasterGainMilliBel
                             )
                             val pluginBooleanSnapshot = mapOf(
+                                CorePreferenceKeys.VGMPLAY_ALLOW_NON_LOOPING_LOOP to vgmPlayAllowNonLoopingLoop,
                                 CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES to openMptAmigaResamplerApplyAllModules,
                                 CorePreferenceKeys.OPENMPT_FT2_XM_VOLUME_RAMPING to openMptFt2XmVolumeRamping,
                                 CorePreferenceKeys.OPENMPT_SURROUND_ENABLED to openMptSurroundEnabled
                             )
+                            val vgmChipCoreSnapshot = vgmPlayChipCoreSelections
 
                             prefs.edit().clear().apply()
 
                             val restoreEditor = prefs.edit()
                             pluginSnapshot.forEach { (key, value) -> restoreEditor.putInt(key, value) }
                             pluginBooleanSnapshot.forEach { (key, value) -> restoreEditor.putBoolean(key, value) }
+                            vgmChipCoreSnapshot.forEach { (chipKey, value) ->
+                                restoreEditor.putInt(CorePreferenceKeys.vgmPlayChipCoreKey(chipKey), value)
+                            }
                             restoreEditor.apply()
 
                             autoPlayOnTrackSelect = true
@@ -2141,6 +2332,13 @@ private fun AppNavigation(
                             ffmpegCoreSampleRateHz = 0
                             openMptCoreSampleRateHz = OpenMptDefaults.coreSampleRateHz
                             vgmPlayCoreSampleRateHz = VgmPlayDefaults.coreSampleRateHz
+                            vgmPlayLoopCount = VgmPlayDefaults.loopCount
+                            vgmPlayAllowNonLoopingLoop = VgmPlayDefaults.allowNonLoopingLoop
+                            vgmPlayVsyncRate = VgmPlayDefaults.vsyncRate
+                            vgmPlayResampleMode = VgmPlayDefaults.resampleMode
+                            vgmPlayChipSampleMode = VgmPlayDefaults.chipSampleMode
+                            vgmPlayChipSampleRate = VgmPlayDefaults.chipSampleRate
+                            vgmPlayChipCoreSelections = VgmPlayConfig.defaultChipCoreSelections()
                             openMptStereoSeparationPercent = OpenMptDefaults.stereoSeparationPercent
                             openMptStereoSeparationAmigaPercent = OpenMptDefaults.stereoSeparationAmigaPercent
                             openMptInterpolationFilterLength = OpenMptDefaults.interpolationFilterLength
@@ -2151,20 +2349,30 @@ private fun AppNavigation(
                             openMptMasterGainMilliBel = OpenMptDefaults.masterGainMilliBel
                             openMptSurroundEnabled = OpenMptDefaults.surroundEnabled
 
-                            prefs.edit()
-                                .remove(CorePreferenceKeys.CORE_RATE_FFMPEG)
-                                .remove(CorePreferenceKeys.CORE_RATE_OPENMPT)
-                                .remove(CorePreferenceKeys.CORE_RATE_VGMPLAY)
-                                .remove(CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT)
-                                .remove(CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT)
-                                .remove(CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH)
-                                .remove(CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE)
-                                .remove(CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES)
-                                .remove(CorePreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH)
-                                .remove(CorePreferenceKeys.OPENMPT_FT2_XM_VOLUME_RAMPING)
-                                .remove(CorePreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL)
-                                .remove(CorePreferenceKeys.OPENMPT_SURROUND_ENABLED)
-                                .apply()
+                            prefs.edit().apply {
+                                remove(CorePreferenceKeys.CORE_RATE_FFMPEG)
+                                remove(CorePreferenceKeys.CORE_RATE_OPENMPT)
+                                remove(CorePreferenceKeys.CORE_RATE_VGMPLAY)
+                                remove(CorePreferenceKeys.VGMPLAY_LOOP_COUNT)
+                                remove(CorePreferenceKeys.VGMPLAY_ALLOW_NON_LOOPING_LOOP)
+                                remove(CorePreferenceKeys.VGMPLAY_VSYNC_RATE)
+                                remove(CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE)
+                                remove(CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_MODE)
+                                remove(CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_RATE)
+                                remove(CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT)
+                                remove(CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT)
+                                remove(CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH)
+                                remove(CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE)
+                                remove(CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES)
+                                remove(CorePreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH)
+                                remove(CorePreferenceKeys.OPENMPT_FT2_XM_VOLUME_RAMPING)
+                                remove(CorePreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL)
+                                remove(CorePreferenceKeys.OPENMPT_SURROUND_ENABLED)
+                                VgmPlayConfig.chipCoreSpecs.forEach { spec ->
+                                    remove(CorePreferenceKeys.vgmPlayChipCoreKey(spec.key))
+                                }
+                                apply()
+                            }
 
                             Toast.makeText(
                                 context,

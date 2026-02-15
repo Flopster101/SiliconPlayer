@@ -13,6 +13,13 @@ object CorePreferenceKeys {
     const val OPENMPT_FT2_XM_VOLUME_RAMPING = "openmpt_ft2_xm_volume_ramping"
     const val OPENMPT_MASTER_GAIN_MILLIBEL = "openmpt_master_gain_millibel"
     const val OPENMPT_SURROUND_ENABLED = "openmpt_surround_enabled"
+    const val VGMPLAY_LOOP_COUNT = "vgmplay_loop_count"
+    const val VGMPLAY_ALLOW_NON_LOOPING_LOOP = "vgmplay_allow_non_looping_loop"
+    const val VGMPLAY_VSYNC_RATE = "vgmplay_vsync_rate"
+    const val VGMPLAY_RESAMPLE_MODE = "vgmplay_resample_mode"
+    const val VGMPLAY_CHIP_SAMPLE_MODE = "vgmplay_chip_sample_mode"
+    const val VGMPLAY_CHIP_SAMPLE_RATE = "vgmplay_chip_sample_rate"
+    fun vgmPlayChipCoreKey(chipKey: String) = "vgmplay_chip_core_$chipKey"
 }
 
 object OpenMptDefaults {
@@ -34,4 +41,10 @@ object FfmpegDefaults {
 
 object VgmPlayDefaults {
     const val coreSampleRateHz = 0
+    const val loopCount = 1
+    const val allowNonLoopingLoop = false
+    const val vsyncRate = 0
+    const val resampleMode = 0
+    const val chipSampleMode = 0
+    const val chipSampleRate = 48000
 }

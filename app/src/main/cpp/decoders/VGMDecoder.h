@@ -7,9 +7,11 @@
 #include <memory>
 #include <string>
 #include <atomic>
+#include <unordered_map>
 
 // Forward declarations for libvgm types
 class PlayerA;
+class VGMPlayer;
 struct _data_loader;
 typedef struct _data_loader DATA_LOADER;
 
@@ -72,12 +74,22 @@ private:
     bool playerStarted = false; // Track if player has been started
     bool pendingTerminalEnd = false;
     double playbackTimeOffsetSeconds = 0.0;
+    bool songHasLoopPoint = false;
+    bool allowNonLoopingLoop = false;
+    uint32_t vgmPlaybackRateHz = 0; // 0=auto, 50/60 override
+    uint8_t chipSampleMode = 0; // DEVRI_SRMODE_NATIVE
+    uint8_t chipResampleMode = 0; // high quality
+    uint32_t chipSampleRateHz = 48000;
+    std::unordered_map<uint8_t, uint32_t> chipCoreOverrideByType;
 
     // Internal close method that doesn't acquire mutex (for use within locked methods)
     void closeInternal();
 
     // Ensure player is started with correct sample rate (called on first read)
     void ensurePlayerStarted();
+    void applyPlayerOptionsLocked();
+    void applyDeviceOptionsLocked(VGMPlayer* vgmPlayer);
+    uint32_t resolveChipCoreForOption(uint8_t deviceType, int optionValue) const;
 };
 
 #endif //SILICONPLAYER_VGMDECODER_H

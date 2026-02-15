@@ -4,9 +4,13 @@
 #include <cstring>
 #include <fstream>
 #include <limits>
+#include <cctype>
 #include <vector>
 
 // libvgm includes
+#include <vgm/emu/EmuCores.h>
+#include <vgm/emu/EmuStructs.h>
+#include <vgm/emu/SoundDevs.h>
 #include <vgm/player/playera.hpp>
 #include <vgm/player/playerbase.hpp>
 #include <vgm/player/vgmplayer.hpp>
@@ -18,6 +22,33 @@
 
 namespace {
 constexpr uint32_t kPlayerOutputBufferFrames = 4096;
+
+bool parseBoolString(const std::string& value, bool fallback) {
+    std::string normalized;
+    normalized.reserve(value.size());
+    for (char c : value) {
+        normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+    }
+    if (normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on") {
+        return true;
+    }
+    if (normalized == "0" || normalized == "false" || normalized == "no" || normalized == "off") {
+        return false;
+    }
+    return fallback;
+}
+
+int parseIntString(const std::string& value, int fallback) {
+    try {
+        return std::stoi(value);
+    } catch (...) {
+        return fallback;
+    }
+}
+
+bool startsWith(const std::string& value, const std::string& prefix) {
+    return value.rfind(prefix, 0) == 0;
+}
 }
 
 VGMDecoder::VGMDecoder() {
@@ -128,10 +159,13 @@ bool VGMDecoder::open(const char* path) {
 
     PLR_SONG_INFO songInfo{};
     if (vgmPlayer->GetSongInfo(songInfo) == 0x00) {
-        (void)songInfo;
+        songHasLoopPoint = songInfo.loopTick != static_cast<uint32_t>(-1);
         const double totalTime = player->GetTotalTime(PLAYTIME_LOOP_EXCL);
         duration = totalTime > 0.0 ? totalTime : 0.0;
     }
+
+    applyPlayerOptionsLocked();
+    applyDeviceOptionsLocked(vgmPlayer);
     return true;
 }
 
@@ -159,6 +193,7 @@ void VGMDecoder::closeInternal() {
     playerStarted = false;
     pendingTerminalEnd = false;
     playbackTimeOffsetSeconds = 0.0;
+    songHasLoopPoint = false;
 }
 
 void VGMDecoder::close() {
@@ -229,9 +264,16 @@ int VGMDecoder::read(float* buffer, int numFrames) {
         hasLooped = true;
     }
 
-    if (repeatMode.load() != 2) {
+    const int activeMode = repeatMode.load();
+    if (activeMode != 2) {
         const UINT8 state = player->GetState();
         if ((state & (PLAYSTATE_END | PLAYSTATE_FIN)) != 0) {
+            if (activeMode == 1 && allowNonLoopingLoop && !songHasLoopPoint) {
+                player->Seek(PLAYPOS_SAMPLE, 0);
+                pendingTerminalEnd = false;
+                playbackTimeOffsetSeconds = 0.0;
+                return framesRendered;
+            }
             // Let one final rendered chunk pass through, then report EOF on next read.
             pendingTerminalEnd = true;
         }
@@ -382,7 +424,150 @@ AudioDecoder::TimelineMode VGMDecoder::getTimelineMode() const {
             : TimelineMode::ContinuousLinear;
 }
 
-void VGMDecoder::setOption(const char* /*name*/, const char* /*value*/) {
+void VGMDecoder::setOption(const char* name, const char* value) {
+    if (!name || !value) return;
+    std::lock_guard<std::mutex> lock(decodeMutex);
+
+    const std::string optionName(name);
+    const std::string optionValue(value);
+
+    if (optionName == "vgmplay.loop_count") {
+        finiteLoopCount = static_cast<uint32_t>(std::clamp(parseIntString(optionValue, static_cast<int>(finiteLoopCount)), 1, 99));
+        if (player) {
+            const int activeRepeatMode = repeatMode.load();
+            player->SetLoopCount(activeRepeatMode == 2 ? 0 : finiteLoopCount);
+        }
+    } else if (optionName == "vgmplay.allow_non_looping_loop") {
+        allowNonLoopingLoop = parseBoolString(optionValue, allowNonLoopingLoop);
+    } else if (optionName == "vgmplay.vsync_rate_hz") {
+        const int parsed = parseIntString(optionValue, static_cast<int>(vgmPlaybackRateHz));
+        vgmPlaybackRateHz = (parsed == 50 || parsed == 60) ? static_cast<uint32_t>(parsed) : 0;
+        applyPlayerOptionsLocked();
+    } else if (optionName == "vgmplay.resample_mode") {
+        chipResampleMode = static_cast<uint8_t>(std::clamp(parseIntString(optionValue, chipResampleMode), 0, 2));
+        PlayerBase* playerBase = player ? player->GetPlayer() : nullptr;
+        if (auto* vgmPlayer = dynamic_cast<VGMPlayer*>(playerBase)) {
+            applyDeviceOptionsLocked(vgmPlayer);
+        }
+    } else if (optionName == "vgmplay.chip_sample_mode") {
+        chipSampleMode = static_cast<uint8_t>(std::clamp(parseIntString(optionValue, chipSampleMode), 0, 2));
+        PlayerBase* playerBase = player ? player->GetPlayer() : nullptr;
+        if (auto* vgmPlayer = dynamic_cast<VGMPlayer*>(playerBase)) {
+            applyDeviceOptionsLocked(vgmPlayer);
+        }
+    } else if (optionName == "vgmplay.chip_sample_rate_hz") {
+        const int parsed = parseIntString(optionValue, static_cast<int>(chipSampleRateHz));
+        chipSampleRateHz = static_cast<uint32_t>(std::clamp(parsed, 8000, 192000));
+        PlayerBase* playerBase = player ? player->GetPlayer() : nullptr;
+        if (auto* vgmPlayer = dynamic_cast<VGMPlayer*>(playerBase)) {
+            applyDeviceOptionsLocked(vgmPlayer);
+        }
+    } else if (startsWith(optionName, "vgmplay.chip_core.")) {
+        const std::string chipKey = optionName.substr(std::strlen("vgmplay.chip_core."));
+        int chipType = -1;
+        if (chipKey == "SN76496") chipType = DEVID_SN76496;
+        else if (chipKey == "YM2151") chipType = DEVID_YM2151;
+        else if (chipKey == "YM2413") chipType = DEVID_YM2413;
+        else if (chipKey == "YM2612") chipType = DEVID_YM2612;
+        else if (chipKey == "YM2203") chipType = DEVID_YM2203;
+        else if (chipKey == "YM2608") chipType = DEVID_YM2608;
+        else if (chipKey == "YM2610") chipType = DEVID_YM2610;
+        else if (chipKey == "YM3812") chipType = DEVID_YM3812;
+        else if (chipKey == "YMF262") chipType = DEVID_YMF262;
+        else if (chipKey == "AY8910") chipType = DEVID_AY8910;
+        else if (chipKey == "NES_APU") chipType = DEVID_NES_APU;
+        else if (chipKey == "qsound") chipType = DEVID_QSOUND;
+        else if (chipKey == "saa1099") chipType = DEVID_SAA1099;
+        else if (chipKey == "c6280") chipType = DEVID_C6280;
+        if (chipType < 0) return;
+
+        const int choiceValue = parseIntString(optionValue, 0);
+        chipCoreOverrideByType[static_cast<uint8_t>(chipType)] =
+                resolveChipCoreForOption(static_cast<uint8_t>(chipType), choiceValue);
+        PlayerBase* playerBase = player ? player->GetPlayer() : nullptr;
+        if (auto* vgmPlayer = dynamic_cast<VGMPlayer*>(playerBase)) {
+            applyDeviceOptionsLocked(vgmPlayer);
+        }
+    }
+}
+
+void VGMDecoder::applyPlayerOptionsLocked() {
+    PlayerBase* playerBase = player ? player->GetPlayer() : nullptr;
+    auto* vgmPlayer = dynamic_cast<VGMPlayer*>(playerBase);
+    if (!vgmPlayer) {
+        return;
+    }
+
+    VGM_PLAY_OPTIONS playOptions{};
+    if (vgmPlayer->GetPlayerOptions(playOptions) != 0x00) {
+        return;
+    }
+    playOptions.playbackHz = vgmPlaybackRateHz;
+    vgmPlayer->SetPlayerOptions(playOptions);
+}
+
+void VGMDecoder::applyDeviceOptionsLocked(VGMPlayer* vgmPlayer) {
+    if (!vgmPlayer) return;
+
+    std::vector<PLR_DEV_INFO> deviceInfos;
+    if (vgmPlayer->GetSongDeviceInfo(deviceInfos) != 0x00) {
+        return;
+    }
+
+    for (const auto& deviceInfo : deviceInfos) {
+        PLR_DEV_OPTS deviceOptions{};
+        if (vgmPlayer->GetDeviceOptions(deviceInfo.id, deviceOptions) != 0x00) {
+            continue;
+        }
+
+        deviceOptions.srMode = chipSampleMode;
+        deviceOptions.resmplMode = chipResampleMode;
+        deviceOptions.smplRate = chipSampleRateHz;
+
+        auto coreIt = chipCoreOverrideByType.find(deviceInfo.type);
+        if (coreIt != chipCoreOverrideByType.end()) {
+            deviceOptions.emuCore[0] = coreIt->second;
+        }
+
+        vgmPlayer->SetDeviceOptions(deviceInfo.id, deviceOptions);
+    }
+}
+
+uint32_t VGMDecoder::resolveChipCoreForOption(uint8_t deviceType, int optionValue) const {
+    switch (deviceType) {
+        case DEVID_SN76496:
+            return optionValue == 1 ? FCC_MAXM : FCC_MAME;
+        case DEVID_YM2151:
+            return optionValue == 1 ? FCC_NUKE : FCC_MAME;
+        case DEVID_YM2413:
+            if (optionValue == 1) return FCC_MAME;
+            if (optionValue == 2) return FCC_NUKE;
+            return FCC_EMU_;
+        case DEVID_YM2612:
+            if (optionValue == 1) return FCC_NUKE;
+            if (optionValue == 2) return FCC_GENS;
+            return FCC_GPGX;
+        case DEVID_YM2203:
+        case DEVID_YM2608:
+        case DEVID_YM2610:
+        case DEVID_AY8910:
+            return optionValue == 1 ? FCC_MAME : FCC_EMU_;
+        case DEVID_YM3812:
+        case DEVID_YMF262:
+            if (optionValue == 1) return FCC_MAME;
+            if (optionValue == 2) return FCC_NUKE;
+            return FCC_ADLE;
+        case DEVID_NES_APU:
+            return optionValue == 1 ? FCC_MAME : FCC_NSFP;
+        case DEVID_QSOUND:
+            return optionValue == 1 ? FCC_MAME : FCC_CTR_;
+        case DEVID_SAA1099:
+            return optionValue == 1 ? FCC_MAME : FCC_VBEL;
+        case DEVID_C6280:
+            return optionValue == 1 ? FCC_MAME : FCC_OOTK;
+        default:
+            return 0;
+    }
 }
 
 std::vector<std::string> VGMDecoder::getSupportedExtensions() {

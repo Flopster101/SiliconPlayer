@@ -31,6 +31,12 @@ public:
     std::string getTitle() override;
     std::string getArtist() override;
     void setOutputSampleRate(int sampleRate) override;
+    int getPlaybackCapabilities() const override {
+        return PLAYBACK_CAP_SEEK |
+               PLAYBACK_CAP_RELIABLE_DURATION |
+               PLAYBACK_CAP_LIVE_REPEAT_MODE |
+               PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
+    }
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     double getPlaybackPositionSeconds() override;

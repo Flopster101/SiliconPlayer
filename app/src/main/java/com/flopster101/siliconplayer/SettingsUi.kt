@@ -391,104 +391,100 @@ fun SettingsScreen(
                     }
                     SettingsRoute.PluginDetail -> {
                         if (selectedPluginName != null) {
-                            // Render core-specific settings based on plugin name
-                            when (selectedPluginName) {
-                                "FFmpeg" -> {
-                                    PluginDetailScreen(
-                                        pluginName = selectedPluginName,
-                                        onPriorityChanged = { priority ->
-                                            onPluginPriorityChanged(selectedPluginName, priority)
-                                        },
-                                        onExtensionsChanged = { extensions ->
-                                            onPluginExtensionsChanged(selectedPluginName, extensions)
-                                        }
-                                    )
+                            PluginDetailScreen(
+                                pluginName = selectedPluginName,
+                                onPriorityChanged = { priority ->
+                                    onPluginPriorityChanged(selectedPluginName, priority)
+                                },
+                                onExtensionsChanged = { extensions ->
+                                    onPluginExtensionsChanged(selectedPluginName, extensions)
+                                }
+                            )
 
-                                    // Render plugin-specific settings using the API
-                                    val pluginSettings = com.flopster101.siliconplayer.pluginsettings.FfmpegSettings(
-                                        sampleRateHz = ffmpegSampleRateHz,
-                                        capabilities = ffmpegCapabilities,
-                                        onSampleRateChanged = onFfmpegSampleRateChanged
-                                    )
-                                    com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings(
-                                        pluginSettings = pluginSettings,
-                                        settingsSectionLabel = { label -> SettingsSectionLabel(label) }
-                                    )
-                                }
-                                "LibOpenMPT" -> {
-                                    PluginDetailScreen(
-                                        pluginName = selectedPluginName,
-                                        onPriorityChanged = { priority ->
-                                            onPluginPriorityChanged(selectedPluginName, priority)
-                                        },
-                                        onExtensionsChanged = { extensions ->
-                                            onPluginExtensionsChanged(selectedPluginName, extensions)
-                                        }
-                                    )
-
-                                    // Render plugin-specific settings using the API
-                                    val pluginSettings = com.flopster101.siliconplayer.pluginsettings.OpenMptSettings(
-                                        sampleRateHz = openMptSampleRateHz,
-                                        capabilities = openMptCapabilities,
-                                        stereoSeparationPercent = openMptStereoSeparationPercent,
-                                        stereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
-                                        interpolationFilterLength = openMptInterpolationFilterLength,
-                                        amigaResamplerMode = openMptAmigaResamplerMode,
-                                        amigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
-                                        volumeRampingStrength = openMptVolumeRampingStrength,
-                                        ft2XmVolumeRamping = openMptFt2XmVolumeRamping,
-                                        masterGainMilliBel = openMptMasterGainMilliBel,
-                                        surroundEnabled = openMptSurroundEnabled,
-                                        onSampleRateChanged = onOpenMptSampleRateChanged,
-                                        onStereoSeparationPercentChanged = onOpenMptStereoSeparationPercentChanged,
-                                        onStereoSeparationAmigaPercentChanged = onOpenMptStereoSeparationAmigaPercentChanged,
-                                        onInterpolationFilterLengthChanged = onOpenMptInterpolationFilterLengthChanged,
-                                        onAmigaResamplerModeChanged = onOpenMptAmigaResamplerModeChanged,
-                                        onAmigaResamplerApplyAllModulesChanged = onOpenMptAmigaResamplerApplyAllModulesChanged,
-                                        onVolumeRampingStrengthChanged = onOpenMptVolumeRampingStrengthChanged,
-                                        onFt2XmVolumeRampingChanged = onOpenMptFt2XmVolumeRampingChanged,
-                                        onMasterGainMilliBelChanged = onOpenMptMasterGainMilliBelChanged,
-                                        onSurroundEnabledChanged = onOpenMptSurroundEnabledChanged
-                                    )
-                                    com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings(
-                                        pluginSettings = pluginSettings,
-                                        settingsSectionLabel = { label -> SettingsSectionLabel(label) }
-                                    )
-                                }
-                                "VGMPlay" -> {
-                                    PluginDetailScreen(
-                                        pluginName = selectedPluginName,
-                                        onPriorityChanged = { priority ->
-                                            onPluginPriorityChanged(selectedPluginName, priority)
-                                        },
-                                        onExtensionsChanged = { extensions ->
-                                            onPluginExtensionsChanged(selectedPluginName, extensions)
-                                        }
-                                    )
-
-                                    val pluginSettings = com.flopster101.siliconplayer.pluginsettings.FfmpegSettings(
-                                        sampleRateHz = vgmPlaySampleRateHz,
-                                        capabilities = vgmPlayCapabilities,
-                                        onSampleRateChanged = onVgmPlaySampleRateChanged
-                                    )
-                                    com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings(
-                                        pluginSettings = pluginSettings,
-                                        settingsSectionLabel = { label -> SettingsSectionLabel(label) }
-                                    )
-                                }
-                                else -> {
-                                    // Generic plugin with no core-specific settings
-                                    PluginDetailScreen(
-                                        pluginName = selectedPluginName,
-                                        onPriorityChanged = { priority ->
-                                            onPluginPriorityChanged(selectedPluginName, priority)
-                                        },
-                                        onExtensionsChanged = { extensions ->
-                                            onPluginExtensionsChanged(selectedPluginName, extensions)
-                                        }
-                                    )
-                                }
+                            val selectedCoreCapabilities = remember(selectedPluginName) {
+                                NativeBridge.getCoreCapabilities(selectedPluginName)
                             }
+                            val fixedSampleRateHz = remember(selectedPluginName) {
+                                NativeBridge.getCoreFixedSampleRateHz(selectedPluginName)
+                            }
+                            val supportsConfigurableRate = supportsCustomSampleRate(selectedCoreCapabilities)
+                            val supportsLiveRateChange = supportsLiveSampleRateChange(selectedCoreCapabilities)
+                            val hasFixedRate = hasFixedSampleRate(selectedCoreCapabilities) && fixedSampleRateHz > 0
+                            val selectedRateHz = when (selectedPluginName) {
+                                "FFmpeg" -> ffmpegSampleRateHz
+                                "LibOpenMPT" -> openMptSampleRateHz
+                                "VGMPlay" -> vgmPlaySampleRateHz
+                                else -> fixedSampleRateHz
+                            }
+                            val onSampleRateSelected: ((Int) -> Unit)? = when (selectedPluginName) {
+                                "FFmpeg" -> onFfmpegSampleRateChanged
+                                "LibOpenMPT" -> onOpenMptSampleRateChanged
+                                "VGMPlay" -> onVgmPlaySampleRateChanged
+                                else -> null
+                            }
+                            val fixedRateLabel = if (fixedSampleRateHz > 0) {
+                                if (fixedSampleRateHz % 1000 == 0) {
+                                    "${fixedSampleRateHz / 1000} kHz"
+                                } else {
+                                    String.format(Locale.US, "%.1f kHz", fixedSampleRateHz / 1000.0)
+                                }
+                            } else {
+                                "unknown"
+                            }
+                            val sampleRateDescription = when {
+                                hasFixedRate ->
+                                    "Internal render rate for this core: $fixedRateLabel."
+                                else ->
+                                    "Preferred internal render sample rate for this core. Audio is resampled to the active output stream rate."
+                            }
+                            val sampleRateStatus = when {
+                                hasFixedRate -> "Fixed rate"
+                                supportsConfigurableRate && supportsLiveRateChange -> "Applies immediately"
+                                supportsConfigurableRate -> "Playback restart required"
+                                else -> "Not configurable"
+                            }
+
+                            if (selectedPluginName == "LibOpenMPT") {
+                                val pluginSettings = com.flopster101.siliconplayer.pluginsettings.OpenMptSettings(
+                                    sampleRateHz = openMptSampleRateHz,
+                                    capabilities = openMptCapabilities,
+                                    stereoSeparationPercent = openMptStereoSeparationPercent,
+                                    stereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
+                                    interpolationFilterLength = openMptInterpolationFilterLength,
+                                    amigaResamplerMode = openMptAmigaResamplerMode,
+                                    amigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
+                                    volumeRampingStrength = openMptVolumeRampingStrength,
+                                    ft2XmVolumeRamping = openMptFt2XmVolumeRamping,
+                                    masterGainMilliBel = openMptMasterGainMilliBel,
+                                    surroundEnabled = openMptSurroundEnabled,
+                                    onSampleRateChanged = onOpenMptSampleRateChanged,
+                                    onStereoSeparationPercentChanged = onOpenMptStereoSeparationPercentChanged,
+                                    onStereoSeparationAmigaPercentChanged = onOpenMptStereoSeparationAmigaPercentChanged,
+                                    onInterpolationFilterLengthChanged = onOpenMptInterpolationFilterLengthChanged,
+                                    onAmigaResamplerModeChanged = onOpenMptAmigaResamplerModeChanged,
+                                    onAmigaResamplerApplyAllModulesChanged = onOpenMptAmigaResamplerApplyAllModulesChanged,
+                                    onVolumeRampingStrengthChanged = onOpenMptVolumeRampingStrengthChanged,
+                                    onFt2XmVolumeRampingChanged = onOpenMptFt2XmVolumeRampingChanged,
+                                    onMasterGainMilliBelChanged = onOpenMptMasterGainMilliBelChanged,
+                                    onSurroundEnabledChanged = onOpenMptSurroundEnabledChanged,
+                                    includeSampleRateControl = false
+                                )
+                                com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings(
+                                    pluginSettings = pluginSettings,
+                                    settingsSectionLabel = { label -> SettingsSectionLabel(label) }
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+                            SettingsSectionLabel("Generic output options")
+                            SampleRateSelectorCard(
+                                title = "Render sample rate",
+                                description = sampleRateDescription,
+                                selectedHz = if (hasFixedRate) fixedSampleRateHz else selectedRateHz,
+                                statusText = sampleRateStatus,
+                                enabled = supportsConfigurableRate && onSampleRateSelected != null,
+                                onSelected = { hz -> onSampleRateSelected?.invoke(hz) }
+                            )
                         }
                     }
                     SettingsRoute.PluginFfmpeg -> SampleRateSelectorCard(
@@ -1319,6 +1315,7 @@ internal fun SampleRateSelectorCard(
     title: String,
     description: String,
     selectedHz: Int,
+    statusText: String? = null,
     enabled: Boolean = true,
     onSelected: (Int) -> Unit
 ) {
@@ -1344,7 +1341,7 @@ internal fun SampleRateSelectorCard(
     val selectedLabel = if (enabled) {
         options.firstOrNull { it.hz == selectedHz }?.label ?: "Auto"
     } else {
-        "Auto (Fixed)"
+        if (selectedHz > 0) "${formatSampleRateLabel(selectedHz)} (Fixed)" else "Auto (Fixed)"
     }
     var dialogOpen by remember { mutableStateOf(false) }
 
@@ -1369,6 +1366,14 @@ internal fun SampleRateSelectorCard(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
+                if (!statusText.isNullOrBlank()) {
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = contentAlpha)
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                }
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,

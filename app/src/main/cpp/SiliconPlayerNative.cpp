@@ -148,6 +148,16 @@ Java_com_flopster101_siliconplayer_MainActivity_getCoreCapabilities(
     return static_cast<jint>(caps);
 }
 
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getCoreFixedSampleRateHz(
+        JNIEnv* env, jobject, jstring coreName) {
+    ensureEngine();
+    const char* nativeCoreName = env->GetStringUTFChars(coreName, 0);
+    int hz = audioEngine->getCoreFixedSampleRateHz(nativeCoreName);
+    env->ReleaseStringUTFChars(coreName, nativeCoreName);
+    return static_cast<jint>(hz);
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_setAudioPipelineConfig(
         JNIEnv*,
@@ -275,6 +285,12 @@ Java_com_flopster101_siliconplayer_NativeBridge_getSupportedExtensions(JNIEnv* e
 extern "C" JNIEXPORT jdouble JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getDuration(JNIEnv* env, jobject thiz) {
     return Java_com_flopster101_siliconplayer_MainActivity_getDuration(env, thiz);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getCoreFixedSampleRateHz(
+        JNIEnv* env, jobject thiz, jstring coreName) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getCoreFixedSampleRateHz(env, thiz, coreName);
 }
 
 extern "C" JNIEXPORT jdouble JNICALL

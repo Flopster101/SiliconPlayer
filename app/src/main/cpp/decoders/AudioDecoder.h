@@ -12,6 +12,8 @@ public:
     static constexpr int PLAYBACK_CAP_RELIABLE_DURATION = 1 << 1;
     static constexpr int PLAYBACK_CAP_LIVE_REPEAT_MODE = 1 << 2;
     static constexpr int PLAYBACK_CAP_CUSTOM_SAMPLE_RATE = 1 << 3;
+    static constexpr int PLAYBACK_CAP_LIVE_SAMPLE_RATE_CHANGE = 1 << 4;
+    static constexpr int PLAYBACK_CAP_FIXED_SAMPLE_RATE = 1 << 5;
     enum class TimelineMode {
         Unknown = 0,
         ContinuousLinear = 1,
@@ -40,8 +42,9 @@ public:
     virtual void setRepeatMode(int /*mode*/) {}
     virtual int getRepeatModeCapabilities() const { return REPEAT_CAP_TRACK; }
     virtual int getPlaybackCapabilities() const {
-        return PLAYBACK_CAP_SEEK | PLAYBACK_CAP_RELIABLE_DURATION | PLAYBACK_CAP_LIVE_REPEAT_MODE | PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
+        return PLAYBACK_CAP_SEEK | PLAYBACK_CAP_RELIABLE_DURATION | PLAYBACK_CAP_LIVE_REPEAT_MODE;
     }
+    virtual int getFixedSampleRateHz() const { return 0; }
     virtual double getPlaybackPositionSeconds() { return -1.0; }
     virtual TimelineMode getTimelineMode() const { return TimelineMode::Unknown; }
 

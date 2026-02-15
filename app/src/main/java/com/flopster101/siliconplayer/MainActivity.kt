@@ -614,6 +614,7 @@ class MainActivity : ComponentActivity() {
     external fun getRepeatModeCapabilities(): Int
     external fun getPlaybackCapabilities(): Int
     external fun getCoreCapabilities(coreName: String): Int
+    external fun getCoreFixedSampleRateHz(coreName: String): Int
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
     external fun setCoreOption(coreName: String, optionName: String, optionValue: String)
     external fun setAudioPipelineConfig(

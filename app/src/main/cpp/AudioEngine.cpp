@@ -995,9 +995,13 @@ void AudioEngine::setCoreOutputSampleRate(const std::string& coreName, int sampl
     coreOutputSampleRateHz[coreName] = normalizedRate;
 
     if (decoder && coreName == decoder->getName()) {
-        decoderRenderSampleRate = resolveOutputSampleRateForCore(coreName);
-        decoder->setOutputSampleRate(decoderRenderSampleRate);
-        resetResamplerStateLocked();
+        const bool supportsLiveRateChange =
+                (decoder->getPlaybackCapabilities() & AudioDecoder::PLAYBACK_CAP_LIVE_SAMPLE_RATE_CHANGE) != 0;
+        if (supportsLiveRateChange) {
+            decoderRenderSampleRate = resolveOutputSampleRateForCore(coreName);
+            decoder->setOutputSampleRate(decoderRenderSampleRate);
+            resetResamplerStateLocked();
+        }
     }
 }
 
@@ -1029,6 +1033,23 @@ int AudioEngine::getCoreCapabilities(const std::string& coreName) {
     auto tempDecoder = DecoderRegistry::getInstance().createDecoderByName(coreName);
     if (tempDecoder) {
         return tempDecoder->getPlaybackCapabilities();
+    }
+    return 0;
+}
+
+int AudioEngine::getCoreFixedSampleRateHz(const std::string& coreName) {
+    if (coreName.empty()) return 0;
+
+    {
+        std::lock_guard<std::mutex> lock(decoderMutex);
+        if (decoder && decoder->getName() == coreName) {
+            return decoder->getFixedSampleRateHz();
+        }
+    }
+
+    auto tempDecoder = DecoderRegistry::getInstance().createDecoderByName(coreName);
+    if (tempDecoder) {
+        return tempDecoder->getFixedSampleRateHz();
     }
     return 0;
 }

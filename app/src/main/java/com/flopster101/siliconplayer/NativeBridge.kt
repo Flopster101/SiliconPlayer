@@ -30,6 +30,7 @@ object NativeBridge {
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
     external fun setCoreOption(coreName: String, optionName: String, optionValue: String)
     external fun getCoreCapabilities(coreName: String): Int
+    external fun getCoreFixedSampleRateHz(coreName: String): Int
     external fun setAudioPipelineConfig(
         backendPreference: Int,
         performanceMode: Int,

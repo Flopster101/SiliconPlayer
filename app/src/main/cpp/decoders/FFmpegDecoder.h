@@ -33,6 +33,13 @@ public:
     std::string getTitle() override;
     std::string getArtist() override;
     void setOutputSampleRate(int sampleRate) override;
+    int getPlaybackCapabilities() const override {
+        return PLAYBACK_CAP_SEEK |
+               PLAYBACK_CAP_RELIABLE_DURATION |
+               PLAYBACK_CAP_LIVE_REPEAT_MODE |
+               PLAYBACK_CAP_CUSTOM_SAMPLE_RATE |
+               PLAYBACK_CAP_LIVE_SAMPLE_RATE_CHANGE;
+    }
     double getPlaybackPositionSeconds() override;
     TimelineMode getTimelineMode() const override { return TimelineMode::ContinuousLinear; }
 

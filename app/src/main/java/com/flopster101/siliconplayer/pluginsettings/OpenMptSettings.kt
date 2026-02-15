@@ -28,7 +28,8 @@ class OpenMptSettings(
     private val onVolumeRampingStrengthChanged: (Int) -> Unit,
     private val onFt2XmVolumeRampingChanged: (Boolean) -> Unit,
     private val onMasterGainMilliBelChanged: (Int) -> Unit,
-    private val onSurroundEnabledChanged: (Boolean) -> Unit
+    private val onSurroundEnabledChanged: (Boolean) -> Unit,
+    private val includeSampleRateControl: Boolean = true
 ) : PluginSettings {
 
     @Composable
@@ -139,16 +140,18 @@ class OpenMptSettings(
             }
         }
 
-        // Generic output options
-        builder.genericOutputOptions {
-            custom {
-                SampleRateSelectorCard(
-                    title = "Render sample rate",
-                    description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
-                    selectedHz = sampleRateHz,
-                    enabled = supportsCustomSampleRate(capabilities),
-                    onSelected = onSampleRateChanged
-                )
+        if (includeSampleRateControl) {
+            // Generic output options
+            builder.genericOutputOptions {
+                custom {
+                    SampleRateSelectorCard(
+                        title = "Render sample rate",
+                        description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
+                        selectedHz = sampleRateHz,
+                        enabled = supportsCustomSampleRate(capabilities),
+                        onSelected = onSampleRateChanged
+                    )
+                }
             }
         }
     }

@@ -10,3 +10,6 @@
 [submodule "external/libvgm"]
 	path = external/libvgm
 	url = https://github.com/ValleyBell/libvgm.git
+[submodule "external/libgme"]
+	path = external/libgme
+	url = https://github.com/libgme/game-music-emu.git

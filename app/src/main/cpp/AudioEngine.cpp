@@ -895,6 +895,21 @@ bool AudioEngine::isEnginePlaying() const {
 void AudioEngine::setUrl(const char* url) {
     LOGD("URL set to: %s", url);
 
+    // Drop any previously loaded decoder first. If opening the new source fails,
+    // playback should not continue from stale decoder state.
+    {
+        std::lock_guard<std::mutex> lock(decoderMutex);
+        decoder.reset();
+        resetResamplerStateLocked();
+        decoderRenderSampleRate = streamSampleRate;
+        positionSeconds.store(0.0);
+        sharedAbsoluteInputPositionBaseSeconds = 0.0;
+        outputClockSeconds = 0.0;
+        timelineSmoothedSeconds = 0.0;
+        timelineSmootherInitialized = false;
+        naturalEndPending.store(false);
+    }
+
     auto newDecoder = DecoderRegistry::getInstance().createDecoder(url);
     if (newDecoder) {
         const int targetRate = resolveOutputSampleRateForCore(newDecoder->getName());

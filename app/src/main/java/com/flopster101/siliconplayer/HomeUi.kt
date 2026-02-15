@@ -189,10 +189,11 @@ internal fun HomeScreen(
                             maxLines = 1
                         )
                         Text(
-                            text = "Coming soon",
+                            text = "Open links or direct paths",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }

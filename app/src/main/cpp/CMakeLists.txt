@@ -35,6 +35,7 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
     find_library(android-lib android)
     find_library(aaudio-lib aaudio)
     find_library(mediandk-lib mediandk)
+    find_library(dl-lib dl)
 
     set(PREBUILT_DIR ${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI})
 
@@ -72,6 +73,16 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
     add_library(libgme STATIC IMPORTED)
     set_target_properties(libgme PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libgme.a")
 
+    set(HAS_OPENSSL_PREBUILT FALSE)
+    if (EXISTS "${PREBUILT_DIR}/lib/libssl.a" AND EXISTS "${PREBUILT_DIR}/lib/libcrypto.a")
+        add_library(libssl STATIC IMPORTED)
+        set_target_properties(libssl PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libssl.a")
+
+        add_library(libcrypto STATIC IMPORTED)
+        set_target_properties(libcrypto PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libcrypto.a")
+        set(HAS_OPENSSL_PREBUILT TRUE)
+    endif()
+
     # Link libraries
     target_link_libraries(
             siliconplayer
@@ -91,3 +102,7 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
             libgme
             z # zlib is needed for openmpt/ffmpeg/vgm
     )
+
+    if (HAS_OPENSSL_PREBUILT)
+        target_link_libraries(siliconplayer libssl libcrypto ${dl-lib})
+    endif()

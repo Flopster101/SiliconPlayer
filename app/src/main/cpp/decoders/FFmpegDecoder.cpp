@@ -2,12 +2,36 @@
 #include <android/log.h>
 #include <sstream>
 #include <vector>
+#include <mutex>
+#include <libavutil/error.h>
 
 #define LOG_TAG "FFmpegDecoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
 namespace {
+std::once_flag gFfmpegNetworkInitOnce;
+
+void ensureFfmpegNetworkInitialized() {
+    std::call_once(gFfmpegNetworkInitOnce, []() {
+        const int result = avformat_network_init();
+        if (result < 0) {
+            LOGE("avformat_network_init failed: %d", result);
+        } else {
+            LOGD("FFmpeg network initialized");
+        }
+        const char* httpProto = avio_find_protocol_name("http://example.com");
+        const char* httpsProto = avio_find_protocol_name("https://example.com");
+        const char* tlsProto = avio_find_protocol_name("tls://example.com");
+        LOGD(
+            "FFmpeg protocol support http=%s https=%s tls=%s",
+            httpProto ? "yes" : "no",
+            httpsProto ? "yes" : "no",
+            tlsProto ? "yes" : "no"
+        );
+    });
+}
+
 std::string getMetadataValue(AVDictionary* metadata, const char* key) {
     if (!metadata || !key) {
         return "";
@@ -45,10 +69,14 @@ bool FFmpegDecoder::open(const char* path) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     close(); // close if already open
     decoderDrainStarted = false;
+    ensureFfmpegNetworkInitialized();
 
     // Open input
-    if (avformat_open_input(&formatContext, path, nullptr, nullptr) != 0) {
-        LOGE("Failed to open file: %s", path);
+    const int openResult = avformat_open_input(&formatContext, path, nullptr, nullptr);
+    if (openResult != 0) {
+        char errbuf[AV_ERROR_MAX_STRING_SIZE] = {0};
+        av_strerror(openResult, errbuf, sizeof(errbuf));
+        LOGE("Failed to open file: %s (fferr=%d msg=%s)", path, openResult, errbuf);
         return false;
     }
 

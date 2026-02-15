@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 import android.media.MediaMetadataRetriever
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.MarqueeSpacing
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -381,10 +382,11 @@ internal fun RecentTrackSummaryText(
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Clip,
-                modifier = Modifier.basicMarquee(
-                    iterations = Int.MAX_VALUE,
-                    initialDelayMillis = 900
-                )
+                    modifier = Modifier.basicMarquee(
+                        iterations = Int.MAX_VALUE,
+                        initialDelayMillis = 900,
+                        spacing = MarqueeSpacing(24.dp)
+                    )
             )
         }
     } else {
@@ -395,6 +397,20 @@ internal fun RecentTrackSummaryText(
             overflow = TextOverflow.Ellipsis
         )
     }
+    val subtitleText = buildString {
+        append(storagePresentation.label)
+        storagePresentation.qualifier?.takeIf { it.isNotBlank() }?.let {
+            append(" • ")
+            append(it)
+        }
+        append(" • ")
+        append(extensionLabel)
+        if (display.includeFilenameInSubtitle) {
+            append(" • ")
+            append(fallback)
+        }
+    }
+    val shouldMarqueeSubtitle = subtitleText.length > 44
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             imageVector = storagePresentation.icon,
@@ -403,24 +419,27 @@ internal fun RecentTrackSummaryText(
             modifier = Modifier.size(14.dp)
         )
         Spacer(modifier = Modifier.width(4.dp))
-        Text(
-            text = buildString {
-                append(storagePresentation.label)
-                storagePresentation.qualifier?.takeIf { it.isNotBlank() }?.let {
-                    append(" • ")
-                    append(it)
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .clipToBounds()
+        ) {
+            Text(
+                text = subtitleText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = if (shouldMarqueeSubtitle) TextOverflow.Clip else TextOverflow.Ellipsis,
+                modifier = if (shouldMarqueeSubtitle) {
+                    Modifier.basicMarquee(
+                        iterations = Int.MAX_VALUE,
+                        initialDelayMillis = 900,
+                        spacing = MarqueeSpacing(24.dp)
+                    )
+                } else {
+                    Modifier
                 }
-                append(" • ")
-                append(extensionLabel)
-                if (display.includeFilenameInSubtitle) {
-                    append(" • ")
-                    append(fallback)
-                }
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+            )
+        }
     }
 }

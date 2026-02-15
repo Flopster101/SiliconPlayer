@@ -135,6 +135,7 @@ private enum class MainView {
 enum class SettingsRoute {
     Root,
     AudioPlugins,
+    PluginDetail, // Generic plugin detail screen (plugin name passed separately)
     PluginFfmpeg,
     PluginOpenMpt,
     GeneralAudio,
@@ -386,6 +387,7 @@ private fun mainViewOrder(view: MainView): Int = when (view) {
 private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.Root -> 0
     SettingsRoute.AudioPlugins -> 1
+    SettingsRoute.PluginDetail -> 2
     SettingsRoute.PluginFfmpeg -> 2
     SettingsRoute.PluginOpenMpt -> 2
     SettingsRoute.GeneralAudio -> 1
@@ -660,6 +662,7 @@ private fun AppNavigation(
 
     var currentView by remember { mutableStateOf(MainView.Home) }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.Root) }
+    var selectedPluginName by remember { mutableStateOf<String?>(null) }
     var settingsLaunchedFromPlayer by remember { mutableStateOf(false) }
     var settingsReturnView by remember { mutableStateOf(MainView.Home) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
@@ -1698,7 +1701,7 @@ private fun AppNavigation(
             currentView == MainView.Settings && settingsLaunchedFromPlayer -> exitSettingsToReturnView()
             currentView == MainView.Settings && settingsRoute != SettingsRoute.Root -> {
                 settingsRoute = when (settingsRoute) {
-                    SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
+                    SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
                     else -> SettingsRoute.Root
                 }
             }
@@ -1881,7 +1884,7 @@ private fun AppNavigation(
                             }
                             if (settingsRoute != SettingsRoute.Root) {
                                 settingsRoute = when (settingsRoute) {
-                                    SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
+                                    SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
                                     else -> SettingsRoute.Root
                                 }
                             } else {
@@ -1940,6 +1943,23 @@ private fun AppNavigation(
                         onOpenAbout = { settingsRoute = SettingsRoute.About },
                         onOpenFfmpeg = { settingsRoute = SettingsRoute.PluginFfmpeg },
                         onOpenOpenMpt = { settingsRoute = SettingsRoute.PluginOpenMpt },
+                        selectedPluginName = selectedPluginName,
+                        onPluginSelected = { pluginName ->
+                            selectedPluginName = pluginName
+                            settingsRoute = SettingsRoute.PluginDetail
+                        },
+                        onPluginEnabledChanged = { pluginName, enabled ->
+                            NativeBridge.setDecoderEnabled(pluginName, enabled)
+                            savePluginConfiguration(prefs, pluginName)
+                        },
+                        onPluginPriorityChanged = { pluginName, priority ->
+                            NativeBridge.setDecoderPriority(pluginName, priority)
+                            savePluginConfiguration(prefs, pluginName)
+                        },
+                        onPluginExtensionsChanged = { pluginName, extensions ->
+                            NativeBridge.setDecoderEnabledExtensions(pluginName, extensions)
+                            savePluginConfiguration(prefs, pluginName)
+                        },
                         autoPlayOnTrackSelect = autoPlayOnTrackSelect,
                         onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
                         openPlayerOnTrackSelect = openPlayerOnTrackSelect,

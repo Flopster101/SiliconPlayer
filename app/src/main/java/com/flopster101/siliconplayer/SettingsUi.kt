@@ -29,8 +29,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -61,6 +69,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -77,6 +86,7 @@ private val SettingsCardShape = RoundedCornerShape(16.dp)
 private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.Root -> 0
     SettingsRoute.AudioPlugins -> 1
+    SettingsRoute.PluginDetail -> 2
     SettingsRoute.PluginFfmpeg -> 2
     SettingsRoute.PluginOpenMpt -> 2
     SettingsRoute.GeneralAudio -> 1
@@ -104,6 +114,11 @@ fun SettingsScreen(
     onOpenAbout: () -> Unit,
     onOpenFfmpeg: () -> Unit,
     onOpenOpenMpt: () -> Unit,
+    selectedPluginName: String?,
+    onPluginSelected: (String) -> Unit,
+    onPluginEnabledChanged: (String, Boolean) -> Unit,
+    onPluginPriorityChanged: (String, Int) -> Unit,
+    onPluginExtensionsChanged: (String, Array<String>) -> Unit,
     autoPlayOnTrackSelect: Boolean,
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     openPlayerOnTrackSelect: Boolean,
@@ -176,6 +191,7 @@ fun SettingsScreen(
     val secondaryTitle = when (route) {
         SettingsRoute.Root -> null
         SettingsRoute.AudioPlugins -> "Audio plugins"
+        SettingsRoute.PluginDetail -> selectedPluginName?.let { "$it plugin settings" } ?: "Plugin settings"
         SettingsRoute.PluginFfmpeg -> "FFmpeg plugin settings"
         SettingsRoute.PluginOpenMpt -> "OpenMPT plugin settings"
         SettingsRoute.GeneralAudio -> "General audio"
@@ -332,26 +348,32 @@ fun SettingsScreen(
                         )
                     }
                     SettingsRoute.AudioPlugins -> {
-                        SettingsSectionLabel("Plugin configuration")
-                        Text(
-                            text = "This section will also handle enabling/disabling plugins in the future.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
-                            title = "FFmpeg",
-                            description = "Core options for mainstream audio codecs.",
-                            icon = Icons.Default.GraphicEq,
-                            onClick = onOpenFfmpeg
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
-                            title = "OpenMPT",
-                            description = "Core options for tracker/module playback.",
-                            icon = Icons.Default.GraphicEq,
-                            onClick = onOpenOpenMpt
-                        )
+                        SettingsSectionLabel("Registered plugins")
+
+                        // Get list of registered plugins
+                        val pluginNames = remember { NativeBridge.getRegisteredDecoderNames() }
+
+                        pluginNames.forEachIndexed { index, pluginName ->
+                            val isEnabled = remember(pluginName) { NativeBridge.isDecoderEnabled(pluginName) }
+                            val priority = remember(pluginName) { NativeBridge.getDecoderPriority(pluginName) }
+
+                            PluginListItemCard(
+                                pluginName = pluginName,
+                                priority = priority,
+                                enabled = isEnabled,
+                                onEnabledChanged = { enabled ->
+                                    onPluginEnabledChanged(pluginName, enabled)
+                                },
+                                onClick = {
+                                    onPluginSelected(pluginName)
+                                }
+                            )
+
+                            if (index < pluginNames.size - 1) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Danger zone")
                         SettingsItemCard(
@@ -360,6 +382,151 @@ fun SettingsScreen(
                             icon = Icons.Default.MoreHoriz,
                             onClick = { pendingResetAction = SettingsResetAction.ClearPluginSettings }
                         )
+                    }
+                    SettingsRoute.PluginDetail -> {
+                        if (selectedPluginName != null) {
+                            // Render core-specific settings based on plugin name
+                            when (selectedPluginName) {
+                                "FFmpeg" -> {
+                                    PluginDetailScreen(
+                                        pluginName = selectedPluginName,
+                                        onPriorityChanged = { priority ->
+                                            onPluginPriorityChanged(selectedPluginName, priority)
+                                        },
+                                        onExtensionsChanged = { extensions ->
+                                            onPluginExtensionsChanged(selectedPluginName, extensions)
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    SettingsSectionLabel("Core options")
+                                    SampleRateSelectorCard(
+                                        title = "Render sample rate",
+                                        description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
+                                        selectedHz = ffmpegSampleRateHz,
+                                        enabled = supportsCustomSampleRate(ffmpegCapabilities),
+                                        onSelected = onFfmpegSampleRateChanged
+                                    )
+                                }
+                                "LibOpenMPT" -> {
+                                    PluginDetailScreen(
+                                        pluginName = selectedPluginName,
+                                        onPriorityChanged = { priority ->
+                                            onPluginPriorityChanged(selectedPluginName, priority)
+                                        },
+                                        onExtensionsChanged = { extensions ->
+                                            onPluginExtensionsChanged(selectedPluginName, extensions)
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    SettingsSectionLabel("Core options")
+                                    OpenMptDialogSliderCard(
+                                        title = "Stereo separation",
+                                        description = "Sets mixer stereo separation.",
+                                        value = openMptStereoSeparationPercent,
+                                        valueRange = 0..200,
+                                        step = 5,
+                                        valueLabel = { "$it%" },
+                                        onValueChanged = onOpenMptStereoSeparationPercentChanged
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    OpenMptDialogSliderCard(
+                                        title = "Amiga stereo separation",
+                                        description = "Stereo separation used specifically for Amiga modules.",
+                                        value = openMptStereoSeparationAmigaPercent,
+                                        valueRange = 0..200,
+                                        step = 5,
+                                        valueLabel = { "$it%" },
+                                        onValueChanged = onOpenMptStereoSeparationAmigaPercentChanged
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    OpenMptChoiceSelectorCard(
+                                        title = "Interpolation filter",
+                                        description = "Selects interpolation quality for module playback.",
+                                        selectedValue = openMptInterpolationFilterLength,
+                                        options = listOf(
+                                            IntChoice(0, "Auto"),
+                                            IntChoice(1, "None"),
+                                            IntChoice(2, "Linear"),
+                                            IntChoice(4, "Cubic"),
+                                            IntChoice(8, "Sinc (8-tap)")
+                                        ),
+                                        onSelected = onOpenMptInterpolationFilterLengthChanged
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    OpenMptChoiceSelectorCard(
+                                        title = "Amiga resampler",
+                                        description = "Choose Amiga resampler mode. None uses interpolation filter.",
+                                        selectedValue = openMptAmigaResamplerMode,
+                                        options = listOf(
+                                            IntChoice(0, "None"),
+                                            IntChoice(1, "Unfiltered"),
+                                            IntChoice(2, "Amiga 500"),
+                                            IntChoice(3, "Amiga 1200")
+                                        ),
+                                        onSelected = onOpenMptAmigaResamplerModeChanged
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    PlayerSettingToggleCard(
+                                        title = "Apply Amiga resampler to all modules",
+                                        description = "When disabled, Amiga resampler is used only on Amiga module formats.",
+                                        checked = openMptAmigaResamplerApplyAllModules,
+                                        onCheckedChange = onOpenMptAmigaResamplerApplyAllModulesChanged
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    OpenMptVolumeRampingCard(
+                                        title = "Volume ramping strength",
+                                        description = "Controls smoothing strength for volume changes.",
+                                        value = openMptVolumeRampingStrength,
+                                        onValueChanged = onOpenMptVolumeRampingStrengthChanged
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    PlayerSettingToggleCard(
+                                        title = "FT2 5ms XM ramping",
+                                        description = "Apply classic FT2-style 5ms ramping for XM modules only.",
+                                        checked = openMptFt2XmVolumeRamping,
+                                        onCheckedChange = onOpenMptFt2XmVolumeRampingChanged
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    OpenMptDialogSliderCard(
+                                        title = "Master gain",
+                                        description = "Applies decoder gain before output.",
+                                        value = openMptMasterGainMilliBel,
+                                        valueRange = -1200..1200,
+                                        step = 100,
+                                        valueLabel = { formatMilliBelAsDbLabel(it) },
+                                        onValueChanged = onOpenMptMasterGainMilliBelChanged
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    PlayerSettingToggleCard(
+                                        title = "Enable surround sound",
+                                        description = "Enable surround rendering mode when supported by the playback path.",
+                                        checked = openMptSurroundEnabled,
+                                        onCheckedChange = onOpenMptSurroundEnabledChanged
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    SettingsSectionLabel("Generic output options")
+                                    SampleRateSelectorCard(
+                                        title = "Render sample rate",
+                                        description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
+                                        selectedHz = openMptSampleRateHz,
+                                        enabled = supportsCustomSampleRate(openMptCapabilities),
+                                        onSelected = onOpenMptSampleRateChanged
+                                    )
+                                }
+                                else -> {
+                                    // Generic plugin with no core-specific settings
+                                    PluginDetailScreen(
+                                        pluginName = selectedPluginName,
+                                        onPriorityChanged = { priority ->
+                                            onPluginPriorityChanged(selectedPluginName, priority)
+                                        },
+                                        onExtensionsChanged = { extensions ->
+                                            onPluginExtensionsChanged(selectedPluginName, extensions)
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
                     SettingsRoute.PluginFfmpeg -> SampleRateSelectorCard(
                         title = "Render sample rate",
@@ -1709,6 +1876,414 @@ private fun FilenameDisplayModeDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text("Close")
+            }
+        }
+    )
+}
+
+// ============================================================================
+// Plugin Management Composables
+// ============================================================================
+
+@Composable
+private fun PluginListItemCard(
+    pluginName: String,
+    priority: Int,
+    enabled: Boolean,
+    onEnabledChanged: (Boolean) -> Unit,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = SettingsCardShape
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = pluginName,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Text(
+                            text = "Priority: $priority",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                val extensionCount = remember(pluginName) {
+                    NativeBridge.getDecoderEnabledExtensions(pluginName).size
+                }
+                Text(
+                    text = "$extensionCount extensions enabled",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onEnabledChanged
+            )
+        }
+    }
+}
+
+@Composable
+private fun PluginDetailScreen(
+    pluginName: String,
+    onPriorityChanged: (Int) -> Unit,
+    onExtensionsChanged: (Array<String>) -> Unit
+) {
+    var isEnabled by remember { mutableStateOf(NativeBridge.isDecoderEnabled(pluginName)) }
+    var priority by remember { mutableIntStateOf(NativeBridge.getDecoderPriority(pluginName)) }
+    val supportedExtensions = remember { NativeBridge.getDecoderSupportedExtensions(pluginName) }
+    var enabledExtensions by remember {
+        mutableStateOf(NativeBridge.getDecoderEnabledExtensions(pluginName).toSet())
+    }
+    var showPriorityDialog by remember { mutableStateOf(false) }
+    var showExtensionsDialog by remember { mutableStateOf(false) }
+
+    Column {
+        // Enable/Disable toggle
+        SettingsSectionLabel("Plugin status")
+        PlayerSettingToggleCard(
+            title = "Enable plugin",
+            description = "When disabled, this plugin will not be used for any files.",
+            checked = isEnabled,
+            onCheckedChange = { enabled ->
+                isEnabled = enabled
+                NativeBridge.setDecoderEnabled(pluginName, enabled)
+            }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Priority
+        SettingsSectionLabel("Priority")
+        SettingsItemCard(
+            title = "Plugin priority: $priority",
+            description = "Higher priority plugins are tried first for matching extensions. Click to change.",
+            icon = Icons.Default.Tune,
+            onClick = { showPriorityDialog = true }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Extensions
+        SettingsSectionLabel("Handled extensions")
+        val enabledCount = enabledExtensions.size
+        val totalCount = supportedExtensions.size
+        SettingsItemCard(
+            title = "$enabledCount of $totalCount extensions enabled",
+            description = "Select which file extensions this plugin should handle.",
+            icon = Icons.Default.MusicNote,
+            onClick = { showExtensionsDialog = true }
+        )
+    }
+
+    // Priority dialog
+    if (showPriorityDialog) {
+        PriorityPickerDialog(
+            currentPriority = priority,
+            onPrioritySelected = { newPriority ->
+                priority = newPriority
+                onPriorityChanged(newPriority)
+                NativeBridge.setDecoderPriority(pluginName, newPriority)
+                showPriorityDialog = false
+            },
+            onDismiss = { showPriorityDialog = false }
+        )
+    }
+
+    // Extensions dialog
+    if (showExtensionsDialog) {
+        ExtensionSelectorDialog(
+            supportedExtensions = supportedExtensions,
+            enabledExtensions = enabledExtensions,
+            onExtensionsChanged = { newEnabled ->
+                enabledExtensions = newEnabled
+
+                // Save to native
+                val extensionsArray = if (newEnabled.size == supportedExtensions.size) {
+                    // All enabled, save empty array (optimization)
+                    emptyArray()
+                } else {
+                    newEnabled.toTypedArray()
+                }
+                onExtensionsChanged(extensionsArray)
+                NativeBridge.setDecoderEnabledExtensions(pluginName, extensionsArray)
+            },
+            onDismiss = { showExtensionsDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun ExtensionSelectorDialog(
+    supportedExtensions: Array<String>,
+    enabledExtensions: Set<String>,
+    onExtensionsChanged: (Set<String>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var tempEnabledExtensions by remember { mutableStateOf(enabledExtensions) }
+    var searchQuery by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    // Filter extensions based on search query
+    val filteredExtensions = remember(searchQuery, supportedExtensions) {
+        if (searchQuery.isBlank()) {
+            supportedExtensions.toList()
+        } else {
+            supportedExtensions.filter { it.contains(searchQuery, ignoreCase = true) }
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select extensions") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 500.dp)
+            ) {
+                // Search bar with rounded corners
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("Search extensions...") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search"
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Clear search"
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(28.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Select All / Deselect All buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    TextButton(onClick = {
+                        tempEnabledExtensions = supportedExtensions.toSet()
+                    }) {
+                        Text("Select All")
+                    }
+                    TextButton(onClick = {
+                        tempEnabledExtensions = emptySet()
+                    }) {
+                        Text("Deselect All")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Scrollable list with scrollbar indicator
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                ) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 300.dp)
+                    ) {
+                        items(
+                            items = filteredExtensions,
+                            key = { it }
+                        ) { ext ->
+                            val isEnabled = ext in tempEnabledExtensions
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        tempEnabledExtensions = if (isEnabled) {
+                                            tempEnabledExtensions - ext
+                                        } else {
+                                            tempEnabledExtensions + ext
+                                        }
+                                    }
+                                    .padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.Checkbox(
+                                    checked = isEnabled,
+                                    onCheckedChange = { checked ->
+                                        tempEnabledExtensions = if (checked) {
+                                            tempEnabledExtensions + ext
+                                        } else {
+                                            tempEnabledExtensions - ext
+                                        }
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(ext.uppercase())
+                            }
+                        }
+                    }
+
+                    // Scrollbar indicator - only show when there are many items
+                    if (filteredExtensions.size > 8) {
+                        // Use derivedStateOf with actual layout info for accurate scrollbar
+                        val scrollbarPosition by remember {
+                            androidx.compose.runtime.derivedStateOf {
+                                val layoutInfo = listState.layoutInfo
+                                val viewportHeight = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+                                val totalItemsHeight = layoutInfo.totalItemsCount *
+                                    (layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 40)
+
+                                if (viewportHeight <= 0 || totalItemsHeight <= viewportHeight) {
+                                    return@derivedStateOf Triple(300f, 300f, 0f)
+                                }
+
+                                // Calculate thumb height based on viewport ratio
+                                val thumbHeight = maxOf(
+                                    20f,
+                                    (viewportHeight.toFloat() / totalItemsHeight.toFloat()) * 300f
+                                )
+
+                                // Calculate scroll offset using layout info
+                                val firstVisibleItemIndex = layoutInfo.visibleItemsInfo.firstOrNull()?.index ?: 0
+                                val firstVisibleItemOffset = layoutInfo.visibleItemsInfo.firstOrNull()?.offset ?: 0
+                                val itemSize = layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 40
+
+                                val scrollOffset = if (itemSize > 0) {
+                                    firstVisibleItemIndex * itemSize - firstVisibleItemOffset
+                                } else {
+                                    0
+                                }
+
+                                val maxScroll = totalItemsHeight - viewportHeight
+                                val scrollProgress = if (maxScroll > 0) {
+                                    (scrollOffset.toFloat() / maxScroll.toFloat()).coerceIn(0f, 1f)
+                                } else {
+                                    0f
+                                }
+
+                                val thumbOffset = (scrollProgress * (300f - thumbHeight)).coerceIn(0f, 300f - thumbHeight)
+
+                                Triple(300f, thumbHeight, thumbOffset)
+                            }
+                        }
+
+                        val (viewportHeight, thumbHeight, thumbOffset) = scrollbarPosition
+
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .width(6.dp)
+                                .height(viewportHeight.dp)
+                                .padding(start = 2.dp, end = 2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(4.dp)
+                                    .height(thumbHeight.dp)
+                                    .offset(y = thumbOffset.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                        shape = RoundedCornerShape(2.dp)
+                                    )
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onExtensionsChanged(tempEnabledExtensions)
+                onDismiss()
+            }) {
+                Text("Apply")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun PriorityPickerDialog(
+    currentPriority: Int,
+    onPrioritySelected: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var tempPriority by remember { mutableIntStateOf(currentPriority) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Set plugin priority") },
+        text = {
+            Column {
+                Text(
+                    text = "Higher priority plugins are tried first when multiple plugins support the same extension.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Priority: $tempPriority",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Slider(
+                    value = tempPriority.toFloat(),
+                    onValueChange = { tempPriority = it.roundToInt() },
+                    valueRange = 0f..100f,
+                    steps = 19 // 0, 5, 10, ..., 100
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("0 (Lowest)", style = MaterialTheme.typography.labelSmall)
+                    Text("100 (Highest)", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onPrioritySelected(tempPriority) }) {
+                Text("Apply")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
             }
         }
     )

@@ -71,6 +71,40 @@ apply_libopenmpt_patches() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: Apply libvgm patches (idempotent)
+# -----------------------------------------------------------------------------
+apply_libvgm_patches() {
+    local PROJECT_PATH="$ABSOLUTE_PATH/libvgm"
+    local PATCHES_DIR_VGM="$ABSOLUTE_PATH/patches/libvgm"
+    
+    if [ ! -d "$PATCHES_DIR_VGM" ]; then
+        return
+    fi
+
+    for patch_file in "$PATCHES_DIR_VGM"/*.patch; do
+        [ -e "$patch_file" ] || continue
+        local patch_name
+        patch_name="$(basename "$patch_file")"
+
+        # Check if patch is already applied by looking for the commit subject in git log
+        # Extract subject from patch file (Subject: ...)
+        local subject
+        subject=$(grep "^Subject: " "$patch_file" | sed 's/^Subject: \[PATCH[^]]*\] //')
+        
+        if git -C "$PROJECT_PATH" log -1 --grep="$subject" >/dev/null 2>&1; then
+             echo "libvgm patch already applied: $patch_name"
+        else
+             echo "Applying libvgm patch: $patch_name"
+             git -C "$PROJECT_PATH" am "$patch_file" || {
+                 echo "Error applying patch $patch_name"
+                 git -C "$PROJECT_PATH" am --abort
+                 exit 1
+             }
+        fi
+    done
+}
+
+# -----------------------------------------------------------------------------
 # Function: Build libsoxr (optional, if source is present)
 # -----------------------------------------------------------------------------
 build_libsoxr() {
@@ -265,6 +299,48 @@ build_libopenmpt() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build libvgm
+# -----------------------------------------------------------------------------
+build_libvgm() {
+    local ABI=$1
+    echo "Building libvgm for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/libvgm"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "libvgm source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
+
+    cmake \
+        -S "$PROJECT_PATH" \
+        -B "$BUILD_DIR" \
+        -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+        -DANDROID_ABI="$ABI" \
+        -DANDROID_PLATFORM="android-$ANDROID_API" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DLIBRARY_TYPE=STATIC \
+        -DBUILD_LIBAUDIO=OFF \
+        -DBUILD_LIBEMU=ON \
+        -DBUILD_LIBPLAYER=ON \
+        -DBUILD_TESTS=OFF \
+        -DBUILD_PLAYER=OFF \
+        -DBUILD_VGM2WAV=OFF \
+        -DUSE_SANITIZERS=OFF \
+        -DUTIL_CHARSET_CONV=OFF \
+        -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"
+
+    cmake --build "$BUILD_DIR" -j$(nproc)
+    cmake --install "$BUILD_DIR"
+}
+
+# -----------------------------------------------------------------------------
 # Argument Parsing
 # -----------------------------------------------------------------------------
 TARGET_ABI=${1:-all}
@@ -307,6 +383,10 @@ target_has_lib() {
 # -----------------------------------------------------------------------------
 if target_has_lib "libopenmpt"; then
     apply_libopenmpt_patches
+fi
+
+if target_has_lib "libvgm"; then
+    apply_libvgm_patches
 fi
 
 # -----------------------------------------------------------------------------
@@ -365,6 +445,10 @@ for ABI in "${ABIS[@]}"; do
 
     if target_has_lib "libopenmpt"; then
         build_libopenmpt "$ABI"
+    fi
+
+    if target_has_lib "libvgm"; then
+        build_libvgm "$ABI"
     fi
 done
 

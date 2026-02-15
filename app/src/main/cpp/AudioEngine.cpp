@@ -2,6 +2,7 @@
 #include "decoders/DecoderRegistry.h"
 #include "decoders/FFmpegDecoder.h"
 #include "decoders/LibOpenMPTDecoder.h"
+#include "decoders/VGMDecoder.h"
 #include <android/log.h>
 #include <cmath>
 #include <cstring>
@@ -36,6 +37,10 @@ namespace {
             DecoderRegistry::getInstance().registerDecoder("LibOpenMPT", LibOpenMPTDecoder::getSupportedExtensions(), []() {
                 return std::make_unique<LibOpenMPTDecoder>();
             }, 10);
+
+            DecoderRegistry::getInstance().registerDecoder("VGMPlay", VGMDecoder::getSupportedExtensions(), []() {
+                return std::make_unique<VGMDecoder>();
+            }, 5);
         }
     };
     static DecoderRegistration registration;

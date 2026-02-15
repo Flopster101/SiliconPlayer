@@ -23,6 +23,8 @@ add_library(
         decoders/FFmpegDecoder.cpp
         decoders/DecoderRegistry.cpp
         decoders/LibOpenMPTDecoder.cpp
+        decoders/VGMDecoder.cpp
+        decoders/CPConvStub.c
 )
 
 include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
@@ -55,6 +57,16 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
     add_library(libsoxr STATIC IMPORTED)
     set_target_properties(libsoxr PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libsoxr.a")
 
+    # Import libvgm libraries (Static)
+    add_library(libvgm-utils STATIC IMPORTED)
+    set_target_properties(libvgm-utils PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libvgm-utils.a")
+
+    add_library(libvgm-emu STATIC IMPORTED)
+    set_target_properties(libvgm-emu PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libvgm-emu.a")
+
+    add_library(libvgm-player STATIC IMPORTED)
+    set_target_properties(libvgm-player PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libvgm-player.a")
+
     # Link libraries
     target_link_libraries(
             siliconplayer
@@ -68,5 +80,8 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
             libavutil
             libswresample
             libsoxr
-            z # zlib is needed for openmpt/ffmpeg
+            libvgm-player
+            libvgm-emu
+            libvgm-utils
+            z # zlib is needed for openmpt/ffmpeg/vgm
     )

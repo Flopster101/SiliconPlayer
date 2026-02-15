@@ -137,15 +137,15 @@ fun PlayerScreen(
             sliderPosition = positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0))
         }
     }
-    val animatedSliderPosition by animateFloatAsState(
-        targetValue = sliderPosition.toFloat(),
-        animationSpec = tween(durationMillis = 140, easing = LinearOutSlowInEasing),
-        label = "playerTimelinePosition"
-    )
     val animatedPanelOffsetPx by animateFloatAsState(
         targetValue = if (isDraggingDown) downwardDragPx else 0f,
         animationSpec = tween(durationMillis = 180, easing = LinearOutSlowInEasing),
         label = "playerCollapseDragOffset"
+    )
+    val animatedSliderPosition by animateFloatAsState(
+        targetValue = sliderPosition.toFloat(),
+        animationSpec = tween(durationMillis = 90, easing = LinearOutSlowInEasing),
+        label = "playerTimelinePosition"
     )
     val panelOffsetPx = if (isDraggingDown) downwardDragPx else animatedPanelOffsetPx
     val dragFadeProgress = (panelOffsetPx / (collapseThresholdPx * 1.4f)).coerceIn(0f, 1f)
@@ -1176,7 +1176,7 @@ private fun TrackMetadataBlock(
                     overflow = TextOverflow.Clip,
                     textAlign = TextAlign.Start,
                     modifier = Modifier.basicMarquee(
-                        iterations = Int.MAX_VALUE,
+                        iterations = 3,
                         initialDelayMillis = 900
                     )
                 )

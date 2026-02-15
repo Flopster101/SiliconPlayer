@@ -2,7 +2,6 @@ package com.flopster101.siliconplayer
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -101,11 +100,6 @@ internal fun MiniPlayerBar(
     } else {
         0f
     }
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress,
-        animationSpec = tween(durationMillis = 140, easing = LinearOutSlowInEasing),
-        label = "miniPlayerProgress"
-    )
     val compactControls = LocalConfiguration.current.screenWidthDp <= 420
     val controlButtonSize = if (compactControls) 36.dp else 40.dp
     val controlIconSize = if (compactControls) 20.dp else 22.dp
@@ -207,7 +201,7 @@ internal fun MiniPlayerBar(
                             overflow = if (marquee) TextOverflow.Clip else TextOverflow.Ellipsis,
                             modifier = if (marquee) {
                                 Modifier.basicMarquee(
-                                    iterations = Int.MAX_VALUE,
+                                    iterations = 3,
                                     initialDelayMillis = 900
                                 )
                             } else {
@@ -232,7 +226,7 @@ internal fun MiniPlayerBar(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = if (marquee) {
                                 Modifier.basicMarquee(
-                                    iterations = Int.MAX_VALUE,
+                                    iterations = 3,
                                     initialDelayMillis = 1100
                                 )
                             } else {
@@ -305,7 +299,7 @@ internal fun MiniPlayerBar(
             }
 
             LinearProgressIndicator(
-                progress = { animatedProgress },
+                progress = { progress },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(2.dp),

@@ -1363,8 +1363,10 @@ private fun AppNavigation(
     }
 
     LaunchedEffect(selectedFile) {
+        var metadataPollElapsedMs = 0L
         while (selectedFile != null) {
             val currentFile = selectedFile
+            val pollDelayMs = if (isPlaying) 180L else 320L
             val nextDuration = NativeBridge.getDuration()
             val nextPosition = NativeBridge.getPosition()
             val nextIsPlaying = NativeBridge.isEnginePlaying()
@@ -1380,21 +1382,25 @@ private fun AppNavigation(
                     continue
                 }
             }
-            val nextTitle = NativeBridge.getTrackTitle()
-            val nextArtist = NativeBridge.getTrackArtist()
-            val titleChanged = nextTitle != metadataTitle
-            val artistChanged = nextArtist != metadataArtist
-            if (titleChanged) metadataTitle = nextTitle
-            if (artistChanged) metadataArtist = nextArtist
-            if ((titleChanged || artistChanged) && currentFile != null) {
-                addRecentPlayedTrack(
-                    path = currentFile.absolutePath,
-                    locationId = lastBrowserLocationId,
-                    title = nextTitle,
-                    artist = nextArtist
-                )
+            metadataPollElapsedMs += pollDelayMs
+            if (metadataPollElapsedMs >= 540L || metadataTitle.isBlank() || metadataArtist.isBlank()) {
+                metadataPollElapsedMs = 0L
+                val nextTitle = NativeBridge.getTrackTitle()
+                val nextArtist = NativeBridge.getTrackArtist()
+                val titleChanged = nextTitle != metadataTitle
+                val artistChanged = nextArtist != metadataArtist
+                if (titleChanged) metadataTitle = nextTitle
+                if (artistChanged) metadataArtist = nextArtist
+                if ((titleChanged || artistChanged) && currentFile != null) {
+                    addRecentPlayedTrack(
+                        path = currentFile.absolutePath,
+                        locationId = lastBrowserLocationId,
+                        title = nextTitle,
+                        artist = nextArtist
+                    )
+                }
             }
-            delay(if (isPlaying) 80 else 250)
+            delay(pollDelayMs)
         }
     }
 

@@ -1,0 +1,307 @@
+From f1b2ba315dfcbff42823dd9d5420e73fd816671a Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Sun, 15 Feb 2026 15:50:45 -0300
+Subject: [PATCH] Add SPC interpolation API and runtime modes
+
+---
+ gme/Snes_Spc.h  |   5 +++
+ gme/Spc_Dsp.cpp | 115 +++++++++++++++++++++++++++++++++++++++---------
+ gme/Spc_Dsp.h   |  12 +++++
+ gme/Spc_Emu.h   |   4 ++
+ gme/gme.cpp     |  14 ++++++
+ gme/gme.h       |   6 +++
+ 6 files changed, 134 insertions(+), 22 deletions(-)
+
+diff --git a/gme/Snes_Spc.h b/gme/Snes_Spc.h
+index ec2db1b..dc085c5 100644
+--- a/gme/Snes_Spc.h
++++ b/gme/Snes_Spc.h
+@@ -65,6 +65,9 @@ public:
+ 
+ 	void disable_echo( bool disable = true );
+ 
++	// -2 nearest, -1 linear, 0 gaussian, 1 cubic, 2 sinc
++	void interpolation_level( int level = 0 );
++
+ 	// Sets tempo, where tempo_unit = normal, tempo_unit / 2 = half speed, etc.
+ 	static const unsigned int tempo_unit = 0x100;
+ 	void set_tempo( int );
+@@ -280,6 +283,8 @@ inline void Snes_Spc::disable_surround( bool disable ) { dsp.disable_surround( d
+ 
+ inline void Snes_Spc::disable_echo( bool disable ) { dsp.disable_echo( disable ); }
+ 
++inline void Snes_Spc::interpolation_level( int level ) { dsp.interpolation_level( level ); }
++
+ #if !SPC_NO_COPY_STATE_FUNCS
+ inline bool Snes_Spc::check_kon() { return dsp.check_kon(); }
+ #endif
+diff --git a/gme/Spc_Dsp.cpp b/gme/Spc_Dsp.cpp
+index 6b41ead..c761900 100644
+--- a/gme/Spc_Dsp.cpp
++++ b/gme/Spc_Dsp.cpp
+@@ -3,6 +3,7 @@
+ #include "Spc_Dsp.h"
+ 
+ #include "blargg_endian.h"
++#include <cmath>
+ #include <string.h>
+ 
+ /* Copyright (C) 2007 Shay Green. This module is free software; you
+@@ -127,6 +128,57 @@ static short const interleved_gauss [512] =
+    0, 401,   0, 397,   0, 393,   0, 389,   0, 385,   0, 381,   0, 378,   0, 374,
+ };
+ 
++static inline int interpolate_linear_sample( int const* in, int interp_pos )
++{
++	int const fract = interp_pos & 0x0FFF;
++	int out = ((0x1000 - fract) * in [0] + fract * in [1]) >> 12;
++	return out & ~1;
++}
++
++static inline int interpolate_nearest_sample( int const* in )
++{
++	return in [0] & ~1;
++}
++
++static inline int interpolate_cubic_sample( int const* in, int interp_pos )
++{
++	double const t = static_cast<double>(interp_pos & 0x0FFF) / 4096.0;
++	double const p0 = in [0];
++	double const p1 = in [1];
++	double const p2 = in [2];
++	double const p3 = in [3];
++	double const a0 = (-0.5 * p0) + (1.5 * p1) - (1.5 * p2) + (0.5 * p3);
++	double const a1 = p0 - (2.5 * p1) + (2.0 * p2) - (0.5 * p3);
++	double const a2 = (-0.5 * p0) + (0.5 * p2);
++	double const a3 = p1;
++	int out = static_cast<int>(std::lrint((((a0 * t) + a1) * t + a2) * t + a3));
++	CLAMP16( out );
++	return out & ~1;
++}
++
++static inline int interpolate_sinc_sample( int const* in, int interp_pos )
++{
++	double const t = static_cast<double>(interp_pos & 0x0FFF) / 4096.0;
++	double sum = 0.0;
++	double norm = 0.0;
++	for ( int i = 0; i < 8; ++i )
++	{
++		double const x = (static_cast<double>(i) - 3.0) - t;
++		double const pix = 3.14159265358979323846 * x;
++		double const sinc = (std::fabs(x) < 1e-9) ? 1.0 : std::sin(pix) / pix;
++		double const pixw = pix / 4.0;
++		double const window = (std::fabs(x) < 4.0) ? ((std::fabs(x) < 1e-9) ? 1.0 : std::sin(pixw) / pixw) : 0.0;
++		double const coeff = sinc * window;
++		sum += static_cast<double>(in [i]) * coeff;
++		norm += coeff;
++	}
++	if ( std::fabs(norm) > 1e-12 )
++		sum /= norm;
++	int out = static_cast<int>(std::lrint(sum));
++	CLAMP16( out );
++	return out & ~1;
++}
++
+ 
+ //// Counters
+ 
+@@ -285,41 +337,59 @@ void Spc_Dsp::run( int clock_count )
+ 
+ 			int env = v->env;
+ 
+-			// Gaussian interpolation
++			// Interpolation (gaussian default, optional linear/cubic/sinc/nearest)
+ 			{
+ 				int output = 0;
+ 				VREG(v_regs,envx) = (uint8_t) (env >> 4);
+ 				if ( env )
+ 				{
+-					// Make pointers into gaussian based on fractional position between samples
+-					int offset = (unsigned) v->interp_pos >> 3 & 0x1FE;
+-					short const* fwd = interleved_gauss       + offset;
+-					short const* rev = interleved_gauss + 510 - offset; // mirror left half of gaussian
+-
+ 					int const* in = &v->buf_pos [(unsigned) v->interp_pos >> 12];
+-
+-					if ( !(slow_gaussian & vbit) ) // 99%
++					if ( m.interpolation_level == 0 )
+ 					{
+-						// Faster approximation when exact sample value isn't necessary for pitch mod
+-						output = (fwd [0] * in [0] +
+-						          fwd [1] * in [1] +
+-						          rev [1] * in [2] +
+-						          rev [0] * in [3]) >> 11;
+-						output = (output * env) >> 11;
++						// Make pointers into gaussian based on fractional position between samples
++						int offset = (unsigned) v->interp_pos >> 3 & 0x1FE;
++						short const* fwd = interleved_gauss       + offset;
++						short const* rev = interleved_gauss + 510 - offset; // mirror left half of gaussian
++
++						if ( !(slow_gaussian & vbit) ) // 99%
++						{
++							// Faster approximation when exact sample value isn't necessary for pitch mod
++							output = (fwd [0] * in [0] +
++							          fwd [1] * in [1] +
++							          rev [1] * in [2] +
++							          rev [0] * in [3]) >> 11;
++							output = (output * env) >> 11;
++						}
++						else
++						{
++							output = (int16_t) (m.noise * 2);
++							if ( !(REG(non) & vbit) )
++							{
++								output  = (fwd [0] * in [0]) >> 11;
++								output += (fwd [1] * in [1]) >> 11;
++								output += (rev [1] * in [2]) >> 11;
++								output = (int16_t) output;
++								output += (rev [0] * in [3]) >> 11;
++
++								CLAMP16( output );
++								output &= ~1;
++							}
++							output = (output * env) >> 11 & ~1;
++						}
+ 					}
+ 					else
+ 					{
+ 						output = (int16_t) (m.noise * 2);
+ 						if ( !(REG(non) & vbit) )
+ 						{
+-							output  = (fwd [0] * in [0]) >> 11;
+-							output += (fwd [1] * in [1]) >> 11;
+-							output += (rev [1] * in [2]) >> 11;
+-							output = (int16_t) output;
+-							output += (rev [0] * in [3]) >> 11;
+-
+-							CLAMP16( output );
+-							output &= ~1;
++							switch ( m.interpolation_level )
++							{
++								case -2: output = interpolate_nearest_sample( in ); break;
++								case -1: output = interpolate_linear_sample( in, v->interp_pos ); break;
++								case 1:  output = interpolate_cubic_sample( in, v->interp_pos ); break;
++								case 2:  output = interpolate_sinc_sample( in, v->interp_pos ); break;
++								default: break;
++							}
+ 						}
+ 						output = (output * env) >> 11 & ~1;
+ 					}
+@@ -669,6 +739,7 @@ void Spc_Dsp::init( void* ram_64k )
+ 	mute_voices( 0 );
+ 	disable_surround( false );
+ 	disable_echo( false );
++	interpolation_level( 0 );
+ 	set_output( 0, 0 );
+ 	reset();
+ 
+diff --git a/gme/Spc_Dsp.h b/gme/Spc_Dsp.h
+index 8e05114..a2362c4 100644
+--- a/gme/Spc_Dsp.h
++++ b/gme/Spc_Dsp.h
+@@ -53,6 +53,10 @@ public:
+ 
+ 	void disable_echo( bool disable = true );
+ 
++	// SPC interpolation mode:
++	// -2 nearest, -1 linear, 0 gaussian (default), 1 cubic, 2 sinc
++	void interpolation_level( int level = 0 );
++
+ // State
+ 
+ 	// Resets DSP and uses supplied values to initialize registers
+@@ -142,6 +146,7 @@ private:
+ 		int mute_mask;
+ 		int surround_threshold;
+ 		int echo_enable;
++		int interpolation_level;
+ 		sample_t* out;
+ 		sample_t* out_end;
+ 		sample_t* out_begin;
+@@ -214,6 +219,13 @@ inline void Spc_Dsp::disable_echo( bool disable )
+ 	m.echo_enable = !disable;
+ }
+ 
++inline void Spc_Dsp::interpolation_level( int level )
++{
++	if ( level < -2 ) level = -2;
++	if ( level > 2 ) level = 2;
++	m.interpolation_level = level;
++}
++
+ #define SPC_NO_COPY_STATE_FUNCS 1
+ 
+ #define SPC_LESS_ACCURATE 1
+diff --git a/gme/Spc_Emu.h b/gme/Spc_Emu.h
+index c83cd45..911f491 100644
+--- a/gme/Spc_Emu.h
++++ b/gme/Spc_Emu.h
+@@ -44,6 +44,9 @@ public:
+ 	// Prevents channels and global volumes from being phase-negated
+ 	void disable_surround( bool disable = true );
+ 
++	// -2 nearest, -1 linear, 0 gaussian, 1 cubic, 2 sinc
++	void interpolation_level( int level = 0 );
++
+ 	static gme_type_t static_type() { return gme_spc_type; }
+ 
+ public:
+@@ -79,5 +82,6 @@ private:
+ };
+ 
+ inline void Spc_Emu::disable_surround( bool b ) { apu.disable_surround( b ); }
++inline void Spc_Emu::interpolation_level( int level ) { apu.interpolation_level( level ); }
+ 
+ #endif
+diff --git a/gme/gme.cpp b/gme/gme.cpp
+index 78914b2..3adba8d 100644
+--- a/gme/gme.cpp
++++ b/gme/gme.cpp
+@@ -10,6 +10,9 @@
+ #if !GME_DISABLE_STEREO_DEPTH
+ #include "Effects_Buffer.h"
+ #endif
++#ifdef USE_GME_SPC
++#include "Spc_Emu.h"
++#endif
+ #include "blargg_endian.h"
+ #include <string.h>
+ #include <ctype.h>
+@@ -405,6 +408,17 @@ void      gme_set_tempo      ( Music_Emu* me, double t )            { me->set_te
+ void      gme_mute_voice     ( Music_Emu* me, int index, int mute ) { me->mute_voice( index, mute != 0 ); }
+ void      gme_mute_voices    ( Music_Emu* me, int mask )            { me->mute_voices( mask ); }
+ void      gme_disable_echo   ( Music_Emu* me, int disable )         { me->disable_echo( disable ); }
++void      gme_set_spc_interpolation( Music_Emu* me, int level )
++{
++#ifdef USE_GME_SPC
++	if ( me && gme_type( me ) == gme_spc_type ) {
++		STATIC_CAST(Spc_Emu*, me)->interpolation_level( level );
++	}
++#else
++	(void) me;
++	(void) level;
++#endif
++}
+ void      gme_enable_accuracy( Music_Emu* me, int enabled )         { me->enable_accuracy( enabled ); }
+ void      gme_clear_playlist ( Music_Emu* me )                      { me->clear_playlist(); }
+ int       gme_type_multitrack( gme_type_t t )                       { return t->track_count != 1; }
+diff --git a/gme/gme.h b/gme/gme.h
+index c6f2c82..9020638 100644
+--- a/gme/gme.h
++++ b/gme/gme.h
+@@ -191,6 +191,12 @@ BLARGG_EXPORT void gme_mute_voices( Music_Emu*, int muting_mask );
+ /* Available since 0.6.4 */
+ BLARGG_EXPORT void gme_disable_echo( Music_Emu*, int disable );
+ 
++/* Set SPC interpolation mode:
++ * -2 nearest, -1 linear, 0 gaussian, 1 cubic, 2 sinc.
++ * Has no effect for non-SPC tracks.
++ */
++BLARGG_EXPORT void gme_set_spc_interpolation( Music_Emu*, int level );
++
+ /* Frequency equalizer parameters (see gme.txt) */
+ /* Implementers: If modified, also adjust Music_Emu::make_equalizer as needed */
+ typedef struct gme_equalizer_t
+-- 
+2.53.0
+

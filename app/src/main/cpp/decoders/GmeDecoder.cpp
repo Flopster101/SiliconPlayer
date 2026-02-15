@@ -93,7 +93,6 @@ bool GmeDecoder::open(const char* path) {
         return false;
     }
     activeSampleRate = openSampleRate;
-    loggedSpcInterpolationCompat = false;
 
     trackCount = std::max(1, gme_track_count(emu));
     activeTrack = 0;
@@ -180,7 +179,6 @@ void GmeDecoder::closeInternal() {
     hasLoopPoint = false;
     isSpcTrack = false;
     activeSampleRate = requestedSampleRate;
-    loggedSpcInterpolationCompat = false;
     playbackPositionSeconds = 0.0;
     lastTellMs = -1;
     title.clear();
@@ -412,8 +410,10 @@ int GmeDecoder::getOptionApplyPolicy(const char* name) const {
     if (optionName == "gme.spc_use_builtin_fade") {
         return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
     }
-    if (optionName == "gme.spc_interpolation" ||
-        optionName == "gme.spc_use_native_sample_rate") {
+    if (optionName == "gme.spc_interpolation") {
+        return OPTION_APPLY_LIVE;
+    }
+    if (optionName == "gme.spc_use_native_sample_rate") {
         return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
     }
     return OPTION_APPLY_LIVE;
@@ -493,9 +493,8 @@ void GmeDecoder::applyCoreOptionsLocked() {
     eq.bass = eqBassHz;
     gme_set_equalizer(emu, &eq);
 
-    if (isSpcTrack && spcInterpolation != 0 && !loggedSpcInterpolationCompat) {
-        LOGW("SPC interpolation option (%d) requested, but current libgme API exposes no runtime SPC interpolation control. Using library default.", spcInterpolation);
-        loggedSpcInterpolationCompat = true;
+    if (isSpcTrack) {
+        gme_set_spc_interpolation(emu, spcInterpolation);
     }
 }
 

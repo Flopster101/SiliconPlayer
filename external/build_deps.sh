@@ -37,6 +37,7 @@ ABIS=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 ABSOLUTE_PATH="$SCRIPT_DIR"
 PATCHES_DIR="$ABSOLUTE_PATH/patches/libopenmpt"
+PATCHES_DIR_LIBGME="$ABSOLUTE_PATH/patches/libgme"
 
 # -----------------------------------------------------------------------------
 # Function: Apply libopenmpt patches (idempotent)
@@ -92,6 +93,35 @@ apply_libvgm_patches() {
         fi
 
         echo "Applying libvgm patch: $patch_name"
+        git -C "$PROJECT_PATH" am "$patch_file" || {
+            echo "Error applying patch $patch_name"
+            git -C "$PROJECT_PATH" am --abort
+            exit 1
+        }
+    done
+}
+
+# -----------------------------------------------------------------------------
+# Function: Apply libgme patches (idempotent)
+# -----------------------------------------------------------------------------
+apply_libgme_patches() {
+    local PROJECT_PATH="$ABSOLUTE_PATH/libgme"
+    if [ ! -d "$PATCHES_DIR_LIBGME" ]; then
+        return
+    fi
+
+    for patch_file in "$PATCHES_DIR_LIBGME"/*.patch; do
+        [ -e "$patch_file" ] || continue
+        local patch_name
+        patch_name="$(basename "$patch_file")"
+
+        # If reverse-apply check succeeds, patch content is already present.
+        if git -C "$PROJECT_PATH" apply --check --reverse "$patch_file" >/dev/null 2>&1; then
+            echo "libgme patch already applied: $patch_name"
+            continue
+        fi
+
+        echo "Applying libgme patch: $patch_name"
         git -C "$PROJECT_PATH" am "$patch_file" || {
             echo "Error applying patch $patch_name"
             git -C "$PROJECT_PATH" am --abort
@@ -425,6 +455,10 @@ fi
 
 if target_has_lib "libvgm"; then
     apply_libvgm_patches
+fi
+
+if target_has_lib "libgme"; then
+    apply_libgme_patches
 fi
 
 # -----------------------------------------------------------------------------

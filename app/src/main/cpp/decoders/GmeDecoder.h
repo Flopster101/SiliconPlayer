@@ -84,7 +84,6 @@ private:
     int activeSampleRate = 48000;
     int spcInterpolation = 0;
     bool spcUseNativeSampleRate = true;
-    bool loggedSpcInterpolationCompat = false;
 };
 
 #endif // SILICONPLAYER_GMEDECODER_H

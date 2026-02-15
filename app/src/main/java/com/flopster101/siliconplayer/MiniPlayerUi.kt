@@ -117,8 +117,8 @@ internal fun MiniPlayerBar(
 
     Surface(
         modifier = modifier,
-        tonalElevation = 6.dp,
-        shadowElevation = 6.dp,
+        tonalElevation = 1.dp,
+        shadowElevation = 0.dp,
         shape = MaterialTheme.shapes.large,
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
     ) {

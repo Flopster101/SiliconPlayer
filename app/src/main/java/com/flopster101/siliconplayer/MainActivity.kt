@@ -2289,7 +2289,8 @@ private fun AppNavigation(
                             }
                         )
                     }
-                    MainView.Settings -> SettingsScreen(
+                    MainView.Settings -> Box(modifier = Modifier.padding(mainPadding)) {
+                        SettingsScreen(
                         route = settingsRoute,
                         bottomContentPadding = miniPlayerListInset,
                         onBack = {
@@ -2792,7 +2793,8 @@ private fun AppNavigation(
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -2875,21 +2877,17 @@ private fun AppNavigation(
                         }
                     }
                 )
-                SwipeToDismissBox(
-                    state = dismissState,
-                    modifier = Modifier
-                        .graphicsLayer {
-                            val dragProgress = miniExpandPreviewProgress.coerceIn(0f, 1f)
-                            val hideMini = expandFromMiniDrag || isPlayerExpanded
-                            val alphaFloor = if (hideMini) 0f else 0.16f
-                            alpha = (1f - dragProgress).coerceIn(alphaFloor, 1f)
-                            translationY = -miniPreviewLiftPx * dragProgress
-                        }
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    backgroundContent = {},
-                    enableDismissFromStartToEnd = !isPlaying,
-                    enableDismissFromEndToStart = !isPlaying
-                ) {
+                val miniPlayerModifier = Modifier
+                    .graphicsLayer {
+                        val dragProgress = miniExpandPreviewProgress.coerceIn(0f, 1f)
+                        val hideMini = expandFromMiniDrag || isPlayerExpanded
+                        val alphaFloor = if (hideMini) 0f else 0.16f
+                        alpha = (1f - dragProgress).coerceIn(alphaFloor, 1f)
+                        translationY = -miniPreviewLiftPx * dragProgress
+                    }
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+
+                val miniPlayerContent: @Composable () -> Unit = {
                     MiniPlayerBar(
                         file = selectedFile,
                         title = metadataTitle.ifBlank {
@@ -2965,6 +2963,16 @@ private fun AppNavigation(
                         },
                         onStopAndClear = stopAndEmptyTrack
                     )
+                }
+
+                SwipeToDismissBox(
+                    state = dismissState,
+                    modifier = miniPlayerModifier,
+                    backgroundContent = {},
+                    enableDismissFromStartToEnd = !isPlaying,
+                    enableDismissFromEndToStart = !isPlaying
+                ) {
+                    miniPlayerContent()
                 }
             }
             AnimatedVisibility(

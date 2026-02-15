@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -282,6 +283,7 @@ fun SettingsScreen(
     }
 
     androidx.compose.material3.Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             androidx.compose.material3.TopAppBar(
                 title = { Text("Settings") },
@@ -409,7 +411,7 @@ fun SettingsScreen(
                 label = "settingsRouteTransition",
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = bottomContentPadding)
+                    .padding(start = 16.dp, end = 16.dp, top = 12.dp)
             ) {
                 Column(
                     modifier = Modifier
@@ -1142,7 +1144,10 @@ fun SettingsScreen(
                         onSelectedModeChanged = onThemeModeChanged
                     )
                     SettingsRoute.About -> AboutSettingsBody()
-                }
+                    }
+                    if (bottomContentPadding > 0.dp) {
+                        Spacer(modifier = Modifier.height(bottomContentPadding))
+                    }
                 }
             }
         }

@@ -34,6 +34,7 @@ internal fun readNativeTrackSnapshot(): NativeTrackSnapshot {
 internal fun syncPlaybackServiceForState(
     context: Context,
     selectedFile: File?,
+    sourceId: String?,
     metadataTitle: String,
     metadataArtist: String,
     durationSeconds: Double,
@@ -42,7 +43,7 @@ internal fun syncPlaybackServiceForState(
 ) {
     PlaybackService.syncFromUi(
         context = context,
-        path = selectedFile?.absolutePath,
+        path = sourceId ?: selectedFile?.absolutePath,
         title = metadataTitle.ifBlank { selectedFile?.nameWithoutExtension.orEmpty() },
         artist = metadataArtist.ifBlank { "Unknown Artist" },
         durationSeconds = durationSeconds,

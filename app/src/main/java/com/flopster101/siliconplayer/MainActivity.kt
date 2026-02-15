@@ -913,6 +913,7 @@ private fun AppNavigation(
     var settingsReturnView by remember { mutableStateOf(MainView.Home) }
     var selectedFile by remember { mutableStateOf<File?>(null) }
     var lastStoppedFile by remember { mutableStateOf<File?>(null) }
+    var lastStoppedSourceId by remember { mutableStateOf<String?>(null) }
     var duration by remember { mutableDoubleStateOf(0.0) }
     var position by remember { mutableDoubleStateOf(0.0) }
     var isPlaying by remember { mutableStateOf(false) }
@@ -1691,6 +1692,7 @@ private fun AppNavigation(
         syncPlaybackServiceForState(
             context = context,
             selectedFile = selectedFile,
+            sourceId = currentPlaybackSourceId,
             metadataTitle = metadataTitle,
             metadataArtist = metadataArtist,
             durationSeconds = duration,
@@ -1822,8 +1824,9 @@ private fun AppNavigation(
     }
 
     fun resetAndOptionallyKeepLastTrack(keepLastTrack: Boolean) {
-        if (keepLastTrack && selectedFile != null) {
+        if (keepLastTrack && (selectedFile != null || currentPlaybackSourceId != null)) {
             lastStoppedFile = selectedFile
+            lastStoppedSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
         }
         NativeBridge.stopEngine()
         clearPlaybackMetadataState()
@@ -1872,7 +1875,8 @@ private fun AppNavigation(
 
     fun applyManualInputSelection(
         rawInput: String,
-        options: ManualSourceOpenOptions = ManualSourceOpenOptions()
+        options: ManualSourceOpenOptions = ManualSourceOpenOptions(),
+        expandOverride: Boolean? = null
     ) {
         val resolved = resolveManualSourceInput(rawInput)
         if (resolved == null) {
@@ -1962,7 +1966,7 @@ private fun AppNavigation(
                     sourceId = sourceId,
                     locationId = null
                 )
-                isPlayerExpanded = openPlayerOnTrackSelect
+                isPlayerExpanded = expandOverride ?: openPlayerOnTrackSelect
                 syncPlaybackService()
             }
 
@@ -2110,14 +2114,24 @@ private fun AppNavigation(
     }
 
     fun resumeLastStoppedTrack(autoStart: Boolean = true): Boolean {
-        val resumable = lastStoppedFile?.takeIf { it.exists() && it.isFile } ?: run {
+        val resumable = lastStoppedFile?.takeIf { it.exists() && it.isFile }
+        if (resumable != null) {
+            applyTrackSelection(
+                file = resumable,
+                autoStart = autoStart,
+                expandOverride = null
+            )
+            return true
+        }
+        val sourceId = lastStoppedSourceId?.takeIf { it.isNotBlank() } ?: run {
             lastStoppedFile = null
+            lastStoppedSourceId = null
             return false
         }
-        applyTrackSelection(
-            file = resumable,
-            autoStart = autoStart,
-            expandOverride = null
+        applyManualInputSelection(
+            rawInput = sourceId,
+            options = ManualSourceOpenOptions(forceCaching = urlOrPathForceCaching),
+            expandOverride = isPlayerExpanded
         )
         return true
     }
@@ -2170,8 +2184,19 @@ private fun AppNavigation(
     }
 
     fun restorePlayerStateFromSessionAndNative(openExpanded: Boolean) {
-        val sourcePath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null)?.trim()
+        var sourcePath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null)?.trim()
             ?.takeIf { it.isNotBlank() } ?: return
+        if (sourcePath.startsWith("/virtual/remote/")) {
+            val legacyName = sourcePath.substringAfterLast('/').trim()
+            val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
+            val recovered = sourceIdForCachedFileName(cacheRoot, legacyName)
+            if (!recovered.isNullOrBlank()) {
+                sourcePath = recovered
+            } else {
+                // Legacy virtual-only source has no recoverable URL; avoid restoring broken state.
+                return
+            }
+        }
         val normalizedSource = normalizeSourceIdentity(sourcePath) ?: sourcePath
         val sourceUri = Uri.parse(normalizedSource)
         val sourceScheme = sourceUri.scheme?.lowercase(Locale.ROOT)
@@ -3059,7 +3084,7 @@ private fun AppNavigation(
                 when (targetView) {
                     MainView.Home -> Box(modifier = Modifier.padding(mainPadding)) {
                         HomeScreen(
-                            currentTrackPath = selectedFile?.absolutePath,
+                            currentTrackPath = currentPlaybackSourceId ?: selectedFile?.absolutePath,
                             currentTrackTitle = metadataTitle,
                             currentTrackArtist = metadataArtist,
                             recentFolders = recentFolders,
@@ -3083,7 +3108,28 @@ private fun AppNavigation(
                                 currentView = MainView.Browser
                             },
                             onPlayRecentFile = { entry ->
-                                applyManualInputSelection(entry.path)
+                                val normalized = normalizeSourceIdentity(entry.path)
+                                val uri = normalized?.let { Uri.parse(it) }
+                                val scheme = uri?.scheme?.lowercase(Locale.ROOT)
+                                val isRemote = scheme == "http" || scheme == "https"
+                                if (isRemote && !normalized.isNullOrBlank()) {
+                                    val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
+                                    val cached = findExistingCachedFileForSource(cacheRoot, normalized)
+                                    if (cached != null) {
+                                        applyTrackSelection(
+                                            file = cached,
+                                            autoStart = true,
+                                            expandOverride = openPlayerOnTrackSelect,
+                                            sourceIdOverride = normalized,
+                                            locationIdOverride = null,
+                                            useSongVolumeLookup = false
+                                        )
+                                    } else {
+                                        applyManualInputSelection(entry.path)
+                                    }
+                                } else {
+                                    applyManualInputSelection(entry.path)
+                                }
                             }
                         )
                     }
@@ -3746,6 +3792,7 @@ private fun AppNavigation(
         }
 
         run {
+            val canResumeStoppedTrack = lastStoppedFile?.exists() == true || !lastStoppedSourceId.isNullOrBlank()
             if (isPlayerSurfaceVisible && !isPlayerExpanded && miniExpandPreviewProgress > 0f) {
                 val previewProgress = miniExpandPreviewProgress.coerceIn(0f, 1f)
                 val previewOffsetPx = (1f - previewProgress) * screenHeightPx
@@ -3848,7 +3895,7 @@ private fun AppNavigation(
                         artwork = artworkBitmap,
                         noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
                         isPlaying = isPlaying,
-                        canResumeStoppedTrack = lastStoppedFile?.exists() == true,
+                        canResumeStoppedTrack = canResumeStoppedTrack,
                         positionSeconds = position,
                         durationSeconds = duration,
                         hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
@@ -3950,7 +3997,7 @@ private fun AppNavigation(
                         isPlayerExpanded = false
                     },
                     isPlaying = isPlaying,
-                    canResumeStoppedTrack = lastStoppedFile?.exists() == true,
+                    canResumeStoppedTrack = canResumeStoppedTrack,
                     onPlay = {
                         if (selectedFile == null) {
                             resumeLastStoppedTrack(autoStart = true)

@@ -199,6 +199,11 @@ internal fun listCachedSourceFiles(cacheRoot: File): List<CachedSourceFile> {
         }
 }
 
+internal fun sourceIdForCachedFileName(cacheRoot: File, fileName: String): String? {
+    if (fileName.isBlank()) return null
+    return loadSourceCacheIndex(cacheRoot)[fileName]
+}
+
 internal fun enforceRemoteCacheLimits(
     cacheRoot: File,
     maxTracks: Int,

@@ -137,6 +137,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLDecoder
 import java.util.Locale
 import java.security.MessageDigest
 
@@ -309,6 +310,7 @@ private enum class ManualSourceType {
 private data class ManualSourceResolution(
     val type: ManualSourceType,
     val sourceId: String,
+    val requestUrl: String,
     val localFile: File?,
     val directoryPath: String?,
     val displayFile: File?
@@ -339,6 +341,58 @@ private fun sha1Hex(value: String): String {
     return digest.joinToString("") { "%02x".format(it) }
 }
 
+private fun sanitizeRemoteLeafName(raw: String?): String? {
+    val trimmed = raw?.trim()?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: return null
+    return trimmed.replace(Regex("""[\\/:*?"<>|]"""), "_")
+}
+
+private fun stripUrlFragment(url: String): String {
+    val parsed = Uri.parse(url)
+    if (parsed.fragment.isNullOrBlank()) return url
+    return parsed.buildUpon().fragment(null).build().toString()
+}
+
+private fun remoteFilenameHintFromUri(uri: Uri): String? {
+    val fragmentHint = sanitizeRemoteLeafName(uri.fragment)
+        ?.takeIf { it.contains('.') }
+    if (fragmentHint != null) return fragmentHint
+
+    val queryHint = listOf("filename", "file", "name")
+        .firstNotNullOfOrNull { key ->
+            sanitizeRemoteLeafName(uri.getQueryParameter(key))
+                ?.takeIf { it.contains('.') }
+        }
+    if (queryHint != null) return queryHint
+
+    return sanitizeRemoteLeafName(uri.lastPathSegment)
+}
+
+private fun filenameFromContentDisposition(headerValue: String?): String? {
+    if (headerValue.isNullOrBlank()) return null
+    val filenameStar = Regex("""filename\*\s*=\s*([^;]+)""", RegexOption.IGNORE_CASE)
+        .find(headerValue)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.trim()
+        ?.trim('"')
+        ?.let { value ->
+            value.substringAfter("''", value)
+        }
+    if (!filenameStar.isNullOrBlank()) {
+        return try {
+            sanitizeRemoteLeafName(URLDecoder.decode(filenameStar, "UTF-8"))
+        } catch (_: Throwable) {
+            sanitizeRemoteLeafName(filenameStar)
+        }
+    }
+
+    val filename = Regex("""filename\s*=\s*("?)([^";]+)\1""", RegexOption.IGNORE_CASE)
+        .find(headerValue)
+        ?.groupValues
+        ?.getOrNull(2)
+    return sanitizeRemoteLeafName(filename)
+}
+
 private fun resolveManualSourceInput(rawInput: String): ManualSourceResolution? {
     val trimmed = rawInput.trim()
     if (trimmed.isEmpty()) return null
@@ -348,14 +402,12 @@ private fun resolveManualSourceInput(rawInput: String): ManualSourceResolution? 
     if (scheme == "http" || scheme == "https") {
         if (uri.host.isNullOrBlank()) return null
         val normalizedUrl = uri.normalizeScheme().toString()
-        val baseName = uri.lastPathSegment
-            ?.substringAfterLast('/')
-            ?.takeIf { it.isNotBlank() }
-            ?: uri.host!!
-        val safeName = baseName.replace(Regex("""[\\/:*?"<>|]"""), "_")
+        val requestUrl = stripUrlFragment(normalizedUrl)
+        val safeName = remoteFilenameHintFromUri(uri) ?: sanitizeRemoteLeafName(uri.host) ?: "remote"
         return ManualSourceResolution(
             type = ManualSourceType.RemoteUrl,
             sourceId = normalizedUrl,
+            requestUrl = requestUrl,
             localFile = null,
             directoryPath = null,
             displayFile = File("/virtual/remote/$safeName")
@@ -369,6 +421,7 @@ private fun resolveManualSourceInput(rawInput: String): ManualSourceResolution? 
             return ManualSourceResolution(
                 type = ManualSourceType.LocalDirectory,
                 sourceId = sourceIdOverride ?: file.absolutePath,
+                requestUrl = sourceIdOverride ?: file.absolutePath,
                 localFile = null,
                 directoryPath = file.absolutePath,
                 displayFile = null
@@ -378,6 +431,7 @@ private fun resolveManualSourceInput(rawInput: String): ManualSourceResolution? 
             return ManualSourceResolution(
                 type = ManualSourceType.LocalFile,
                 sourceId = sourceIdOverride ?: file.absolutePath,
+                requestUrl = sourceIdOverride ?: file.absolutePath,
                 localFile = file,
                 directoryPath = null,
                 displayFile = file
@@ -426,8 +480,9 @@ private fun remoteCacheFileForUrl(cacheRoot: File, url: String): File {
         cacheRoot.mkdirs()
     }
     val uri = Uri.parse(url)
-    val leafName = uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "remote"
-    val safeLeaf = leafName.replace(Regex("""[\\/:*?"<>|]"""), "_")
+    val safeLeaf = remoteFilenameHintFromUri(uri)
+        ?: sanitizeRemoteLeafName(uri.host)
+        ?: "remote"
     return File(cacheRoot, "${sha1Hex(url)}_$safeLeaf")
 }
 
@@ -1298,9 +1353,11 @@ private fun AppNavigation(
 
     suspend fun downloadRemoteUrlToCache(
         url: String,
+        requestUrl: String,
         onStatus: suspend (RemoteLoadUiState) -> Unit
     ): RemoteDownloadResult = withContext(Dispatchers.IO) {
-        val target = remoteCacheFileForUrl(File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR), url)
+        val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
+        var target = remoteCacheFileForUrl(cacheRoot, url)
         suspend fun emitStatus(state: RemoteLoadUiState) {
             withContext(Dispatchers.Main.immediate) {
                 onStatus(state)
@@ -1311,8 +1368,8 @@ private fun AppNavigation(
             return@withContext RemoteDownloadResult(file = target)
         }
 
-        val temp = File(target.absolutePath + ".part")
-        Log.d(URL_SOURCE_TAG, "Downloading URL to cache: $url")
+        var temp = File(target.absolutePath + ".part")
+        Log.d(URL_SOURCE_TAG, "Downloading URL to cache: source=$url request=$requestUrl")
         emitStatus(
             RemoteLoadUiState(
                 sourceId = url,
@@ -1362,15 +1419,32 @@ private fun AppNavigation(
 
         var connection: HttpURLConnection? = null
         return@withContext try {
-            val (openedConnection, openError) = openWithRedirects(url)
+            val (openedConnection, openError) = openWithRedirects(requestUrl)
             connection = openedConnection
             if (connection == null) {
-                Log.e(URL_SOURCE_TAG, "HTTP open failed for URL: $url")
+                Log.e(URL_SOURCE_TAG, "HTTP open failed for URL: source=$url request=$requestUrl")
                 RemoteDownloadResult(
                     file = null,
                     errorMessage = openError ?: "Connection failed"
                 )
             } else {
+                val contentDispositionName = filenameFromContentDisposition(
+                    connection.getHeaderField("Content-Disposition")
+                )
+                if (!contentDispositionName.isNullOrBlank()) {
+                    val resolvedTarget = File(cacheRoot, "${sha1Hex(url)}_$contentDispositionName")
+                    if (resolvedTarget.absolutePath != target.absolutePath) {
+                        target = resolvedTarget
+                        temp = File(target.absolutePath + ".part")
+                        if (target.exists() && target.length() > 0L) {
+                            Log.d(
+                                URL_SOURCE_TAG,
+                                "Using existing cached file after Content-Disposition resolution: ${target.absolutePath} (${target.length()} bytes)"
+                            )
+                            return@withContext RemoteDownloadResult(file = target)
+                        }
+                    }
+                }
                 val expectedBytes = connection.contentLengthLong
                 var totalBytes = 0L
                 var latestBytesPerSecond: Long? = null
@@ -1830,10 +1904,13 @@ private fun AppNavigation(
                 var streamingFailureReason: String? = null
                 if (!options.forceCaching) {
                     try {
-                        Log.d(URL_SOURCE_TAG, "Attempting direct stream open: ${resolved.sourceId}")
+                        Log.d(
+                            URL_SOURCE_TAG,
+                            "Attempting direct stream open: source=${resolved.sourceId} request=${resolved.requestUrl}"
+                        )
                         val snapshot = withContext(Dispatchers.IO) {
                             withTimeout(20_000L) {
-                                NativeBridge.loadAudio(resolved.sourceId)
+                                NativeBridge.loadAudio(resolved.requestUrl)
                                 readNativeTrackSnapshot()
                             }
                         }
@@ -1868,6 +1945,7 @@ private fun AppNavigation(
 
                 val downloadResult = downloadRemoteUrlToCache(
                     url = resolved.sourceId,
+                    requestUrl = resolved.requestUrl,
                     onStatus = { state ->
                         remoteLoadUiState = state
                     }

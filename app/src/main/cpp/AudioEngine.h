@@ -37,12 +37,16 @@ public:
     bool consumeNaturalEndEvent();
     std::string getTitle();
     std::string getArtist();
+    std::string getComposer();
+    std::string getGenre();
     int getSampleRate();
     int getDisplayChannelCount();
     int getChannelCount();
     int getBitDepth();
     std::string getBitDepthLabel();
     std::string getCurrentDecoderName();
+    int getDecoderRenderSampleRateHz() const;
+    int getOutputStreamSampleRateHz() const;
 
     // Bitrate information
     int64_t getTrackBitrate();

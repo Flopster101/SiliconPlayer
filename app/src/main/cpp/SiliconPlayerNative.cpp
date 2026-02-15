@@ -195,6 +195,24 @@ Java_com_flopster101_siliconplayer_MainActivity_getTrackArtist(JNIEnv* env, jobj
     return env->NewStringUTF(value.c_str());
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTrackComposer(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewStringUTF("");
+    }
+    std::string value = audioEngine->getComposer();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTrackGenre(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewStringUTF("");
+    }
+    std::string value = audioEngine->getGenre();
+    return env->NewStringUTF(value.c_str());
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getTrackSampleRate(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
@@ -255,6 +273,22 @@ Java_com_flopster101_siliconplayer_MainActivity_getCurrentDecoderName(JNIEnv* en
     }
     std::string value = audioEngine->getCurrentDecoderName();
     return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getDecoderRenderSampleRateHz(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) {
+        return 0;
+    }
+    return static_cast<jint>(audioEngine->getDecoderRenderSampleRateHz());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getOutputStreamSampleRateHz(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) {
+        return 0;
+    }
+    return static_cast<jint>(audioEngine->getOutputStreamSampleRateHz());
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -328,6 +362,16 @@ Java_com_flopster101_siliconplayer_NativeBridge_getTrackArtist(JNIEnv* env, jobj
     return Java_com_flopster101_siliconplayer_MainActivity_getTrackArtist(env, thiz);
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getTrackComposer(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getTrackComposer(env, thiz);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getTrackGenre(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getTrackGenre(env, thiz);
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getTrackSampleRate(JNIEnv* env, jobject thiz) {
     return Java_com_flopster101_siliconplayer_MainActivity_getTrackSampleRate(env, thiz);
@@ -361,6 +405,16 @@ Java_com_flopster101_siliconplayer_NativeBridge_getPlaybackCapabilities(JNIEnv* 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getCurrentDecoderName(JNIEnv* env, jobject thiz) {
     return Java_com_flopster101_siliconplayer_MainActivity_getCurrentDecoderName(env, thiz);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDecoderRenderSampleRateHz(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getDecoderRenderSampleRateHz(env, thiz);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getOutputStreamSampleRateHz(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getOutputStreamSampleRateHz(env, thiz);
 }
 
 extern "C" JNIEXPORT jlong JNICALL

@@ -120,6 +120,8 @@ bool FFmpegDecoder::open(const char* path) {
 
     title = getFirstMetadataValue(formatContext->metadata, {"title"});
     artist = getFirstMetadataValue(formatContext->metadata, {"artist", "album_artist", "author", "composer"});
+    composer = getFirstMetadataValue(formatContext->metadata, {"composer", "author"});
+    genre = getFirstMetadataValue(formatContext->metadata, {"genre"});
     if (title.empty() || artist.empty()) {
         AVDictionary* streamMetadata = formatContext->streams[audioStreamIndex]->metadata;
         if (title.empty()) {
@@ -127,6 +129,12 @@ bool FFmpegDecoder::open(const char* path) {
         }
         if (artist.empty()) {
             artist = getFirstMetadataValue(streamMetadata, {"artist", "album_artist", "author", "composer"});
+        }
+        if (composer.empty()) {
+            composer = getFirstMetadataValue(streamMetadata, {"composer", "author"});
+        }
+        if (genre.empty()) {
+            genre = getFirstMetadataValue(streamMetadata, {"genre"});
         }
     }
 
@@ -165,6 +173,8 @@ void FFmpegDecoder::close() {
     sourceBitDepth = 0;
     title.clear();
     artist.clear();
+    composer.clear();
+    genre.clear();
     bitrate = 0;
     vbr = false;
 }
@@ -371,6 +381,16 @@ std::string FFmpegDecoder::getTitle() {
 std::string FFmpegDecoder::getArtist() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return artist;
+}
+
+std::string FFmpegDecoder::getComposer() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return composer;
+}
+
+std::string FFmpegDecoder::getGenre() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return genre;
 }
 
 void FFmpegDecoder::setOutputSampleRate(int sampleRate) {

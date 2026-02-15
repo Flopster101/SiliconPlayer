@@ -14,9 +14,13 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.focusable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -72,6 +76,7 @@ import android.view.MotionEvent
 import com.flopster101.siliconplayer.RepeatMode
 import java.io.File
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,6 +126,7 @@ fun PlayerScreen(
     var isTimelineTouchActive by remember { mutableStateOf(false) }
     var downwardDragPx by remember { mutableFloatStateOf(0f) }
     var isDraggingDown by remember { mutableStateOf(false) }
+    var showTrackInfoDialog by remember { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
@@ -325,7 +331,8 @@ fun PlayerScreen(
                         fileSizeBytes = file?.length() ?: 0L,
                         sampleRateHz = sampleRateHz,
                         channelCount = channelCount,
-                        bitDepthLabel = bitDepthLabel
+                        bitDepthLabel = bitDepthLabel,
+                        onClick = { showTrackInfoDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         TrackMetadataBlock(
@@ -410,6 +417,7 @@ fun PlayerScreen(
                         sampleRateHz = sampleRateHz,
                         channelCount = channelCount,
                         bitDepthLabel = bitDepthLabel,
+                        onClick = { showTrackInfoDialog = true },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(10.dp))
@@ -474,6 +482,20 @@ fun PlayerScreen(
                 }
             }
         }
+    }
+    if (showTrackInfoDialog) {
+        TrackInfoDetailsDialog(
+            file = file,
+            title = displayTitle,
+            artist = displayArtist,
+            decoderName = decoderName,
+            sampleRateHz = sampleRateHz,
+            channelCount = channelCount,
+            bitDepthLabel = bitDepthLabel,
+            durationSeconds = durationSeconds,
+            hasReliableDuration = hasReliableDuration,
+            onDismiss = { showTrackInfoDialog = false }
+        )
     }
 }
 }
@@ -548,6 +570,7 @@ private fun TrackInfoChips(
     sampleRateHz: Int,
     channelCount: Int,
     bitDepthLabel: String,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val formatLabel = file?.extension?.uppercase()?.ifBlank { "UNKNOWN" } ?: "EMPTY"
@@ -589,39 +612,207 @@ private fun TrackInfoChips(
         screenWidthDp <= 460 -> 1
         else -> 0
     }
-    Row(
+    Box(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(
-            when (compactLevel) {
-                2 -> 3.dp
-                1 -> 4.dp
-                else -> 6.dp
-            },
-            Alignment.CenterHorizontally
-        )
+        contentAlignment = Alignment.Center
     ) {
-        TrackInfoChip(
-            icon = Icons.Default.AudioFile,
-            text = formatLabel,
-            compactLevel = compactLevel
-        )
-        if (bitrateOrSize != null) {
+        Row(
+            modifier = Modifier
+                .wrapContentWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .clickable(onClick = onClick),
+            horizontalArrangement = Arrangement.spacedBy(
+                when (compactLevel) {
+                    2 -> 3.dp
+                    1 -> 4.dp
+                    else -> 6.dp
+                }
+            )
+        ) {
             TrackInfoChip(
-                icon = if (decoderName.equals("FFmpeg", ignoreCase = true))
-                    Icons.Default.Speed else Icons.Default.Info,
-                text = bitrateOrSize,
+                icon = Icons.Default.AudioFile,
+                text = formatLabel,
+                compactLevel = compactLevel
+            )
+            if (bitrateOrSize != null) {
+                TrackInfoChip(
+                    icon = if (decoderName.equals("FFmpeg", ignoreCase = true))
+                        Icons.Default.Speed else Icons.Default.Info,
+                    text = bitrateOrSize,
+                    compactLevel = compactLevel
+                )
+            }
+            TrackInfoChip(
+                icon = Icons.Default.Equalizer,
+                text = sampleRateLabel,
+                compactLevel = compactLevel
+            )
+            TrackInfoChip(
+                icon = Icons.Default.Info,
+                text = channelsAndDepth,
                 compactLevel = compactLevel
             )
         }
-        TrackInfoChip(
-            icon = Icons.Default.Equalizer,
-            text = sampleRateLabel,
-            compactLevel = compactLevel
+    }
+}
+
+@Composable
+private fun TrackInfoDetailsDialog(
+    file: File?,
+    title: String,
+    artist: String,
+    decoderName: String?,
+    sampleRateHz: Int,
+    channelCount: Int,
+    bitDepthLabel: String,
+    durationSeconds: Double,
+    hasReliableDuration: Boolean,
+    onDismiss: () -> Unit
+) {
+    var liveBitrate by remember { mutableLongStateOf(0L) }
+    var liveIsVbr by remember { mutableStateOf(false) }
+    var liveRenderRateHz by remember { mutableIntStateOf(0) }
+    var liveOutputRateHz by remember { mutableIntStateOf(0) }
+    var liveComposer by remember { mutableStateOf("") }
+    var liveGenre by remember { mutableStateOf("") }
+    val detailsScrollState = rememberScrollState()
+    var detailsViewportHeightPx by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(file?.absolutePath, decoderName) {
+        while (true) {
+            liveBitrate = NativeBridge.getTrackBitrate()
+            liveIsVbr = NativeBridge.isTrackVBR()
+            liveRenderRateHz = NativeBridge.getDecoderRenderSampleRateHz()
+            liveOutputRateHz = NativeBridge.getOutputStreamSampleRateHz()
+            liveComposer = NativeBridge.getTrackComposer()
+            liveGenre = NativeBridge.getTrackGenre()
+            delay(500)
+        }
+    }
+
+    val fileSizeBytes = file?.length() ?: 0L
+    val filename = file?.name ?: "No file loaded"
+    val extension = file?.extension?.uppercase()?.ifBlank { "UNKNOWN" } ?: "UNKNOWN"
+    val decoderLabel = decoderName?.ifBlank { "Unknown" } ?: "Unknown"
+    val bitrateLabel = if (liveBitrate > 0L) {
+        "${formatBitrate(liveBitrate, liveIsVbr)} (${if (liveIsVbr) "VBR" else "CBR"})"
+    } else {
+        "Unavailable"
+    }
+    val lengthLabel = if (hasReliableDuration && durationSeconds > 0.0) {
+        formatTime(durationSeconds)
+    } else {
+        "Unavailable"
+    }
+    val channelsLabel = if (channelCount > 0) "$channelCount channels" else "Unknown"
+    val depthLabel = bitDepthLabel.ifBlank { "Unknown" }
+    val sampleRateChain =
+        "${formatSampleRateForDetails(sampleRateHz)} -> " +
+            "${formatSampleRateForDetails(liveRenderRateHz)} -> " +
+            formatSampleRateForDetails(liveOutputRateHz)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Track and decoder info") },
+        text = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 460.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onSizeChanged { detailsViewportHeightPx = it.height }
+                        .padding(end = 10.dp)
+                        .verticalScroll(detailsScrollState),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TrackInfoDetailsRow("Filename", filename)
+                    TrackInfoDetailsRow("Title", title)
+                    TrackInfoDetailsRow("Artist", artist)
+                    if (liveComposer.isNotBlank()) {
+                        TrackInfoDetailsRow("Composer", liveComposer)
+                    }
+                    if (liveGenre.isNotBlank()) {
+                        TrackInfoDetailsRow("Genre", liveGenre)
+                    }
+                    TrackInfoDetailsRow("Format", extension)
+                    TrackInfoDetailsRow("Decoder", decoderLabel)
+                    TrackInfoDetailsRow(
+                        "File size",
+                        if (fileSizeBytes > 0L) formatFileSize(fileSizeBytes) else "Unavailable"
+                    )
+                    TrackInfoDetailsRow("Sample rate chain", sampleRateChain)
+                    TrackInfoDetailsRow("Bitrate", bitrateLabel)
+                    TrackInfoDetailsRow("Length", lengthLabel)
+                    TrackInfoDetailsRow("Audio channels", channelsLabel)
+                    TrackInfoDetailsRow("Bit depth", depthLabel)
+                }
+                if (detailsScrollState.maxValue > 0 && detailsViewportHeightPx > 0) {
+                    TrackInfoDetailsScrollbar(
+                        scrollState = detailsScrollState,
+                        viewportHeightPx = detailsViewportHeightPx,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight()
+                            .width(6.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+private fun TrackInfoDetailsRow(label: String, value: String) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        TrackInfoChip(
-            icon = Icons.Default.Info,
-            text = channelsAndDepth,
-            compactLevel = compactLevel
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+@Composable
+private fun TrackInfoDetailsScrollbar(
+    scrollState: androidx.compose.foundation.ScrollState,
+    viewportHeightPx: Int,
+    modifier: Modifier = Modifier
+) {
+    val maxScroll = scrollState.maxValue
+    if (maxScroll <= 0 || viewportHeightPx <= 0) return
+
+    val viewport = viewportHeightPx.toFloat()
+    val content = viewport + maxScroll.toFloat()
+    val thumbHeightPx = (viewport * (viewport / content)).coerceAtLeast(24f)
+    val travelRangePx = (viewport - thumbHeightPx).coerceAtLeast(0f)
+    val thumbOffsetPx =
+        if (maxScroll > 0) (scrollState.value.toFloat() / maxScroll.toFloat()) * travelRangePx else 0f
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(99.dp))
+            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f))
+    ) {
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(0, thumbOffsetPx.roundToInt()) }
+                .fillMaxWidth()
+                .height(with(LocalDensity.current) { thumbHeightPx.toDp() })
+                .clip(RoundedCornerShape(99.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.68f))
         )
     }
 }
@@ -1276,6 +1467,15 @@ private fun formatBitrate(bitrateInBitsPerSecond: Long, isVBR: Boolean): String 
     return when {
         kbps >= 1000 -> String.format(java.util.Locale.US, "%s%.1f Mbps", prefix, kbps / 1000.0)
         else -> String.format(java.util.Locale.US, "%s%.0f kbps", prefix, kbps)
+    }
+}
+
+private fun formatSampleRateForDetails(rateHz: Int): String {
+    if (rateHz <= 0) return "Unknown"
+    return if (rateHz % 1000 == 0) {
+        "${rateHz / 1000} kHz"
+    } else {
+        String.format(java.util.Locale.US, "%.1f kHz", rateHz / 1000.0)
     }
 }
 

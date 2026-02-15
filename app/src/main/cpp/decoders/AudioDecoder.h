@@ -38,6 +38,8 @@ public:
     virtual int getChannelCount() = 0;
     virtual std::string getTitle() = 0;
     virtual std::string getArtist() = 0;
+    virtual std::string getComposer() { return ""; }
+    virtual std::string getGenre() { return ""; }
     virtual void setOutputSampleRate(int /*sampleRate*/) {}
     virtual void setRepeatMode(int /*mode*/) {}
     virtual int getRepeatModeCapabilities() const { return REPEAT_CAP_TRACK; }

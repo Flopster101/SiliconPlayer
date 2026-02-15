@@ -32,6 +32,8 @@ public:
     int getChannelCount() override;
     std::string getTitle() override;
     std::string getArtist() override;
+    std::string getComposer() override;
+    std::string getGenre() override;
     void setOutputSampleRate(int sampleRate) override;
     int getPlaybackCapabilities() const override {
         return PLAYBACK_CAP_SEEK |
@@ -68,6 +70,8 @@ private:
     int outputChannelCount = 2; // Output channels (stereo)
     std::string title;
     std::string artist;
+    std::string composer;
+    std::string genre;
     int64_t bitrate = 0;
     bool vbr = false;
 

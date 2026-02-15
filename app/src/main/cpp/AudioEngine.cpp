@@ -1113,6 +1113,22 @@ std::string AudioEngine::getArtist() {
     return decoder->getArtist();
 }
 
+std::string AudioEngine::getComposer() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return "";
+    }
+    return decoder->getComposer();
+}
+
+std::string AudioEngine::getGenre() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return "";
+    }
+    return decoder->getGenre();
+}
+
 int AudioEngine::getSampleRate() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) {
@@ -1159,6 +1175,14 @@ std::string AudioEngine::getCurrentDecoderName() {
         return "";
     }
     return decoder->getName();
+}
+
+int AudioEngine::getDecoderRenderSampleRateHz() const {
+    return decoderRenderSampleRate;
+}
+
+int AudioEngine::getOutputStreamSampleRateHz() const {
+    return streamSampleRate;
 }
 
 // Gain control implementation

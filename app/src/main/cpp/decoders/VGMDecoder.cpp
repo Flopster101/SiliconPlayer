@@ -78,9 +78,6 @@ bool VGMDecoder::open(const char* path) {
             return false;
         }
 
-        // DON'T start playback yet - wait until first read() after setOutputSampleRate() is called
-        // This ensures we use the correct sample rate from AudioEngine
-
         // Get metadata
         const char* const* tags = player->GetTags();
         if (tags) {
@@ -88,14 +85,14 @@ bool VGMDecoder::open(const char* path) {
                 const char* key = tags[i];
                 const char* value = tags[i + 1];
 
-                if (strcmp(key, "TITLE") == 0 || strcmp(key, "TITLE_EN") == 0) {
-                    if (title.empty()) title = value;
-                } else if (strcmp(key, "ARTIST") == 0 || strcmp(key, "ARTIST_EN") == 0) {
-                    if (artist.empty()) artist = value;
-                } else if (strcmp(key, "GAME") == 0 || strcmp(key, "GAME_EN") == 0) {
-                    if (gameName.empty()) gameName = value;
-                } else if (strcmp(key, "SYSTEM") == 0 || strcmp(key, "SYSTEM_EN") == 0) {
-                    if (systemName.empty()) systemName = value;
+                if (strcmp(key, "TITLE") == 0 || strcmp(key, "TITLE-JPN") == 0) {
+                    if (title.empty() && value && strlen(value) > 0) title = value;
+                } else if (strcmp(key, "ARTIST") == 0 || strcmp(key, "ARTIST-JPN") == 0) {
+                    if (artist.empty() && value && strlen(value) > 0) artist = value;
+                } else if (strcmp(key, "GAME") == 0 || strcmp(key, "GAME-JPN") == 0) {
+                    if (gameName.empty() && value && strlen(value) > 0) gameName = value;
+                } else if (strcmp(key, "SYSTEM") == 0 || strcmp(key, "SYSTEM-JPN") == 0) {
+                    if (systemName.empty() && value && strlen(value) > 0) systemName = value;
                 }
             }
         }

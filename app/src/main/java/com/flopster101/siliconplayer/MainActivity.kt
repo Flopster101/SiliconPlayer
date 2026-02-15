@@ -2224,6 +2224,13 @@ private fun AppNavigation(
                                 browserLaunchDirectoryPath = null
                                 currentView = MainView.Browser
                             },
+                            onOpenUrlOrPath = {
+                                Toast.makeText(
+                                    context,
+                                    "URL or path support coming soon",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
                             onOpenRecentFolder = { entry ->
                                 browserLaunchLocationId = entry.locationId
                                 browserLaunchDirectoryPath = entry.path

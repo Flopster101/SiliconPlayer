@@ -274,6 +274,22 @@ private data class ManualSourceResolution(
     val displayFile: File?
 )
 
+private fun resolvePlaybackSourceLabel(
+    selectedFile: File?,
+    sourceId: String?
+): String? {
+    if (selectedFile == null) return null
+    val normalizedSource = normalizeSourceIdentity(sourceId ?: selectedFile.absolutePath) ?: return "Local"
+    val scheme = Uri.parse(normalizedSource).scheme?.lowercase(Locale.ROOT)
+    val isRemote = scheme == "http" || scheme == "https"
+    if (!isRemote) return "Local"
+    return if (selectedFile.absolutePath.contains("/cache/remote_sources/")) {
+        "Streamed (cached)"
+    } else {
+        "Streamed"
+    }
+}
+
 private fun sha1Hex(value: String): String {
     val digest = MessageDigest.getInstance("SHA-1").digest(value.toByteArray())
     return digest.joinToString("") { "%02x".format(it) }
@@ -1171,6 +1187,9 @@ private fun AppNavigation(
     }
     var playbackWatchPath by remember { mutableStateOf<String?>(null) }
     var currentPlaybackSourceId by remember { mutableStateOf<String?>(null) }
+    val playbackSourceLabel = remember(selectedFile, currentPlaybackSourceId) {
+        resolvePlaybackSourceLabel(selectedFile, currentPlaybackSourceId)
+    }
 
     // Get supported extensions from JNI
     val supportedExtensions = remember { NativeBridge.getSupportedExtensions().toSet() }
@@ -3194,6 +3213,7 @@ private fun AppNavigation(
                         channelCount = metadataChannelCount,
                         bitDepthLabel = metadataBitDepthLabel,
                         decoderName = NativeBridge.getCurrentDecoderName().takeIf { it.isNotBlank() },
+                        playbackSourceLabel = playbackSourceLabel,
                         artwork = artworkBitmap,
                         noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
                         repeatMode = activeRepeatMode,
@@ -3407,6 +3427,7 @@ private fun AppNavigation(
                     channelCount = metadataChannelCount,
                     bitDepthLabel = metadataBitDepthLabel,
                     decoderName = NativeBridge.getCurrentDecoderName().takeIf { it.isNotBlank() },
+                    playbackSourceLabel = playbackSourceLabel,
                     artwork = artworkBitmap,
                     noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
                     repeatMode = activeRepeatMode,

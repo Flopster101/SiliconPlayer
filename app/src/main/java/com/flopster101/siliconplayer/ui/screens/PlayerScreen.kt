@@ -100,6 +100,7 @@ fun PlayerScreen(
     channelCount: Int,
     bitDepthLabel: String,
     decoderName: String?,
+    playbackSourceLabel: String? = null,
     artwork: ImageBitmap?,
     noArtworkIcon: ImageVector = Icons.Default.MusicNote,
     repeatMode: RepeatMode,
@@ -491,6 +492,7 @@ fun PlayerScreen(
             title = displayTitle,
             artist = displayArtist,
             decoderName = decoderName,
+            playbackSourceLabel = playbackSourceLabel,
             sampleRateHz = sampleRateHz,
             channelCount = channelCount,
             bitDepthLabel = bitDepthLabel,
@@ -664,6 +666,7 @@ private fun TrackInfoDetailsDialog(
     title: String,
     artist: String,
     decoderName: String?,
+    playbackSourceLabel: String?,
     sampleRateHz: Int,
     channelCount: Int,
     bitDepthLabel: String,
@@ -852,6 +855,9 @@ private fun TrackInfoDetailsDialog(
                     }
                     TrackInfoDetailsRow("Format", extension)
                     TrackInfoDetailsRow("Decoder", decoderLabel)
+                    playbackSourceLabel?.takeIf { it.isNotBlank() }?.let {
+                        TrackInfoDetailsRow("Playback source", it)
+                    }
                     TrackInfoDetailsRow(
                         "File size",
                         if (fileSizeBytes > 0L) formatFileSize(fileSizeBytes) else "Unavailable"

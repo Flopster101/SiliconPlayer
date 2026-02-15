@@ -163,7 +163,7 @@ fun PlayerScreen(
         if (file != null) file.nameWithoutExtension.ifBlank { file.name } else "No track selected"
     }
     val displayArtist = artist.ifBlank { if (hasTrack) "Unknown Artist" else "Tap a file to play" }
-    val displayFilename = file?.name ?: "No file loaded"
+    val displayFilename = file?.let { toDisplayFilename(it) } ?: "No file loaded"
 
     // Focus management for keyboard input
     val focusRequester = remember { FocusRequester() }
@@ -509,6 +509,16 @@ fun PlayerScreen(
         )
     }
 }
+}
+
+private fun toDisplayFilename(file: File): String {
+    val name = file.name
+    val path = file.absolutePath
+    if (path.contains("/cache/remote_sources/")) {
+        val normalized = name.replaceFirst(Regex("^[0-9a-fA-F]{40}_"), "")
+        if (normalized.isNotBlank()) return normalized
+    }
+    return name
 }
 
 @Composable

@@ -406,6 +406,10 @@ internal fun RecentTrackSummaryText(
         Text(
             text = buildString {
                 append(storagePresentation.label)
+                storagePresentation.qualifier?.takeIf { it.isNotBlank() }?.let {
+                    append(" • ")
+                    append(it)
+                }
                 append(" • ")
                 append(extensionLabel)
                 if (display.includeFilenameInSubtitle) {

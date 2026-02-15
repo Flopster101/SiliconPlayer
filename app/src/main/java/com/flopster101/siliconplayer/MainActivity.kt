@@ -84,6 +84,7 @@ import androidx.compose.material.icons.filled.TabletAndroid
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Slideshow
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.runtime.* // Import for remember, mutableStateOf
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -136,6 +137,7 @@ import java.util.Locale
 import java.security.MessageDigest
 
 private const val URL_SOURCE_TAG = "UrlSource"
+private const val REMOTE_SOURCE_CACHE_DIR = "remote_sources"
 
 private enum class MainView {
     Home,
@@ -373,8 +375,25 @@ private data class StorageDescriptor(
 
 internal data class StoragePresentation(
     val label: String,
-    val icon: ImageVector
+    val icon: ImageVector,
+    val qualifier: String? = null
 )
+
+private fun remoteCacheFileForUrl(cacheRoot: File, url: String): File {
+    if (!cacheRoot.exists()) {
+        cacheRoot.mkdirs()
+    }
+    val uri = Uri.parse(url)
+    val leafName = uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "remote"
+    val safeLeaf = leafName.replace(Regex("""[\\/:*?"<>|]"""), "_")
+    return File(cacheRoot, "${sha1Hex(url)}_$safeLeaf")
+}
+
+private fun isRemoteUrlCached(context: Context, url: String): Boolean {
+    val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
+    val cachedFile = remoteCacheFileForUrl(cacheRoot, url)
+    return cachedFile.exists() && cachedFile.length() > 0L
+}
 
 private fun applyRepeatModeToNative(mode: RepeatMode) {
     NativeBridge.setRepeatMode(
@@ -435,16 +454,35 @@ private fun detectStorageDescriptors(context: Context): List<StorageDescriptor> 
 }
 
 private fun storagePresentationForEntry(
+    context: Context,
     entry: RecentPathEntry,
     descriptors: List<StorageDescriptor>
 ): StoragePresentation {
+    val parsed = Uri.parse(entry.path)
+    val scheme = parsed.scheme?.lowercase(Locale.ROOT)
+    if (scheme == "http" || scheme == "https") {
+        val hostLabel = parsed.host?.takeIf { it.isNotBlank() } ?: "unknown host"
+        val protocolLabel = scheme.uppercase(Locale.ROOT)
+        val qualifier = if (isRemoteUrlCached(context, entry.path)) "Cached" else null
+        return StoragePresentation(
+            label = "$protocolLabel ($hostLabel)",
+            icon = Icons.Default.Public,
+            qualifier = qualifier
+        )
+    }
+
+    val pathForMatching = when (scheme) {
+        "file" -> parsed.path?.takeIf { it.isNotBlank() } ?: entry.path
+        else -> entry.path
+    }
+
     entry.locationId?.let { locationId ->
         descriptors.firstOrNull { it.rootPath == locationId }?.let {
             return StoragePresentation(label = it.label, icon = it.icon)
         }
     }
     val matching = descriptors
-        .filter { entry.path == it.rootPath || entry.path.startsWith("${it.rootPath}/") }
+        .filter { pathForMatching == it.rootPath || pathForMatching.startsWith("${it.rootPath}/") }
         .maxByOrNull { it.rootPath.length }
     return if (matching != null) {
         StoragePresentation(label = matching.label, icon = matching.icon)
@@ -624,7 +662,7 @@ class MainActivity : ComponentActivity() {
     private var initialFileFromExternalIntent: Boolean = false
 
     private fun clearRemoteSourceCacheOnLaunch() {
-        val cacheRoot = File(cacheDir, "remote_sources")
+        val cacheRoot = File(cacheDir, REMOTE_SOURCE_CACHE_DIR)
         if (!cacheRoot.exists()) return
         val entries = cacheRoot.listFiles().orEmpty()
         var deleted = 0
@@ -1208,19 +1246,8 @@ private fun AppNavigation(
 
     fun isLocalPlayableFile(file: File?): Boolean = file?.exists() == true && file.isFile
 
-    fun remoteCacheFileForUrl(url: String): File {
-        val cacheDir = File(context.cacheDir, "remote_sources")
-        if (!cacheDir.exists()) {
-            cacheDir.mkdirs()
-        }
-        val uri = Uri.parse(url)
-        val leafName = uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "remote"
-        val safeLeaf = leafName.replace(Regex("""[\\/:*?"<>|]"""), "_")
-        return File(cacheDir, "${sha1Hex(url)}_$safeLeaf")
-    }
-
     suspend fun downloadRemoteUrlToCache(url: String): File? = withContext(Dispatchers.IO) {
-        val target = remoteCacheFileForUrl(url)
+        val target = remoteCacheFileForUrl(File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR), url)
         if (target.exists() && target.length() > 0L) {
             Log.d(URL_SOURCE_TAG, "Using existing cached file: ${target.absolutePath} (${target.length()} bytes)")
             return@withContext target
@@ -2612,7 +2639,7 @@ private fun AppNavigation(
                             recentFolders = recentFolders,
                             recentPlayedFiles = recentPlayedFiles,
                             storagePresentationForEntry = { entry ->
-                                storagePresentationForEntry(entry, storageDescriptors)
+                                storagePresentationForEntry(context, entry, storageDescriptors)
                             },
                             bottomContentPadding = miniPlayerListInset,
                             onOpenLibrary = {

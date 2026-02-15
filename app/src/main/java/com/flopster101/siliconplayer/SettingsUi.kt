@@ -89,6 +89,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.PluginDetail -> 2
     SettingsRoute.PluginFfmpeg -> 2
     SettingsRoute.PluginOpenMpt -> 2
+    SettingsRoute.PluginVgmPlay -> 2
     SettingsRoute.GeneralAudio -> 1
     SettingsRoute.Player -> 1
     SettingsRoute.Misc -> 1
@@ -114,6 +115,7 @@ fun SettingsScreen(
     onOpenAbout: () -> Unit,
     onOpenFfmpeg: () -> Unit,
     onOpenOpenMpt: () -> Unit,
+    onOpenVgmPlay: () -> Unit,
     selectedPluginName: String?,
     onPluginSelected: (String) -> Unit,
     onPluginEnabledChanged: (String, Boolean) -> Unit,
@@ -165,6 +167,9 @@ fun SettingsScreen(
     openMptSampleRateHz: Int,
     openMptCapabilities: Int,
     onOpenMptSampleRateChanged: (Int) -> Unit,
+    vgmPlaySampleRateHz: Int,
+    vgmPlayCapabilities: Int,
+    onVgmPlaySampleRateChanged: (Int) -> Unit,
     openMptStereoSeparationPercent: Int,
     onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
     openMptStereoSeparationAmigaPercent: Int,
@@ -194,6 +199,7 @@ fun SettingsScreen(
         SettingsRoute.PluginDetail -> selectedPluginName?.let { "$it plugin settings" } ?: "Plugin settings"
         SettingsRoute.PluginFfmpeg -> "FFmpeg plugin settings"
         SettingsRoute.PluginOpenMpt -> "OpenMPT plugin settings"
+        SettingsRoute.PluginVgmPlay -> "VGMPlay plugin settings"
         SettingsRoute.GeneralAudio -> "General audio"
         SettingsRoute.Player -> "Player settings"
         SettingsRoute.Misc -> "Misc settings"
@@ -449,6 +455,27 @@ fun SettingsScreen(
                                         settingsSectionLabel = { label -> SettingsSectionLabel(label) }
                                     )
                                 }
+                                "VGMPlay" -> {
+                                    PluginDetailScreen(
+                                        pluginName = selectedPluginName,
+                                        onPriorityChanged = { priority ->
+                                            onPluginPriorityChanged(selectedPluginName, priority)
+                                        },
+                                        onExtensionsChanged = { extensions ->
+                                            onPluginExtensionsChanged(selectedPluginName, extensions)
+                                        }
+                                    )
+
+                                    val pluginSettings = com.flopster101.siliconplayer.pluginsettings.FfmpegSettings(
+                                        sampleRateHz = vgmPlaySampleRateHz,
+                                        capabilities = vgmPlayCapabilities,
+                                        onSampleRateChanged = onVgmPlaySampleRateChanged
+                                    )
+                                    com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings(
+                                        pluginSettings = pluginSettings,
+                                        settingsSectionLabel = { label -> SettingsSectionLabel(label) }
+                                    )
+                                }
                                 else -> {
                                     // Generic plugin with no core-specific settings
                                     PluginDetailScreen(
@@ -470,6 +497,13 @@ fun SettingsScreen(
                         selectedHz = ffmpegSampleRateHz,
                         enabled = supportsCustomSampleRate(ffmpegCapabilities),
                         onSelected = onFfmpegSampleRateChanged
+                    )
+                    SettingsRoute.PluginVgmPlay -> SampleRateSelectorCard(
+                        title = "Render sample rate",
+                        description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
+                        selectedHz = vgmPlaySampleRateHz,
+                        enabled = supportsCustomSampleRate(vgmPlayCapabilities),
+                        onSelected = onVgmPlaySampleRateChanged
                     )
                     SettingsRoute.PluginOpenMpt -> {
                         SettingsSectionLabel("Core options")

@@ -118,10 +118,11 @@ internal fun shouldRestartCurrentTrackOnPrevious(
         positionSeconds > PREVIOUS_RESTART_THRESHOLD_SECONDS
 }
 
-internal fun settingsRouteForCoreName(coreName: String?): SettingsRoute? {
+internal fun pluginNameForCoreName(coreName: String?): String? {
     return when (coreName?.trim()?.lowercase()) {
-        "ffmpeg" -> SettingsRoute.PluginFfmpeg
-        "libopenmpt", "openmpt" -> SettingsRoute.PluginOpenMpt
+        "ffmpeg" -> "FFmpeg"
+        "libopenmpt", "openmpt" -> "LibOpenMPT"
+        "vgmplay" -> "VGMPlay"
         else -> null
     }
 }

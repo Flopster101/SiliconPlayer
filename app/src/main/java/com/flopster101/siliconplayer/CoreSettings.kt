@@ -3,6 +3,7 @@ package com.flopster101.siliconplayer
 object CorePreferenceKeys {
     const val CORE_RATE_FFMPEG = "core_rate_ffmpeg"
     const val CORE_RATE_OPENMPT = "core_rate_openmpt"
+    const val CORE_RATE_VGMPLAY = "core_rate_vgmplay"
     const val OPENMPT_STEREO_SEPARATION_PERCENT = "openmpt_stereo_separation_percent"
     const val OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT = "openmpt_stereo_separation_amiga_percent"
     const val OPENMPT_INTERPOLATION_FILTER_LENGTH = "openmpt_interpolation_filter_length"
@@ -28,5 +29,9 @@ object OpenMptDefaults {
 }
 
 object FfmpegDefaults {
+    const val coreSampleRateHz = 0
+}
+
+object VgmPlayDefaults {
     const val coreSampleRateHz = 0
 }

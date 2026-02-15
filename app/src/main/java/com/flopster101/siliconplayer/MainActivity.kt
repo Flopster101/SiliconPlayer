@@ -138,6 +138,7 @@ enum class SettingsRoute {
     PluginDetail, // Generic plugin detail screen (plugin name passed separately)
     PluginFfmpeg,
     PluginOpenMpt,
+    PluginVgmPlay,
     GeneralAudio,
     Player,
     Misc,
@@ -390,6 +391,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.PluginDetail -> 2
     SettingsRoute.PluginFfmpeg -> 2
     SettingsRoute.PluginOpenMpt -> 2
+    SettingsRoute.PluginVgmPlay -> 2
     SettingsRoute.GeneralAudio -> 1
     SettingsRoute.Player -> 1
     SettingsRoute.Misc -> 1
@@ -708,11 +710,13 @@ private fun AppNavigation(
 
     var ffmpegCapabilities by remember { mutableIntStateOf(0) }
     var openMptCapabilities by remember { mutableIntStateOf(0) }
+    var vgmPlayCapabilities by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             ffmpegCapabilities = NativeBridge.getCoreCapabilities("FFmpeg")
             openMptCapabilities = NativeBridge.getCoreCapabilities("LibOpenMPT")
+            vgmPlayCapabilities = NativeBridge.getCoreCapabilities("VGMPlay")
         }
     }
 
@@ -810,6 +814,11 @@ private fun AppNavigation(
     var openMptCoreSampleRateHz by remember {
         mutableIntStateOf(
             prefs.getInt(CorePreferenceKeys.CORE_RATE_OPENMPT, OpenMptDefaults.coreSampleRateHz)
+        )
+    }
+    var vgmPlayCoreSampleRateHz by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.CORE_RATE_VGMPLAY, VgmPlayDefaults.coreSampleRateHz)
         )
     }
     var openMptStereoSeparationPercent by remember {
@@ -1344,6 +1353,13 @@ private fun AppNavigation(
         NativeBridge.setCoreOutputSampleRate("LibOpenMPT", openMptCoreSampleRateHz)
     }
 
+    LaunchedEffect(vgmPlayCoreSampleRateHz) {
+        prefs.edit()
+            .putInt(CorePreferenceKeys.CORE_RATE_VGMPLAY, vgmPlayCoreSampleRateHz)
+            .apply()
+        NativeBridge.setCoreOutputSampleRate("VGMPlay", vgmPlayCoreSampleRateHz)
+    }
+
     LaunchedEffect(openMptStereoSeparationPercent) {
         prefs.edit()
             .putInt(
@@ -1643,8 +1659,8 @@ private fun AppNavigation(
             Intent(context, PlaybackService::class.java).setAction(PlaybackService.ACTION_STOP_CLEAR)
         )
     }
-    val currentCoreSettingsRoute = settingsRouteForCoreName(lastUsedCoreName)
-    val canOpenCurrentCoreSettings = currentCoreSettingsRoute != null
+    val currentCorePluginName = pluginNameForCoreName(lastUsedCoreName)
+    val canOpenCurrentCoreSettings = currentCorePluginName != null
     val exitSettingsToReturnView: () -> Unit = {
         val target = if (settingsLaunchedFromPlayer) settingsReturnView else MainView.Home
         settingsLaunchedFromPlayer = false
@@ -1652,10 +1668,11 @@ private fun AppNavigation(
         currentView = target
     }
     val openCurrentCoreSettings: () -> Unit = {
-        settingsRouteForCoreName(lastUsedCoreName)?.let { route ->
+        pluginNameForCoreName(lastUsedCoreName)?.let { pluginName ->
             settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
             settingsLaunchedFromPlayer = true
-            settingsRoute = route
+            selectedPluginName = pluginName
+            settingsRoute = SettingsRoute.PluginDetail
             currentView = MainView.Settings
             isPlayerExpanded = false
         }
@@ -1703,7 +1720,7 @@ private fun AppNavigation(
             currentView == MainView.Settings && settingsLaunchedFromPlayer -> exitSettingsToReturnView()
             currentView == MainView.Settings && settingsRoute != SettingsRoute.Root -> {
                 settingsRoute = when (settingsRoute) {
-                    SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
+                    SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt, SettingsRoute.PluginVgmPlay -> SettingsRoute.AudioPlugins
                     else -> SettingsRoute.Root
                 }
             }
@@ -1886,7 +1903,7 @@ private fun AppNavigation(
                             }
                             if (settingsRoute != SettingsRoute.Root) {
                                 settingsRoute = when (settingsRoute) {
-                                    SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt -> SettingsRoute.AudioPlugins
+                                    SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt, SettingsRoute.PluginVgmPlay -> SettingsRoute.AudioPlugins
                                     else -> SettingsRoute.Root
                                 }
                             } else {
@@ -1945,6 +1962,7 @@ private fun AppNavigation(
                         onOpenAbout = { settingsRoute = SettingsRoute.About },
                         onOpenFfmpeg = { settingsRoute = SettingsRoute.PluginFfmpeg },
                         onOpenOpenMpt = { settingsRoute = SettingsRoute.PluginOpenMpt },
+                        onOpenVgmPlay = { settingsRoute = SettingsRoute.PluginVgmPlay },
                         selectedPluginName = selectedPluginName,
                         onPluginSelected = { pluginName ->
                             selectedPluginName = pluginName
@@ -2027,6 +2045,9 @@ private fun AppNavigation(
                         openMptSampleRateHz = openMptCoreSampleRateHz,
                         openMptCapabilities = openMptCapabilities,
                         onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it },
+                        vgmPlaySampleRateHz = vgmPlayCoreSampleRateHz,
+                        vgmPlayCapabilities = vgmPlayCapabilities,
+                        onVgmPlaySampleRateChanged = { vgmPlayCoreSampleRateHz = it },
                         openMptStereoSeparationPercent = openMptStereoSeparationPercent,
                         onOpenMptStereoSeparationPercentChanged = { openMptStereoSeparationPercent = it },
                         openMptStereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
@@ -2062,6 +2083,7 @@ private fun AppNavigation(
                             val pluginSnapshot = mapOf(
                                 CorePreferenceKeys.CORE_RATE_FFMPEG to ffmpegCoreSampleRateHz,
                                 CorePreferenceKeys.CORE_RATE_OPENMPT to openMptCoreSampleRateHz,
+                                CorePreferenceKeys.CORE_RATE_VGMPLAY to vgmPlayCoreSampleRateHz,
                                 CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT to openMptStereoSeparationPercent,
                                 CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT to openMptStereoSeparationAmigaPercent,
                                 CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH to openMptInterpolationFilterLength,
@@ -2117,6 +2139,7 @@ private fun AppNavigation(
                         onClearAllPluginSettings = {
                             ffmpegCoreSampleRateHz = 0
                             openMptCoreSampleRateHz = OpenMptDefaults.coreSampleRateHz
+                            vgmPlayCoreSampleRateHz = VgmPlayDefaults.coreSampleRateHz
                             openMptStereoSeparationPercent = OpenMptDefaults.stereoSeparationPercent
                             openMptStereoSeparationAmigaPercent = OpenMptDefaults.stereoSeparationAmigaPercent
                             openMptInterpolationFilterLength = OpenMptDefaults.interpolationFilterLength
@@ -2130,6 +2153,7 @@ private fun AppNavigation(
                             prefs.edit()
                                 .remove(CorePreferenceKeys.CORE_RATE_FFMPEG)
                                 .remove(CorePreferenceKeys.CORE_RATE_OPENMPT)
+                                .remove(CorePreferenceKeys.CORE_RATE_VGMPLAY)
                                 .remove(CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT)
                                 .remove(CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT)
                                 .remove(CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH)

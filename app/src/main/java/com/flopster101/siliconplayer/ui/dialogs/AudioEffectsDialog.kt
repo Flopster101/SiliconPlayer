@@ -117,7 +117,7 @@ private fun VolumeSliderRow(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
             )
             Text(
-                text = String.format("%.1f dB", valueDb),
+                text = if (valueDb == 0f) "0.0 dB" else String.format("%.1f dB", valueDb),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
             )

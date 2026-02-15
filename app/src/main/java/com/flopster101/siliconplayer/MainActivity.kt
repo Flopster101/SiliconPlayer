@@ -733,14 +733,6 @@ private fun AppNavigation(
         }
     }
 
-    // Load per-song volume when track changes
-    LaunchedEffect(selectedFile?.absolutePath) {
-        selectedFile?.absolutePath?.let { path ->
-            songVolumeDb = volumeDatabase.getSongVolume(path) ?: 0f
-            NativeBridge.setSongGain(songVolumeDb)
-        }
-    }
-
     val recentLimit = RECENTS_LIMIT
     var recentFolders by remember {
         mutableStateOf(readRecentEntries(prefs, AppPreferenceKeys.RECENT_FOLDERS, recentLimit))
@@ -954,6 +946,13 @@ private fun AppNavigation(
     // Handle pending file from intent
     var pendingFileToOpen by remember { mutableStateOf<File?>(initialFileToOpen) }
     var pendingFileFromExternalIntent by remember { mutableStateOf(initialFileFromExternalIntent) }
+
+    // Helper function to load song volume before loading audio
+    fun loadSongVolumeForFile(filePath: String) {
+        songVolumeDb = volumeDatabase.getSongVolume(filePath) ?: 0f
+        NativeBridge.setSongGain(songVolumeDb)
+    }
+
     LaunchedEffect(pendingFileToOpen) {
         pendingFileToOpen?.let { file ->
             if (file.exists() && supportedExtensions.contains(file.extension.lowercase())) {
@@ -961,6 +960,7 @@ private fun AppNavigation(
 
                 // Load and start playback immediately
                 if (autoPlayOnTrackSelect) {
+                    loadSongVolumeForFile(file.absolutePath)
                     NativeBridge.loadAudio(file.absolutePath)
                     applyRepeatModeToNative(activeRepeatMode)
                     NativeBridge.startEngine()
@@ -1143,6 +1143,7 @@ private fun AppNavigation(
         resetAndOptionallyKeepLastTrack(keepLastTrack = false)
         selectedFile = file
         isPlayerSurfaceVisible = true
+        loadSongVolumeForFile(file.absolutePath)
         NativeBridge.loadAudio(file.absolutePath)
         applyNativeTrackSnapshot(readNativeTrackSnapshot())
         position = 0.0
@@ -1232,6 +1233,7 @@ private fun AppNavigation(
 
         val isLoaded = NativeBridge.getTrackSampleRate() > 0
         if (!isLoaded) {
+            loadSongVolumeForFile(file.absolutePath)
             NativeBridge.loadAudio(file.absolutePath)
         }
 

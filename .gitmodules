@@ -7,3 +7,6 @@
 [submodule "external/libsoxr"]
 	path = external/libsoxr
 	url = https://git.code.sf.net/p/soxr/code
+[submodule "external/libvgm"]
+	path = external/libvgm
+	url = https://github.com/ValleyBell/libvgm.git

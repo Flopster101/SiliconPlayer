@@ -103,6 +103,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import com.flopster101.siliconplayer.pluginsettings.OpenMptSettings
 import com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings
+import com.flopster101.siliconplayer.pluginsettings.GmeSettings
 import com.flopster101.siliconplayer.pluginsettings.VgmPlayChipSettingsScreen
 import com.flopster101.siliconplayer.pluginsettings.VgmPlaySettings
 import java.util.Locale
@@ -199,6 +200,14 @@ fun SettingsScreen(
     onVgmPlaySampleRateChanged: (Int) -> Unit,
     gmeSampleRateHz: Int,
     onGmeSampleRateChanged: (Int) -> Unit,
+    gmeTempoPercent: Int,
+    onGmeTempoPercentChanged: (Int) -> Unit,
+    gmeStereoSeparationPercent: Int,
+    onGmeStereoSeparationPercentChanged: (Int) -> Unit,
+    gmeEchoEnabled: Boolean,
+    onGmeEchoEnabledChanged: (Boolean) -> Unit,
+    gmeAccuracyEnabled: Boolean,
+    onGmeAccuracyEnabledChanged: (Boolean) -> Unit,
     vgmPlayLoopCount: Int,
     onVgmPlayLoopCountChanged: (Int) -> Unit,
     vgmPlayAllowNonLoopingLoop: Boolean,
@@ -766,6 +775,16 @@ fun SettingsScreen(
                                     onChipSampleRateChanged = onVgmPlayChipSampleRateChanged,
                                     onOpenChipSettings = onOpenVgmPlayChipSettings,
                                     includeSampleRateControl = false
+                                )
+                                "Game Music Emu" -> GmeSettings(
+                                    tempoPercent = gmeTempoPercent,
+                                    stereoSeparationPercent = gmeStereoSeparationPercent,
+                                    echoEnabled = gmeEchoEnabled,
+                                    accuracyEnabled = gmeAccuracyEnabled,
+                                    onTempoPercentChanged = onGmeTempoPercentChanged,
+                                    onStereoSeparationPercentChanged = onGmeStereoSeparationPercentChanged,
+                                    onEchoEnabledChanged = onGmeEchoEnabledChanged,
+                                    onAccuracyEnabledChanged = onGmeAccuracyEnabledChanged
                                 )
                                 else -> null
                             }

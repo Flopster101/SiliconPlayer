@@ -830,6 +830,29 @@ private fun AppNavigation(
             prefs.getInt(CorePreferenceKeys.CORE_RATE_GME, GmeDefaults.coreSampleRateHz)
         )
     }
+    var gmeTempoPercent by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.GME_TEMPO_PERCENT, GmeDefaults.tempoPercent)
+        )
+    }
+    var gmeStereoSeparationPercent by remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.GME_STEREO_SEPARATION_PERCENT,
+                GmeDefaults.stereoSeparationPercent
+            )
+        )
+    }
+    var gmeEchoEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(CorePreferenceKeys.GME_ECHO_ENABLED, GmeDefaults.echoEnabled)
+        )
+    }
+    var gmeAccuracyEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(CorePreferenceKeys.GME_ACCURACY_ENABLED, GmeDefaults.accuracyEnabled)
+        )
+    }
     var vgmPlayLoopCount by remember {
         mutableIntStateOf(
             prefs.getInt(CorePreferenceKeys.VGMPLAY_LOOP_COUNT, VgmPlayDefaults.loopCount)
@@ -1414,6 +1437,68 @@ private fun AppNavigation(
             .putInt(CorePreferenceKeys.CORE_RATE_GME, gmeCoreSampleRateHz)
             .apply()
         NativeBridge.setCoreOutputSampleRate("Game Music Emu", gmeCoreSampleRateHz)
+    }
+
+    LaunchedEffect(gmeTempoPercent) {
+        val normalized = gmeTempoPercent.coerceIn(50, 200)
+        if (normalized != gmeTempoPercent) {
+            gmeTempoPercent = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.GME_TEMPO_PERCENT, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Game Music Emu",
+            optionName = GmeOptionKeys.TEMPO,
+            optionValue = String.format(Locale.US, "%.2f", normalized / 100.0),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Tempo"
+        )
+    }
+
+    LaunchedEffect(gmeStereoSeparationPercent) {
+        val normalized = gmeStereoSeparationPercent.coerceIn(0, 100)
+        if (normalized != gmeStereoSeparationPercent) {
+            gmeStereoSeparationPercent = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.GME_STEREO_SEPARATION_PERCENT, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Game Music Emu",
+            optionName = GmeOptionKeys.STEREO_SEPARATION,
+            optionValue = String.format(Locale.US, "%.2f", normalized / 100.0),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Stereo separation"
+        )
+    }
+
+    LaunchedEffect(gmeEchoEnabled) {
+        prefs.edit()
+            .putBoolean(CorePreferenceKeys.GME_ECHO_ENABLED, gmeEchoEnabled)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Game Music Emu",
+            optionName = GmeOptionKeys.ECHO_ENABLED,
+            optionValue = gmeEchoEnabled.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "SPC echo"
+        )
+    }
+
+    LaunchedEffect(gmeAccuracyEnabled) {
+        prefs.edit()
+            .putBoolean(CorePreferenceKeys.GME_ACCURACY_ENABLED, gmeAccuracyEnabled)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Game Music Emu",
+            optionName = GmeOptionKeys.ACCURACY_ENABLED,
+            optionValue = gmeAccuracyEnabled.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "High accuracy emulation"
+        )
     }
 
     LaunchedEffect(vgmPlayLoopCount) {
@@ -2243,6 +2328,14 @@ private fun AppNavigation(
                         onVgmPlaySampleRateChanged = { vgmPlayCoreSampleRateHz = it },
                         gmeSampleRateHz = gmeCoreSampleRateHz,
                         onGmeSampleRateChanged = { gmeCoreSampleRateHz = it },
+                        gmeTempoPercent = gmeTempoPercent,
+                        onGmeTempoPercentChanged = { gmeTempoPercent = it },
+                        gmeStereoSeparationPercent = gmeStereoSeparationPercent,
+                        onGmeStereoSeparationPercentChanged = { gmeStereoSeparationPercent = it },
+                        gmeEchoEnabled = gmeEchoEnabled,
+                        onGmeEchoEnabledChanged = { gmeEchoEnabled = it },
+                        gmeAccuracyEnabled = gmeAccuracyEnabled,
+                        onGmeAccuracyEnabledChanged = { gmeAccuracyEnabled = it },
                         vgmPlayLoopCount = vgmPlayLoopCount,
                         onVgmPlayLoopCountChanged = { vgmPlayLoopCount = it },
                         vgmPlayAllowNonLoopingLoop = vgmPlayAllowNonLoopingLoop,
@@ -2301,6 +2394,8 @@ private fun AppNavigation(
                                 CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE to vgmPlayResampleMode,
                                 CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_MODE to vgmPlayChipSampleMode,
                                 CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_RATE to vgmPlayChipSampleRate,
+                                CorePreferenceKeys.GME_TEMPO_PERCENT to gmeTempoPercent,
+                                CorePreferenceKeys.GME_STEREO_SEPARATION_PERCENT to gmeStereoSeparationPercent,
                                 CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT to openMptStereoSeparationPercent,
                                 CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT to openMptStereoSeparationAmigaPercent,
                                 CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH to openMptInterpolationFilterLength,
@@ -2310,6 +2405,8 @@ private fun AppNavigation(
                             )
                             val pluginBooleanSnapshot = mapOf(
                                 CorePreferenceKeys.VGMPLAY_ALLOW_NON_LOOPING_LOOP to vgmPlayAllowNonLoopingLoop,
+                                CorePreferenceKeys.GME_ECHO_ENABLED to gmeEchoEnabled,
+                                CorePreferenceKeys.GME_ACCURACY_ENABLED to gmeAccuracyEnabled,
                                 CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES to openMptAmigaResamplerApplyAllModules,
                                 CorePreferenceKeys.OPENMPT_FT2_XM_VOLUME_RAMPING to openMptFt2XmVolumeRamping,
                                 CorePreferenceKeys.OPENMPT_SURROUND_ENABLED to openMptSurroundEnabled
@@ -2363,6 +2460,10 @@ private fun AppNavigation(
                             openMptCoreSampleRateHz = OpenMptDefaults.coreSampleRateHz
                             vgmPlayCoreSampleRateHz = VgmPlayDefaults.coreSampleRateHz
                             gmeCoreSampleRateHz = GmeDefaults.coreSampleRateHz
+                            gmeTempoPercent = GmeDefaults.tempoPercent
+                            gmeStereoSeparationPercent = GmeDefaults.stereoSeparationPercent
+                            gmeEchoEnabled = GmeDefaults.echoEnabled
+                            gmeAccuracyEnabled = GmeDefaults.accuracyEnabled
                             vgmPlayLoopCount = VgmPlayDefaults.loopCount
                             vgmPlayAllowNonLoopingLoop = VgmPlayDefaults.allowNonLoopingLoop
                             vgmPlayVsyncRate = VgmPlayDefaults.vsyncRate
@@ -2385,6 +2486,10 @@ private fun AppNavigation(
                                 remove(CorePreferenceKeys.CORE_RATE_OPENMPT)
                                 remove(CorePreferenceKeys.CORE_RATE_VGMPLAY)
                                 remove(CorePreferenceKeys.CORE_RATE_GME)
+                                remove(CorePreferenceKeys.GME_TEMPO_PERCENT)
+                                remove(CorePreferenceKeys.GME_STEREO_SEPARATION_PERCENT)
+                                remove(CorePreferenceKeys.GME_ECHO_ENABLED)
+                                remove(CorePreferenceKeys.GME_ACCURACY_ENABLED)
                                 remove(CorePreferenceKeys.VGMPLAY_LOOP_COUNT)
                                 remove(CorePreferenceKeys.VGMPLAY_ALLOW_NON_LOOPING_LOOP)
                                 remove(CorePreferenceKeys.VGMPLAY_VSYNC_RATE)

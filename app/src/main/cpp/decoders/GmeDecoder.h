@@ -29,6 +29,7 @@ public:
     std::string getComposer() override;
     std::string getGenre() override;
     void setOutputSampleRate(int sampleRate) override;
+    void setOption(const char* name, const char* value) override;
     int getPlaybackCapabilities() const override {
         return PLAYBACK_CAP_SEEK |
                PLAYBACK_CAP_RELIABLE_DURATION |
@@ -60,6 +61,10 @@ private:
     bool hasLoopPoint = false;
     double playbackPositionSeconds = 0.0;
     int lastTellMs = -1;
+    double tempo = 1.0;
+    double stereoDepth = 0.0;
+    bool echoEnabled = true;
+    bool accuracyEnabled = false;
 
     std::string title;
     std::string artist;
@@ -68,6 +73,7 @@ private:
 
     void closeInternal();
     void applyRepeatBehaviorLocked();
+    void applyCoreOptionsLocked();
 };
 
 #endif // SILICONPLAYER_GMEDECODER_H

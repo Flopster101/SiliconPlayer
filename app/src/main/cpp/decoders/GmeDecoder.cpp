@@ -2,6 +2,7 @@
 #include <android/log.h>
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <limits>
 #include <vector>
 
@@ -41,6 +42,22 @@ int resolveLoopStartMs(const gme_info_t* info) {
     }
     return -1;
 }
+
+double parseDoubleString(const std::string& value, double fallback) {
+    char* end = nullptr;
+    const double parsed = std::strtod(value.c_str(), &end);
+    if (end == value.c_str() || (end != nullptr && *end != '\0')) {
+        return fallback;
+    }
+    return parsed;
+}
+
+bool parseBoolString(const std::string& value, bool fallback) {
+    const std::string normalized = toLowerAscii(value);
+    if (normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on") return true;
+    if (normalized == "0" || normalized == "false" || normalized == "no" || normalized == "off") return false;
+    return fallback;
+}
 }
 
 GmeDecoder::GmeDecoder() = default;
@@ -75,6 +92,7 @@ bool GmeDecoder::open(const char* path) {
 
     // Must be applied before start_track(): libgme sets fade/end behavior there.
     applyRepeatBehaviorLocked();
+    applyCoreOptionsLocked();
 
     const gme_err_t startErr = gme_start_track(emu, activeTrack);
     if (startErr != nullptr) {
@@ -106,6 +124,7 @@ bool GmeDecoder::open(const char* path) {
     }
 
     applyRepeatBehaviorLocked();
+    applyCoreOptionsLocked();
     return true;
 }
 
@@ -173,6 +192,7 @@ int GmeDecoder::read(float* buffer, int numFrames) {
                     pendingTerminalEnd = true;
                     break;
                 }
+                applyCoreOptionsLocked();
                 playbackPositionSeconds = 0.0;
                 lastTellMs = 0;
                 continue;
@@ -187,6 +207,7 @@ int GmeDecoder::read(float* buffer, int numFrames) {
                     pendingTerminalEnd = true;
                     break;
                 }
+                applyCoreOptionsLocked();
                 if (hasLoopPoint && loopStartMs >= 0) {
                     const gme_err_t loopSeekErr = gme_seek(emu, loopStartMs);
                     if (loopSeekErr != nullptr) {
@@ -301,6 +322,28 @@ void GmeDecoder::setOutputSampleRate(int rate) {
     sampleRate = rate;
 }
 
+void GmeDecoder::setOption(const char* name, const char* value) {
+    if (!name || !value) return;
+    std::lock_guard<std::mutex> lock(decodeMutex);
+
+    const std::string optionName(name);
+    const std::string optionValue(value);
+
+    if (optionName == "gme.tempo") {
+        tempo = std::clamp(parseDoubleString(optionValue, tempo), 0.5, 2.0);
+    } else if (optionName == "gme.stereo_separation") {
+        stereoDepth = std::clamp(parseDoubleString(optionValue, stereoDepth), 0.0, 1.0);
+    } else if (optionName == "gme.echo_enabled") {
+        echoEnabled = parseBoolString(optionValue, echoEnabled);
+    } else if (optionName == "gme.accuracy_enabled") {
+        accuracyEnabled = parseBoolString(optionValue, accuracyEnabled);
+    } else {
+        return;
+    }
+
+    applyCoreOptionsLocked();
+}
+
 void GmeDecoder::setRepeatMode(int mode) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     repeatMode.store(mode);
@@ -362,4 +405,12 @@ void GmeDecoder::applyRepeatBehaviorLocked() {
             gme_set_fade_msecs(emu, fadeStartMs, 50);
         }
     }
+}
+
+void GmeDecoder::applyCoreOptionsLocked() {
+    if (!emu) return;
+    gme_set_tempo(emu, tempo);
+    gme_set_stereo_depth(emu, stereoDepth);
+    gme_disable_echo(emu, echoEnabled ? 0 : 1);
+    gme_enable_accuracy(emu, accuracyEnabled ? 1 : 0);
 }

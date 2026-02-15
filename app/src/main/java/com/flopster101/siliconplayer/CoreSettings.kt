@@ -20,6 +20,10 @@ object CorePreferenceKeys {
     const val VGMPLAY_RESAMPLE_MODE = "vgmplay_resample_mode"
     const val VGMPLAY_CHIP_SAMPLE_MODE = "vgmplay_chip_sample_mode"
     const val VGMPLAY_CHIP_SAMPLE_RATE = "vgmplay_chip_sample_rate"
+    const val GME_TEMPO_PERCENT = "gme_tempo_percent"
+    const val GME_STEREO_SEPARATION_PERCENT = "gme_stereo_separation_percent"
+    const val GME_ECHO_ENABLED = "gme_echo_enabled"
+    const val GME_ACCURACY_ENABLED = "gme_accuracy_enabled"
     fun vgmPlayChipCoreKey(chipKey: String) = "vgmplay_chip_core_$chipKey"
 }
 
@@ -52,4 +56,8 @@ object VgmPlayDefaults {
 
 object GmeDefaults {
     const val coreSampleRateHz = 0
+    const val tempoPercent = 100
+    const val stereoSeparationPercent = 0
+    const val echoEnabled = true
+    const val accuracyEnabled = false
 }

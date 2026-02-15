@@ -2658,6 +2658,139 @@ private fun AppNavigation(
                                 "Plugin settings cleared",
                                 Toast.LENGTH_SHORT
                             ).show()
+                        },
+                        onResetPluginSettings = { pluginName ->
+                            val optionNamesForReset = when (pluginName) {
+                                "LibOpenMPT" -> listOf(
+                                    "openmpt.stereo_separation_percent",
+                                    "openmpt.stereo_separation_amiga_percent",
+                                    "openmpt.interpolation_filter_length",
+                                    "openmpt.amiga_resampler_mode",
+                                    "openmpt.amiga_resampler_apply_all_modules",
+                                    "openmpt.volume_ramping_strength",
+                                    "openmpt.ft2_xm_volume_ramping",
+                                    "openmpt.master_gain_millibel",
+                                    "openmpt.surround_enabled"
+                                )
+                                "VGMPlay" -> buildList {
+                                    add(VgmPlayOptionKeys.LOOP_COUNT)
+                                    add(VgmPlayOptionKeys.ALLOW_NON_LOOPING_LOOP)
+                                    add(VgmPlayOptionKeys.VSYNC_RATE_HZ)
+                                    add(VgmPlayOptionKeys.RESAMPLE_MODE)
+                                    add(VgmPlayOptionKeys.CHIP_SAMPLE_MODE)
+                                    add(VgmPlayOptionKeys.CHIP_SAMPLE_RATE_HZ)
+                                    VgmPlayConfig.chipCoreSpecs.forEach { spec ->
+                                        add("${VgmPlayOptionKeys.CHIP_CORE_PREFIX}${spec.key}")
+                                    }
+                                }
+                                "Game Music Emu" -> listOf(
+                                    GmeOptionKeys.TEMPO,
+                                    GmeOptionKeys.STEREO_SEPARATION,
+                                    GmeOptionKeys.ECHO_ENABLED,
+                                    GmeOptionKeys.ACCURACY_ENABLED,
+                                    GmeOptionKeys.EQ_TREBLE_DB,
+                                    GmeOptionKeys.EQ_BASS_HZ,
+                                    GmeOptionKeys.SPC_USE_BUILTIN_FADE,
+                                    GmeOptionKeys.SPC_INTERPOLATION,
+                                    GmeOptionKeys.SPC_USE_NATIVE_SAMPLE_RATE
+                                )
+                                else -> emptyList()
+                            }
+                            val requiresPlaybackRestart = optionNamesForReset.any { optionName ->
+                                try {
+                                    NativeBridge.getCoreOptionApplyPolicy(pluginName, optionName) == 1
+                                } catch (_: Throwable) {
+                                    false
+                                }
+                            }
+                            when (pluginName) {
+                                "FFmpeg" -> {
+                                    ffmpegCoreSampleRateHz = FfmpegDefaults.coreSampleRateHz
+                                    prefs.edit().remove(CorePreferenceKeys.CORE_RATE_FFMPEG).apply()
+                                }
+                                "LibOpenMPT" -> {
+                                    openMptCoreSampleRateHz = OpenMptDefaults.coreSampleRateHz
+                                    openMptStereoSeparationPercent = OpenMptDefaults.stereoSeparationPercent
+                                    openMptStereoSeparationAmigaPercent = OpenMptDefaults.stereoSeparationAmigaPercent
+                                    openMptInterpolationFilterLength = OpenMptDefaults.interpolationFilterLength
+                                    openMptAmigaResamplerMode = OpenMptDefaults.amigaResamplerMode
+                                    openMptAmigaResamplerApplyAllModules = OpenMptDefaults.amigaResamplerApplyAllModules
+                                    openMptVolumeRampingStrength = OpenMptDefaults.volumeRampingStrength
+                                    openMptFt2XmVolumeRamping = OpenMptDefaults.ft2XmVolumeRamping
+                                    openMptMasterGainMilliBel = OpenMptDefaults.masterGainMilliBel
+                                    openMptSurroundEnabled = OpenMptDefaults.surroundEnabled
+                                    prefs.edit().apply {
+                                        remove(CorePreferenceKeys.CORE_RATE_OPENMPT)
+                                        remove(CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT)
+                                        remove(CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT)
+                                        remove(CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH)
+                                        remove(CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE)
+                                        remove(CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES)
+                                        remove(CorePreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH)
+                                        remove(CorePreferenceKeys.OPENMPT_FT2_XM_VOLUME_RAMPING)
+                                        remove(CorePreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL)
+                                        remove(CorePreferenceKeys.OPENMPT_SURROUND_ENABLED)
+                                        apply()
+                                    }
+                                }
+                                "VGMPlay" -> {
+                                    vgmPlayCoreSampleRateHz = VgmPlayDefaults.coreSampleRateHz
+                                    vgmPlayLoopCount = VgmPlayDefaults.loopCount
+                                    vgmPlayAllowNonLoopingLoop = VgmPlayDefaults.allowNonLoopingLoop
+                                    vgmPlayVsyncRate = VgmPlayDefaults.vsyncRate
+                                    vgmPlayResampleMode = VgmPlayDefaults.resampleMode
+                                    vgmPlayChipSampleMode = VgmPlayDefaults.chipSampleMode
+                                    vgmPlayChipSampleRate = VgmPlayDefaults.chipSampleRate
+                                    vgmPlayChipCoreSelections = VgmPlayConfig.defaultChipCoreSelections()
+                                    prefs.edit().apply {
+                                        remove(CorePreferenceKeys.CORE_RATE_VGMPLAY)
+                                        remove(CorePreferenceKeys.VGMPLAY_LOOP_COUNT)
+                                        remove(CorePreferenceKeys.VGMPLAY_ALLOW_NON_LOOPING_LOOP)
+                                        remove(CorePreferenceKeys.VGMPLAY_VSYNC_RATE)
+                                        remove(CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE)
+                                        remove(CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_MODE)
+                                        remove(CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_RATE)
+                                        VgmPlayConfig.chipCoreSpecs.forEach { spec ->
+                                            remove(CorePreferenceKeys.vgmPlayChipCoreKey(spec.key))
+                                        }
+                                        apply()
+                                    }
+                                }
+                                "Game Music Emu" -> {
+                                    gmeCoreSampleRateHz = GmeDefaults.coreSampleRateHz
+                                    gmeTempoPercent = GmeDefaults.tempoPercent
+                                    gmeStereoSeparationPercent = GmeDefaults.stereoSeparationPercent
+                                    gmeEchoEnabled = GmeDefaults.echoEnabled
+                                    gmeAccuracyEnabled = GmeDefaults.accuracyEnabled
+                                    gmeEqTrebleDecibel = GmeDefaults.eqTrebleDecibel
+                                    gmeEqBassHz = GmeDefaults.eqBassHz
+                                    gmeSpcUseBuiltInFade = GmeDefaults.spcUseBuiltInFade
+                                    gmeSpcInterpolation = GmeDefaults.spcInterpolation
+                                    gmeSpcUseNativeSampleRate = GmeDefaults.spcUseNativeSampleRate
+                                    prefs.edit().apply {
+                                        remove(CorePreferenceKeys.CORE_RATE_GME)
+                                        remove(CorePreferenceKeys.GME_TEMPO_PERCENT)
+                                        remove(CorePreferenceKeys.GME_STEREO_SEPARATION_PERCENT)
+                                        remove(CorePreferenceKeys.GME_ECHO_ENABLED)
+                                        remove(CorePreferenceKeys.GME_ACCURACY_ENABLED)
+                                        remove(CorePreferenceKeys.GME_EQ_TREBLE_DECIBEL)
+                                        remove(CorePreferenceKeys.GME_EQ_BASS_HZ)
+                                        remove(CorePreferenceKeys.GME_SPC_USE_BUILTIN_FADE)
+                                        remove(CorePreferenceKeys.GME_SPC_INTERPOLATION)
+                                        remove(CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE)
+                                        apply()
+                                    }
+                                }
+                            }
+                            Toast.makeText(
+                                context,
+                                if (requiresPlaybackRestart) {
+                                    "Settings reset. Playback restart needed for some changes."
+                                } else {
+                                    "$pluginName settings reset"
+                                },
+                                Toast.LENGTH_SHORT
+                            ).show()
                         }
                     )
                 }

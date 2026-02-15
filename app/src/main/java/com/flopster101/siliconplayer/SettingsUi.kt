@@ -57,6 +57,7 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Slideshow
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Tune
@@ -254,9 +255,11 @@ fun SettingsScreen(
     onOpenMptSurroundEnabledChanged: (Boolean) -> Unit,
     onClearRecentHistory: () -> Unit,
     onClearAllSettings: () -> Unit,
-    onClearAllPluginSettings: () -> Unit
+    onClearAllPluginSettings: () -> Unit,
+    onResetPluginSettings: (String) -> Unit
 ) {
     var pendingResetAction by remember { mutableStateOf<SettingsResetAction?>(null) }
+    var pendingPluginResetName by remember { mutableStateOf<String?>(null) }
     var pluginPriorityEditMode by remember { mutableStateOf(false) }
     LaunchedEffect(route) {
         if (route != SettingsRoute.AudioPlugins) {
@@ -344,6 +347,23 @@ fun SettingsScreen(
                                             } else {
                                                 MaterialTheme.colorScheme.onSurfaceVariant
                                             },
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            } else if (route == SettingsRoute.PluginDetail && selectedPluginName != null) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Transparent
+                                ) {
+                                    IconButton(
+                                        onClick = { pendingPluginResetName = selectedPluginName },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Restore,
+                                            contentDescription = "Reset plugin settings",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(18.dp)
                                         )
                                     }
@@ -1163,6 +1183,27 @@ fun SettingsScreen(
                     pendingResetAction = null
                 }) {
                     Text(confirmText)
+                }
+            }
+        )
+    }
+
+    pendingPluginResetName?.let { pluginName ->
+        AlertDialog(
+            onDismissRequest = { pendingPluginResetName = null },
+            title = { Text("Reset $pluginName settings?") },
+            text = { Text("This resets only $pluginName plugin/core settings to defaults.") },
+            dismissButton = {
+                TextButton(onClick = { pendingPluginResetName = null }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onResetPluginSettings(pluginName)
+                    pendingPluginResetName = null
+                }) {
+                    Text("Reset")
                 }
             }
         )

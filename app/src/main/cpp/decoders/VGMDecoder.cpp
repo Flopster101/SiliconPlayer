@@ -19,6 +19,7 @@
 
 namespace {
 constexpr uint32_t kInitialRenderDebugLogs = 5;
+constexpr uint32_t kPlayerOutputBufferFrames = 4096;
 }
 
 VGMDecoder::VGMDecoder() {
@@ -39,7 +40,7 @@ bool VGMDecoder::open(const char* path) {
         sampleRate = 44100;
     }
 
-    if (player->SetOutputSettings(sampleRate, 2, 16, 1024) != 0x00) {
+    if (player->SetOutputSettings(sampleRate, 2, 16, kPlayerOutputBufferFrames) != 0x00) {
         LOGE("SetOutputSettings failed");
         return false;
     }
@@ -193,9 +194,20 @@ int VGMDecoder::read(float* buffer, int numFrames) {
     }
 
     std::vector<int16_t> int16Buffer(numFrames * channels);
-    const uint32_t bytesRequested = static_cast<uint32_t>(numFrames * channels * sizeof(int16_t));
-    const uint32_t bytesRendered = player->Render(bytesRequested, int16Buffer.data());
-    const int framesRendered = static_cast<int>(bytesRendered / (channels * sizeof(int16_t)));
+    int framesRendered = 0;
+    while (framesRendered < numFrames) {
+        const int framesRemaining = numFrames - framesRendered;
+        const uint32_t bytesRequested = static_cast<uint32_t>(framesRemaining * channels * sizeof(int16_t));
+        const uint32_t bytesRendered = player->Render(
+                bytesRequested,
+                int16Buffer.data() + (framesRendered * channels)
+        );
+        const int chunkFrames = static_cast<int>(bytesRendered / (channels * sizeof(int16_t)));
+        if (chunkFrames <= 0) {
+            break;
+        }
+        framesRendered += chunkFrames;
+    }
 
     if (shouldLog) {
         const uint32_t filePosAfter = playerBase->GetCurPos(PLAYPOS_FILEOFS);
@@ -295,7 +307,7 @@ void VGMDecoder::setOutputSampleRate(int rate) {
     }
 
     if (!playerStarted) {
-        if (player->SetOutputSettings(sampleRate, 2, 16, 1024) != 0x00) {
+        if (player->SetOutputSettings(sampleRate, 2, 16, kPlayerOutputBufferFrames) != 0x00) {
             LOGE("SetOutputSettings failed before start");
         }
         return;
@@ -308,7 +320,7 @@ void VGMDecoder::setOutputSampleRate(int rate) {
 
     player->Stop();
     playerStarted = false;
-    if (player->SetOutputSettings(sampleRate, 2, 16, 1024) != 0x00) {
+    if (player->SetOutputSettings(sampleRate, 2, 16, kPlayerOutputBufferFrames) != 0x00) {
         LOGE("SetOutputSettings failed while active");
         return;
     }

@@ -2,6 +2,7 @@
 #include <android/log.h>
 #include <algorithm>
 #include <cctype>
+#include <limits>
 #include <vector>
 
 extern "C" {
@@ -23,6 +24,22 @@ std::string toLowerAscii(std::string value) {
         return static_cast<char>(std::tolower(c));
     });
     return value;
+}
+
+int resolveLoopStartMs(const gme_info_t* info) {
+    if (!info || info->loop_length <= 0) {
+        return -1;
+    }
+    if (info->intro_length >= 0) {
+        return info->intro_length;
+    }
+    if (info->play_length > info->loop_length) {
+        return info->play_length - info->loop_length;
+    }
+    if (info->length > info->loop_length) {
+        return info->length - info->loop_length;
+    }
+    return -1;
 }
 }
 
@@ -50,9 +67,14 @@ bool GmeDecoder::open(const char* path) {
     trackCount = std::max(1, gme_track_count(emu));
     activeTrack = 0;
     pendingTerminalEnd = false;
+    loopStartMs = -1;
+    loopLengthMs = -1;
+    hasLoopPoint = false;
+    playbackPositionSeconds = 0.0;
+    lastTellMs = 0;
 
-    gme_set_autoload_playback_limit(emu, 1);
-    gme_ignore_silence(emu, 0);
+    // Must be applied before start_track(): libgme sets fade/end behavior there.
+    applyRepeatBehaviorLocked();
 
     const gme_err_t startErr = gme_start_track(emu, activeTrack);
     if (startErr != nullptr) {
@@ -74,12 +96,16 @@ bool GmeDecoder::open(const char* path) {
         if (durationMs <= 0 && info->intro_length > 0 && info->loop_length > 0) {
             durationMs = info->intro_length + (info->loop_length * 2);
         }
+        loopStartMs = resolveLoopStartMs(info);
+        loopLengthMs = info->loop_length;
+        hasLoopPoint = loopStartMs >= 0 && loopLengthMs > 0;
         duration = durationMs > 0 ? static_cast<double>(durationMs) / 1000.0 : 0.0;
         gme_free_info(info);
     } else {
         duration = 0.0;
     }
 
+    applyRepeatBehaviorLocked();
     return true;
 }
 
@@ -93,6 +119,11 @@ void GmeDecoder::closeInternal() {
     trackCount = 0;
     activeTrack = 0;
     pendingTerminalEnd = false;
+    loopStartMs = -1;
+    loopLengthMs = -1;
+    hasLoopPoint = false;
+    playbackPositionSeconds = 0.0;
+    lastTellMs = -1;
     title.clear();
     artist.clear();
     composer.clear();
@@ -135,11 +166,38 @@ int GmeDecoder::read(float* buffer, int numFrames) {
         if (gme_track_ended(emu)) {
             const int mode = repeatMode.load();
             if (mode == 1) {
+                applyRepeatBehaviorLocked();
                 const gme_err_t restartErr = gme_start_track(emu, activeTrack);
                 if (restartErr != nullptr) {
                     LOGE("gme_start_track(repeat) failed: %s", restartErr);
                     pendingTerminalEnd = true;
                     break;
+                }
+                playbackPositionSeconds = 0.0;
+                lastTellMs = 0;
+                continue;
+            }
+            if (mode == 2) {
+                // LP mode must never terminate. Re-arm playback if libgme still
+                // reports track end.
+                applyRepeatBehaviorLocked();
+                const gme_err_t restartErr = gme_start_track(emu, activeTrack);
+                if (restartErr != nullptr) {
+                    LOGE("gme_start_track(loop) failed: %s", restartErr);
+                    pendingTerminalEnd = true;
+                    break;
+                }
+                if (hasLoopPoint && loopStartMs >= 0) {
+                    const gme_err_t loopSeekErr = gme_seek(emu, loopStartMs);
+                    if (loopSeekErr != nullptr) {
+                        LOGE("gme_seek(loop) failed: %s", loopSeekErr);
+                    } else {
+                        playbackPositionSeconds = static_cast<double>(loopStartMs) / 1000.0;
+                        lastTellMs = loopStartMs;
+                    }
+                } else {
+                    playbackPositionSeconds = 0.0;
+                    lastTellMs = 0;
                 }
                 continue;
             }
@@ -147,6 +205,31 @@ int GmeDecoder::read(float* buffer, int numFrames) {
             pendingTerminalEnd = true;
             break;
         }
+    }
+
+    if (framesRead > 0) {
+        const int currentTellMs = gme_tell(emu);
+        if (repeatMode.load() == 2) {
+            if (lastTellMs < 0 || currentTellMs > lastTellMs) {
+                playbackPositionSeconds = static_cast<double>(currentTellMs) / 1000.0;
+            } else {
+                // Some tracks keep rendering but gme_tell() stalls at tagged end.
+                // Keep LP timeline moving from rendered frames.
+                playbackPositionSeconds += static_cast<double>(framesRead) / sampleRate;
+            }
+
+            if (hasLoopPoint && loopLengthMs > 0) {
+                const double loopStartSec = std::max(0.0, static_cast<double>(loopStartMs) / 1000.0);
+                const double loopLengthSec = static_cast<double>(loopLengthMs) / 1000.0;
+                if (playbackPositionSeconds >= loopStartSec + loopLengthSec) {
+                    playbackPositionSeconds =
+                            loopStartSec + std::fmod(playbackPositionSeconds - loopStartSec, loopLengthSec);
+                }
+            }
+        } else {
+            playbackPositionSeconds = static_cast<double>(currentTellMs) / 1000.0;
+        }
+        lastTellMs = currentTellMs;
     }
 
     return framesRead;
@@ -161,6 +244,8 @@ void GmeDecoder::seek(double seconds) {
     if (seekErr != nullptr) {
         LOGE("gme_seek failed: %s", seekErr);
     }
+    playbackPositionSeconds = static_cast<double>(targetMs) / 1000.0;
+    lastTellMs = targetMs;
     pendingTerminalEnd = false;
 }
 
@@ -217,17 +302,26 @@ void GmeDecoder::setOutputSampleRate(int rate) {
 }
 
 void GmeDecoder::setRepeatMode(int mode) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
     repeatMode.store(mode);
+    applyRepeatBehaviorLocked();
 }
 
 int GmeDecoder::getRepeatModeCapabilities() const {
-    return REPEAT_CAP_TRACK;
+    return REPEAT_CAP_TRACK | REPEAT_CAP_LOOP_POINT;
 }
 
 double GmeDecoder::getPlaybackPositionSeconds() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (!emu) return 0.0;
+    if (repeatMode.load() == 2) {
+        return playbackPositionSeconds;
+    }
     return static_cast<double>(gme_tell(emu)) / 1000.0;
+}
+
+AudioDecoder::TimelineMode GmeDecoder::getTimelineMode() const {
+    return TimelineMode::Discontinuous;
 }
 
 std::vector<std::string> GmeDecoder::getSupportedExtensions() {
@@ -248,4 +342,24 @@ std::vector<std::string> GmeDecoder::getSupportedExtensions() {
     std::sort(extensions.begin(), extensions.end());
     extensions.erase(std::unique(extensions.begin(), extensions.end()), extensions.end());
     return extensions;
+}
+
+void GmeDecoder::applyRepeatBehaviorLocked() {
+    if (!emu) return;
+    const int mode = repeatMode.load();
+
+    if (mode == 2) {
+        // LP mode: prefer emulator-native looping behavior, especially for sets
+        // that do not expose explicit intro/loop metadata.
+        gme_set_autoload_playback_limit(emu, 0);
+        gme_ignore_silence(emu, 1);
+        gme_set_fade_msecs(emu, std::numeric_limits<int>::max() / 2, 1);
+    } else {
+        gme_set_autoload_playback_limit(emu, 1);
+        gme_ignore_silence(emu, 0);
+        if (duration > 0.0) {
+            const int fadeStartMs = static_cast<int>(duration * 1000.0);
+            gme_set_fade_msecs(emu, fadeStartMs, 50);
+        }
+    }
 }

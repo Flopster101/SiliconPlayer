@@ -38,7 +38,7 @@ public:
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     double getPlaybackPositionSeconds() override;
-    TimelineMode getTimelineMode() const override { return TimelineMode::ContinuousLinear; }
+    TimelineMode getTimelineMode() const override;
 
     const char* getName() const override { return "Game Music Emu"; }
     static std::vector<std::string> getSupportedExtensions();
@@ -53,8 +53,13 @@ private:
     int channels = 2;
     int trackCount = 0;
     int activeTrack = 0;
-    std::atomic<int> repeatMode { 0 }; // 0 none, 1 repeat track, 2 loop-point (unsupported -> treated as none)
+    std::atomic<int> repeatMode { 0 }; // 0 none, 1 repeat track, 2 repeat at loop point
     bool pendingTerminalEnd = false;
+    int loopStartMs = -1;
+    int loopLengthMs = -1;
+    bool hasLoopPoint = false;
+    double playbackPositionSeconds = 0.0;
+    int lastTellMs = -1;
 
     std::string title;
     std::string artist;
@@ -62,6 +67,7 @@ private:
     std::string genre;
 
     void closeInternal();
+    void applyRepeatBehaviorLocked();
 };
 
 #endif // SILICONPLAYER_GMEDECODER_H

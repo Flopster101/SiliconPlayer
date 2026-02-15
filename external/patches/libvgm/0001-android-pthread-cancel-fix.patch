@@ -1,19 +1,17 @@
-From: Silicon Player <siliconplayer@example.com>
-Date: Fri, 14 Feb 2025 00:00:00 +0000
+From 063f97ffed10537a17fb627394b45a7bf09579d8 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Sun, 15 Feb 2026 01:48:48 -0300
 Subject: [PATCH] Fix Android pthread_cancel compatibility
 
-Android's Bionic libc does not support pthread_cancel.
-Make OSThread_Cancel a no-op on Android since we don't use thread cancellation.
-
 ---
- utils/OSThread_POSIX.c | 4 ++++
- 1 file changed, 4 insertions(+)
+ utils/OSThread_POSIX.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
 
 diff --git a/utils/OSThread_POSIX.c b/utils/OSThread_POSIX.c
-index 1234567..abcdefg 100644
+index e3cd1e2..cbd445c 100644
 --- a/utils/OSThread_POSIX.c
 +++ b/utils/OSThread_POSIX.c
-@@ -76,11 +76,15 @@ void OSThread_Join(OS_THREAD* thr)
+@@ -74,6 +74,7 @@ void OSThread_Join(OS_THREAD* thr)
  
  void OSThread_Cancel(OS_THREAD* thr)
  {
@@ -21,15 +19,18 @@ index 1234567..abcdefg 100644
  	int retVal;
  	
  	if (! thr->id)
- 		return;
- 	
+@@ -82,6 +83,11 @@ void OSThread_Cancel(OS_THREAD* thr)
  	retVal = pthread_cancel(thr->id);
  	if (! retVal)
  		thr->id = 0;	// stopped successfully
 +#else
 +	// Android's Bionic libc does not support pthread_cancel
++	// Thread cancellation is not used in our implementation
++	(void)thr;  // Suppress unused parameter warning
 +#endif
  	
  	return;
+ }
 -- 
-2.34.1
+2.53.0
+

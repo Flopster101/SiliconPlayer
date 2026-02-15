@@ -52,21 +52,19 @@ apply_libopenmpt_patches() {
         local patch_name
         patch_name="$(basename "$patch_file")"
 
-        # Check if patch is already applied by looking for the commit subject in git log
-        # Extract subject from patch file (Subject: ...)
-        local subject
-        subject=$(grep "^Subject: " "$patch_file" | sed 's/^Subject: \[PATCH[^]]*\] //')
-        
-        if git -C "$PROJECT_PATH" log -1 --grep="$subject" >/dev/null 2>&1; then
-             echo "libopenmpt patch already applied: $patch_name"
-        else
-             echo "Applying libopenmpt patch: $patch_name"
-             git -C "$PROJECT_PATH" am "$patch_file" || {
-                 echo "Error applying patch $patch_name"
-                 git -C "$PROJECT_PATH" am --abort
-                 exit 1
-             }
+        # Reliable idempotency check:
+        # If reverse-apply check succeeds, patch content is already present.
+        if git -C "$PROJECT_PATH" apply --check --reverse "$patch_file" >/dev/null 2>&1; then
+            echo "libopenmpt patch already applied: $patch_name"
+            continue
         fi
+
+        echo "Applying libopenmpt patch: $patch_name"
+        git -C "$PROJECT_PATH" am "$patch_file" || {
+            echo "Error applying patch $patch_name"
+            git -C "$PROJECT_PATH" am --abort
+            exit 1
+        }
     done
 }
 
@@ -86,21 +84,19 @@ apply_libvgm_patches() {
         local patch_name
         patch_name="$(basename "$patch_file")"
 
-        # Check if patch is already applied by looking for the commit subject in git log
-        # Extract subject from patch file (Subject: ...)
-        local subject
-        subject=$(grep "^Subject: " "$patch_file" | sed 's/^Subject: \[PATCH[^]]*\] //')
-        
-        if git -C "$PROJECT_PATH" log -1 --grep="$subject" >/dev/null 2>&1; then
-             echo "libvgm patch already applied: $patch_name"
-        else
-             echo "Applying libvgm patch: $patch_name"
-             git -C "$PROJECT_PATH" am "$patch_file" || {
-                 echo "Error applying patch $patch_name"
-                 git -C "$PROJECT_PATH" am --abort
-                 exit 1
-             }
+        # Reliable idempotency check:
+        # If reverse-apply check succeeds, patch content is already present.
+        if git -C "$PROJECT_PATH" apply --check --reverse "$patch_file" >/dev/null 2>&1; then
+            echo "libvgm patch already applied: $patch_name"
+            continue
         fi
+
+        echo "Applying libvgm patch: $patch_name"
+        git -C "$PROJECT_PATH" am "$patch_file" || {
+            echo "Error applying patch $patch_name"
+            git -C "$PROJECT_PATH" am --abort
+            exit 1
+        }
     done
 }
 

@@ -695,7 +695,7 @@ private fun AppNavigation(
     var metadataSampleRate by remember { mutableIntStateOf(0) }
     var metadataChannelCount by remember { mutableIntStateOf(0) }
     var metadataBitDepthLabel by remember { mutableStateOf("Unknown") }
-    var repeatModeCapabilitiesFlags by remember { mutableIntStateOf(REPEAT_CAP_TRACK) }
+    var repeatModeCapabilitiesFlags by remember { mutableIntStateOf(REPEAT_CAP_ALL) }
     var playbackCapabilitiesFlags by remember {
         mutableIntStateOf(
             PLAYBACK_CAP_SEEK or
@@ -1176,7 +1176,7 @@ private fun AppNavigation(
         metadataSampleRate = 0
         metadataChannelCount = 0
         metadataBitDepthLabel = "Unknown"
-        repeatModeCapabilitiesFlags = REPEAT_CAP_TRACK
+        repeatModeCapabilitiesFlags = REPEAT_CAP_ALL
         playbackCapabilitiesFlags = PLAYBACK_CAP_SEEK or
             PLAYBACK_CAP_RELIABLE_DURATION or
             PLAYBACK_CAP_LIVE_REPEAT_MODE

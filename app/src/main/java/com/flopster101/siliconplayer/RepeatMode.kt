@@ -10,6 +10,7 @@ val trackerModuleExtensions = setOf(
 
 const val REPEAT_CAP_TRACK = 1 shl 0
 const val REPEAT_CAP_LOOP_POINT = 1 shl 1
+const val REPEAT_CAP_ALL = REPEAT_CAP_TRACK or REPEAT_CAP_LOOP_POINT
 
 enum class RepeatMode(
     val storageValue: String,

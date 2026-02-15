@@ -224,7 +224,7 @@ fun PlayerScreen(
                     }
                     // R: Cycle repeat mode
                     Key.R -> {
-                        if (hasTrack && canCycleRepeatMode) {
+                        if (canCycleRepeatMode) {
                             onCycleRepeatMode()
                             true
                         } else false
@@ -1227,7 +1227,7 @@ private fun TransportControls(
 
                     FilledTonalIconButton(
                         onClick = onCycleRepeatMode,
-                        enabled = hasTrack && canCycleRepeatMode,
+                        enabled = canCycleRepeatMode,
                         modifier = Modifier.size(sideButtonSize),
                         shape = MaterialTheme.shapes.extraLarge,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(

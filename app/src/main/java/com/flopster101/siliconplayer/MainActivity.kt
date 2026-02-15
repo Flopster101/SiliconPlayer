@@ -98,6 +98,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.ContentScale
@@ -1907,7 +1908,21 @@ private fun AppNavigation(
                     exit = fadeOut(animationSpec = tween(140))
                 ) {
                     androidx.compose.material3.TopAppBar(
-                        title = { Text("Silicon Player") },
+                        title = {
+                            Text(
+                                text = "Silicon Player",
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .clickable {
+                                        isPlayerSurfaceVisible = true
+                                        isPlayerExpanded = true
+                                        collapseFromSwipe = false
+                                        expandFromMiniDrag = false
+                                        miniExpandPreviewProgress = 0f
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        },
                         actions = {
                             AnimatedVisibility(
                                 visible = shouldShowBrowserHomeAction,

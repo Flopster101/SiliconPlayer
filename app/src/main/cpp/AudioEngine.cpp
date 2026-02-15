@@ -1311,6 +1311,41 @@ bool AudioEngine::getVgmHasLoopPoint() {
     return vgmDecoder ? vgmDecoder->hasLoopPoint() : false;
 }
 
+std::string AudioEngine::getFfmpegCodecName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* ffmpegDecoder = dynamic_cast<FFmpegDecoder*>(decoder.get());
+    return ffmpegDecoder ? ffmpegDecoder->getCodecName() : "";
+}
+
+std::string AudioEngine::getFfmpegContainerName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* ffmpegDecoder = dynamic_cast<FFmpegDecoder*>(decoder.get());
+    return ffmpegDecoder ? ffmpegDecoder->getContainerName() : "";
+}
+
+std::string AudioEngine::getFfmpegSampleFormatName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* ffmpegDecoder = dynamic_cast<FFmpegDecoder*>(decoder.get());
+    return ffmpegDecoder ? ffmpegDecoder->getSampleFormatName() : "";
+}
+
+std::string AudioEngine::getFfmpegChannelLayoutName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* ffmpegDecoder = dynamic_cast<FFmpegDecoder*>(decoder.get());
+    return ffmpegDecoder ? ffmpegDecoder->getChannelLayoutName() : "";
+}
+
+std::string AudioEngine::getFfmpegEncoderName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* ffmpegDecoder = dynamic_cast<FFmpegDecoder*>(decoder.get());
+    return ffmpegDecoder ? ffmpegDecoder->getEncoderName() : "";
+}
+
 // Gain control implementation
 void AudioEngine::setMasterGain(float gainDb) {
     masterGainDb.store(gainDb);

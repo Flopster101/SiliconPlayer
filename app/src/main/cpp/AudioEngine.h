@@ -65,6 +65,11 @@ public:
     int getVgmDeviceCount();
     std::string getVgmUsedChipList();
     bool getVgmHasLoopPoint();
+    std::string getFfmpegCodecName();
+    std::string getFfmpegContainerName();
+    std::string getFfmpegSampleFormatName();
+    std::string getFfmpegChannelLayoutName();
+    std::string getFfmpegEncoderName();
 
     // Bitrate information
     int64_t getTrackBitrate();

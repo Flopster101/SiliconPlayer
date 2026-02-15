@@ -1,6 +1,7 @@
 #include "FFmpegDecoder.h"
 #include <android/log.h>
 #include <sstream>
+#include <vector>
 
 #define LOG_TAG "FFmpegDecoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -117,11 +118,29 @@ bool FFmpegDecoder::open(const char* path) {
         int bytesPerSample = av_get_bytes_per_sample(codecContext->sample_fmt);
         sourceBitDepth = bytesPerSample > 0 ? bytesPerSample * 8 : 0;
     }
+    codecName = codec && codec->name ? codec->name : avcodec_get_name(codecParams->codec_id);
+    if (codec && codec->long_name) {
+        codecName += " (";
+        codecName += codec->long_name;
+        codecName += ")";
+    }
+    containerName = (formatContext->iformat && formatContext->iformat->long_name)
+            ? formatContext->iformat->long_name
+            : ((formatContext->iformat && formatContext->iformat->name) ? formatContext->iformat->name : "");
+    const char* sampleFmt = av_get_sample_fmt_name(codecContext->sample_fmt);
+    sampleFormatName = sampleFmt ? sampleFmt : "";
+    char chLayoutBuf[128] = {0};
+    if (av_channel_layout_describe(&codecContext->ch_layout, chLayoutBuf, sizeof(chLayoutBuf)) > 0) {
+        channelLayoutName = chLayoutBuf;
+    } else {
+        channelLayoutName.clear();
+    }
 
     title = getFirstMetadataValue(formatContext->metadata, {"title"});
     artist = getFirstMetadataValue(formatContext->metadata, {"artist", "album_artist", "author", "composer"});
     composer = getFirstMetadataValue(formatContext->metadata, {"composer", "author"});
     genre = getFirstMetadataValue(formatContext->metadata, {"genre"});
+    encoderName = getFirstMetadataValue(formatContext->metadata, {"encoder", "encoded_by"});
     if (title.empty() || artist.empty()) {
         AVDictionary* streamMetadata = formatContext->streams[audioStreamIndex]->metadata;
         if (title.empty()) {
@@ -135,6 +154,9 @@ bool FFmpegDecoder::open(const char* path) {
         }
         if (genre.empty()) {
             genre = getFirstMetadataValue(streamMetadata, {"genre"});
+        }
+        if (encoderName.empty()) {
+            encoderName = getFirstMetadataValue(streamMetadata, {"encoder", "encoded_by"});
         }
     }
 
@@ -175,6 +197,11 @@ void FFmpegDecoder::close() {
     artist.clear();
     composer.clear();
     genre.clear();
+    codecName.clear();
+    containerName.clear();
+    sampleFormatName.clear();
+    channelLayoutName.clear();
+    encoderName.clear();
     bitrate = 0;
     vbr = false;
 }
@@ -438,4 +465,24 @@ int64_t FFmpegDecoder::getBitrate() const {
 
 bool FFmpegDecoder::isVBR() const {
     return vbr;
+}
+
+std::string FFmpegDecoder::getCodecName() const {
+    return codecName;
+}
+
+std::string FFmpegDecoder::getContainerName() const {
+    return containerName;
+}
+
+std::string FFmpegDecoder::getSampleFormatName() const {
+    return sampleFormatName;
+}
+
+std::string FFmpegDecoder::getChannelLayoutName() const {
+    return channelLayoutName;
+}
+
+std::string FFmpegDecoder::getEncoderName() const {
+    return encoderName;
 }

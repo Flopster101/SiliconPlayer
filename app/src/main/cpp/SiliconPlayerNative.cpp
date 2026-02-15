@@ -429,6 +429,41 @@ Java_com_flopster101_siliconplayer_NativeBridge_getVgmHasLoopPoint(JNIEnv*, jobj
     return audioEngine->getVgmHasLoopPoint() ? JNI_TRUE : JNI_FALSE;
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFfmpegCodecName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return env->NewStringUTF("");
+    std::string value = audioEngine->getFfmpegCodecName();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFfmpegContainerName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return env->NewStringUTF("");
+    std::string value = audioEngine->getFfmpegContainerName();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFfmpegSampleFormatName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return env->NewStringUTF("");
+    std::string value = audioEngine->getFfmpegSampleFormatName();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFfmpegChannelLayoutName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return env->NewStringUTF("");
+    std::string value = audioEngine->getFfmpegChannelLayoutName();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFfmpegEncoderName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return env->NewStringUTF("");
+    std::string value = audioEngine->getFfmpegEncoderName();
+    return env->NewStringUTF(value.c_str());
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_startEngine(JNIEnv* env, jobject thiz) {
     Java_com_flopster101_siliconplayer_MainActivity_startEngine(env, thiz);

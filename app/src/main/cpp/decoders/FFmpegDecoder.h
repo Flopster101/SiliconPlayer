@@ -34,6 +34,11 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    std::string getCodecName() const;
+    std::string getContainerName() const;
+    std::string getSampleFormatName() const;
+    std::string getChannelLayoutName() const;
+    std::string getEncoderName() const;
     void setOutputSampleRate(int sampleRate) override;
     int getPlaybackCapabilities() const override {
         return PLAYBACK_CAP_SEEK |
@@ -72,6 +77,11 @@ private:
     std::string artist;
     std::string composer;
     std::string genre;
+    std::string codecName;
+    std::string containerName;
+    std::string sampleFormatName;
+    std::string channelLayoutName;
+    std::string encoderName;
     int64_t bitrate = 0;
     bool vbr = false;
 

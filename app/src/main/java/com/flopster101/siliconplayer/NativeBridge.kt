@@ -47,6 +47,11 @@ object NativeBridge {
     external fun getVgmDeviceCount(): Int
     external fun getVgmUsedChipList(): String
     external fun getVgmHasLoopPoint(): Boolean
+    external fun getFfmpegCodecName(): String
+    external fun getFfmpegContainerName(): String
+    external fun getFfmpegSampleFormatName(): String
+    external fun getFfmpegChannelLayoutName(): String
+    external fun getFfmpegEncoderName(): String
     external fun getTrackBitrate(): Long
     external fun isTrackVBR(): Boolean
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)

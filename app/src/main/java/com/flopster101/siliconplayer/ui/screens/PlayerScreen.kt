@@ -693,6 +693,11 @@ private fun TrackInfoDetailsDialog(
     var vgmDeviceCount by remember { mutableIntStateOf(0) }
     var vgmUsedChipList by remember { mutableStateOf("") }
     var vgmHasLoopPoint by remember { mutableStateOf(false) }
+    var ffmpegCodecName by remember { mutableStateOf("") }
+    var ffmpegContainerName by remember { mutableStateOf("") }
+    var ffmpegSampleFormatName by remember { mutableStateOf("") }
+    var ffmpegChannelLayoutName by remember { mutableStateOf("") }
+    var ffmpegEncoderName by remember { mutableStateOf("") }
     val detailsScrollState = rememberScrollState()
     var detailsViewportHeightPx by remember { mutableIntStateOf(0) }
 
@@ -745,6 +750,19 @@ private fun TrackInfoDetailsDialog(
                 vgmDeviceCount = 0
                 vgmUsedChipList = ""
                 vgmHasLoopPoint = false
+            }
+            if (decoderName.equals("FFmpeg", ignoreCase = true)) {
+                ffmpegCodecName = NativeBridge.getFfmpegCodecName()
+                ffmpegContainerName = NativeBridge.getFfmpegContainerName()
+                ffmpegSampleFormatName = NativeBridge.getFfmpegSampleFormatName()
+                ffmpegChannelLayoutName = NativeBridge.getFfmpegChannelLayoutName()
+                ffmpegEncoderName = NativeBridge.getFfmpegEncoderName()
+            } else {
+                ffmpegCodecName = ""
+                ffmpegContainerName = ""
+                ffmpegSampleFormatName = ""
+                ffmpegChannelLayoutName = ""
+                ffmpegEncoderName = ""
             }
             delay(500)
         }
@@ -866,6 +884,29 @@ private fun TrackInfoDetailsDialog(
                         TrackInfoDetailsRow("Has loop point", if (vgmHasLoopPoint) "Yes" else "No")
                         if (vgmNotes.isNotBlank()) {
                             TrackInfoDetailsRow("Notes", vgmNotes)
+                        }
+                    }
+                    if (decoderName.equals("FFmpeg", ignoreCase = true)) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "FFmpeg",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (ffmpegCodecName.isNotBlank()) {
+                            TrackInfoDetailsRow("Codec", ffmpegCodecName)
+                        }
+                        if (ffmpegContainerName.isNotBlank()) {
+                            TrackInfoDetailsRow("Container", ffmpegContainerName)
+                        }
+                        if (ffmpegSampleFormatName.isNotBlank()) {
+                            TrackInfoDetailsRow("Sample format", ffmpegSampleFormatName)
+                        }
+                        if (ffmpegChannelLayoutName.isNotBlank()) {
+                            TrackInfoDetailsRow("Channel layout", ffmpegChannelLayoutName)
+                        }
+                        if (ffmpegEncoderName.isNotBlank()) {
+                            TrackInfoDetailsRow("Encoder", ffmpegEncoderName)
                         }
                     }
                 }

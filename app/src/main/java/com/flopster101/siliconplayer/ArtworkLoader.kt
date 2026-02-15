@@ -1,11 +1,14 @@
 package com.flopster101.siliconplayer
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
+import android.net.Uri
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import java.io.File
+import java.util.Locale
 
 internal fun loadArtworkForFile(file: File): ImageBitmap? {
     loadEmbeddedArtwork(file)?.let { return it.asImageBitmap() }
@@ -15,10 +18,52 @@ internal fun loadArtworkForFile(file: File): ImageBitmap? {
     return null
 }
 
+internal fun loadArtworkForSource(
+    context: Context,
+    displayFile: File?,
+    sourceId: String?
+): ImageBitmap? {
+    val normalized = sourceId?.trim()
+    val scheme = normalized?.let { Uri.parse(it).scheme?.lowercase(Locale.ROOT) }
+    val isRemote = scheme == "http" || scheme == "https"
+
+    if (isRemote && !normalized.isNullOrBlank()) {
+        loadEmbeddedArtworkFromRemote(normalized)?.let { return it.asImageBitmap() }
+        val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
+        findExistingCachedFileForSource(cacheRoot, normalized)?.let { cached ->
+            loadArtworkForFile(cached)?.let { return it }
+        }
+    }
+
+    displayFile?.takeIf { it.exists() && it.isFile }?.let { local ->
+        loadArtworkForFile(local)?.let { return it }
+    }
+    return null
+}
+
 private fun loadEmbeddedArtwork(file: File): Bitmap? {
     val retriever = MediaMetadataRetriever()
     return try {
         retriever.setDataSource(file.absolutePath)
+        val embedded = retriever.embeddedPicture ?: return null
+        decodeScaledBitmapFromBytes(embedded)
+    } catch (_: Exception) {
+        null
+    } finally {
+        retriever.release()
+    }
+}
+
+private fun loadEmbeddedArtworkFromRemote(url: String): Bitmap? {
+    val retriever = MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(
+            url,
+            mapOf(
+                "User-Agent" to "SiliconPlayer/1.0 (Android)",
+                "Icy-MetaData" to "1"
+            )
+        )
         val embedded = retriever.embeddedPicture ?: return null
         decodeScaledBitmapFromBytes(embedded)
     } catch (_: Exception) {

@@ -2237,9 +2237,13 @@ private fun AppNavigation(
         refreshRepeatModeForTrack()
     }
 
-    LaunchedEffect(selectedFile) {
+    LaunchedEffect(selectedFile, currentPlaybackSourceId) {
         artworkBitmap = withContext(Dispatchers.IO) {
-            selectedFile?.let { loadArtworkForFile(it) }
+            loadArtworkForSource(
+                context = context,
+                displayFile = selectedFile,
+                sourceId = currentPlaybackSourceId
+            )
         }
     }
 

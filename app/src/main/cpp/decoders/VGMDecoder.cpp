@@ -1,20 +1,25 @@
 #include "VGMDecoder.h"
 #include <android/log.h>
-#include <fstream>
 #include <algorithm>
 #include <cstring>
+#include <fstream>
+#include <limits>
+#include <vector>
 
 // libvgm includes
-#include <vgm/player/vgmplayer.hpp>
+#include <vgm/player/playera.hpp>
 #include <vgm/player/playerbase.hpp>
-#include <vgm/utils/FileLoader.h>
-#include <vgm/utils/MemoryLoader.h>
+#include <vgm/player/vgmplayer.hpp>
 #include <vgm/utils/DataLoader.h>
-#include <vgm/emu/Resampler.h>
+#include <vgm/utils/MemoryLoader.h>
 
 #define LOG_TAG "VGMDecoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+
+namespace {
+constexpr uint32_t kInitialRenderDebugLogs = 5;
+}
 
 VGMDecoder::VGMDecoder() {
 }
@@ -25,96 +30,105 @@ VGMDecoder::~VGMDecoder() {
 
 bool VGMDecoder::open(const char* path) {
     std::lock_guard<std::mutex> lock(decodeMutex);
-
     closeInternal();
 
-    // Load file into memory
+    player = std::make_unique<PlayerA>();
+    player->RegisterPlayerEngine(new VGMPlayer());
+
+    if (sampleRate <= 0) {
+        sampleRate = 44100;
+    }
+
+    if (player->SetOutputSettings(sampleRate, 2, 16, 1024) != 0x00) {
+        LOGE("SetOutputSettings failed");
+        return false;
+    }
+
+    player->SetLoopCount(repeatMode == 0 ? maxLoops : 0);
+
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
         LOGE("Failed to open file: %s", path);
         return false;
     }
 
-    std::streamsize size = file.tellg();
+    const std::streamsize size = file.tellg();
     file.seekg(0, std::ios::beg);
-
     if (size <= 0) {
-        LOGE("File is empty: %s", path);
+        LOGE("Invalid file size for %s", path);
+        return false;
+    }
+    if (static_cast<uint64_t>(size) > std::numeric_limits<UINT32>::max()) {
+        LOGE("File too large for libvgm loader: %lld", static_cast<long long>(size));
         return false;
     }
 
-    try {
-        fileData.resize(size);
-        if (!file.read(reinterpret_cast<char*>(fileData.data()), size)) {
-            LOGE("Failed to read file: %s", path);
-            return false;
-        }
+    fileData.resize(static_cast<size_t>(size));
+    if (!file.read(reinterpret_cast<char*>(fileData.data()), size)) {
+        LOGE("Failed to read file: %s", path);
+        return false;
+    }
+    file.close();
 
-        // Create VGM player
-        player = std::make_unique<VGMPlayer>();
+    DATA_LOADER* dataLoader = MemoryLoader_Init(fileData.data(), static_cast<UINT32>(fileData.size()));
+    if (dataLoader == nullptr) {
+        LOGE("MemoryLoader_Init failed");
+        return false;
+    }
 
-        // Create data loader from memory (MemoryLoader handles gzip decompression automatically)
-        DATA_LOADER* dataLoader = MemoryLoader_Init(fileData.data(), static_cast<UINT32>(fileData.size()));
-        if (dataLoader == nullptr) {
-            LOGE("Failed to initialize memory loader");
-            return false;
-        }
-
-        // Load the data loader
-        UINT8 loadResult = DataLoader_Load(dataLoader);
-        if (loadResult != 0x00) {
-            LOGE("Failed to load data loader, error: 0x%02X", loadResult);
-            DataLoader_Deinit(dataLoader);
-            return false;
-        }
-
-        // Load file into player
-        UINT8 result = player->LoadFile(dataLoader);
+    const UINT8 loadResult = DataLoader_Load(dataLoader);
+    if (loadResult != 0x00) {
+        LOGE("DataLoader_Load failed: 0x%02X", loadResult);
         DataLoader_Deinit(dataLoader);
+        return false;
+    }
 
-        if (result != 0x00) {
-            LOGE("Failed to load VGM file, error code: 0x%02X", result);
-            player.reset();
-            return false;
-        }
+    const UINT8 result = player->LoadFile(dataLoader);
+    DataLoader_Deinit(dataLoader);
+    if (result != 0x00) {
+        LOGE("LoadFile failed: 0x%02X", result);
+        player.reset();
+        return false;
+    }
 
-        // Get metadata
-        const char* const* tags = player->GetTags();
-        if (tags) {
-            for (int i = 0; tags[i] != nullptr; i += 2) {
-                const char* key = tags[i];
-                const char* value = tags[i + 1];
+    PlayerBase* playerBase = player->GetPlayer();
+    if (!playerBase) {
+        LOGE("No active player engine after LoadFile");
+        return false;
+    }
 
-                if (strcmp(key, "TITLE") == 0 || strcmp(key, "TITLE-JPN") == 0) {
-                    if (title.empty() && value && strlen(value) > 0) title = value;
-                } else if (strcmp(key, "ARTIST") == 0 || strcmp(key, "ARTIST-JPN") == 0) {
-                    if (artist.empty() && value && strlen(value) > 0) artist = value;
-                } else if (strcmp(key, "GAME") == 0 || strcmp(key, "GAME-JPN") == 0) {
-                    if (gameName.empty() && value && strlen(value) > 0) gameName = value;
-                } else if (strcmp(key, "SYSTEM") == 0 || strcmp(key, "SYSTEM-JPN") == 0) {
-                    if (systemName.empty() && value && strlen(value) > 0) systemName = value;
-                }
+    VGMPlayer* vgmPlayer = dynamic_cast<VGMPlayer*>(playerBase);
+    if (!vgmPlayer) {
+        LOGE("Active player engine is not VGMPlayer");
+        return false;
+    }
+
+    const char* const* tags = vgmPlayer->GetTags();
+    if (tags) {
+        for (int i = 0; tags[i] != nullptr; i += 2) {
+            const char* key = tags[i];
+            const char* value = tags[i + 1];
+            if (!value || std::strlen(value) == 0) continue;
+
+            if (std::strcmp(key, "TITLE") == 0 || std::strcmp(key, "TITLE-JPN") == 0) {
+                if (title.empty()) title = value;
+            } else if (std::strcmp(key, "ARTIST") == 0 || std::strcmp(key, "ARTIST-JPN") == 0) {
+                if (artist.empty()) artist = value;
+            } else if (std::strcmp(key, "GAME") == 0 || std::strcmp(key, "GAME-JPN") == 0) {
+                if (gameName.empty()) gameName = value;
+            } else if (std::strcmp(key, "SYSTEM") == 0 || std::strcmp(key, "SYSTEM-JPN") == 0) {
+                if (systemName.empty()) systemName = value;
             }
         }
-
-        // Get duration
-        PLR_SONG_INFO songInfo;
-        if (player->GetSongInfo(songInfo) == 0x00) {
-            // Duration is in samples, convert to seconds
-            duration = static_cast<double>(songInfo.songLen) / sampleRate;
-        }
-
-        // Allocate render buffer (1024 frames is a reasonable chunk size)
-        renderBuffer.resize(1024);
-
-        return true;
-    } catch (const std::exception& e) {
-        LOGE("Exception opening VGM: %s", e.what());
-        return false;
-    } catch (...) {
-        LOGE("Unknown exception opening VGM");
-        return false;
     }
+
+    PLR_SONG_INFO songInfo{};
+    if (vgmPlayer->GetSongInfo(songInfo) == 0x00) {
+        duration = vgmPlayer->Tick2Second(songInfo.songLen);
+    }
+
+    renderDebugLogCount = 0;
+    return true;
 }
 
 void VGMDecoder::closeInternal() {
@@ -127,7 +141,6 @@ void VGMDecoder::closeInternal() {
     }
 
     fileData.clear();
-    renderBuffer.clear();
     title.clear();
     artist.clear();
     gameName.clear();
@@ -136,6 +149,7 @@ void VGMDecoder::closeInternal() {
     currentLoop = 0;
     hasLooped = false;
     playerStarted = false;
+    renderDebugLogCount = 0;
 }
 
 void VGMDecoder::close() {
@@ -144,70 +158,79 @@ void VGMDecoder::close() {
 }
 
 void VGMDecoder::ensurePlayerStarted() {
-    // This method should be called with decodeMutex already locked
     if (!player || playerStarted) {
         return;
     }
 
     player->SetSampleRate(sampleRate);
-    player->Start();
+    const UINT8 startResult = player->Start();
+    if (startResult != 0x00) {
+        LOGE("Player start failed: 0x%02X", startResult);
+        return;
+    }
     playerStarted = true;
 }
 
 int VGMDecoder::read(float* buffer, int numFrames) {
     std::lock_guard<std::mutex> lock(decodeMutex);
-    if (!player) {
+    if (!player || !buffer || numFrames <= 0) {
         return 0;
     }
 
-    // Ensure player is started with the correct sample rate (set by setOutputSampleRate)
     ensurePlayerStarted();
-
-    // CRITICAL: VGMPlayer's resampler ADDS to the buffer instead of replacing it!
-    // We must zero the buffer before rendering
-    std::memset(buffer, 0, numFrames * 2 * sizeof(float));
-
-    int framesRead = 0;
-    while (framesRead < numFrames) {
-        int framesToRender = std::min(numFrames - framesRead, static_cast<int>(renderBuffer.size()));
-
-        // Zero the render buffer before calling Render (libvgm uses += not =)
-        std::memset(renderBuffer.data(), 0, framesToRender * sizeof(WAVE_32BS));
-
-        // Render from VGM player
-        uint32_t renderedFrames = player->Render(framesToRender, renderBuffer.data());
-
-        if (renderedFrames == 0) {
-            // End of playback
-            break;
-        }
-
-        // Convert from WAVE_32BS (32-bit stereo) to float
-        // Apply 200x gain boost because libvgm outputs very quiet samples
-        const float gain = 200.0f;
-        for (uint32_t i = 0; i < renderedFrames; i++) {
-            // WAVE_32BS contains left and right as 32-bit signed integers
-            // Convert to float range [-1.0, 1.0] and apply gain
-            buffer[(framesRead + i) * 2 + 0] = (renderBuffer[i].L / 2147483648.0f) * gain; // Left
-            buffer[(framesRead + i) * 2 + 1] = (renderBuffer[i].R / 2147483648.0f) * gain; // Right
-        }
-
-        framesRead += renderedFrames;
-
-        // Check if we've looped
-        uint32_t currentLoopCount = player->GetCurLoop();
-        if (currentLoopCount > currentLoop) {
-            currentLoop = currentLoopCount;
-            hasLooped = true;
-
-            // If we've reached max loops and repeat mode is not enabled, stop
-            if (repeatMode == 0 && currentLoop >= maxLoops) {
-                break;
-            }
-        }
+    if (!playerStarted) {
+        return 0;
     }
 
-    return framesRead;
+    PlayerBase* playerBase = player->GetPlayer();
+    uint32_t filePosBefore = 0;
+    uint32_t playTickBefore = 0;
+    const uint8_t stateBefore = player->GetState();
+    const bool shouldLog = renderDebugLogCount < kInitialRenderDebugLogs && playerBase != nullptr;
+    if (shouldLog) {
+        filePosBefore = playerBase->GetCurPos(PLAYPOS_FILEOFS);
+        playTickBefore = playerBase->GetCurPos(PLAYPOS_TICK);
+    }
+
+    std::vector<int16_t> int16Buffer(numFrames * channels);
+    const uint32_t bytesRequested = static_cast<uint32_t>(numFrames * channels * sizeof(int16_t));
+    const uint32_t bytesRendered = player->Render(bytesRequested, int16Buffer.data());
+    const int framesRendered = static_cast<int>(bytesRendered / (channels * sizeof(int16_t)));
+
+    if (shouldLog) {
+        const uint32_t filePosAfter = playerBase->GetCurPos(PLAYPOS_FILEOFS);
+        const uint32_t playTickAfter = playerBase->GetCurPos(PLAYPOS_TICK);
+        const uint8_t stateAfter = player->GetState();
+        LOGD(
+                "[render %u] req=%d got=%d filePos=0x%X->0x%X tick=%u->%u state=0x%02X->0x%02X",
+                renderDebugLogCount + 1,
+                numFrames,
+                framesRendered,
+                filePosBefore,
+                filePosAfter,
+                playTickBefore,
+                playTickAfter,
+                stateBefore,
+                stateAfter
+        );
+        renderDebugLogCount++;
+    }
+
+    if (framesRendered <= 0) {
+        return 0;
+    }
+
+    for (int i = 0; i < framesRendered * channels; ++i) {
+        buffer[i] = static_cast<float>(int16Buffer[i]) / 32768.0f;
+    }
+
+    const uint32_t loopCount = player->GetCurLoop();
+    if (loopCount > currentLoop) {
+        currentLoop = loopCount;
+        hasLooped = true;
+    }
+
+    return framesRendered;
 }
 
 void VGMDecoder::seek(double seconds) {
@@ -216,10 +239,7 @@ void VGMDecoder::seek(double seconds) {
         return;
     }
 
-    // Convert seconds to samples
-    uint32_t targetSample = static_cast<uint32_t>(seconds * sampleRate);
-
-    // VGM player uses sample-based seeking
+    const uint32_t targetSample = static_cast<uint32_t>(std::max(0.0, seconds) * sampleRate);
     player->Seek(PLAYPOS_SAMPLE, targetSample);
 }
 
@@ -252,7 +272,6 @@ std::string VGMDecoder::getTitle() {
 }
 
 std::string VGMDecoder::getArtist() {
-    // If artist is empty, try game name
     if (!artist.empty()) {
         return artist;
     }
@@ -264,49 +283,72 @@ std::string VGMDecoder::getArtist() {
 
 void VGMDecoder::setOutputSampleRate(int rate) {
     std::lock_guard<std::mutex> lock(decodeMutex);
-    if (rate > 0) {
-        sampleRate = rate;
-        if (player && playerStarted) {
-            // If player is already started, update its sample rate
-            player->SetSampleRate(sampleRate);
-        }
+    if (rate <= 0 || rate == sampleRate) {
+        return;
     }
+
+    const int oldSampleRate = sampleRate;
+    sampleRate = rate;
+
+    if (!player) {
+        return;
+    }
+
+    if (!playerStarted) {
+        if (player->SetOutputSettings(sampleRate, 2, 16, 1024) != 0x00) {
+            LOGE("SetOutputSettings failed before start");
+        }
+        return;
+    }
+
+    const uint32_t currentSample = player->GetCurPos(PLAYPOS_SAMPLE);
+    const double currentSeconds = oldSampleRate > 0
+            ? static_cast<double>(currentSample) / static_cast<double>(oldSampleRate)
+            : 0.0;
+
+    player->Stop();
+    playerStarted = false;
+    if (player->SetOutputSettings(sampleRate, 2, 16, 1024) != 0x00) {
+        LOGE("SetOutputSettings failed while active");
+        return;
+    }
+    if (player->Start() != 0x00) {
+        LOGE("Start failed while applying sample-rate change");
+        return;
+    }
+    playerStarted = true;
+    player->Seek(PLAYPOS_SAMPLE, static_cast<uint32_t>(std::max(0.0, currentSeconds) * sampleRate));
 }
 
 void VGMDecoder::setRepeatMode(int mode) {
     std::lock_guard<std::mutex> lock(decodeMutex);
-    repeatMode = mode;
+    repeatMode = (mode >= 0 && mode <= 2) ? mode : 0;
 
-    // VGM player doesn't have SetLoopCount, we'll handle looping in the read() method
-    // by checking GetCurLoop() and stopping when appropriate
+    if (player) {
+        player->SetLoopCount(repeatMode == 0 ? maxLoops : 0);
+    }
 }
 
 int VGMDecoder::getRepeatModeCapabilities() const {
-    // VGM supports: Repeat track and Repeat at loop point
-    // No repeat is handled by stopping after maxLoops
     return REPEAT_CAP_TRACK | REPEAT_CAP_LOOP_POINT;
 }
 
 double VGMDecoder::getPlaybackPositionSeconds() {
     std::lock_guard<std::mutex> lock(decodeMutex);
-    if (!player) {
+    if (!player || sampleRate <= 0) {
         return 0.0;
     }
-
-    // Get current position in samples
-    uint32_t currentSample = player->GetCurPos(PLAYPOS_SAMPLE);
+    const uint32_t currentSample = player->GetCurPos(PLAYPOS_SAMPLE);
     return static_cast<double>(currentSample) / sampleRate;
 }
 
-void VGMDecoder::setOption(const char* name, const char* value) {
-    // Options can be added later for VGM-specific settings
-    // e.g., chip volumes, resampling quality, etc.
+void VGMDecoder::setOption(const char* /*name*/, const char* /*value*/) {
 }
 
 std::vector<std::string> VGMDecoder::getSupportedExtensions() {
     return {
-        "vgm",  // Video Game Music
-        "vgz",  // Compressed VGM (gzip)
-        "vgm.gz" // Alternative compressed VGM extension
+            "vgm",
+            "vgz",
+            "vgm.gz"
     };
 }

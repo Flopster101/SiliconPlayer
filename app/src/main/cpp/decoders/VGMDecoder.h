@@ -8,10 +8,7 @@
 #include <string>
 
 // Forward declarations for libvgm types
-class VGMPlayer;
-
-// Include for WAVE_32BS definition
-#include <vgm/emu/Resampler.h>
+class PlayerA;
 
 class VGMDecoder : public AudioDecoder {
 public:
@@ -42,7 +39,7 @@ public:
     static std::vector<std::string> getSupportedExtensions();
 
 private:
-    std::unique_ptr<VGMPlayer> player;
+    std::unique_ptr<PlayerA> player;
     std::mutex decodeMutex;
 
     // File data buffer
@@ -63,9 +60,7 @@ private:
     uint32_t maxLoops = 2; // Default: play once + loop once
     bool hasLooped = false;
     bool playerStarted = false; // Track if player has been started
-
-    // Internal buffer for libvgm's 32-bit stereo output
-    std::vector<WAVE_32BS> renderBuffer;
+    uint32_t renderDebugLogCount = 0;
 
     // Internal close method that doesn't acquire mutex (for use within locked methods)
     void closeInternal();

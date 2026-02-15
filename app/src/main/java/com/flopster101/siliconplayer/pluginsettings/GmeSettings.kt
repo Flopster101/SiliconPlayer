@@ -80,6 +80,8 @@ internal class GmeSettings(
                     valueRange = -50..5,
                     step = 1,
                     valueLabel = { "${it} dB" },
+                    showNudgeButtons = true,
+                    nudgeStep = 1,
                     onValueChanged = onEqTrebleDecibelChanged
                 )
             }
@@ -92,6 +94,8 @@ internal class GmeSettings(
                     valueRange = 1..1000,
                     step = 1,
                     valueLabel = { "${it} Hz" },
+                    showNudgeButtons = true,
+                    nudgeStep = 1,
                     onValueChanged = onEqBassHzChanged
                 )
             }

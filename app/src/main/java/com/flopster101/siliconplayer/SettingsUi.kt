@@ -48,6 +48,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.GraphicEq
@@ -55,6 +56,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Slideshow
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Tune
@@ -1889,6 +1891,7 @@ internal fun OpenMptChoiceSelectorCard(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun OpenMptDialogSliderCard(
     title: String,
     description: String,
@@ -1896,6 +1899,8 @@ internal fun OpenMptDialogSliderCard(
     valueRange: IntRange,
     step: Int,
     valueLabel: (Int) -> String,
+    showNudgeButtons: Boolean = false,
+    nudgeStep: Int = step,
     onValueChanged: (Int) -> Unit
 ) {
     val coercedValue = value.coerceIn(valueRange.first, valueRange.last)
@@ -1945,16 +1950,58 @@ internal fun OpenMptDialogSliderCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Slider(
-                        value = sliderValue.toFloat(),
-                        onValueChange = { raw ->
-                            val stepsFromStart = ((raw - valueRange.first.toFloat()) / step.toFloat()).roundToInt()
-                            val snapped = valueRange.first + (stepsFromStart * step)
-                            sliderValue = snapped.coerceIn(valueRange.first, valueRange.last)
-                        },
-                        valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
-                        steps = sliderSteps
-                    )
+                    CompositionLocalProvider(
+                        androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement provides false
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (showNudgeButtons) {
+                                IconButton(
+                                    onClick = {
+                                        val snapped = sliderValue - nudgeStep
+                                        sliderValue = snapped.coerceIn(valueRange.first, valueRange.last)
+                                    },
+                                    enabled = sliderValue > valueRange.first,
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Remove,
+                                        contentDescription = "Decrease",
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                            Slider(
+                                value = sliderValue.toFloat(),
+                                onValueChange = { raw ->
+                                    val stepsFromStart = ((raw - valueRange.first.toFloat()) / step.toFloat()).roundToInt()
+                                    val snapped = valueRange.first + (stepsFromStart * step)
+                                    sliderValue = snapped.coerceIn(valueRange.first, valueRange.last)
+                                },
+                                valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
+                                steps = sliderSteps,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (showNudgeButtons) {
+                                IconButton(
+                                    onClick = {
+                                        val snapped = sliderValue + nudgeStep
+                                        sliderValue = snapped.coerceIn(valueRange.first, valueRange.last)
+                                    },
+                                    enabled = sliderValue < valueRange.last,
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Increase",
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             },
             dismissButton = {

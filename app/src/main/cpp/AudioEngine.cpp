@@ -3,6 +3,7 @@
 #include "decoders/FFmpegDecoder.h"
 #include "decoders/LibOpenMPTDecoder.h"
 #include "decoders/VGMDecoder.h"
+#include "decoders/GmeDecoder.h"
 #include <android/log.h>
 #include <cmath>
 #include <cstring>
@@ -41,6 +42,10 @@ namespace {
             DecoderRegistry::getInstance().registerDecoder("VGMPlay", VGMDecoder::getSupportedExtensions(), []() {
                 return std::make_unique<VGMDecoder>();
             }, 5);
+
+            DecoderRegistry::getInstance().registerDecoder("Game Music Emu", GmeDecoder::getSupportedExtensions(), []() {
+                return std::make_unique<GmeDecoder>();
+            }, 6);
         }
     };
     static DecoderRegistration registration;

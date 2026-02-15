@@ -24,6 +24,7 @@ add_library(
         decoders/DecoderRegistry.cpp
         decoders/LibOpenMPTDecoder.cpp
         decoders/VGMDecoder.cpp
+        decoders/GmeDecoder.cpp
         decoders/CPConvStub.c
 )
 
@@ -67,6 +68,10 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
     add_library(libvgm-player STATIC IMPORTED)
     set_target_properties(libvgm-player PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libvgm-player.a")
 
+    # Import libgme (Static)
+    add_library(libgme STATIC IMPORTED)
+    set_target_properties(libgme PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libgme.a")
+
     # Link libraries
     target_link_libraries(
             siliconplayer
@@ -83,5 +88,6 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
             libvgm-player
             libvgm-emu
             libvgm-utils
+            libgme
             z # zlib is needed for openmpt/ffmpeg/vgm
     )

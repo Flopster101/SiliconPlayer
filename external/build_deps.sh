@@ -337,6 +337,45 @@ build_libvgm() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build libgme
+# -----------------------------------------------------------------------------
+build_libgme() {
+    local ABI=$1
+    echo "Building libgme for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/libgme"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "libgme source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
+
+    cmake \
+        -S "$PROJECT_PATH" \
+        -B "$BUILD_DIR" \
+        -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+        -DANDROID_ABI="$ABI" \
+        -DANDROID_PLATFORM="android-$ANDROID_API" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DGME_BUILD_SHARED=OFF \
+        -DGME_BUILD_STATIC=ON \
+        -DGME_BUILD_TESTING=OFF \
+        -DGME_BUILD_EXAMPLES=OFF \
+        -DGME_ZLIB=ON \
+        -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"
+
+    cmake --build "$BUILD_DIR" -j$(nproc)
+    cmake --install "$BUILD_DIR"
+}
+
+# -----------------------------------------------------------------------------
 # Argument Parsing
 # -----------------------------------------------------------------------------
 TARGET_ABI=${1:-all}
@@ -347,6 +386,9 @@ normalize_lib_name() {
     case "$lib" in
         sox|soxr)
             echo "libsoxr"
+            ;;
+        gme)
+            echo "libgme"
             ;;
         *)
             echo "$lib"
@@ -445,6 +487,10 @@ for ABI in "${ABIS[@]}"; do
 
     if target_has_lib "libvgm"; then
         build_libvgm "$ABI"
+    fi
+
+    if target_has_lib "libgme"; then
+        build_libgme "$ABI"
     fi
 done
 

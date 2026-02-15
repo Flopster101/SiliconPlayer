@@ -123,6 +123,7 @@ internal fun pluginNameForCoreName(coreName: String?): String? {
         "ffmpeg" -> "FFmpeg"
         "libopenmpt", "openmpt" -> "LibOpenMPT"
         "vgmplay" -> "VGMPlay"
+        "game music emu", "libgme", "gme" -> "Game Music Emu"
         else -> null
     }
 }

@@ -14,7 +14,8 @@ struct DecoderInfo {
     std::string name;
     std::vector<std::string> supportedExtensions;
     DecoderFactory factory;
-    int priority; // Higher priority decoders are tried first for matching extensions
+    int defaultPriority; // Built-in default priority from registration
+    int priority; // Lower numeric value means higher priority (Linux nice-style)
     bool enabled; // Whether this decoder is enabled
     std::vector<std::string> enabledExtensions; // Subset of supportedExtensions that are enabled (empty = all enabled)
 };
@@ -36,6 +37,7 @@ public:
     bool isDecoderEnabled(const std::string& name);
     void setDecoderPriority(const std::string& name, int priority);
     int getDecoderPriority(const std::string& name);
+    int getDecoderDefaultPriority(const std::string& name);
     void setDecoderEnabledExtensions(const std::string& name, const std::vector<std::string>& extensions);
     std::vector<std::string> getDecoderEnabledExtensions(const std::string& name);
     std::vector<std::string> getDecoderSupportedExtensions(const std::string& name);

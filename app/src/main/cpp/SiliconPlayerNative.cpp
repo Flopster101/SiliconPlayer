@@ -764,6 +764,15 @@ Java_com_flopster101_siliconplayer_NativeBridge_getDecoderPriority(
     return static_cast<jint>(priority);
 }
 
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDecoderDefaultPriority(
+        JNIEnv* env, jobject thiz, jstring decoderName) {
+    const char* name = env->GetStringUTFChars(decoderName, 0);
+    int priority = DecoderRegistry::getInstance().getDecoderDefaultPriority(name);
+    env->ReleaseStringUTFChars(decoderName, name);
+    return static_cast<jint>(priority);
+}
+
 extern "C" JNIEXPORT jobjectArray JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getDecoderSupportedExtensions(
         JNIEnv* env, jobject thiz, jstring decoderName) {

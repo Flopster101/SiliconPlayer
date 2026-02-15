@@ -82,6 +82,7 @@ object NativeBridge {
     external fun isDecoderEnabled(decoderName: String): Boolean
     external fun setDecoderPriority(decoderName: String, priority: Int)
     external fun getDecoderPriority(decoderName: String): Int
+    external fun getDecoderDefaultPriority(decoderName: String): Int
     external fun getDecoderSupportedExtensions(decoderName: String): Array<String>
     external fun getDecoderEnabledExtensions(decoderName: String): Array<String>
     external fun setDecoderEnabledExtensions(decoderName: String, extensions: Array<String>)

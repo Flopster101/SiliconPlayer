@@ -18,6 +18,7 @@ void DecoderRegistry::registerDecoder(const std::string& name, const std::vector
     info.name = name;
     info.supportedExtensions = extensions;
     info.factory = factory;
+    info.defaultPriority = priority;
     info.priority = priority;
     info.enabled = true; // Enabled by default
     info.enabledExtensions = {}; // Empty means all extensions enabled
@@ -131,7 +132,7 @@ DecoderInfo* DecoderRegistry::findDecoderInfo(const std::string& name) {
 
 void DecoderRegistry::sortDecodersByPriority() {
     std::sort(decoders.begin(), decoders.end(), [](const DecoderInfo& a, const DecoderInfo& b) {
-        return a.priority > b.priority;
+        return a.priority < b.priority;
     });
 }
 
@@ -160,6 +161,11 @@ void DecoderRegistry::setDecoderPriority(const std::string& name, int priority) 
 int DecoderRegistry::getDecoderPriority(const std::string& name) {
     DecoderInfo* info = findDecoderInfo(name);
     return info ? info->priority : 0;
+}
+
+int DecoderRegistry::getDecoderDefaultPriority(const std::string& name) {
+    DecoderInfo* info = findDecoderInfo(name);
+    return info ? info->defaultPriority : 0;
 }
 
 void DecoderRegistry::setDecoderEnabledExtensions(const std::string& name, const std::vector<std::string>& extensions) {

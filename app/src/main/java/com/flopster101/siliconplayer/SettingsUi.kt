@@ -3,12 +3,17 @@ package com.flopster101.siliconplayer
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -17,6 +22,7 @@ import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,12 +49,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Slideshow
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
@@ -64,19 +72,34 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import com.flopster101.siliconplayer.pluginsettings.OpenMptSettings
 import com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings
 import com.flopster101.siliconplayer.pluginsettings.VgmPlayChipSettingsScreen
@@ -210,6 +233,12 @@ fun SettingsScreen(
     onClearAllPluginSettings: () -> Unit
 ) {
     var pendingResetAction by remember { mutableStateOf<SettingsResetAction?>(null) }
+    var pluginPriorityEditMode by remember { mutableStateOf(false) }
+    LaunchedEffect(route) {
+        if (route != SettingsRoute.AudioPlugins) {
+            pluginPriorityEditMode = false
+        }
+    }
     val secondaryTitle = when (route) {
         SettingsRoute.Root -> null
         SettingsRoute.AudioPlugins -> "Audio plugins"
@@ -267,8 +296,35 @@ fun SettingsScreen(
                         ) {
                             Text(
                                 text = secondaryTitle.orEmpty(),
-                                style = MaterialTheme.typography.titleMedium
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f)
                             )
+                            if (route == SettingsRoute.AudioPlugins) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (pluginPriorityEditMode) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        Color.Transparent
+                                    }
+                                ) {
+                                    IconButton(
+                                        onClick = { pluginPriorityEditMode = !pluginPriorityEditMode },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.SwapVert,
+                                            contentDescription = if (pluginPriorityEditMode) "Finish reorder mode" else "Edit plugin order",
+                                            tint = if (pluginPriorityEditMode) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                         androidx.compose.material3.HorizontalDivider()
                     }
@@ -314,7 +370,10 @@ fun SettingsScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(
+                            state = rememberScrollState(),
+                            enabled = !(route == SettingsRoute.AudioPlugins && pluginPriorityEditMode)
+                        )
                 ) {
                     when (it) {
                     SettingsRoute.Root -> {
@@ -372,29 +431,205 @@ fun SettingsScreen(
                         )
                     }
                     SettingsRoute.AudioPlugins -> {
+                        val context = LocalContext.current
                         SettingsSectionLabel("Registered plugins")
 
-                        // Get list of registered plugins
-                        val pluginNames = remember { NativeBridge.getRegisteredDecoderNames() }
-
-                        pluginNames.forEachIndexed { index, pluginName ->
-                            val isEnabled = remember(pluginName) { NativeBridge.isDecoderEnabled(pluginName) }
-                            val priority = remember(pluginName) { NativeBridge.getDecoderPriority(pluginName) }
-
-                            PluginListItemCard(
-                                pluginName = pluginName,
-                                priority = priority,
-                                enabled = isEnabled,
-                                onEnabledChanged = { enabled ->
-                                    onPluginEnabledChanged(pluginName, enabled)
-                                },
-                                onClick = {
-                                    onPluginSelected(pluginName)
+                        val registeredPluginNames = remember { NativeBridge.getRegisteredDecoderNames().toList() }
+                        val defaultPluginOrder = remember(registeredPluginNames) {
+                            registeredPluginNames.sortedBy { pluginName ->
+                                NativeBridge.getDecoderDefaultPriority(pluginName)
+                            }
+                        }
+                        var orderedPluginNames by remember {
+                            mutableStateOf(
+                                registeredPluginNames.sortedBy { pluginName ->
+                                    NativeBridge.getDecoderPriority(pluginName)
                                 }
                             )
+                        }
+                        var draggingPluginName by remember { mutableStateOf<String?>(null) }
+                        var dragVisualOffsetPx by remember { mutableFloatStateOf(0f) }
+                        var dragSwapRemainderPx by remember { mutableFloatStateOf(0f) }
+                        var dragOriginTopPx by remember { mutableFloatStateOf(0f) }
+                        var dragStartIndex by remember { mutableIntStateOf(-1) }
+                        var rowHeightPx by remember { mutableFloatStateOf(0f) }
+                        var orderDirty by remember { mutableStateOf(false) }
+                        val rowNudgeOffsetPx = remember { mutableStateMapOf<String, Float>() }
+                        val rowNudgeNonce = remember { mutableStateMapOf<String, Int>() }
+                        val rowTopPx = remember { mutableStateMapOf<String, Float>() }
+                        val spacerPx = with(androidx.compose.ui.platform.LocalDensity.current) { 10.dp.toPx() }
+                        val fallbackStepPx = with(androidx.compose.ui.platform.LocalDensity.current) { 84.dp.toPx() }
+                        val edgeOverscrollPx = with(androidx.compose.ui.platform.LocalDensity.current) { 14.dp.toPx() }
+                        val itemStepPx = if (rowHeightPx > 0f) rowHeightPx + spacerPx else fallbackStepPx
+                        val swapThresholdPx = itemStepPx * 0.62f
 
-                            if (index < pluginNames.size - 1) {
-                                Spacer(modifier = Modifier.height(10.dp))
+                        fun persistPriorityOrder(order: List<String>) {
+                            order.forEachIndexed { index, pluginName ->
+                                val newPriority = index
+                                onPluginPriorityChanged(pluginName, newPriority)
+                            }
+                        }
+
+                        fun movePlugin(pluginName: String, direction: Int): Boolean {
+                            val currentIndex = orderedPluginNames.indexOf(pluginName)
+                            if (currentIndex < 0) return false
+                            val targetIndex = (currentIndex + direction).coerceIn(0, orderedPluginNames.lastIndex)
+                            if (targetIndex == currentIndex) return false
+                            val mutable = orderedPluginNames.toMutableList()
+                            val displacedPlugin = mutable[targetIndex]
+                            val item = mutable.removeAt(currentIndex)
+                            mutable.add(targetIndex, item)
+                            // Displaced row starts from its old slot and eases into the new slot.
+                            // Use a partial step so post-drop settling feels tighter and less bouncy.
+                            val displacedStartOffset = if (direction > 0) itemStepPx * 0.42f else -itemStepPx * 0.42f
+                            Snapshot.withMutableSnapshot {
+                                rowNudgeOffsetPx[displacedPlugin] = displacedStartOffset
+                                rowNudgeNonce[displacedPlugin] = (rowNudgeNonce[displacedPlugin] ?: 0) + 1
+                                orderedPluginNames = mutable
+                                orderDirty = true
+                            }
+                            return true
+                        }
+
+                        fun finishDragging(pluginName: String) {
+                            if (draggingPluginName != pluginName) return
+                            if (orderDirty) {
+                                persistPriorityOrder(orderedPluginNames)
+                            }
+                            draggingPluginName = null
+                            dragOriginTopPx = 0f
+                            dragVisualOffsetPx = 0f
+                            dragSwapRemainderPx = 0f
+                            dragStartIndex = -1
+                            orderDirty = false
+                        }
+
+                        if (pluginPriorityEditMode) {
+                            Text(
+                                text = "Drag plugins to set priority order. Top item has highest priority.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+
+                        LaunchedEffect(pluginPriorityEditMode) {
+                            if (!pluginPriorityEditMode) {
+                                draggingPluginName?.let { finishDragging(it) }
+                            }
+                        }
+
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                orderedPluginNames.forEachIndexed { index, pluginName ->
+                                    key(pluginName) {
+                                        val isEnabled = remember(pluginName) { NativeBridge.isDecoderEnabled(pluginName) }
+                                        val priority = index
+                                        val isDraggedRow = draggingPluginName == pluginName
+
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .onGloballyPositioned { coords ->
+                                                    rowTopPx[pluginName] = coords.positionInParent().y
+                                                }
+                                        ) {
+                                            PluginListItemCard(
+                                                pluginName = pluginName,
+                                                priority = priority,
+                                                enabled = isEnabled,
+                                                onEnabledChanged = { enabled ->
+                                                    onPluginEnabledChanged(pluginName, enabled)
+                                                },
+                                                onClick = {
+                                                    if (!pluginPriorityEditMode) onPluginSelected(pluginName)
+                                                },
+                                                editMode = pluginPriorityEditMode,
+                                                isDragging = false,
+                                                dragOffsetPx = 0f,
+                                                nudgeOffsetPx = if (isDraggedRow) 0f else (rowNudgeOffsetPx[pluginName] ?: 0f),
+                                                nudgeNonce = if (isDraggedRow) 0 else (rowNudgeNonce[pluginName] ?: 0),
+                                                contentAlpha = if (isDraggedRow) 0f else 1f,
+                                                enableInteractions = (draggingPluginName == null || draggingPluginName == pluginName),
+                                                switchEnabled = !isDraggedRow,
+                                                onMeasuredHeight = { h ->
+                                                    if (h > 0f) rowHeightPx = h
+                                                },
+                                                onDragStart = {
+                                                    if (draggingPluginName == null || draggingPluginName == pluginName) {
+                                                        draggingPluginName = pluginName
+                                                        dragVisualOffsetPx = 0f
+                                                        dragSwapRemainderPx = 0f
+                                                        dragStartIndex = orderedPluginNames.indexOf(pluginName)
+                                                        dragOriginTopPx = rowTopPx[pluginName] ?: 0f
+                                                        orderDirty = false
+                                                    }
+                                                },
+                                                onDragDelta = { deltaY ->
+                                                    if (draggingPluginName != pluginName) return@PluginListItemCard
+                                                    dragVisualOffsetPx += deltaY
+                                                    dragSwapRemainderPx += deltaY
+                                                    while (dragSwapRemainderPx >= swapThresholdPx) {
+                                                        if (!movePlugin(pluginName, 1)) {
+                                                            dragSwapRemainderPx = edgeOverscrollPx
+                                                            break
+                                                        }
+                                                        dragSwapRemainderPx -= itemStepPx
+                                                    }
+                                                    while (dragSwapRemainderPx <= -swapThresholdPx) {
+                                                        if (!movePlugin(pluginName, -1)) {
+                                                            dragSwapRemainderPx = -edgeOverscrollPx
+                                                            break
+                                                        }
+                                                        dragSwapRemainderPx += itemStepPx
+                                                    }
+                                                    val totalSteps = orderedPluginNames.lastIndex.coerceAtLeast(0)
+                                                    val startIndex = dragStartIndex.coerceIn(0, totalSteps)
+                                                    val minVisualOffset = (-startIndex * itemStepPx) - edgeOverscrollPx
+                                                    val maxVisualOffset = ((totalSteps - startIndex) * itemStepPx) + edgeOverscrollPx
+                                                    dragVisualOffsetPx = dragVisualOffsetPx.coerceIn(minVisualOffset, maxVisualOffset)
+                                                },
+                                                onDragEnd = {
+                                                    finishDragging(pluginName)
+                                                }
+                                            )
+                                        }
+
+                                        if (index < orderedPluginNames.size - 1) {
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                        }
+                                    }
+                                }
+                            }
+
+                            val draggedName = draggingPluginName
+                            if (draggedName != null) {
+                                val draggedIndex = orderedPluginNames.indexOf(draggedName)
+                                val draggedPriority = if (draggedIndex >= 0) {
+                                    draggedIndex
+                                } else {
+                                    NativeBridge.getDecoderPriority(draggedName)
+                                }
+                                val draggedEnabled = NativeBridge.isDecoderEnabled(draggedName)
+                                PluginListItemCard(
+                                    pluginName = draggedName,
+                                    priority = draggedPriority,
+                                    enabled = draggedEnabled,
+                                    onEnabledChanged = { },
+                                    onClick = { },
+                                    editMode = pluginPriorityEditMode,
+                                    isDragging = true,
+                                    dragOffsetPx = dragOriginTopPx + dragVisualOffsetPx,
+                                    nudgeOffsetPx = 0f,
+                                    nudgeNonce = 0,
+                                    contentAlpha = 1f,
+                                    enableInteractions = false,
+                                    switchEnabled = false,
+                                    onMeasuredHeight = { },
+                                    onDragStart = { },
+                                    onDragDelta = { },
+                                    onDragEnd = { }
+                                )
                             }
                         }
 
@@ -405,6 +640,27 @@ fun SettingsScreen(
                             description = "Reset all plugin/core settings to defaults without changing app settings.",
                             icon = Icons.Default.MoreHoriz,
                             onClick = { pendingResetAction = SettingsResetAction.ClearPluginSettings }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Reset plugin priority order",
+                            description = "Restore plugin priority order to each plugin's built-in default priority.",
+                            icon = Icons.Default.Tune,
+                            onClick = {
+                                orderedPluginNames = defaultPluginOrder
+                                defaultPluginOrder.forEach { pluginName ->
+                                    onPluginPriorityChanged(
+                                        pluginName,
+                                        NativeBridge.getDecoderDefaultPriority(pluginName)
+                                    )
+                                }
+                                draggingPluginName = null
+                                dragVisualOffsetPx = 0f
+                                dragSwapRemainderPx = 0f
+                                dragStartIndex = -1
+                                orderDirty = false
+                                Toast.makeText(context, "Plugin priority order reset", Toast.LENGTH_SHORT).show()
+                            }
                         )
                     }
                     SettingsRoute.PluginDetail -> {
@@ -1915,18 +2171,72 @@ private fun PluginListItemCard(
     priority: Int,
     enabled: Boolean,
     onEnabledChanged: (Boolean) -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    editMode: Boolean,
+    isDragging: Boolean,
+    dragOffsetPx: Float,
+    nudgeOffsetPx: Float,
+    nudgeNonce: Int,
+    contentAlpha: Float,
+    enableInteractions: Boolean,
+    switchEnabled: Boolean,
+    onMeasuredHeight: (Float) -> Unit,
+    onDragStart: () -> Unit,
+    onDragDelta: (Float) -> Unit,
+    onDragEnd: () -> Unit
 ) {
+    val rowNudgeAnim = remember(nudgeNonce) { Animatable(nudgeOffsetPx) }
+    LaunchedEffect(nudgeNonce) {
+        if (nudgeNonce > 0 && nudgeOffsetPx != 0f) {
+            rowNudgeAnim.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = 160, easing = LinearOutSlowInEasing)
+            )
+        }
+    }
+    val animatedDragOffsetY by animateFloatAsState(
+        targetValue = if (isDragging) dragOffsetPx else 0f,
+        animationSpec = if (isDragging) snap() else spring(
+            dampingRatio = 1.0f,
+            stiffness = 520f
+        ),
+        label = "pluginCardDragOffset"
+    )
+    val displayOffsetY = animatedDragOffsetY + if (isDragging) 0f else rowNudgeAnim.value
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .zIndex(if (isDragging) 100f else 0f)
+            .alpha(contentAlpha)
+            .offset { IntOffset(x = 0, y = displayOffsetY.roundToInt()) }
+            .let { base ->
+                if (editMode && enableInteractions) {
+                    base.pointerInput(pluginName, editMode) {
+                        detectDragGestures(
+                            onDragStart = { onDragStart() },
+                            onDragEnd = { onDragEnd() },
+                            onDragCancel = { onDragEnd() },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                onDragDelta(dragAmount.y)
+                            }
+                        )
+                    }
+                } else if (!editMode && enableInteractions) {
+                    base.clickable(onClick = onClick)
+                } else {
+                    base
+                }
+            },
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = SettingsCardShape
+        shape = SettingsCardShape,
+        tonalElevation = 0.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .onSizeChanged { onMeasuredHeight(it.height.toFloat()) }
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1958,10 +2268,20 @@ private fun PluginListItemCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Switch(
-                checked = enabled,
-                onCheckedChange = onEnabledChanged
-            )
+            if (editMode) {
+                Icon(
+                    imageVector = Icons.Default.DragIndicator,
+                    contentDescription = "Drag to reorder",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp)
+                )
+            } else {
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = onEnabledChanged,
+                    enabled = switchEnabled
+                )
+            }
         }
     }
 }
@@ -2000,7 +2320,7 @@ private fun PluginDetailScreen(
         SettingsSectionLabel("Priority")
         SettingsItemCard(
             title = "Plugin priority: $priority",
-            description = "Higher priority plugins are tried first for matching extensions. Click to change.",
+            description = "Lower value means higher priority. Plugins are tried in ascending order for matching extensions. Click to change.",
             icon = Icons.Default.Tune,
             onClick = { showPriorityDialog = true }
         )
@@ -2276,7 +2596,7 @@ private fun PriorityPickerDialog(
         text = {
             Column {
                 Text(
-                    text = "Higher priority plugins are tried first when multiple plugins support the same extension.",
+                    text = "Lower value means higher priority. Plugins are tried in ascending order when multiple plugins support the same extension.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -2295,8 +2615,8 @@ private fun PriorityPickerDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("0 (Lowest)", style = MaterialTheme.typography.labelSmall)
-                    Text("100 (Highest)", style = MaterialTheme.typography.labelSmall)
+                    Text("0 (Highest)", style = MaterialTheme.typography.labelSmall)
+                    Text("100 (Lowest)", style = MaterialTheme.typography.labelSmall)
                 }
             }
         },

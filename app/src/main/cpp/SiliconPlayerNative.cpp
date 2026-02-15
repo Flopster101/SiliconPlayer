@@ -476,6 +476,71 @@ Java_com_flopster101_siliconplayer_NativeBridge_getFfmpegEncoderName(JNIEnv* env
     return env->NewStringUTF(value.c_str());
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getGmeSystemName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return env->NewStringUTF("");
+    std::string value = audioEngine->getGmeSystemName();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getGmeGameName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return env->NewStringUTF("");
+    std::string value = audioEngine->getGmeGameName();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getGmeCopyright(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return env->NewStringUTF("");
+    std::string value = audioEngine->getGmeCopyright();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getGmeComment(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return env->NewStringUTF("");
+    std::string value = audioEngine->getGmeComment();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getGmeDumper(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return env->NewStringUTF("");
+    std::string value = audioEngine->getGmeDumper();
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getGmeTrackCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getGmeTrackCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getGmeVoiceCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getGmeVoiceCount());
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getGmeHasLoopPoint(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return JNI_FALSE;
+    return audioEngine->getGmeHasLoopPoint() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getGmeLoopStartMs(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return -1;
+    return static_cast<jint>(audioEngine->getGmeLoopStartMs());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getGmeLoopLengthMs(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return -1;
+    return static_cast<jint>(audioEngine->getGmeLoopLengthMs());
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_startEngine(JNIEnv* env, jobject thiz) {
     Java_com_flopster101_siliconplayer_MainActivity_startEngine(env, thiz);

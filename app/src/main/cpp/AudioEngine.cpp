@@ -1393,6 +1393,76 @@ std::string AudioEngine::getFfmpegEncoderName() {
     return ffmpegDecoder ? ffmpegDecoder->getEncoderName() : "";
 }
 
+std::string AudioEngine::getGmeSystemName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* gmeDecoder = dynamic_cast<GmeDecoder*>(decoder.get());
+    return gmeDecoder ? gmeDecoder->getSystemName() : "";
+}
+
+std::string AudioEngine::getGmeGameName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* gmeDecoder = dynamic_cast<GmeDecoder*>(decoder.get());
+    return gmeDecoder ? gmeDecoder->getGameName() : "";
+}
+
+std::string AudioEngine::getGmeCopyright() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* gmeDecoder = dynamic_cast<GmeDecoder*>(decoder.get());
+    return gmeDecoder ? gmeDecoder->getCopyright() : "";
+}
+
+std::string AudioEngine::getGmeComment() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* gmeDecoder = dynamic_cast<GmeDecoder*>(decoder.get());
+    return gmeDecoder ? gmeDecoder->getComment() : "";
+}
+
+std::string AudioEngine::getGmeDumper() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* gmeDecoder = dynamic_cast<GmeDecoder*>(decoder.get());
+    return gmeDecoder ? gmeDecoder->getDumper() : "";
+}
+
+int AudioEngine::getGmeTrackCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* gmeDecoder = dynamic_cast<GmeDecoder*>(decoder.get());
+    return gmeDecoder ? gmeDecoder->getTrackCountInfo() : 0;
+}
+
+int AudioEngine::getGmeVoiceCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* gmeDecoder = dynamic_cast<GmeDecoder*>(decoder.get());
+    return gmeDecoder ? gmeDecoder->getVoiceCountInfo() : 0;
+}
+
+bool AudioEngine::getGmeHasLoopPoint() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return false;
+    auto* gmeDecoder = dynamic_cast<GmeDecoder*>(decoder.get());
+    return gmeDecoder ? gmeDecoder->getHasLoopPointInfo() : false;
+}
+
+int AudioEngine::getGmeLoopStartMs() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return -1;
+    auto* gmeDecoder = dynamic_cast<GmeDecoder*>(decoder.get());
+    return gmeDecoder ? gmeDecoder->getLoopStartMsInfo() : -1;
+}
+
+int AudioEngine::getGmeLoopLengthMs() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return -1;
+    auto* gmeDecoder = dynamic_cast<GmeDecoder*>(decoder.get());
+    return gmeDecoder ? gmeDecoder->getLoopLengthMsInfo() : -1;
+}
+
 // Gain control implementation
 void AudioEngine::setMasterGain(float gainDb) {
     masterGainDb.store(gainDb);

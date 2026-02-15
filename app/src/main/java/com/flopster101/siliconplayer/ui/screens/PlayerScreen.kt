@@ -700,6 +700,16 @@ private fun TrackInfoDetailsDialog(
     var ffmpegSampleFormatName by remember { mutableStateOf("") }
     var ffmpegChannelLayoutName by remember { mutableStateOf("") }
     var ffmpegEncoderName by remember { mutableStateOf("") }
+    var gmeSystemName by remember { mutableStateOf("") }
+    var gmeGameName by remember { mutableStateOf("") }
+    var gmeCopyright by remember { mutableStateOf("") }
+    var gmeComment by remember { mutableStateOf("") }
+    var gmeDumper by remember { mutableStateOf("") }
+    var gmeTrackCount by remember { mutableIntStateOf(0) }
+    var gmeVoiceCount by remember { mutableIntStateOf(0) }
+    var gmeHasLoopPoint by remember { mutableStateOf(false) }
+    var gmeLoopStartMs by remember { mutableIntStateOf(-1) }
+    var gmeLoopLengthMs by remember { mutableIntStateOf(-1) }
     val detailsScrollState = rememberScrollState()
     var detailsViewportHeightPx by remember { mutableIntStateOf(0) }
 
@@ -765,6 +775,29 @@ private fun TrackInfoDetailsDialog(
                 ffmpegSampleFormatName = ""
                 ffmpegChannelLayoutName = ""
                 ffmpegEncoderName = ""
+            }
+            if (decoderName.equals("Game Music Emu", ignoreCase = true)) {
+                gmeSystemName = NativeBridge.getGmeSystemName()
+                gmeGameName = NativeBridge.getGmeGameName()
+                gmeCopyright = NativeBridge.getGmeCopyright()
+                gmeComment = NativeBridge.getGmeComment()
+                gmeDumper = NativeBridge.getGmeDumper()
+                gmeTrackCount = NativeBridge.getGmeTrackCount()
+                gmeVoiceCount = NativeBridge.getGmeVoiceCount()
+                gmeHasLoopPoint = NativeBridge.getGmeHasLoopPoint()
+                gmeLoopStartMs = NativeBridge.getGmeLoopStartMs()
+                gmeLoopLengthMs = NativeBridge.getGmeLoopLengthMs()
+            } else {
+                gmeSystemName = ""
+                gmeGameName = ""
+                gmeCopyright = ""
+                gmeComment = ""
+                gmeDumper = ""
+                gmeTrackCount = 0
+                gmeVoiceCount = 0
+                gmeHasLoopPoint = false
+                gmeLoopStartMs = -1
+                gmeLoopLengthMs = -1
             }
             delay(500)
         }
@@ -909,6 +942,42 @@ private fun TrackInfoDetailsDialog(
                         }
                         if (ffmpegEncoderName.isNotBlank()) {
                             TrackInfoDetailsRow("Encoder", ffmpegEncoderName)
+                        }
+                    }
+                    if (decoderName.equals("Game Music Emu", ignoreCase = true)) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Game Music Emu",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (gmeSystemName.isNotBlank()) {
+                            TrackInfoDetailsRow("System", gmeSystemName)
+                        }
+                        if (gmeGameName.isNotBlank()) {
+                            TrackInfoDetailsRow("Game", gmeGameName)
+                        }
+                        if (gmeTrackCount > 0) {
+                            TrackInfoDetailsRow("Track count", gmeTrackCount.toString())
+                        }
+                        if (gmeVoiceCount > 0) {
+                            TrackInfoDetailsRow("Voice count", gmeVoiceCount.toString())
+                        }
+                        TrackInfoDetailsRow("Has loop point", if (gmeHasLoopPoint) "Yes" else "No")
+                        if (gmeLoopStartMs >= 0) {
+                            TrackInfoDetailsRow("Loop start", formatTime(gmeLoopStartMs / 1000.0))
+                        }
+                        if (gmeLoopLengthMs > 0) {
+                            TrackInfoDetailsRow("Loop length", formatTime(gmeLoopLengthMs / 1000.0))
+                        }
+                        if (gmeCopyright.isNotBlank()) {
+                            TrackInfoDetailsRow("Copyright", gmeCopyright)
+                        }
+                        if (gmeDumper.isNotBlank()) {
+                            TrackInfoDetailsRow("Dumper", gmeDumper)
+                        }
+                        if (gmeComment.isNotBlank()) {
+                            TrackInfoDetailsRow("Comment", gmeComment)
                         }
                     }
                 }

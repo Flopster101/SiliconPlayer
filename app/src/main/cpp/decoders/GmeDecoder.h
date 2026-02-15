@@ -28,6 +28,16 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    std::string getSystemName();
+    std::string getGameName();
+    std::string getCopyright();
+    std::string getComment();
+    std::string getDumper();
+    int getTrackCountInfo();
+    int getVoiceCountInfo();
+    bool getHasLoopPointInfo();
+    int getLoopStartMsInfo();
+    int getLoopLengthMsInfo();
     void setOutputSampleRate(int sampleRate) override;
     void setOption(const char* name, const char* value) override;
     int getOptionApplyPolicy(const char* name) const override;
@@ -74,6 +84,12 @@ private:
     std::string artist;
     std::string composer;
     std::string genre;
+    std::string systemName;
+    std::string gameName;
+    std::string copyrightText;
+    std::string commentText;
+    std::string dumper;
+    int voiceCount = 0;
 
     void closeInternal();
     void applyRepeatBehaviorLocked();

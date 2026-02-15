@@ -119,10 +119,15 @@ bool GmeDecoder::open(const char* path) {
     gme_info_t* info = nullptr;
     const gme_err_t infoErr = gme_track_info(emu, &info, activeTrack);
     if (infoErr == nullptr && info != nullptr) {
+        systemName = safeString(info->system);
+        gameName = safeString(info->game);
         title = safeString(info->song);
         artist = safeString(info->author);
         composer = safeString(info->author);
-        genre = safeString(info->system);
+        genre = systemName;
+        copyrightText = safeString(info->copyright);
+        commentText = safeString(info->comment);
+        dumper = safeString(info->dumper);
 
         int durationMs = info->play_length;
         if (durationMs <= 0) durationMs = info->length;
@@ -136,7 +141,13 @@ bool GmeDecoder::open(const char* path) {
         gme_free_info(info);
     } else {
         duration = 0.0;
+        systemName.clear();
+        gameName.clear();
+        copyrightText.clear();
+        commentText.clear();
+        dumper.clear();
     }
+    voiceCount = std::max(0, gme_voice_count(emu));
 
     if (isSpcTrack && spcUseNativeSampleRate && activeSampleRate != 32000) {
         gme_delete(emu);
@@ -185,6 +196,12 @@ void GmeDecoder::closeInternal() {
     artist.clear();
     composer.clear();
     genre.clear();
+    systemName.clear();
+    gameName.clear();
+    copyrightText.clear();
+    commentText.clear();
+    dumper.clear();
+    voiceCount = 0;
 }
 
 void GmeDecoder::close() {
@@ -350,6 +367,56 @@ std::string GmeDecoder::getComposer() {
 std::string GmeDecoder::getGenre() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return genre;
+}
+
+std::string GmeDecoder::getSystemName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return systemName;
+}
+
+std::string GmeDecoder::getGameName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return gameName;
+}
+
+std::string GmeDecoder::getCopyright() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return copyrightText;
+}
+
+std::string GmeDecoder::getComment() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return commentText;
+}
+
+std::string GmeDecoder::getDumper() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return dumper;
+}
+
+int GmeDecoder::getTrackCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return trackCount;
+}
+
+int GmeDecoder::getVoiceCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return voiceCount;
+}
+
+bool GmeDecoder::getHasLoopPointInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return hasLoopPoint;
+}
+
+int GmeDecoder::getLoopStartMsInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return loopStartMs;
+}
+
+int GmeDecoder::getLoopLengthMsInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return loopLengthMs;
 }
 
 void GmeDecoder::setOutputSampleRate(int rate) {

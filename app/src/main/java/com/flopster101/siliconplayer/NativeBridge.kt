@@ -52,6 +52,16 @@ object NativeBridge {
     external fun getFfmpegSampleFormatName(): String
     external fun getFfmpegChannelLayoutName(): String
     external fun getFfmpegEncoderName(): String
+    external fun getGmeSystemName(): String
+    external fun getGmeGameName(): String
+    external fun getGmeCopyright(): String
+    external fun getGmeComment(): String
+    external fun getGmeDumper(): String
+    external fun getGmeTrackCount(): Int
+    external fun getGmeVoiceCount(): Int
+    external fun getGmeHasLoopPoint(): Boolean
+    external fun getGmeLoopStartMs(): Int
+    external fun getGmeLoopLengthMs(): Int
     external fun getTrackBitrate(): Long
     external fun isTrackVBR(): Boolean
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)

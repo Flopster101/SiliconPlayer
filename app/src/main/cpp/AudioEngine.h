@@ -71,6 +71,16 @@ public:
     std::string getFfmpegSampleFormatName();
     std::string getFfmpegChannelLayoutName();
     std::string getFfmpegEncoderName();
+    std::string getGmeSystemName();
+    std::string getGmeGameName();
+    std::string getGmeCopyright();
+    std::string getGmeComment();
+    std::string getGmeDumper();
+    int getGmeTrackCount();
+    int getGmeVoiceCount();
+    bool getGmeHasLoopPoint();
+    int getGmeLoopStartMs();
+    int getGmeLoopLengthMs();
 
     // Bitrate information
     int64_t getTrackBitrate();

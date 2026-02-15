@@ -63,7 +63,6 @@ private:
     uint32_t maxLoops = 2; // Default: play once + loop once
     bool hasLooped = false;
     bool playerStarted = false; // Track if player has been started
-    uint32_t renderDebugLogCount = 0;
 
     // Internal close method that doesn't acquire mutex (for use within locked methods)
     void closeInternal();

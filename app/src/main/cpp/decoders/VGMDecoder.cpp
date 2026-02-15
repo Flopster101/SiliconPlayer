@@ -15,10 +15,8 @@
 
 #define LOG_TAG "VGMDecoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
-#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
 namespace {
-constexpr uint32_t kInitialRenderDebugLogs = 5;
 constexpr uint32_t kPlayerOutputBufferFrames = 4096;
 }
 
@@ -129,8 +127,6 @@ bool VGMDecoder::open(const char* path) {
     if (vgmPlayer->GetSongInfo(songInfo) == 0x00) {
         duration = vgmPlayer->Tick2Second(songInfo.songLen);
     }
-
-    renderDebugLogCount = 0;
     return true;
 }
 
@@ -156,7 +152,6 @@ void VGMDecoder::closeInternal() {
     currentLoop = 0;
     hasLooped = false;
     playerStarted = false;
-    renderDebugLogCount = 0;
 }
 
 void VGMDecoder::close() {
@@ -193,16 +188,6 @@ int VGMDecoder::read(float* buffer, int numFrames) {
         return 0;
     }
 
-    PlayerBase* playerBase = player->GetPlayer();
-    uint32_t filePosBefore = 0;
-    uint32_t playTickBefore = 0;
-    const uint8_t stateBefore = player->GetState();
-    const bool shouldLog = renderDebugLogCount < kInitialRenderDebugLogs && playerBase != nullptr;
-    if (shouldLog) {
-        filePosBefore = playerBase->GetCurPos(PLAYPOS_FILEOFS);
-        playTickBefore = playerBase->GetCurPos(PLAYPOS_TICK);
-    }
-
     std::vector<int16_t> int16Buffer(numFrames * channels);
     int framesRendered = 0;
     while (framesRendered < numFrames) {
@@ -217,25 +202,6 @@ int VGMDecoder::read(float* buffer, int numFrames) {
             break;
         }
         framesRendered += chunkFrames;
-    }
-
-    if (shouldLog) {
-        const uint32_t filePosAfter = playerBase->GetCurPos(PLAYPOS_FILEOFS);
-        const uint32_t playTickAfter = playerBase->GetCurPos(PLAYPOS_TICK);
-        const uint8_t stateAfter = player->GetState();
-        LOGD(
-                "[render %u] req=%d got=%d filePos=0x%X->0x%X tick=%u->%u state=0x%02X->0x%02X",
-                renderDebugLogCount + 1,
-                numFrames,
-                framesRendered,
-                filePosBefore,
-                filePosAfter,
-                playTickBefore,
-                playTickAfter,
-                stateBefore,
-                stateAfter
-        );
-        renderDebugLogCount++;
     }
 
     if (framesRendered <= 0) {

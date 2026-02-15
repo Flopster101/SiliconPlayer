@@ -397,14 +397,16 @@ fun SettingsScreen(
                                             onPluginExtensionsChanged(selectedPluginName, extensions)
                                         }
                                     )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    SettingsSectionLabel("Core options")
-                                    SampleRateSelectorCard(
-                                        title = "Render sample rate",
-                                        description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
-                                        selectedHz = ffmpegSampleRateHz,
-                                        enabled = supportsCustomSampleRate(ffmpegCapabilities),
-                                        onSelected = onFfmpegSampleRateChanged
+
+                                    // Render plugin-specific settings using the API
+                                    val pluginSettings = com.flopster101.siliconplayer.pluginsettings.FfmpegSettings(
+                                        sampleRateHz = ffmpegSampleRateHz,
+                                        capabilities = ffmpegCapabilities,
+                                        onSampleRateChanged = onFfmpegSampleRateChanged
+                                    )
+                                    com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings(
+                                        pluginSettings = pluginSettings,
+                                        settingsSectionLabel = { label -> SettingsSectionLabel(label) }
                                     )
                                 }
                                 "LibOpenMPT" -> {
@@ -417,100 +419,34 @@ fun SettingsScreen(
                                             onPluginExtensionsChanged(selectedPluginName, extensions)
                                         }
                                     )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    SettingsSectionLabel("Core options")
-                                    OpenMptDialogSliderCard(
-                                        title = "Stereo separation",
-                                        description = "Sets mixer stereo separation.",
-                                        value = openMptStereoSeparationPercent,
-                                        valueRange = 0..200,
-                                        step = 5,
-                                        valueLabel = { "$it%" },
-                                        onValueChanged = onOpenMptStereoSeparationPercentChanged
+
+                                    // Render plugin-specific settings using the API
+                                    val pluginSettings = com.flopster101.siliconplayer.pluginsettings.OpenMptSettings(
+                                        sampleRateHz = openMptSampleRateHz,
+                                        capabilities = openMptCapabilities,
+                                        stereoSeparationPercent = openMptStereoSeparationPercent,
+                                        stereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
+                                        interpolationFilterLength = openMptInterpolationFilterLength,
+                                        amigaResamplerMode = openMptAmigaResamplerMode,
+                                        amigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
+                                        volumeRampingStrength = openMptVolumeRampingStrength,
+                                        ft2XmVolumeRamping = openMptFt2XmVolumeRamping,
+                                        masterGainMilliBel = openMptMasterGainMilliBel,
+                                        surroundEnabled = openMptSurroundEnabled,
+                                        onSampleRateChanged = onOpenMptSampleRateChanged,
+                                        onStereoSeparationPercentChanged = onOpenMptStereoSeparationPercentChanged,
+                                        onStereoSeparationAmigaPercentChanged = onOpenMptStereoSeparationAmigaPercentChanged,
+                                        onInterpolationFilterLengthChanged = onOpenMptInterpolationFilterLengthChanged,
+                                        onAmigaResamplerModeChanged = onOpenMptAmigaResamplerModeChanged,
+                                        onAmigaResamplerApplyAllModulesChanged = onOpenMptAmigaResamplerApplyAllModulesChanged,
+                                        onVolumeRampingStrengthChanged = onOpenMptVolumeRampingStrengthChanged,
+                                        onFt2XmVolumeRampingChanged = onOpenMptFt2XmVolumeRampingChanged,
+                                        onMasterGainMilliBelChanged = onOpenMptMasterGainMilliBelChanged,
+                                        onSurroundEnabledChanged = onOpenMptSurroundEnabledChanged
                                     )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    OpenMptDialogSliderCard(
-                                        title = "Amiga stereo separation",
-                                        description = "Stereo separation used specifically for Amiga modules.",
-                                        value = openMptStereoSeparationAmigaPercent,
-                                        valueRange = 0..200,
-                                        step = 5,
-                                        valueLabel = { "$it%" },
-                                        onValueChanged = onOpenMptStereoSeparationAmigaPercentChanged
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    OpenMptChoiceSelectorCard(
-                                        title = "Interpolation filter",
-                                        description = "Selects interpolation quality for module playback.",
-                                        selectedValue = openMptInterpolationFilterLength,
-                                        options = listOf(
-                                            IntChoice(0, "Auto"),
-                                            IntChoice(1, "None"),
-                                            IntChoice(2, "Linear"),
-                                            IntChoice(4, "Cubic"),
-                                            IntChoice(8, "Sinc (8-tap)")
-                                        ),
-                                        onSelected = onOpenMptInterpolationFilterLengthChanged
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    OpenMptChoiceSelectorCard(
-                                        title = "Amiga resampler",
-                                        description = "Choose Amiga resampler mode. None uses interpolation filter.",
-                                        selectedValue = openMptAmigaResamplerMode,
-                                        options = listOf(
-                                            IntChoice(0, "None"),
-                                            IntChoice(1, "Unfiltered"),
-                                            IntChoice(2, "Amiga 500"),
-                                            IntChoice(3, "Amiga 1200")
-                                        ),
-                                        onSelected = onOpenMptAmigaResamplerModeChanged
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    PlayerSettingToggleCard(
-                                        title = "Apply Amiga resampler to all modules",
-                                        description = "When disabled, Amiga resampler is used only on Amiga module formats.",
-                                        checked = openMptAmigaResamplerApplyAllModules,
-                                        onCheckedChange = onOpenMptAmigaResamplerApplyAllModulesChanged
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    OpenMptVolumeRampingCard(
-                                        title = "Volume ramping strength",
-                                        description = "Controls smoothing strength for volume changes.",
-                                        value = openMptVolumeRampingStrength,
-                                        onValueChanged = onOpenMptVolumeRampingStrengthChanged
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    PlayerSettingToggleCard(
-                                        title = "FT2 5ms XM ramping",
-                                        description = "Apply classic FT2-style 5ms ramping for XM modules only.",
-                                        checked = openMptFt2XmVolumeRamping,
-                                        onCheckedChange = onOpenMptFt2XmVolumeRampingChanged
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    OpenMptDialogSliderCard(
-                                        title = "Master gain",
-                                        description = "Applies decoder gain before output.",
-                                        value = openMptMasterGainMilliBel,
-                                        valueRange = -1200..1200,
-                                        step = 100,
-                                        valueLabel = { formatMilliBelAsDbLabel(it) },
-                                        onValueChanged = onOpenMptMasterGainMilliBelChanged
-                                    )
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    PlayerSettingToggleCard(
-                                        title = "Enable surround sound",
-                                        description = "Enable surround rendering mode when supported by the playback path.",
-                                        checked = openMptSurroundEnabled,
-                                        onCheckedChange = onOpenMptSurroundEnabledChanged
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    SettingsSectionLabel("Generic output options")
-                                    SampleRateSelectorCard(
-                                        title = "Render sample rate",
-                                        description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
-                                        selectedHz = openMptSampleRateHz,
-                                        enabled = supportsCustomSampleRate(openMptCapabilities),
-                                        onSelected = onOpenMptSampleRateChanged
+                                    com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings(
+                                        pluginSettings = pluginSettings,
+                                        settingsSectionLabel = { label -> SettingsSectionLabel(label) }
                                     )
                                 }
                                 else -> {
@@ -906,7 +842,7 @@ private fun SettingsItemCard(
 }
 
 @Composable
-private fun PlayerSettingToggleCard(
+internal fun PlayerSettingToggleCard(
     title: String,
     description: String,
     checked: Boolean,
@@ -1064,11 +1000,11 @@ private data class SampleRateChoice(val hz: Int, val label: String)
 
 private data class ThemeModeChoice(val mode: ThemeMode, val label: String)
 
-private data class IntChoice(val value: Int, val label: String)
+internal data class IntChoice(val value: Int, val label: String)
 
 private data class EnumChoice<T>(val value: T, val label: String)
 
-private fun formatMilliBelAsDbLabel(milliBel: Int): String {
+internal fun formatMilliBelAsDbLabel(milliBel: Int): String {
     val db = milliBel / 100.0
     return String.format(Locale.US, "%+.1f dB", db)
 }
@@ -1345,7 +1281,7 @@ private fun AudioResamplerSelectorCard(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun SampleRateSelectorCard(
+internal fun SampleRateSelectorCard(
     title: String,
     description: String,
     selectedHz: Int,
@@ -1469,7 +1405,7 @@ private fun SampleRateSelectorCard(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun OpenMptChoiceSelectorCard(
+internal fun OpenMptChoiceSelectorCard(
     title: String,
     description: String,
     selectedValue: Int,
@@ -1565,7 +1501,7 @@ private fun OpenMptChoiceSelectorCard(
 }
 
 @Composable
-private fun OpenMptDialogSliderCard(
+internal fun OpenMptDialogSliderCard(
     title: String,
     description: String,
     value: Int,
@@ -1652,7 +1588,7 @@ private fun OpenMptDialogSliderCard(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun OpenMptVolumeRampingCard(
+internal fun OpenMptVolumeRampingCard(
     title: String,
     description: String,
     value: Int,

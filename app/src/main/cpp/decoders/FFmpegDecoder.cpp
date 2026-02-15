@@ -12,6 +12,12 @@
 namespace {
 std::once_flag gFfmpegNetworkInitOnce;
 
+std::string ffErrString(int errnum) {
+    char errbuf[AV_ERROR_MAX_STRING_SIZE] = {0};
+    av_strerror(errnum, errbuf, sizeof(errbuf));
+    return std::string(errbuf);
+}
+
 void ensureFfmpegNetworkInitialized() {
     std::call_once(gFfmpegNetworkInitOnce, []() {
         const int result = avformat_network_init();
@@ -364,17 +370,32 @@ int FFmpegDecoder::decodeFrame() {
              // No more packets: flush buffered decoder frames once.
              if (!decoderDrainStarted) {
                  decoderDrainStarted = true;
-                 avcodec_send_packet(codecContext, nullptr);
+                 const int flushRet = avcodec_send_packet(codecContext, nullptr);
+                 if (flushRet < 0 && flushRet != AVERROR_EOF && flushRet != AVERROR(EAGAIN)) {
+                     LOGE("Error starting decoder drain: fferr=%d msg=%s", flushRet, ffErrString(flushRet).c_str());
+                 }
                  continue;
              }
              return -1;
         }
 
         if (packet->stream_index == audioStreamIndex) {
-            if (avcodec_send_packet(codecContext, packet) < 0) {
-                LOGE("Error sending packet to decoder");
+            const int sendRet = avcodec_send_packet(codecContext, packet);
+            if (sendRet == AVERROR(EAGAIN)) {
+                // Decoder output queue is full; consume frames on next loop iteration.
                 av_packet_unref(packet);
-                return -1;
+                continue;
+            }
+            if (sendRet == AVERROR_INVALIDDATA) {
+                // Corrupt packet; skip it and continue decoding.
+                LOGE("Skipping invalid packet: fferr=%d msg=%s", sendRet, ffErrString(sendRet).c_str());
+                av_packet_unref(packet);
+                continue;
+            }
+            if (sendRet < 0) {
+                LOGE("Error sending packet to decoder: fferr=%d msg=%s", sendRet, ffErrString(sendRet).c_str());
+                av_packet_unref(packet);
+                continue;
             }
         }
         av_packet_unref(packet);

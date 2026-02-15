@@ -125,7 +125,10 @@ import android.os.Environment
 import android.util.Log
 import android.widget.Toast
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -139,6 +142,40 @@ import java.security.MessageDigest
 
 private const val URL_SOURCE_TAG = "UrlSource"
 private const val REMOTE_SOURCE_CACHE_DIR = "remote_sources"
+
+private enum class RemoteLoadPhase {
+    Connecting,
+    Downloading,
+    Opening
+}
+
+private data class RemoteLoadUiState(
+    val sourceId: String,
+    val phase: RemoteLoadPhase,
+    val downloadedBytes: Long = 0L,
+    val totalBytes: Long? = null,
+    val bytesPerSecond: Long? = null,
+    val percent: Int? = null,
+    val indeterminate: Boolean = true
+)
+
+private data class RemoteDownloadResult(
+    val file: File?,
+    val errorMessage: String? = null,
+    val cancelled: Boolean = false
+)
+
+private fun formatByteCount(bytes: Long): String {
+    if (bytes < 1024L) return "$bytes B"
+    val units = arrayOf("KB", "MB", "GB", "TB")
+    var value = bytes.toDouble()
+    var unitIndex = -1
+    while (value >= 1024.0 && unitIndex < units.lastIndex) {
+        value /= 1024.0
+        unitIndex++
+    }
+    return String.format(Locale.US, "%.1f %s", value, units[unitIndex])
+}
 
 private enum class MainView {
     Home,
@@ -1219,6 +1256,8 @@ private fun AppNavigation(
     var showSoxExperimentalDialog by remember { mutableStateOf(false) }
     var showUrlOrPathDialog by remember { mutableStateOf(false) }
     var urlOrPathInput by remember { mutableStateOf("") }
+    var remoteLoadUiState by remember { mutableStateOf<RemoteLoadUiState?>(null) }
+    var remoteLoadJob by remember { mutableStateOf<Job?>(null) }
     var urlOrPathForceCaching by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.URL_PATH_FORCE_CACHING, false)
@@ -1257,19 +1296,35 @@ private fun AppNavigation(
 
     fun isLocalPlayableFile(file: File?): Boolean = file?.exists() == true && file.isFile
 
-    suspend fun downloadRemoteUrlToCache(url: String): File? = withContext(Dispatchers.IO) {
+    suspend fun downloadRemoteUrlToCache(
+        url: String,
+        onStatus: suspend (RemoteLoadUiState) -> Unit
+    ): RemoteDownloadResult = withContext(Dispatchers.IO) {
         val target = remoteCacheFileForUrl(File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR), url)
+        suspend fun emitStatus(state: RemoteLoadUiState) {
+            withContext(Dispatchers.Main.immediate) {
+                onStatus(state)
+            }
+        }
         if (target.exists() && target.length() > 0L) {
             Log.d(URL_SOURCE_TAG, "Using existing cached file: ${target.absolutePath} (${target.length()} bytes)")
-            return@withContext target
+            return@withContext RemoteDownloadResult(file = target)
         }
 
         val temp = File(target.absolutePath + ".part")
         Log.d(URL_SOURCE_TAG, "Downloading URL to cache: $url")
+        emitStatus(
+            RemoteLoadUiState(
+                sourceId = url,
+                phase = RemoteLoadPhase.Connecting,
+                indeterminate = true
+            )
+        )
 
-        fun openWithRedirects(initialUrl: String, maxRedirects: Int = 6): HttpURLConnection? {
+        suspend fun openWithRedirects(initialUrl: String, maxRedirects: Int = 6): Pair<HttpURLConnection?, String?> {
             var currentUrl = initialUrl
             repeat(maxRedirects + 1) { hop ->
+                kotlin.coroutines.coroutineContext.ensureActive()
                 val connection = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
                     connectTimeout = 15_000
                     readTimeout = 30_000
@@ -1289,7 +1344,7 @@ private fun AppNavigation(
                     )
                     connection.disconnect()
                     if (location.isNullOrBlank()) {
-                        return null
+                        return Pair(null, "Redirect missing Location header (HTTP $responseCode)")
                     }
                     currentUrl = URL(URL(currentUrl), location).toString()
                     return@repeat
@@ -1297,49 +1352,118 @@ private fun AppNavigation(
                 Log.d(URL_SOURCE_TAG, "HTTP response code=$responseCode finalUrl=$currentUrl")
                 if (responseCode !in 200..299) {
                     connection.disconnect()
-                    return null
+                    return Pair(null, "HTTP $responseCode")
                 }
-                return connection
+                return Pair(connection, null)
             }
             Log.e(URL_SOURCE_TAG, "Too many redirects for URL: $initialUrl")
-            return null
+            return Pair(null, "Too many redirects")
         }
 
         var connection: HttpURLConnection? = null
         return@withContext try {
-            connection = openWithRedirects(url)
+            val (openedConnection, openError) = openWithRedirects(url)
+            connection = openedConnection
             if (connection == null) {
                 Log.e(URL_SOURCE_TAG, "HTTP open failed for URL: $url")
-                null
+                RemoteDownloadResult(
+                    file = null,
+                    errorMessage = openError ?: "Connection failed"
+                )
             } else {
                 val expectedBytes = connection.contentLengthLong
                 var totalBytes = 0L
+                var latestBytesPerSecond: Long? = null
+                val startedAtMs = System.currentTimeMillis()
+                var lastSpeedSampleBytes = 0L
+                var lastSpeedSampleMs = startedAtMs
+                var lastUiUpdateMs = 0L
+                suspend fun publishDownloadStatus(force: Boolean = false) {
+                    val now = System.currentTimeMillis()
+                    if (!force && now - lastUiUpdateMs < 120L) return
+                    lastUiUpdateMs = now
+                    val hasKnownTotal = expectedBytes > 0L
+                    val percentValue = if (hasKnownTotal) {
+                        ((totalBytes * 100L) / expectedBytes).toInt().coerceIn(0, 100)
+                    } else {
+                        null
+                    }
+                    emitStatus(
+                        RemoteLoadUiState(
+                            sourceId = url,
+                            phase = RemoteLoadPhase.Downloading,
+                            downloadedBytes = totalBytes,
+                            totalBytes = expectedBytes.takeIf { it > 0L },
+                            bytesPerSecond = latestBytesPerSecond,
+                            percent = percentValue,
+                            indeterminate = !hasKnownTotal
+                        )
+                    )
+                }
+
+                publishDownloadStatus(force = true)
                 BufferedInputStream(connection.inputStream).use { input ->
                     FileOutputStream(temp).use { output ->
                         val buffer = ByteArray(16 * 1024)
                         while (true) {
+                            kotlin.coroutines.coroutineContext.ensureActive()
                             val read = input.read(buffer)
                             if (read <= 0) break
                             output.write(buffer, 0, read)
                             totalBytes += read
+                            val now = System.currentTimeMillis()
+                            val deltaMs = now - lastSpeedSampleMs
+                            if (deltaMs >= 350L) {
+                                val deltaBytes = totalBytes - lastSpeedSampleBytes
+                                latestBytesPerSecond = ((deltaBytes * 1000L) / deltaMs).coerceAtLeast(0L)
+                                lastSpeedSampleBytes = totalBytes
+                                lastSpeedSampleMs = now
+                            }
+                            publishDownloadStatus()
                         }
                         output.flush()
                     }
                 }
+                publishDownloadStatus(force = true)
                 Log.d(
                     URL_SOURCE_TAG,
                     "Download complete bytes=$totalBytes expected=$expectedBytes temp=${temp.absolutePath}"
                 )
+                if (totalBytes <= 0L) {
+                    return@withContext RemoteDownloadResult(
+                        file = null,
+                        errorMessage = "Downloaded 0 bytes"
+                    )
+                }
                 if (!temp.renameTo(target)) {
                     temp.copyTo(target, overwrite = true)
                     temp.delete()
                 }
                 Log.d(URL_SOURCE_TAG, "Cached file ready: ${target.absolutePath} (${target.length()} bytes)")
-                target
+                val elapsedMs = (System.currentTimeMillis() - startedAtMs).coerceAtLeast(1L)
+                val avgSpeed = (totalBytes * 1000L) / elapsedMs
+                emitStatus(
+                    RemoteLoadUiState(
+                        sourceId = url,
+                        phase = RemoteLoadPhase.Downloading,
+                        downloadedBytes = totalBytes,
+                        totalBytes = expectedBytes.takeIf { it > 0L },
+                        bytesPerSecond = latestBytesPerSecond ?: avgSpeed,
+                        percent = if (expectedBytes > 0L) 100 else null,
+                        indeterminate = expectedBytes <= 0L
+                    )
+                )
+                RemoteDownloadResult(file = target)
             }
+        } catch (_: CancellationException) {
+            Log.d(URL_SOURCE_TAG, "Download cancelled for URL: $url")
+            RemoteDownloadResult(file = null, errorMessage = "Cancelled", cancelled = true)
         } catch (t: Throwable) {
             Log.e(URL_SOURCE_TAG, "Download failed for URL: $url (${t::class.java.simpleName}: ${t.message})")
-            null
+            RemoteDownloadResult(
+                file = null,
+                errorMessage = "${t::class.java.simpleName}: ${t.message ?: "unknown error"}"
+            )
         } finally {
             connection?.disconnect()
             if (temp.exists() && (target.length() <= 0L)) {
@@ -1644,80 +1768,160 @@ private fun AppNavigation(
             return
         }
 
-        appScope.launch {
-            var openedByStreaming = false
-            if (!options.forceCaching) {
-                try {
-                    Log.d(URL_SOURCE_TAG, "Attempting direct stream open: ${resolved.sourceId}")
-                    resetAndOptionallyKeepLastTrack(keepLastTrack = false)
-                    selectedFile = resolved.displayFile
-                    currentPlaybackSourceId = resolved.sourceId
-                    visiblePlayableFiles = emptyList()
-                    isPlayerSurfaceVisible = true
-                    songVolumeDb = 0f
-                    NativeBridge.setSongGain(0f)
-                    NativeBridge.loadAudio(resolved.sourceId)
-                    val snapshot = readNativeTrackSnapshot()
-                    if (snapshot.sampleRateHz > 0 || snapshot.durationSeconds > 0.0 ||
-                        snapshot.title.isNotBlank() || snapshot.artist.isNotBlank()
-                    ) {
-                        Log.d(
-                            URL_SOURCE_TAG,
-                            "Direct stream open appears successful (sampleRate=${snapshot.sampleRateHz}, duration=${snapshot.durationSeconds})"
-                        )
-                        applyNativeTrackSnapshot(snapshot)
-                        position = 0.0
-                        artworkBitmap = null
-                        refreshRepeatModeForTrack()
-                        addRecentPlayedTrack(
-                            path = resolved.sourceId,
-                            locationId = null,
-                            title = metadataTitle,
-                            artist = metadataArtist
-                        )
-                        applyRepeatModeToNative(activeRepeatMode)
-                        NativeBridge.startEngine()
-                        isPlaying = true
-                        scheduleRecentTrackMetadataRefresh(
-                            sourceId = resolved.sourceId,
-                            locationId = null
-                        )
-                        isPlayerExpanded = openPlayerOnTrackSelect
-                        syncPlaybackService()
-                        openedByStreaming = true
-                    } else {
+        remoteLoadJob?.cancel()
+        remoteLoadJob = appScope.launch {
+            fun snapshotAppearsValid(snapshot: NativeTrackSnapshot): Boolean {
+                return snapshot.sampleRateHz > 0 ||
+                    snapshot.durationSeconds > 0.0 ||
+                    snapshot.title.isNotBlank() ||
+                    snapshot.artist.isNotBlank()
+            }
+
+            fun publishOpenFromSnapshot(displayFile: File, sourceId: String, snapshot: NativeTrackSnapshot) {
+                selectedFile = displayFile
+                currentPlaybackSourceId = sourceId
+                visiblePlayableFiles = emptyList()
+                isPlayerSurfaceVisible = true
+                songVolumeDb = 0f
+                NativeBridge.setSongGain(0f)
+                applyNativeTrackSnapshot(snapshot)
+                position = 0.0
+                artworkBitmap = null
+                refreshRepeatModeForTrack()
+                addRecentPlayedTrack(
+                    path = sourceId,
+                    locationId = null,
+                    title = metadataTitle,
+                    artist = metadataArtist
+                )
+                applyRepeatModeToNative(activeRepeatMode)
+                NativeBridge.startEngine()
+                isPlaying = true
+                scheduleRecentTrackMetadataRefresh(
+                    sourceId = sourceId,
+                    locationId = null
+                )
+                isPlayerExpanded = openPlayerOnTrackSelect
+                syncPlaybackService()
+            }
+
+            fun failOpen(reason: String) {
+                Toast.makeText(
+                    context,
+                    "Unable to open source: $reason",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
+            try {
+                resetAndOptionallyKeepLastTrack(keepLastTrack = false)
+                selectedFile = resolved.displayFile
+                currentPlaybackSourceId = resolved.sourceId
+                visiblePlayableFiles = emptyList()
+                isPlayerSurfaceVisible = true
+                songVolumeDb = 0f
+                NativeBridge.setSongGain(0f)
+                remoteLoadUiState = RemoteLoadUiState(
+                    sourceId = resolved.sourceId,
+                    phase = RemoteLoadPhase.Connecting,
+                    indeterminate = true
+                )
+
+                var streamingFailureReason: String? = null
+                if (!options.forceCaching) {
+                    try {
+                        Log.d(URL_SOURCE_TAG, "Attempting direct stream open: ${resolved.sourceId}")
+                        val snapshot = withContext(Dispatchers.IO) {
+                            withTimeout(20_000L) {
+                                NativeBridge.loadAudio(resolved.sourceId)
+                                readNativeTrackSnapshot()
+                            }
+                        }
+                        if (snapshotAppearsValid(snapshot)) {
+                            Log.d(
+                                URL_SOURCE_TAG,
+                                "Direct stream open appears successful (sampleRate=${snapshot.sampleRateHz}, duration=${snapshot.durationSeconds})"
+                            )
+                            publishOpenFromSnapshot(
+                                displayFile = resolved.displayFile ?: File("/virtual/remote/stream"),
+                                sourceId = resolved.sourceId,
+                                snapshot = snapshot
+                            )
+                            return@launch
+                        }
+                        streamingFailureReason = "direct streaming returned no playable metadata"
                         Log.d(URL_SOURCE_TAG, "Direct stream open returned empty snapshot; falling back to cache download")
+                    } catch (_: TimeoutCancellationException) {
+                        streamingFailureReason = "direct streaming timed out"
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (t: Throwable) {
+                        streamingFailureReason = "direct streaming error (${t::class.java.simpleName}: ${t.message ?: "unknown"})"
+                        Log.e(
+                            URL_SOURCE_TAG,
+                            "Direct stream open threw ${t::class.java.simpleName}: ${t.message}; falling back to cache download"
+                        )
                     }
-                } catch (t: Throwable) {
-                    Log.e(
-                        URL_SOURCE_TAG,
-                        "Direct stream open threw ${t::class.java.simpleName}: ${t.message}; falling back to cache download"
-                    )
-                    openedByStreaming = false
+                } else {
+                    Log.d(URL_SOURCE_TAG, "Force caching enabled; skipping direct stream open for: ${resolved.sourceId}")
                 }
-            } else {
-                Log.d(URL_SOURCE_TAG, "Force caching enabled; skipping direct stream open for: ${resolved.sourceId}")
+
+                val downloadResult = downloadRemoteUrlToCache(
+                    url = resolved.sourceId,
+                    onStatus = { state ->
+                        remoteLoadUiState = state
+                    }
+                )
+                if (downloadResult.cancelled) {
+                    Toast.makeText(context, "Download cancelled", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                val cachedFile = downloadResult.file
+                if (cachedFile == null) {
+                    val reason = buildString {
+                        streamingFailureReason?.let {
+                            append(it)
+                            append("; ")
+                        }
+                        append("cache download failed")
+                        downloadResult.errorMessage?.let { append(" ($it)") }
+                    }
+                    Log.e(URL_SOURCE_TAG, "Cache download/open failed for URL: ${resolved.sourceId} reason=$reason")
+                    failOpen(reason)
+                    return@launch
+                }
+
+                Log.d(URL_SOURCE_TAG, "Opening downloaded cached file: ${cachedFile.absolutePath}")
+                remoteLoadUiState = RemoteLoadUiState(
+                    sourceId = resolved.sourceId,
+                    phase = RemoteLoadPhase.Opening,
+                    downloadedBytes = cachedFile.length(),
+                    totalBytes = cachedFile.length(),
+                    percent = 100,
+                    indeterminate = false
+                )
+
+                val cachedSnapshot = withContext(Dispatchers.IO) {
+                    withTimeout(20_000L) {
+                        NativeBridge.loadAudio(cachedFile.absolutePath)
+                        readNativeTrackSnapshot()
+                    }
+                }
+                if (!snapshotAppearsValid(cachedSnapshot)) {
+                    failOpen("cached file opened but returned no playable metadata")
+                    return@launch
+                }
+                publishOpenFromSnapshot(
+                    displayFile = cachedFile,
+                    sourceId = resolved.sourceId,
+                    snapshot = cachedSnapshot
+                )
+            } catch (_: CancellationException) {
+                Log.d(URL_SOURCE_TAG, "Remote open cancelled for source=${resolved.sourceId}")
+            } finally {
+                remoteLoadUiState = null
+                remoteLoadJob = null
             }
-
-            if (openedByStreaming) return@launch
-
-            val cachedFile = downloadRemoteUrlToCache(resolved.sourceId)
-            if (cachedFile == null) {
-                Log.e(URL_SOURCE_TAG, "Cache download/open failed for URL: ${resolved.sourceId}")
-                Toast.makeText(context, "Unable to open source", Toast.LENGTH_SHORT).show()
-                return@launch
-            }
-
-            Log.d(URL_SOURCE_TAG, "Opening downloaded cached file: ${cachedFile.absolutePath}")
-            visiblePlayableFiles = emptyList()
-            applyTrackSelection(
-                file = cachedFile,
-                autoStart = true,
-                expandOverride = openPlayerOnTrackSelect,
-                sourceIdOverride = resolved.sourceId,
-                locationIdOverride = null,
-                useSongVolumeLookup = false
-            )
         }
     }
 
@@ -3576,6 +3780,62 @@ private fun AppNavigation(
                     },
                     dismissButton = {
                         TextButton(onClick = { showUrlOrPathDialog = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            remoteLoadUiState?.let { loadState ->
+                AlertDialog(
+                    onDismissRequest = {},
+                    title = { Text("Opening remote source") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            val phaseText = when (loadState.phase) {
+                                RemoteLoadPhase.Connecting -> "Connecting..."
+                                RemoteLoadPhase.Downloading -> "Downloading..."
+                                RemoteLoadPhase.Opening -> "Opening..."
+                            }
+                            Text(phaseText)
+                            if (loadState.indeterminate) {
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            } else {
+                                val progress = (loadState.percent ?: 0).coerceIn(0, 100) / 100f
+                                LinearProgressIndicator(
+                                    progress = { progress },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            if (loadState.phase == RemoteLoadPhase.Downloading || loadState.phase == RemoteLoadPhase.Opening) {
+                                val downloadedLabel = formatByteCount(loadState.downloadedBytes)
+                                val sizeLabel = loadState.totalBytes?.let { total ->
+                                    "$downloadedLabel / ${formatByteCount(total)}"
+                                } ?: downloadedLabel
+                                Text(
+                                    text = sizeLabel,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                loadState.percent?.let { percent ->
+                                    Text(
+                                        text = "$percent%",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                                loadState.bytesPerSecond?.takeIf { it > 0L }?.let { speed ->
+                                    Text(
+                                        text = "${formatByteCount(speed)}/s",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            remoteLoadJob?.cancel()
+                            remoteLoadUiState = null
+                        }) {
                             Text("Cancel")
                         }
                     }

@@ -318,13 +318,13 @@ private fun resolveManualSourceInput(rawInput: String): ManualSourceResolution? 
         )
     }
 
-    fun resolveLocalPath(path: String): ManualSourceResolution? {
+    fun resolveLocalPath(path: String, sourceIdOverride: String? = null): ManualSourceResolution? {
         val file = File(path).absoluteFile
         if (!file.exists()) return null
         if (file.isDirectory) {
             return ManualSourceResolution(
                 type = ManualSourceType.LocalDirectory,
-                sourceId = file.absolutePath,
+                sourceId = sourceIdOverride ?: file.absolutePath,
                 localFile = null,
                 directoryPath = file.absolutePath,
                 displayFile = null
@@ -333,7 +333,7 @@ private fun resolveManualSourceInput(rawInput: String): ManualSourceResolution? 
         if (file.isFile) {
             return ManualSourceResolution(
                 type = ManualSourceType.LocalFile,
-                sourceId = file.absolutePath,
+                sourceId = sourceIdOverride ?: file.absolutePath,
                 localFile = file,
                 directoryPath = null,
                 displayFile = file
@@ -344,7 +344,7 @@ private fun resolveManualSourceInput(rawInput: String): ManualSourceResolution? 
 
     if (scheme == "file") {
         val localPath = uri.path?.takeIf { it.isNotBlank() } ?: return null
-        return resolveLocalPath(localPath)
+        return resolveLocalPath(localPath, sourceIdOverride = uri.normalizeScheme().toString())
     }
 
     val expandedPath = when {
@@ -1187,6 +1187,7 @@ private fun AppNavigation(
     }
     var playbackWatchPath by remember { mutableStateOf<String?>(null) }
     var currentPlaybackSourceId by remember { mutableStateOf<String?>(null) }
+    val currentTrackPathOrUrl = currentPlaybackSourceId ?: selectedFile?.absolutePath
     val playbackSourceLabel = remember(selectedFile, currentPlaybackSourceId) {
         resolvePlaybackSourceLabel(selectedFile, currentPlaybackSourceId)
     }
@@ -1595,7 +1596,8 @@ private fun AppNavigation(
                 applyTrackSelection(
                     file = localFile,
                     autoStart = true,
-                    expandOverride = openPlayerOnTrackSelect
+                    expandOverride = openPlayerOnTrackSelect,
+                    sourceIdOverride = resolved.sourceId
                 )
             }
             return
@@ -3214,6 +3216,7 @@ private fun AppNavigation(
                         bitDepthLabel = metadataBitDepthLabel,
                         decoderName = NativeBridge.getCurrentDecoderName().takeIf { it.isNotBlank() },
                         playbackSourceLabel = playbackSourceLabel,
+                        pathOrUrl = currentTrackPathOrUrl,
                         artwork = artworkBitmap,
                         noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
                         repeatMode = activeRepeatMode,
@@ -3428,6 +3431,7 @@ private fun AppNavigation(
                     bitDepthLabel = metadataBitDepthLabel,
                     decoderName = NativeBridge.getCurrentDecoderName().takeIf { it.isNotBlank() },
                     playbackSourceLabel = playbackSourceLabel,
+                    pathOrUrl = currentTrackPathOrUrl,
                     artwork = artworkBitmap,
                     noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
                     repeatMode = activeRepeatMode,

@@ -101,6 +101,7 @@ fun PlayerScreen(
     bitDepthLabel: String,
     decoderName: String?,
     playbackSourceLabel: String? = null,
+    pathOrUrl: String? = null,
     artwork: ImageBitmap?,
     noArtworkIcon: ImageVector = Icons.Default.MusicNote,
     repeatMode: RepeatMode,
@@ -493,6 +494,7 @@ fun PlayerScreen(
             artist = displayArtist,
             decoderName = decoderName,
             playbackSourceLabel = playbackSourceLabel,
+            pathOrUrl = pathOrUrl,
             sampleRateHz = sampleRateHz,
             channelCount = channelCount,
             bitDepthLabel = bitDepthLabel,
@@ -667,6 +669,7 @@ private fun TrackInfoDetailsDialog(
     artist: String,
     decoderName: String?,
     playbackSourceLabel: String?,
+    pathOrUrl: String?,
     sampleRateHz: Int,
     channelCount: Int,
     bitDepthLabel: String,
@@ -867,6 +870,7 @@ private fun TrackInfoDetailsDialog(
                     TrackInfoDetailsRow("Length", lengthLabel)
                     TrackInfoDetailsRow("Audio channels", channelsLabel)
                     TrackInfoDetailsRow("Bit depth", depthLabel)
+                    TrackInfoDetailsRow("Path / URL", pathOrUrl?.ifBlank { "Unavailable" } ?: "Unavailable")
                     if (decoderName.equals("LibOpenMPT", ignoreCase = true)) {
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(

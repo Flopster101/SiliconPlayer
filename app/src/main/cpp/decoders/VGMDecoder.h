@@ -6,6 +6,7 @@
 #include <mutex>
 #include <memory>
 #include <string>
+#include <atomic>
 
 // Forward declarations for libvgm types
 class PlayerA;
@@ -33,7 +34,7 @@ public:
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     double getPlaybackPositionSeconds() override;
-    TimelineMode getTimelineMode() const override { return TimelineMode::ContinuousLinear; }
+    TimelineMode getTimelineMode() const override;
     void setOption(const char* name, const char* value) override;
 
     // Framework
@@ -52,7 +53,7 @@ private:
     int sampleRate = 44100; // Default VGM playback rate
     int bitDepth = 16; // VGM outputs 16-bit samples
     int channels = 2; // Stereo output
-    int repeatMode = 0; // 0 = no repeat, 1 = repeat track
+    std::atomic<int> repeatMode { 0 }; // 0 = no repeat, 1 = repeat track, 2 = repeat at loop point
     std::string title;
     std::string artist;
     std::string gameName;
@@ -60,9 +61,11 @@ private:
 
     // Playback state
     uint32_t currentLoop = 0;
-    uint32_t maxLoops = 2; // Default: play once + loop once
+    uint32_t finiteLoopCount = 1; // Play through once for non-loop-point modes.
     bool hasLooped = false;
     bool playerStarted = false; // Track if player has been started
+    bool pendingTerminalEnd = false;
+    double playbackTimeOffsetSeconds = 0.0;
 
     // Internal close method that doesn't acquire mutex (for use within locked methods)
     void closeInternal();

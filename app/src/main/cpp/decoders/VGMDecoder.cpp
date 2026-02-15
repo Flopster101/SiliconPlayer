@@ -43,7 +43,10 @@ bool VGMDecoder::open(const char* path) {
         return false;
     }
 
-    player->SetLoopCount(repeatMode == 0 ? maxLoops : 0);
+    const int activeRepeatMode = repeatMode.load();
+    player->SetLoopCount(activeRepeatMode == 2 ? 0 : finiteLoopCount);
+    pendingTerminalEnd = false;
+    playbackTimeOffsetSeconds = 0.0;
 
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
@@ -125,7 +128,9 @@ bool VGMDecoder::open(const char* path) {
 
     PLR_SONG_INFO songInfo{};
     if (vgmPlayer->GetSongInfo(songInfo) == 0x00) {
-        duration = vgmPlayer->Tick2Second(songInfo.songLen);
+        (void)songInfo;
+        const double totalTime = player->GetTotalTime(PLAYTIME_LOOP_EXCL);
+        duration = totalTime > 0.0 ? totalTime : 0.0;
     }
     return true;
 }
@@ -152,6 +157,8 @@ void VGMDecoder::closeInternal() {
     currentLoop = 0;
     hasLooped = false;
     playerStarted = false;
+    pendingTerminalEnd = false;
+    playbackTimeOffsetSeconds = 0.0;
 }
 
 void VGMDecoder::close() {
@@ -180,6 +187,10 @@ void VGMDecoder::ensurePlayerStarted() {
 int VGMDecoder::read(float* buffer, int numFrames) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (!player || !buffer || numFrames <= 0) {
+        return 0;
+    }
+    if (pendingTerminalEnd) {
+        pendingTerminalEnd = false;
         return 0;
     }
 
@@ -218,6 +229,14 @@ int VGMDecoder::read(float* buffer, int numFrames) {
         hasLooped = true;
     }
 
+    if (repeatMode.load() != 2) {
+        const UINT8 state = player->GetState();
+        if ((state & (PLAYSTATE_END | PLAYSTATE_FIN)) != 0) {
+            // Let one final rendered chunk pass through, then report EOF on next read.
+            pendingTerminalEnd = true;
+        }
+    }
+
     return framesRendered;
 }
 
@@ -229,6 +248,8 @@ void VGMDecoder::seek(double seconds) {
 
     const uint32_t targetSample = static_cast<uint32_t>(std::max(0.0, seconds) * sampleRate);
     player->Seek(PLAYPOS_SAMPLE, targetSample);
+    pendingTerminalEnd = false;
+    playbackTimeOffsetSeconds = 0.0;
 }
 
 double VGMDecoder::getDuration() {
@@ -306,15 +327,30 @@ void VGMDecoder::setOutputSampleRate(int rate) {
     }
     playerStarted = true;
     player->Seek(PLAYPOS_SAMPLE, static_cast<uint32_t>(std::max(0.0, currentSeconds) * sampleRate));
+    pendingTerminalEnd = false;
+    playbackTimeOffsetSeconds = 0.0;
 }
 
 void VGMDecoder::setRepeatMode(int mode) {
     std::lock_guard<std::mutex> lock(decodeMutex);
-    repeatMode = (mode >= 0 && mode <= 2) ? mode : 0;
+    const int previousMode = repeatMode.load();
+    const int normalizedMode = (mode >= 0 && mode <= 2) ? mode : 0;
+    repeatMode.store(normalizedMode);
+
+    if (player && previousMode == 2 && normalizedMode != 2) {
+        const double includeTime = player->GetCurTime(PLAYTIME_LOOP_INCL);
+        const double excludeTime = player->GetCurTime(PLAYTIME_LOOP_EXCL);
+        if (includeTime >= 0.0 && excludeTime >= 0.0) {
+            playbackTimeOffsetSeconds = std::max(0.0, includeTime - excludeTime);
+        }
+    } else if (previousMode != 2 && normalizedMode == 2) {
+        playbackTimeOffsetSeconds = 0.0;
+    }
 
     if (player) {
-        player->SetLoopCount(repeatMode == 0 ? maxLoops : 0);
+        player->SetLoopCount(normalizedMode == 2 ? 0 : finiteLoopCount);
     }
+    pendingTerminalEnd = false;
 }
 
 int VGMDecoder::getRepeatModeCapabilities() const {
@@ -326,8 +362,24 @@ double VGMDecoder::getPlaybackPositionSeconds() {
     if (!player || sampleRate <= 0) {
         return 0.0;
     }
+    const UINT8 timeFlags = (repeatMode.load() == 2)
+            ? PLAYTIME_LOOP_EXCL
+            : PLAYTIME_LOOP_INCL;
+    const double currentTime = player->GetCurTime(timeFlags);
+    if (currentTime >= 0.0) {
+        if (repeatMode.load() == 2) {
+            return currentTime;
+        }
+        return std::max(0.0, currentTime - playbackTimeOffsetSeconds);
+    }
     const uint32_t currentSample = player->GetCurPos(PLAYPOS_SAMPLE);
     return static_cast<double>(currentSample) / sampleRate;
+}
+
+AudioDecoder::TimelineMode VGMDecoder::getTimelineMode() const {
+    return repeatMode.load() == 2
+            ? TimelineMode::Discontinuous
+            : TimelineMode::ContinuousLinear;
 }
 
 void VGMDecoder::setOption(const char* /*name*/, const char* /*value*/) {

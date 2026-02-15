@@ -893,10 +893,14 @@ void AudioEngine::setUrl(const char* url) {
     LOGD("URL set to: %s", url);
 
     auto newDecoder = DecoderRegistry::getInstance().createDecoder(url);
-    if (newDecoder && newDecoder->open(url)) {
-        std::lock_guard<std::mutex> lock(decoderMutex);
+    if (newDecoder) {
         const int targetRate = resolveOutputSampleRateForCore(newDecoder->getName());
         newDecoder->setOutputSampleRate(targetRate);
+        if (!newDecoder->open(url)) {
+            LOGE("Failed to open file: %s", url);
+            return;
+        }
+        std::lock_guard<std::mutex> lock(decoderMutex);
         decoderRenderSampleRate = targetRate;
         newDecoder->setRepeatMode(repeatMode.load());
         const auto optionsIt = coreOptions.find(newDecoder->getName());
@@ -914,7 +918,7 @@ void AudioEngine::setUrl(const char* url) {
         timelineSmootherInitialized = false;
         naturalEndPending.store(false);
     } else {
-        LOGE("Failed to open file: %s", url);
+        LOGE("Failed to create decoder for file: %s", url);
     }
 }
 

@@ -38,6 +38,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 ABSOLUTE_PATH="$SCRIPT_DIR"
 PATCHES_DIR="$ABSOLUTE_PATH/patches/libopenmpt"
 PATCHES_DIR_LIBGME="$ABSOLUTE_PATH/patches/libgme"
+OPENSSL_DIR="$ABSOLUTE_PATH/openssl"
 
 # -----------------------------------------------------------------------------
 # Function: Apply libopenmpt patches (idempotent)
@@ -176,6 +177,88 @@ build_libsoxr() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build OpenSSL (required for FFmpeg HTTPS/TLS)
+# -----------------------------------------------------------------------------
+build_openssl() {
+    local ABI=$1
+    local PROJECT_PATH="$OPENSSL_DIR"
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+    local OPENSSL_TARGET=""
+    local OPENSSL_BUILD_SIGNATURE="openssl-android-static-pic-noasm-v1"
+    local OPENSSL_STAMP_FILE="$INSTALL_DIR/lib/.openssl_build_signature"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "OpenSSL source not found at $PROJECT_PATH."
+        echo "Clone it first: git clone https://github.com/openssl/openssl.git $PROJECT_PATH"
+        return 1
+    fi
+
+    if [ -f "$INSTALL_DIR/lib/libssl.a" ] && [ -f "$INSTALL_DIR/lib/libcrypto.a" ] && [ -f "$INSTALL_DIR/include/openssl/ssl.h" ] && [ -f "$OPENSSL_STAMP_FILE" ]; then
+        if [ "$(cat "$OPENSSL_STAMP_FILE")" = "$OPENSSL_BUILD_SIGNATURE" ]; then
+            echo "OpenSSL already built for $ABI -> skipping"
+            return 0
+        fi
+    fi
+
+    case "$ABI" in
+        "arm64-v8a")
+            OPENSSL_TARGET="android-arm64"
+            ;;
+        "armeabi-v7a")
+            OPENSSL_TARGET="android-arm"
+            ;;
+        "x86_64")
+            OPENSSL_TARGET="android-x86_64"
+            ;;
+        "x86")
+            OPENSSL_TARGET="android-x86"
+            ;;
+        *)
+            echo "Unsupported ABI for OpenSSL: $ABI"
+            return 1
+            ;;
+    esac
+
+    echo "Building OpenSSL for $ABI ($OPENSSL_TARGET)..."
+
+    mkdir -p "$INSTALL_DIR"
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR"
+
+    cd "$PROJECT_PATH"
+
+    make clean >/dev/null 2>&1 || true
+    rm -f configdata.pm
+
+    export CFLAGS="-fPIC"
+    export CXXFLAGS="-fPIC"
+
+    perl ./Configure "$OPENSSL_TARGET" \
+        no-tests \
+        no-asm \
+        no-shared \
+        no-module \
+        no-engine \
+        no-apps \
+        no-docs \
+        no-ui-console \
+        --prefix="$INSTALL_DIR" \
+        --openssldir="$INSTALL_DIR/ssl" \
+        -D__ANDROID_API__="$ANDROID_API" || {
+            echo "Error: OpenSSL configure failed!"
+            exit 1
+        }
+
+    make -j$(nproc)
+    make install_sw
+    mkdir -p "$INSTALL_DIR/lib"
+    echo "$OPENSSL_BUILD_SIGNATURE" > "$OPENSSL_STAMP_FILE"
+
+    cd "$ABSOLUTE_PATH"
+}
+
+# -----------------------------------------------------------------------------
 # Function: Build FFmpeg
 # -----------------------------------------------------------------------------
 build_ffmpeg() {
@@ -187,6 +270,10 @@ build_ffmpeg() {
     local SOXR_LDFLAGS=""
     local SOXR_EXTRA_LIBS=""
     local SOXR_ENABLE_FLAG=""
+    local OPENSSL_CFLAGS=""
+    local OPENSSL_LDFLAGS=""
+    local OPENSSL_EXTRA_LIBS=""
+    local OPENSSL_ENABLE_FLAG=""
     local FFMPEG_EXTRA_CFLAGS="-fPIC"
 
     mkdir -p "$BUILD_DIR"
@@ -221,6 +308,17 @@ build_ffmpeg() {
         echo "libsoxr not available for $ABI -> FFmpeg will use built-in swr resampler only"
     fi
 
+    if [ -f "$BUILD_DIR/lib/libssl.a" ] && [ -f "$BUILD_DIR/lib/libcrypto.a" ] && [ -f "$BUILD_DIR/include/openssl/ssl.h" ]; then
+        echo "OpenSSL detected for $ABI -> enabling FFmpeg HTTPS/TLS support"
+        OPENSSL_ENABLE_FLAG="--enable-openssl"
+        OPENSSL_CFLAGS="-I$BUILD_DIR/include"
+        OPENSSL_LDFLAGS="-L$BUILD_DIR/lib"
+        OPENSSL_EXTRA_LIBS="-lssl -lcrypto -ldl -lz"
+        FFMPEG_EXTRA_CFLAGS="$FFMPEG_EXTRA_CFLAGS $OPENSSL_CFLAGS"
+    else
+        echo "OpenSSL not available for $ABI -> FFmpeg HTTPS/TLS protocols will be unavailable"
+    fi
+
     ./configure \
         --target-os=android \
         --arch=$ARCH \
@@ -241,7 +339,7 @@ build_ffmpeg() {
         --disable-avdevice \
         --disable-swscale \
         --disable-avfilter \
-        --disable-network \
+        --enable-network \
         --disable-hwaccels \
         --disable-encoders \
         --disable-muxers \
@@ -254,14 +352,13 @@ build_ffmpeg() {
         --disable-decoder=mpeg1video \
         --disable-decoder=mpeg2video \
         --enable-swresample \
-        --enable-gpl \
-        --enable-version3 \
         $SOXR_ENABLE_FLAG \
+        $OPENSSL_ENABLE_FLAG \
         --enable-jni \
         --enable-mediacodec \
         --extra-cflags="$FFMPEG_EXTRA_CFLAGS" \
-        --extra-ldflags="$SOXR_LDFLAGS" \
-        --extra-libs="$SOXR_EXTRA_LIBS" \
+        --extra-ldflags="$SOXR_LDFLAGS $OPENSSL_LDFLAGS" \
+        --extra-libs="$SOXR_EXTRA_LIBS $OPENSSL_EXTRA_LIBS" \
         $EXTRA_FLAGS || { echo "Error: FFmpeg configure failed!"; exit 1; }
 
     make -j$(nproc)
@@ -414,6 +511,9 @@ TARGET_LIB=${2:-all}
 normalize_lib_name() {
     local lib="$1"
     case "$lib" in
+        openssl)
+            echo "openssl"
+            ;;
         sox|soxr)
             echo "libsoxr"
             ;;
@@ -509,6 +609,10 @@ for ABI in "${ABIS[@]}"; do
 
     if target_has_lib "libsoxr"; then
         build_libsoxr "$ABI"
+    fi
+
+    if target_has_lib "openssl"; then
+        build_openssl "$ABI"
     fi
 
     if target_has_lib "ffmpeg"; then

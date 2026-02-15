@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import android.widget.Toast
 import com.flopster101.siliconplayer.NativeBridge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
@@ -54,6 +55,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
@@ -67,6 +70,7 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.CornerRadius
@@ -77,6 +81,7 @@ import com.flopster101.siliconplayer.RepeatMode
 import java.io.File
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.text.selection.SelectionContainer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -677,6 +682,8 @@ private fun TrackInfoDetailsDialog(
     hasReliableDuration: Boolean,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     var liveBitrate by remember { mutableLongStateOf(0L) }
     var liveIsVbr by remember { mutableStateOf(false) }
     var liveRenderRateHz by remember { mutableIntStateOf(0) }
@@ -829,6 +836,74 @@ private fun TrackInfoDetailsDialog(
         "${formatSampleRateForDetails(sampleRateHz)} -> " +
             "${formatSampleRateForDetails(liveRenderRateHz)} -> " +
             formatSampleRateForDetails(liveOutputRateHz)
+    val pathOrUrlLabel = pathOrUrl?.ifBlank { "Unavailable" } ?: "Unavailable"
+    val copyAllText = buildString {
+        fun row(label: String, value: String) {
+            append(label).append(": ").append(value).append('\n')
+        }
+
+        row("Filename", filename)
+        row("Title", title)
+        row("Artist", artist)
+        if (liveComposer.isNotBlank()) row("Composer", liveComposer)
+        if (liveGenre.isNotBlank()) row("Genre", liveGenre)
+        row("Format", extension)
+        row("Decoder", decoderLabel)
+        playbackSourceLabel?.takeIf { it.isNotBlank() }?.let { row("Playback source", it) }
+        row("File size", if (fileSizeBytes > 0L) formatFileSize(fileSizeBytes) else "Unavailable")
+        row("Sample rate chain", sampleRateChain)
+        row("Bitrate", bitrateLabel)
+        row("Length", lengthLabel)
+        row("Audio channels", channelsLabel)
+        row("Bit depth", depthLabel)
+        row("Path / URL", pathOrUrlLabel)
+
+        if (decoderName.equals("LibOpenMPT", ignoreCase = true)) {
+            append('\n').append("[OpenMPT]").append('\n')
+            if (openMptTypeLong.isNotBlank()) row("Module type", openMptTypeLong)
+            if (openMptTracker.isNotBlank()) row("Tracker", openMptTracker)
+            row("Orders", openMptOrderCount.toString())
+            row("Patterns", openMptPatternCount.toString())
+            row("Instruments", openMptInstrumentCount.toString())
+            row("Samples", openMptSampleCount.toString())
+            if (openMptSongMessage.isNotBlank()) row("Message", openMptSongMessage)
+            if (openMptInstrumentNames.isNotBlank()) row("Instrument names", openMptInstrumentNames)
+            if (openMptSampleNames.isNotBlank()) row("Sample names", openMptSampleNames)
+        }
+        if (decoderName.equals("VGMPlay", ignoreCase = true)) {
+            append('\n').append("[VGMPlay]").append('\n')
+            if (vgmGameName.isNotBlank()) row("Game", vgmGameName)
+            if (vgmSystemName.isNotBlank()) row("System", vgmSystemName)
+            if (vgmReleaseDate.isNotBlank()) row("Release date", vgmReleaseDate)
+            if (vgmEncodedBy.isNotBlank()) row("Encoded by", vgmEncodedBy)
+            if (vgmFileVersion.isNotBlank()) row("VGM version", vgmFileVersion)
+            if (vgmDeviceCount > 0) row("Used chips", vgmDeviceCount.toString())
+            if (vgmUsedChipList.isNotBlank()) row("Chip list", vgmUsedChipList)
+            row("Has loop point", if (vgmHasLoopPoint) "Yes" else "No")
+            if (vgmNotes.isNotBlank()) row("Notes", vgmNotes)
+        }
+        if (decoderName.equals("FFmpeg", ignoreCase = true)) {
+            append('\n').append("[FFmpeg]").append('\n')
+            if (ffmpegCodecName.isNotBlank()) row("Codec", ffmpegCodecName)
+            if (ffmpegContainerName.isNotBlank()) row("Container", ffmpegContainerName)
+            if (ffmpegSampleFormatName.isNotBlank()) row("Sample format", ffmpegSampleFormatName)
+            if (ffmpegChannelLayoutName.isNotBlank()) row("Channel layout", ffmpegChannelLayoutName)
+            if (ffmpegEncoderName.isNotBlank()) row("Encoder", ffmpegEncoderName)
+        }
+        if (decoderName.equals("Game Music Emu", ignoreCase = true)) {
+            append('\n').append("[Game Music Emu]").append('\n')
+            if (gmeSystemName.isNotBlank()) row("System", gmeSystemName)
+            if (gmeGameName.isNotBlank()) row("Game", gmeGameName)
+            if (gmeTrackCount > 0) row("Track count", gmeTrackCount.toString())
+            if (gmeVoiceCount > 0) row("Voice count", gmeVoiceCount.toString())
+            row("Has loop point", if (gmeHasLoopPoint) "Yes" else "No")
+            if (gmeLoopStartMs >= 0) row("Loop start", formatTime(gmeLoopStartMs / 1000.0))
+            if (gmeLoopLengthMs > 0) row("Loop length", formatTime(gmeLoopLengthMs / 1000.0))
+            if (gmeCopyright.isNotBlank()) row("Copyright", gmeCopyright)
+            if (gmeDumper.isNotBlank()) row("Dumper", gmeDumper)
+            if (gmeComment.isNotBlank()) row("Comment", gmeComment)
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -847,147 +922,151 @@ private fun TrackInfoDetailsDialog(
                         .verticalScroll(detailsScrollState),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    TrackInfoDetailsRow("Filename", filename)
-                    TrackInfoDetailsRow("Title", title)
-                    TrackInfoDetailsRow("Artist", artist)
-                    if (liveComposer.isNotBlank()) {
-                        TrackInfoDetailsRow("Composer", liveComposer)
-                    }
-                    if (liveGenre.isNotBlank()) {
-                        TrackInfoDetailsRow("Genre", liveGenre)
-                    }
-                    TrackInfoDetailsRow("Format", extension)
-                    TrackInfoDetailsRow("Decoder", decoderLabel)
-                    playbackSourceLabel?.takeIf { it.isNotBlank() }?.let {
-                        TrackInfoDetailsRow("Playback source", it)
-                    }
-                    TrackInfoDetailsRow(
-                        "File size",
-                        if (fileSizeBytes > 0L) formatFileSize(fileSizeBytes) else "Unavailable"
-                    )
-                    TrackInfoDetailsRow("Sample rate chain", sampleRateChain)
-                    TrackInfoDetailsRow("Bitrate", bitrateLabel)
-                    TrackInfoDetailsRow("Length", lengthLabel)
-                    TrackInfoDetailsRow("Audio channels", channelsLabel)
-                    TrackInfoDetailsRow("Bit depth", depthLabel)
-                    TrackInfoDetailsRow("Path / URL", pathOrUrl?.ifBlank { "Unavailable" } ?: "Unavailable")
-                    if (decoderName.equals("LibOpenMPT", ignoreCase = true)) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "OpenMPT",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        if (openMptTypeLong.isNotBlank()) {
-                            TrackInfoDetailsRow("Module type", openMptTypeLong)
-                        }
-                        if (openMptTracker.isNotBlank()) {
-                            TrackInfoDetailsRow("Tracker", openMptTracker)
-                        }
-                        TrackInfoDetailsRow("Orders", openMptOrderCount.toString())
-                        TrackInfoDetailsRow("Patterns", openMptPatternCount.toString())
-                        TrackInfoDetailsRow("Instruments", openMptInstrumentCount.toString())
-                        TrackInfoDetailsRow("Samples", openMptSampleCount.toString())
-                        if (openMptSongMessage.isNotBlank()) {
-                            TrackInfoDetailsRow("Message", openMptSongMessage)
-                        }
-                        if (openMptInstrumentNames.isNotBlank()) {
-                            TrackInfoDetailsRow("Instrument names", openMptInstrumentNames)
-                        }
-                        if (openMptSampleNames.isNotBlank()) {
-                            TrackInfoDetailsRow("Sample names", openMptSampleNames)
-                        }
-                    }
-                    if (decoderName.equals("VGMPlay", ignoreCase = true)) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "VGMPlay",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        if (vgmGameName.isNotBlank()) {
-                            TrackInfoDetailsRow("Game", vgmGameName)
-                        }
-                        if (vgmSystemName.isNotBlank()) {
-                            TrackInfoDetailsRow("System", vgmSystemName)
-                        }
-                        if (vgmReleaseDate.isNotBlank()) {
-                            TrackInfoDetailsRow("Release date", vgmReleaseDate)
-                        }
-                        if (vgmEncodedBy.isNotBlank()) {
-                            TrackInfoDetailsRow("Encoded by", vgmEncodedBy)
-                        }
-                        if (vgmFileVersion.isNotBlank()) {
-                            TrackInfoDetailsRow("VGM version", vgmFileVersion)
-                        }
-                        if (vgmDeviceCount > 0) {
-                            TrackInfoDetailsRow("Used chips", vgmDeviceCount.toString())
-                        }
-                        if (vgmUsedChipList.isNotBlank()) {
-                            TrackInfoDetailsRow("Chip list", vgmUsedChipList)
-                        }
-                        TrackInfoDetailsRow("Has loop point", if (vgmHasLoopPoint) "Yes" else "No")
-                        if (vgmNotes.isNotBlank()) {
-                            TrackInfoDetailsRow("Notes", vgmNotes)
-                        }
-                    }
-                    if (decoderName.equals("FFmpeg", ignoreCase = true)) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "FFmpeg",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        if (ffmpegCodecName.isNotBlank()) {
-                            TrackInfoDetailsRow("Codec", ffmpegCodecName)
-                        }
-                        if (ffmpegContainerName.isNotBlank()) {
-                            TrackInfoDetailsRow("Container", ffmpegContainerName)
-                        }
-                        if (ffmpegSampleFormatName.isNotBlank()) {
-                            TrackInfoDetailsRow("Sample format", ffmpegSampleFormatName)
-                        }
-                        if (ffmpegChannelLayoutName.isNotBlank()) {
-                            TrackInfoDetailsRow("Channel layout", ffmpegChannelLayoutName)
-                        }
-                        if (ffmpegEncoderName.isNotBlank()) {
-                            TrackInfoDetailsRow("Encoder", ffmpegEncoderName)
-                        }
-                    }
-                    if (decoderName.equals("Game Music Emu", ignoreCase = true)) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "Game Music Emu",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        if (gmeSystemName.isNotBlank()) {
-                            TrackInfoDetailsRow("System", gmeSystemName)
-                        }
-                        if (gmeGameName.isNotBlank()) {
-                            TrackInfoDetailsRow("Game", gmeGameName)
-                        }
-                        if (gmeTrackCount > 0) {
-                            TrackInfoDetailsRow("Track count", gmeTrackCount.toString())
-                        }
-                        if (gmeVoiceCount > 0) {
-                            TrackInfoDetailsRow("Voice count", gmeVoiceCount.toString())
-                        }
-                        TrackInfoDetailsRow("Has loop point", if (gmeHasLoopPoint) "Yes" else "No")
-                        if (gmeLoopStartMs >= 0) {
-                            TrackInfoDetailsRow("Loop start", formatTime(gmeLoopStartMs / 1000.0))
-                        }
-                        if (gmeLoopLengthMs > 0) {
-                            TrackInfoDetailsRow("Loop length", formatTime(gmeLoopLengthMs / 1000.0))
-                        }
-                        if (gmeCopyright.isNotBlank()) {
-                            TrackInfoDetailsRow("Copyright", gmeCopyright)
-                        }
-                        if (gmeDumper.isNotBlank()) {
-                            TrackInfoDetailsRow("Dumper", gmeDumper)
-                        }
-                        if (gmeComment.isNotBlank()) {
-                            TrackInfoDetailsRow("Comment", gmeComment)
+                    SelectionContainer {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TrackInfoDetailsRow("Filename", filename)
+                            TrackInfoDetailsRow("Title", title)
+                            TrackInfoDetailsRow("Artist", artist)
+                            if (liveComposer.isNotBlank()) {
+                                TrackInfoDetailsRow("Composer", liveComposer)
+                            }
+                            if (liveGenre.isNotBlank()) {
+                                TrackInfoDetailsRow("Genre", liveGenre)
+                            }
+                            TrackInfoDetailsRow("Format", extension)
+                            TrackInfoDetailsRow("Decoder", decoderLabel)
+                            playbackSourceLabel?.takeIf { it.isNotBlank() }?.let {
+                                TrackInfoDetailsRow("Playback source", it)
+                            }
+                            TrackInfoDetailsRow(
+                                "File size",
+                                if (fileSizeBytes > 0L) formatFileSize(fileSizeBytes) else "Unavailable"
+                            )
+                            TrackInfoDetailsRow("Sample rate chain", sampleRateChain)
+                            TrackInfoDetailsRow("Bitrate", bitrateLabel)
+                            TrackInfoDetailsRow("Length", lengthLabel)
+                            TrackInfoDetailsRow("Audio channels", channelsLabel)
+                            TrackInfoDetailsRow("Bit depth", depthLabel)
+                            TrackInfoDetailsRow("Path / URL", pathOrUrlLabel)
+                            if (decoderName.equals("LibOpenMPT", ignoreCase = true)) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "OpenMPT",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (openMptTypeLong.isNotBlank()) {
+                                    TrackInfoDetailsRow("Module type", openMptTypeLong)
+                                }
+                                if (openMptTracker.isNotBlank()) {
+                                    TrackInfoDetailsRow("Tracker", openMptTracker)
+                                }
+                                TrackInfoDetailsRow("Orders", openMptOrderCount.toString())
+                                TrackInfoDetailsRow("Patterns", openMptPatternCount.toString())
+                                TrackInfoDetailsRow("Instruments", openMptInstrumentCount.toString())
+                                TrackInfoDetailsRow("Samples", openMptSampleCount.toString())
+                                if (openMptSongMessage.isNotBlank()) {
+                                    TrackInfoDetailsRow("Message", openMptSongMessage)
+                                }
+                                if (openMptInstrumentNames.isNotBlank()) {
+                                    TrackInfoDetailsRow("Instrument names", openMptInstrumentNames)
+                                }
+                                if (openMptSampleNames.isNotBlank()) {
+                                    TrackInfoDetailsRow("Sample names", openMptSampleNames)
+                                }
+                            }
+                            if (decoderName.equals("VGMPlay", ignoreCase = true)) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "VGMPlay",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (vgmGameName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Game", vgmGameName)
+                                }
+                                if (vgmSystemName.isNotBlank()) {
+                                    TrackInfoDetailsRow("System", vgmSystemName)
+                                }
+                                if (vgmReleaseDate.isNotBlank()) {
+                                    TrackInfoDetailsRow("Release date", vgmReleaseDate)
+                                }
+                                if (vgmEncodedBy.isNotBlank()) {
+                                    TrackInfoDetailsRow("Encoded by", vgmEncodedBy)
+                                }
+                                if (vgmFileVersion.isNotBlank()) {
+                                    TrackInfoDetailsRow("VGM version", vgmFileVersion)
+                                }
+                                if (vgmDeviceCount > 0) {
+                                    TrackInfoDetailsRow("Used chips", vgmDeviceCount.toString())
+                                }
+                                if (vgmUsedChipList.isNotBlank()) {
+                                    TrackInfoDetailsRow("Chip list", vgmUsedChipList)
+                                }
+                                TrackInfoDetailsRow("Has loop point", if (vgmHasLoopPoint) "Yes" else "No")
+                                if (vgmNotes.isNotBlank()) {
+                                    TrackInfoDetailsRow("Notes", vgmNotes)
+                                }
+                            }
+                            if (decoderName.equals("FFmpeg", ignoreCase = true)) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "FFmpeg",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (ffmpegCodecName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Codec", ffmpegCodecName)
+                                }
+                                if (ffmpegContainerName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Container", ffmpegContainerName)
+                                }
+                                if (ffmpegSampleFormatName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Sample format", ffmpegSampleFormatName)
+                                }
+                                if (ffmpegChannelLayoutName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Channel layout", ffmpegChannelLayoutName)
+                                }
+                                if (ffmpegEncoderName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Encoder", ffmpegEncoderName)
+                                }
+                            }
+                            if (decoderName.equals("Game Music Emu", ignoreCase = true)) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Game Music Emu",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (gmeSystemName.isNotBlank()) {
+                                    TrackInfoDetailsRow("System", gmeSystemName)
+                                }
+                                if (gmeGameName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Game", gmeGameName)
+                                }
+                                if (gmeTrackCount > 0) {
+                                    TrackInfoDetailsRow("Track count", gmeTrackCount.toString())
+                                }
+                                if (gmeVoiceCount > 0) {
+                                    TrackInfoDetailsRow("Voice count", gmeVoiceCount.toString())
+                                }
+                                TrackInfoDetailsRow("Has loop point", if (gmeHasLoopPoint) "Yes" else "No")
+                                if (gmeLoopStartMs >= 0) {
+                                    TrackInfoDetailsRow("Loop start", formatTime(gmeLoopStartMs / 1000.0))
+                                }
+                                if (gmeLoopLengthMs > 0) {
+                                    TrackInfoDetailsRow("Loop length", formatTime(gmeLoopLengthMs / 1000.0))
+                                }
+                                if (gmeCopyright.isNotBlank()) {
+                                    TrackInfoDetailsRow("Copyright", gmeCopyright)
+                                }
+                                if (gmeDumper.isNotBlank()) {
+                                    TrackInfoDetailsRow("Dumper", gmeDumper)
+                                }
+                                if (gmeComment.isNotBlank()) {
+                                    TrackInfoDetailsRow("Comment", gmeComment)
+                                }
+                            }
                         }
                     }
                 }
@@ -1004,6 +1083,16 @@ private fun TrackInfoDetailsDialog(
             }
         },
         confirmButton = {
+            TextButton(
+                onClick = {
+                    clipboardManager.setText(AnnotatedString(copyAllText.trim()))
+                    Toast.makeText(context, "Copied track and decoder info", Toast.LENGTH_SHORT).show()
+                }
+            ) {
+                Text("Copy all")
+            }
+        },
+        dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Close")
             }

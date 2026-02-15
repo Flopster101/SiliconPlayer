@@ -9,6 +9,8 @@
 
 // Forward declarations for libvgm types
 class PlayerA;
+struct _data_loader;
+typedef struct _data_loader DATA_LOADER;
 
 class VGMDecoder : public AudioDecoder {
 public:
@@ -44,6 +46,7 @@ private:
 
     // File data buffer
     std::vector<uint8_t> fileData;
+    DATA_LOADER* dataLoaderHandle = nullptr;
 
     double duration = 0.0;
     int sampleRate = 44100; // Default VGM playback rate

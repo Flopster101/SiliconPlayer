@@ -71,24 +71,26 @@ bool VGMDecoder::open(const char* path) {
     }
     file.close();
 
-    DATA_LOADER* dataLoader = MemoryLoader_Init(fileData.data(), static_cast<UINT32>(fileData.size()));
-    if (dataLoader == nullptr) {
+    dataLoaderHandle = MemoryLoader_Init(fileData.data(), static_cast<UINT32>(fileData.size()));
+    if (dataLoaderHandle == nullptr) {
         LOGE("MemoryLoader_Init failed");
         return false;
     }
 
-    const UINT8 loadResult = DataLoader_Load(dataLoader);
+    const UINT8 loadResult = DataLoader_Load(dataLoaderHandle);
     if (loadResult != 0x00) {
         LOGE("DataLoader_Load failed: 0x%02X", loadResult);
-        DataLoader_Deinit(dataLoader);
+        DataLoader_Deinit(dataLoaderHandle);
+        dataLoaderHandle = nullptr;
         return false;
     }
 
-    const UINT8 result = player->LoadFile(dataLoader);
-    DataLoader_Deinit(dataLoader);
+    const UINT8 result = player->LoadFile(dataLoaderHandle);
     if (result != 0x00) {
         LOGE("LoadFile failed: 0x%02X", result);
         player.reset();
+        DataLoader_Deinit(dataLoaderHandle);
+        dataLoaderHandle = nullptr;
         return false;
     }
 
@@ -140,6 +142,10 @@ void VGMDecoder::closeInternal() {
         player->UnloadFile();
         player.reset();
     }
+    if (dataLoaderHandle != nullptr) {
+        DataLoader_Deinit(dataLoaderHandle);
+        dataLoaderHandle = nullptr;
+    }
 
     fileData.clear();
     title.clear();
@@ -169,6 +175,10 @@ void VGMDecoder::ensurePlayerStarted() {
         LOGE("Player start failed: 0x%02X", startResult);
         return;
     }
+
+    // Match vgmplay-reference behavior: process initialization block immediately.
+    player->Render(0, nullptr);
+
     playerStarted = true;
 }
 

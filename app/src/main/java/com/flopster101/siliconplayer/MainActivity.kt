@@ -120,9 +120,11 @@ import android.content.Context
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.Settings
 import android.os.Environment
 import android.util.Log
+import android.webkit.MimeTypeMap
 import android.widget.Toast
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -175,6 +177,13 @@ private fun formatByteCount(bytes: Long): String {
     return String.format(Locale.US, "%.1f %s", value, units[unitIndex])
 }
 
+private fun guessMimeTypeFromFilename(fileName: String): String {
+    val extension = fileName.substringAfterLast('.', "").lowercase(Locale.ROOT)
+    if (extension.isBlank()) return "application/octet-stream"
+    return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+        ?: "application/octet-stream"
+}
+
 
 private enum class MainView {
     Home,
@@ -191,6 +200,7 @@ enum class SettingsRoute {
     PluginOpenMpt,
     PluginVgmPlay,
     UrlCache,
+    CacheManager,
     GeneralAudio,
     Player,
     Misc,
@@ -580,6 +590,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.PluginOpenMpt -> 2
     SettingsRoute.PluginVgmPlay -> 2
     SettingsRoute.UrlCache -> 1
+    SettingsRoute.CacheManager -> 2
     SettingsRoute.GeneralAudio -> 1
     SettingsRoute.Player -> 1
     SettingsRoute.Misc -> 1
@@ -1289,6 +1300,8 @@ private fun AppNavigation(
             prefs.getLong(AppPreferenceKeys.URL_CACHE_MAX_BYTES, SOURCE_CACHE_MAX_BYTES_DEFAULT)
         )
     }
+    var cachedSourceFiles by remember { mutableStateOf<List<CachedSourceFile>>(emptyList()) }
+    var pendingCacheExportPaths by remember { mutableStateOf<List<String>>(emptyList()) }
     var audioAllowBackendFallback by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.AUDIO_ALLOW_BACKEND_FALLBACK, true)
@@ -1336,6 +1349,7 @@ private fun AppNavigation(
         }
         findExistingCachedFileForSource(cacheRoot, url)?.let { existing ->
             existing.setLastModified(System.currentTimeMillis())
+            rememberSourceForCachedFile(cacheRoot, existing.name, url)
             Log.d(URL_SOURCE_TAG, "Using existing cached file: ${existing.absolutePath} (${existing.length()} bytes)")
             return@withContext RemoteDownloadResult(file = existing)
         }
@@ -1410,6 +1424,7 @@ private fun AppNavigation(
                         temp = File(target.absolutePath + ".part")
                         findExistingCachedFileForSource(cacheRoot, url)?.let { existing ->
                             existing.setLastModified(System.currentTimeMillis())
+                            rememberSourceForCachedFile(cacheRoot, existing.name, url)
                             Log.d(
                                 URL_SOURCE_TAG,
                                 "Using existing cached file after Content-Disposition resolution: ${existing.absolutePath} (${existing.length()} bytes)"
@@ -1486,6 +1501,7 @@ private fun AppNavigation(
                     temp.copyTo(target, overwrite = true)
                     temp.delete()
                 }
+                rememberSourceForCachedFile(cacheRoot, target.name, url)
                 Log.d(URL_SOURCE_TAG, "Cached file ready: ${target.absolutePath} (${target.length()} bytes)")
                 val elapsedMs = (System.currentTimeMillis() - startedAtMs).coerceAtLeast(1L)
                 val avgSpeed = (totalBytes * 1000L) / elapsedMs
@@ -1516,6 +1532,104 @@ private fun AppNavigation(
             if (temp.exists() && (target.length() <= 0L)) {
                 temp.delete()
             }
+        }
+    }
+
+    fun refreshCachedSourceFiles() {
+        appScope.launch(Dispatchers.IO) {
+            val files = listCachedSourceFiles(File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR))
+            withContext(Dispatchers.Main.immediate) {
+                cachedSourceFiles = files
+            }
+        }
+    }
+
+    val cacheExportDirectoryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri ->
+        val selectedPaths = pendingCacheExportPaths
+        pendingCacheExportPaths = emptyList()
+        if (treeUri == null || selectedPaths.isEmpty()) {
+            if (selectedPaths.isNotEmpty()) {
+                Toast.makeText(context, "Export canceled", Toast.LENGTH_SHORT).show()
+            }
+            return@rememberLauncherForActivityResult
+        }
+        appScope.launch(Dispatchers.IO) {
+            var exported = 0
+            var failed = 0
+            val parentDocumentUri = try {
+                DocumentsContract.buildDocumentUriUsingTree(
+                    treeUri,
+                    DocumentsContract.getTreeDocumentId(treeUri)
+                )
+            } catch (_: Throwable) {
+                null
+            }
+            if (parentDocumentUri == null) {
+                withContext(Dispatchers.Main.immediate) {
+                    Toast.makeText(context, "Export failed: invalid destination", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+            val hashPrefixRegex = Regex("^[0-9a-fA-F]{40}_(.+)$")
+            selectedPaths.distinct().forEach { absolutePath ->
+                val sourceFile = File(absolutePath)
+                if (!sourceFile.exists() || !sourceFile.isFile) {
+                    failed++
+                    return@forEach
+                }
+                val baseName = hashPrefixRegex.matchEntire(sourceFile.name)?.groupValues?.getOrNull(1)
+                    ?: sourceFile.name
+                val dotIndex = baseName.lastIndexOf('.')
+                val stem = if (dotIndex > 0) baseName.substring(0, dotIndex) else baseName
+                val ext = if (dotIndex > 0) baseName.substring(dotIndex) else ""
+                val mimeType = guessMimeTypeFromFilename(baseName)
+                var destinationUri: Uri? = null
+                for (attempt in 0..24) {
+                    val candidateName = if (attempt == 0) baseName else "$stem ($attempt)$ext"
+                    destinationUri = try {
+                        DocumentsContract.createDocument(
+                            context.contentResolver,
+                            parentDocumentUri,
+                            mimeType,
+                            candidateName
+                        )
+                    } catch (_: Throwable) {
+                        null
+                    }
+                    if (destinationUri != null) break
+                }
+                if (destinationUri == null) {
+                    failed++
+                    return@forEach
+                }
+                val copied = try {
+                    context.contentResolver.openOutputStream(destinationUri, "w")?.use { output ->
+                        sourceFile.inputStream().use { input ->
+                            input.copyTo(output)
+                        }
+                    } != null
+                } catch (_: Throwable) {
+                    false
+                }
+                if (copied) exported++ else failed++
+            }
+            withContext(Dispatchers.Main.immediate) {
+                Toast.makeText(
+                    context,
+                    "Exported $exported file(s)" + if (failed > 0) " ($failed failed)" else "",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    LaunchedEffect(currentView, settingsRoute) {
+        if (currentView == MainView.Settings &&
+            (settingsRoute == SettingsRoute.UrlCache || settingsRoute == SettingsRoute.CacheManager)
+        ) {
+            refreshCachedSourceFiles()
         }
     }
 
@@ -2824,6 +2938,7 @@ private fun AppNavigation(
                 settingsRoute = when (settingsRoute) {
                     SettingsRoute.PluginVgmPlayChipSettings -> SettingsRoute.PluginDetail
                     SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt, SettingsRoute.PluginVgmPlay -> SettingsRoute.AudioPlugins
+                    SettingsRoute.CacheManager -> SettingsRoute.UrlCache
                     else -> SettingsRoute.Root
                 }
             }
@@ -3005,6 +3120,7 @@ private fun AppNavigation(
                                 settingsRoute = when (settingsRoute) {
                                     SettingsRoute.PluginVgmPlayChipSettings -> SettingsRoute.PluginDetail
                                     SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt, SettingsRoute.PluginVgmPlay -> SettingsRoute.AudioPlugins
+                                    SettingsRoute.CacheManager -> SettingsRoute.UrlCache
                                     else -> SettingsRoute.Root
                                 }
                             } else {
@@ -3060,6 +3176,10 @@ private fun AppNavigation(
                         onOpenPlayer = { settingsRoute = SettingsRoute.Player },
                         onOpenMisc = { settingsRoute = SettingsRoute.Misc },
                         onOpenUrlCache = { settingsRoute = SettingsRoute.UrlCache },
+                        onOpenCacheManager = {
+                            refreshCachedSourceFiles()
+                            settingsRoute = SettingsRoute.CacheManager
+                        },
                         onOpenUi = { settingsRoute = SettingsRoute.Ui },
                         onOpenAbout = { settingsRoute = SettingsRoute.About },
                         onOpenVgmPlayChipSettings = { settingsRoute = SettingsRoute.PluginVgmPlayChipSettings },
@@ -3130,6 +3250,9 @@ private fun AppNavigation(
                                     maxTracks = urlCacheMaxTracks,
                                     maxBytes = urlCacheMaxBytes
                                 )
+                                withContext(Dispatchers.Main.immediate) {
+                                    refreshCachedSourceFiles()
+                                }
                             }
                         },
                         urlCacheMaxBytes = urlCacheMaxBytes,
@@ -3142,6 +3265,9 @@ private fun AppNavigation(
                                     maxTracks = urlCacheMaxTracks,
                                     maxBytes = urlCacheMaxBytes
                                 )
+                                withContext(Dispatchers.Main.immediate) {
+                                    refreshCachedSourceFiles()
+                                }
                             }
                         },
                         onClearUrlCacheNow = {
@@ -3167,7 +3293,46 @@ private fun AppNavigation(
                                         "Cache cleared (${result.deletedFiles} files)$suffix",
                                         Toast.LENGTH_SHORT
                                     ).show()
+                                    refreshCachedSourceFiles()
                                 }
+                            }
+                        },
+                        cachedSourceFiles = cachedSourceFiles,
+                        onRefreshCachedSourceFiles = { refreshCachedSourceFiles() },
+                        onDeleteCachedSourceFiles = { paths ->
+                            appScope.launch(Dispatchers.IO) {
+                                val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
+                                val sessionPath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null)
+                                val protectedPaths = buildSet {
+                                    selectedFile?.absolutePath
+                                        ?.takeIf { it.startsWith(cacheRoot.absolutePath) }
+                                        ?.let { add(it) }
+                                    sessionPath
+                                        ?.takeIf { it.startsWith(cacheRoot.absolutePath) }
+                                        ?.let { add(it) }
+                                }
+                                val result = deleteSpecificRemoteCacheFiles(
+                                    cacheRoot = cacheRoot,
+                                    absolutePaths = paths.toSet(),
+                                    protectedPaths = protectedPaths
+                                )
+                                withContext(Dispatchers.Main.immediate) {
+                                    val suffix = if (result.skippedFiles > 0) " (${result.skippedFiles} protected)" else ""
+                                    Toast.makeText(
+                                        context,
+                                        "Deleted ${result.deletedFiles} file(s)$suffix",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    refreshCachedSourceFiles()
+                                }
+                            }
+                        },
+                        onExportCachedSourceFiles = { paths ->
+                            if (paths.isEmpty()) {
+                                Toast.makeText(context, "No files selected", Toast.LENGTH_SHORT).show()
+                            } else {
+                                pendingCacheExportPaths = paths
+                                cacheExportDirectoryLauncher.launch(null)
                             }
                         },
                         keepScreenOn = keepScreenOn,

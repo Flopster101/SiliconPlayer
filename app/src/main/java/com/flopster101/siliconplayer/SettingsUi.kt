@@ -22,6 +22,8 @@ import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,6 +71,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -113,6 +116,7 @@ import com.flopster101.siliconplayer.pluginsettings.VgmPlayChipSettingsScreen
 import com.flopster101.siliconplayer.pluginsettings.VgmPlaySettings
 import java.util.Locale
 import kotlin.math.roundToInt
+import androidx.activity.compose.BackHandler
 
 private const val SETTINGS_PAGE_NAV_DURATION_MS = 300
 private val SettingsCardShape = RoundedCornerShape(16.dp)
@@ -125,6 +129,23 @@ private enum class CacheSizeUnit(
     GB("GB", 1024.0 * 1024.0 * 1024.0)
 }
 
+private fun formatCacheByteCount(bytes: Long): String {
+    if (bytes < 1024L) return "$bytes B"
+    val units = arrayOf("KB", "MB", "GB", "TB")
+    var value = bytes.toDouble()
+    var unitIndex = -1
+    while (value >= 1024.0 && unitIndex < units.lastIndex) {
+        value /= 1024.0
+        unitIndex++
+    }
+    return String.format(Locale.US, "%.1f %s", value, units[unitIndex])
+}
+
+private fun stripCachedFileHashPrefix(fileName: String): String {
+    val hashPrefix = Regex("^[0-9a-fA-F]{40}_(.+)$")
+    return hashPrefix.matchEntire(fileName)?.groupValues?.getOrNull(1) ?: fileName
+}
+
 private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.Root -> 0
     SettingsRoute.AudioPlugins -> 1
@@ -134,6 +155,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.PluginOpenMpt -> 2
     SettingsRoute.PluginVgmPlay -> 2
     SettingsRoute.UrlCache -> 1
+    SettingsRoute.CacheManager -> 2
     SettingsRoute.GeneralAudio -> 1
     SettingsRoute.Player -> 1
     SettingsRoute.Misc -> 1
@@ -141,9 +163,9 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.About -> 1
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun SettingsScreen(
+internal fun SettingsScreen(
     route: SettingsRoute,
     bottomContentPadding: Dp = 0.dp,
     onBack: () -> Unit,
@@ -156,6 +178,7 @@ fun SettingsScreen(
     onOpenPlayer: () -> Unit,
     onOpenMisc: () -> Unit,
     onOpenUrlCache: () -> Unit,
+    onOpenCacheManager: () -> Unit,
     onOpenUi: () -> Unit,
     onOpenAbout: () -> Unit,
     onOpenVgmPlayChipSettings: () -> Unit,
@@ -205,6 +228,10 @@ fun SettingsScreen(
     urlCacheMaxBytes: Long,
     onUrlCacheMaxBytesChanged: (Long) -> Unit,
     onClearUrlCacheNow: () -> Unit,
+    cachedSourceFiles: List<CachedSourceFile>,
+    onRefreshCachedSourceFiles: () -> Unit,
+    onDeleteCachedSourceFiles: (List<String>) -> Unit,
+    onExportCachedSourceFiles: (List<String>) -> Unit,
     keepScreenOn: Boolean,
     onKeepScreenOnChanged: (Boolean) -> Unit,
     filenameDisplayMode: FilenameDisplayMode,
@@ -294,6 +321,7 @@ fun SettingsScreen(
         SettingsRoute.PluginOpenMpt -> "OpenMPT plugin settings"
         SettingsRoute.PluginVgmPlay -> "VGMPlay plugin settings"
         SettingsRoute.UrlCache -> "Cache settings"
+        SettingsRoute.CacheManager -> "Manage cached files"
         SettingsRoute.GeneralAudio -> "General audio"
         SettingsRoute.Player -> "Player settings"
         SettingsRoute.Misc -> "Misc settings"
@@ -1168,7 +1196,6 @@ fun SettingsScreen(
                     }
 
                     SettingsRoute.UrlCache -> {
-                        val context = LocalContext.current
                         var showCacheTrackLimitDialog by remember { mutableStateOf(false) }
                         var showCacheSizeLimitDialog by remember { mutableStateOf(false) }
                         var showClearCacheConfirmDialog by remember { mutableStateOf(false) }
@@ -1197,11 +1224,9 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(10.dp))
                         SettingsItemCard(
                             title = "Manage cached files",
-                            description = "Browse cached files, multi-select delete, and export to storage (TODO).",
+                            description = "Browse cached files, long-press multi-select, delete, and export.",
                             icon = Icons.Default.MoreHoriz,
-                            onClick = {
-                                Toast.makeText(context, "Cached file manager coming soon", Toast.LENGTH_SHORT).show()
-                            }
+                            onClick = onOpenCacheManager
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Danger zone")
@@ -1348,6 +1373,188 @@ fun SettingsScreen(
                                         showClearCacheConfirmDialog = false
                                     }) {
                                         Text("Clear cache")
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    SettingsRoute.CacheManager -> {
+                        var selectedPaths by remember { mutableStateOf(setOf<String>()) }
+                        var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+                        LaunchedEffect(cachedSourceFiles) {
+                            val existing = cachedSourceFiles.map { it.absolutePath }.toSet()
+                            selectedPaths = selectedPaths.filterTo(mutableSetOf()) { it in existing }
+                        }
+                        LaunchedEffect(route) {
+                            onRefreshCachedSourceFiles()
+                        }
+                        val inSelectionMode = selectedPaths.isNotEmpty()
+                        val totalBytes = cachedSourceFiles.sumOf { it.sizeBytes.coerceAtLeast(0L) }
+                        BackHandler(enabled = inSelectionMode) {
+                            selectedPaths = emptySet()
+                        }
+
+                        SettingsSectionLabel("Overview")
+                        Text(
+                            text = "${cachedSourceFiles.size} files • ${formatCacheByteCount(totalBytes)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { showDeleteConfirmDialog = true },
+                                enabled = inSelectionMode,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Delete (${selectedPaths.size})")
+                            }
+                            OutlinedButton(
+                                onClick = { onExportCachedSourceFiles(selectedPaths.toList()) },
+                                enabled = inSelectionMode,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Link,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Export (${selectedPaths.size})")
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    selectedPaths = cachedSourceFiles.map { it.absolutePath }.toSet()
+                                },
+                                enabled = cachedSourceFiles.isNotEmpty(),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Select all")
+                            }
+                            OutlinedButton(
+                                onClick = { selectedPaths = emptySet() },
+                                enabled = inSelectionMode,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Deselect all")
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Tap files to select. Back clears selection first.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (cachedSourceFiles.isEmpty()) {
+                            Text(
+                                text = "No cached files.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            SettingsSectionLabel("Files")
+                            cachedSourceFiles.forEach { entry ->
+                                val isSelected = selectedPaths.contains(entry.absolutePath)
+                                val sourceLine = entry.sourceId ?: "Source: unknown"
+                                Surface(
+                                    shape = SettingsCardShape,
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainer
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .combinedClickable(
+                                            onLongClick = {
+                                                selectedPaths = if (isSelected) {
+                                                    selectedPaths - entry.absolutePath
+                                                } else {
+                                                    selectedPaths + entry.absolutePath
+                                                }
+                                            },
+                                            onClick = {
+                                                if (selectedPaths.isEmpty()) {
+                                                    selectedPaths = setOf(entry.absolutePath)
+                                                } else {
+                                                    selectedPaths = if (isSelected) {
+                                                        selectedPaths - entry.absolutePath
+                                                    } else {
+                                                        selectedPaths + entry.absolutePath
+                                                    }
+                                                }
+                                            }
+                                        )
+                                ) {
+                                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                        Text(
+                                            text = stripCachedFileHashPrefix(entry.fileName),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            maxLines = 1
+                                        )
+                                        Spacer(modifier = Modifier.height(3.dp))
+                                        Text(
+                                            text = "${formatCacheByteCount(entry.sizeBytes)} • $sourceLine",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isSelected) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                            maxLines = 2
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
+                        }
+
+                        if (showDeleteConfirmDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showDeleteConfirmDialog = false },
+                                title = { Text("Delete selected cached files?") },
+                                text = { Text("This removes ${selectedPaths.size} selected cached file(s).") },
+                                dismissButton = {
+                                    TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                                        Text("Cancel")
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        onDeleteCachedSourceFiles(selectedPaths.toList())
+                                        selectedPaths = emptySet()
+                                        showDeleteConfirmDialog = false
+                                    }) {
+                                        Text("Delete")
                                     }
                                 }
                             )

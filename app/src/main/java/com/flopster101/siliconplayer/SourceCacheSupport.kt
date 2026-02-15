@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 import android.content.Context
 import android.net.Uri
+import org.json.JSONObject
 import java.io.File
 import java.net.URLDecoder
 import java.security.MessageDigest
@@ -9,6 +10,7 @@ import java.security.MessageDigest
 internal const val REMOTE_SOURCE_CACHE_DIR = "remote_sources"
 internal const val SOURCE_CACHE_MAX_TRACKS_DEFAULT = 100
 internal const val SOURCE_CACHE_MAX_BYTES_DEFAULT = 1024L * 1024L * 1024L
+private const val SOURCE_CACHE_INDEX_FILE = ".source_index.json"
 
 internal data class RemoteCachePruneResult(
     val deletedFiles: Int,
@@ -19,6 +21,21 @@ internal data class RemoteCacheClearResult(
     val deletedFiles: Int,
     val skippedFiles: Int,
     val freedBytes: Long
+)
+
+internal data class RemoteCacheDeleteResult(
+    val deletedFiles: Int,
+    val skippedFiles: Int,
+    val missingFiles: Int,
+    val freedBytes: Long
+)
+
+internal data class CachedSourceFile(
+    val absolutePath: String,
+    val fileName: String,
+    val sizeBytes: Long,
+    val lastModified: Long,
+    val sourceId: String?
 )
 
 internal fun sha1Hex(value: String): String {
@@ -101,6 +118,87 @@ internal fun isRemoteSourceCached(context: Context, url: String): Boolean {
     return findExistingCachedFileForSource(cacheRoot, url) != null
 }
 
+private fun cacheIndexFile(cacheRoot: File): File = File(cacheRoot, SOURCE_CACHE_INDEX_FILE)
+
+private fun loadSourceCacheIndex(cacheRoot: File): MutableMap<String, String> {
+    val indexFile = cacheIndexFile(cacheRoot)
+    if (!indexFile.exists() || !indexFile.isFile) return mutableMapOf()
+    return try {
+        val root = JSONObject(indexFile.readText())
+        val out = mutableMapOf<String, String>()
+        root.keys().forEach { key ->
+            val value = root.optString(key, "").trim()
+            if (key.isNotBlank() && value.isNotBlank()) {
+                out[key] = value
+            }
+        }
+        out
+    } catch (_: Throwable) {
+        mutableMapOf()
+    }
+}
+
+private fun saveSourceCacheIndex(cacheRoot: File, index: Map<String, String>) {
+    try {
+        if (!cacheRoot.exists()) cacheRoot.mkdirs()
+        val root = JSONObject()
+        index.entries
+            .sortedBy { it.key }
+            .forEach { (key, value) ->
+                if (key.isNotBlank() && value.isNotBlank()) {
+                    root.put(key, value)
+                }
+            }
+        cacheIndexFile(cacheRoot).writeText(root.toString())
+    } catch (_: Throwable) {
+    }
+}
+
+internal fun rememberSourceForCachedFile(cacheRoot: File, fileName: String, sourceId: String) {
+    if (fileName.isBlank() || sourceId.isBlank()) return
+    val index = loadSourceCacheIndex(cacheRoot)
+    index[fileName] = sourceId
+    saveSourceCacheIndex(cacheRoot, index)
+}
+
+private fun removeSourceMappingsForFiles(cacheRoot: File, fileNames: Set<String>) {
+    if (fileNames.isEmpty()) return
+    val normalized = fileNames.filter { it.isNotBlank() }.toSet()
+    if (normalized.isEmpty()) return
+    val index = loadSourceCacheIndex(cacheRoot)
+    val changed = index.keys.removeAll(normalized)
+    if (changed) saveSourceCacheIndex(cacheRoot, index)
+}
+
+private fun pruneStaleSourceMappings(cacheRoot: File) {
+    val index = loadSourceCacheIndex(cacheRoot)
+    if (index.isEmpty()) return
+    val existingNames = cacheRoot.listFiles().orEmpty()
+        .filter { it.isFile && !it.name.endsWith(".part", ignoreCase = true) && it.name != SOURCE_CACHE_INDEX_FILE }
+        .map { it.name }
+        .toSet()
+    val changed = index.keys.removeAll { it !in existingNames }
+    if (changed) saveSourceCacheIndex(cacheRoot, index)
+}
+
+internal fun listCachedSourceFiles(cacheRoot: File): List<CachedSourceFile> {
+    if (!cacheRoot.exists()) return emptyList()
+    pruneStaleSourceMappings(cacheRoot)
+    val index = loadSourceCacheIndex(cacheRoot)
+    return cacheRoot.listFiles().orEmpty()
+        .filter { it.isFile && !it.name.endsWith(".part", ignoreCase = true) && it.name != SOURCE_CACHE_INDEX_FILE }
+        .sortedByDescending { it.lastModified() }
+        .map { file ->
+            CachedSourceFile(
+                absolutePath = file.absolutePath,
+                fileName = file.name,
+                sizeBytes = file.length().coerceAtLeast(0L),
+                lastModified = file.lastModified(),
+                sourceId = index[file.name]
+            )
+        }
+}
+
 internal fun enforceRemoteCacheLimits(
     cacheRoot: File,
     maxTracks: Int,
@@ -124,6 +222,7 @@ internal fun enforceRemoteCacheLimits(
     var freedBytes = 0L
 
     entries.sortBy { it.lastModified() }
+    val deletedNames = mutableSetOf<String>()
     for (file in entries) {
         if (totalCount <= normalizedMaxTracks && totalBytes <= normalizedMaxBytes) break
         if (protected.contains(file.absolutePath)) continue
@@ -133,10 +232,12 @@ internal fun enforceRemoteCacheLimits(
             freedBytes += size
             totalCount--
             totalBytes = (totalBytes - size).coerceAtLeast(0L)
+            deletedNames.add(file.name)
         } else {
             file.deleteOnExit()
         }
     }
+    removeSourceMappingsForFiles(cacheRoot, deletedNames)
 
     return RemoteCachePruneResult(deletedFiles, freedBytes)
 }
@@ -150,9 +251,52 @@ internal fun clearRemoteCacheFiles(
     var deletedFiles = 0
     var skippedFiles = 0
     var freedBytes = 0L
+    val deletedNames = mutableSetOf<String>()
     cacheRoot.listFiles().orEmpty().forEach { file ->
         if (!file.isFile) {
             file.deleteRecursively()
+            return@forEach
+        }
+        if (file.name == SOURCE_CACHE_INDEX_FILE) return@forEach
+        if (protected.contains(file.absolutePath)) {
+            skippedFiles++
+            return@forEach
+        }
+        val size = file.length().coerceAtLeast(0L)
+        if (file.delete()) {
+            deletedFiles++
+            freedBytes += size
+            deletedNames.add(file.name)
+        } else {
+            file.deleteOnExit()
+        }
+    }
+    removeSourceMappingsForFiles(cacheRoot, deletedNames)
+    return RemoteCacheClearResult(deletedFiles, skippedFiles, freedBytes)
+}
+
+internal fun deleteSpecificRemoteCacheFiles(
+    cacheRoot: File,
+    absolutePaths: Set<String>,
+    protectedPaths: Set<String> = emptySet()
+): RemoteCacheDeleteResult {
+    if (!cacheRoot.exists() || absolutePaths.isEmpty()) {
+        return RemoteCacheDeleteResult(0, 0, absolutePaths.size, 0L)
+    }
+    val protected = protectedPaths.filter { it.isNotBlank() }.toSet()
+    var deletedFiles = 0
+    var skippedFiles = 0
+    var missingFiles = 0
+    var freedBytes = 0L
+    val deletedNames = mutableSetOf<String>()
+    absolutePaths.forEach { absolutePath ->
+        val file = File(absolutePath)
+        if (!file.exists() || !file.isFile || file.parentFile?.absolutePath != cacheRoot.absolutePath) {
+            missingFiles++
+            return@forEach
+        }
+        if (file.name == SOURCE_CACHE_INDEX_FILE) {
+            missingFiles++
             return@forEach
         }
         if (protected.contains(file.absolutePath)) {
@@ -163,9 +307,12 @@ internal fun clearRemoteCacheFiles(
         if (file.delete()) {
             deletedFiles++
             freedBytes += size
+            deletedNames.add(file.name)
         } else {
             file.deleteOnExit()
+            skippedFiles++
         }
     }
-    return RemoteCacheClearResult(deletedFiles, skippedFiles, freedBytes)
+    removeSourceMappingsForFiles(cacheRoot, deletedNames)
+    return RemoteCacheDeleteResult(deletedFiles, skippedFiles, missingFiles, freedBytes)
 }

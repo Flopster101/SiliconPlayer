@@ -35,6 +35,7 @@ fun BasicVisualizationOverlay(
     oscLineWidthDp: Int,
     oscGridWidthDp: Int,
     oscVerticalGridEnabled: Boolean,
+    oscCenterLineEnabled: Boolean,
     oscLineColorModeNoArtwork: VisualizationOscColorMode,
     oscGridColorModeNoArtwork: VisualizationOscColorMode,
     oscLineColorModeWithArtwork: VisualizationOscColorMode,
@@ -132,6 +133,7 @@ fun BasicVisualizationOverlay(
                 lineWidthPx = oscLineWidthDp.toFloat(),
                 gridWidthPx = oscGridWidthDp.toFloat(),
                 showVerticalGrid = oscVerticalGridEnabled,
+                showCenterLine = oscCenterLineEnabled,
                 modifier = modifier
             )
         }

@@ -1945,6 +1945,7 @@ internal fun SettingsScreen(
                         val oscLineWidthKey = "visualization_osc_line_width_dp"
                         val oscGridWidthKey = "visualization_osc_grid_width_dp"
                         val oscVerticalGridEnabledKey = "visualization_osc_vertical_grid_enabled"
+                        val oscCenterLineEnabledKey = "visualization_osc_center_line_enabled"
                         val oscLineNoArtworkColorModeKey = "visualization_osc_line_color_mode_no_artwork"
                         val oscGridNoArtworkColorModeKey = "visualization_osc_grid_color_mode_no_artwork"
                         val oscLineArtworkColorModeKey = "visualization_osc_line_color_mode_with_artwork"
@@ -1992,6 +1993,9 @@ internal fun SettingsScreen(
                         }
                         var visualizationOscVerticalGridEnabled by remember {
                             mutableStateOf(prefs.getBoolean(oscVerticalGridEnabledKey, false))
+                        }
+                        var visualizationOscCenterLineEnabled by remember {
+                            mutableStateOf(prefs.getBoolean(oscCenterLineEnabledKey, false))
                         }
                         var oscLineColorModeNoArtwork by remember {
                             mutableStateOf(
@@ -2104,6 +2108,16 @@ internal fun SettingsScreen(
                             onCheckedChange = { enabled ->
                                 visualizationOscVerticalGridEnabled = enabled
                                 prefs.edit().putBoolean(oscVerticalGridEnabledKey, enabled).apply()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Show centerline",
+                            description = "Display the waveform center reference line.",
+                            checked = visualizationOscCenterLineEnabled,
+                            onCheckedChange = { enabled ->
+                                visualizationOscCenterLineEnabled = enabled
+                                prefs.edit().putBoolean(oscCenterLineEnabledKey, enabled).apply()
                             }
                         )
                         Spacer(modifier = Modifier.height(16.dp))

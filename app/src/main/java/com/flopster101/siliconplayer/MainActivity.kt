@@ -729,6 +729,7 @@ private object AppPreferenceKeys {
     const val VISUALIZATION_OSC_LINE_WIDTH_DP = "visualization_osc_line_width_dp"
     const val VISUALIZATION_OSC_GRID_WIDTH_DP = "visualization_osc_grid_width_dp"
     const val VISUALIZATION_OSC_VERTICAL_GRID_ENABLED = "visualization_osc_vertical_grid_enabled"
+    const val VISUALIZATION_OSC_CENTER_LINE_ENABLED = "visualization_osc_center_line_enabled"
     const val VISUALIZATION_OSC_LINE_COLOR_MODE_NO_ARTWORK = "visualization_osc_line_color_mode_no_artwork"
     const val VISUALIZATION_OSC_GRID_COLOR_MODE_NO_ARTWORK = "visualization_osc_grid_color_mode_no_artwork"
     const val VISUALIZATION_OSC_LINE_COLOR_MODE_WITH_ARTWORK = "visualization_osc_line_color_mode_with_artwork"
@@ -4214,6 +4215,7 @@ private fun AppNavigation(
                                 .putInt(AppPreferenceKeys.VISUALIZATION_OSC_LINE_WIDTH_DP, 3)
                                 .putInt(AppPreferenceKeys.VISUALIZATION_OSC_GRID_WIDTH_DP, 2)
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_OSC_VERTICAL_GRID_ENABLED, false)
+                                .putBoolean(AppPreferenceKeys.VISUALIZATION_OSC_CENTER_LINE_ENABLED, false)
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_OSC_LINE_COLOR_MODE_NO_ARTWORK,
                                     VisualizationOscColorMode.Monet.storageValue
@@ -4452,6 +4454,7 @@ private fun AppNavigation(
                                 .putInt(AppPreferenceKeys.VISUALIZATION_OSC_LINE_WIDTH_DP, 3)
                                 .putInt(AppPreferenceKeys.VISUALIZATION_OSC_GRID_WIDTH_DP, 2)
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_OSC_VERTICAL_GRID_ENABLED, false)
+                                .putBoolean(AppPreferenceKeys.VISUALIZATION_OSC_CENTER_LINE_ENABLED, false)
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_OSC_LINE_COLOR_MODE_NO_ARTWORK,
                                     VisualizationOscColorMode.Monet.storageValue

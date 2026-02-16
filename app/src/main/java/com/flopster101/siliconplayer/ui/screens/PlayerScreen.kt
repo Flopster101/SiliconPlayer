@@ -184,6 +184,7 @@ fun PlayerScreen(
     val oscGridWidthKey = "visualization_osc_grid_width_dp"
     val oscFpsModeKey = "visualization_osc_fps_mode"
     val oscVerticalGridEnabledKey = "visualization_osc_vertical_grid_enabled"
+    val oscCenterLineEnabledKey = "visualization_osc_center_line_enabled"
     val oscLineNoArtworkColorModeKey = "visualization_osc_line_color_mode_no_artwork"
     val oscGridNoArtworkColorModeKey = "visualization_osc_grid_color_mode_no_artwork"
     val oscLineArtworkColorModeKey = "visualization_osc_line_color_mode_with_artwork"
@@ -223,6 +224,9 @@ fun PlayerScreen(
     }
     var visualizationOscVerticalGridEnabled by remember {
         mutableStateOf(prefs.getBoolean(oscVerticalGridEnabledKey, false))
+    }
+    var visualizationOscCenterLineEnabled by remember {
+        mutableStateOf(prefs.getBoolean(oscCenterLineEnabledKey, false))
     }
     var visualizationOscLineColorModeNoArtwork by remember {
         mutableStateOf(
@@ -336,6 +340,10 @@ fun PlayerScreen(
                 oscVerticalGridEnabledKey -> {
                     visualizationOscVerticalGridEnabled =
                         sharedPrefs.getBoolean(oscVerticalGridEnabledKey, false)
+                }
+                oscCenterLineEnabledKey -> {
+                    visualizationOscCenterLineEnabled =
+                        sharedPrefs.getBoolean(oscCenterLineEnabledKey, false)
                 }
 
                 oscLineNoArtworkColorModeKey -> {
@@ -744,6 +752,7 @@ fun PlayerScreen(
                         oscLineWidthDp = visualizationOscLineWidthDp,
                         oscGridWidthDp = visualizationOscGridWidthDp,
                         oscVerticalGridEnabled = visualizationOscVerticalGridEnabled,
+                        oscCenterLineEnabled = visualizationOscCenterLineEnabled,
                         oscLineColorModeNoArtwork = visualizationOscLineColorModeNoArtwork,
                         oscGridColorModeNoArtwork = visualizationOscGridColorModeNoArtwork,
                         oscLineColorModeWithArtwork = visualizationOscLineColorModeWithArtwork,
@@ -872,6 +881,7 @@ fun PlayerScreen(
                         oscLineWidthDp = visualizationOscLineWidthDp,
                         oscGridWidthDp = visualizationOscGridWidthDp,
                         oscVerticalGridEnabled = visualizationOscVerticalGridEnabled,
+                        oscCenterLineEnabled = visualizationOscCenterLineEnabled,
                         oscLineColorModeNoArtwork = visualizationOscLineColorModeNoArtwork,
                         oscGridColorModeNoArtwork = visualizationOscGridColorModeNoArtwork,
                         oscLineColorModeWithArtwork = visualizationOscLineColorModeWithArtwork,
@@ -1194,6 +1204,7 @@ private fun AlbumArtPlaceholder(
     oscLineWidthDp: Int,
     oscGridWidthDp: Int,
     oscVerticalGridEnabled: Boolean,
+    oscCenterLineEnabled: Boolean,
     oscLineColorModeNoArtwork: VisualizationOscColorMode,
     oscGridColorModeNoArtwork: VisualizationOscColorMode,
     oscLineColorModeWithArtwork: VisualizationOscColorMode,
@@ -1318,6 +1329,7 @@ private fun AlbumArtPlaceholder(
                 oscLineWidthDp = oscLineWidthDp,
                 oscGridWidthDp = oscGridWidthDp,
                 oscVerticalGridEnabled = oscVerticalGridEnabled,
+                oscCenterLineEnabled = oscCenterLineEnabled,
                 oscLineColorModeNoArtwork = oscLineColorModeNoArtwork,
                 oscGridColorModeNoArtwork = oscGridColorModeNoArtwork,
                 oscLineColorModeWithArtwork = oscLineColorModeWithArtwork,

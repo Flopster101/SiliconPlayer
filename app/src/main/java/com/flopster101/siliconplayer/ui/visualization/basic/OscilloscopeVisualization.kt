@@ -18,6 +18,7 @@ fun OscilloscopeVisualization(
     lineWidthPx: Float,
     gridWidthPx: Float,
     showVerticalGrid: Boolean,
+    showCenterLine: Boolean,
     modifier: Modifier = Modifier
 ) {
     Canvas(modifier = modifier.fillMaxSize()) {
@@ -47,33 +48,39 @@ fun OscilloscopeVisualization(
                 )
             }
         }
-        // Horizontal reference lines
+        // Keep the stereo inter-channel separator as part of the grid.
         if (stereo) {
-            drawLine(
-                color = gridColor,
-                start = Offset(0f, centerLeft),
-                end = Offset(size.width, centerLeft),
-                strokeWidth = scopeGridWidth
-            )
-            drawLine(
-                color = gridColor,
-                start = Offset(0f, centerRight),
-                end = Offset(size.width, centerRight),
-                strokeWidth = scopeGridWidth
-            )
             drawLine(
                 color = gridColor.copy(alpha = (gridColor.alpha * 0.85f).coerceIn(0f, 1f)),
                 start = Offset(0f, half),
                 end = Offset(size.width, half),
                 strokeWidth = scopeGridWidth
             )
-        } else {
-            drawLine(
-                color = gridColor,
-                start = Offset(0f, half),
-                end = Offset(size.width, half),
-                strokeWidth = scopeGridWidth
-            )
+        }
+
+        // Optional waveform centerline(s).
+        if (showCenterLine) {
+            if (stereo) {
+                drawLine(
+                    color = gridColor,
+                    start = Offset(0f, centerLeft),
+                    end = Offset(size.width, centerLeft),
+                    strokeWidth = scopeGridWidth
+                )
+                drawLine(
+                    color = gridColor,
+                    start = Offset(0f, centerRight),
+                    end = Offset(size.width, centerRight),
+                    strokeWidth = scopeGridWidth
+                )
+            } else {
+                drawLine(
+                    color = gridColor,
+                    start = Offset(0f, half),
+                    end = Offset(size.width, half),
+                    strokeWidth = scopeGridWidth
+                )
+            }
         }
 
         for (i in 1 until left.size) {

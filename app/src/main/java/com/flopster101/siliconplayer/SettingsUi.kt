@@ -1788,24 +1788,24 @@ internal fun SettingsScreen(
                         var showBarCustomColorDialog by remember { mutableStateOf(false) }
 
                         SettingsSectionLabel("Bars")
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Bar count",
-                            description = "$visualizationBarCount bars",
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Number of frequency bars shown in the spectrum.",
+                            value = "$visualizationBarCount",
                             onClick = { showBarCountDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Smoothing",
-                            description = "$visualizationBarSmoothingPercent%",
-                            icon = Icons.Default.MoreHoriz,
+                            description = "How quickly bars react to level changes.",
+                            value = "$visualizationBarSmoothingPercent%",
                             onClick = { showBarSmoothingDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Roundness",
-                            description = "${visualizationBarRoundnessDp}dp",
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Corner radius used for each bar.",
+                            value = "${visualizationBarRoundnessDp}dp",
                             onClick = { showBarRoundnessDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
@@ -1824,26 +1824,26 @@ internal fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Colors (no artwork)")
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Bar color",
-                            description = barColorModeNoArtwork.label,
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Color source used when no artwork is available.",
+                            value = barColorModeNoArtwork.label,
                             onClick = { showBarColorModeNoArtworkDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         SettingsSectionLabel("Colors (with artwork)")
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Bar color",
-                            description = barColorModeWithArtwork.label,
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Color source used when artwork is available.",
+                            value = barColorModeWithArtwork.label,
                             onClick = { showBarColorModeWithArtworkDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         SettingsSectionLabel("Custom color")
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Custom bar color",
-                            description = String.format(Locale.US, "#%06X", barCustomColorArgb and 0xFFFFFF),
-                            icon = Icons.Default.Palette,
+                            description = "RGB color used when color mode is set to Custom.",
+                            value = String.format(Locale.US, "#%06X", barCustomColorArgb and 0xFFFFFF),
                             onClick = { showBarCustomColorDialog = true }
                         )
 
@@ -2062,38 +2062,38 @@ internal fun SettingsScreen(
                             onCheckedChange = onVisualizationOscStereoChanged
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Visible window",
-                            description = "${visualizationOscWindowMs} ms",
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Time span shown across the oscilloscope view.",
+                            value = "${visualizationOscWindowMs} ms",
                             onClick = { showWindowDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Trigger",
-                            description = visualizationOscTriggerMode.label,
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Sync mode used to stabilize waveform start point.",
+                            value = visualizationOscTriggerMode.label,
                             onClick = { showTriggerDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Scope frame rate",
-                            description = visualizationOscFpsMode.label,
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Rendering rate for oscilloscope updates.",
+                            value = visualizationOscFpsMode.label,
                             onClick = { showFpsModeDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Line width",
-                            description = "${visualizationOscLineWidthDp}dp",
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Stroke width for waveform lines.",
+                            value = "${visualizationOscLineWidthDp}dp",
                             onClick = { showLineWidthDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Grid width",
-                            description = "${visualizationOscGridWidthDp}dp",
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Stroke width for grid lines.",
+                            value = "${visualizationOscGridWidthDp}dp",
                             onClick = { showGridWidthDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
@@ -2108,47 +2108,47 @@ internal fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Colors (no artwork)")
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Line color",
-                            description = oscLineColorModeNoArtwork.label,
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Color source used when no artwork is available.",
+                            value = oscLineColorModeNoArtwork.label,
                             onClick = { showLineNoArtworkColorModeDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Grid color",
-                            description = oscGridColorModeNoArtwork.label,
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Color source used when no artwork is available.",
+                            value = oscGridColorModeNoArtwork.label,
                             onClick = { showGridNoArtworkColorModeDialog = true }
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Colors (with artwork)")
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Line color",
-                            description = oscLineColorModeWithArtwork.label,
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Color source used when artwork is available.",
+                            value = oscLineColorModeWithArtwork.label,
                             onClick = { showLineArtworkColorModeDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Grid color",
-                            description = oscGridColorModeWithArtwork.label,
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Color source used when artwork is available.",
+                            value = oscGridColorModeWithArtwork.label,
                             onClick = { showGridArtworkColorModeDialog = true }
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Custom colors")
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Custom line color",
-                            description = String.format(Locale.US, "#%06X", oscCustomLineColorArgb and 0xFFFFFF),
-                            icon = Icons.Default.Palette,
+                            description = "RGB color used when line color mode is Custom.",
+                            value = String.format(Locale.US, "#%06X", oscCustomLineColorArgb and 0xFFFFFF),
                             onClick = { showCustomLineColorDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Custom grid color",
-                            description = String.format(Locale.US, "#%06X", oscCustomGridColorArgb and 0xFFFFFF),
-                            icon = Icons.Default.Palette,
+                            description = "RGB color used when grid color mode is Custom.",
+                            value = String.format(Locale.US, "#%06X", oscCustomGridColorArgb and 0xFFFFFF),
                             onClick = { showCustomGridColorDialog = true }
                         )
                         if (showWindowDialog) {
@@ -2438,17 +2438,17 @@ internal fun SettingsScreen(
                         var showVuColorModeWithArtworkDialog by remember { mutableStateOf(false) }
                         var showVuCustomColorDialog by remember { mutableStateOf(false) }
                         SettingsSectionLabel("VU meters")
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Anchor position",
-                            description = visualizationVuAnchor.label,
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Where VU meter rows are aligned in the artwork area.",
+                            value = visualizationVuAnchor.label,
                             onClick = { showVuAnchorDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Smoothing",
-                            description = "$visualizationVuSmoothingPercent%",
-                            icon = Icons.Default.MoreHoriz,
+                            description = "How quickly VU levels react to level changes.",
+                            value = "$visualizationVuSmoothingPercent%",
                             onClick = { showVuSmoothingDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
@@ -2460,26 +2460,26 @@ internal fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Colors (no artwork)")
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "VU color",
-                            description = vuColorModeNoArtwork.label,
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Color source used when no artwork is available.",
+                            value = vuColorModeNoArtwork.label,
                             onClick = { showVuColorModeNoArtworkDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         SettingsSectionLabel("Colors (with artwork)")
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "VU color",
-                            description = vuColorModeWithArtwork.label,
-                            icon = Icons.Default.MoreHoriz,
+                            description = "Color source used when artwork is available.",
+                            value = vuColorModeWithArtwork.label,
                             onClick = { showVuColorModeWithArtworkDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         SettingsSectionLabel("Custom color")
-                        SettingsItemCard(
+                        SettingsValuePickerCard(
                             title = "Custom VU color",
-                            description = String.format(Locale.US, "#%06X", vuCustomColorArgb and 0xFFFFFF),
-                            icon = Icons.Default.Palette,
+                            description = "RGB color used when VU color mode is Custom.",
+                            value = String.format(Locale.US, "#%06X", vuCustomColorArgb and 0xFFFFFF),
                             onClick = { showVuCustomColorDialog = true }
                         )
                         if (showVuSmoothingDialog) {
@@ -3088,6 +3088,50 @@ private fun SettingsItemCard(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsValuePickerCard(
+    title: String,
+    description: String,
+    value: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
+    val contentAlpha = if (enabled) 1f else 0.38f
+    androidx.compose.material3.ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = SettingsCardShape,
+        onClick = { if (enabled) onClick() },
+        enabled = enabled
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
             )
         }
     }

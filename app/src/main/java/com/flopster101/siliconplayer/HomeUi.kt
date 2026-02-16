@@ -18,11 +18,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,9 +33,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -47,6 +54,17 @@ internal data class RecentTrackDisplay(
     val primaryText: String,
     val includeFilenameInSubtitle: Boolean
 )
+
+internal enum class SourceEntryAction {
+    DeleteFromRecents,
+    ShareFile,
+    CopySource
+}
+
+internal enum class FolderEntryAction {
+    DeleteFromRecents,
+    CopyPath
+}
 
 internal fun buildRecentTrackDisplay(
     title: String,
@@ -94,8 +112,13 @@ internal fun HomeScreen(
     onOpenLibrary: () -> Unit,
     onOpenUrlOrPath: () -> Unit,
     onOpenRecentFolder: (RecentPathEntry) -> Unit,
-    onPlayRecentFile: (RecentPathEntry) -> Unit
+    onPlayRecentFile: (RecentPathEntry) -> Unit,
+    onRecentFolderAction: (RecentPathEntry, FolderEntryAction) -> Unit,
+    onRecentFileAction: (RecentPathEntry, SourceEntryAction) -> Unit,
+    canShareRecentFile: (RecentPathEntry) -> Boolean
 ) {
+    var folderActionTargetEntry by remember { mutableStateOf<RecentPathEntry?>(null) }
+    var fileActionTargetEntry by remember { mutableStateOf<RecentPathEntry?>(null) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -210,47 +233,76 @@ internal fun HomeScreen(
             recentFolders.take(RECENTS_LIMIT).forEach { entry ->
                 val folderFile = File(entry.path)
                 val storagePresentation = storagePresentationForEntry(entry)
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = HomeCardShape,
-                    onClick = { onOpenRecentFolder(entry) }
-                ) {
-                    Row(
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    ElevatedCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .clip(HomeCardShape)
+                            .combinedClickable(
+                                onClick = { onOpenRecentFolder(entry) },
+                                onLongClick = {
+                                    fileActionTargetEntry = null
+                                    folderActionTargetEntry = entry
+                                }
+                            ),
+                        shape = HomeCardShape
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Folder,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = folderFile.name.ifBlank { entry.path },
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = storagePresentation.icon,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = storagePresentation.label,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    text = folderFile.name.ifBlank { entry.path },
+                                    style = MaterialTheme.typography.titleSmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = storagePresentation.icon,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = storagePresentation.label,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
+                    }
+                    DropdownMenu(
+                        expanded = folderActionTargetEntry == entry,
+                        onDismissRequest = { folderActionTargetEntry = null }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Delete from recents") },
+                            onClick = {
+                                onRecentFolderAction(entry, FolderEntryAction.DeleteFromRecents)
+                                folderActionTargetEntry = null
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Copy path") },
+                            onClick = {
+                                onRecentFolderAction(entry, FolderEntryAction.CopyPath)
+                                folderActionTargetEntry = null
+                            }
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -262,53 +314,97 @@ internal fun HomeScreen(
                 text = "Recently played",
                 style = MaterialTheme.typography.titleMedium
             )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Tip: Hold a song for more actions.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(modifier = Modifier.height(8.dp))
             recentPlayedFiles.take(RECENTS_LIMIT).forEach { entry ->
                 val trackFile = File(entry.path)
                 val storagePresentation = storagePresentationForEntry(entry)
                 val extensionLabel = trackFile.extension.uppercase().ifBlank { "UNKNOWN" }
                 val useLiveMetadata = samePath(currentTrackPath, entry.path)
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = HomeCardShape,
-                    onClick = { onPlayRecentFile(entry) }
-                ) {
-                    Row(
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    ElevatedCard(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .clip(HomeCardShape)
+                            .combinedClickable(
+                                onClick = { onPlayRecentFile(entry) },
+                                onLongClick = {
+                                    folderActionTargetEntry = null
+                                    fileActionTargetEntry = entry
+                                }
+                            ),
+                        shape = HomeCardShape
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            RecentTrackSummaryText(
-                                file = trackFile,
-                                cachedTitle = if (useLiveMetadata) currentTrackTitle else entry.title,
-                                cachedArtist = if (useLiveMetadata) currentTrackArtist else entry.artist,
-                                storagePresentation = storagePresentation,
-                                extensionLabel = extensionLabel
-                            )
-                        }
-                        if (useLiveMetadata) {
-                            Spacer(modifier = Modifier.width(12.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = "Playing",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
                             )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                RecentTrackSummaryText(
+                                    file = trackFile,
+                                    cachedTitle = if (useLiveMetadata) currentTrackTitle else entry.title,
+                                    cachedArtist = if (useLiveMetadata) currentTrackArtist else entry.artist,
+                                    storagePresentation = storagePresentation,
+                                    extensionLabel = extensionLabel
+                                )
+                            }
+                            if (useLiveMetadata) {
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Playing",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
+                    }
+                    DropdownMenu(
+                        expanded = fileActionTargetEntry == entry,
+                        onDismissRequest = { fileActionTargetEntry = null }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Delete from recents") },
+                            onClick = {
+                                onRecentFileAction(entry, SourceEntryAction.DeleteFromRecents)
+                                fileActionTargetEntry = null
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Share file") },
+                            onClick = {
+                                onRecentFileAction(entry, SourceEntryAction.ShareFile)
+                                fileActionTargetEntry = null
+                            },
+                            enabled = canShareRecentFile(entry)
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Copy URL/path") },
+                            onClick = {
+                                onRecentFileAction(entry, SourceEntryAction.CopySource)
+                                fileActionTargetEntry = null
+                            }
+                        )
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }
+
 }
 
 @OptIn(ExperimentalFoundationApi::class)

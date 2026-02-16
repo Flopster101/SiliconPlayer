@@ -119,6 +119,8 @@ import android.content.Intent
 import android.content.Context
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.Settings
@@ -126,6 +128,7 @@ import android.os.Environment
 import android.util.Log
 import android.webkit.MimeTypeMap
 import android.widget.Toast
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
@@ -1701,6 +1704,24 @@ private fun AppNavigation(
         )
     }
 
+    fun resolveShareableFileForRecent(entry: RecentPathEntry): File? {
+        val normalized = normalizeSourceIdentity(entry.path) ?: return null
+        val uri = Uri.parse(normalized)
+        val scheme = uri.scheme?.lowercase(Locale.ROOT)
+        return when (scheme) {
+            "http", "https" -> {
+                findExistingCachedFileForSource(File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR), normalized)
+                    ?.takeIf { it.exists() && it.isFile }
+            }
+            "file" -> {
+                uri.path?.let { File(it) }?.takeIf { it.exists() && it.isFile }
+            }
+            else -> {
+                File(normalized).takeIf { it.exists() && it.isFile }
+            }
+        }
+    }
+
     fun addRecentFolder(path: String, locationId: String?) {
         val normalized = normalizeSourceIdentity(path) ?: path
         val updated = listOf(
@@ -3130,6 +3151,85 @@ private fun AppNavigation(
                                 } else {
                                     applyManualInputSelection(entry.path)
                                 }
+                            },
+                            onRecentFolderAction = { entry, action ->
+                                when (action) {
+                                    FolderEntryAction.DeleteFromRecents -> {
+                                        recentFolders = recentFolders
+                                            .filterNot { samePath(it.path, entry.path) }
+                                        writeRecentEntries(
+                                            prefs,
+                                            AppPreferenceKeys.RECENT_FOLDERS,
+                                            recentFolders,
+                                            recentLimit
+                                        )
+                                        Toast.makeText(context, "Removed from recents", Toast.LENGTH_SHORT).show()
+                                    }
+                                    FolderEntryAction.CopyPath -> {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(
+                                            ClipData.newPlainText("Path", entry.path)
+                                        )
+                                        Toast.makeText(context, "Copied path", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            onRecentFileAction = { entry, action ->
+                                when (action) {
+                                    SourceEntryAction.DeleteFromRecents -> {
+                                        recentPlayedFiles = recentPlayedFiles
+                                            .filterNot { samePath(it.path, entry.path) }
+                                        writeRecentEntries(
+                                            prefs,
+                                            AppPreferenceKeys.RECENT_PLAYED_FILES,
+                                            recentPlayedFiles,
+                                            recentLimit
+                                        )
+                                        Toast.makeText(context, "Removed from recents", Toast.LENGTH_SHORT).show()
+                                    }
+                                    SourceEntryAction.ShareFile -> {
+                                        val shareFile = resolveShareableFileForRecent(entry)
+                                        if (shareFile == null) {
+                                            Toast.makeText(
+                                                context,
+                                                "Share is only available for local or cached files",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        } else {
+                                            try {
+                                                val uri = FileProvider.getUriForFile(
+                                                    context,
+                                                    "${context.packageName}.fileprovider",
+                                                    shareFile
+                                                )
+                                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                                    type = guessMimeTypeFromFilename(shareFile.name)
+                                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                }
+                                                context.startActivity(
+                                                    Intent.createChooser(intent, "Share file")
+                                                )
+                                            } catch (_: Throwable) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Unable to share file",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        }
+                                    }
+                                    SourceEntryAction.CopySource -> {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(
+                                            ClipData.newPlainText("URL or path", entry.path)
+                                        )
+                                        Toast.makeText(context, "Copied URL/path", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            canShareRecentFile = { entry ->
+                                resolveShareableFileForRecent(entry) != null
                             }
                         )
                     }

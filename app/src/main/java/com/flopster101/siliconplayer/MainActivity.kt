@@ -1692,10 +1692,15 @@ private fun AppNavigation(
     val storagePermissionState = rememberStoragePermissionState(context)
 
     fun syncPlaybackService() {
+        val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
+        val resolvedSourceId = currentPlaybackSourceId
+            ?: selectedFile
+                ?.takeIf { it.absolutePath.startsWith(cacheRoot.absolutePath) }
+                ?.let { sourceIdForCachedFileName(cacheRoot, it.name) }
         syncPlaybackServiceForState(
             context = context,
             selectedFile = selectedFile,
-            sourceId = currentPlaybackSourceId,
+            sourceId = resolvedSourceId,
             metadataTitle = metadataTitle,
             metadataArtist = metadataArtist,
             durationSeconds = duration,
@@ -2207,9 +2212,9 @@ private fun AppNavigation(
     fun restorePlayerStateFromSessionAndNative(openExpanded: Boolean) {
         var sourcePath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null)?.trim()
             ?.takeIf { it.isNotBlank() } ?: return
+        val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
         if (sourcePath.startsWith("/virtual/remote/")) {
             val legacyName = sourcePath.substringAfterLast('/').trim()
-            val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
             val recovered = sourceIdForCachedFileName(cacheRoot, legacyName)
             if (!recovered.isNullOrBlank()) {
                 sourcePath = recovered
@@ -2218,12 +2223,17 @@ private fun AppNavigation(
                 return
             }
         }
+        if (sourcePath.startsWith(cacheRoot.absolutePath)) {
+            val recovered = sourceIdForCachedFileName(cacheRoot, File(sourcePath).name)
+            if (!recovered.isNullOrBlank()) {
+                sourcePath = recovered
+            }
+        }
         val normalizedSource = normalizeSourceIdentity(sourcePath) ?: sourcePath
         val sourceUri = Uri.parse(normalizedSource)
         val sourceScheme = sourceUri.scheme?.lowercase(Locale.ROOT)
         val isRemoteSource = sourceScheme == "http" || sourceScheme == "https"
         val displayFile = if (isRemoteSource) {
-            val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
             findExistingCachedFileForSource(cacheRoot, normalizedSource)
                 ?: File("/virtual/remote/${remoteFilenameHintFromUri(sourceUri) ?: "remote"}")
         } else {
@@ -2890,7 +2900,7 @@ private fun AppNavigation(
         }
     }
 
-    LaunchedEffect(selectedFile, isPlaying, metadataTitle, metadataArtist, duration) {
+    LaunchedEffect(selectedFile, currentPlaybackSourceId, isPlaying, metadataTitle, metadataArtist, duration) {
         if (selectedFile != null) {
             syncPlaybackService()
         }

@@ -1035,10 +1035,62 @@ void AudioEngine::setLooping(bool enabled) {
 
 void AudioEngine::setRepeatMode(int mode) {
     const int normalized = (mode >= 0 && mode <= 3) ? mode : 0;
-    repeatMode.store(normalized);
-    std::lock_guard<std::mutex> lock(decoderMutex);
-    if (decoder) {
-        decoder->setRepeatMode(normalized);
+    const int previousMode = repeatMode.exchange(normalized);
+    bool shouldStopForTerminalState = false;
+    {
+        std::lock_guard<std::mutex> lock(decoderMutex);
+        if (decoder) {
+            decoder->setRepeatMode(normalized);
+
+            // If we are leaving LP mode while already at/after track end, apply the
+            // newly selected repeat semantics immediately instead of waiting for a
+            // future decoder terminal event that may not occur promptly.
+            if (previousMode == 2 && normalized != 2) {
+                const double durationNow = decoder->getDuration();
+                const double currentPosition = positionSeconds.load();
+                const bool atOrPastEnd = durationNow > 0.0 && currentPosition >= (durationNow - 0.01);
+                if (atOrPastEnd) {
+                    if (normalized == 1) {
+                        const int subtuneCount = std::max(1, decoder->getSubtuneCount());
+                        if (subtuneCount > 1) {
+                            const int currentIndex = std::clamp(decoder->getCurrentSubtuneIndex(), 0, subtuneCount - 1);
+                            const int nextIndex = (currentIndex + 1) % subtuneCount;
+                            if (!decoder->selectSubtune(nextIndex)) {
+                                decoder->seek(0.0);
+                            }
+                        } else {
+                            decoder->seek(0.0);
+                        }
+                        resetResamplerStateLocked();
+                        positionSeconds.store(0.0);
+                        sharedAbsoluteInputPositionBaseSeconds = 0.0;
+                        outputClockSeconds = 0.0;
+                        timelineSmoothedSeconds = 0.0;
+                        timelineSmootherInitialized = false;
+                        naturalEndPending.store(false);
+                    } else if (normalized == 3) {
+                        decoder->seek(0.0);
+                        resetResamplerStateLocked();
+                        positionSeconds.store(0.0);
+                        sharedAbsoluteInputPositionBaseSeconds = 0.0;
+                        outputClockSeconds = 0.0;
+                        timelineSmoothedSeconds = 0.0;
+                        timelineSmootherInitialized = false;
+                        naturalEndPending.store(false);
+                    } else if (normalized == 0) {
+                        shouldStopForTerminalState = true;
+                        naturalEndPending.store(true);
+                    }
+                }
+            }
+        }
+    }
+
+    if (shouldStopForTerminalState) {
+        if (stream != nullptr) {
+            AAudioStream_requestStop(stream);
+        }
+        isPlaying.store(false);
     }
 }
 

@@ -159,6 +159,7 @@ fun PlayerScreen(
     visualizationVuAnchor: VisualizationVuAnchor,
     visualizationVuUseThemeColor: Boolean,
     visualizationVuSmoothingPercent: Int,
+    visualizationShowDebugInfo: Boolean = false,
     onOpenAudioEffects: () -> Unit,
     filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode = com.flopster101.siliconplayer.FilenameDisplayMode.Always,
     filenameOnlyWhenTitleMissing: Boolean = false
@@ -659,6 +660,7 @@ fun PlayerScreen(
                         visualizationModeBadgeText = visualizationModeBadgeText,
                         showVisualizationModeBadge = showVisualizationModeBadge,
                         visualizationMode = visualizationMode,
+                        visualizationShowDebugInfo = visualizationShowDebugInfo,
                         visualizationOscWindowMs = visualizationOscWindowMs,
                         visualizationOscTriggerModeNative = visualizationOscTriggerModeNative,
                         visualizationOscFpsMode = visualizationOscFpsMode,
@@ -793,6 +795,7 @@ fun PlayerScreen(
                         visualizationModeBadgeText = visualizationModeBadgeText,
                         showVisualizationModeBadge = showVisualizationModeBadge,
                         visualizationMode = visualizationMode,
+                        visualizationShowDebugInfo = visualizationShowDebugInfo,
                         visualizationOscWindowMs = visualizationOscWindowMs,
                         visualizationOscTriggerModeNative = visualizationOscTriggerModeNative,
                         visualizationOscFpsMode = visualizationOscFpsMode,

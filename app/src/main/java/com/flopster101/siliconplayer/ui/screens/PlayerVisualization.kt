@@ -63,6 +63,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
+private class VisualizationDebugAccumulator {
+    var frameCount: Int = 0
+    var windowStartNs: Long = 0L
+    var lastFrameNs: Long = 0L
+    var latestFrameMs: Int = 0
+    var lastUiPublishNs: Long = 0L
+}
+
 private fun computeChannelScopeSampleCount(
     windowMs: Int,
     sampleRateHz: Int
@@ -374,6 +382,7 @@ internal fun AlbumArtPlaceholder(
     visualizationModeBadgeText: String,
     showVisualizationModeBadge: Boolean,
     visualizationMode: VisualizationMode,
+    visualizationShowDebugInfo: Boolean,
     visualizationOscWindowMs: Int,
     visualizationOscTriggerModeNative: Int,
     visualizationOscFpsMode: VisualizationOscFpsMode,
@@ -416,6 +425,9 @@ internal fun AlbumArtPlaceholder(
     var visChannelScopeHistories by remember { mutableStateOf<List<FloatArray>>(emptyList()) }
     var visChannelScopeLastChannelCount by remember { mutableIntStateOf(1) }
     var visChannelScopeTriggerIndices by remember { mutableStateOf(IntArray(0)) }
+    var visDebugFps by remember { mutableIntStateOf(0) }
+    var visDebugFrameMs by remember { mutableIntStateOf(0) }
+    val visDebugAccumulator = remember { VisualizationDebugAccumulator() }
     var lastVisualizationBackend by remember {
         mutableStateOf(
             if (visualizationMode == VisualizationMode.ChannelScope) {
@@ -447,6 +459,13 @@ internal fun AlbumArtPlaceholder(
             ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
         visChannelScopeHistories = List(channels) { FloatArray(points) }
         visChannelScopeTriggerIndices = IntArray(channels) { points / 2 }
+        visDebugFps = 0
+        visDebugFrameMs = 0
+        visDebugAccumulator.frameCount = 0
+        visDebugAccumulator.windowStartNs = 0L
+        visDebugAccumulator.lastFrameNs = 0L
+        visDebugAccumulator.latestFrameMs = 0
+        visDebugAccumulator.lastUiPublishNs = 0L
     }
     LaunchedEffect(
         visualizationMode,
@@ -502,6 +521,29 @@ internal fun AlbumArtPlaceholder(
                         sampleRateHz = sampleRateHz
                     )
                     visChannelScopesFlat = NativeBridge.getChannelScopeSamples(scopeSamples)
+                }
+                val nowNs = System.nanoTime()
+                if (visDebugAccumulator.windowStartNs == 0L) {
+                    visDebugAccumulator.windowStartNs = nowNs
+                }
+                if (visDebugAccumulator.lastFrameNs != 0L) {
+                    visDebugAccumulator.latestFrameMs =
+                        ((nowNs - visDebugAccumulator.lastFrameNs) / 1_000_000L).toInt().coerceAtLeast(0)
+                }
+                visDebugAccumulator.lastFrameNs = nowNs
+                visDebugAccumulator.frameCount += 1
+                val elapsedNs = nowNs - visDebugAccumulator.windowStartNs
+                if (elapsedNs >= 1_000_000_000L) {
+                    visDebugFps = ((visDebugAccumulator.frameCount.toDouble() * 1_000_000_000.0) / elapsedNs.toDouble())
+                        .roundToInt()
+                        .coerceAtLeast(0)
+                    visDebugAccumulator.frameCount = 0
+                    visDebugAccumulator.windowStartNs = nowNs
+                }
+                // Throttle HUD state updates to reduce recomposition overhead.
+                if (nowNs - visDebugAccumulator.lastUiPublishNs >= 350_000_000L) {
+                    visDebugFrameMs = visDebugAccumulator.latestFrameMs
+                    visDebugAccumulator.lastUiPublishNs = nowNs
                 }
             }
             val delayMs = if (!isPlaying) {
@@ -681,6 +723,11 @@ internal fun AlbumArtPlaceholder(
         artworkBrightness > 0.5f -> androidx.compose.ui.graphics.Color.White
         else -> androidx.compose.ui.graphics.Color.Black
     }
+    val activeRenderBackend = if (visualizationMode == VisualizationMode.ChannelScope) {
+        channelScopePrefs.renderBackend
+    } else {
+        visualizationRenderBackendForMode(visualizationMode)
+    }
 
     ElevatedCard(
         modifier = modifier,
@@ -790,6 +837,22 @@ internal fun AlbumArtPlaceholder(
                         .matchParentSize()
                         .background(Color.Black.copy(alpha = backendTransitionBlackAlpha.value.coerceIn(0f, 1f)))
                 )
+            }
+            if (visualizationShowDebugInfo && visualizationMode != VisualizationMode.Off) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(start = 10.dp, top = 10.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color.Black.copy(alpha = 0.22f)
+                ) {
+                    Text(
+                        text = "Mode: ${visualizationMode.label}\nBackend: ${activeRenderBackend.label}\nFPS: ${visDebugFps}\nFrame: ${visDebugFrameMs} ms",
+                        color = Color.White.copy(alpha = 0.78f),
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                    )
+                }
             }
             androidx.compose.animation.AnimatedVisibility(
                 visible = showVisualizationModeBadge,

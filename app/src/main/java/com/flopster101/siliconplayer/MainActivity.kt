@@ -745,6 +745,7 @@ private object AppPreferenceKeys {
     const val END_FADE_CURVE = "end_fade_curve"
     const val VISUALIZATION_MODE = "visualization_mode"
     const val VISUALIZATION_ENABLED_MODES = "visualization_enabled_modes"
+    const val VISUALIZATION_SHOW_DEBUG_INFO = "visualization_show_debug_info"
     const val VISUALIZATION_BAR_COUNT = "visualization_bar_count"
     const val VISUALIZATION_BAR_SMOOTHING_PERCENT = "visualization_bar_smoothing_percent"
     const val VISUALIZATION_BAR_ROUNDNESS_DP = "visualization_bar_roundness_dp"
@@ -1287,6 +1288,11 @@ private fun AppNavigation(
             parseEnabledVisualizationModes(
                 prefs.getString(AppPreferenceKeys.VISUALIZATION_ENABLED_MODES, null)
             )
+        )
+    }
+    var visualizationShowDebugInfo by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.VISUALIZATION_SHOW_DEBUG_INFO, false)
         )
     }
     var visualizationBarCount by remember {
@@ -3015,6 +3021,11 @@ private fun AppNavigation(
             visualizationMode = VisualizationMode.Off
         }
     }
+    LaunchedEffect(visualizationShowDebugInfo) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.VISUALIZATION_SHOW_DEBUG_INFO, visualizationShowDebugInfo)
+            .apply()
+    }
 
     LaunchedEffect(visualizationBarCount) {
         val normalized = visualizationBarCount.coerceIn(8, 96)
@@ -4211,6 +4222,10 @@ private fun AppNavigation(
                         onEnabledVisualizationModesChanged = { modes ->
                             setEnabledVisualizationModes(modes)
                         },
+                        visualizationShowDebugInfo = visualizationShowDebugInfo,
+                        onVisualizationShowDebugInfoChanged = { enabled ->
+                            visualizationShowDebugInfo = enabled
+                        },
                         visualizationBarCount = visualizationBarCount,
                         onVisualizationBarCountChanged = { value ->
                             visualizationBarCount = value
@@ -4540,6 +4555,7 @@ private fun AppNavigation(
                             endFadeCurve = EndFadeCurve.Linear
                             visualizationMode = VisualizationMode.Off
                             enabledVisualizationModes = selectableVisualizationModes.toSet()
+                            visualizationShowDebugInfo = false
                             visualizationBarCount = 40
                             visualizationBarSmoothingPercent = 60
                             visualizationBarRoundnessDp = 6
@@ -4955,6 +4971,7 @@ private fun AppNavigation(
                             tempForceMono = forceMono
                             showAudioEffectsDialog = true
                         },
+                        visualizationShowDebugInfo = visualizationShowDebugInfo,
                         filenameDisplayMode = filenameDisplayMode,
                         filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
                     )
@@ -5203,6 +5220,7 @@ private fun AppNavigation(
                     visualizationVuAnchor = visualizationVuAnchor,
                     visualizationVuUseThemeColor = visualizationVuUseThemeColor,
                     visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
+                    visualizationShowDebugInfo = visualizationShowDebugInfo,
                     onOpenAudioEffects = {
                         tempMasterVolumeDb = masterVolumeDb
                         tempPluginVolumeDb = pluginVolumeDb

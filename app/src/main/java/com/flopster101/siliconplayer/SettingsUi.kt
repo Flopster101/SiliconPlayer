@@ -317,6 +317,8 @@ internal fun SettingsScreen(
     onVisualizationModeChanged: (VisualizationMode) -> Unit,
     enabledVisualizationModes: Set<VisualizationMode>,
     onEnabledVisualizationModesChanged: (Set<VisualizationMode>) -> Unit,
+    visualizationShowDebugInfo: Boolean,
+    onVisualizationShowDebugInfoChanged: (Boolean) -> Unit,
     visualizationBarCount: Int,
     onVisualizationBarCountChanged: (Int) -> Unit,
     visualizationBarSmoothingPercent: Int,
@@ -1597,6 +1599,13 @@ internal fun SettingsScreen(
                             description = "${enabledVisualizationModes.size}/${allPages.size} modes enabled",
                             icon = Icons.Default.Tune,
                             onClick = { showEnabledDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Show debug info overlay",
+                            description = "Show renderer backend and frame timing/FPS overlay for visualizations.",
+                            checked = visualizationShowDebugInfo,
+                            onCheckedChange = onVisualizationShowDebugInfoChanged
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Basic visualizations")

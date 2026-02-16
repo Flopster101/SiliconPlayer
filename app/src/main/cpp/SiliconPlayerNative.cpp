@@ -15,6 +15,20 @@ static void ensureEngine() {
     }
 }
 
+static jfloatArray toJFloatArray(JNIEnv* env, const std::vector<float>& values) {
+    jfloatArray array = env->NewFloatArray(static_cast<jsize>(values.size()));
+    if (array == nullptr || values.empty()) {
+        return array;
+    }
+    env->SetFloatArrayRegion(
+            array,
+            0,
+            static_cast<jsize>(values.size()),
+            reinterpret_cast<const jfloat*>(values.data())
+    );
+    return array;
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_stringFromJNI(
         JNIEnv* env,
@@ -754,6 +768,39 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_isTrackVBR(JNIEnv* env, jobject thiz) {
     if (audioEngine == nullptr) return JNI_FALSE;
     return audioEngine->isTrackVBR() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getVisualizationWaveform(
+        JNIEnv* env, jobject, jint channelIndex) {
+    if (audioEngine == nullptr) {
+        return env->NewFloatArray(0);
+    }
+    return toJFloatArray(env, audioEngine->getVisualizationWaveform(static_cast<int>(channelIndex)));
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getVisualizationBars(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewFloatArray(0);
+    }
+    return toJFloatArray(env, audioEngine->getVisualizationBars());
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getVisualizationVuLevels(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewFloatArray(0);
+    }
+    return toJFloatArray(env, audioEngine->getVisualizationVuLevels());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getVisualizationChannelCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) {
+        return 2;
+    }
+    return static_cast<jint>(audioEngine->getVisualizationChannelCount());
 }
 
 extern "C" JNIEXPORT void JNICALL

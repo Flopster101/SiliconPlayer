@@ -163,6 +163,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.GeneralAudio -> 1
     SettingsRoute.Home -> 1
     SettingsRoute.Player -> 1
+    SettingsRoute.Visualization -> 1
     SettingsRoute.Misc -> 1
     SettingsRoute.Ui -> 1
     SettingsRoute.About -> 1
@@ -182,6 +183,7 @@ internal fun SettingsScreen(
     onClearPluginAudioParameters: () -> Unit,
     onClearSongAudioParameters: () -> Unit,
     onOpenPlayer: () -> Unit,
+    onOpenVisualization: () -> Unit,
     onOpenMisc: () -> Unit,
     onOpenUrlCache: () -> Unit,
     onOpenCacheManager: () -> Unit,
@@ -256,6 +258,26 @@ internal fun SettingsScreen(
     onEndFadeDurationMsChanged: (Int) -> Unit,
     endFadeCurve: EndFadeCurve,
     onEndFadeCurveChanged: (EndFadeCurve) -> Unit,
+    visualizationMode: VisualizationMode,
+    onVisualizationModeChanged: (VisualizationMode) -> Unit,
+    visualizationBarCount: Int,
+    onVisualizationBarCountChanged: (Int) -> Unit,
+    visualizationBarSmoothingPercent: Int,
+    onVisualizationBarSmoothingPercentChanged: (Int) -> Unit,
+    visualizationBarRoundnessDp: Int,
+    onVisualizationBarRoundnessDpChanged: (Int) -> Unit,
+    visualizationBarOverlayArtwork: Boolean,
+    onVisualizationBarOverlayArtworkChanged: (Boolean) -> Unit,
+    visualizationBarUseThemeColor: Boolean,
+    onVisualizationBarUseThemeColorChanged: (Boolean) -> Unit,
+    visualizationOscStereo: Boolean,
+    onVisualizationOscStereoChanged: (Boolean) -> Unit,
+    visualizationVuAnchor: VisualizationVuAnchor,
+    onVisualizationVuAnchorChanged: (VisualizationVuAnchor) -> Unit,
+    visualizationVuUseThemeColor: Boolean,
+    onVisualizationVuUseThemeColorChanged: (Boolean) -> Unit,
+    visualizationVuSmoothingPercent: Int,
+    onVisualizationVuSmoothingPercentChanged: (Int) -> Unit,
     ffmpegSampleRateHz: Int,
     ffmpegCapabilities: Int,
     onFfmpegSampleRateChanged: (Int) -> Unit,
@@ -343,6 +365,7 @@ internal fun SettingsScreen(
         SettingsRoute.GeneralAudio -> "General audio"
         SettingsRoute.Home -> "Home settings"
         SettingsRoute.Player -> "Player settings"
+        SettingsRoute.Visualization -> "Visualization settings"
         SettingsRoute.Misc -> "Misc settings"
         SettingsRoute.Ui -> "UI settings"
         SettingsRoute.About -> "About"
@@ -534,6 +557,13 @@ internal fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Interface")
+                        SettingsItemCard(
+                            title = "Visualization settings",
+                            description = "Configure player visualizers and rendering style.",
+                            icon = Icons.Default.GraphicEq,
+                            onClick = onOpenVisualization
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
                         SettingsItemCard(
                             title = "UI settings",
                             description = "Appearance and layout preferences.",
@@ -1445,6 +1475,231 @@ internal fun SettingsScreen(
                             onCheckedChange = onFilenameOnlyWhenTitleMissingChanged,
                             enabled = filenameDisplayMode != FilenameDisplayMode.Never
                         )
+                    }
+                    SettingsRoute.Visualization -> {
+                        var showModeDialog by remember { mutableStateOf(false) }
+                        var showBarCountDialog by remember { mutableStateOf(false) }
+                        var showBarSmoothingDialog by remember { mutableStateOf(false) }
+                        var showBarRoundnessDialog by remember { mutableStateOf(false) }
+                        var showVuAnchorDialog by remember { mutableStateOf(false) }
+                        var showVuSmoothingDialog by remember { mutableStateOf(false) }
+
+                        SettingsSectionLabel("General")
+                        SettingsItemCard(
+                            title = "Current visualization",
+                            description = visualizationMode.label,
+                            icon = Icons.Default.GraphicEq,
+                            onClick = { showModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Bars")
+                        SettingsItemCard(
+                            title = "Bar count",
+                            description = "$visualizationBarCount bars",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showBarCountDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Smoothing",
+                            description = "$visualizationBarSmoothingPercent%",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showBarSmoothingDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Roundness",
+                            description = "${visualizationBarRoundnessDp}dp",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showBarRoundnessDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Overlay on artwork",
+                            description = "When disabled, bars are rendered over a blank background.",
+                            checked = visualizationBarOverlayArtwork,
+                            onCheckedChange = onVisualizationBarOverlayArtworkChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Use theme color",
+                            description = "Use app theme color for bars instead of alternate accent.",
+                            checked = visualizationBarUseThemeColor,
+                            onCheckedChange = onVisualizationBarUseThemeColorChanged
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Oscilloscope")
+                        PlayerSettingToggleCard(
+                            title = "Stereo mode",
+                            description = "Render stereo waveform when channel layout supports it.",
+                            checked = visualizationOscStereo,
+                            onCheckedChange = onVisualizationOscStereoChanged
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("VU meters")
+                        SettingsItemCard(
+                            title = "Anchor position",
+                            description = visualizationVuAnchor.label,
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showVuAnchorDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Smoothing",
+                            description = "$visualizationVuSmoothingPercent%",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showVuSmoothingDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Use theme color",
+                            description = "Use app theme color for VU bars instead of alternate accent.",
+                            checked = visualizationVuUseThemeColor,
+                            onCheckedChange = onVisualizationVuUseThemeColorChanged
+                        )
+
+                        if (showVuSmoothingDialog) {
+                            SteppedIntSliderDialog(
+                                title = "VU smoothing",
+                                unitLabel = "%",
+                                range = 0..95,
+                                step = 1,
+                                currentValue = visualizationVuSmoothingPercent,
+                                onDismiss = { showVuSmoothingDialog = false },
+                                onConfirm = { value ->
+                                    onVisualizationVuSmoothingPercentChanged(value)
+                                    showVuSmoothingDialog = false
+                                }
+                            )
+                        }
+
+                        if (showModeDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showModeDialog = false },
+                                title = { Text("Visualization mode") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            text = "Available modes depend on the current core and song format.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        VisualizationMode.entries.forEach { mode ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        onVisualizationModeChanged(mode)
+                                                        showModeDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = mode == visualizationMode,
+                                                    onClick = {
+                                                        onVisualizationModeChanged(mode)
+                                                        showModeDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(mode.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showModeDialog = false }) {
+                                        Text("Close")
+                                    }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+
+                        if (showBarCountDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Bar count",
+                                unitLabel = "bars",
+                                range = 8..96,
+                                step = 1,
+                                currentValue = visualizationBarCount,
+                                onDismiss = { showBarCountDialog = false },
+                                onConfirm = { value ->
+                                    onVisualizationBarCountChanged(value)
+                                    showBarCountDialog = false
+                                }
+                            )
+                        }
+
+                        if (showBarSmoothingDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Bar smoothing",
+                                unitLabel = "%",
+                                range = 0..95,
+                                step = 1,
+                                currentValue = visualizationBarSmoothingPercent,
+                                onDismiss = { showBarSmoothingDialog = false },
+                                onConfirm = { value ->
+                                    onVisualizationBarSmoothingPercentChanged(value)
+                                    showBarSmoothingDialog = false
+                                }
+                            )
+                        }
+
+                        if (showBarRoundnessDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Bar roundness",
+                                unitLabel = "dp",
+                                range = 0..24,
+                                step = 1,
+                                currentValue = visualizationBarRoundnessDp,
+                                onDismiss = { showBarRoundnessDialog = false },
+                                onConfirm = { value ->
+                                    onVisualizationBarRoundnessDpChanged(value)
+                                    showBarRoundnessDialog = false
+                                }
+                            )
+                        }
+
+                        if (showVuAnchorDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showVuAnchorDialog = false },
+                                title = { Text("VU anchor position") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationVuAnchor.entries.forEach { anchor ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        onVisualizationVuAnchorChanged(anchor)
+                                                        showVuAnchorDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = anchor == visualizationVuAnchor,
+                                                    onClick = {
+                                                        onVisualizationVuAnchorChanged(anchor)
+                                                        showVuAnchorDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(anchor.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showVuAnchorDialog = false }) {
+                                        Text("Close")
+                                    }
+                                },
+                                confirmButton = {}
+                            )
+                        }
                     }
                     SettingsRoute.Misc -> {
                         SettingsSectionLabel("Browser behavior")
@@ -3404,6 +3659,93 @@ private fun ExtensionSelectorDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun SteppedIntSliderDialog(
+    title: String,
+    unitLabel: String,
+    range: IntRange,
+    step: Int,
+    currentValue: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    val safeStep = step.coerceAtLeast(1)
+    val min = range.first
+    val max = range.last
+    val stepCount = ((max - min) / safeStep).coerceAtLeast(1)
+    var value by remember { mutableIntStateOf(currentValue.coerceIn(min, max)) }
+
+    fun normalize(raw: Int): Int {
+        val snapped = min + (((raw - min).toFloat() / safeStep).roundToInt() * safeStep)
+        return snapped.coerceIn(min, max)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = if (unitLabel == "%") "$value$unitLabel" else "$value $unitLabel",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { value = normalize(value - safeStep) },
+                        enabled = value > min,
+                        modifier = Modifier.width(56.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Remove,
+                            contentDescription = "Decrease"
+                        )
+                    }
+                    Slider(
+                        value = value.toFloat(),
+                        onValueChange = { raw ->
+                            value = normalize(raw.roundToInt())
+                        },
+                        valueRange = min.toFloat()..max.toFloat(),
+                        steps = (stepCount - 1).coerceAtLeast(0),
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedButton(
+                        onClick = { value = normalize(value + safeStep) },
+                        enabled = value < max,
+                        modifier = Modifier.width(56.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Increase"
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("$min", style = MaterialTheme.typography.labelSmall)
+                    Text("$max", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(value) }) {
+                Text("Save")
             }
         }
     )

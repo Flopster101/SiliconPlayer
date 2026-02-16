@@ -16,6 +16,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowLeft
@@ -78,8 +80,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import android.view.MotionEvent
 import com.flopster101.siliconplayer.RepeatMode
+import com.flopster101.siliconplayer.VisualizationMode
+import com.flopster101.siliconplayer.VisualizationVuAnchor
 import java.io.File
 import kotlin.math.roundToInt
+import kotlin.math.pow
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.text.selection.SelectionContainer
 
@@ -125,6 +130,20 @@ fun PlayerScreen(
     onCycleRepeatMode: () -> Unit,
     canOpenCoreSettings: Boolean,
     onOpenCoreSettings: () -> Unit,
+    visualizationMode: VisualizationMode,
+    availableVisualizationModes: List<VisualizationMode>,
+    onCycleVisualizationMode: () -> Unit,
+    onSelectVisualizationMode: (VisualizationMode) -> Unit,
+    onOpenVisualizationSettings: () -> Unit,
+    visualizationBarCount: Int,
+    visualizationBarSmoothingPercent: Int,
+    visualizationBarRoundnessDp: Int,
+    visualizationBarOverlayArtwork: Boolean,
+    visualizationBarUseThemeColor: Boolean,
+    visualizationOscStereo: Boolean,
+    visualizationVuAnchor: VisualizationVuAnchor,
+    visualizationVuUseThemeColor: Boolean,
+    visualizationVuSmoothingPercent: Int,
     onOpenAudioEffects: () -> Unit,
     filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode = com.flopster101.siliconplayer.FilenameDisplayMode.Always,
     filenameOnlyWhenTitleMissing: Boolean = false
@@ -137,6 +156,14 @@ fun PlayerScreen(
     var downwardDragPx by remember { mutableFloatStateOf(0f) }
     var isDraggingDown by remember { mutableStateOf(false) }
     var showTrackInfoDialog by remember { mutableStateOf(false) }
+    var showVisualizationPickerDialog by remember { mutableStateOf(false) }
+    var visWaveLeft by remember { mutableStateOf(FloatArray(0)) }
+    var visWaveRight by remember { mutableStateOf(FloatArray(0)) }
+    var visBars by remember { mutableStateOf(FloatArray(0)) }
+    var visBarsSmoothed by remember { mutableStateOf(FloatArray(0)) }
+    var visVu by remember { mutableStateOf(FloatArray(0)) }
+    var visVuSmoothed by remember { mutableStateOf(FloatArray(0)) }
+    var visChannelCount by remember { mutableIntStateOf(2) }
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
@@ -146,6 +173,64 @@ fun PlayerScreen(
         if (!isSeeking) {
             sliderPosition = positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0))
         }
+    }
+    LaunchedEffect(visualizationMode, file?.absolutePath, isPlaying) {
+        while (true) {
+            if (visualizationMode != VisualizationMode.Off && file != null) {
+                visWaveLeft = NativeBridge.getVisualizationWaveform(0)
+                visWaveRight = NativeBridge.getVisualizationWaveform(1)
+                visBars = NativeBridge.getVisualizationBars()
+                visVu = NativeBridge.getVisualizationVuLevels()
+                visChannelCount = NativeBridge.getVisualizationChannelCount().coerceAtLeast(1)
+            }
+            delay(if (isPlaying) 33L else 90L)
+        }
+    }
+    LaunchedEffect(visBars, visualizationBarSmoothingPercent, visualizationMode) {
+        if (visualizationMode != VisualizationMode.Bars) {
+            visBarsSmoothed = visBars
+            return@LaunchedEffect
+        }
+        if (visBars.isEmpty()) {
+            visBarsSmoothed = visBars
+            return@LaunchedEffect
+        }
+        val prev = visBarsSmoothed
+        if (prev.size != visBars.size) {
+            visBarsSmoothed = visBars.copyOf()
+            return@LaunchedEffect
+        }
+        val smoothing = (visualizationBarSmoothingPercent.coerceIn(0, 95) / 100f)
+        val mixed = FloatArray(visBars.size)
+        for (i in visBars.indices) {
+            val target = visBars[i].coerceIn(0f, 1f)
+            val current = prev[i].coerceIn(0f, 1f)
+            mixed[i] = (current * smoothing) + (target * (1f - smoothing))
+        }
+        visBarsSmoothed = mixed
+    }
+    LaunchedEffect(visVu, visualizationVuSmoothingPercent, visualizationMode) {
+        if (visualizationMode != VisualizationMode.VuMeters) {
+            visVuSmoothed = visVu
+            return@LaunchedEffect
+        }
+        if (visVu.isEmpty()) {
+            visVuSmoothed = visVu
+            return@LaunchedEffect
+        }
+        val prev = visVuSmoothed
+        if (prev.size != visVu.size) {
+            visVuSmoothed = visVu.copyOf()
+            return@LaunchedEffect
+        }
+        val smoothing = (visualizationVuSmoothingPercent.coerceIn(0, 95) / 100f)
+        val mixed = FloatArray(visVu.size)
+        for (i in visVu.indices) {
+            val target = visVu[i].coerceIn(0f, 1f)
+            val current = prev[i].coerceIn(0f, 1f)
+            mixed[i] = (current * smoothing) + (target * (1f - smoothing))
+        }
+        visVuSmoothed = mixed
     }
     val animatedPanelOffsetPx by animateFloatAsState(
         targetValue = if (isDraggingDown) downwardDragPx else 0f,
@@ -327,6 +412,19 @@ fun PlayerScreen(
                     AlbumArtPlaceholder(
                         artwork = artwork,
                         placeholderIcon = noArtworkIcon,
+                        visualizationMode = visualizationMode,
+                        barCount = visualizationBarCount,
+                        barRoundnessDp = visualizationBarRoundnessDp,
+                        barOverlayArtwork = visualizationBarOverlayArtwork,
+                        barUseThemeColor = visualizationBarUseThemeColor,
+                        oscStereo = visualizationOscStereo,
+                        vuAnchor = visualizationVuAnchor,
+                        vuUseThemeColor = visualizationVuUseThemeColor,
+                        waveformLeft = visWaveLeft,
+                        waveformRight = visWaveRight,
+                        bars = visBarsSmoothed,
+                        vuLevels = visVuSmoothed,
+                        channelCount = visChannelCount,
                         modifier = Modifier
                             .weight(0.45f)
                             .fillMaxHeight(0.84f)
@@ -408,6 +506,9 @@ fun PlayerScreen(
                         FutureActionStrip(
                             canOpenCoreSettings = canOpenCoreSettings,
                             onOpenCoreSettings = onOpenCoreSettings,
+                            visualizationMode = visualizationMode,
+                            onCycleVisualizationMode = onCycleVisualizationMode,
+                            onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
                             onOpenAudioEffects = onOpenAudioEffects
                         )
                     }
@@ -423,6 +524,19 @@ fun PlayerScreen(
                     AlbumArtPlaceholder(
                         artwork = artwork,
                         placeholderIcon = noArtworkIcon,
+                        visualizationMode = visualizationMode,
+                        barCount = visualizationBarCount,
+                        barRoundnessDp = visualizationBarRoundnessDp,
+                        barOverlayArtwork = visualizationBarOverlayArtwork,
+                        barUseThemeColor = visualizationBarUseThemeColor,
+                        oscStereo = visualizationOscStereo,
+                        vuAnchor = visualizationVuAnchor,
+                        vuUseThemeColor = visualizationVuUseThemeColor,
+                        waveformLeft = visWaveLeft,
+                        waveformRight = visWaveRight,
+                        bars = visBarsSmoothed,
+                        vuLevels = visVuSmoothed,
+                        channelCount = visChannelCount,
                         modifier = Modifier
                             .fillMaxWidth(0.86f)
                             .aspectRatio(1f)
@@ -499,6 +613,9 @@ fun PlayerScreen(
                         modifier = Modifier.fillMaxWidth(0.94f),
                         canOpenCoreSettings = canOpenCoreSettings,
                         onOpenCoreSettings = onOpenCoreSettings,
+                        visualizationMode = visualizationMode,
+                        onCycleVisualizationMode = onCycleVisualizationMode,
+                        onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
                         onOpenAudioEffects = onOpenAudioEffects
                     )
                 }
@@ -521,6 +638,56 @@ fun PlayerScreen(
             onDismiss = { showTrackInfoDialog = false }
         )
     }
+    if (showVisualizationPickerDialog) {
+        AlertDialog(
+            onDismissRequest = { showVisualizationPickerDialog = false },
+            title = { Text("Visualization mode") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Available visualizations depend on the current core and song.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    availableVisualizationModes.forEach { mode ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onSelectVisualizationMode(mode)
+                                    showVisualizationPickerDialog = false
+                                }
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = mode == visualizationMode,
+                                onClick = {
+                                    onSelectVisualizationMode(mode)
+                                    showVisualizationPickerDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(mode.label)
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showVisualizationPickerDialog = false }) {
+                    Text("Close")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showVisualizationPickerDialog = false
+                    onOpenVisualizationSettings()
+                }) {
+                    Text("Settings")
+                }
+            }
+        )
+    }
 }
 }
 
@@ -538,6 +705,19 @@ private fun toDisplayFilename(file: File): String {
 private fun AlbumArtPlaceholder(
     artwork: ImageBitmap?,
     placeholderIcon: ImageVector,
+    visualizationMode: VisualizationMode,
+    barCount: Int,
+    barRoundnessDp: Int,
+    barOverlayArtwork: Boolean,
+    barUseThemeColor: Boolean,
+    oscStereo: Boolean,
+    vuAnchor: VisualizationVuAnchor,
+    vuUseThemeColor: Boolean,
+    waveformLeft: FloatArray,
+    waveformRight: FloatArray,
+    bars: FloatArray,
+    vuLevels: FloatArray,
+    channelCount: Int,
     modifier: Modifier = Modifier
 ) {
     ElevatedCard(
@@ -547,52 +727,262 @@ private fun AlbumArtPlaceholder(
         ),
         shape = MaterialTheme.shapes.extraLarge
     ) {
-        Crossfade(targetState = artwork, label = "albumArtCrossfade") { art ->
-            if (art != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        bitmap = art,
-                        contentDescription = "Album artwork",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
-                                    MaterialTheme.colorScheme.surfaceVariant
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Crossfade(targetState = artwork, label = "albumArtCrossfade") { art ->
+                if (art != null) {
                     Box(
                         modifier = Modifier
-                            .size(120.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = placeholderIcon,
-                            contentDescription = "No album artwork",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(72.dp)
+                        Image(
+                            bitmap = art,
+                            contentDescription = "Album artwork",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
                         )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = placeholderIcon,
+                                contentDescription = "No album artwork",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(72.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            VisualizationOverlay(
+                mode = visualizationMode,
+                bars = bars,
+                waveformLeft = waveformLeft,
+                waveformRight = waveformRight,
+                vuLevels = vuLevels,
+                channelCount = channelCount,
+                barCount = barCount,
+                barRoundnessDp = barRoundnessDp,
+                barOverlayArtwork = barOverlayArtwork,
+                barUseThemeColor = barUseThemeColor,
+                oscStereo = oscStereo,
+                vuAnchor = vuAnchor,
+                vuUseThemeColor = vuUseThemeColor,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+    }
+}
+
+@Composable
+private fun VisualizationOverlay(
+    mode: VisualizationMode,
+    bars: FloatArray,
+    waveformLeft: FloatArray,
+    waveformRight: FloatArray,
+    vuLevels: FloatArray,
+    channelCount: Int,
+    barCount: Int,
+    barRoundnessDp: Int,
+    barOverlayArtwork: Boolean,
+    barUseThemeColor: Boolean,
+    oscStereo: Boolean,
+    vuAnchor: VisualizationVuAnchor,
+    vuUseThemeColor: Boolean,
+    modifier: Modifier = Modifier
+) {
+    if (mode == VisualizationMode.Off) return
+    val barColor = if (barUseThemeColor) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+    } else {
+        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.85f)
+    }
+    val oscColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
+    val vuColor = if (vuUseThemeColor) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+    } else {
+        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.9f)
+    }
+    val vuBackgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+    val barBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
+
+    when (mode) {
+        VisualizationMode.Bars -> {
+            Canvas(modifier = modifier.fillMaxSize()) {
+                if (!barOverlayArtwork) {
+                    drawRect(color = barBackgroundColor)
+                }
+                val count = barCount.coerceIn(8, 96)
+                val widthPx = size.width
+                val heightPx = size.height
+                if (widthPx <= 0f || heightPx <= 0f || count <= 0) return@Canvas
+                val gapPx = (widthPx / count) * 0.18f
+                val barWidth = ((widthPx - gapPx * (count - 1)) / count).coerceAtLeast(1f)
+                val radius = barRoundnessDp.dp.toPx().coerceAtMost(barWidth * 0.45f)
+                val source = if (bars.isNotEmpty()) bars else FloatArray(256) { 0f }
+                val usableMinIndex = 6
+                val usableMaxIndex = (source.size - 3).coerceAtLeast(usableMinIndex + 1)
+                val usableSpan = (usableMaxIndex - usableMinIndex).coerceAtLeast(1)
+                for (i in 0 until count) {
+                    val t0 = i.toFloat() / count.toFloat()
+                    val t1 = (i + 1).toFloat() / count.toFloat()
+                    // Log-spaced bar ranges: low frequencies use wider bins, highs get finer resolution.
+                    val mapped0 = kotlin.math.ln(1f + t0 * usableSpan) / kotlin.math.ln((usableSpan + 1).toFloat())
+                    val mapped1 = kotlin.math.ln(1f + t1 * usableSpan) / kotlin.math.ln((usableSpan + 1).toFloat())
+                    val start = (usableMinIndex + (mapped0 * usableSpan)).roundToInt().coerceIn(usableMinIndex, usableMaxIndex)
+                    val end = (usableMinIndex + (mapped1 * usableSpan)).roundToInt().coerceIn(start, usableMaxIndex)
+
+                    var peak = 0f
+                    var bandSumSq = 0.0
+                    var bandCount = 0
+                    for (idx in start..end) {
+                        val v = source[idx].coerceAtLeast(0f)
+                        if (v > peak) peak = v
+                        bandSumSq += (v * v).toDouble()
+                        bandCount += 1
+                    }
+                    val rms = if (bandCount > 0) kotlin.math.sqrt(bandSumSq / bandCount).toFloat() else peak
+                    val combined = (rms * 0.7f) + (peak * 0.3f)
+                    val db = 20f * kotlin.math.log10(combined.coerceAtLeast(0.00001f))
+                    val dbFloor = -72f
+                    val dbCeil = -10f
+                    val dbNorm = ((db - dbFloor) / (dbCeil - dbFloor)).coerceIn(0f, 1f)
+                    val bandCenterIndex = (start + end) * 0.5f
+                    val bandNorm = ((bandCenterIndex - usableMinIndex) / usableSpan.toFloat()).coerceIn(0f, 1f)
+                    // Stronger low-frequency compensation to prevent first-bar domination.
+                    val lowCompensation = 0.38f + (bandNorm * 0.62f)
+                    val level = dbNorm.toDouble().pow(1.08).toFloat().times(lowCompensation).coerceIn(0f, 1f)
+                    val h = level * heightPx
+                    val x = i * (barWidth + gapPx)
+                    drawRoundRect(
+                        color = barColor,
+                        topLeft = Offset(x, heightPx - h),
+                        size = Size(barWidth, h),
+                        cornerRadius = CornerRadius(radius, radius)
+                    )
+                }
+            }
+        }
+        VisualizationMode.Oscilloscope -> {
+            Canvas(modifier = modifier.fillMaxSize()) {
+                val stereo = oscStereo && channelCount > 1
+                val left = if (waveformLeft.isNotEmpty()) waveformLeft else FloatArray(256)
+                val right = if (waveformRight.isNotEmpty()) waveformRight else left
+                if (left.isEmpty()) return@Canvas
+
+                val half = size.height / 2f
+                val centerLeft = if (stereo) size.height * 0.30f else half
+                val centerRight = if (stereo) size.height * 0.72f else half
+                val ampScale = if (stereo) size.height * 0.20f else size.height * 0.34f
+                val stepX = size.width / (left.size - 1).coerceAtLeast(1)
+
+                for (i in 1 until left.size) {
+                    val x0 = (i - 1) * stepX
+                    val x1 = i * stepX
+                    val y0Left = centerLeft - (left[i - 1].coerceIn(-1f, 1f) * ampScale)
+                    val y1Left = centerLeft - (left[i].coerceIn(-1f, 1f) * ampScale)
+                    drawLine(
+                        color = oscColor,
+                        start = Offset(x0, y0Left),
+                        end = Offset(x1, y1Left),
+                        strokeWidth = 2f
+                    )
+                    if (stereo) {
+                        val y0Right = centerRight - (right[i - 1].coerceIn(-1f, 1f) * ampScale)
+                        val y1Right = centerRight - (right[i].coerceIn(-1f, 1f) * ampScale)
+                        drawLine(
+                            color = oscColor.copy(alpha = 0.78f),
+                            start = Offset(x0, y0Right),
+                            end = Offset(x1, y1Right),
+                            strokeWidth = 2f
+                        )
+                    }
+                }
+                if (stereo) {
+                    drawLine(
+                        color = oscColor.copy(alpha = 0.18f),
+                        start = Offset(0f, half),
+                        end = Offset(size.width, half),
+                        strokeWidth = 1f
+                    )
+                }
+            }
+        }
+        VisualizationMode.VuMeters -> {
+            val levels = vuLevels
+            val showStereo = channelCount > 1
+            val rows = if (showStereo) 2 else 1
+            val align = when (vuAnchor) {
+                VisualizationVuAnchor.Top -> Alignment.TopCenter
+                VisualizationVuAnchor.Center -> Alignment.Center
+                VisualizationVuAnchor.Bottom -> Alignment.BottomCenter
+            }
+            Box(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                contentAlignment = align
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    repeat(rows) { idx ->
+                        val label = when {
+                            showStereo && idx == 0 -> "Left"
+                            showStereo && idx == 1 -> "Right"
+                            else -> "Mono"
+                        }
+                        val raw = levels.getOrElse(idx) { 0f }.coerceIn(0f, 1f)
+                        val db = 20f * kotlin.math.log10(raw.coerceAtLeast(0.0001f))
+                        val dbFloor = -58f
+                        val norm = ((db - dbFloor) / -dbFloor).coerceIn(0f, 1f)
+                        val value = norm.toDouble().pow(0.62).toFloat().coerceIn(0f, 1f)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(42.dp)
+                            )
+                            LinearProgressIndicator(
+                                progress = { value },
+                                modifier = Modifier
+                                    .height(10.dp)
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(50)),
+                                color = vuColor,
+                                trackColor = vuBackgroundColor
+                            )
+                        }
                     }
                 }
             }
         }
+        VisualizationMode.Off -> Unit
     }
 }
 
@@ -1616,10 +2006,14 @@ private fun TransportControls(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun FutureActionStrip(
     modifier: Modifier = Modifier,
     canOpenCoreSettings: Boolean,
     onOpenCoreSettings: () -> Unit,
+    visualizationMode: VisualizationMode,
+    onCycleVisualizationMode: () -> Unit,
+    onOpenVisualizationPicker: () -> Unit,
     onOpenAudioEffects: () -> Unit
 ) {
     Surface(
@@ -1634,11 +2028,36 @@ private fun FutureActionStrip(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AssistChip(
-                onClick = {},
-                enabled = false,
-                label = { Text("1x") }
-            )
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                modifier = Modifier
+                    .clip(MaterialTheme.shapes.extraLarge)
+                    .combinedClickable(
+                        onClick = onCycleVisualizationMode,
+                        onLongClick = onOpenVisualizationPicker
+                    )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.GraphicEq,
+                        contentDescription = "Visualization mode"
+                    )
+                    Text(
+                        text = when (visualizationMode) {
+                            VisualizationMode.Off -> "Off"
+                            VisualizationMode.Bars -> "Bars"
+                            VisualizationMode.Oscilloscope -> "Scope"
+                            VisualizationMode.VuMeters -> "VU"
+                        },
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
             IconButton(onClick = onOpenCoreSettings, enabled = canOpenCoreSettings) {
                 Icon(
                     imageVector = Icons.Default.Extension,

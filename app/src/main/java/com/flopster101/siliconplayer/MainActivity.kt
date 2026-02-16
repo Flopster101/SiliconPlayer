@@ -222,6 +222,7 @@ enum class SettingsRoute {
     GeneralAudio,
     Home,
     Player,
+    Visualization,
     Misc,
     Ui,
     About
@@ -626,6 +627,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.GeneralAudio -> 1
     SettingsRoute.Home -> 1
     SettingsRoute.Player -> 1
+    SettingsRoute.Visualization -> 1
     SettingsRoute.Misc -> 1
     SettingsRoute.Ui -> 1
     SettingsRoute.About -> 1
@@ -678,6 +680,16 @@ private object AppPreferenceKeys {
     const val END_FADE_APPLY_TO_ALL_TRACKS = "end_fade_apply_to_all_tracks"
     const val END_FADE_DURATION_MS = "end_fade_duration_ms"
     const val END_FADE_CURVE = "end_fade_curve"
+    const val VISUALIZATION_MODE = "visualization_mode"
+    const val VISUALIZATION_BAR_COUNT = "visualization_bar_count"
+    const val VISUALIZATION_BAR_SMOOTHING_PERCENT = "visualization_bar_smoothing_percent"
+    const val VISUALIZATION_BAR_ROUNDNESS_DP = "visualization_bar_roundness_dp"
+    const val VISUALIZATION_BAR_OVERLAY_ARTWORK = "visualization_bar_overlay_artwork"
+    const val VISUALIZATION_BAR_USE_THEME_COLOR = "visualization_bar_use_theme_color"
+    const val VISUALIZATION_OSC_STEREO = "visualization_osc_stereo"
+    const val VISUALIZATION_VU_ANCHOR = "visualization_vu_anchor"
+    const val VISUALIZATION_VU_USE_THEME_COLOR = "visualization_vu_use_theme_color"
+    const val VISUALIZATION_VU_SMOOTHING_PERCENT = "visualization_vu_smoothing_percent"
 
     // Plugin management keys
     fun decoderEnabledKey(decoderName: String) = "decoder_${decoderName}_enabled"
@@ -1160,6 +1172,60 @@ private fun AppNavigation(
             EndFadeCurve.fromStorage(
                 prefs.getString(AppPreferenceKeys.END_FADE_CURVE, EndFadeCurve.Linear.storageValue)
             )
+        )
+    }
+    var visualizationMode by remember {
+        mutableStateOf(
+            VisualizationMode.fromStorage(
+                prefs.getString(AppPreferenceKeys.VISUALIZATION_MODE, VisualizationMode.Off.storageValue)
+            )
+        )
+    }
+    var visualizationBarCount by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.VISUALIZATION_BAR_COUNT, 40).coerceIn(8, 96)
+        )
+    }
+    var visualizationBarSmoothingPercent by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.VISUALIZATION_BAR_SMOOTHING_PERCENT, 60).coerceIn(0, 95)
+        )
+    }
+    var visualizationBarRoundnessDp by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.VISUALIZATION_BAR_ROUNDNESS_DP, 6).coerceIn(0, 24)
+        )
+    }
+    var visualizationBarOverlayArtwork by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.VISUALIZATION_BAR_OVERLAY_ARTWORK, true)
+        )
+    }
+    var visualizationBarUseThemeColor by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.VISUALIZATION_BAR_USE_THEME_COLOR, true)
+        )
+    }
+    var visualizationOscStereo by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.VISUALIZATION_OSC_STEREO, true)
+        )
+    }
+    var visualizationVuAnchor by remember {
+        mutableStateOf(
+            VisualizationVuAnchor.fromStorage(
+                prefs.getString(AppPreferenceKeys.VISUALIZATION_VU_ANCHOR, VisualizationVuAnchor.Bottom.storageValue)
+            )
+        )
+    }
+    var visualizationVuUseThemeColor by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.VISUALIZATION_VU_USE_THEME_COLOR, true)
+        )
+    }
+    var visualizationVuSmoothingPercent by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.VISUALIZATION_VU_SMOOTHING_PERCENT, 60).coerceIn(0, 95)
         )
     }
 
@@ -2819,6 +2885,80 @@ private fun AppNavigation(
         NativeBridge.setEndFadeCurve(endFadeCurve.nativeValue)
     }
 
+    LaunchedEffect(visualizationMode) {
+        prefs.edit()
+            .putString(AppPreferenceKeys.VISUALIZATION_MODE, visualizationMode.storageValue)
+            .apply()
+    }
+
+    LaunchedEffect(visualizationBarCount) {
+        val normalized = visualizationBarCount.coerceIn(8, 96)
+        if (normalized != visualizationBarCount) {
+            visualizationBarCount = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit().putInt(AppPreferenceKeys.VISUALIZATION_BAR_COUNT, normalized).apply()
+    }
+
+    LaunchedEffect(visualizationBarSmoothingPercent) {
+        val normalized = visualizationBarSmoothingPercent.coerceIn(0, 95)
+        if (normalized != visualizationBarSmoothingPercent) {
+            visualizationBarSmoothingPercent = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit().putInt(AppPreferenceKeys.VISUALIZATION_BAR_SMOOTHING_PERCENT, normalized).apply()
+    }
+
+    LaunchedEffect(visualizationBarRoundnessDp) {
+        val normalized = visualizationBarRoundnessDp.coerceIn(0, 24)
+        if (normalized != visualizationBarRoundnessDp) {
+            visualizationBarRoundnessDp = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit().putInt(AppPreferenceKeys.VISUALIZATION_BAR_ROUNDNESS_DP, normalized).apply()
+    }
+
+    LaunchedEffect(visualizationBarOverlayArtwork) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.VISUALIZATION_BAR_OVERLAY_ARTWORK, visualizationBarOverlayArtwork)
+            .apply()
+    }
+
+    LaunchedEffect(visualizationBarUseThemeColor) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.VISUALIZATION_BAR_USE_THEME_COLOR, visualizationBarUseThemeColor)
+            .apply()
+    }
+
+    LaunchedEffect(visualizationOscStereo) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.VISUALIZATION_OSC_STEREO, visualizationOscStereo)
+            .apply()
+    }
+
+    LaunchedEffect(visualizationVuAnchor) {
+        prefs.edit()
+            .putString(AppPreferenceKeys.VISUALIZATION_VU_ANCHOR, visualizationVuAnchor.storageValue)
+            .apply()
+    }
+
+    LaunchedEffect(visualizationVuUseThemeColor) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.VISUALIZATION_VU_USE_THEME_COLOR, visualizationVuUseThemeColor)
+            .apply()
+    }
+
+    LaunchedEffect(visualizationVuSmoothingPercent) {
+        val normalized = visualizationVuSmoothingPercent.coerceIn(0, 95)
+        if (normalized != visualizationVuSmoothingPercent) {
+            visualizationVuSmoothingPercent = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(AppPreferenceKeys.VISUALIZATION_VU_SMOOTHING_PERCENT, normalized)
+            .apply()
+    }
+
     LaunchedEffect(vgmPlayLoopCount) {
         val normalized = vgmPlayLoopCount.coerceIn(1, 99)
         if (normalized != vgmPlayLoopCount) {
@@ -3243,6 +3383,24 @@ private fun AppNavigation(
     }
     val currentCorePluginName = pluginNameForCoreName(lastUsedCoreName)
     val canOpenCurrentCoreSettings = currentCorePluginName != null
+    val availableVisualizationModes = remember(metadataChannelCount) {
+        listOf(
+            VisualizationMode.Off,
+            VisualizationMode.Bars,
+            VisualizationMode.Oscilloscope,
+            VisualizationMode.VuMeters
+        )
+    }
+    val cycleVisualizationMode: () -> Unit = {
+        val modes = availableVisualizationModes
+        val currentIndex = modes.indexOf(visualizationMode).takeIf { it >= 0 } ?: 0
+        visualizationMode = modes[(currentIndex + 1) % modes.size]
+    }
+    val setVisualizationMode: (VisualizationMode) -> Unit = { mode ->
+        if (availableVisualizationModes.contains(mode)) {
+            visualizationMode = mode
+        }
+    }
     val exitSettingsToReturnView: () -> Unit = {
         val target = if (settingsLaunchedFromPlayer) settingsReturnView else MainView.Home
         settingsLaunchedFromPlayer = false
@@ -3258,6 +3416,13 @@ private fun AppNavigation(
             currentView = MainView.Settings
             isPlayerExpanded = false
         }
+    }
+    val openVisualizationSettings: () -> Unit = {
+        settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
+        settingsLaunchedFromPlayer = true
+        settingsRoute = SettingsRoute.Visualization
+        currentView = MainView.Settings
+        isPlayerExpanded = false
     }
 
     LaunchedEffect(keepScreenOn, isPlayerExpanded) {
@@ -3638,6 +3803,7 @@ private fun AppNavigation(
                             Toast.makeText(context, "All song volumes cleared", Toast.LENGTH_SHORT).show()
                         },
                         onOpenPlayer = { settingsRoute = SettingsRoute.Player },
+                        onOpenVisualization = { settingsRoute = SettingsRoute.Visualization },
                         onOpenMisc = { settingsRoute = SettingsRoute.Misc },
                         onOpenUrlCache = { settingsRoute = SettingsRoute.UrlCache },
                         onOpenCacheManager = {
@@ -3831,6 +3997,46 @@ private fun AppNavigation(
                         onEndFadeCurveChanged = { curve ->
                             endFadeCurve = curve
                         },
+                        visualizationMode = visualizationMode,
+                        onVisualizationModeChanged = { mode ->
+                            setVisualizationMode(mode)
+                        },
+                        visualizationBarCount = visualizationBarCount,
+                        onVisualizationBarCountChanged = { value ->
+                            visualizationBarCount = value
+                        },
+                        visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
+                        onVisualizationBarSmoothingPercentChanged = { value ->
+                            visualizationBarSmoothingPercent = value
+                        },
+                        visualizationBarRoundnessDp = visualizationBarRoundnessDp,
+                        onVisualizationBarRoundnessDpChanged = { value ->
+                            visualizationBarRoundnessDp = value
+                        },
+                        visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
+                        onVisualizationBarOverlayArtworkChanged = { enabled ->
+                            visualizationBarOverlayArtwork = enabled
+                        },
+                        visualizationBarUseThemeColor = visualizationBarUseThemeColor,
+                        onVisualizationBarUseThemeColorChanged = { enabled ->
+                            visualizationBarUseThemeColor = enabled
+                        },
+                        visualizationOscStereo = visualizationOscStereo,
+                        onVisualizationOscStereoChanged = { enabled ->
+                            visualizationOscStereo = enabled
+                        },
+                        visualizationVuAnchor = visualizationVuAnchor,
+                        onVisualizationVuAnchorChanged = { anchor ->
+                            visualizationVuAnchor = anchor
+                        },
+                        visualizationVuUseThemeColor = visualizationVuUseThemeColor,
+                        onVisualizationVuUseThemeColorChanged = { enabled ->
+                            visualizationVuUseThemeColor = enabled
+                        },
+                        visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
+                        onVisualizationVuSmoothingPercentChanged = { value ->
+                            visualizationVuSmoothingPercent = value
+                        },
                         audioFocusInterrupt = audioFocusInterrupt,
                         onAudioFocusInterruptChanged = {
                             audioFocusInterrupt = it
@@ -3995,6 +4201,16 @@ private fun AppNavigation(
                             endFadeApplyToAllTracks = false
                             endFadeDurationMs = 10000
                             endFadeCurve = EndFadeCurve.Linear
+                            visualizationMode = VisualizationMode.Off
+                            visualizationBarCount = 40
+                            visualizationBarSmoothingPercent = 60
+                            visualizationBarRoundnessDp = 6
+                            visualizationBarOverlayArtwork = true
+                            visualizationBarUseThemeColor = true
+                            visualizationOscStereo = true
+                            visualizationVuAnchor = VisualizationVuAnchor.Bottom
+                            visualizationVuUseThemeColor = true
+                            visualizationVuSmoothingPercent = 60
                             browserLaunchLocationId = null
                             browserLaunchDirectoryPath = null
                             onThemeModeChanged(ThemeMode.Auto)
@@ -4269,6 +4485,20 @@ private fun AppNavigation(
                         onCycleRepeatMode = {},
                         canOpenCoreSettings = canOpenCurrentCoreSettings,
                         onOpenCoreSettings = openCurrentCoreSettings,
+                        visualizationMode = visualizationMode,
+                        availableVisualizationModes = availableVisualizationModes,
+                        onCycleVisualizationMode = cycleVisualizationMode,
+                        onSelectVisualizationMode = setVisualizationMode,
+                        onOpenVisualizationSettings = openVisualizationSettings,
+                        visualizationBarCount = visualizationBarCount,
+                        visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
+                        visualizationBarRoundnessDp = visualizationBarRoundnessDp,
+                        visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
+                        visualizationBarUseThemeColor = visualizationBarUseThemeColor,
+                        visualizationOscStereo = visualizationOscStereo,
+                        visualizationVuAnchor = visualizationVuAnchor,
+                        visualizationVuUseThemeColor = visualizationVuUseThemeColor,
+                        visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
                         onOpenAudioEffects = {
                             tempMasterVolumeDb = masterVolumeDb
                             tempPluginVolumeDb = pluginVolumeDb
@@ -4509,6 +4739,20 @@ private fun AppNavigation(
                     onCycleRepeatMode = { cycleRepeatMode() },
                     canOpenCoreSettings = canOpenCurrentCoreSettings,
                     onOpenCoreSettings = openCurrentCoreSettings,
+                    visualizationMode = visualizationMode,
+                    availableVisualizationModes = availableVisualizationModes,
+                    onCycleVisualizationMode = cycleVisualizationMode,
+                    onSelectVisualizationMode = setVisualizationMode,
+                    onOpenVisualizationSettings = openVisualizationSettings,
+                    visualizationBarCount = visualizationBarCount,
+                    visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
+                    visualizationBarRoundnessDp = visualizationBarRoundnessDp,
+                    visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
+                    visualizationBarUseThemeColor = visualizationBarUseThemeColor,
+                    visualizationOscStereo = visualizationOscStereo,
+                    visualizationVuAnchor = visualizationVuAnchor,
+                    visualizationVuUseThemeColor = visualizationVuUseThemeColor,
+                    visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
                     onOpenAudioEffects = {
                         tempMasterVolumeDb = masterVolumeDb
                         tempPluginVolumeDb = pluginVolumeDb

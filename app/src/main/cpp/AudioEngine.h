@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 #include <unordered_map>
+#include <array>
 #include "decoders/AudioDecoder.h"
 
 struct SwrContext;
@@ -100,6 +101,10 @@ public:
     void setEndFadeApplyToAllTracks(bool enabled);
     void setEndFadeDurationMs(int durationMs);
     void setEndFadeCurve(int curve);
+    std::vector<float> getVisualizationWaveform(int channelIndex) const;
+    std::vector<float> getVisualizationBars() const;
+    std::vector<float> getVisualizationVuLevels() const;
+    int getVisualizationChannelCount() const;
     float getMasterGain() const;
     float getPluginGain() const;
     float getSongGain() const;
@@ -152,6 +157,15 @@ private:
     std::atomic<bool> endFadeApplyToAllTracks { false };
     std::atomic<int> endFadeDurationMs { 10000 };
     std::atomic<int> endFadeCurve { 0 }; // 0 linear, 1 ease-in, 2 ease-out
+    mutable std::mutex visualizationMutex;
+    std::array<float, 256> visualizationWaveformLeft {};
+    std::array<float, 256> visualizationWaveformRight {};
+    std::array<float, 256> visualizationBars {};
+    std::array<float, 2> visualizationVuLevels {};
+    std::atomic<int> visualizationChannelCount { 2 };
+    std::array<float, 2048> visualizationMonoHistory {};
+    int visualizationMonoWriteIndex = 0;
+    int visualizationCallbacksSinceAnalysis = 0;
 
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
     void reconfigureStream(bool resumePlayback);
@@ -172,6 +186,7 @@ private:
     float computeEndFadeGainLocked(double playbackPositionSeconds) const;
     void applyGain(float* buffer, int numFrames, int channels, float extraGain = 1.0f);
     void applyMonoDownmix(float* buffer, int numFrames, int channels);
+    void updateVisualizationDataLocked(const float* buffer, int numFrames, int channels);
 
     // Callback
     static aaudio_data_callback_result_t dataCallback(

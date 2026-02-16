@@ -843,6 +843,7 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         const float endFadeGain = engine->computeEndFadeGainLocked(gainTimelinePosition);
         engine->applyGain(outputData, numFrames, channels, endFadeGain);
         engine->applyMonoDownmix(outputData, numFrames, channels);
+        engine->updateVisualizationDataLocked(outputData, numFrames, channels);
 
         const int mode = engine->repeatMode.load();
         if (reachedEnd && mode != 1 && mode != 3) {
@@ -1761,6 +1762,135 @@ void AudioEngine::applyMonoDownmix(float* buffer, int numFrames, int channels) {
         buffer[i * 2] = mono;
         buffer[i * 2 + 1] = mono;
     }
+}
+
+void AudioEngine::updateVisualizationDataLocked(const float* buffer, int numFrames, int channels) {
+    if (!buffer || numFrames <= 0 || channels <= 0) {
+        return;
+    }
+
+    constexpr int kWaveformSize = 256;
+    constexpr int kFftSize = 512;
+    constexpr int kFftBins = 256;
+    constexpr int kHistorySize = 2048;
+    constexpr int kAnalysisEveryCallbacks = 1;
+
+    std::array<float, 256> waveL {};
+    std::array<float, 256> waveR {};
+    std::array<float, 256> bars {};
+    std::array<float, 2> vu {};
+
+    for (int n = 0; n < kWaveformSize; ++n) {
+        const int srcFrame = (n * numFrames) / kWaveformSize;
+        const int frameIndex = std::min(srcFrame, numFrames - 1);
+        const int base = frameIndex * channels;
+        const float left = buffer[base];
+        const float right = channels > 1 ? buffer[base + 1] : left;
+        waveL[n] = std::clamp(left, -1.0f, 1.0f);
+        waveR[n] = std::clamp(right, -1.0f, 1.0f);
+    }
+
+    double sumSqL = 0.0;
+    double sumSqR = 0.0;
+    for (int frame = 0; frame < numFrames; ++frame) {
+        const int base = frame * channels;
+        const float left = buffer[base];
+        const float right = channels > 1 ? buffer[base + 1] : left;
+        const float mono = 0.5f * (left + right);
+        visualizationMonoHistory[visualizationMonoWriteIndex] = mono;
+        visualizationMonoWriteIndex = (visualizationMonoWriteIndex + 1) % kHistorySize;
+        sumSqL += static_cast<double>(left) * left;
+        sumSqR += static_cast<double>(right) * right;
+    }
+    const double invFrames = 1.0 / static_cast<double>(numFrames);
+    vu[0] = static_cast<float>(std::clamp(std::sqrt(sumSqL * invFrames), 0.0, 1.0));
+    vu[1] = static_cast<float>(std::clamp(std::sqrt(sumSqR * invFrames), 0.0, 1.0));
+
+    {
+        std::lock_guard<std::mutex> visLock(visualizationMutex);
+        bars = visualizationBars;
+    }
+
+    visualizationCallbacksSinceAnalysis += 1;
+    if (visualizationCallbacksSinceAnalysis >= kAnalysisEveryCallbacks) {
+        visualizationCallbacksSinceAnalysis = 0;
+
+        std::array<float, kFftSize> analysisWindow {};
+        for (int n = 0; n < kFftSize; ++n) {
+            const int historyIndex =
+                    (visualizationMonoWriteIndex - kFftSize + n + kHistorySize) % kHistorySize;
+            analysisWindow[n] = visualizationMonoHistory[historyIndex];
+        }
+
+        double mean = 0.0;
+        for (int n = 0; n < kFftSize; ++n) {
+            mean += analysisWindow[n];
+        }
+        mean /= static_cast<double>(kFftSize);
+
+        constexpr float twoPiOverN = static_cast<float>((2.0 * M_PI) / kFftSize);
+        float prevSample = 0.0f;
+        for (int n = 0; n < kFftSize; ++n) {
+            const float centered = analysisWindow[n] - static_cast<float>(mean);
+            // Pre-emphasis reduces persistent low-frequency dominance in the display.
+            const float emphasized = centered - (0.94f * prevSample);
+            prevSample = centered;
+            const float window = 0.5f - 0.5f * std::cos(twoPiOverN * static_cast<float>(n));
+            analysisWindow[n] = emphasized * window;
+        }
+
+        static bool twiddleInitialized = false;
+        static std::array<std::array<float, kFftSize>, kFftBins> cosTable {};
+        static std::array<std::array<float, kFftSize>, kFftBins> sinTable {};
+        if (!twiddleInitialized) {
+            for (int k = 0; k < kFftBins; ++k) {
+                for (int n = 0; n < kFftSize; ++n) {
+                    const double angle = -2.0 * M_PI * static_cast<double>(k * n) / kFftSize;
+                    cosTable[k][n] = static_cast<float>(std::cos(angle));
+                    sinTable[k][n] = static_cast<float>(std::sin(angle));
+                }
+            }
+            twiddleInitialized = true;
+        }
+
+        for (int k = 0; k < kFftBins; ++k) {
+            double real = 0.0;
+            double imag = 0.0;
+            for (int n = 0; n < kFftSize; ++n) {
+                real += static_cast<double>(analysisWindow[n]) * cosTable[k][n];
+                imag += static_cast<double>(analysisWindow[n]) * sinTable[k][n];
+            }
+            const double mag = std::sqrt(real * real + imag * imag) / (kFftSize * 0.5);
+            bars[k] = static_cast<float>(std::clamp(mag, 0.0, 4.0));
+        }
+    }
+
+    std::lock_guard<std::mutex> visLock(visualizationMutex);
+    visualizationWaveformLeft = waveL;
+    visualizationWaveformRight = waveR;
+    visualizationBars = bars;
+    visualizationVuLevels = vu;
+    visualizationChannelCount.store(std::clamp(channels, 1, 2));
+}
+
+std::vector<float> AudioEngine::getVisualizationWaveform(int channelIndex) const {
+    std::lock_guard<std::mutex> lock(visualizationMutex);
+    const auto& source = channelIndex == 1 ? visualizationWaveformRight : visualizationWaveformLeft;
+    return std::vector<float>(source.begin(), source.end());
+}
+
+std::vector<float> AudioEngine::getVisualizationBars() const {
+    std::lock_guard<std::mutex> lock(visualizationMutex);
+    return std::vector<float>(visualizationBars.begin(), visualizationBars.end());
+}
+
+std::vector<float> AudioEngine::getVisualizationVuLevels() const {
+    std::lock_guard<std::mutex> lock(visualizationMutex);
+    return std::vector<float>(visualizationVuLevels.begin(), visualizationVuLevels.end());
+}
+
+int AudioEngine::getVisualizationChannelCount() const {
+    return visualizationChannelCount.load();
 }
 
 // Bitrate information

@@ -452,6 +452,7 @@ private fun applyRepeatModeToNative(mode: RepeatMode) {
             RepeatMode.None -> 0
             RepeatMode.Track -> 1
             RepeatMode.LoopPoint -> 2
+            RepeatMode.Subtune -> 3
         }
     )
 }
@@ -1908,7 +1909,12 @@ private fun AppNavigation(
     }
 
     fun refreshRepeatModeForTrack() {
-        activeRepeatMode = resolveActiveRepeatMode(preferredRepeatMode, repeatModeCapabilitiesFlags)
+        val allowSubtuneRepeat = selectedFile == null || subtuneCount > 1
+        activeRepeatMode = resolveActiveRepeatMode(
+            preferredRepeatMode = preferredRepeatMode,
+            repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags,
+            includeSubtuneRepeat = allowSubtuneRepeat
+        )
         applyRepeatModeToNative(activeRepeatMode)
     }
 
@@ -1916,7 +1922,8 @@ private fun AppNavigation(
         if (!supportsLiveRepeatMode(playbackCapabilitiesFlags)) return
         val next = cycleRepeatModeValue(
             activeRepeatMode = activeRepeatMode,
-            repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags
+            repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags,
+            includeSubtuneRepeat = selectedFile == null || subtuneCount > 1
         ) ?: return
         preferredRepeatMode = next
         activeRepeatMode = next
@@ -2441,6 +2448,25 @@ private fun AppNavigation(
             duration = nextDuration
             position = nextPosition
             isPlaying = nextIsPlaying
+
+            val nativeSubtuneCount = NativeBridge.getSubtuneCount().coerceAtLeast(1)
+            val nativeSubtuneIndex = NativeBridge.getCurrentSubtuneIndex()
+                .coerceIn(0, nativeSubtuneCount - 1)
+            if (nativeSubtuneCount != subtuneCount || nativeSubtuneIndex != currentSubtuneIndex) {
+                applyNativeTrackSnapshot(readNativeTrackSnapshot())
+                refreshSubtuneState()
+                refreshRepeatModeForTrack()
+                val recentSourceId = currentPlaybackSourceId ?: currentFile?.absolutePath
+                if (recentSourceId != null) {
+                    addRecentPlayedTrack(
+                        path = recentSourceId,
+                        locationId = if (isLocalPlayableFile(currentFile)) lastBrowserLocationId else null,
+                        title = metadataTitle,
+                        artist = metadataArtist
+                    )
+                }
+            }
+
             val currentPath = currentPlaybackSourceId ?: currentFile?.absolutePath
             if (currentPath != playbackWatchPath) {
                 playbackWatchPath = currentPath

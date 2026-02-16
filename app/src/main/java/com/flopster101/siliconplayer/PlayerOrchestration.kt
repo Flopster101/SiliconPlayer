@@ -54,16 +54,22 @@ internal fun syncPlaybackServiceForState(
 
 internal fun resolveActiveRepeatMode(
     preferredRepeatMode: RepeatMode,
-    repeatModeCapabilitiesFlags: Int
+    repeatModeCapabilitiesFlags: Int,
+    includeSubtuneRepeat: Boolean = false
 ): RepeatMode {
-    return resolveRepeatModeForFlags(preferredRepeatMode, repeatModeCapabilitiesFlags)
+    return resolveRepeatModeForFlags(
+        preferredRepeatMode,
+        repeatModeCapabilitiesFlags,
+        includeSubtuneRepeat
+    )
 }
 
 internal fun cycleRepeatModeValue(
     activeRepeatMode: RepeatMode,
-    repeatModeCapabilitiesFlags: Int
+    repeatModeCapabilitiesFlags: Int,
+    includeSubtuneRepeat: Boolean = false
 ): RepeatMode? {
-    val modes = availableRepeatModesForFlags(repeatModeCapabilitiesFlags)
+    val modes = availableRepeatModesForFlags(repeatModeCapabilitiesFlags, includeSubtuneRepeat)
     if (modes.isEmpty()) return null
     val currentIndex = modes.indexOf(activeRepeatMode).let { if (it < 0) 0 else it }
     return modes[(currentIndex + 1) % modes.size]

@@ -1458,6 +1458,7 @@ private fun TransportControls(
                         val modeBadge = when (repeatMode) {
                             RepeatMode.None -> ""
                             RepeatMode.Track -> "1"
+                            RepeatMode.Subtune -> "ST"
                             RepeatMode.LoopPoint -> "LP"
                         }
                         BadgedBox(

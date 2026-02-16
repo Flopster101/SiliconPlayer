@@ -24,6 +24,10 @@ enum class RepeatMode(
         storageValue = "track",
         label = "Repeat track"
     ),
+    Subtune(
+        storageValue = "subtune",
+        label = "Repeat subtune"
+    ),
     LoopPoint(
         storageValue = "loop_point",
         label = "Repeat at loop point"
@@ -31,7 +35,6 @@ enum class RepeatMode(
 
     companion object {
         fun fromStorage(value: String?): RepeatMode {
-            if (value == "subtune") return LoopPoint
             return entries.firstOrNull { it.storageValue == value } ?: None
         }
     }
@@ -60,11 +63,14 @@ fun repeatModeCapabilitiesFlagsForFileFallback(file: File?): Int {
     return flags
 }
 
-fun availableRepeatModesForFlags(flags: Int): List<RepeatMode> {
+fun availableRepeatModesForFlags(flags: Int, includeSubtuneRepeat: Boolean = false): List<RepeatMode> {
     val supportsLoopPointRepeat = (flags and REPEAT_CAP_LOOP_POINT) != 0
     return buildList {
         add(RepeatMode.None)
         add(RepeatMode.Track)
+        if (includeSubtuneRepeat) {
+            add(RepeatMode.Subtune)
+        }
         if (supportsLoopPointRepeat) {
             add(RepeatMode.LoopPoint)
         }
@@ -75,11 +81,22 @@ fun resolveRepeatModeForFile(preferredMode: RepeatMode, file: File?): RepeatMode
     return resolveRepeatModeForFlags(preferredMode, repeatModeCapabilitiesFlagsForFileFallback(file))
 }
 
-fun resolveRepeatModeForFlags(preferredMode: RepeatMode, flags: Int): RepeatMode {
+fun resolveRepeatModeForFlags(
+    preferredMode: RepeatMode,
+    flags: Int,
+    includeSubtuneRepeat: Boolean = false
+): RepeatMode {
     val supportsLoopPointRepeat = (flags and REPEAT_CAP_LOOP_POINT) != 0
     return when (preferredMode) {
         RepeatMode.None -> RepeatMode.None
         RepeatMode.Track -> RepeatMode.Track
+        RepeatMode.Subtune -> {
+            if (includeSubtuneRepeat) {
+                RepeatMode.Subtune
+            } else {
+                RepeatMode.Track
+            }
+        }
         RepeatMode.LoopPoint -> {
             if (supportsLoopPointRepeat) {
                 RepeatMode.LoopPoint

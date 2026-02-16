@@ -326,7 +326,9 @@ int AudioEngine::readFromDecoderLocked(float* buffer, int numFrames, bool& reach
         return framesRead;
     }
 
-    if (repeatMode.load() == 2) {
+    const int mode = repeatMode.load();
+
+    if (mode == 2) {
         // Loop-point mode can return transient 0-frame reads at wrap boundaries.
         for (int retry = 0; retry < 4; ++retry) {
             framesRead = decoder->read(buffer, numFrames);
@@ -336,7 +338,8 @@ int AudioEngine::readFromDecoderLocked(float* buffer, int numFrames, bool& reach
         }
     }
 
-    if (repeatMode.load() == 1) {
+    if (mode == 3) {
+        // Repeat current subtune/track only.
         decoder->seek(0.0);
         positionSeconds.store(0.0);
         resetResamplerStateLocked();
@@ -347,7 +350,43 @@ int AudioEngine::readFromDecoderLocked(float* buffer, int numFrames, bool& reach
         }
     }
 
-    if (repeatMode.load() != 2) {
+    if (mode == 1) {
+        // Repeat whole track set: advance subtune when available, otherwise restart from start.
+        const int subtuneCount = std::max(1, decoder->getSubtuneCount());
+        if (subtuneCount > 1) {
+            const int currentIndex = std::clamp(decoder->getCurrentSubtuneIndex(), 0, subtuneCount - 1);
+            bool switched = false;
+            if (currentIndex + 1 < subtuneCount) {
+                switched = decoder->selectSubtune(currentIndex + 1);
+            } else {
+                switched = decoder->selectSubtune(0);
+                if (switched) {
+                    decoder->seek(0.0);
+                }
+            }
+            if (!switched) {
+                decoder->seek(0.0);
+            }
+            positionSeconds.store(0.0);
+            resetResamplerStateLocked();
+            sharedAbsoluteInputPositionBaseSeconds = 0.0;
+            framesRead = decoder->read(buffer, numFrames);
+            if (framesRead > 0) {
+                return framesRead;
+            }
+        } else {
+            decoder->seek(0.0);
+            positionSeconds.store(0.0);
+            resetResamplerStateLocked();
+            sharedAbsoluteInputPositionBaseSeconds = 0.0;
+            framesRead = decoder->read(buffer, numFrames);
+            if (framesRead > 0) {
+                return framesRead;
+            }
+        }
+    }
+
+    if (mode != 2) {
         reachedEnd = true;
     }
     return 0;
@@ -804,12 +843,13 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
             engine->positionSeconds.fetch_add(callbackDeltaSeconds);
         }
 
-        if (reachedEnd && engine->repeatMode.load() != 1) {
+        const int mode = engine->repeatMode.load();
+        if (reachedEnd && mode != 1 && mode != 3) {
             const double durationAtEnd = engine->decoder->getDuration();
             if (durationAtEnd > 0.0) {
                 engine->positionSeconds.store(durationAtEnd);
             }
-            if (engine->repeatMode.load() == 0) {
+            if (mode == 0) {
                 engine->naturalEndPending.store(true);
             }
             engine->isPlaying.store(false);
@@ -993,7 +1033,7 @@ void AudioEngine::setLooping(bool enabled) {
 }
 
 void AudioEngine::setRepeatMode(int mode) {
-    const int normalized = (mode >= 0 && mode <= 2) ? mode : 0;
+    const int normalized = (mode >= 0 && mode <= 3) ? mode : 0;
     repeatMode.store(normalized);
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (decoder) {

@@ -276,7 +276,8 @@ int GmeDecoder::read(float* buffer, int numFrames) {
 
         if (gme_track_ended(emu)) {
             const int mode = repeatMode.load();
-            if (mode == 1) {
+            if (mode == 3) {
+                // Repeat-subtune mode: restart current subtune only.
                 applyRepeatBehaviorLocked();
                 const gme_err_t restartErr = gme_start_track(emu, activeTrack);
                 if (restartErr != nullptr) {

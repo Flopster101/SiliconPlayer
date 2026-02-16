@@ -142,9 +142,7 @@ bool LibOpenMPTDecoder::open(const char* path) {
         isAmigaModule = detectAmigaModule(path ? path : "", module.get());
         isXmModule = detectXmModule(path ? path : "", module.get());
         applyRenderSettingsLocked();
-        if (repeatMode == 1 || repeatMode == 2) {
-            // Keep looping inside currently selected subsong.
-            // "play.at_end=continue" can advance to other subsongs for some modules.
+        if (repeatMode == 2) {
             module->set_repeat_count(-1);
             module->ctl_set_text("play.at_end", "stop");
         } else {
@@ -260,7 +258,7 @@ void LibOpenMPTDecoder::setRepeatMode(int mode) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     repeatMode = mode;
     if (!module) return;
-    if (repeatMode == 1 || repeatMode == 2) {
+    if (repeatMode == 2) {
         module->set_repeat_count(-1);
         module->ctl_set_text("play.at_end", "stop");
     } else {

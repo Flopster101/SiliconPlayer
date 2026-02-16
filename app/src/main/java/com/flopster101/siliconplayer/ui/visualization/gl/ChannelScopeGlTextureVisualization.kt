@@ -332,6 +332,8 @@ private class ChannelScopeGlCoreRenderer {
     private var waveformVertexCount: Int = 0
     private var gridBuffer: FloatBuffer? = null
     private var gridVertexCount: Int = 0
+    private val waveformBuilder = TextureFloatLineBuilder(16_384)
+    private val gridBuilder = TextureFloatLineBuilder(4_096)
     private var rendererReady: Boolean = false
     private var frameStatsCallback: ((fps: Int, frameMs: Int) -> Unit)? = null
     private var drawFrameCount: Int = 0
@@ -421,8 +423,8 @@ private class ChannelScopeGlCoreRenderer {
         val cellWidth = surfaceWidth.toFloat() / safeColumns.toFloat()
         val cellHeight = surfaceHeight.toFloat() / safeRows.toFloat()
         val ampScale = cellHeight * 0.48f
-        val waveformBuilder = TextureFloatLineBuilder(channels * 1024)
-        val gridBuilder = TextureFloatLineBuilder(channels * 64)
+        waveformBuilder.reset()
+        gridBuilder.reset()
 
         for (channel in 0 until channels) {
             val col = channel / safeRows
@@ -471,18 +473,18 @@ private class ChannelScopeGlCoreRenderer {
             }
         }
 
-        val waveData = waveformBuilder.toFloatArray()
-        val gridData = gridBuilder.toFloatArray()
-        waveformVertexCount = waveData.size / 2
-        gridVertexCount = gridData.size / 2
-        waveformBuffer = ensureBuffer(waveformBuffer, waveData.size).apply {
+        val waveSize = waveformBuilder.size
+        val gridSize = gridBuilder.size
+        waveformVertexCount = waveSize / 2
+        gridVertexCount = gridSize / 2
+        waveformBuffer = ensureBuffer(waveformBuffer, waveSize).apply {
             clear()
-            put(waveData)
+            put(waveformBuilder.data, 0, waveSize)
             position(0)
         }
-        gridBuffer = ensureBuffer(gridBuffer, gridData.size).apply {
+        gridBuffer = ensureBuffer(gridBuffer, gridSize).apply {
             clear()
-            put(gridData)
+            put(gridBuilder.data, 0, gridSize)
             position(0)
         }
     }
@@ -574,8 +576,10 @@ private class ChannelScopeGlCoreRenderer {
 }
 
 private class TextureFloatLineBuilder(initialFloatCapacity: Int) {
-    private var data = FloatArray(initialFloatCapacity.coerceAtLeast(16))
-    private var size = 0
+    var data = FloatArray(initialFloatCapacity.coerceAtLeast(16))
+        private set
+    var size = 0
+        private set
 
     fun addLine(x0: Float, y0: Float, x1: Float, y1: Float) {
         ensureCapacity(4)
@@ -583,6 +587,10 @@ private class TextureFloatLineBuilder(initialFloatCapacity: Int) {
         data[size++] = y0
         data[size++] = x1
         data[size++] = y1
+    }
+
+    fun reset() {
+        size = 0
     }
 
     private fun ensureCapacity(extra: Int) {
@@ -595,7 +603,6 @@ private class TextureFloatLineBuilder(initialFloatCapacity: Int) {
         data = data.copyOf(newSize)
     }
 
-    fun toFloatArray(): FloatArray = data.copyOf(size)
 }
 
 private fun resolveGridTexture(

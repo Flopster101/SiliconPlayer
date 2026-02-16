@@ -29,6 +29,70 @@ namespace {
         return preference == 2 ? "SoX" : "Built-in";
     }
 
+    constexpr int kVisualizationWaveformSize = 256;
+    constexpr int kVisualizationFftSize = 2048;
+    constexpr int kVisualizationSpectrumBins = 256;
+
+    void fftInPlace(std::array<float, kVisualizationFftSize>& real,
+                    std::array<float, kVisualizationFftSize>& imag) {
+        static bool bitReverseInitialized = false;
+        static std::array<int, kVisualizationFftSize> bitReverse {};
+        if (!bitReverseInitialized) {
+            constexpr int kBitCount = 11; // log2(2048)
+            for (int i = 0; i < kVisualizationFftSize; ++i) {
+                int x = i;
+                int reversed = 0;
+                for (int bit = 0; bit < kBitCount; ++bit) {
+                    reversed = (reversed << 1) | (x & 1);
+                    x >>= 1;
+                }
+                bitReverse[i] = reversed;
+            }
+            bitReverseInitialized = true;
+        }
+
+        for (int i = 0; i < kVisualizationFftSize; ++i) {
+            const int j = bitReverse[i];
+            if (j > i) {
+                std::swap(real[i], real[j]);
+                std::swap(imag[i], imag[j]);
+            }
+        }
+
+        for (int len = 2; len <= kVisualizationFftSize; len <<= 1) {
+            const int halfLen = len >> 1;
+            const float theta = -2.0f * static_cast<float>(M_PI) / static_cast<float>(len);
+            const float phaseStepReal = std::cos(theta);
+            const float phaseStepImag = std::sin(theta);
+            for (int i = 0; i < kVisualizationFftSize; i += len) {
+                float twiddleReal = 1.0f;
+                float twiddleImag = 0.0f;
+                for (int j = 0; j < halfLen; ++j) {
+                    const int even = i + j;
+                    const int odd = even + halfLen;
+                    const float oddReal = real[odd];
+                    const float oddImag = imag[odd];
+                    const float tReal = (twiddleReal * oddReal) - (twiddleImag * oddImag);
+                    const float tImag = (twiddleReal * oddImag) + (twiddleImag * oddReal);
+                    const float evenReal = real[even];
+                    const float evenImag = imag[even];
+
+                    real[odd] = evenReal - tReal;
+                    imag[odd] = evenImag - tImag;
+                    real[even] = evenReal + tReal;
+                    imag[even] = evenImag + tImag;
+
+                    const float nextTwiddleReal =
+                            (twiddleReal * phaseStepReal) - (twiddleImag * phaseStepImag);
+                    const float nextTwiddleImag =
+                            (twiddleReal * phaseStepImag) + (twiddleImag * phaseStepReal);
+                    twiddleReal = nextTwiddleReal;
+                    twiddleImag = nextTwiddleImag;
+                }
+            }
+        }
+    }
+
     struct DecoderRegistration {
         DecoderRegistration() {
              DecoderRegistry::getInstance().registerDecoder("FFmpeg", FFmpegDecoder::getSupportedExtensions(), []() {
@@ -1769,19 +1833,13 @@ void AudioEngine::updateVisualizationDataLocked(const float* buffer, int numFram
         return;
     }
 
-    constexpr int kWaveformSize = 256;
-    constexpr int kFftSize = 512;
-    constexpr int kFftBins = 256;
-    constexpr int kHistorySize = 2048;
-    constexpr int kAnalysisEveryCallbacks = 1;
-
     std::array<float, 256> waveL {};
     std::array<float, 256> waveR {};
     std::array<float, 256> bars {};
     std::array<float, 2> vu {};
 
-    for (int n = 0; n < kWaveformSize; ++n) {
-        const int srcFrame = (n * numFrames) / kWaveformSize;
+    for (int n = 0; n < kVisualizationWaveformSize; ++n) {
+        const int srcFrame = (n * numFrames) / kVisualizationWaveformSize;
         const int frameIndex = std::min(srcFrame, numFrames - 1);
         const int base = frameIndex * channels;
         const float left = buffer[base];
@@ -1798,7 +1856,7 @@ void AudioEngine::updateVisualizationDataLocked(const float* buffer, int numFram
         const float right = channels > 1 ? buffer[base + 1] : left;
         const float mono = 0.5f * (left + right);
         visualizationMonoHistory[visualizationMonoWriteIndex] = mono;
-        visualizationMonoWriteIndex = (visualizationMonoWriteIndex + 1) % kHistorySize;
+        visualizationMonoWriteIndex = (visualizationMonoWriteIndex + 1) % static_cast<int>(visualizationMonoHistory.size());
         sumSqL += static_cast<double>(left) * left;
         sumSqR += static_cast<double>(right) * right;
     }
@@ -1806,63 +1864,66 @@ void AudioEngine::updateVisualizationDataLocked(const float* buffer, int numFram
     vu[0] = static_cast<float>(std::clamp(std::sqrt(sumSqL * invFrames), 0.0, 1.0));
     vu[1] = static_cast<float>(std::clamp(std::sqrt(sumSqR * invFrames), 0.0, 1.0));
 
-    {
-        std::lock_guard<std::mutex> visLock(visualizationMutex);
-        bars = visualizationBars;
+    std::array<float, kVisualizationFftSize> fftReal {};
+    std::array<float, kVisualizationFftSize> fftImag {};
+    const int historySize = static_cast<int>(visualizationMonoHistory.size());
+    for (int n = 0; n < kVisualizationFftSize; ++n) {
+        const int historyIndex =
+                (visualizationMonoWriteIndex - kVisualizationFftSize + n + historySize) % historySize;
+        fftReal[n] = visualizationMonoHistory[historyIndex];
     }
 
-    visualizationCallbacksSinceAnalysis += 1;
-    if (visualizationCallbacksSinceAnalysis >= kAnalysisEveryCallbacks) {
-        visualizationCallbacksSinceAnalysis = 0;
+    // Remove DC and apply Hann window before FFT.
+    double mean = 0.0;
+    for (float sample : fftReal) {
+        mean += sample;
+    }
+    mean /= static_cast<double>(kVisualizationFftSize);
+    const float invSizeMinusOne = 1.0f / static_cast<float>(kVisualizationFftSize - 1);
+    for (int n = 0; n < kVisualizationFftSize; ++n) {
+        const float centered = fftReal[n] - static_cast<float>(mean);
+        const float phase = static_cast<float>(n) * invSizeMinusOne;
+        const float hann = 0.5f - (0.5f * std::cos(2.0f * static_cast<float>(M_PI) * phase));
+        fftReal[n] = centered * hann;
+        fftImag[n] = 0.0f;
+    }
 
-        std::array<float, kFftSize> analysisWindow {};
-        for (int n = 0; n < kFftSize; ++n) {
-            const int historyIndex =
-                    (visualizationMonoWriteIndex - kFftSize + n + kHistorySize) % kHistorySize;
-            analysisWindow[n] = visualizationMonoHistory[historyIndex];
+    fftInPlace(fftReal, fftImag);
+
+    const int fftHalf = kVisualizationFftSize / 2;
+    const float sampleRate = static_cast<float>(std::max(streamSampleRate, 1));
+    const int minBin = std::clamp(
+            static_cast<int>(std::floor((35.0f / sampleRate) * static_cast<float>(kVisualizationFftSize))),
+            1,
+            fftHalf - 2
+    );
+    const int maxBin = fftHalf - 1;
+    const int usableBins = std::max(1, maxBin - minBin + 1);
+    for (int band = 0; band < kVisualizationSpectrumBins; ++band) {
+        const int startBin = minBin + ((band * usableBins) / kVisualizationSpectrumBins);
+        const int endBin = minBin + ((((band + 1) * usableBins) / kVisualizationSpectrumBins) - 1);
+        const int clampedStart = std::clamp(startBin, minBin, maxBin);
+        const int clampedEnd = std::clamp(std::max(endBin, clampedStart), clampedStart, maxBin);
+
+        double powerSum = 0.0;
+        int count = 0;
+        for (int bin = clampedStart; bin <= clampedEnd; ++bin) {
+            const double re = fftReal[bin];
+            const double im = fftImag[bin];
+            powerSum += (re * re) + (im * im);
+            count += 1;
+        }
+        if (count <= 0) {
+            bars[band] = 0.0f;
+            continue;
         }
 
-        double mean = 0.0;
-        for (int n = 0; n < kFftSize; ++n) {
-            mean += analysisWindow[n];
-        }
-        mean /= static_cast<double>(kFftSize);
-
-        constexpr float twoPiOverN = static_cast<float>((2.0 * M_PI) / kFftSize);
-        float prevSample = 0.0f;
-        for (int n = 0; n < kFftSize; ++n) {
-            const float centered = analysisWindow[n] - static_cast<float>(mean);
-            // Pre-emphasis reduces persistent low-frequency dominance in the display.
-            const float emphasized = centered - (0.94f * prevSample);
-            prevSample = centered;
-            const float window = 0.5f - 0.5f * std::cos(twoPiOverN * static_cast<float>(n));
-            analysisWindow[n] = emphasized * window;
-        }
-
-        static bool twiddleInitialized = false;
-        static std::array<std::array<float, kFftSize>, kFftBins> cosTable {};
-        static std::array<std::array<float, kFftSize>, kFftBins> sinTable {};
-        if (!twiddleInitialized) {
-            for (int k = 0; k < kFftBins; ++k) {
-                for (int n = 0; n < kFftSize; ++n) {
-                    const double angle = -2.0 * M_PI * static_cast<double>(k * n) / kFftSize;
-                    cosTable[k][n] = static_cast<float>(std::cos(angle));
-                    sinTable[k][n] = static_cast<float>(std::sin(angle));
-                }
-            }
-            twiddleInitialized = true;
-        }
-
-        for (int k = 0; k < kFftBins; ++k) {
-            double real = 0.0;
-            double imag = 0.0;
-            for (int n = 0; n < kFftSize; ++n) {
-                real += static_cast<double>(analysisWindow[n]) * cosTable[k][n];
-                imag += static_cast<double>(analysisWindow[n]) * sinTable[k][n];
-            }
-            const double mag = std::sqrt(real * real + imag * imag) / (kFftSize * 0.5);
-            bars[k] = static_cast<float>(std::clamp(mag, 0.0, 4.0));
-        }
+        const double avgPower = powerSum / static_cast<double>(count);
+        const double magnitude = std::sqrt(avgPower) / static_cast<double>(kVisualizationFftSize);
+        const float freqNorm = static_cast<float>(clampedStart - minBin) / static_cast<float>(usableBins);
+        // Mild high-band emphasis to counter natural pink/brown spectral tilt.
+        const float tiltCompensation = 0.5f + (0.8f * std::pow(std::clamp(freqNorm, 0.0f, 1.0f), 0.55f));
+        bars[band] = static_cast<float>(std::clamp(magnitude * static_cast<double>(48.0f * tiltCompensation), 0.0, 1.0));
     }
 
     std::lock_guard<std::mutex> visLock(visualizationMutex);

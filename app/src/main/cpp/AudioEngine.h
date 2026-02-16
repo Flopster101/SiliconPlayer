@@ -163,7 +163,7 @@ private:
     std::array<float, 256> visualizationBars {};
     std::array<float, 2> visualizationVuLevels {};
     std::atomic<int> visualizationChannelCount { 2 };
-    std::array<float, 2048> visualizationMonoHistory {};
+    std::array<float, 4096> visualizationMonoHistory {};
     int visualizationMonoWriteIndex = 0;
     int visualizationCallbacksSinceAnalysis = 0;
 

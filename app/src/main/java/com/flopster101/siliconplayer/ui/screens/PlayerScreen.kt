@@ -840,38 +840,30 @@ private fun VisualizationOverlay(
                 val barWidth = ((widthPx - gapPx * (count - 1)) / count).coerceAtLeast(1f)
                 val radius = barRoundnessDp.dp.toPx().coerceAtMost(barWidth * 0.45f)
                 val source = if (bars.isNotEmpty()) bars else FloatArray(256) { 0f }
-                val usableMinIndex = 6
-                val usableMaxIndex = (source.size - 3).coerceAtLeast(usableMinIndex + 1)
-                val usableSpan = (usableMaxIndex - usableMinIndex).coerceAtLeast(1)
+                val usableMinIndex = 1
+                val usableMaxIndex = (source.size - 1).coerceAtLeast(usableMinIndex + 1)
+                val minForLog = usableMinIndex.toFloat()
+                val maxForLog = usableMaxIndex.toFloat()
+                val logBase = (maxForLog / minForLog).coerceAtLeast(1.001f)
                 for (i in 0 until count) {
                     val t0 = i.toFloat() / count.toFloat()
                     val t1 = (i + 1).toFloat() / count.toFloat()
-                    // Log-spaced bar ranges: low frequencies use wider bins, highs get finer resolution.
-                    val mapped0 = kotlin.math.ln(1f + t0 * usableSpan) / kotlin.math.ln((usableSpan + 1).toFloat())
-                    val mapped1 = kotlin.math.ln(1f + t1 * usableSpan) / kotlin.math.ln((usableSpan + 1).toFloat())
-                    val start = (usableMinIndex + (mapped0 * usableSpan)).roundToInt().coerceIn(usableMinIndex, usableMaxIndex)
-                    val end = (usableMinIndex + (mapped1 * usableSpan)).roundToInt().coerceIn(start, usableMaxIndex)
+                    val start = (minForLog * logBase.pow(t0)).roundToInt().coerceIn(usableMinIndex, usableMaxIndex)
+                    val end = (minForLog * logBase.pow(t1)).roundToInt().coerceIn(start, usableMaxIndex)
 
-                    var peak = 0f
+                    var sum = 0f
                     var bandSumSq = 0.0
                     var bandCount = 0
                     for (idx in start..end) {
                         val v = source[idx].coerceAtLeast(0f)
-                        if (v > peak) peak = v
+                        sum += v
                         bandSumSq += (v * v).toDouble()
                         bandCount += 1
                     }
-                    val rms = if (bandCount > 0) kotlin.math.sqrt(bandSumSq / bandCount).toFloat() else peak
-                    val combined = (rms * 0.7f) + (peak * 0.3f)
-                    val db = 20f * kotlin.math.log10(combined.coerceAtLeast(0.00001f))
-                    val dbFloor = -72f
-                    val dbCeil = -10f
-                    val dbNorm = ((db - dbFloor) / (dbCeil - dbFloor)).coerceIn(0f, 1f)
-                    val bandCenterIndex = (start + end) * 0.5f
-                    val bandNorm = ((bandCenterIndex - usableMinIndex) / usableSpan.toFloat()).coerceIn(0f, 1f)
-                    // Stronger low-frequency compensation to prevent first-bar domination.
-                    val lowCompensation = 0.38f + (bandNorm * 0.62f)
-                    val level = dbNorm.toDouble().pow(1.08).toFloat().times(lowCompensation).coerceIn(0f, 1f)
+                    val mean = if (bandCount > 0) sum / bandCount.toFloat() else 0f
+                    val rms = if (bandCount > 0) kotlin.math.sqrt(bandSumSq / bandCount).toFloat() else 0f
+                    val combined = (rms * 0.8f) + (mean * 0.2f)
+                    val level = combined.toDouble().pow(0.82).toFloat().coerceIn(0f, 1f)
                     val h = level * heightPx
                     val x = i * (barWidth + gapPx)
                     drawRoundRect(

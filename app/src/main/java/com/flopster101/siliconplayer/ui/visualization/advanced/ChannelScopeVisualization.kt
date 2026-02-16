@@ -34,7 +34,6 @@ fun ChannelScopeVisualization(
         val scopeLineWidth = lineWidthPx.coerceAtLeast(1f)
         val scopeGridWidth = gridWidthPx.coerceAtLeast(0.5f)
         val channelBorderColor = gridColor.copy(alpha = 0.45f)
-        val triggerAnchorFraction = 0.5f
         for (channel in 0 until channels) {
             val col = channel / rows
             val row = channel % rows
@@ -52,10 +51,8 @@ fun ChannelScopeVisualization(
             if (history.size < 2) {
                 continue
             }
-            val triggerAnchorIndex = ((history.size - 1) * triggerAnchorFraction).toInt()
-                .coerceIn(0, history.size - 1)
-            val triggerIndex = findTriggerIndex(history, triggerModeNative, triggerAnchorIndex)
-            val phaseOffset = if (triggerModeNative == 0) 0 else triggerAnchorIndex
+            val triggerIndex = findTriggerIndex(history, triggerModeNative)
+            val phaseOffset = if (triggerModeNative == 0) 0 else history.size / 2
             val startIndex = ((triggerIndex - phaseOffset) % history.size + history.size) % history.size
             val stepX = cellWidth / (history.size - 1).coerceAtLeast(1).toFloat()
 
@@ -107,31 +104,32 @@ private fun resolveGrid(
     if (channels <= 1) return 1 to 1
     return when (strategy) {
         VisualizationChannelScopeLayout.ColumnFirst -> {
-            if (channels <= 4) {
-                1 to channels
+            // Grow columns with channel count, but keep growth gradual on medium-high channel counts.
+            // Examples with this curve: 4ch -> 1x4, 6ch -> 2x3, 24ch -> 4x6.
+            val targetRowsPerColumn = 7
+            val columns = if (channels <= 4) {
+                1
             } else {
-                2 to ceil(channels / 2.0).toInt()
+                ceil(channels / targetRowsPerColumn.toDouble()).toInt().coerceAtLeast(2)
             }
+            val rows = ceil(channels / columns.toDouble()).toInt().coerceAtLeast(1)
+            columns to rows
         }
         VisualizationChannelScopeLayout.BalancedTwoColumn -> {
-            if (channels <= 2) {
-                1 to channels
-            } else {
-                2 to ceil(channels / 2.0).toInt()
-            }
+            // Balanced layout trends toward a square-ish grid as channels increase.
+            val columns = ceil(kotlin.math.sqrt(channels.toDouble())).toInt().coerceAtLeast(1)
+            val rows = ceil(channels / columns.toDouble()).toInt().coerceAtLeast(1)
+            columns to rows
         }
     }
 }
 
-private fun findTriggerIndex(
-    history: FloatArray?,
-    triggerModeNative: Int,
-    anchorIndex: Int
-): Int {
+private fun findTriggerIndex(history: FloatArray?, triggerModeNative: Int): Int {
     if (history == null || history.size < 2 || triggerModeNative == 0) return 0
     val threshold = 0.0f
+    val centerIndex = history.size / 2
     var bestIndex = -1
-    var bestScore = Float.NEGATIVE_INFINITY
+    var bestDistance = Int.MAX_VALUE
     for (i in 1 until history.size) {
         val prev = history[i - 1]
         val next = history[i]
@@ -141,14 +139,12 @@ private fun findTriggerIndex(
             prev > threshold && next <= threshold
         }
         if (hit) {
-            val slope = abs(next - prev)
-            val distanceNorm = abs(i - anchorIndex).toFloat() / history.size.toFloat()
-            val score = (slope * 4.0f) - distanceNorm
-            if (score > bestScore) {
-                bestScore = score
+            val distance = abs(i - centerIndex)
+            if (distance < bestDistance) {
+                bestDistance = distance
                 bestIndex = i
             }
         }
     }
-    return if (bestIndex >= 0) bestIndex else anchorIndex.coerceIn(0, history.size - 1)
+    return if (bestIndex >= 0) bestIndex else 0
 }

@@ -142,12 +142,47 @@ bool LibOpenMPTDecoder::open(const char* path) {
         isAmigaModule = detectAmigaModule(path ? path : "", module.get());
         isXmModule = detectXmModule(path ? path : "", module.get());
         applyRenderSettingsLocked();
-        if (repeatMode == 2) {
-            module->set_repeat_count(0);
-            module->ctl_set_text("play.at_end", "continue");
+        if (repeatMode == 1 || repeatMode == 2) {
+            // Keep looping inside currently selected subsong.
+            // "play.at_end=continue" can advance to other subsongs for some modules.
+            module->set_repeat_count(-1);
+            module->ctl_set_text("play.at_end", "stop");
         } else {
             module->set_repeat_count(0);
             module->ctl_set_text("play.at_end", "stop");
+        }
+
+        subtuneCount = 1;
+        currentSubtuneIndex = 0;
+        subtuneNames.clear();
+        subtuneDurationsSeconds.clear();
+        try {
+            const int detectedSubtunes = static_cast<int>(module->get_num_subsongs());
+            subtuneCount = std::max(1, detectedSubtunes);
+            subtuneNames = module->get_subsong_names();
+            if (static_cast<int>(subtuneNames.size()) < subtuneCount) {
+                subtuneNames.resize(subtuneCount);
+            }
+            subtuneDurationsSeconds.assign(subtuneCount, 0.0);
+            for (int i = 0; i < subtuneCount; ++i) {
+                module->select_subsong(i);
+                const double subtuneDuration = module->get_duration_seconds();
+                subtuneDurationsSeconds[i] = subtuneDuration > 0.0 ? subtuneDuration : 0.0;
+            }
+            module->select_subsong(0);
+            currentSubtuneIndex = 0;
+        } catch (const openmpt::exception& e) {
+            LOGE("Failed to initialize OpenMPT subsongs: %s", e.what());
+            subtuneCount = 1;
+            currentSubtuneIndex = 0;
+            subtuneNames.assign(1, "");
+            subtuneDurationsSeconds.assign(1, 0.0);
+        } catch (...) {
+            LOGE("Failed to initialize OpenMPT subsongs: unknown error");
+            subtuneCount = 1;
+            currentSubtuneIndex = 0;
+            subtuneNames.assign(1, "");
+            subtuneDurationsSeconds.assign(1, 0.0);
         }
 
         duration = module->get_duration_seconds();
@@ -185,6 +220,10 @@ void LibOpenMPTDecoder::close() {
     songMessage.clear();
     instrumentNames.clear();
     sampleNames.clear();
+    subtuneCount = 1;
+    currentSubtuneIndex = 0;
+    subtuneNames.clear();
+    subtuneDurationsSeconds.clear();
 }
 
 int LibOpenMPTDecoder::read(float* buffer, int numFrames) {
@@ -221,9 +260,9 @@ void LibOpenMPTDecoder::setRepeatMode(int mode) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     repeatMode = mode;
     if (!module) return;
-    if (repeatMode == 2) {
-        module->set_repeat_count(0);
-        module->ctl_set_text("play.at_end", "continue");
+    if (repeatMode == 1 || repeatMode == 2) {
+        module->set_repeat_count(-1);
+        module->ctl_set_text("play.at_end", "stop");
     } else {
         module->set_repeat_count(0);
         module->ctl_set_text("play.at_end", "stop");
@@ -266,12 +305,78 @@ int LibOpenMPTDecoder::getDisplayChannelCount() {
 
 std::string LibOpenMPTDecoder::getTitle() {
     std::lock_guard<std::mutex> lock(decodeMutex);
+    if (subtuneCount > 1 &&
+        currentSubtuneIndex >= 0 &&
+        currentSubtuneIndex < static_cast<int>(subtuneNames.size()) &&
+        !subtuneNames[currentSubtuneIndex].empty()) {
+        return subtuneNames[currentSubtuneIndex];
+    }
     return title;
 }
 
 std::string LibOpenMPTDecoder::getArtist() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return artist;
+}
+
+int LibOpenMPTDecoder::getSubtuneCount() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return subtuneCount;
+}
+
+int LibOpenMPTDecoder::getCurrentSubtuneIndex() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return currentSubtuneIndex;
+}
+
+bool LibOpenMPTDecoder::selectSubtune(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!module || index < 0 || index >= subtuneCount) {
+        return false;
+    }
+    if (index == currentSubtuneIndex) {
+        return true;
+    }
+    try {
+        module->select_subsong(index);
+        currentSubtuneIndex = index;
+        const double subtuneDuration = module->get_duration_seconds();
+        duration = subtuneDuration > 0.0 ? subtuneDuration : 0.0;
+        if (index >= 0 && index < static_cast<int>(subtuneDurationsSeconds.size())) {
+            subtuneDurationsSeconds[index] = duration;
+        }
+        return true;
+    } catch (const openmpt::exception& e) {
+        LOGE("OpenMPT select_subsong failed: %s", e.what());
+        return false;
+    } catch (...) {
+        LOGE("OpenMPT select_subsong failed: unknown error");
+        return false;
+    }
+}
+
+std::string LibOpenMPTDecoder::getSubtuneTitle(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (index < 0 || index >= subtuneCount) return "";
+    if (index < static_cast<int>(subtuneNames.size())) {
+        return subtuneNames[index];
+    }
+    return "";
+}
+
+std::string LibOpenMPTDecoder::getSubtuneArtist(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (index < 0 || index >= subtuneCount) return "";
+    return artist;
+}
+
+double LibOpenMPTDecoder::getSubtuneDurationSeconds(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (index < 0 || index >= subtuneCount) return 0.0;
+    if (index < static_cast<int>(subtuneDurationsSeconds.size())) {
+        return subtuneDurationsSeconds[index];
+    }
+    return 0.0;
 }
 
 std::string LibOpenMPTDecoder::getModuleTypeLong() {

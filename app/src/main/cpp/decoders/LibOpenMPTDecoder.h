@@ -25,6 +25,12 @@ public:
     std::string getBitDepthLabel() override;
     int getDisplayChannelCount() override;
     int getChannelCount() override;
+    int getSubtuneCount() const override;
+    int getCurrentSubtuneIndex() const override;
+    bool selectSubtune(int index) override;
+    std::string getSubtuneTitle(int index) override;
+    std::string getSubtuneArtist(int index) override;
+    double getSubtuneDurationSeconds(int index) override;
     std::string getTitle() override;
     std::string getArtist() override;
     std::string getModuleTypeLong();
@@ -57,7 +63,7 @@ public:
 
 private:
     std::unique_ptr<openmpt::module> module;
-    std::mutex decodeMutex;
+    mutable std::mutex decodeMutex;
 
     // Buffer to hold file data in memory
     std::vector<char> fileBuffer;
@@ -87,6 +93,10 @@ private:
     std::string songMessage;
     std::string instrumentNames;
     std::string sampleNames;
+    int subtuneCount = 1;
+    int currentSubtuneIndex = 0;
+    std::vector<std::string> subtuneNames;
+    std::vector<double> subtuneDurationsSeconds;
 
     void applyRenderSettingsLocked();
 };

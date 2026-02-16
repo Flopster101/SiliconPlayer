@@ -165,6 +165,7 @@ private:
     std::array<float, 16384> visualizationScopeHistoryLeft {};
     std::array<float, 16384> visualizationScopeHistoryRight {};
     int visualizationScopeWriteIndex = 0;
+    mutable std::array<int, 2> visualizationScopePrevTriggerIndex { -1, -1 };
     std::array<float, 256> visualizationBars {};
     std::array<float, 2> visualizationVuLevels {};
     std::atomic<int> visualizationChannelCount { 2 };

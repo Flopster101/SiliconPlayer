@@ -49,8 +49,9 @@ fun BasicVisualizationOverlay(
     vuColorModeNoArtwork: VisualizationOscColorMode,
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
-    openMptChannelHistories: List<FloatArray>,
+    channelScopeHistories: List<FloatArray>,
     channelScopeTriggerModeNative: Int,
+    channelScopeTriggerIndices: IntArray,
     channelScopeLineWidthDp: Int,
     channelScopeGridWidthDp: Int,
     channelScopeVerticalGridEnabled: Boolean,
@@ -185,7 +186,7 @@ fun BasicVisualizationOverlay(
 
         VisualizationMode.ChannelScope -> {
             ChannelScopeVisualization(
-                channelHistories = openMptChannelHistories,
+                channelHistories = channelScopeHistories,
                 lineColor = openMptLineColor,
                 gridColor = openMptGridColor,
                 lineWidthPx = channelScopeLineWidthDp.toFloat(),
@@ -193,6 +194,7 @@ fun BasicVisualizationOverlay(
                 showVerticalGrid = channelScopeVerticalGridEnabled,
                 showCenterLine = channelScopeCenterLineEnabled,
                 triggerModeNative = channelScopeTriggerModeNative,
+                triggerIndices = channelScopeTriggerIndices,
                 layoutStrategy = channelScopeLayout,
                 modifier = modifier
             )

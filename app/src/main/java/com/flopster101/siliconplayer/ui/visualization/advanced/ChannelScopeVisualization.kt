@@ -22,6 +22,7 @@ fun ChannelScopeVisualization(
     showVerticalGrid: Boolean,
     showCenterLine: Boolean,
     triggerModeNative: Int,
+    triggerIndices: IntArray,
     layoutStrategy: VisualizationChannelScopeLayout,
     modifier: Modifier = Modifier
 ) {
@@ -51,7 +52,10 @@ fun ChannelScopeVisualization(
             if (history.size < 2) {
                 continue
             }
-            val triggerIndex = findTriggerIndex(history, triggerModeNative)
+            val triggerIndex = triggerIndices
+                .getOrNull(channel)
+                ?.coerceIn(0, history.size - 1)
+                ?: findTriggerIndex(history, triggerModeNative)
             val phaseOffset = if (triggerModeNative == 0) 0 else history.size / 2
             val startIndex = ((triggerIndex - phaseOffset) % history.size + history.size) % history.size
             val stepX = cellWidth / (history.size - 1).coerceAtLeast(1).toFloat()

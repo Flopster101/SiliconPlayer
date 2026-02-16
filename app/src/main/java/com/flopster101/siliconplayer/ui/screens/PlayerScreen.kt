@@ -1165,6 +1165,100 @@ private suspend fun buildChannelScopeHistoriesAsync(
     }
 }
 
+private fun computeChannelScopeTriggerIndices(
+    histories: List<FloatArray>,
+    triggerModeNative: Int,
+    previousIndices: IntArray
+): IntArray {
+    if (histories.isEmpty()) return IntArray(0)
+    return IntArray(histories.size) { channel ->
+        val history = histories[channel]
+        val anchorIndex = (history.size / 2).coerceAtLeast(0)
+        val previous = previousIndices.getOrElse(channel) { -1 }
+        findScopedTriggerIndex(
+            history = history,
+            triggerModeNative = triggerModeNative,
+            anchorIndex = anchorIndex,
+            previousIndex = previous
+        )
+    }
+}
+
+private fun findScopedTriggerIndex(
+    history: FloatArray,
+    triggerModeNative: Int,
+    anchorIndex: Int,
+    previousIndex: Int
+): Int {
+    if (history.size < 2 || triggerModeNative == 0) {
+        return anchorIndex.coerceIn(0, history.size - 1)
+    }
+    val n = history.size
+    val anchor = anchorIndex.coerceIn(0, n - 1)
+    val previous = if (previousIndex in 0 until n) previousIndex else -1
+    fun circularDistance(a: Int, b: Int): Int {
+        val d = kotlin.math.abs(a - b)
+        return kotlin.math.min(d, n - d)
+    }
+
+    var bestIndex = -1
+    var bestScore = Float.NEGATIVE_INFINITY
+    for (i in 1 until n) {
+        val prev = history[i - 1]
+        val curr = history[i]
+        val crossed = if (triggerModeNative == 1) {
+            prev < 0f && curr >= 0f
+        } else {
+            prev > 0f && curr <= 0f
+        }
+        if (!crossed) continue
+
+        val left = history[(i - 2 + n) % n]
+        val right = history[(i + 1) % n]
+        val slope = kotlin.math.abs(curr - prev)
+        val edgeEnergy = 0.5f * (kotlin.math.abs(curr) + kotlin.math.abs(prev))
+        val curvature = kotlin.math.abs((right - curr) - (curr - left))
+        val anchorPenalty = circularDistance(i, anchor).toFloat() / n.toFloat()
+        val continuityPenalty = if (previous >= 0) {
+            circularDistance(i, previous).toFloat() / n.toFloat()
+        } else {
+            0f
+        }
+
+        val score =
+            (slope * 2.8f) +
+                (edgeEnergy * 0.9f) +
+                (curvature * 0.35f) -
+                (anchorPenalty * 1.6f) -
+                (continuityPenalty * 1.1f)
+        if (score > bestScore) {
+            bestScore = score
+            bestIndex = i
+        }
+    }
+
+    if (bestIndex >= 0) return bestIndex
+
+    // Fallback near-zero center lock for stable idle/noise behavior.
+    var fallbackIndex = anchor
+    var fallbackRank = Float.POSITIVE_INFINITY
+    for (i in history.indices) {
+        val sample = kotlin.math.abs(history[i])
+        val anchorPenalty = circularDistance(i, anchor).toFloat() / n.toFloat()
+        val continuityPenalty = if (previous >= 0) {
+            circularDistance(i, previous).toFloat() / n.toFloat()
+        } else {
+            0f
+        }
+        val rank = sample + (anchorPenalty * 0.10f) + (continuityPenalty * 0.08f)
+        if (rank < fallbackRank) {
+            fallbackRank = rank
+            fallbackIndex = i
+        }
+    }
+    return fallbackIndex
+}
+
 private data class ChannelScopePrefs(
     val windowMs: Int,
     val triggerModeNative: Int,
@@ -1265,6 +1359,7 @@ private fun rememberChannelScopePrefs(
 private data class ChannelScopeVisualState(
     val channelHistories: List<FloatArray>,
     val triggerModeNative: Int,
+    val triggerIndices: IntArray,
     val lineWidthDp: Int,
     val gridWidthDp: Int,
     val verticalGridEnabled: Boolean,
@@ -1330,6 +1425,7 @@ private fun AlbumArtPlaceholder(
     var visChannelScopesFlat by remember { mutableStateOf(FloatArray(0)) }
     var visChannelScopeHistories by remember { mutableStateOf<List<FloatArray>>(emptyList()) }
     var visChannelScopeLastChannelCount by remember { mutableIntStateOf(1) }
+    var visChannelScopeTriggerIndices by remember { mutableStateOf(IntArray(0)) }
     val context = LocalContext.current
 
     LaunchedEffect(file?.absolutePath, isPlaying, channelScopePrefs.windowMs, sampleRateHz) {
@@ -1350,6 +1446,7 @@ private fun AlbumArtPlaceholder(
             .takeIf { it > 0 }
             ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
         visChannelScopeHistories = List(channels) { FloatArray(points) }
+        visChannelScopeTriggerIndices = IntArray(channels) { points / 2 }
     }
     LaunchedEffect(
         visualizationMode,
@@ -1418,11 +1515,13 @@ private fun AlbumArtPlaceholder(
         visChannelScopesFlat,
         visualizationMode,
         channelScopePrefs.windowMs,
+        channelScopePrefs.triggerModeNative,
         sampleRateHz,
         isPlaying
     ) {
         if (visualizationMode != VisualizationMode.ChannelScope) {
             visChannelScopeHistories = emptyList()
+            visChannelScopeTriggerIndices = IntArray(0)
             return@LaunchedEffect
         }
         val points = computeChannelScopeSampleCount(
@@ -1435,9 +1534,11 @@ private fun AlbumArtPlaceholder(
                     .takeIf { it > 0 }
                     ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
                 visChannelScopeHistories = List(channels) { FloatArray(points) }
+                visChannelScopeTriggerIndices = IntArray(channels) { points / 2 }
                 return@LaunchedEffect
             }
             visChannelScopeHistories = emptyList()
+            visChannelScopeTriggerIndices = IntArray(0)
             return@LaunchedEffect
         }
         if (visChannelScopesFlat.size < points) {
@@ -1446,9 +1547,11 @@ private fun AlbumArtPlaceholder(
                     .takeIf { it > 0 }
                     ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
                 visChannelScopeHistories = List(channels) { FloatArray(points) }
+                visChannelScopeTriggerIndices = IntArray(channels) { points / 2 }
                 return@LaunchedEffect
             }
             visChannelScopeHistories = emptyList()
+            visChannelScopeTriggerIndices = IntArray(0)
             return@LaunchedEffect
         }
         val histories = buildChannelScopeHistoriesAsync(
@@ -1457,6 +1560,11 @@ private fun AlbumArtPlaceholder(
         )
         visChannelScopeLastChannelCount = histories.size.coerceIn(1, 64)
         visChannelScopeHistories = histories
+        visChannelScopeTriggerIndices = computeChannelScopeTriggerIndices(
+            histories = histories,
+            triggerModeNative = channelScopePrefs.triggerModeNative,
+            previousIndices = visChannelScopeTriggerIndices
+        )
     }
     LaunchedEffect(visBars, visualizationBarSmoothingPercent, visualizationMode) {
         if (visualizationMode != VisualizationMode.Bars) {
@@ -1507,6 +1615,7 @@ private fun AlbumArtPlaceholder(
     val channelScopeState = ChannelScopeVisualState(
         channelHistories = visChannelScopeHistories,
         triggerModeNative = channelScopePrefs.triggerModeNative,
+        triggerIndices = visChannelScopeTriggerIndices,
         lineWidthDp = channelScopePrefs.lineWidthDp,
         gridWidthDp = channelScopePrefs.gridWidthDp,
         verticalGridEnabled = channelScopePrefs.verticalGridEnabled,
@@ -1637,8 +1746,9 @@ private fun AlbumArtPlaceholder(
                 vuColorModeNoArtwork = vuColorModeNoArtwork,
                 vuColorModeWithArtwork = vuColorModeWithArtwork,
                 vuCustomColorArgb = vuCustomColorArgb,
-                openMptChannelHistories = channelScopeState.channelHistories,
+                channelScopeHistories = channelScopeState.channelHistories,
                 channelScopeTriggerModeNative = channelScopeState.triggerModeNative,
+                channelScopeTriggerIndices = channelScopeState.triggerIndices,
                 channelScopeLineWidthDp = channelScopeState.lineWidthDp,
                 channelScopeGridWidthDp = channelScopeState.gridWidthDp,
                 channelScopeVerticalGridEnabled = channelScopeState.verticalGridEnabled,

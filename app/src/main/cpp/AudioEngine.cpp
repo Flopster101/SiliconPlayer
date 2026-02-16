@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstring>
 #include <algorithm>
+#include <limits>
 extern "C" {
 #include <libswresample/swresample.h>
 #include <libavutil/opt.h>
@@ -1977,23 +1978,90 @@ std::vector<float> AudioEngine::getVisualizationWaveformScope(
 
     if (triggerMode == 1 || triggerMode == 2) {
         const bool rising = triggerMode == 1;
-        bool found = false;
-        int triggerIndex = -1;
-        for (int offset = 1; offset < windowFrames; ++offset) {
+        const int preTrigger = windowFrames / 2;
+        const int anchorOffset = preTrigger;
+        const int prevTrigger = (channelIndex == 1)
+                                ? visualizationScopePrevTriggerIndex[1]
+                                : visualizationScopePrevTriggerIndex[0];
+        auto circularDistance = [historySize](int a, int b) -> int {
+            const int raw = std::abs(a - b);
+            return std::min(raw, historySize - raw);
+        };
+
+        int bestTriggerIndex = -1;
+        float bestScore = -1.0e9f;
+        for (int offset = 2; offset < windowFrames - 2; ++offset) {
             const int prevIndex = (startIndex + offset - 1) % historySize;
             const int currIndex = (startIndex + offset) % historySize;
             const float prev = history[prevIndex];
             const float curr = history[currIndex];
             const bool crossed = rising ? (prev < 0.0f && curr >= 0.0f) : (prev > 0.0f && curr <= 0.0f);
-            if (crossed) {
-                triggerIndex = currIndex;
-                found = true;
-                break;
+            if (!crossed) {
+                continue;
+            }
+
+            const int leftIndex = (currIndex - 2 + historySize) % historySize;
+            const int rightIndex = (currIndex + 1) % historySize;
+            const float left = history[leftIndex];
+            const float right = history[rightIndex];
+            const float slope = std::abs(curr - prev);
+            const float edgeEnergy = 0.5f * (std::abs(curr) + std::abs(prev));
+            const float curvature = std::abs((right - curr) - (curr - left));
+            const float anchorPenalty =
+                    static_cast<float>(std::abs(offset - anchorOffset)) / static_cast<float>(windowFrames);
+            const float continuityPenalty = (prevTrigger >= 0)
+                                            ? static_cast<float>(circularDistance(currIndex, prevTrigger)) /
+                                              static_cast<float>(historySize)
+                                            : 0.0f;
+
+            const float score =
+                    (slope * 2.8f) +
+                    (edgeEnergy * 0.9f) +
+                    (curvature * 0.35f) -
+                    (anchorPenalty * 1.6f) -
+                    (continuityPenalty * 1.1f);
+            if (score > bestScore) {
+                bestScore = score;
+                bestTriggerIndex = currIndex;
             }
         }
-        if (found && triggerIndex >= 0) {
-            const int preTrigger = windowFrames / 2;
-            startIndex = (triggerIndex - preTrigger + historySize) % historySize;
+
+        if (bestTriggerIndex < 0) {
+            // Fallback: pick a near-zero sample close to center for stable idle behavior.
+            float bestAbs = std::numeric_limits<float>::max();
+            int bestOffset = anchorOffset;
+            for (int offset = 0; offset < windowFrames; ++offset) {
+                const int idx = (startIndex + offset) % historySize;
+                const float sample = std::abs(history[idx]);
+                const float anchorPenalty =
+                        static_cast<float>(std::abs(offset - anchorOffset)) / static_cast<float>(windowFrames);
+                const float continuityPenalty = (prevTrigger >= 0)
+                                                ? static_cast<float>(circularDistance(idx, prevTrigger)) /
+                                                  static_cast<float>(historySize)
+                                                : 0.0f;
+                const float ranking = sample + (anchorPenalty * 0.10f) + (continuityPenalty * 0.08f);
+                if (ranking < bestAbs) {
+                    bestAbs = ranking;
+                    bestOffset = offset;
+                    bestTriggerIndex = idx;
+                }
+            }
+            (void)bestOffset;
+        }
+
+        if (bestTriggerIndex >= 0) {
+            if (channelIndex == 1) {
+                visualizationScopePrevTriggerIndex[1] = bestTriggerIndex;
+            } else {
+                visualizationScopePrevTriggerIndex[0] = bestTriggerIndex;
+            }
+            startIndex = (bestTriggerIndex - preTrigger + historySize) % historySize;
+        }
+    } else {
+        if (channelIndex == 1) {
+            visualizationScopePrevTriggerIndex[1] = -1;
+        } else {
+            visualizationScopePrevTriggerIndex[0] = -1;
         }
     }
 

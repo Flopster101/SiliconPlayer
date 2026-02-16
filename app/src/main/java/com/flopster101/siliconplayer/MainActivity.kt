@@ -666,6 +666,7 @@ private object AppPreferenceKeys {
     fun decoderEnabledKey(decoderName: String) = "decoder_${decoderName}_enabled"
     fun decoderPriorityKey(decoderName: String) = "decoder_${decoderName}_priority"
     fun decoderEnabledExtensionsKey(decoderName: String) = "decoder_${decoderName}_enabled_extensions"
+    fun decoderPluginVolumeDbKey(decoderName: String) = "decoder_${decoderName}_plugin_volume_db"
 }
 
 // Plugin configuration helpers
@@ -716,6 +717,35 @@ private fun savePluginConfiguration(prefs: android.content.SharedPreferences, de
         editor.remove(AppPreferenceKeys.decoderEnabledExtensionsKey(decoderName))
     }
 
+    editor.apply()
+}
+
+private fun readPluginVolumeForDecoder(
+    prefs: android.content.SharedPreferences,
+    decoderName: String?
+): Float {
+    if (decoderName.isNullOrBlank()) return 0f
+    return prefs.getFloat(AppPreferenceKeys.decoderPluginVolumeDbKey(decoderName), 0f)
+}
+
+private fun writePluginVolumeForDecoder(
+    prefs: android.content.SharedPreferences,
+    decoderName: String?,
+    valueDb: Float
+) {
+    if (decoderName.isNullOrBlank()) return
+    prefs.edit()
+        .putFloat(AppPreferenceKeys.decoderPluginVolumeDbKey(decoderName), valueDb)
+        .apply()
+}
+
+private fun clearAllDecoderPluginVolumes(prefs: android.content.SharedPreferences) {
+    val editor = prefs.edit()
+    editor.remove(AppPreferenceKeys.AUDIO_PLUGIN_VOLUME_DB)
+    val decoderNames = NativeBridge.getRegisteredDecoderNames()
+    for (decoderName in decoderNames) {
+        editor.remove(AppPreferenceKeys.decoderPluginVolumeDbKey(decoderName))
+    }
     editor.apply()
 }
 
@@ -996,12 +1026,12 @@ private fun AppNavigation(
     // Load audio effects preferences on startup
     LaunchedEffect(Unit) {
         masterVolumeDb = prefs.getFloat(AppPreferenceKeys.AUDIO_MASTER_VOLUME_DB, 0f)
-        pluginVolumeDb = prefs.getFloat(AppPreferenceKeys.AUDIO_PLUGIN_VOLUME_DB, 0f)
+        pluginVolumeDb = 0f
         forceMono = prefs.getBoolean(AppPreferenceKeys.AUDIO_FORCE_MONO, false)
 
         // Apply to native layer
         NativeBridge.setMasterGain(masterVolumeDb)
-        NativeBridge.setPluginGain(pluginVolumeDb)
+        NativeBridge.setPluginGain(0f)
         NativeBridge.setForceMono(forceMono)
 
         // Load plugin configurations
@@ -1921,7 +1951,13 @@ private fun AppNavigation(
     }
 
     fun applyNativeTrackSnapshot(snapshot: NativeTrackSnapshot) {
-        snapshot.decoderName?.let { lastUsedCoreName = it }
+        val decoderName = snapshot.decoderName
+        decoderName?.let {
+            lastUsedCoreName = it
+            val decoderPluginVolumeDb = readPluginVolumeForDecoder(prefs, it)
+            pluginVolumeDb = decoderPluginVolumeDb
+            NativeBridge.setPluginGain(decoderPluginVolumeDb)
+        }
         metadataTitle = snapshot.title
         metadataArtist = snapshot.artist
         metadataSampleRate = snapshot.sampleRateHz
@@ -3460,10 +3496,10 @@ private fun AppNavigation(
                             // Clear all: master, plugin volumes and force mono from preferences, and all song volumes from database
                             prefs.edit().apply {
                                 remove(AppPreferenceKeys.AUDIO_MASTER_VOLUME_DB)
-                                remove(AppPreferenceKeys.AUDIO_PLUGIN_VOLUME_DB)
                                 remove(AppPreferenceKeys.AUDIO_FORCE_MONO)
                                 apply()
                             }
+                            clearAllDecoderPluginVolumes(prefs)
                             volumeDatabase.resetAllSongVolumes()
                             // Reset state and native layer
                             masterVolumeDb = 0f
@@ -3478,10 +3514,7 @@ private fun AppNavigation(
                         },
                         onClearPluginAudioParameters = {
                             // Clear plugin volume only
-                            prefs.edit().apply {
-                                remove(AppPreferenceKeys.AUDIO_PLUGIN_VOLUME_DB)
-                                apply()
-                            }
+                            clearAllDecoderPluginVolumes(prefs)
                             pluginVolumeDb = 0f
                             NativeBridge.setPluginGain(0f)
                             Toast.makeText(context, "Plugin volume cleared", Toast.LENGTH_SHORT).show()
@@ -4617,7 +4650,7 @@ private fun AppNavigation(
                     onDismiss = {
                         // Cancel: revert to original values
                         NativeBridge.setMasterGain(masterVolumeDb)
-                        NativeBridge.setPluginGain(pluginVolumeDb)
+                        NativeBridge.setPluginGain(readPluginVolumeForDecoder(prefs, lastUsedCoreName))
                         NativeBridge.setSongGain(songVolumeDb)
                         NativeBridge.setForceMono(forceMono)
                         showAudioEffectsDialog = false
@@ -4632,10 +4665,14 @@ private fun AppNavigation(
                         // Save to preferences
                         prefs.edit().apply {
                             putFloat(AppPreferenceKeys.AUDIO_MASTER_VOLUME_DB, masterVolumeDb)
-                            putFloat(AppPreferenceKeys.AUDIO_PLUGIN_VOLUME_DB, pluginVolumeDb)
                             putBoolean(AppPreferenceKeys.AUDIO_FORCE_MONO, forceMono)
                             apply()
                         }
+                        writePluginVolumeForDecoder(
+                            prefs = prefs,
+                            decoderName = lastUsedCoreName,
+                            valueDb = pluginVolumeDb
+                        )
 
                         // Save song volume to database
                         selectedFile?.absolutePath?.let { path ->

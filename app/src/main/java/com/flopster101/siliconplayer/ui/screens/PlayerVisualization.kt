@@ -468,6 +468,7 @@ internal fun AlbumArtPlaceholder(
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
     channelScopePrefs: ChannelScopePrefs,
+    artworkCornerRadiusDp: Int = 3,
     modifier: Modifier = Modifier
 ) {
     var visWaveLeft by remember { mutableStateOf(FloatArray(0)) }
@@ -788,6 +789,12 @@ internal fun AlbumArtPlaceholder(
     } else {
         visualizationRenderBackendForMode(visualizationMode)
     }
+    val channelScopeInsetDp =
+        if (visualizationMode == VisualizationMode.ChannelScope) {
+            (artworkCornerRadiusDp.coerceIn(0, 48).toFloat() * 0.42f).dp
+        } else {
+            0.dp
+        }
     val themePrimaryColor = MaterialTheme.colorScheme.primary
     val useScopeArtworkBackground =
         visualizationMode != VisualizationMode.ChannelScope || channelScopePrefs.showArtworkBackground
@@ -815,7 +822,7 @@ internal fun AlbumArtPlaceholder(
         colors = CardDefaults.elevatedCardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
-        shape = MaterialTheme.shapes.extraLarge
+        shape = RoundedCornerShape(artworkCornerRadiusDp.coerceIn(0, 48).dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (useScopeArtworkBackground) {
@@ -922,7 +929,9 @@ internal fun AlbumArtPlaceholder(
                     visDebugDrawFps = fps.coerceAtLeast(0)
                     visDebugDrawFrameMs = frameMs.coerceAtLeast(0)
                 },
-                modifier = Modifier.matchParentSize()
+                modifier = Modifier
+                    .matchParentSize()
+                    .padding(channelScopeInsetDp)
             )
             if (backendTransitionBlackAlpha.value > 0f) {
                 Box(

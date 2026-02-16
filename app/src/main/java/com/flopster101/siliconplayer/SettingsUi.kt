@@ -301,6 +301,8 @@ internal fun SettingsScreen(
     onExportCachedSourceFiles: (List<String>) -> Unit,
     keepScreenOn: Boolean,
     onKeepScreenOnChanged: (Boolean) -> Unit,
+    playerArtworkCornerRadiusDp: Int,
+    onPlayerArtworkCornerRadiusDpChanged: (Int) -> Unit,
     filenameDisplayMode: FilenameDisplayMode,
     onFilenameDisplayModeChanged: (FilenameDisplayMode) -> Unit,
     filenameOnlyWhenTitleMissing: Boolean,
@@ -1351,6 +1353,7 @@ internal fun SettingsScreen(
                         var showUnknownDurationDialog by remember { mutableStateOf(false) }
                         var showEndFadeDurationDialog by remember { mutableStateOf(false) }
                         var showEndFadeCurveDialog by remember { mutableStateOf(false) }
+                        var showArtworkCornerRadiusDialog by remember { mutableStateOf(false) }
                         SettingsSectionLabel("Track duration fallback")
                         SettingsItemCard(
                             title = "Unknown track duration",
@@ -1548,6 +1551,27 @@ internal fun SettingsScreen(
                             checked = keepScreenOn,
                             onCheckedChange = onKeepScreenOnChanged
                         )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Artwork corner radius",
+                            description = "Rounded corner size for the player artwork/scope container.",
+                            value = "${playerArtworkCornerRadiusDp}dp",
+                            onClick = { showArtworkCornerRadiusDialog = true }
+                        )
+                        if (showArtworkCornerRadiusDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Artwork corner radius",
+                                unitLabel = "dp",
+                                range = 0..48,
+                                step = 1,
+                                currentValue = playerArtworkCornerRadiusDp,
+                                onDismiss = { showArtworkCornerRadiusDialog = false },
+                                onConfirm = { value ->
+                                    onPlayerArtworkCornerRadiusDpChanged(value.coerceIn(0, 48))
+                                    showArtworkCornerRadiusDialog = false
+                                }
+                            )
+                        }
                         Spacer(modifier = Modifier.height(10.dp))
                         var showFilenameDisplayDialog by remember { mutableStateOf(false) }
                         SettingsItemCard(

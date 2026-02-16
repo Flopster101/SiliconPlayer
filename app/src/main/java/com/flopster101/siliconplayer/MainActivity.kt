@@ -728,6 +728,7 @@ private object AppPreferenceKeys {
     const val RECENT_FOLDERS_LIMIT = "recent_folders_limit"
     const val RECENT_PLAYED_FILES_LIMIT = "recent_played_files_limit"
     const val KEEP_SCREEN_ON = "keep_screen_on"
+    const val PLAYER_ARTWORK_CORNER_RADIUS_DP = "player_artwork_corner_radius_dp"
     const val AUDIO_FOCUS_INTERRUPT = "audio_focus_interrupt"
     const val AUDIO_DUCKING = "audio_ducking"
     const val AUDIO_MASTER_VOLUME_DB = "audio_master_volume_db"
@@ -1230,6 +1231,11 @@ private fun AppNavigation(
     var keepScreenOn by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.KEEP_SCREEN_ON, false)
+        )
+    }
+    var playerArtworkCornerRadiusDp by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.PLAYER_ARTWORK_CORNER_RADIUS_DP, 3).coerceIn(0, 48)
         )
     }
     var audioFocusInterrupt by remember {
@@ -3665,6 +3671,16 @@ private fun AppNavigation(
             .putBoolean(AppPreferenceKeys.KEEP_SCREEN_ON, keepScreenOn)
             .apply()
     }
+    LaunchedEffect(playerArtworkCornerRadiusDp) {
+        val normalized = playerArtworkCornerRadiusDp.coerceIn(0, 48)
+        if (normalized != playerArtworkCornerRadiusDp) {
+            playerArtworkCornerRadiusDp = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(AppPreferenceKeys.PLAYER_ARTWORK_CORNER_RADIUS_DP, normalized)
+            .apply()
+    }
 
     val hidePlayerSurface: () -> Unit = {
         stopAndEmptyTrack()
@@ -4191,6 +4207,10 @@ private fun AppNavigation(
                         },
                         keepScreenOn = keepScreenOn,
                         onKeepScreenOnChanged = { keepScreenOn = it },
+                        playerArtworkCornerRadiusDp = playerArtworkCornerRadiusDp,
+                        onPlayerArtworkCornerRadiusDpChanged = { value ->
+                            playerArtworkCornerRadiusDp = value.coerceIn(0, 48)
+                        },
                         filenameDisplayMode = filenameDisplayMode,
                         onFilenameDisplayModeChanged = { mode ->
                             filenameDisplayMode = mode
@@ -4559,6 +4579,7 @@ private fun AppNavigation(
                             recentFolders = emptyList()
                             recentPlayedFiles = emptyList()
                             keepScreenOn = false
+                            playerArtworkCornerRadiusDp = 3
                             filenameDisplayMode = FilenameDisplayMode.Always
                             filenameOnlyWhenTitleMissing = false
                             unknownTrackDurationSeconds = GmeDefaults.unknownDurationSeconds
@@ -4993,6 +5014,7 @@ private fun AppNavigation(
                             showAudioEffectsDialog = true
                         },
                         visualizationShowDebugInfo = visualizationShowDebugInfo,
+                        artworkCornerRadiusDp = playerArtworkCornerRadiusDp,
                         filenameDisplayMode = filenameDisplayMode,
                         filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
                     )
@@ -5242,6 +5264,7 @@ private fun AppNavigation(
                     visualizationVuUseThemeColor = visualizationVuUseThemeColor,
                     visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
                     visualizationShowDebugInfo = visualizationShowDebugInfo,
+                    artworkCornerRadiusDp = playerArtworkCornerRadiusDp,
                     onOpenAudioEffects = {
                         tempMasterVolumeDb = masterVolumeDb
                         tempPluginVolumeDb = pluginVolumeDb

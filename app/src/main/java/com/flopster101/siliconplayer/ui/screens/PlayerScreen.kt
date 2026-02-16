@@ -160,6 +160,7 @@ fun PlayerScreen(
     visualizationVuUseThemeColor: Boolean,
     visualizationVuSmoothingPercent: Int,
     visualizationShowDebugInfo: Boolean = false,
+    artworkCornerRadiusDp: Int = 3,
     onOpenAudioEffects: () -> Unit,
     filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode = com.flopster101.siliconplayer.FilenameDisplayMode.Always,
     filenameOnlyWhenTitleMissing: Boolean = false
@@ -690,6 +691,7 @@ fun PlayerScreen(
                         vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
                         vuCustomColorArgb = visualizationVuCustomColorArgb,
                         channelScopePrefs = channelScopePrefs,
+                        artworkCornerRadiusDp = artworkCornerRadiusDp,
                         modifier = Modifier
                             .weight(0.45f)
                             .fillMaxHeight(0.84f)
@@ -825,6 +827,7 @@ fun PlayerScreen(
                         vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
                         vuCustomColorArgb = visualizationVuCustomColorArgb,
                         channelScopePrefs = channelScopePrefs,
+                        artworkCornerRadiusDp = artworkCornerRadiusDp,
                         modifier = Modifier
                             .fillMaxWidth(0.86f)
                             .aspectRatio(1f)

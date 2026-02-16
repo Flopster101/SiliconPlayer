@@ -789,12 +789,6 @@ internal fun AlbumArtPlaceholder(
     } else {
         visualizationRenderBackendForMode(visualizationMode)
     }
-    val channelScopeInsetDp =
-        if (visualizationMode == VisualizationMode.ChannelScope) {
-            (artworkCornerRadiusDp.coerceIn(0, 48).toFloat() * 0.42f).dp
-        } else {
-            0.dp
-        }
     val themePrimaryColor = MaterialTheme.colorScheme.primary
     val useScopeArtworkBackground =
         visualizationMode != VisualizationMode.ChannelScope || channelScopePrefs.showArtworkBackground
@@ -925,13 +919,12 @@ internal fun AlbumArtPlaceholder(
                 channelScopeGridColorModeWithArtwork = channelScopeState.gridColorModeWithArtwork,
                 channelScopeCustomLineColorArgb = channelScopeState.customLineColorArgb,
                 channelScopeCustomGridColorArgb = channelScopeState.customGridColorArgb,
+                channelScopeCornerRadiusDp = artworkCornerRadiusDp.coerceIn(0, 48),
                 channelScopeOnFrameStats = { fps, frameMs ->
                     visDebugDrawFps = fps.coerceAtLeast(0)
                     visDebugDrawFrameMs = frameMs.coerceAtLeast(0)
                 },
-                modifier = Modifier
-                    .matchParentSize()
-                    .padding(channelScopeInsetDp)
+                modifier = Modifier.matchParentSize()
             )
             if (backendTransitionBlackAlpha.value > 0f) {
                 Box(

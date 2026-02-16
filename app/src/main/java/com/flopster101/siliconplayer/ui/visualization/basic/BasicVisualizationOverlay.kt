@@ -3,13 +3,16 @@ package com.flopster101.siliconplayer.ui.visualization.basic
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.platform.LocalDensity
 import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.flopster101.siliconplayer.VisualizationMode
 import com.flopster101.siliconplayer.VisualizationOscColorMode
 import com.flopster101.siliconplayer.VisualizationRenderBackend
@@ -19,6 +22,7 @@ import com.flopster101.siliconplayer.ui.visualization.gl.ChannelScopeGlVisualiza
 import com.flopster101.siliconplayer.ui.visualization.gl.ChannelScopeGlTextureVisualization
 import kotlin.math.max
 import kotlin.math.min
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun BasicVisualizationOverlay(
@@ -67,6 +71,7 @@ fun BasicVisualizationOverlay(
     channelScopeGridColorModeWithArtwork: VisualizationOscColorMode,
     channelScopeCustomLineColorArgb: Int,
     channelScopeCustomGridColorArgb: Int,
+    channelScopeCornerRadiusDp: Int = 0,
     channelScopeOnFrameStats: ((fps: Int, frameMs: Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -130,6 +135,10 @@ fun BasicVisualizationOverlay(
     val vuBackgroundColor = deriveVuTrackColor(vuAccentColor)
     val channelScopeCustomLineColor = Color(channelScopeCustomLineColorArgb)
     val channelScopeCustomGridColor = Color(channelScopeCustomGridColorArgb)
+    val channelScopeCornerRadiusShape = RoundedCornerShape(channelScopeCornerRadiusDp.coerceIn(0, 48).dp)
+    val channelScopeCornerRadiusPx = with(LocalDensity.current) {
+        channelScopeCornerRadiusDp.coerceIn(0, 48).dp.toPx()
+    }
     val channelScopeLineColor = resolveOscColor(
         hasArtwork = hasArtwork,
         noArtworkMode = channelScopeLineColorModeNoArtwork,
@@ -203,7 +212,8 @@ fun BasicVisualizationOverlay(
                         triggerModeNative = channelScopeTriggerModeNative,
                         triggerIndices = channelScopeTriggerIndices,
                         layoutStrategy = channelScopeLayout,
-                        modifier = modifier
+                        outerCornerRadiusPx = channelScopeCornerRadiusPx,
+                        modifier = modifier.clip(channelScopeCornerRadiusShape)
                     )
                 }
                 VisualizationRenderBackend.OpenGlTexture -> {
@@ -218,8 +228,9 @@ fun BasicVisualizationOverlay(
                         triggerModeNative = channelScopeTriggerModeNative,
                         triggerIndices = channelScopeTriggerIndices,
                         layoutStrategy = channelScopeLayout,
+                        outerCornerRadiusPx = channelScopeCornerRadiusPx,
                         onFrameStats = channelScopeOnFrameStats,
-                        modifier = modifier
+                        modifier = modifier.clip(channelScopeCornerRadiusShape)
                     )
                 }
                 VisualizationRenderBackend.OpenGlSurface -> {
@@ -234,8 +245,9 @@ fun BasicVisualizationOverlay(
                         triggerModeNative = channelScopeTriggerModeNative,
                         triggerIndices = channelScopeTriggerIndices,
                         layoutStrategy = channelScopeLayout,
+                        outerCornerRadiusPx = channelScopeCornerRadiusPx,
                         onFrameStats = channelScopeOnFrameStats,
-                        modifier = modifier
+                        modifier = modifier.clip(channelScopeCornerRadiusShape)
                     )
                 }
             }

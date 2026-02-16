@@ -24,6 +24,7 @@ fun ChannelScopeVisualization(
     triggerModeNative: Int,
     triggerIndices: IntArray,
     layoutStrategy: VisualizationChannelScopeLayout,
+    outerCornerRadiusPx: Float = 0f,
     modifier: Modifier = Modifier
 ) {
     if (channelHistories.isEmpty()) return
@@ -34,7 +35,27 @@ fun ChannelScopeVisualization(
         val cellHeight = size.height / rows.toFloat().coerceAtLeast(1f)
         val scopeLineWidth = lineWidthPx.coerceAtLeast(1f)
         val scopeGridWidth = gridWidthPx.coerceAtLeast(0.5f)
-        val channelBorderColor = gridColor.copy(alpha = 0.45f)
+        val outerRadius = outerCornerRadiusPx.coerceAtLeast(0f).coerceAtMost(minOf(size.width, size.height) * 0.5f)
+
+        for (col in 1 until columns) {
+            val x = col * cellWidth
+            drawLine(
+                color = gridColor.copy(alpha = 0.45f),
+                start = Offset(x, 0f),
+                end = Offset(x, size.height),
+                strokeWidth = scopeGridWidth
+            )
+        }
+        for (row in 1 until rows) {
+            val y = row * cellHeight
+            drawLine(
+                color = gridColor.copy(alpha = 0.45f),
+                start = Offset(0f, y),
+                end = Offset(size.width, y),
+                strokeWidth = scopeGridWidth
+            )
+        }
+
         for (channel in 0 until channels) {
             val col = channel / rows
             val row = channel % rows
@@ -43,12 +64,6 @@ fun ChannelScopeVisualization(
             val centerY = top + (cellHeight * 0.5f)
             val ampScale = cellHeight * 0.48f
             val history = channelHistories[channel]
-            drawRect(
-                color = channelBorderColor,
-                topLeft = Offset(left, top),
-                size = androidx.compose.ui.geometry.Size(cellWidth, cellHeight),
-                style = Stroke(width = scopeGridWidth)
-            )
             if (history.size < 2) {
                 continue
             }
@@ -104,6 +119,18 @@ fun ChannelScopeVisualization(
                 }
             }
         }
+
+        val borderInset = scopeGridWidth * 0.5f
+        val insetWidth = (size.width - (borderInset * 2f)).coerceAtLeast(0f)
+        val insetHeight = (size.height - (borderInset * 2f)).coerceAtLeast(0f)
+        val insetRadius = (outerRadius - borderInset).coerceAtLeast(0f)
+        drawRoundRect(
+            color = gridColor.copy(alpha = 0.45f),
+            topLeft = Offset(borderInset, borderInset),
+            size = androidx.compose.ui.geometry.Size(insetWidth, insetHeight),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(insetRadius, insetRadius),
+            style = Stroke(width = scopeGridWidth)
+        )
     }
 }
 

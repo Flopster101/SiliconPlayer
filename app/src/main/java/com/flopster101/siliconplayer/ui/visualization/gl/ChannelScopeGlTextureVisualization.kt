@@ -41,6 +41,7 @@ fun ChannelScopeGlTextureVisualization(
     triggerModeNative: Int,
     triggerIndices: IntArray,
     layoutStrategy: com.flopster101.siliconplayer.VisualizationChannelScopeLayout,
+    outerCornerRadiusPx: Float = 0f,
     onFrameStats: ((fps: Int, frameMs: Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -64,6 +65,7 @@ fun ChannelScopeGlTextureVisualization(
                     showVerticalGrid = showVerticalGrid,
                     showCenterLine = showCenterLine,
                     layoutStrategy = layoutStrategy,
+                    outerCornerRadiusPx = outerCornerRadiusPx,
                     lineColorArgb = lineColor.toArgb(),
                     gridColorArgb = gridColor.toArgb(),
                     lineWidthPx = lineWidthPx.coerceAtLeast(1f),
@@ -102,6 +104,7 @@ private data class ChannelScopeGlTextureFrame(
     val showVerticalGrid: Boolean,
     val showCenterLine: Boolean,
     val layoutStrategy: com.flopster101.siliconplayer.VisualizationChannelScopeLayout,
+    val outerCornerRadiusPx: Float,
     val lineColorArgb: Int,
     val gridColorArgb: Int,
     val lineWidthPx: Float,
@@ -426,6 +429,24 @@ private class ChannelScopeGlCoreRenderer {
         waveformBuilder.reset()
         gridBuilder.reset()
 
+        for (col in 1 until safeColumns) {
+            val x = col * cellWidth
+            gridBuilder.addLine(x, 0f, x, surfaceHeight.toFloat())
+        }
+        for (row in 1 until safeRows) {
+            val y = row * cellHeight
+            gridBuilder.addLine(0f, y, surfaceWidth.toFloat(), y)
+        }
+        val borderInset = frame.gridWidthPx * 0.5f
+        addRoundedRectBorder(
+            builder = gridBuilder,
+            left = borderInset,
+            top = borderInset,
+            right = surfaceWidth.toFloat() - borderInset,
+            bottom = surfaceHeight.toFloat() - borderInset,
+            radius = (frame.outerCornerRadiusPx - borderInset).coerceAtLeast(0f)
+        )
+
         for (channel in 0 until channels) {
             val col = channel / safeRows
             val row = channel % safeRows
@@ -434,11 +455,6 @@ private class ChannelScopeGlCoreRenderer {
             val right = left + cellWidth
             val bottom = top + cellHeight
             val centerY = top + (cellHeight * 0.5f)
-
-            gridBuilder.addLine(left, top, right, top)
-            gridBuilder.addLine(right, top, right, bottom)
-            gridBuilder.addLine(right, bottom, left, bottom)
-            gridBuilder.addLine(left, bottom, left, top)
 
             if (frame.showVerticalGrid) {
                 val divisions = 4
@@ -490,6 +506,59 @@ private class ChannelScopeGlCoreRenderer {
             clear()
             put(gridBuilder.data, 0, gridSize)
             position(0)
+        }
+    }
+
+    private fun addRoundedRectBorder(
+        builder: TextureFloatLineBuilder,
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+        radius: Float
+    ) {
+        val w = (right - left).coerceAtLeast(0f)
+        val h = (bottom - top).coerceAtLeast(0f)
+        val r = radius.coerceAtLeast(0f).coerceAtMost(minOf(w, h) * 0.5f)
+        if (r <= 0.5f) {
+            builder.addLine(left, top, right, top)
+            builder.addLine(right, top, right, bottom)
+            builder.addLine(right, bottom, left, bottom)
+            builder.addLine(left, bottom, left, top)
+            return
+        }
+        builder.addLine(left + r, top, right - r, top)
+        builder.addLine(right, top + r, right, bottom - r)
+        builder.addLine(right - r, bottom, left + r, bottom)
+        builder.addLine(left, bottom - r, left, top + r)
+
+        val segments = 8
+        addArcPolyline(builder, right - r, top + r, r, -90f, 0f, segments)
+        addArcPolyline(builder, right - r, bottom - r, r, 0f, 90f, segments)
+        addArcPolyline(builder, left + r, bottom - r, r, 90f, 180f, segments)
+        addArcPolyline(builder, left + r, top + r, r, 180f, 270f, segments)
+    }
+
+    private fun addArcPolyline(
+        builder: TextureFloatLineBuilder,
+        cx: Float,
+        cy: Float,
+        radius: Float,
+        startDeg: Float,
+        endDeg: Float,
+        segments: Int
+    ) {
+        if (radius <= 0f || segments <= 0) return
+        var prevX = cx + (kotlin.math.cos(Math.toRadians(startDeg.toDouble())).toFloat() * radius)
+        var prevY = cy + (kotlin.math.sin(Math.toRadians(startDeg.toDouble())).toFloat() * radius)
+        for (i in 1..segments) {
+            val t = i.toFloat() / segments.toFloat()
+            val deg = startDeg + ((endDeg - startDeg) * t)
+            val x = cx + (kotlin.math.cos(Math.toRadians(deg.toDouble())).toFloat() * radius)
+            val y = cy + (kotlin.math.sin(Math.toRadians(deg.toDouble())).toFloat() * radius)
+            builder.addLine(prevX, prevY, x, y)
+            prevX = x
+            prevY = y
         }
     }
 

@@ -1225,7 +1225,7 @@ private fun AppNavigation(
     }
     var visualizationVuSmoothingPercent by remember {
         mutableIntStateOf(
-            prefs.getInt(AppPreferenceKeys.VISUALIZATION_VU_SMOOTHING_PERCENT, 60).coerceIn(0, 95)
+            prefs.getInt(AppPreferenceKeys.VISUALIZATION_VU_SMOOTHING_PERCENT, 40).coerceIn(0, 95)
         )
     }
 
@@ -4210,7 +4210,7 @@ private fun AppNavigation(
                             visualizationOscStereo = true
                             visualizationVuAnchor = VisualizationVuAnchor.Bottom
                             visualizationVuUseThemeColor = true
-                            visualizationVuSmoothingPercent = 60
+                            visualizationVuSmoothingPercent = 40
                             browserLaunchLocationId = null
                             browserLaunchDirectoryPath = null
                             onThemeModeChanged(ThemeMode.Auto)

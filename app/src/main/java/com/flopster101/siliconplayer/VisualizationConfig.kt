@@ -17,6 +17,30 @@ enum class VisualizationMode(
     }
 }
 
+enum class VisualizationRenderBackend(
+    val storageValue: String,
+    val label: String
+) {
+    Compose("compose", "Compose"),
+    Gpu("gpu", "GPU canvas");
+
+    companion object {
+        fun fromStorage(value: String?, fallback: VisualizationRenderBackend): VisualizationRenderBackend {
+            return entries.firstOrNull { it.storageValue == value } ?: fallback
+        }
+    }
+}
+
+fun visualizationRenderBackendForMode(mode: VisualizationMode): VisualizationRenderBackend {
+    return when (mode) {
+        VisualizationMode.ChannelScope -> VisualizationRenderBackend.Gpu
+        VisualizationMode.Off,
+        VisualizationMode.Bars,
+        VisualizationMode.Oscilloscope,
+        VisualizationMode.VuMeters -> VisualizationRenderBackend.Compose
+    }
+}
+
 enum class VisualizationChannelScopeLayout(
     val storageValue: String,
     val label: String

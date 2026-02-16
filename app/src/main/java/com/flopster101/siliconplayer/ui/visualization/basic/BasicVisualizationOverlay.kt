@@ -12,8 +12,10 @@ import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
 import androidx.compose.material3.MaterialTheme
 import com.flopster101.siliconplayer.VisualizationMode
 import com.flopster101.siliconplayer.VisualizationOscColorMode
+import com.flopster101.siliconplayer.VisualizationRenderBackend
 import com.flopster101.siliconplayer.VisualizationVuAnchor
 import com.flopster101.siliconplayer.ui.visualization.advanced.ChannelScopeVisualization
+import com.flopster101.siliconplayer.ui.visualization.gpu.ChannelScopeGpuVisualization
 import kotlin.math.max
 import kotlin.math.min
 
@@ -52,6 +54,7 @@ fun BasicVisualizationOverlay(
     channelScopeHistories: List<FloatArray>,
     channelScopeTriggerModeNative: Int,
     channelScopeTriggerIndices: IntArray,
+    channelScopeRenderBackend: VisualizationRenderBackend,
     channelScopeLineWidthDp: Int,
     channelScopeGridWidthDp: Int,
     channelScopeVerticalGridEnabled: Boolean,
@@ -185,19 +188,38 @@ fun BasicVisualizationOverlay(
         }
 
         VisualizationMode.ChannelScope -> {
-            ChannelScopeVisualization(
-                channelHistories = channelScopeHistories,
-                lineColor = openMptLineColor,
-                gridColor = openMptGridColor,
-                lineWidthPx = channelScopeLineWidthDp.toFloat(),
-                gridWidthPx = channelScopeGridWidthDp.toFloat(),
-                showVerticalGrid = channelScopeVerticalGridEnabled,
-                showCenterLine = channelScopeCenterLineEnabled,
-                triggerModeNative = channelScopeTriggerModeNative,
-                triggerIndices = channelScopeTriggerIndices,
-                layoutStrategy = channelScopeLayout,
-                modifier = modifier
-            )
+            when (channelScopeRenderBackend) {
+                VisualizationRenderBackend.Compose -> {
+                    ChannelScopeVisualization(
+                        channelHistories = channelScopeHistories,
+                        lineColor = openMptLineColor,
+                        gridColor = openMptGridColor,
+                        lineWidthPx = channelScopeLineWidthDp.toFloat(),
+                        gridWidthPx = channelScopeGridWidthDp.toFloat(),
+                        showVerticalGrid = channelScopeVerticalGridEnabled,
+                        showCenterLine = channelScopeCenterLineEnabled,
+                        triggerModeNative = channelScopeTriggerModeNative,
+                        triggerIndices = channelScopeTriggerIndices,
+                        layoutStrategy = channelScopeLayout,
+                        modifier = modifier
+                    )
+                }
+                VisualizationRenderBackend.Gpu -> {
+                    ChannelScopeGpuVisualization(
+                        channelHistories = channelScopeHistories,
+                        lineColor = openMptLineColor,
+                        gridColor = openMptGridColor,
+                        lineWidthPx = channelScopeLineWidthDp.toFloat(),
+                        gridWidthPx = channelScopeGridWidthDp.toFloat(),
+                        showVerticalGrid = channelScopeVerticalGridEnabled,
+                        showCenterLine = channelScopeCenterLineEnabled,
+                        triggerModeNative = channelScopeTriggerModeNative,
+                        triggerIndices = channelScopeTriggerIndices,
+                        layoutStrategy = channelScopeLayout,
+                        modifier = modifier
+                    )
+                }
+            }
         }
 
         VisualizationMode.Off -> Unit

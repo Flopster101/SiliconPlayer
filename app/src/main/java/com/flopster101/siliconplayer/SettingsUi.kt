@@ -2661,6 +2661,7 @@ internal fun SettingsScreen(
                     SettingsRoute.VisualizationAdvancedChannelScope -> {
                         val prefsName = "silicon_player_settings"
                         val scopeWindowKey = "visualization_channel_scope_window_ms"
+                        val scopeRenderBackendKey = "visualization_channel_scope_render_backend"
                         val scopeDcRemovalEnabledKey = "visualization_channel_scope_dc_removal_enabled"
                         val scopeGainPercentKey = "visualization_channel_scope_gain_percent"
                         val scopeTriggerKey = "visualization_channel_scope_trigger_mode"
@@ -2687,6 +2688,14 @@ internal fun SettingsScreen(
                             mutableStateOf(
                                 VisualizationOscTriggerMode.fromStorage(
                                     prefs.getString(scopeTriggerKey, VisualizationOscTriggerMode.Rising.storageValue)
+                                )
+                            )
+                        }
+                        var scopeRenderBackend by remember {
+                            mutableStateOf(
+                                VisualizationRenderBackend.fromStorage(
+                                    prefs.getString(scopeRenderBackendKey, VisualizationRenderBackend.Gpu.storageValue),
+                                    VisualizationRenderBackend.Gpu
                                 )
                             )
                         }
@@ -2762,6 +2771,7 @@ internal fun SettingsScreen(
                         }
 
                         var showWindowDialog by remember { mutableStateOf(false) }
+                        var showRendererBackendDialog by remember { mutableStateOf(false) }
                         var showGainDialog by remember { mutableStateOf(false) }
                         var showTriggerDialog by remember { mutableStateOf(false) }
                         var showFpsModeDialog by remember { mutableStateOf(false) }
@@ -2788,6 +2798,13 @@ internal fun SettingsScreen(
                             description = "Sync mode used to stabilize channel traces.",
                             value = scopeTriggerMode.label,
                             onClick = { showTriggerDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Renderer backend",
+                            description = "Select rendering path for Channel scope.",
+                            value = scopeRenderBackend.label,
+                            onClick = { showRendererBackendDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         PlayerSettingToggleCard(
@@ -2930,6 +2947,44 @@ internal fun SettingsScreen(
                                     prefs.edit().putInt(scopeGainPercentKey, clamped).apply()
                                     showGainDialog = false
                                 }
+                            )
+                        }
+                        if (showRendererBackendDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showRendererBackendDialog = false },
+                                title = { Text("Renderer backend") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationRenderBackend.entries.forEach { backend ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeRenderBackend = backend
+                                                        prefs.edit().putString(scopeRenderBackendKey, backend.storageValue).apply()
+                                                        showRendererBackendDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = backend == scopeRenderBackend,
+                                                    onClick = {
+                                                        scopeRenderBackend = backend
+                                                        prefs.edit().putString(scopeRenderBackendKey, backend.storageValue).apply()
+                                                        showRendererBackendDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(backend.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showRendererBackendDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
                             )
                         }
                         if (showTriggerDialog) {

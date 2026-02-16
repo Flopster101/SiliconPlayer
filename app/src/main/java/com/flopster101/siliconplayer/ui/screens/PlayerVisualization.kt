@@ -1,6 +1,7 @@
 package com.flopster101.siliconplayer.ui.screens
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -49,8 +50,10 @@ import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
 import com.flopster101.siliconplayer.VisualizationMode
 import com.flopster101.siliconplayer.VisualizationOscColorMode
 import com.flopster101.siliconplayer.VisualizationOscFpsMode
+import com.flopster101.siliconplayer.VisualizationRenderBackend
 import com.flopster101.siliconplayer.VisualizationVuAnchor
 import com.flopster101.siliconplayer.pluginNameForCoreName
+import com.flopster101.siliconplayer.visualizationRenderBackendForMode
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
 import java.io.File
 import kotlin.coroutines.coroutineContext
@@ -235,6 +238,7 @@ private fun findScopedTriggerIndex(
 
 internal data class ChannelScopePrefs(
     val windowMs: Int,
+    val renderBackend: VisualizationRenderBackend,
     val dcRemovalEnabled: Boolean,
     val gainPercent: Int,
     val triggerModeNative: Int,
@@ -253,6 +257,7 @@ internal data class ChannelScopePrefs(
 ) {
     companion object {
         private const val KEY_WINDOW_MS = "visualization_channel_scope_window_ms"
+        private const val KEY_RENDER_BACKEND = "visualization_channel_scope_render_backend"
         private const val KEY_DC_REMOVAL_ENABLED = "visualization_channel_scope_dc_removal_enabled"
         private const val KEY_GAIN_PERCENT = "visualization_channel_scope_gain_percent"
         private const val KEY_TRIGGER_MODE = "visualization_channel_scope_trigger_mode"
@@ -277,6 +282,10 @@ internal data class ChannelScopePrefs(
             }
             return ChannelScopePrefs(
                 windowMs = sharedPrefs.getInt(KEY_WINDOW_MS, 30).coerceIn(5, 200),
+                renderBackend = VisualizationRenderBackend.fromStorage(
+                    sharedPrefs.getString(KEY_RENDER_BACKEND, VisualizationRenderBackend.Gpu.storageValue),
+                    VisualizationRenderBackend.Gpu
+                ),
                 dcRemovalEnabled = sharedPrefs.getBoolean(KEY_DC_REMOVAL_ENABLED, true),
                 gainPercent = sharedPrefs.getInt(KEY_GAIN_PERCENT, 240).coerceIn(25, 600),
                 triggerModeNative = triggerModeNative,
@@ -340,6 +349,7 @@ private data class ChannelScopeVisualState(
     val channelHistories: List<FloatArray>,
     val triggerModeNative: Int,
     val triggerIndices: IntArray,
+    val renderBackend: VisualizationRenderBackend,
     val lineWidthDp: Int,
     val gridWidthDp: Int,
     val verticalGridEnabled: Boolean,
@@ -406,6 +416,16 @@ internal fun AlbumArtPlaceholder(
     var visChannelScopeHistories by remember { mutableStateOf<List<FloatArray>>(emptyList()) }
     var visChannelScopeLastChannelCount by remember { mutableIntStateOf(1) }
     var visChannelScopeTriggerIndices by remember { mutableStateOf(IntArray(0)) }
+    var lastVisualizationBackend by remember {
+        mutableStateOf(
+            if (visualizationMode == VisualizationMode.ChannelScope) {
+                channelScopePrefs.renderBackend
+            } else {
+                visualizationRenderBackendForMode(visualizationMode)
+            }
+        )
+    }
+    val backendTransitionBlackAlpha = remember { Animatable(0f) }
     val context = LocalContext.current
 
     LaunchedEffect(file?.absolutePath, isPlaying, channelScopePrefs.windowMs, sampleRateHz) {
@@ -427,6 +447,24 @@ internal fun AlbumArtPlaceholder(
             ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
         visChannelScopeHistories = List(channels) { FloatArray(points) }
         visChannelScopeTriggerIndices = IntArray(channels) { points / 2 }
+    }
+    LaunchedEffect(
+        visualizationMode,
+        channelScopePrefs.renderBackend
+    ) {
+        val nextBackend = if (visualizationMode == VisualizationMode.ChannelScope) {
+            channelScopePrefs.renderBackend
+        } else {
+            visualizationRenderBackendForMode(visualizationMode)
+        }
+        if (nextBackend != lastVisualizationBackend) {
+            backendTransitionBlackAlpha.snapTo(0f)
+            backendTransitionBlackAlpha.animateTo(1f, animationSpec = tween(85))
+            lastVisualizationBackend = nextBackend
+            backendTransitionBlackAlpha.animateTo(0f, animationSpec = tween(145))
+        } else {
+            lastVisualizationBackend = nextBackend
+        }
     }
     LaunchedEffect(
         visualizationMode,
@@ -598,6 +636,7 @@ internal fun AlbumArtPlaceholder(
         channelHistories = visChannelScopeHistories,
         triggerModeNative = channelScopePrefs.triggerModeNative,
         triggerIndices = visChannelScopeTriggerIndices,
+        renderBackend = channelScopePrefs.renderBackend,
         lineWidthDp = channelScopePrefs.lineWidthDp,
         gridWidthDp = channelScopePrefs.gridWidthDp,
         verticalGridEnabled = channelScopePrefs.verticalGridEnabled,
@@ -731,6 +770,7 @@ internal fun AlbumArtPlaceholder(
                 channelScopeHistories = channelScopeState.channelHistories,
                 channelScopeTriggerModeNative = channelScopeState.triggerModeNative,
                 channelScopeTriggerIndices = channelScopeState.triggerIndices,
+                channelScopeRenderBackend = channelScopeState.renderBackend,
                 channelScopeLineWidthDp = channelScopeState.lineWidthDp,
                 channelScopeGridWidthDp = channelScopeState.gridWidthDp,
                 channelScopeVerticalGridEnabled = channelScopeState.verticalGridEnabled,
@@ -744,6 +784,13 @@ internal fun AlbumArtPlaceholder(
                 channelScopeCustomGridColorArgb = channelScopeState.customGridColorArgb,
                 modifier = Modifier.matchParentSize()
             )
+            if (backendTransitionBlackAlpha.value > 0f) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(Color.Black.copy(alpha = backendTransitionBlackAlpha.value.coerceIn(0f, 1f)))
+                )
+            }
             androidx.compose.animation.AnimatedVisibility(
                 visible = showVisualizationModeBadge,
                 modifier = Modifier

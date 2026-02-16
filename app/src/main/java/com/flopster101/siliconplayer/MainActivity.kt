@@ -774,6 +774,7 @@ private object AppPreferenceKeys {
     const val VISUALIZATION_VU_COLOR_MODE_WITH_ARTWORK = "visualization_vu_color_mode_with_artwork"
     const val VISUALIZATION_VU_CUSTOM_COLOR_ARGB = "visualization_vu_custom_color_argb"
     const val VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS = "visualization_channel_scope_window_ms"
+    const val VISUALIZATION_CHANNEL_SCOPE_RENDER_BACKEND = "visualization_channel_scope_render_backend"
     const val VISUALIZATION_CHANNEL_SCOPE_DC_REMOVAL_ENABLED = "visualization_channel_scope_dc_removal_enabled"
     const val VISUALIZATION_CHANNEL_SCOPE_GAIN_PERCENT = "visualization_channel_scope_gain_percent"
     const val VISUALIZATION_CHANNEL_SCOPE_TRIGGER_MODE = "visualization_channel_scope_trigger_mode"
@@ -4325,6 +4326,10 @@ private fun AppNavigation(
                         onResetVisualizationChannelScopeSettings = {
                             prefs.edit()
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS, 30)
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_RENDER_BACKEND,
+                                    VisualizationRenderBackend.Gpu.storageValue
+                                )
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_DC_REMOVAL_ENABLED, true)
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GAIN_PERCENT, 240)
                                 .putString(
@@ -4607,6 +4612,10 @@ private fun AppNavigation(
                                 .apply()
                             prefs.edit()
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS, 30)
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_RENDER_BACKEND,
+                                    VisualizationRenderBackend.Gpu.storageValue
+                                )
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_DC_REMOVAL_ENABLED, true)
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GAIN_PERCENT, 240)
                                 .putString(

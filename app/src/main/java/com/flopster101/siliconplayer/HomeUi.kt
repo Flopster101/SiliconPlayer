@@ -230,7 +230,7 @@ internal fun HomeScreen(
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(8.dp))
-            recentFolders.take(RECENTS_LIMIT).forEach { entry ->
+            recentFolders.forEach { entry ->
                 val folderFile = File(entry.path)
                 val storagePresentation = storagePresentationForEntry(entry)
                 Box(modifier = Modifier.fillMaxWidth()) {
@@ -321,7 +321,7 @@ internal fun HomeScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
-            recentPlayedFiles.take(RECENTS_LIMIT).forEach { entry ->
+            recentPlayedFiles.forEach { entry ->
                 val trackFile = File(entry.path)
                 val storagePresentation = storagePresentationForEntry(entry)
                 val extensionLabel = trackFile.extension.uppercase().ifBlank { "UNKNOWN" }

@@ -205,6 +205,7 @@ enum class SettingsRoute {
     UrlCache,
     CacheManager,
     GeneralAudio,
+    Home,
     Player,
     Misc,
     Ui,
@@ -595,6 +596,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.UrlCache -> 1
     SettingsRoute.CacheManager -> 2
     SettingsRoute.GeneralAudio -> 1
+    SettingsRoute.Home -> 1
     SettingsRoute.Player -> 1
     SettingsRoute.Misc -> 1
     SettingsRoute.Ui -> 1
@@ -602,7 +604,9 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
 }
 
 private const val PAGE_NAV_DURATION_MS = 300
-internal const val RECENTS_LIMIT = 3
+private const val RECENT_FOLDERS_LIMIT_DEFAULT = 3
+private const val RECENT_FILES_LIMIT_DEFAULT = 5
+private const val RECENTS_LIMIT_MAX = 50
 internal const val PREVIOUS_RESTART_THRESHOLD_SECONDS = 3.0
 
 private object AppPreferenceKeys {
@@ -628,6 +632,8 @@ private object AppPreferenceKeys {
     const val THEME_MODE = "theme_mode"
     const val RECENT_FOLDERS = "recent_folders"
     const val RECENT_PLAYED_FILES = "recent_played_files"
+    const val RECENT_FOLDERS_LIMIT = "recent_folders_limit"
+    const val RECENT_PLAYED_FILES_LIMIT = "recent_played_files_limit"
     const val KEEP_SCREEN_ON = "keep_screen_on"
     const val AUDIO_FOCUS_INTERRUPT = "audio_focus_interrupt"
     const val AUDIO_DUCKING = "audio_ducking"
@@ -985,12 +991,23 @@ private fun AppNavigation(
         }
     }
 
-    val recentLimit = RECENTS_LIMIT
+    var recentFoldersLimit by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.RECENT_FOLDERS_LIMIT, RECENT_FOLDERS_LIMIT_DEFAULT)
+                .coerceIn(1, RECENTS_LIMIT_MAX)
+        )
+    }
+    var recentFilesLimit by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.RECENT_PLAYED_FILES_LIMIT, RECENT_FILES_LIMIT_DEFAULT)
+                .coerceIn(1, RECENTS_LIMIT_MAX)
+        )
+    }
     var recentFolders by remember {
-        mutableStateOf(readRecentEntries(prefs, AppPreferenceKeys.RECENT_FOLDERS, recentLimit))
+        mutableStateOf(readRecentEntries(prefs, AppPreferenceKeys.RECENT_FOLDERS, recentFoldersLimit))
     }
     var recentPlayedFiles by remember {
-        mutableStateOf(readRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, recentLimit))
+        mutableStateOf(readRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, recentFilesLimit))
     }
     var autoPlayOnTrackSelect by remember {
         mutableStateOf(
@@ -1053,6 +1070,34 @@ private fun AppNavigation(
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.FILENAME_ONLY_WHEN_TITLE_MISSING, false)
         )
+    }
+
+    LaunchedEffect(recentFoldersLimit) {
+        val clamped = recentFoldersLimit.coerceIn(1, RECENTS_LIMIT_MAX)
+        if (clamped != recentFoldersLimit) {
+            recentFoldersLimit = clamped
+            return@LaunchedEffect
+        }
+        prefs.edit().putInt(AppPreferenceKeys.RECENT_FOLDERS_LIMIT, clamped).apply()
+        val trimmed = recentFolders.take(clamped)
+        if (trimmed.size != recentFolders.size) {
+            recentFolders = trimmed
+        }
+        writeRecentEntries(prefs, AppPreferenceKeys.RECENT_FOLDERS, recentFolders, clamped)
+    }
+
+    LaunchedEffect(recentFilesLimit) {
+        val clamped = recentFilesLimit.coerceIn(1, RECENTS_LIMIT_MAX)
+        if (clamped != recentFilesLimit) {
+            recentFilesLimit = clamped
+            return@LaunchedEffect
+        }
+        prefs.edit().putInt(AppPreferenceKeys.RECENT_PLAYED_FILES_LIMIT, clamped).apply()
+        val trimmed = recentPlayedFiles.take(clamped)
+        if (trimmed.size != recentPlayedFiles.size) {
+            recentPlayedFiles = trimmed
+        }
+        writeRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, recentPlayedFiles, clamped)
     }
     var ffmpegCoreSampleRateHz by remember {
         mutableIntStateOf(
@@ -1732,8 +1777,8 @@ private fun AppNavigation(
         val updated = listOf(
             RecentPathEntry(path = normalized, locationId = locationId, title = null, artist = null)
         ) + recentFolders.filterNot { samePath(it.path, normalized) }
-        recentFolders = updated.take(recentLimit)
-        writeRecentEntries(prefs, AppPreferenceKeys.RECENT_FOLDERS, recentFolders, recentLimit)
+        recentFolders = updated.take(recentFoldersLimit)
+        writeRecentEntries(prefs, AppPreferenceKeys.RECENT_FOLDERS, recentFolders, recentFoldersLimit)
     }
 
     fun addRecentPlayedTrack(path: String, locationId: String?, title: String? = null, artist: String? = null) {
@@ -1750,8 +1795,8 @@ private fun AppNavigation(
             )
         ) +
             recentPlayedFiles.filterNot { samePath(it.path, normalized) }
-        recentPlayedFiles = updated.take(recentLimit)
-        writeRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, recentPlayedFiles, recentLimit)
+        recentPlayedFiles = updated.take(recentFilesLimit)
+        writeRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, recentPlayedFiles, recentFilesLimit)
     }
 
     fun scheduleRecentTrackMetadataRefresh(sourceId: String, locationId: String?) {
@@ -3171,7 +3216,7 @@ private fun AppNavigation(
                                             prefs,
                                             AppPreferenceKeys.RECENT_FOLDERS,
                                             recentFolders,
-                                            recentLimit
+                                            recentFoldersLimit
                                         )
                                         Toast.makeText(context, "Removed from recents", Toast.LENGTH_SHORT).show()
                                     }
@@ -3193,7 +3238,7 @@ private fun AppNavigation(
                                             prefs,
                                             AppPreferenceKeys.RECENT_PLAYED_FILES,
                                             recentPlayedFiles,
-                                            recentLimit
+                                            recentFilesLimit
                                         )
                                         Toast.makeText(context, "Removed from recents", Toast.LENGTH_SHORT).show()
                                     }
@@ -3304,6 +3349,7 @@ private fun AppNavigation(
                         },
                         onOpenAudioPlugins = { settingsRoute = SettingsRoute.AudioPlugins },
                         onOpenGeneralAudio = { settingsRoute = SettingsRoute.GeneralAudio },
+                        onOpenHome = { settingsRoute = SettingsRoute.Home },
                         onOpenAudioEffects = {
                             tempMasterVolumeDb = masterVolumeDb
                             tempPluginVolumeDb = pluginVolumeDb
@@ -3410,6 +3456,10 @@ private fun AppNavigation(
                         onThemeModeChanged = onThemeModeChanged,
                         rememberBrowserLocation = rememberBrowserLocation,
                         onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
+                        recentFoldersLimit = recentFoldersLimit,
+                        onRecentFoldersLimitChanged = { recentFoldersLimit = it.coerceIn(1, RECENTS_LIMIT_MAX) },
+                        recentFilesLimit = recentFilesLimit,
+                        onRecentFilesLimitChanged = { recentFilesLimit = it.coerceIn(1, RECENTS_LIMIT_MAX) },
                         urlCacheClearOnLaunch = urlCacheClearOnLaunch,
                         onUrlCacheClearOnLaunchChanged = { enabled ->
                             urlCacheClearOnLaunch = enabled
@@ -3675,6 +3725,8 @@ private fun AppNavigation(
                             urlCacheMaxBytes = SOURCE_CACHE_MAX_BYTES_DEFAULT
                             lastBrowserLocationId = null
                             lastBrowserDirectoryPath = null
+                            recentFoldersLimit = RECENT_FOLDERS_LIMIT_DEFAULT
+                            recentFilesLimit = RECENT_FILES_LIMIT_DEFAULT
                             recentFolders = emptyList()
                             recentPlayedFiles = emptyList()
                             keepScreenOn = false

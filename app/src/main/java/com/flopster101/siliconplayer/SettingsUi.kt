@@ -45,6 +45,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.OutlinedTextField
@@ -54,7 +55,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -103,6 +106,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.Dp
@@ -157,6 +161,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.UrlCache -> 1
     SettingsRoute.CacheManager -> 2
     SettingsRoute.GeneralAudio -> 1
+    SettingsRoute.Home -> 1
     SettingsRoute.Player -> 1
     SettingsRoute.Misc -> 1
     SettingsRoute.Ui -> 1
@@ -171,6 +176,7 @@ internal fun SettingsScreen(
     onBack: () -> Unit,
     onOpenAudioPlugins: () -> Unit,
     onOpenGeneralAudio: () -> Unit,
+    onOpenHome: () -> Unit,
     onOpenAudioEffects: () -> Unit,
     onClearAllAudioParameters: () -> Unit,
     onClearPluginAudioParameters: () -> Unit,
@@ -221,6 +227,10 @@ internal fun SettingsScreen(
     onThemeModeChanged: (ThemeMode) -> Unit,
     rememberBrowserLocation: Boolean,
     onRememberBrowserLocationChanged: (Boolean) -> Unit,
+    recentFoldersLimit: Int,
+    onRecentFoldersLimitChanged: (Int) -> Unit,
+    recentFilesLimit: Int,
+    onRecentFilesLimitChanged: (Int) -> Unit,
     urlCacheClearOnLaunch: Boolean,
     onUrlCacheClearOnLaunchChanged: (Boolean) -> Unit,
     urlCacheMaxTracks: Int,
@@ -323,6 +333,7 @@ internal fun SettingsScreen(
         SettingsRoute.UrlCache -> "Cache settings"
         SettingsRoute.CacheManager -> "Manage cached files"
         SettingsRoute.GeneralAudio -> "General audio"
+        SettingsRoute.Home -> "Home settings"
         SettingsRoute.Player -> "Player settings"
         SettingsRoute.Misc -> "Misc settings"
         SettingsRoute.Ui -> "UI settings"
@@ -492,6 +503,12 @@ internal fun SettingsScreen(
                             onClick = onOpenPlayer
                         )
                         Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Home settings",
+                            description = "Configure recents shown on the Home page.",
+                            icon = Icons.Default.Home,
+                            onClick = onOpenHome
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Other")
                         SettingsItemCard(
@@ -1097,6 +1114,97 @@ internal fun SettingsScreen(
                             checked = audioAllowBackendFallback,
                             onCheckedChange = onAudioAllowBackendFallbackChanged
                         )
+                    }
+                    SettingsRoute.Home -> {
+                        var showFolderLimitDialog by remember { mutableStateOf(false) }
+                        var showFileLimitDialog by remember { mutableStateOf(false) }
+
+                        SettingsSectionLabel("Recents")
+                        SettingsItemCard(
+                            title = "Recent folders limit",
+                            description = "$recentFoldersLimit folders",
+                            icon = Icons.Default.Folder,
+                            onClick = { showFolderLimitDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Recent files limit",
+                            description = "$recentFilesLimit files",
+                            icon = Icons.Default.MusicNote,
+                            onClick = { showFileLimitDialog = true }
+                        )
+
+                        if (showFolderLimitDialog) {
+                            var input by remember { mutableStateOf(recentFoldersLimit.toString()) }
+                            AlertDialog(
+                                onDismissRequest = { showFolderLimitDialog = false },
+                                title = { Text("Recent folders limit") },
+                                text = {
+                                    OutlinedTextField(
+                                        value = input,
+                                        onValueChange = { value ->
+                                            input = value.filter { it.isDigit() }.take(2)
+                                        },
+                                        singleLine = true,
+                                        label = { Text("Folders") },
+                                        supportingText = { Text("1-50 (default 3)") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                                    )
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showFolderLimitDialog = false }) {
+                                        Text("Cancel")
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        val parsed = input.trim().toIntOrNull()
+                                        if (parsed != null && parsed in 1..50) {
+                                            onRecentFoldersLimitChanged(parsed)
+                                            showFolderLimitDialog = false
+                                        }
+                                    }) {
+                                        Text("Save")
+                                    }
+                                }
+                            )
+                        }
+
+                        if (showFileLimitDialog) {
+                            var input by remember { mutableStateOf(recentFilesLimit.toString()) }
+                            AlertDialog(
+                                onDismissRequest = { showFileLimitDialog = false },
+                                title = { Text("Recent files limit") },
+                                text = {
+                                    OutlinedTextField(
+                                        value = input,
+                                        onValueChange = { value ->
+                                            input = value.filter { it.isDigit() }.take(2)
+                                        },
+                                        singleLine = true,
+                                        label = { Text("Files") },
+                                        supportingText = { Text("1-50 (default 5)") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                                    )
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showFileLimitDialog = false }) {
+                                        Text("Cancel")
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        val parsed = input.trim().toIntOrNull()
+                                        if (parsed != null && parsed in 1..50) {
+                                            onRecentFilesLimitChanged(parsed)
+                                            showFileLimitDialog = false
+                                        }
+                                    }) {
+                                        Text("Save")
+                                    }
+                                }
+                            )
+                        }
                     }
                     SettingsRoute.Player -> {
                         SettingsSectionLabel("Track selection")

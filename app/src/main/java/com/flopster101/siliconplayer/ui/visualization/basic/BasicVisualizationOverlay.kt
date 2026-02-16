@@ -16,6 +16,7 @@ import com.flopster101.siliconplayer.VisualizationRenderBackend
 import com.flopster101.siliconplayer.VisualizationVuAnchor
 import com.flopster101.siliconplayer.ui.visualization.advanced.ChannelScopeVisualization
 import com.flopster101.siliconplayer.ui.visualization.gpu.ChannelScopeGpuVisualization
+import com.flopster101.siliconplayer.ui.visualization.gl.ChannelScopeGlVisualization
 import kotlin.math.max
 import kotlin.math.min
 
@@ -66,7 +67,7 @@ fun BasicVisualizationOverlay(
     channelScopeGridColorModeWithArtwork: VisualizationOscColorMode,
     channelScopeCustomLineColorArgb: Int,
     channelScopeCustomGridColorArgb: Int,
-    channelScopeGpuOnFrameStats: ((fps: Int, frameMs: Int) -> Unit)? = null,
+    channelScopeOnFrameStats: ((fps: Int, frameMs: Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (mode == VisualizationMode.Off) return
@@ -127,23 +128,23 @@ fun BasicVisualizationOverlay(
     val vuColor = vuAccentColor
     val vuLabelColor = deriveVuLabelColor(vuAccentColor)
     val vuBackgroundColor = deriveVuTrackColor(vuAccentColor)
-    val openMptCustomLineColor = Color(channelScopeCustomLineColorArgb)
-    val openMptCustomGridColor = Color(channelScopeCustomGridColorArgb)
-    val openMptLineColor = resolveOscColor(
+    val channelScopeCustomLineColor = Color(channelScopeCustomLineColorArgb)
+    val channelScopeCustomGridColor = Color(channelScopeCustomGridColorArgb)
+    val channelScopeLineColor = resolveOscColor(
         hasArtwork = hasArtwork,
         noArtworkMode = channelScopeLineColorModeNoArtwork,
         withArtworkMode = channelScopeLineColorModeWithArtwork,
         artworkColor = artworkBaseColor,
         monetColor = monetOscLineColor,
-        customColor = openMptCustomLineColor
+        customColor = channelScopeCustomLineColor
     )
-    val openMptGridColor = resolveOscColor(
+    val channelScopeGridColor = resolveOscColor(
         hasArtwork = hasArtwork,
         noArtworkMode = channelScopeGridColorModeNoArtwork,
         withArtworkMode = channelScopeGridColorModeWithArtwork,
         artworkColor = artworkGridColor,
         monetColor = monetOscGridColor,
-        customColor = openMptCustomGridColor
+        customColor = channelScopeCustomGridColor
     )
     val barBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
 
@@ -193,8 +194,8 @@ fun BasicVisualizationOverlay(
                 VisualizationRenderBackend.Compose -> {
                     ChannelScopeVisualization(
                         channelHistories = channelScopeHistories,
-                        lineColor = openMptLineColor,
-                        gridColor = openMptGridColor,
+                        lineColor = channelScopeLineColor,
+                        gridColor = channelScopeGridColor,
                         lineWidthPx = channelScopeLineWidthDp.toFloat(),
                         gridWidthPx = channelScopeGridWidthDp.toFloat(),
                         showVerticalGrid = channelScopeVerticalGridEnabled,
@@ -208,8 +209,8 @@ fun BasicVisualizationOverlay(
                 VisualizationRenderBackend.Gpu -> {
                     ChannelScopeGpuVisualization(
                         channelHistories = channelScopeHistories,
-                        lineColor = openMptLineColor,
-                        gridColor = openMptGridColor,
+                        lineColor = channelScopeLineColor,
+                        gridColor = channelScopeGridColor,
                         lineWidthPx = channelScopeLineWidthDp.toFloat(),
                         gridWidthPx = channelScopeGridWidthDp.toFloat(),
                         showVerticalGrid = channelScopeVerticalGridEnabled,
@@ -217,7 +218,23 @@ fun BasicVisualizationOverlay(
                         triggerModeNative = channelScopeTriggerModeNative,
                         triggerIndices = channelScopeTriggerIndices,
                         layoutStrategy = channelScopeLayout,
-                        onFrameStats = channelScopeGpuOnFrameStats,
+                        onFrameStats = channelScopeOnFrameStats,
+                        modifier = modifier
+                    )
+                }
+                VisualizationRenderBackend.OpenGl -> {
+                    ChannelScopeGlVisualization(
+                        channelHistories = channelScopeHistories,
+                        lineColor = channelScopeLineColor,
+                        gridColor = channelScopeGridColor,
+                        lineWidthPx = channelScopeLineWidthDp.toFloat(),
+                        gridWidthPx = channelScopeGridWidthDp.toFloat(),
+                        showVerticalGrid = channelScopeVerticalGridEnabled,
+                        showCenterLine = channelScopeCenterLineEnabled,
+                        triggerModeNative = channelScopeTriggerModeNative,
+                        triggerIndices = channelScopeTriggerIndices,
+                        layoutStrategy = channelScopeLayout,
+                        onFrameStats = channelScopeOnFrameStats,
                         modifier = modifier
                     )
                 }

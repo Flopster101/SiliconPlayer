@@ -22,7 +22,8 @@ enum class VisualizationRenderBackend(
     val label: String
 ) {
     Compose("compose", "Compose"),
-    Gpu("gpu", "GPU canvas");
+    Gpu("gpu", "GPU canvas"),
+    OpenGl("opengl", "OpenGL ES");
 
     companion object {
         fun fromStorage(value: String?, fallback: VisualizationRenderBackend): VisualizationRenderBackend {

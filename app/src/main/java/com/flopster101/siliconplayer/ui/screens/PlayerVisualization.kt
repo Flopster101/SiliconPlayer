@@ -833,7 +833,7 @@ internal fun AlbumArtPlaceholder(
                 channelScopeGridColorModeWithArtwork = channelScopeState.gridColorModeWithArtwork,
                 channelScopeCustomLineColorArgb = channelScopeState.customLineColorArgb,
                 channelScopeCustomGridColorArgb = channelScopeState.customGridColorArgb,
-                channelScopeGpuOnFrameStats = { fps, frameMs ->
+                channelScopeOnFrameStats = { fps, frameMs ->
                     visDebugDrawFps = fps.coerceAtLeast(0)
                     visDebugDrawFrameMs = frameMs.coerceAtLeast(0)
                 },
@@ -856,7 +856,7 @@ internal fun AlbumArtPlaceholder(
                 ) {
                     Text(
                         text = "Mode: ${visualizationMode.label}\nBackend: ${activeRenderBackend.label}\nUpdate: ${visDebugUpdateFps} fps  (${visDebugUpdateFrameMs} ms)\nDraw: ${
-                            if (activeRenderBackend == VisualizationRenderBackend.Gpu) {
+                            if (activeRenderBackend != VisualizationRenderBackend.Compose) {
                                 "${visDebugDrawFps} fps  (${visDebugDrawFrameMs} ms)"
                             } else {
                                 "N/A"

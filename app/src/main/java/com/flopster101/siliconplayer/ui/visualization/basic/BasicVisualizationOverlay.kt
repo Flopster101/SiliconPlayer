@@ -66,6 +66,7 @@ fun BasicVisualizationOverlay(
     channelScopeGridColorModeWithArtwork: VisualizationOscColorMode,
     channelScopeCustomLineColorArgb: Int,
     channelScopeCustomGridColorArgb: Int,
+    channelScopeGpuOnFrameStats: ((fps: Int, frameMs: Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     if (mode == VisualizationMode.Off) return
@@ -216,6 +217,7 @@ fun BasicVisualizationOverlay(
                         triggerModeNative = channelScopeTriggerModeNative,
                         triggerIndices = channelScopeTriggerIndices,
                         layoutStrategy = channelScopeLayout,
+                        onFrameStats = channelScopeGpuOnFrameStats,
                         modifier = modifier
                     )
                 }

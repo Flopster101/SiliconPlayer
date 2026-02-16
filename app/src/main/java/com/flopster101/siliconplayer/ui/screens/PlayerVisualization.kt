@@ -425,8 +425,10 @@ internal fun AlbumArtPlaceholder(
     var visChannelScopeHistories by remember { mutableStateOf<List<FloatArray>>(emptyList()) }
     var visChannelScopeLastChannelCount by remember { mutableIntStateOf(1) }
     var visChannelScopeTriggerIndices by remember { mutableStateOf(IntArray(0)) }
-    var visDebugFps by remember { mutableIntStateOf(0) }
-    var visDebugFrameMs by remember { mutableIntStateOf(0) }
+    var visDebugUpdateFps by remember { mutableIntStateOf(0) }
+    var visDebugUpdateFrameMs by remember { mutableIntStateOf(0) }
+    var visDebugDrawFps by remember { mutableIntStateOf(0) }
+    var visDebugDrawFrameMs by remember { mutableIntStateOf(0) }
     val visDebugAccumulator = remember { VisualizationDebugAccumulator() }
     var lastVisualizationBackend by remember {
         mutableStateOf(
@@ -459,8 +461,10 @@ internal fun AlbumArtPlaceholder(
             ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
         visChannelScopeHistories = List(channels) { FloatArray(points) }
         visChannelScopeTriggerIndices = IntArray(channels) { points / 2 }
-        visDebugFps = 0
-        visDebugFrameMs = 0
+        visDebugUpdateFps = 0
+        visDebugUpdateFrameMs = 0
+        visDebugDrawFps = 0
+        visDebugDrawFrameMs = 0
         visDebugAccumulator.frameCount = 0
         visDebugAccumulator.windowStartNs = 0L
         visDebugAccumulator.lastFrameNs = 0L
@@ -534,7 +538,7 @@ internal fun AlbumArtPlaceholder(
                 visDebugAccumulator.frameCount += 1
                 val elapsedNs = nowNs - visDebugAccumulator.windowStartNs
                 if (elapsedNs >= 1_000_000_000L) {
-                    visDebugFps = ((visDebugAccumulator.frameCount.toDouble() * 1_000_000_000.0) / elapsedNs.toDouble())
+                    visDebugUpdateFps = ((visDebugAccumulator.frameCount.toDouble() * 1_000_000_000.0) / elapsedNs.toDouble())
                         .roundToInt()
                         .coerceAtLeast(0)
                     visDebugAccumulator.frameCount = 0
@@ -542,7 +546,7 @@ internal fun AlbumArtPlaceholder(
                 }
                 // Throttle HUD state updates to reduce recomposition overhead.
                 if (nowNs - visDebugAccumulator.lastUiPublishNs >= 350_000_000L) {
-                    visDebugFrameMs = visDebugAccumulator.latestFrameMs
+                    visDebugUpdateFrameMs = visDebugAccumulator.latestFrameMs
                     visDebugAccumulator.lastUiPublishNs = nowNs
                 }
             }
@@ -829,6 +833,10 @@ internal fun AlbumArtPlaceholder(
                 channelScopeGridColorModeWithArtwork = channelScopeState.gridColorModeWithArtwork,
                 channelScopeCustomLineColorArgb = channelScopeState.customLineColorArgb,
                 channelScopeCustomGridColorArgb = channelScopeState.customGridColorArgb,
+                channelScopeGpuOnFrameStats = { fps, frameMs ->
+                    visDebugDrawFps = fps.coerceAtLeast(0)
+                    visDebugDrawFrameMs = frameMs.coerceAtLeast(0)
+                },
                 modifier = Modifier.matchParentSize()
             )
             if (backendTransitionBlackAlpha.value > 0f) {
@@ -847,7 +855,13 @@ internal fun AlbumArtPlaceholder(
                     color = Color.Black.copy(alpha = 0.22f)
                 ) {
                     Text(
-                        text = "Mode: ${visualizationMode.label}\nBackend: ${activeRenderBackend.label}\nFPS: ${visDebugFps}\nFrame: ${visDebugFrameMs} ms",
+                        text = "Mode: ${visualizationMode.label}\nBackend: ${activeRenderBackend.label}\nUpdate: ${visDebugUpdateFps} fps  (${visDebugUpdateFrameMs} ms)\nDraw: ${
+                            if (activeRenderBackend == VisualizationRenderBackend.Gpu) {
+                                "${visDebugDrawFps} fps  (${visDebugDrawFrameMs} ms)"
+                            } else {
+                                "N/A"
+                            }
+                        }",
                         color = Color.White.copy(alpha = 0.78f),
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)

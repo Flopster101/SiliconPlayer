@@ -25,6 +25,7 @@ fun ChannelScopeGpuVisualization(
     triggerModeNative: Int,
     triggerIndices: IntArray,
     layoutStrategy: VisualizationChannelScopeLayout,
+    onFrameStats: ((fps: Int, frameMs: Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     AndroidView(
@@ -35,6 +36,7 @@ fun ChannelScopeGpuVisualization(
             }
         },
         update = { view ->
+            view.onFrameStats = onFrameStats
             view.updateFrame(
                 channelHistories = channelHistories,
                 lineColorArgb = lineColor.toArgb(),
@@ -73,6 +75,13 @@ private class ChannelScopeGpuCanvasView(
         style = Paint.Style.STROKE
     }
     private val waveformPath = Path()
+    var onFrameStats: ((fps: Int, frameMs: Int) -> Unit)? = null
+    private var drawFrameCount: Int = 0
+    private var drawWindowStartNs: Long = 0L
+    private var lastDrawNs: Long = 0L
+    private var latestDrawFrameMs: Int = 0
+    private var latestDrawFps: Int = 0
+    private var lastHudPublishNs: Long = 0L
 
     init {
         // Keep rendering on hardware path when available.
@@ -108,6 +117,27 @@ private class ChannelScopeGpuCanvasView(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        val nowNs = System.nanoTime()
+        if (drawWindowStartNs == 0L) {
+            drawWindowStartNs = nowNs
+        }
+        if (lastDrawNs != 0L) {
+            latestDrawFrameMs = ((nowNs - lastDrawNs) / 1_000_000L).toInt().coerceAtLeast(0)
+        }
+        lastDrawNs = nowNs
+        drawFrameCount += 1
+        val elapsedNs = nowNs - drawWindowStartNs
+        if (elapsedNs >= 1_000_000_000L) {
+            latestDrawFps = ((drawFrameCount.toDouble() * 1_000_000_000.0) / elapsedNs.toDouble())
+                .toInt()
+                .coerceAtLeast(0)
+            drawFrameCount = 0
+            drawWindowStartNs = nowNs
+        }
+        if (nowNs - lastHudPublishNs >= 350_000_000L) {
+            onFrameStats?.invoke(latestDrawFps, latestDrawFrameMs)
+            lastHudPublishNs = nowNs
+        }
         val histories = channelHistories
         if (histories.isEmpty()) return
         val channels = histories.size

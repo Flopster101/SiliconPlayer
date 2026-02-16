@@ -180,6 +180,7 @@ fun PlayerScreen(
     var visChannelCount by remember { mutableIntStateOf(2) }
     var visOpenMptChannelScopesFlat by remember { mutableStateOf(FloatArray(0)) }
     var visOpenMptChannelHistories by remember { mutableStateOf<List<FloatArray>>(emptyList()) }
+    var visOpenMptLastChannelCount by remember { mutableIntStateOf(1) }
     val context = LocalContext.current
     val prefs = remember {
         context.getSharedPreferences("silicon_player_settings", Context.MODE_PRIVATE)
@@ -468,6 +469,25 @@ fun PlayerScreen(
             sliderPosition = positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0))
         }
     }
+    LaunchedEffect(file?.absolutePath, isPlaying) {
+        if (file != null && isPlaying) return@LaunchedEffect
+        visWaveLeft = FloatArray(256)
+        visWaveRight = FloatArray(256)
+        visBars = FloatArray(256)
+        visBarsSmoothed = FloatArray(256)
+        visVu = FloatArray(2)
+        visVuSmoothed = FloatArray(2)
+        visChannelCount = 2
+        visOpenMptChannelScopesFlat = FloatArray(0)
+        val points = computeOpenMptScopeSampleCount(
+            windowMs = openMptScopePrefs.windowMs,
+            sampleRateHz = sampleRateHz
+        )
+        val channels = visOpenMptChannelHistories.size
+            .takeIf { it > 0 }
+            ?: visOpenMptLastChannelCount.coerceIn(1, 64)
+        visOpenMptChannelHistories = List(channels) { FloatArray(points) }
+    }
     LaunchedEffect(
         visualizationMode,
         file?.absolutePath,
@@ -481,7 +501,7 @@ fun PlayerScreen(
         sampleRateHz
     ) {
         while (true) {
-            if (visualizationMode != VisualizationMode.Off && file != null) {
+            if (visualizationMode != VisualizationMode.Off && file != null && isPlaying) {
                 visWaveLeft = NativeBridge.getVisualizationWaveformScope(
                     0,
                     visualizationOscWindowMs,
@@ -531,8 +551,14 @@ fun PlayerScreen(
             delay(delayMs)
         }
     }
-    LaunchedEffect(visOpenMptChannelScopesFlat, visualizationMode, openMptScopePrefs.windowMs, sampleRateHz) {
-        if (visualizationMode != VisualizationMode.OpenMptChannelScope || visOpenMptChannelScopesFlat.isEmpty()) {
+    LaunchedEffect(
+        visOpenMptChannelScopesFlat,
+        visualizationMode,
+        openMptScopePrefs.windowMs,
+        sampleRateHz,
+        isPlaying
+    ) {
+        if (visualizationMode != VisualizationMode.OpenMptChannelScope) {
             visOpenMptChannelHistories = emptyList()
             return@LaunchedEffect
         }
@@ -540,11 +566,30 @@ fun PlayerScreen(
             windowMs = openMptScopePrefs.windowMs,
             sampleRateHz = sampleRateHz
         )
+        if (visOpenMptChannelScopesFlat.isEmpty()) {
+            if (!isPlaying) {
+                val channels = visOpenMptChannelHistories.size
+                    .takeIf { it > 0 }
+                    ?: visOpenMptLastChannelCount.coerceIn(1, 64)
+                visOpenMptChannelHistories = List(channels) { FloatArray(points) }
+                return@LaunchedEffect
+            }
+            visOpenMptChannelHistories = emptyList()
+            return@LaunchedEffect
+        }
         if (visOpenMptChannelScopesFlat.size < points) {
+            if (!isPlaying) {
+                val channels = visOpenMptChannelHistories.size
+                    .takeIf { it > 0 }
+                    ?: visOpenMptLastChannelCount.coerceIn(1, 64)
+                visOpenMptChannelHistories = List(channels) { FloatArray(points) }
+                return@LaunchedEffect
+            }
             visOpenMptChannelHistories = emptyList()
             return@LaunchedEffect
         }
         val channels = (visOpenMptChannelScopesFlat.size / points).coerceIn(1, 64)
+        visOpenMptLastChannelCount = channels
         val clamped = MutableList(channels) { index ->
             val start = index * points
             val end = (start + points).coerceAtMost(visOpenMptChannelScopesFlat.size)

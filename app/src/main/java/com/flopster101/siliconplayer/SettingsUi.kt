@@ -2681,7 +2681,7 @@ internal fun SettingsScreen(
                             context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
                         }
                         var scopeWindowMs by remember {
-                            mutableIntStateOf(prefs.getInt(scopeWindowKey, 40).coerceIn(5, 200))
+                            mutableIntStateOf(prefs.getInt(scopeWindowKey, 30).coerceIn(5, 200))
                         }
                         var scopeTriggerMode by remember {
                             mutableStateOf(

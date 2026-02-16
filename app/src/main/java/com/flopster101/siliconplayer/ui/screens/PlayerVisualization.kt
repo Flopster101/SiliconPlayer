@@ -276,7 +276,7 @@ internal data class ChannelScopePrefs(
                 else -> 0
             }
             return ChannelScopePrefs(
-                windowMs = sharedPrefs.getInt(KEY_WINDOW_MS, 40).coerceIn(5, 200),
+                windowMs = sharedPrefs.getInt(KEY_WINDOW_MS, 30).coerceIn(5, 200),
                 dcRemovalEnabled = sharedPrefs.getBoolean(KEY_DC_REMOVAL_ENABLED, true),
                 gainPercent = sharedPrefs.getInt(KEY_GAIN_PERCENT, 240).coerceIn(25, 600),
                 triggerModeNative = triggerModeNative,

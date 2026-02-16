@@ -4324,7 +4324,7 @@ private fun AppNavigation(
                         },
                         onResetVisualizationChannelScopeSettings = {
                             prefs.edit()
-                                .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS, 40)
+                                .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS, 30)
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_DC_REMOVAL_ENABLED, true)
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GAIN_PERCENT, 240)
                                 .putString(
@@ -4606,7 +4606,7 @@ private fun AppNavigation(
                                 )
                                 .apply()
                             prefs.edit()
-                                .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS, 40)
+                                .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS, 30)
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_DC_REMOVAL_ENABLED, true)
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GAIN_PERCENT, 240)
                                 .putString(

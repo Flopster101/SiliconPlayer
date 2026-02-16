@@ -22,19 +22,25 @@ enum class VisualizationRenderBackend(
     val label: String
 ) {
     Compose("compose", "Compose"),
-    Gpu("gpu", "GPU canvas"),
-    OpenGl("opengl", "OpenGL ES");
+    OpenGlTexture("opengl_texture", "OpenGL ES (TextureView)"),
+    OpenGlSurface("opengl_surface", "OpenGL ES (SurfaceView)");
 
     companion object {
         fun fromStorage(value: String?, fallback: VisualizationRenderBackend): VisualizationRenderBackend {
-            return entries.firstOrNull { it.storageValue == value } ?: fallback
+            return when (value) {
+                // Legacy migration: old GPU-canvas backend now maps to composited OpenGL backend.
+                "gpu" -> OpenGlTexture
+                // Legacy migration: old OpenGL value now maps to explicit SurfaceView backend.
+                "opengl" -> OpenGlSurface
+                else -> entries.firstOrNull { it.storageValue == value } ?: fallback
+            }
         }
     }
 }
 
 fun visualizationRenderBackendForMode(mode: VisualizationMode): VisualizationRenderBackend {
     return when (mode) {
-        VisualizationMode.ChannelScope -> VisualizationRenderBackend.Gpu
+        VisualizationMode.ChannelScope -> VisualizationRenderBackend.OpenGlTexture
         VisualizationMode.Off,
         VisualizationMode.Bars,
         VisualizationMode.Oscilloscope,

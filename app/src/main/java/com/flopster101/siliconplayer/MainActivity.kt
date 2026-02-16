@@ -4343,7 +4343,7 @@ private fun AppNavigation(
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS, 30)
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_RENDER_BACKEND,
-                                    VisualizationRenderBackend.Gpu.storageValue
+                                    VisualizationRenderBackend.OpenGlTexture.storageValue
                                 )
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_DC_REMOVAL_ENABLED, true)
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GAIN_PERCENT, 240)
@@ -4630,7 +4630,7 @@ private fun AppNavigation(
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS, 30)
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_RENDER_BACKEND,
-                                    VisualizationRenderBackend.Gpu.storageValue
+                                    VisualizationRenderBackend.OpenGlTexture.storageValue
                                 )
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_DC_REMOVAL_ENABLED, true)
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GAIN_PERCENT, 240)

@@ -15,8 +15,8 @@ import com.flopster101.siliconplayer.VisualizationOscColorMode
 import com.flopster101.siliconplayer.VisualizationRenderBackend
 import com.flopster101.siliconplayer.VisualizationVuAnchor
 import com.flopster101.siliconplayer.ui.visualization.advanced.ChannelScopeVisualization
-import com.flopster101.siliconplayer.ui.visualization.gpu.ChannelScopeGpuVisualization
 import com.flopster101.siliconplayer.ui.visualization.gl.ChannelScopeGlVisualization
+import com.flopster101.siliconplayer.ui.visualization.gl.ChannelScopeGlTextureVisualization
 import kotlin.math.max
 import kotlin.math.min
 
@@ -206,8 +206,8 @@ fun BasicVisualizationOverlay(
                         modifier = modifier
                     )
                 }
-                VisualizationRenderBackend.Gpu -> {
-                    ChannelScopeGpuVisualization(
+                VisualizationRenderBackend.OpenGlTexture -> {
+                    ChannelScopeGlTextureVisualization(
                         channelHistories = channelScopeHistories,
                         lineColor = channelScopeLineColor,
                         gridColor = channelScopeGridColor,
@@ -222,7 +222,7 @@ fun BasicVisualizationOverlay(
                         modifier = modifier
                     )
                 }
-                VisualizationRenderBackend.OpenGl -> {
+                VisualizationRenderBackend.OpenGlSurface -> {
                     ChannelScopeGlVisualization(
                         channelHistories = channelScopeHistories,
                         lineColor = channelScopeLineColor,

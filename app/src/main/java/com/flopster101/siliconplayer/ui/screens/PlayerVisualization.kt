@@ -291,8 +291,8 @@ internal data class ChannelScopePrefs(
             return ChannelScopePrefs(
                 windowMs = sharedPrefs.getInt(KEY_WINDOW_MS, 30).coerceIn(5, 200),
                 renderBackend = VisualizationRenderBackend.fromStorage(
-                    sharedPrefs.getString(KEY_RENDER_BACKEND, VisualizationRenderBackend.Gpu.storageValue),
-                    VisualizationRenderBackend.Gpu
+                    sharedPrefs.getString(KEY_RENDER_BACKEND, VisualizationRenderBackend.OpenGlTexture.storageValue),
+                    VisualizationRenderBackend.OpenGlTexture
                 ),
                 dcRemovalEnabled = sharedPrefs.getBoolean(KEY_DC_REMOVAL_ENABLED, true),
                 gainPercent = sharedPrefs.getInt(KEY_GAIN_PERCENT, 240).coerceIn(25, 600),

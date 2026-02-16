@@ -2703,8 +2703,8 @@ internal fun SettingsScreen(
                         var scopeRenderBackend by remember {
                             mutableStateOf(
                                 VisualizationRenderBackend.fromStorage(
-                                    prefs.getString(scopeRenderBackendKey, VisualizationRenderBackend.Gpu.storageValue),
-                                    VisualizationRenderBackend.Gpu
+                                    prefs.getString(scopeRenderBackendKey, VisualizationRenderBackend.OpenGlTexture.storageValue),
+                                    VisualizationRenderBackend.OpenGlTexture
                                 )
                             )
                         }

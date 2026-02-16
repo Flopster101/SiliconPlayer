@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.AppDefaults
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
 import com.flopster101.siliconplayer.VisualizationChannelScopeBackgroundMode
@@ -334,53 +335,123 @@ internal data class ChannelScopePrefs(
         private const val KEY_CUSTOM_GRID_COLOR_ARGB = "visualization_channel_scope_custom_grid_color_argb"
 
         fun from(sharedPrefs: android.content.SharedPreferences): ChannelScopePrefs {
-            val triggerModeNative = when (sharedPrefs.getString(KEY_TRIGGER_MODE, "rising")) {
+            val defaultTriggerStorage = AppDefaults.Visualization.ChannelScope.triggerMode.storageValue
+            val triggerModeNative = when (sharedPrefs.getString(KEY_TRIGGER_MODE, defaultTriggerStorage)) {
                 "rising" -> 1
                 "falling" -> 2
                 else -> 0
             }
             return ChannelScopePrefs(
-                windowMs = sharedPrefs.getInt(KEY_WINDOW_MS, 30).coerceIn(5, 200),
-                renderBackend = VisualizationRenderBackend.fromStorage(
-                    sharedPrefs.getString(KEY_RENDER_BACKEND, VisualizationRenderBackend.OpenGlTexture.storageValue),
-                    VisualizationRenderBackend.OpenGlTexture
+                windowMs = sharedPrefs.getInt(
+                    KEY_WINDOW_MS,
+                    AppDefaults.Visualization.ChannelScope.windowMs
+                ).coerceIn(
+                    AppDefaults.Visualization.ChannelScope.windowRangeMs.first,
+                    AppDefaults.Visualization.ChannelScope.windowRangeMs.last
                 ),
-                dcRemovalEnabled = sharedPrefs.getBoolean(KEY_DC_REMOVAL_ENABLED, true),
-                gainPercent = sharedPrefs.getInt(KEY_GAIN_PERCENT, 240).coerceIn(25, 600),
+                renderBackend = VisualizationRenderBackend.fromStorage(
+                    sharedPrefs.getString(
+                        KEY_RENDER_BACKEND,
+                        AppDefaults.Visualization.ChannelScope.renderBackend.storageValue
+                    ),
+                    AppDefaults.Visualization.ChannelScope.renderBackend
+                ),
+                dcRemovalEnabled = sharedPrefs.getBoolean(
+                    KEY_DC_REMOVAL_ENABLED,
+                    AppDefaults.Visualization.ChannelScope.dcRemovalEnabled
+                ),
+                gainPercent = sharedPrefs.getInt(
+                    KEY_GAIN_PERCENT,
+                    AppDefaults.Visualization.ChannelScope.gainPercent
+                ).coerceIn(
+                    AppDefaults.Visualization.ChannelScope.gainRangePercent.first,
+                    AppDefaults.Visualization.ChannelScope.gainRangePercent.last
+                ),
                 triggerModeNative = triggerModeNative,
                 fpsMode = VisualizationOscFpsMode.fromStorage(
-                    sharedPrefs.getString(KEY_FPS_MODE, VisualizationOscFpsMode.Default.storageValue)
+                    sharedPrefs.getString(
+                        KEY_FPS_MODE,
+                        AppDefaults.Visualization.ChannelScope.fpsMode.storageValue
+                    )
                 ),
-                lineWidthDp = sharedPrefs.getInt(KEY_LINE_WIDTH_DP, 3).coerceIn(1, 12),
-                gridWidthDp = sharedPrefs.getInt(KEY_GRID_WIDTH_DP, 2).coerceIn(1, 8),
-                verticalGridEnabled = sharedPrefs.getBoolean(KEY_VERTICAL_GRID_ENABLED, false),
-                centerLineEnabled = sharedPrefs.getBoolean(KEY_CENTER_LINE_ENABLED, false),
+                lineWidthDp = sharedPrefs.getInt(
+                    KEY_LINE_WIDTH_DP,
+                    AppDefaults.Visualization.ChannelScope.lineWidthDp
+                ).coerceIn(
+                    AppDefaults.Visualization.ChannelScope.lineWidthRangeDp.first,
+                    AppDefaults.Visualization.ChannelScope.lineWidthRangeDp.last
+                ),
+                gridWidthDp = sharedPrefs.getInt(
+                    KEY_GRID_WIDTH_DP,
+                    AppDefaults.Visualization.ChannelScope.gridWidthDp
+                ).coerceIn(
+                    AppDefaults.Visualization.ChannelScope.gridWidthRangeDp.first,
+                    AppDefaults.Visualization.ChannelScope.gridWidthRangeDp.last
+                ),
+                verticalGridEnabled = sharedPrefs.getBoolean(
+                    KEY_VERTICAL_GRID_ENABLED,
+                    AppDefaults.Visualization.ChannelScope.verticalGridEnabled
+                ),
+                centerLineEnabled = sharedPrefs.getBoolean(
+                    KEY_CENTER_LINE_ENABLED,
+                    AppDefaults.Visualization.ChannelScope.centerLineEnabled
+                ),
                 layout = VisualizationChannelScopeLayout.fromStorage(
-                    sharedPrefs.getString(KEY_LAYOUT, VisualizationChannelScopeLayout.ColumnFirst.storageValue)
+                    sharedPrefs.getString(
+                        KEY_LAYOUT,
+                        AppDefaults.Visualization.ChannelScope.layout.storageValue
+                    )
                 ),
                 lineColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
-                    sharedPrefs.getString(KEY_LINE_COLOR_MODE_NO_ARTWORK, VisualizationOscColorMode.Monet.storageValue),
-                    VisualizationOscColorMode.Monet
+                    sharedPrefs.getString(
+                        KEY_LINE_COLOR_MODE_NO_ARTWORK,
+                        AppDefaults.Visualization.ChannelScope.lineColorModeNoArtwork.storageValue
+                    ),
+                    AppDefaults.Visualization.ChannelScope.lineColorModeNoArtwork
                 ),
                 gridColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
-                    sharedPrefs.getString(KEY_GRID_COLOR_MODE_NO_ARTWORK, VisualizationOscColorMode.Monet.storageValue),
-                    VisualizationOscColorMode.Monet
+                    sharedPrefs.getString(
+                        KEY_GRID_COLOR_MODE_NO_ARTWORK,
+                        AppDefaults.Visualization.ChannelScope.gridColorModeNoArtwork.storageValue
+                    ),
+                    AppDefaults.Visualization.ChannelScope.gridColorModeNoArtwork
                 ),
                 lineColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
-                    sharedPrefs.getString(KEY_LINE_COLOR_MODE_WITH_ARTWORK, VisualizationOscColorMode.Artwork.storageValue),
-                    VisualizationOscColorMode.Artwork
+                    sharedPrefs.getString(
+                        KEY_LINE_COLOR_MODE_WITH_ARTWORK,
+                        AppDefaults.Visualization.ChannelScope.lineColorModeWithArtwork.storageValue
+                    ),
+                    AppDefaults.Visualization.ChannelScope.lineColorModeWithArtwork
                 ),
                 gridColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
-                    sharedPrefs.getString(KEY_GRID_COLOR_MODE_WITH_ARTWORK, VisualizationOscColorMode.Artwork.storageValue),
-                    VisualizationOscColorMode.Artwork
+                    sharedPrefs.getString(
+                        KEY_GRID_COLOR_MODE_WITH_ARTWORK,
+                        AppDefaults.Visualization.ChannelScope.gridColorModeWithArtwork.storageValue
+                    ),
+                    AppDefaults.Visualization.ChannelScope.gridColorModeWithArtwork
                 ),
-                customLineColorArgb = sharedPrefs.getInt(KEY_CUSTOM_LINE_COLOR_ARGB, 0xFF6BD8FF.toInt()),
-                customGridColorArgb = sharedPrefs.getInt(KEY_CUSTOM_GRID_COLOR_ARGB, 0x66FFFFFF),
-                showArtworkBackground = sharedPrefs.getBoolean(KEY_SHOW_ARTWORK_BACKGROUND, true),
+                customLineColorArgb = sharedPrefs.getInt(
+                    KEY_CUSTOM_LINE_COLOR_ARGB,
+                    AppDefaults.Visualization.ChannelScope.customLineColorArgb
+                ),
+                customGridColorArgb = sharedPrefs.getInt(
+                    KEY_CUSTOM_GRID_COLOR_ARGB,
+                    AppDefaults.Visualization.ChannelScope.customGridColorArgb
+                ),
+                showArtworkBackground = sharedPrefs.getBoolean(
+                    KEY_SHOW_ARTWORK_BACKGROUND,
+                    AppDefaults.Visualization.ChannelScope.showArtworkBackground
+                ),
                 backgroundMode = VisualizationChannelScopeBackgroundMode.fromStorage(
-                    sharedPrefs.getString(KEY_BACKGROUND_MODE, VisualizationChannelScopeBackgroundMode.AutoDarkAccent.storageValue)
+                    sharedPrefs.getString(
+                        KEY_BACKGROUND_MODE,
+                        AppDefaults.Visualization.ChannelScope.backgroundMode.storageValue
+                    )
                 ),
-                customBackgroundColorArgb = sharedPrefs.getInt(KEY_CUSTOM_BACKGROUND_COLOR_ARGB, 0xFF101418.toInt())
+                customBackgroundColorArgb = sharedPrefs.getInt(
+                    KEY_CUSTOM_BACKGROUND_COLOR_ARGB,
+                    AppDefaults.Visualization.ChannelScope.customBackgroundColorArgb
+                )
             )
         }
 
@@ -468,7 +539,7 @@ internal fun AlbumArtPlaceholder(
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
     channelScopePrefs: ChannelScopePrefs,
-    artworkCornerRadiusDp: Int = 3,
+    artworkCornerRadiusDp: Int = AppDefaults.Player.artworkCornerRadiusDp,
     modifier: Modifier = Modifier
 ) {
     var visWaveLeft by remember { mutableStateOf(FloatArray(0)) }

@@ -1855,9 +1855,9 @@ internal fun SettingsScreen(
                                 VisualizationOscColorMode.fromStorage(
                                     prefs.getString(
                                         barColorModeNoArtworkKey,
-                                        VisualizationOscColorMode.Monet.storageValue
+                                        AppDefaults.Visualization.Bars.colorModeNoArtwork.storageValue
                                     ),
-                                    VisualizationOscColorMode.Monet
+                                    AppDefaults.Visualization.Bars.colorModeNoArtwork
                                 )
                             )
                         }
@@ -1866,14 +1866,16 @@ internal fun SettingsScreen(
                                 VisualizationOscColorMode.fromStorage(
                                     prefs.getString(
                                         barColorModeWithArtworkKey,
-                                        VisualizationOscColorMode.Artwork.storageValue
+                                        AppDefaults.Visualization.Bars.colorModeWithArtwork.storageValue
                                     ),
-                                    VisualizationOscColorMode.Artwork
+                                    AppDefaults.Visualization.Bars.colorModeWithArtwork
                                 )
                             )
                         }
                         var barCustomColorArgb by remember {
-                            mutableIntStateOf(prefs.getInt(barCustomColorKey, 0xFF6BD8FF.toInt()))
+                            mutableIntStateOf(
+                                prefs.getInt(barCustomColorKey, AppDefaults.Visualization.Bars.customColorArgb)
+                            )
                         }
                         var showBarCountDialog by remember { mutableStateOf(false) }
                         var showBarSmoothingDialog by remember { mutableStateOf(false) }
@@ -1946,7 +1948,7 @@ internal fun SettingsScreen(
                             SteppedIntSliderDialog(
                                 title = "Bar count",
                                 unitLabel = "bars",
-                                range = 8..96,
+                                range = AppDefaults.Visualization.Bars.countRange,
                                 step = 1,
                                 currentValue = visualizationBarCount,
                                 onDismiss = { showBarCountDialog = false },
@@ -1960,7 +1962,7 @@ internal fun SettingsScreen(
                             SteppedIntSliderDialog(
                                 title = "Bar smoothing",
                                 unitLabel = "%",
-                                range = 0..95,
+                                range = AppDefaults.Visualization.Bars.smoothingRange,
                                 step = 1,
                                 currentValue = visualizationBarSmoothingPercent,
                                 onDismiss = { showBarSmoothingDialog = false },
@@ -1974,7 +1976,7 @@ internal fun SettingsScreen(
                             SteppedIntSliderDialog(
                                 title = "Bar roundness",
                                 unitLabel = "dp",
-                                range = 0..24,
+                                range = AppDefaults.Visualization.Bars.roundnessRange,
                                 step = 1,
                                 currentValue = visualizationBarRoundnessDp,
                                 onDismiss = { showBarRoundnessDialog = false },
@@ -2053,7 +2055,10 @@ internal fun SettingsScreen(
                         }
                         var visualizationOscWindowMs by remember {
                             mutableIntStateOf(
-                                prefs.getInt(oscWindowKey, 40).coerceIn(5, 200)
+                                prefs.getInt(oscWindowKey, AppDefaults.Visualization.Oscilloscope.windowMs).coerceIn(
+                                    AppDefaults.Visualization.Oscilloscope.windowRangeMs.first,
+                                    AppDefaults.Visualization.Oscilloscope.windowRangeMs.last
+                                )
                             )
                         }
                         var visualizationOscTriggerMode by remember {
@@ -2061,7 +2066,7 @@ internal fun SettingsScreen(
                                 VisualizationOscTriggerMode.fromStorage(
                                     prefs.getString(
                                         oscTriggerKey,
-                                        VisualizationOscTriggerMode.Rising.storageValue
+                                        AppDefaults.Visualization.Oscilloscope.triggerMode.storageValue
                                     )
                                 )
                             )
@@ -2071,35 +2076,57 @@ internal fun SettingsScreen(
                                 VisualizationOscFpsMode.fromStorage(
                                     prefs.getString(
                                         oscFpsModeKey,
-                                        VisualizationOscFpsMode.Default.storageValue
+                                        AppDefaults.Visualization.Oscilloscope.fpsMode.storageValue
                                     )
                                 )
                             )
                         }
                         var visualizationOscLineWidthDp by remember {
                             mutableIntStateOf(
-                                prefs.getInt(oscLineWidthKey, 3).coerceIn(1, 12)
+                                prefs.getInt(
+                                    oscLineWidthKey,
+                                    AppDefaults.Visualization.Oscilloscope.lineWidthDp
+                                ).coerceIn(
+                                    AppDefaults.Visualization.Oscilloscope.lineWidthRangeDp.first,
+                                    AppDefaults.Visualization.Oscilloscope.lineWidthRangeDp.last
+                                )
                             )
                         }
                         var visualizationOscGridWidthDp by remember {
                             mutableIntStateOf(
-                                prefs.getInt(oscGridWidthKey, 2).coerceIn(1, 8)
+                                prefs.getInt(
+                                    oscGridWidthKey,
+                                    AppDefaults.Visualization.Oscilloscope.gridWidthDp
+                                ).coerceIn(
+                                    AppDefaults.Visualization.Oscilloscope.gridWidthRangeDp.first,
+                                    AppDefaults.Visualization.Oscilloscope.gridWidthRangeDp.last
+                                )
                             )
                         }
                         var visualizationOscVerticalGridEnabled by remember {
-                            mutableStateOf(prefs.getBoolean(oscVerticalGridEnabledKey, false))
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    oscVerticalGridEnabledKey,
+                                    AppDefaults.Visualization.Oscilloscope.verticalGridEnabled
+                                )
+                            )
                         }
                         var visualizationOscCenterLineEnabled by remember {
-                            mutableStateOf(prefs.getBoolean(oscCenterLineEnabledKey, false))
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    oscCenterLineEnabledKey,
+                                    AppDefaults.Visualization.Oscilloscope.centerLineEnabled
+                                )
+                            )
                         }
                         var oscLineColorModeNoArtwork by remember {
                             mutableStateOf(
                                 VisualizationOscColorMode.fromStorage(
                                     prefs.getString(
                                         oscLineNoArtworkColorModeKey,
-                                        VisualizationOscColorMode.Monet.storageValue
+                                        AppDefaults.Visualization.Oscilloscope.lineColorModeNoArtwork.storageValue
                                     ),
-                                    VisualizationOscColorMode.Monet
+                                    AppDefaults.Visualization.Oscilloscope.lineColorModeNoArtwork
                                 )
                             )
                         }
@@ -2108,9 +2135,9 @@ internal fun SettingsScreen(
                                 VisualizationOscColorMode.fromStorage(
                                     prefs.getString(
                                         oscGridNoArtworkColorModeKey,
-                                        VisualizationOscColorMode.Monet.storageValue
+                                        AppDefaults.Visualization.Oscilloscope.gridColorModeNoArtwork.storageValue
                                     ),
-                                    VisualizationOscColorMode.Monet
+                                    AppDefaults.Visualization.Oscilloscope.gridColorModeNoArtwork
                                 )
                             )
                         }
@@ -2119,9 +2146,9 @@ internal fun SettingsScreen(
                                 VisualizationOscColorMode.fromStorage(
                                     prefs.getString(
                                         oscLineArtworkColorModeKey,
-                                        VisualizationOscColorMode.Artwork.storageValue
+                                        AppDefaults.Visualization.Oscilloscope.lineColorModeWithArtwork.storageValue
                                     ),
-                                    VisualizationOscColorMode.Artwork
+                                    AppDefaults.Visualization.Oscilloscope.lineColorModeWithArtwork
                                 )
                             )
                         }
@@ -2130,17 +2157,27 @@ internal fun SettingsScreen(
                                 VisualizationOscColorMode.fromStorage(
                                     prefs.getString(
                                         oscGridArtworkColorModeKey,
-                                        VisualizationOscColorMode.Artwork.storageValue
+                                        AppDefaults.Visualization.Oscilloscope.gridColorModeWithArtwork.storageValue
                                     ),
-                                    VisualizationOscColorMode.Artwork
+                                    AppDefaults.Visualization.Oscilloscope.gridColorModeWithArtwork
                                 )
                             )
                         }
                         var oscCustomLineColorArgb by remember {
-                            mutableIntStateOf(prefs.getInt(oscCustomLineColorKey, 0xFF6BD8FF.toInt()))
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    oscCustomLineColorKey,
+                                    AppDefaults.Visualization.Oscilloscope.customLineColorArgb
+                                )
+                            )
                         }
                         var oscCustomGridColorArgb by remember {
-                            mutableIntStateOf(prefs.getInt(oscCustomGridColorKey, 0x66FFFFFF))
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    oscCustomGridColorKey,
+                                    AppDefaults.Visualization.Oscilloscope.customGridColorArgb
+                                )
+                            )
                         }
                         var showWindowDialog by remember { mutableStateOf(false) }
                         var showTriggerDialog by remember { mutableStateOf(false) }
@@ -2264,7 +2301,7 @@ internal fun SettingsScreen(
                             SteppedIntSliderDialog(
                                 title = "Visible window",
                                 unitLabel = "ms",
-                                range = 5..200,
+                                range = AppDefaults.Visualization.Oscilloscope.windowRangeMs,
                                 step = 1,
                                 currentValue = visualizationOscWindowMs,
                                 onDismiss = { showWindowDialog = false },
@@ -2376,7 +2413,7 @@ internal fun SettingsScreen(
                             SteppedIntSliderDialog(
                                 title = "Scope line width",
                                 unitLabel = "dp",
-                                range = 1..12,
+                                range = AppDefaults.Visualization.Oscilloscope.lineWidthRangeDp,
                                 step = 1,
                                 currentValue = visualizationOscLineWidthDp,
                                 onDismiss = { showLineWidthDialog = false },
@@ -2392,7 +2429,7 @@ internal fun SettingsScreen(
                             SteppedIntSliderDialog(
                                 title = "Grid line width",
                                 unitLabel = "dp",
-                                range = 1..8,
+                                range = AppDefaults.Visualization.Oscilloscope.gridWidthRangeDp,
                                 step = 1,
                                 currentValue = visualizationOscGridWidthDp,
                                 onDismiss = { showGridWidthDialog = false },
@@ -2521,9 +2558,9 @@ internal fun SettingsScreen(
                                 VisualizationOscColorMode.fromStorage(
                                     prefs.getString(
                                         vuColorModeNoArtworkKey,
-                                        VisualizationOscColorMode.Monet.storageValue
+                                        AppDefaults.Visualization.Vu.colorModeNoArtwork.storageValue
                                     ),
-                                    VisualizationOscColorMode.Monet
+                                    AppDefaults.Visualization.Vu.colorModeNoArtwork
                                 )
                             )
                         }
@@ -2532,14 +2569,16 @@ internal fun SettingsScreen(
                                 VisualizationOscColorMode.fromStorage(
                                     prefs.getString(
                                         vuColorModeWithArtworkKey,
-                                        VisualizationOscColorMode.Artwork.storageValue
+                                        AppDefaults.Visualization.Vu.colorModeWithArtwork.storageValue
                                     ),
-                                    VisualizationOscColorMode.Artwork
+                                    AppDefaults.Visualization.Vu.colorModeWithArtwork
                                 )
                             )
                         }
                         var vuCustomColorArgb by remember {
-                            mutableIntStateOf(prefs.getInt(vuCustomColorKey, 0xFF6BD8FF.toInt()))
+                            mutableIntStateOf(
+                                prefs.getInt(vuCustomColorKey, AppDefaults.Visualization.Vu.customColorArgb)
+                            )
                         }
                         var showVuAnchorDialog by remember { mutableStateOf(false) }
                         var showVuSmoothingDialog by remember { mutableStateOf(false) }
@@ -2595,7 +2634,7 @@ internal fun SettingsScreen(
                             SteppedIntSliderDialog(
                                 title = "VU smoothing",
                                 unitLabel = "%",
-                                range = 0..95,
+                                range = AppDefaults.Visualization.Vu.smoothingRange,
                                 step = 1,
                                 currentValue = visualizationVuSmoothingPercent,
                                 onDismiss = { showVuSmoothingDialog = false },
@@ -2718,108 +2757,199 @@ internal fun SettingsScreen(
                             context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
                         }
                         var scopeWindowMs by remember {
-                            mutableIntStateOf(prefs.getInt(scopeWindowKey, 30).coerceIn(5, 200))
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeWindowKey,
+                                    AppDefaults.Visualization.ChannelScope.windowMs
+                                ).coerceIn(
+                                    AppDefaults.Visualization.ChannelScope.windowRangeMs.first,
+                                    AppDefaults.Visualization.ChannelScope.windowRangeMs.last
+                                )
+                            )
                         }
                         var scopeTriggerMode by remember {
                             mutableStateOf(
                                 VisualizationOscTriggerMode.fromStorage(
-                                    prefs.getString(scopeTriggerKey, VisualizationOscTriggerMode.Rising.storageValue)
+                                    prefs.getString(
+                                        scopeTriggerKey,
+                                        AppDefaults.Visualization.ChannelScope.triggerMode.storageValue
+                                    )
                                 )
                             )
                         }
                         var scopeRenderBackend by remember {
                             mutableStateOf(
                                 VisualizationRenderBackend.fromStorage(
-                                    prefs.getString(scopeRenderBackendKey, VisualizationRenderBackend.OpenGlTexture.storageValue),
-                                    VisualizationRenderBackend.OpenGlTexture
+                                    prefs.getString(
+                                        scopeRenderBackendKey,
+                                        AppDefaults.Visualization.ChannelScope.renderBackend.storageValue
+                                    ),
+                                    AppDefaults.Visualization.ChannelScope.renderBackend
                                 )
                             )
                         }
                         var scopeDcRemovalEnabled by remember {
-                            mutableStateOf(prefs.getBoolean(scopeDcRemovalEnabledKey, true))
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeDcRemovalEnabledKey,
+                                    AppDefaults.Visualization.ChannelScope.dcRemovalEnabled
+                                )
+                            )
                         }
                         var scopeGainPercent by remember {
-                            mutableIntStateOf(prefs.getInt(scopeGainPercentKey, 240).coerceIn(25, 600))
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeGainPercentKey,
+                                    AppDefaults.Visualization.ChannelScope.gainPercent
+                                ).coerceIn(
+                                    AppDefaults.Visualization.ChannelScope.gainRangePercent.first,
+                                    AppDefaults.Visualization.ChannelScope.gainRangePercent.last
+                                )
+                            )
                         }
                         var scopeFpsMode by remember {
                             mutableStateOf(
                                 VisualizationOscFpsMode.fromStorage(
-                                    prefs.getString(scopeFpsModeKey, VisualizationOscFpsMode.Default.storageValue)
+                                    prefs.getString(
+                                        scopeFpsModeKey,
+                                        AppDefaults.Visualization.ChannelScope.fpsMode.storageValue
+                                    )
                                 )
                             )
                         }
                         var scopeLineWidthDp by remember {
-                            mutableIntStateOf(prefs.getInt(scopeLineWidthKey, 3).coerceIn(1, 12))
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeLineWidthKey,
+                                    AppDefaults.Visualization.ChannelScope.lineWidthDp
+                                ).coerceIn(
+                                    AppDefaults.Visualization.ChannelScope.lineWidthRangeDp.first,
+                                    AppDefaults.Visualization.ChannelScope.lineWidthRangeDp.last
+                                )
+                            )
                         }
                         var scopeGridWidthDp by remember {
-                            mutableIntStateOf(prefs.getInt(scopeGridWidthKey, 2).coerceIn(1, 8))
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeGridWidthKey,
+                                    AppDefaults.Visualization.ChannelScope.gridWidthDp
+                                ).coerceIn(
+                                    AppDefaults.Visualization.ChannelScope.gridWidthRangeDp.first,
+                                    AppDefaults.Visualization.ChannelScope.gridWidthRangeDp.last
+                                )
+                            )
                         }
                         var scopeVerticalGridEnabled by remember {
-                            mutableStateOf(prefs.getBoolean(scopeVerticalGridEnabledKey, false))
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeVerticalGridEnabledKey,
+                                    AppDefaults.Visualization.ChannelScope.verticalGridEnabled
+                                )
+                            )
                         }
                         var scopeCenterLineEnabled by remember {
-                            mutableStateOf(prefs.getBoolean(scopeCenterLineEnabledKey, false))
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeCenterLineEnabledKey,
+                                    AppDefaults.Visualization.ChannelScope.centerLineEnabled
+                                )
+                            )
                         }
                         var scopeShowArtworkBackground by remember {
-                            mutableStateOf(prefs.getBoolean(scopeShowArtworkBackgroundKey, true))
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeShowArtworkBackgroundKey,
+                                    AppDefaults.Visualization.ChannelScope.showArtworkBackground
+                                )
+                            )
                         }
                         var scopeBackgroundMode by remember {
                             mutableStateOf(
                                 VisualizationChannelScopeBackgroundMode.fromStorage(
                                     prefs.getString(
                                         scopeBackgroundModeKey,
-                                        VisualizationChannelScopeBackgroundMode.AutoDarkAccent.storageValue
+                                        AppDefaults.Visualization.ChannelScope.backgroundMode.storageValue
                                     )
                                 )
                             )
                         }
                         var scopeCustomBackgroundColorArgb by remember {
-                            mutableIntStateOf(prefs.getInt(scopeCustomBackgroundColorKey, 0xFF101418.toInt()))
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeCustomBackgroundColorKey,
+                                    AppDefaults.Visualization.ChannelScope.customBackgroundColorArgb
+                                )
+                            )
                         }
                         var scopeLayout by remember {
                             mutableStateOf(
                                 VisualizationChannelScopeLayout.fromStorage(
-                                    prefs.getString(scopeLayoutKey, VisualizationChannelScopeLayout.ColumnFirst.storageValue)
+                                    prefs.getString(
+                                        scopeLayoutKey,
+                                        AppDefaults.Visualization.ChannelScope.layout.storageValue
+                                    )
                                 )
                             )
                         }
                         var scopeLineColorModeNoArtwork by remember {
                             mutableStateOf(
                                 VisualizationOscColorMode.fromStorage(
-                                    prefs.getString(scopeLineNoArtworkColorModeKey, VisualizationOscColorMode.Monet.storageValue),
-                                    VisualizationOscColorMode.Monet
+                                    prefs.getString(
+                                        scopeLineNoArtworkColorModeKey,
+                                        AppDefaults.Visualization.ChannelScope.lineColorModeNoArtwork.storageValue
+                                    ),
+                                    AppDefaults.Visualization.ChannelScope.lineColorModeNoArtwork
                                 )
                             )
                         }
                         var scopeGridColorModeNoArtwork by remember {
                             mutableStateOf(
                                 VisualizationOscColorMode.fromStorage(
-                                    prefs.getString(scopeGridNoArtworkColorModeKey, VisualizationOscColorMode.Monet.storageValue),
-                                    VisualizationOscColorMode.Monet
+                                    prefs.getString(
+                                        scopeGridNoArtworkColorModeKey,
+                                        AppDefaults.Visualization.ChannelScope.gridColorModeNoArtwork.storageValue
+                                    ),
+                                    AppDefaults.Visualization.ChannelScope.gridColorModeNoArtwork
                                 )
                             )
                         }
                         var scopeLineColorModeWithArtwork by remember {
                             mutableStateOf(
                                 VisualizationOscColorMode.fromStorage(
-                                    prefs.getString(scopeLineArtworkColorModeKey, VisualizationOscColorMode.Artwork.storageValue),
-                                    VisualizationOscColorMode.Artwork
+                                    prefs.getString(
+                                        scopeLineArtworkColorModeKey,
+                                        AppDefaults.Visualization.ChannelScope.lineColorModeWithArtwork.storageValue
+                                    ),
+                                    AppDefaults.Visualization.ChannelScope.lineColorModeWithArtwork
                                 )
                             )
                         }
                         var scopeGridColorModeWithArtwork by remember {
                             mutableStateOf(
                                 VisualizationOscColorMode.fromStorage(
-                                    prefs.getString(scopeGridArtworkColorModeKey, VisualizationOscColorMode.Artwork.storageValue),
-                                    VisualizationOscColorMode.Artwork
+                                    prefs.getString(
+                                        scopeGridArtworkColorModeKey,
+                                        AppDefaults.Visualization.ChannelScope.gridColorModeWithArtwork.storageValue
+                                    ),
+                                    AppDefaults.Visualization.ChannelScope.gridColorModeWithArtwork
                                 )
                             )
                         }
                         var scopeCustomLineColorArgb by remember {
-                            mutableIntStateOf(prefs.getInt(scopeCustomLineColorKey, 0xFF6BD8FF.toInt()))
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeCustomLineColorKey,
+                                    AppDefaults.Visualization.ChannelScope.customLineColorArgb
+                                )
+                            )
                         }
                         var scopeCustomGridColorArgb by remember {
-                            mutableIntStateOf(prefs.getInt(scopeCustomGridColorKey, 0x66FFFFFF))
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeCustomGridColorKey,
+                                    AppDefaults.Visualization.ChannelScope.customGridColorArgb
+                                )
+                            )
                         }
 
                         var showWindowDialog by remember { mutableStateOf(false) }
@@ -3003,7 +3133,7 @@ internal fun SettingsScreen(
                             SteppedIntSliderDialog(
                                 title = "Visible window",
                                 unitLabel = "ms",
-                                range = 5..200,
+                                range = AppDefaults.Visualization.ChannelScope.windowRangeMs,
                                 step = 1,
                                 currentValue = scopeWindowMs,
                                 onDismiss = { showWindowDialog = false },
@@ -3019,7 +3149,7 @@ internal fun SettingsScreen(
                             SteppedIntSliderDialog(
                                 title = "Scope gain",
                                 unitLabel = "%",
-                                range = 25..600,
+                                range = AppDefaults.Visualization.ChannelScope.gainRangePercent,
                                 step = 5,
                                 currentValue = scopeGainPercent,
                                 onDismiss = { showGainDialog = false },
@@ -3237,7 +3367,7 @@ internal fun SettingsScreen(
                             SteppedIntSliderDialog(
                                 title = "Scope line width",
                                 unitLabel = "dp",
-                                range = 1..12,
+                                range = AppDefaults.Visualization.ChannelScope.lineWidthRangeDp,
                                 step = 1,
                                 currentValue = scopeLineWidthDp,
                                 onDismiss = { showLineWidthDialog = false },
@@ -3253,7 +3383,7 @@ internal fun SettingsScreen(
                             SteppedIntSliderDialog(
                                 title = "Grid line width",
                                 unitLabel = "dp",
-                                range = 1..8,
+                                range = AppDefaults.Visualization.ChannelScope.gridWidthRangeDp,
                                 step = 1,
                                 currentValue = scopeGridWidthDp,
                                 onDismiss = { showGridWidthDialog = false },

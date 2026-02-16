@@ -198,7 +198,7 @@ fun PlayerScreen(
                         if (keyEvent.isCtrlPressed && canPreviousSubtune) {
                             onPreviousSubtune()
                             true
-                        } else if (!keyEvent.isCtrlPressed && canSeek && hasReliableDuration) {
+                        } else if (!keyEvent.isCtrlPressed && canSeek && durationSeconds > 0.0) {
                             val newPosition = (positionSeconds - 5.0).coerceAtLeast(0.0)
                             onSeek(newPosition)
                             true
@@ -209,7 +209,7 @@ fun PlayerScreen(
                         if (keyEvent.isCtrlPressed && canNextSubtune) {
                             onNextSubtune()
                             true
-                        } else if (!keyEvent.isCtrlPressed && canSeek && hasReliableDuration) {
+                        } else if (!keyEvent.isCtrlPressed && canSeek && durationSeconds > 0.0) {
                             val newPosition = (positionSeconds + 5.0).coerceAtMost(durationSeconds)
                             onSeek(newPosition)
                             true
@@ -231,7 +231,7 @@ fun PlayerScreen(
                     }
                     // Home: Restart song (seek to 0)
                     Key.MoveHome -> {
-                        if (canSeek && hasReliableDuration) {
+                        if (canSeek && durationSeconds > 0.0) {
                             onSeek(0.0)
                             true
                         } else false
@@ -372,7 +372,7 @@ fun PlayerScreen(
                             },
                             onSliderValueChangeFinished = {
                                 isSeeking = false
-                                if (canSeek && hasReliableDuration) {
+                                if (canSeek && durationSeconds > 0.0) {
                                     onSeek(sliderPosition)
                                 }
                             }
@@ -462,7 +462,7 @@ fun PlayerScreen(
                         },
                         onSliderValueChangeFinished = {
                             isSeeking = false
-                            if (canSeek && hasReliableDuration) {
+                            if (canSeek && durationSeconds > 0.0) {
                                 onSeek(sliderPosition)
                             }
                         }
@@ -848,8 +848,8 @@ private fun TrackInfoDetailsDialog(
     } else {
         "Unavailable"
     }
-    val lengthLabel = if (hasReliableDuration && durationSeconds > 0.0) {
-        formatTime(durationSeconds)
+    val lengthLabel = if (durationSeconds > 0.0) {
+        if (hasReliableDuration) formatTime(durationSeconds) else "${formatTime(durationSeconds)}?"
     } else {
         "Unavailable"
     }
@@ -1674,9 +1674,9 @@ private fun TimelineSection(
 ) {
     val sliderMax = durationSeconds.coerceAtLeast(0.0).toFloat()
     val normalizedValue = sliderPosition.toFloat().coerceIn(0f, sliderMax)
-    val seekEnabled = canSeek && hasReliableDuration && durationSeconds > 0.0
-    val durationText = if (hasReliableDuration && durationSeconds > 0.0) {
-        formatTime(durationSeconds)
+    val seekEnabled = canSeek && durationSeconds > 0.0
+    val durationText = if (durationSeconds > 0.0) {
+        if (hasReliableDuration) formatTime(durationSeconds) else "${formatTime(durationSeconds)}?"
     } else {
         "-:--"
     }

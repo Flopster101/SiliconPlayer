@@ -248,6 +248,8 @@ internal fun SettingsScreen(
     onFilenameDisplayModeChanged: (FilenameDisplayMode) -> Unit,
     filenameOnlyWhenTitleMissing: Boolean,
     onFilenameOnlyWhenTitleMissingChanged: (Boolean) -> Unit,
+    unknownTrackDurationSeconds: Int,
+    onUnknownTrackDurationSecondsChanged: (Int) -> Unit,
     ffmpegSampleRateHz: Int,
     ffmpegCapabilities: Int,
     onFfmpegSampleRateChanged: (Int) -> Unit,
@@ -1207,6 +1209,50 @@ internal fun SettingsScreen(
                         }
                     }
                     SettingsRoute.Player -> {
+                        var showUnknownDurationDialog by remember { mutableStateOf(false) }
+                        SettingsSectionLabel("Track duration fallback")
+                        SettingsItemCard(
+                            title = "Unknown track duration",
+                            description = "${unknownTrackDurationSeconds}s (default 180s)",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showUnknownDurationDialog = true }
+                        )
+                        if (showUnknownDurationDialog) {
+                            var input by remember { mutableStateOf(unknownTrackDurationSeconds.toString()) }
+                            AlertDialog(
+                                onDismissRequest = { showUnknownDurationDialog = false },
+                                title = { Text("Unknown track duration") },
+                                text = {
+                                    OutlinedTextField(
+                                        value = input,
+                                        onValueChange = { value ->
+                                            input = value.filter { it.isDigit() }.take(5)
+                                        },
+                                        singleLine = true,
+                                        label = { Text("Seconds") },
+                                        supportingText = { Text("Used when a track has no real tagged duration.") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                                    )
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showUnknownDurationDialog = false }) {
+                                        Text("Cancel")
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        val parsed = input.trim().toIntOrNull()
+                                        if (parsed != null && parsed in 1..86400) {
+                                            onUnknownTrackDurationSecondsChanged(parsed)
+                                            showUnknownDurationDialog = false
+                                        }
+                                    }) {
+                                        Text("Save")
+                                    }
+                                }
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Track selection")
                         PlayerSettingToggleCard(
                             title = "Play on track select",

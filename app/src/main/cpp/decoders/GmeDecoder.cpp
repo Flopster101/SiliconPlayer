@@ -16,6 +16,7 @@ extern "C" {
 
 namespace {
 constexpr int kRenderBlockFrames = 512;
+constexpr int kUnknownTaggedDurationMs = 150000;
 
 std::string safeString(const char* value) {
     return value ? std::string(value) : "";
@@ -44,13 +45,33 @@ int resolveLoopStartMs(const gme_info_t* info) {
     return -1;
 }
 
-int resolveDurationMs(const gme_info_t* info) {
-    if (!info) return 0;
+bool isLikelyUnknownDuration(const gme_info_t* info) {
+    if (!info) return false;
+    if (info->play_length != kUnknownTaggedDurationMs) {
+        return false;
+    }
+    const bool hasExplicitLength = info->length > 0 && info->length != kUnknownTaggedDurationMs;
+    const bool hasIntroLoop = info->intro_length > 0 && info->loop_length > 0;
+    return !hasExplicitLength && !hasIntroLoop;
+}
+
+int resolveDurationMs(const gme_info_t* info, int fallbackDurationMs, bool* reliableOut) {
+    if (!info) {
+        if (reliableOut) *reliableOut = false;
+        return 0;
+    }
+
+    if (isLikelyUnknownDuration(info)) {
+        if (reliableOut) *reliableOut = false;
+        return std::max(0, fallbackDurationMs);
+    }
+
     int durationMs = info->play_length;
     if (durationMs <= 0) durationMs = info->length;
     if (durationMs <= 0 && info->intro_length > 0 && info->loop_length > 0) {
         durationMs = info->intro_length + (info->loop_length * 2);
     }
+    if (reliableOut) *reliableOut = durationMs > 0;
     return durationMs;
 }
 
@@ -159,6 +180,7 @@ bool GmeDecoder::open(const char* path) {
 bool GmeDecoder::applyTrackInfoLocked(int trackIndex) {
     if (!emu || trackIndex < 0 || trackIndex >= trackCount) {
         duration = 0.0;
+        durationReliable = false;
         loopStartMs = -1;
         loopLengthMs = -1;
         hasLoopPoint = false;
@@ -178,6 +200,7 @@ bool GmeDecoder::applyTrackInfoLocked(int trackIndex) {
     const gme_err_t infoErr = gme_track_info(emu, &info, trackIndex);
     if (infoErr != nullptr || info == nullptr) {
         duration = 0.0;
+        durationReliable = false;
         loopStartMs = -1;
         loopLengthMs = -1;
         hasLoopPoint = false;
@@ -203,7 +226,7 @@ bool GmeDecoder::applyTrackInfoLocked(int trackIndex) {
     commentText = safeString(info->comment);
     dumper = safeString(info->dumper);
 
-    const int durationMs = resolveDurationMs(info);
+    const int durationMs = resolveDurationMs(info, unknownDurationSeconds * 1000, &durationReliable);
     loopStartMs = resolveLoopStartMs(info);
     loopLengthMs = info->loop_length;
     hasLoopPoint = loopStartMs >= 0 && loopLengthMs > 0;
@@ -219,6 +242,7 @@ void GmeDecoder::closeInternal() {
     }
 
     duration = 0.0;
+    durationReliable = true;
     trackCount = 0;
     activeTrack = 0;
     pendingTerminalEnd = false;
@@ -239,6 +263,17 @@ void GmeDecoder::closeInternal() {
     commentText.clear();
     dumper.clear();
     voiceCount = 0;
+}
+
+int GmeDecoder::getPlaybackCapabilities() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    int capabilities = PLAYBACK_CAP_SEEK |
+                       PLAYBACK_CAP_LIVE_REPEAT_MODE |
+                       PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
+    if (durationReliable) {
+        capabilities |= PLAYBACK_CAP_RELIABLE_DURATION;
+    }
+    return capabilities;
 }
 
 void GmeDecoder::close() {
@@ -464,7 +499,7 @@ double GmeDecoder::getSubtuneDurationSeconds(int index) {
     if (infoErr != nullptr || info == nullptr) {
         return 0.0;
     }
-    const int durationMs = resolveDurationMs(info);
+    const int durationMs = resolveDurationMs(info, unknownDurationSeconds * 1000, nullptr);
     gme_free_info(info);
     return durationMs > 0 ? static_cast<double>(durationMs) / 1000.0 : 0.0;
 }
@@ -576,6 +611,10 @@ void GmeDecoder::setOption(const char* name, const char* value) {
         spcInterpolation = std::clamp(static_cast<int>(parseDoubleString(optionValue, spcInterpolation)), -2, 2);
     } else if (optionName == "gme.spc_use_native_sample_rate") {
         spcUseNativeSampleRate = parseBoolString(optionValue, spcUseNativeSampleRate);
+    } else if (optionName == "gme.unknown_duration_seconds") {
+        unknownDurationSeconds = std::clamp(static_cast<int>(parseDoubleString(optionValue, unknownDurationSeconds)), 1, 86400);
+        applyTrackInfoLocked(activeTrack);
+        applyRepeatBehaviorLocked();
     } else {
         return;
     }
@@ -602,6 +641,9 @@ int GmeDecoder::getOptionApplyPolicy(const char* name) const {
     }
     if (optionName == "gme.spc_use_native_sample_rate") {
         return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    if (optionName == "gme.unknown_duration_seconds") {
+        return OPTION_APPLY_LIVE;
     }
     return OPTION_APPLY_LIVE;
 }

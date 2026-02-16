@@ -662,6 +662,7 @@ private object AppPreferenceKeys {
     const val URL_CACHE_MAX_BYTES = "url_cache_max_bytes"
     const val FILENAME_DISPLAY_MODE = "filename_display_mode"
     const val FILENAME_ONLY_WHEN_TITLE_MISSING = "filename_only_when_title_missing"
+    const val UNKNOWN_TRACK_DURATION_SECONDS = "unknown_track_duration_seconds"
 
     // Plugin management keys
     fun decoderEnabledKey(decoderName: String) = "decoder_${decoderName}_enabled"
@@ -1119,6 +1120,14 @@ private fun AppNavigation(
     var filenameOnlyWhenTitleMissing by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.FILENAME_ONLY_WHEN_TITLE_MISSING, false)
+        )
+    }
+    var unknownTrackDurationSeconds by remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                AppPreferenceKeys.UNKNOWN_TRACK_DURATION_SECONDS,
+                GmeDefaults.unknownDurationSeconds
+            ).coerceIn(1, 86400)
         )
     }
 
@@ -2734,6 +2743,24 @@ private fun AppNavigation(
         )
     }
 
+    LaunchedEffect(unknownTrackDurationSeconds) {
+        val normalized = unknownTrackDurationSeconds.coerceIn(1, 86400)
+        if (normalized != unknownTrackDurationSeconds) {
+            unknownTrackDurationSeconds = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(AppPreferenceKeys.UNKNOWN_TRACK_DURATION_SECONDS, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Game Music Emu",
+            optionName = GmeOptionKeys.UNKNOWN_DURATION_SECONDS,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Unknown track duration"
+        )
+    }
+
     LaunchedEffect(vgmPlayLoopCount) {
         val normalized = vgmPlayLoopCount.coerceIn(1, 99)
         if (normalized != vgmPlayLoopCount) {
@@ -3730,6 +3757,10 @@ private fun AppNavigation(
                             filenameOnlyWhenTitleMissing = enabled
                             prefs.edit().putBoolean(AppPreferenceKeys.FILENAME_ONLY_WHEN_TITLE_MISSING, enabled).apply()
                         },
+                        unknownTrackDurationSeconds = unknownTrackDurationSeconds,
+                        onUnknownTrackDurationSecondsChanged = { value ->
+                            unknownTrackDurationSeconds = value
+                        },
                         audioFocusInterrupt = audioFocusInterrupt,
                         onAudioFocusInterruptChanged = {
                             audioFocusInterrupt = it
@@ -3890,6 +3921,7 @@ private fun AppNavigation(
                             keepScreenOn = false
                             filenameDisplayMode = FilenameDisplayMode.Always
                             filenameOnlyWhenTitleMissing = false
+                            unknownTrackDurationSeconds = GmeDefaults.unknownDurationSeconds
                             browserLaunchLocationId = null
                             browserLaunchDirectoryPath = null
                             onThemeModeChanged(ThemeMode.Auto)

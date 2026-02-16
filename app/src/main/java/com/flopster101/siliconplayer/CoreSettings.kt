@@ -70,4 +70,5 @@ object GmeDefaults {
     const val spcUseBuiltInFade = false
     const val spcInterpolation = 0
     const val spcUseNativeSampleRate = true
+    const val unknownDurationSeconds = 180
 }

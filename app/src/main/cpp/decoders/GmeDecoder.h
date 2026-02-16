@@ -47,12 +47,7 @@ public:
     void setOutputSampleRate(int sampleRate) override;
     void setOption(const char* name, const char* value) override;
     int getOptionApplyPolicy(const char* name) const override;
-    int getPlaybackCapabilities() const override {
-        return PLAYBACK_CAP_SEEK |
-               PLAYBACK_CAP_RELIABLE_DURATION |
-               PLAYBACK_CAP_LIVE_REPEAT_MODE |
-               PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
-    }
+    int getPlaybackCapabilities() const override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     double getPlaybackPositionSeconds() override;
@@ -76,6 +71,7 @@ private:
     int loopLengthMs = -1;
     bool hasLoopPoint = false;
     bool isSpcTrack = false;
+    bool durationReliable = true;
     double playbackPositionSeconds = 0.0;
     int lastTellMs = -1;
     double tempo = 1.0;
@@ -85,6 +81,7 @@ private:
     double eqTrebleDb = 0.0;
     double eqBassHz = 90.0;
     bool spcUseBuiltInFade = false;
+    int unknownDurationSeconds = 180;
 
     std::string title;
     std::string artist;

@@ -109,6 +109,20 @@ enum class VisualizationOscColorMode(
     }
 }
 
+enum class VisualizationChannelScopeBackgroundMode(
+    val storageValue: String,
+    val label: String
+) {
+    AutoDarkAccent("auto_dark_accent", "Auto dark accent"),
+    Custom("custom", "Custom");
+
+    companion object {
+        fun fromStorage(value: String?): VisualizationChannelScopeBackgroundMode {
+            return entries.firstOrNull { it.storageValue == value } ?: AutoDarkAccent
+        }
+    }
+}
+
 enum class VisualizationOscFpsMode(
     val storageValue: String,
     val label: String

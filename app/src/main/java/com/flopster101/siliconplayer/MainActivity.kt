@@ -784,6 +784,9 @@ private object AppPreferenceKeys {
     const val VISUALIZATION_CHANNEL_SCOPE_GRID_WIDTH_DP = "visualization_channel_scope_grid_width_dp"
     const val VISUALIZATION_CHANNEL_SCOPE_VERTICAL_GRID_ENABLED = "visualization_channel_scope_vertical_grid_enabled"
     const val VISUALIZATION_CHANNEL_SCOPE_CENTER_LINE_ENABLED = "visualization_channel_scope_center_line_enabled"
+    const val VISUALIZATION_CHANNEL_SCOPE_SHOW_ARTWORK_BACKGROUND = "visualization_channel_scope_show_artwork_background"
+    const val VISUALIZATION_CHANNEL_SCOPE_BACKGROUND_MODE = "visualization_channel_scope_background_mode"
+    const val VISUALIZATION_CHANNEL_SCOPE_CUSTOM_BACKGROUND_COLOR_ARGB = "visualization_channel_scope_custom_background_color_argb"
     const val VISUALIZATION_CHANNEL_SCOPE_LAYOUT = "visualization_channel_scope_layout"
     const val VISUALIZATION_CHANNEL_SCOPE_LINE_COLOR_MODE_NO_ARTWORK = "visualization_channel_scope_line_color_mode_no_artwork"
     const val VISUALIZATION_CHANNEL_SCOPE_GRID_COLOR_MODE_NO_ARTWORK = "visualization_channel_scope_grid_color_mode_no_artwork"
@@ -4359,6 +4362,15 @@ private fun AppNavigation(
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GRID_WIDTH_DP, 2)
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_VERTICAL_GRID_ENABLED, false)
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CENTER_LINE_ENABLED, false)
+                                .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_SHOW_ARTWORK_BACKGROUND, true)
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_BACKGROUND_MODE,
+                                    VisualizationChannelScopeBackgroundMode.AutoDarkAccent.storageValue
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CUSTOM_BACKGROUND_COLOR_ARGB,
+                                    0xFF101418.toInt()
+                                )
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_LAYOUT,
                                     VisualizationChannelScopeLayout.ColumnFirst.storageValue
@@ -4646,6 +4658,15 @@ private fun AppNavigation(
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GRID_WIDTH_DP, 2)
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_VERTICAL_GRID_ENABLED, false)
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CENTER_LINE_ENABLED, false)
+                                .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_SHOW_ARTWORK_BACKGROUND, true)
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_BACKGROUND_MODE,
+                                    VisualizationChannelScopeBackgroundMode.AutoDarkAccent.storageValue
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CUSTOM_BACKGROUND_COLOR_ARGB,
+                                    0xFF101418.toInt()
+                                )
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_LAYOUT,
                                     VisualizationChannelScopeLayout.ColumnFirst.storageValue

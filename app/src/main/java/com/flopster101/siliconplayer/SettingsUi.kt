@@ -2679,6 +2679,9 @@ internal fun SettingsScreen(
                         val scopeGridWidthKey = "visualization_channel_scope_grid_width_dp"
                         val scopeVerticalGridEnabledKey = "visualization_channel_scope_vertical_grid_enabled"
                         val scopeCenterLineEnabledKey = "visualization_channel_scope_center_line_enabled"
+                        val scopeShowArtworkBackgroundKey = "visualization_channel_scope_show_artwork_background"
+                        val scopeBackgroundModeKey = "visualization_channel_scope_background_mode"
+                        val scopeCustomBackgroundColorKey = "visualization_channel_scope_custom_background_color_argb"
                         val scopeLayoutKey = "visualization_channel_scope_layout"
                         val scopeLineNoArtworkColorModeKey = "visualization_channel_scope_line_color_mode_no_artwork"
                         val scopeGridNoArtworkColorModeKey = "visualization_channel_scope_grid_color_mode_no_artwork"
@@ -2733,6 +2736,22 @@ internal fun SettingsScreen(
                         var scopeCenterLineEnabled by remember {
                             mutableStateOf(prefs.getBoolean(scopeCenterLineEnabledKey, false))
                         }
+                        var scopeShowArtworkBackground by remember {
+                            mutableStateOf(prefs.getBoolean(scopeShowArtworkBackgroundKey, true))
+                        }
+                        var scopeBackgroundMode by remember {
+                            mutableStateOf(
+                                VisualizationChannelScopeBackgroundMode.fromStorage(
+                                    prefs.getString(
+                                        scopeBackgroundModeKey,
+                                        VisualizationChannelScopeBackgroundMode.AutoDarkAccent.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeCustomBackgroundColorArgb by remember {
+                            mutableIntStateOf(prefs.getInt(scopeCustomBackgroundColorKey, 0xFF101418.toInt()))
+                        }
                         var scopeLayout by remember {
                             mutableStateOf(
                                 VisualizationChannelScopeLayout.fromStorage(
@@ -2786,6 +2805,8 @@ internal fun SettingsScreen(
                         var showFpsModeDialog by remember { mutableStateOf(false) }
                         var showLineWidthDialog by remember { mutableStateOf(false) }
                         var showGridWidthDialog by remember { mutableStateOf(false) }
+                        var showBackgroundModeDialog by remember { mutableStateOf(false) }
+                        var showCustomBackgroundColorDialog by remember { mutableStateOf(false) }
                         var showLayoutDialog by remember { mutableStateOf(false) }
                         var showLineNoArtworkColorModeDialog by remember { mutableStateOf(false) }
                         var showGridNoArtworkColorModeDialog by remember { mutableStateOf(false) }
@@ -2880,6 +2901,34 @@ internal fun SettingsScreen(
                                 prefs.edit().putBoolean(scopeCenterLineEnabledKey, enabled).apply()
                             }
                         )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Show artwork background",
+                            description = "Render album artwork/placeholder behind the channel scope.",
+                            checked = scopeShowArtworkBackground,
+                            onCheckedChange = { enabled ->
+                                scopeShowArtworkBackground = enabled
+                                prefs.edit().putBoolean(scopeShowArtworkBackgroundKey, enabled).apply()
+                            }
+                        )
+                        if (!scopeShowArtworkBackground) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Background color",
+                                description = "Background source when artwork is hidden.",
+                                value = scopeBackgroundMode.label,
+                                onClick = { showBackgroundModeDialog = true }
+                            )
+                            if (scopeBackgroundMode == VisualizationChannelScopeBackgroundMode.Custom) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                SettingsValuePickerCard(
+                                    title = "Custom background color",
+                                    description = "RGB color used when background color mode is Custom.",
+                                    value = String.format(Locale.US, "#%06X", scopeCustomBackgroundColorArgb and 0xFFFFFF),
+                                    onClick = { showCustomBackgroundColorDialog = true }
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Colors (no artwork)")
                         SettingsValuePickerCard(
@@ -3032,6 +3081,56 @@ internal fun SettingsScreen(
                                     TextButton(onClick = { showTriggerDialog = false }) { Text("Close") }
                                 },
                                 confirmButton = {}
+                            )
+                        }
+                        if (showBackgroundModeDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showBackgroundModeDialog = false },
+                                title = { Text("Scope background color") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationChannelScopeBackgroundMode.entries.forEach { mode ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeBackgroundMode = mode
+                                                        prefs.edit().putString(scopeBackgroundModeKey, mode.storageValue).apply()
+                                                        showBackgroundModeDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = mode == scopeBackgroundMode,
+                                                    onClick = {
+                                                        scopeBackgroundMode = mode
+                                                        prefs.edit().putString(scopeBackgroundModeKey, mode.storageValue).apply()
+                                                        showBackgroundModeDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(mode.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showBackgroundModeDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showCustomBackgroundColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom scope background color",
+                                initialArgb = scopeCustomBackgroundColorArgb,
+                                onDismiss = { showCustomBackgroundColorDialog = false },
+                                onConfirm = { argb ->
+                                    scopeCustomBackgroundColorArgb = argb
+                                    prefs.edit().putInt(scopeCustomBackgroundColorKey, argb).apply()
+                                    showCustomBackgroundColorDialog = false
+                                }
                             )
                         }
                         if (showFpsModeDialog) {

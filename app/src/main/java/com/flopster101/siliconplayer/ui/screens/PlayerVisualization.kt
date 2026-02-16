@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -47,6 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
+import com.flopster101.siliconplayer.VisualizationChannelScopeBackgroundMode
 import com.flopster101.siliconplayer.VisualizationMode
 import com.flopster101.siliconplayer.VisualizationOscColorMode
 import com.flopster101.siliconplayer.VisualizationOscFpsMode
@@ -69,6 +71,49 @@ private class VisualizationDebugAccumulator {
     var lastFrameNs: Long = 0L
     var latestFrameMs: Int = 0
     var lastUiPublishNs: Long = 0L
+}
+
+private fun extractArtworkAccentColor(artwork: ImageBitmap?): Color? {
+    if (artwork == null) return null
+    val pixels = artwork.toPixelMap()
+    val width = pixels.width
+    val height = pixels.height
+    if (width <= 0 || height <= 0) return null
+
+    val stepX = maxOf(1, width / 32)
+    val stepY = maxOf(1, height / 32)
+    var weightedR = 0.0
+    var weightedG = 0.0
+    var weightedB = 0.0
+    var weightSum = 0.0
+    var y = 0
+    while (y < height) {
+        var x = 0
+        while (x < width) {
+            val c = pixels[x, y]
+            val r = c.red.toDouble()
+            val g = c.green.toDouble()
+            val b = c.blue.toDouble()
+            val maxCh = maxOf(r, maxOf(g, b))
+            val minCh = minOf(r, minOf(g, b))
+            val sat = if (maxCh <= 1e-6) 0.0 else (maxCh - minCh) / maxCh
+            val value = maxCh
+            val weight = (0.2 + (sat * 0.8)) * (0.3 + (value * 0.7))
+            weightedR += r * weight
+            weightedG += g * weight
+            weightedB += b * weight
+            weightSum += weight
+            x += stepX
+        }
+        y += stepY
+    }
+    if (weightSum <= 1e-6) return null
+    return Color(
+        red = (weightedR / weightSum).toFloat().coerceIn(0f, 1f),
+        green = (weightedG / weightSum).toFloat().coerceIn(0f, 1f),
+        blue = (weightedB / weightSum).toFloat().coerceIn(0f, 1f),
+        alpha = 1f
+    )
 }
 
 private fun computeChannelScopeSampleCount(
@@ -261,7 +306,10 @@ internal data class ChannelScopePrefs(
     val lineColorModeWithArtwork: VisualizationOscColorMode,
     val gridColorModeWithArtwork: VisualizationOscColorMode,
     val customLineColorArgb: Int,
-    val customGridColorArgb: Int
+    val customGridColorArgb: Int,
+    val showArtworkBackground: Boolean,
+    val backgroundMode: VisualizationChannelScopeBackgroundMode,
+    val customBackgroundColorArgb: Int
 ) {
     companion object {
         private const val KEY_WINDOW_MS = "visualization_channel_scope_window_ms"
@@ -274,6 +322,9 @@ internal data class ChannelScopePrefs(
         private const val KEY_GRID_WIDTH_DP = "visualization_channel_scope_grid_width_dp"
         private const val KEY_VERTICAL_GRID_ENABLED = "visualization_channel_scope_vertical_grid_enabled"
         private const val KEY_CENTER_LINE_ENABLED = "visualization_channel_scope_center_line_enabled"
+        private const val KEY_SHOW_ARTWORK_BACKGROUND = "visualization_channel_scope_show_artwork_background"
+        private const val KEY_BACKGROUND_MODE = "visualization_channel_scope_background_mode"
+        private const val KEY_CUSTOM_BACKGROUND_COLOR_ARGB = "visualization_channel_scope_custom_background_color_argb"
         private const val KEY_LAYOUT = "visualization_channel_scope_layout"
         private const val KEY_LINE_COLOR_MODE_NO_ARTWORK = "visualization_channel_scope_line_color_mode_no_artwork"
         private const val KEY_GRID_COLOR_MODE_NO_ARTWORK = "visualization_channel_scope_grid_color_mode_no_artwork"
@@ -324,7 +375,12 @@ internal data class ChannelScopePrefs(
                     VisualizationOscColorMode.Artwork
                 ),
                 customLineColorArgb = sharedPrefs.getInt(KEY_CUSTOM_LINE_COLOR_ARGB, 0xFF6BD8FF.toInt()),
-                customGridColorArgb = sharedPrefs.getInt(KEY_CUSTOM_GRID_COLOR_ARGB, 0x66FFFFFF)
+                customGridColorArgb = sharedPrefs.getInt(KEY_CUSTOM_GRID_COLOR_ARGB, 0x66FFFFFF),
+                showArtworkBackground = sharedPrefs.getBoolean(KEY_SHOW_ARTWORK_BACKGROUND, true),
+                backgroundMode = VisualizationChannelScopeBackgroundMode.fromStorage(
+                    sharedPrefs.getString(KEY_BACKGROUND_MODE, VisualizationChannelScopeBackgroundMode.AutoDarkAccent.storageValue)
+                ),
+                customBackgroundColorArgb = sharedPrefs.getInt(KEY_CUSTOM_BACKGROUND_COLOR_ARGB, 0xFF101418.toInt())
             )
         }
 
@@ -732,6 +788,27 @@ internal fun AlbumArtPlaceholder(
     } else {
         visualizationRenderBackendForMode(visualizationMode)
     }
+    val themePrimaryColor = MaterialTheme.colorScheme.primary
+    val useScopeArtworkBackground =
+        visualizationMode != VisualizationMode.ChannelScope || channelScopePrefs.showArtworkBackground
+    val scopeBackgroundColor = remember(
+        artwork,
+        themePrimaryColor,
+        channelScopePrefs.backgroundMode,
+        channelScopePrefs.customBackgroundColorArgb
+    ) {
+        when (channelScopePrefs.backgroundMode) {
+            VisualizationChannelScopeBackgroundMode.Custom -> Color(channelScopePrefs.customBackgroundColorArgb)
+            VisualizationChannelScopeBackgroundMode.AutoDarkAccent -> {
+                val accent = extractArtworkAccentColor(artwork)
+                    ?: themePrimaryColor.copy(alpha = 1f)
+                // Keep it dark for scope contrast, but avoid collapsing to plain black.
+                val darkTint = lerp(accent, Color.Black, 0.62f)
+                val floor = Color(0xFF101418)
+                lerp(floor, darkTint, 0.70f).copy(alpha = 1f)
+            }
+        }
+    }
 
     ElevatedCard(
         modifier = modifier,
@@ -741,51 +818,59 @@ internal fun AlbumArtPlaceholder(
         shape = MaterialTheme.shapes.extraLarge
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            Crossfade(targetState = artwork, label = "albumArtCrossfade") { art ->
-                if (art != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            bitmap = art,
-                            contentDescription = "Album artwork",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
-                                        MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
+            if (useScopeArtworkBackground) {
+                Crossfade(targetState = artwork, label = "albumArtCrossfade") { art ->
+                    if (art != null) {
                         Box(
                             modifier = Modifier
-                                .size(120.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = placeholderIcon,
-                                contentDescription = "No album artwork",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(72.dp)
+                            Image(
+                                bitmap = art,
+                                contentDescription = "Album artwork",
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize()
                             )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    brush = Brush.radialGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                                            MaterialTheme.colorScheme.surfaceVariant
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(120.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = placeholderIcon,
+                                    contentDescription = "No album artwork",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(72.dp)
+                                )
+                            }
                         }
                     }
                 }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(scopeBackgroundColor)
+                )
             }
             BasicVisualizationOverlay(
                 mode = visualizationMode,

@@ -175,16 +175,6 @@ fun PlayerScreen(
     var showVisualizationModeBadge by remember { mutableStateOf(false) }
     var visualizationModeBadgeText by remember { mutableStateOf(visualizationMode.label) }
     var lastVisualizationModeForBadge by remember { mutableStateOf<VisualizationMode?>(null) }
-    var visWaveLeft by remember { mutableStateOf(FloatArray(0)) }
-    var visWaveRight by remember { mutableStateOf(FloatArray(0)) }
-    var visBars by remember { mutableStateOf(FloatArray(0)) }
-    var visBarsSmoothed by remember { mutableStateOf(FloatArray(0)) }
-    var visVu by remember { mutableStateOf(FloatArray(0)) }
-    var visVuSmoothed by remember { mutableStateOf(FloatArray(0)) }
-    var visChannelCount by remember { mutableIntStateOf(2) }
-    var visChannelScopesFlat by remember { mutableStateOf(FloatArray(0)) }
-    var visChannelScopeHistories by remember { mutableStateOf<List<FloatArray>>(emptyList()) }
-    var visChannelScopeLastChannelCount by remember { mutableIntStateOf(1) }
     val context = LocalContext.current
     val prefs = remember {
         context.getSharedPreferences("silicon_player_settings", Context.MODE_PRIVATE)
@@ -473,193 +463,6 @@ fun PlayerScreen(
             sliderPosition = positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0))
         }
     }
-    LaunchedEffect(file?.absolutePath, isPlaying) {
-        if (file != null && isPlaying) return@LaunchedEffect
-        visWaveLeft = FloatArray(256)
-        visWaveRight = FloatArray(256)
-        visBars = FloatArray(256)
-        visBarsSmoothed = FloatArray(256)
-        visVu = FloatArray(2)
-        visVuSmoothed = FloatArray(2)
-        visChannelCount = 2
-        visChannelScopesFlat = FloatArray(0)
-        val points = computeChannelScopeSampleCount(
-            windowMs = channelScopePrefs.windowMs,
-            sampleRateHz = sampleRateHz
-        )
-        val channels = visChannelScopeHistories.size
-            .takeIf { it > 0 }
-            ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
-        visChannelScopeHistories = List(channels) { FloatArray(points) }
-    }
-    LaunchedEffect(
-        visualizationMode,
-        file?.absolutePath,
-        isPlaying,
-        visualizationOscWindowMs,
-        visualizationOscTriggerModeNative,
-        visualizationOscFpsMode,
-        channelScopePrefs.windowMs,
-        channelScopePrefs.triggerModeNative,
-        channelScopePrefs.fpsMode,
-        sampleRateHz
-    ) {
-        while (true) {
-            if (visualizationMode != VisualizationMode.Off && file != null && isPlaying) {
-                visWaveLeft = NativeBridge.getVisualizationWaveformScope(
-                    0,
-                    visualizationOscWindowMs,
-                    visualizationOscTriggerModeNative
-                )
-                visWaveRight = NativeBridge.getVisualizationWaveformScope(
-                    1,
-                    visualizationOscWindowMs,
-                    visualizationOscTriggerModeNative
-                )
-                visBars = NativeBridge.getVisualizationBars()
-                visVu = NativeBridge.getVisualizationVuLevels()
-                visChannelCount = NativeBridge.getVisualizationChannelCount().coerceAtLeast(1)
-                if (
-                    visualizationMode == VisualizationMode.ChannelScope &&
-                    pluginNameForCoreName(decoderName) == "LibOpenMPT"
-                ) {
-                    val scopeSamples = computeChannelScopeSampleCount(
-                        windowMs = channelScopePrefs.windowMs,
-                        sampleRateHz = sampleRateHz
-                    )
-                    visChannelScopesFlat = NativeBridge.getChannelScopeSamples(scopeSamples)
-                }
-            }
-            val delayMs = if (!isPlaying) {
-                90L
-            } else if (
-                visualizationMode != VisualizationMode.Oscilloscope &&
-                visualizationMode != VisualizationMode.ChannelScope
-            ) {
-                33L
-            } else {
-                val fpsMode = if (visualizationMode == VisualizationMode.ChannelScope) {
-                    channelScopePrefs.fpsMode
-                } else {
-                    visualizationOscFpsMode
-                }
-                when (fpsMode) {
-                    VisualizationOscFpsMode.Default -> 33L
-                    VisualizationOscFpsMode.Fps60 -> 16L
-                    VisualizationOscFpsMode.NativeRefresh -> {
-                        val refreshHz = (context.display?.refreshRate ?: 60f).coerceAtLeast(30f)
-                        (1000f / refreshHz).roundToInt().coerceAtLeast(4).toLong()
-                    }
-                }
-            }
-            delay(delayMs)
-        }
-    }
-    LaunchedEffect(
-        visChannelScopesFlat,
-        visualizationMode,
-        channelScopePrefs.windowMs,
-        sampleRateHz,
-        isPlaying
-    ) {
-        if (visualizationMode != VisualizationMode.ChannelScope) {
-            visChannelScopeHistories = emptyList()
-            return@LaunchedEffect
-        }
-        val points = computeChannelScopeSampleCount(
-            windowMs = channelScopePrefs.windowMs,
-            sampleRateHz = sampleRateHz
-        )
-        if (visChannelScopesFlat.isEmpty()) {
-            if (!isPlaying) {
-                val channels = visChannelScopeHistories.size
-                    .takeIf { it > 0 }
-                    ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
-                visChannelScopeHistories = List(channels) { FloatArray(points) }
-                return@LaunchedEffect
-            }
-            visChannelScopeHistories = emptyList()
-            return@LaunchedEffect
-        }
-        if (visChannelScopesFlat.size < points) {
-            if (!isPlaying) {
-                val channels = visChannelScopeHistories.size
-                    .takeIf { it > 0 }
-                    ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
-                visChannelScopeHistories = List(channels) { FloatArray(points) }
-                return@LaunchedEffect
-            }
-            visChannelScopeHistories = emptyList()
-            return@LaunchedEffect
-        }
-        val histories = buildChannelScopeHistoriesAsync(
-            flatScopes = visChannelScopesFlat,
-            points = points
-        )
-        visChannelScopeLastChannelCount = histories.size.coerceIn(1, 64)
-        visChannelScopeHistories = histories
-    }
-    val channelScopeVisualState = ChannelScopeVisualState(
-        channelHistories = visChannelScopeHistories,
-        triggerModeNative = channelScopePrefs.triggerModeNative,
-        lineWidthDp = channelScopePrefs.lineWidthDp,
-        gridWidthDp = channelScopePrefs.gridWidthDp,
-        verticalGridEnabled = channelScopePrefs.verticalGridEnabled,
-        centerLineEnabled = channelScopePrefs.centerLineEnabled,
-        layout = channelScopePrefs.layout,
-        lineColorModeNoArtwork = channelScopePrefs.lineColorModeNoArtwork,
-        gridColorModeNoArtwork = channelScopePrefs.gridColorModeNoArtwork,
-        lineColorModeWithArtwork = channelScopePrefs.lineColorModeWithArtwork,
-        gridColorModeWithArtwork = channelScopePrefs.gridColorModeWithArtwork,
-        customLineColorArgb = channelScopePrefs.customLineColorArgb,
-        customGridColorArgb = channelScopePrefs.customGridColorArgb
-    )
-    LaunchedEffect(visBars, visualizationBarSmoothingPercent, visualizationMode) {
-        if (visualizationMode != VisualizationMode.Bars) {
-            visBarsSmoothed = visBars
-            return@LaunchedEffect
-        }
-        if (visBars.isEmpty()) {
-            visBarsSmoothed = visBars
-            return@LaunchedEffect
-        }
-        val prev = visBarsSmoothed
-        if (prev.size != visBars.size) {
-            visBarsSmoothed = visBars.copyOf()
-            return@LaunchedEffect
-        }
-        val smoothing = (visualizationBarSmoothingPercent.coerceIn(0, 95) / 100f)
-        val mixed = FloatArray(visBars.size)
-        for (i in visBars.indices) {
-            val target = visBars[i].coerceIn(0f, 1f)
-            val current = prev[i].coerceIn(0f, 1f)
-            mixed[i] = (current * smoothing) + (target * (1f - smoothing))
-        }
-        visBarsSmoothed = mixed
-    }
-    LaunchedEffect(visVu, visualizationVuSmoothingPercent, visualizationMode) {
-        if (visualizationMode != VisualizationMode.VuMeters) {
-            visVuSmoothed = visVu
-            return@LaunchedEffect
-        }
-        if (visVu.isEmpty()) {
-            visVuSmoothed = visVu
-            return@LaunchedEffect
-        }
-        val prev = visVuSmoothed
-        if (prev.size != visVu.size) {
-            visVuSmoothed = visVu.copyOf()
-            return@LaunchedEffect
-        }
-        val smoothing = (visualizationVuSmoothingPercent.coerceIn(0, 95) / 100f)
-        val mixed = FloatArray(visVu.size)
-        for (i in visVu.indices) {
-            val target = visVu[i].coerceIn(0f, 1f)
-            val current = prev[i].coerceIn(0f, 1f)
-            mixed[i] = (current * smoothing) + (target * (1f - smoothing))
-        }
-        visVuSmoothed = mixed
-    }
     val animatedPanelOffsetPx by animateFloatAsState(
         targetValue = if (isDraggingDown) downwardDragPx else 0f,
         animationSpec = tween(durationMillis = 180, easing = LinearOutSlowInEasing),
@@ -847,11 +650,20 @@ fun PlayerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     AlbumArtPlaceholder(
+                        file = file,
+                        isPlaying = isPlaying,
+                        decoderName = decoderName,
+                        sampleRateHz = sampleRateHz,
                         artwork = artwork,
                         placeholderIcon = noArtworkIcon,
                         visualizationModeBadgeText = visualizationModeBadgeText,
                         showVisualizationModeBadge = showVisualizationModeBadge,
                         visualizationMode = visualizationMode,
+                        visualizationOscWindowMs = visualizationOscWindowMs,
+                        visualizationOscTriggerModeNative = visualizationOscTriggerModeNative,
+                        visualizationOscFpsMode = visualizationOscFpsMode,
+                        visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
+                        visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
                         barCount = visualizationBarCount,
                         barRoundnessDp = visualizationBarRoundnessDp,
                         barOverlayArtwork = visualizationBarOverlayArtwork,
@@ -875,12 +687,7 @@ fun PlayerScreen(
                         vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
                         vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
                         vuCustomColorArgb = visualizationVuCustomColorArgb,
-                        channelScopeState = channelScopeVisualState,
-                        waveformLeft = visWaveLeft,
-                        waveformRight = visWaveRight,
-                        bars = visBarsSmoothed,
-                        vuLevels = visVuSmoothed,
-                        channelCount = visChannelCount,
+                        channelScopePrefs = channelScopePrefs,
                         modifier = Modifier
                             .weight(0.45f)
                             .fillMaxHeight(0.84f)
@@ -977,11 +784,20 @@ fun PlayerScreen(
                     verticalArrangement = Arrangement.Top
                 ) {
                     AlbumArtPlaceholder(
+                        file = file,
+                        isPlaying = isPlaying,
+                        decoderName = decoderName,
+                        sampleRateHz = sampleRateHz,
                         artwork = artwork,
                         placeholderIcon = noArtworkIcon,
                         visualizationModeBadgeText = visualizationModeBadgeText,
                         showVisualizationModeBadge = showVisualizationModeBadge,
                         visualizationMode = visualizationMode,
+                        visualizationOscWindowMs = visualizationOscWindowMs,
+                        visualizationOscTriggerModeNative = visualizationOscTriggerModeNative,
+                        visualizationOscFpsMode = visualizationOscFpsMode,
+                        visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
+                        visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
                         barCount = visualizationBarCount,
                         barRoundnessDp = visualizationBarRoundnessDp,
                         barOverlayArtwork = visualizationBarOverlayArtwork,
@@ -1005,12 +821,7 @@ fun PlayerScreen(
                         vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
                         vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
                         vuCustomColorArgb = visualizationVuCustomColorArgb,
-                        channelScopeState = channelScopeVisualState,
-                        waveformLeft = visWaveLeft,
-                        waveformRight = visWaveRight,
-                        bars = visBarsSmoothed,
-                        vuLevels = visVuSmoothed,
-                        channelCount = visChannelCount,
+                        channelScopePrefs = channelScopePrefs,
                         modifier = Modifier
                             .fillMaxWidth(0.86f)
                             .aspectRatio(1f)
@@ -1469,11 +1280,20 @@ private data class ChannelScopeVisualState(
 
 @Composable
 private fun AlbumArtPlaceholder(
+    file: File?,
+    isPlaying: Boolean,
+    decoderName: String?,
+    sampleRateHz: Int,
     artwork: ImageBitmap?,
     placeholderIcon: ImageVector,
     visualizationModeBadgeText: String,
     showVisualizationModeBadge: Boolean,
     visualizationMode: VisualizationMode,
+    visualizationOscWindowMs: Int,
+    visualizationOscTriggerModeNative: Int,
+    visualizationOscFpsMode: VisualizationOscFpsMode,
+    visualizationBarSmoothingPercent: Int,
+    visualizationVuSmoothingPercent: Int,
     barCount: Int,
     barRoundnessDp: Int,
     barOverlayArtwork: Boolean,
@@ -1497,14 +1317,208 @@ private fun AlbumArtPlaceholder(
     vuColorModeNoArtwork: VisualizationOscColorMode,
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
-    channelScopeState: ChannelScopeVisualState,
-    waveformLeft: FloatArray,
-    waveformRight: FloatArray,
-    bars: FloatArray,
-    vuLevels: FloatArray,
-    channelCount: Int,
+    channelScopePrefs: ChannelScopePrefs,
     modifier: Modifier = Modifier
 ) {
+    var visWaveLeft by remember { mutableStateOf(FloatArray(0)) }
+    var visWaveRight by remember { mutableStateOf(FloatArray(0)) }
+    var visBars by remember { mutableStateOf(FloatArray(0)) }
+    var visBarsSmoothed by remember { mutableStateOf(FloatArray(0)) }
+    var visVu by remember { mutableStateOf(FloatArray(0)) }
+    var visVuSmoothed by remember { mutableStateOf(FloatArray(0)) }
+    var visChannelCount by remember { mutableIntStateOf(2) }
+    var visChannelScopesFlat by remember { mutableStateOf(FloatArray(0)) }
+    var visChannelScopeHistories by remember { mutableStateOf<List<FloatArray>>(emptyList()) }
+    var visChannelScopeLastChannelCount by remember { mutableIntStateOf(1) }
+    val context = LocalContext.current
+
+    LaunchedEffect(file?.absolutePath, isPlaying, channelScopePrefs.windowMs, sampleRateHz) {
+        if (file != null && isPlaying) return@LaunchedEffect
+        visWaveLeft = FloatArray(256)
+        visWaveRight = FloatArray(256)
+        visBars = FloatArray(256)
+        visBarsSmoothed = FloatArray(256)
+        visVu = FloatArray(2)
+        visVuSmoothed = FloatArray(2)
+        visChannelCount = 2
+        visChannelScopesFlat = FloatArray(0)
+        val points = computeChannelScopeSampleCount(
+            windowMs = channelScopePrefs.windowMs,
+            sampleRateHz = sampleRateHz
+        )
+        val channels = visChannelScopeHistories.size
+            .takeIf { it > 0 }
+            ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
+        visChannelScopeHistories = List(channels) { FloatArray(points) }
+    }
+    LaunchedEffect(
+        visualizationMode,
+        file?.absolutePath,
+        isPlaying,
+        visualizationOscWindowMs,
+        visualizationOscTriggerModeNative,
+        visualizationOscFpsMode,
+        channelScopePrefs.windowMs,
+        channelScopePrefs.fpsMode,
+        sampleRateHz,
+        decoderName
+    ) {
+        while (true) {
+            if (visualizationMode != VisualizationMode.Off && file != null && isPlaying) {
+                visWaveLeft = NativeBridge.getVisualizationWaveformScope(
+                    0,
+                    visualizationOscWindowMs,
+                    visualizationOscTriggerModeNative
+                )
+                visWaveRight = NativeBridge.getVisualizationWaveformScope(
+                    1,
+                    visualizationOscWindowMs,
+                    visualizationOscTriggerModeNative
+                )
+                visBars = NativeBridge.getVisualizationBars()
+                visVu = NativeBridge.getVisualizationVuLevels()
+                visChannelCount = NativeBridge.getVisualizationChannelCount().coerceAtLeast(1)
+                if (
+                    visualizationMode == VisualizationMode.ChannelScope &&
+                    pluginNameForCoreName(decoderName) == "LibOpenMPT"
+                ) {
+                    val scopeSamples = computeChannelScopeSampleCount(
+                        windowMs = channelScopePrefs.windowMs,
+                        sampleRateHz = sampleRateHz
+                    )
+                    visChannelScopesFlat = NativeBridge.getChannelScopeSamples(scopeSamples)
+                }
+            }
+            val delayMs = if (!isPlaying) {
+                90L
+            } else if (
+                visualizationMode != VisualizationMode.Oscilloscope &&
+                visualizationMode != VisualizationMode.ChannelScope
+            ) {
+                33L
+            } else {
+                val fpsMode = if (visualizationMode == VisualizationMode.ChannelScope) {
+                    channelScopePrefs.fpsMode
+                } else {
+                    visualizationOscFpsMode
+                }
+                when (fpsMode) {
+                    VisualizationOscFpsMode.Default -> 33L
+                    VisualizationOscFpsMode.Fps60 -> 16L
+                    VisualizationOscFpsMode.NativeRefresh -> {
+                        val refreshHz = (context.display?.refreshRate ?: 60f).coerceAtLeast(30f)
+                        (1000f / refreshHz).roundToInt().coerceAtLeast(4).toLong()
+                    }
+                }
+            }
+            delay(delayMs)
+        }
+    }
+    LaunchedEffect(
+        visChannelScopesFlat,
+        visualizationMode,
+        channelScopePrefs.windowMs,
+        sampleRateHz,
+        isPlaying
+    ) {
+        if (visualizationMode != VisualizationMode.ChannelScope) {
+            visChannelScopeHistories = emptyList()
+            return@LaunchedEffect
+        }
+        val points = computeChannelScopeSampleCount(
+            windowMs = channelScopePrefs.windowMs,
+            sampleRateHz = sampleRateHz
+        )
+        if (visChannelScopesFlat.isEmpty()) {
+            if (!isPlaying) {
+                val channels = visChannelScopeHistories.size
+                    .takeIf { it > 0 }
+                    ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
+                visChannelScopeHistories = List(channels) { FloatArray(points) }
+                return@LaunchedEffect
+            }
+            visChannelScopeHistories = emptyList()
+            return@LaunchedEffect
+        }
+        if (visChannelScopesFlat.size < points) {
+            if (!isPlaying) {
+                val channels = visChannelScopeHistories.size
+                    .takeIf { it > 0 }
+                    ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
+                visChannelScopeHistories = List(channels) { FloatArray(points) }
+                return@LaunchedEffect
+            }
+            visChannelScopeHistories = emptyList()
+            return@LaunchedEffect
+        }
+        val histories = buildChannelScopeHistoriesAsync(
+            flatScopes = visChannelScopesFlat,
+            points = points
+        )
+        visChannelScopeLastChannelCount = histories.size.coerceIn(1, 64)
+        visChannelScopeHistories = histories
+    }
+    LaunchedEffect(visBars, visualizationBarSmoothingPercent, visualizationMode) {
+        if (visualizationMode != VisualizationMode.Bars) {
+            visBarsSmoothed = visBars
+            return@LaunchedEffect
+        }
+        if (visBars.isEmpty()) {
+            visBarsSmoothed = visBars
+            return@LaunchedEffect
+        }
+        val prev = visBarsSmoothed
+        if (prev.size != visBars.size) {
+            visBarsSmoothed = visBars.copyOf()
+            return@LaunchedEffect
+        }
+        val smoothing = (visualizationBarSmoothingPercent.coerceIn(0, 95) / 100f)
+        val mixed = FloatArray(visBars.size)
+        for (i in visBars.indices) {
+            val target = visBars[i].coerceIn(0f, 1f)
+            val current = prev[i].coerceIn(0f, 1f)
+            mixed[i] = (current * smoothing) + (target * (1f - smoothing))
+        }
+        visBarsSmoothed = mixed
+    }
+    LaunchedEffect(visVu, visualizationVuSmoothingPercent, visualizationMode) {
+        if (visualizationMode != VisualizationMode.VuMeters) {
+            visVuSmoothed = visVu
+            return@LaunchedEffect
+        }
+        if (visVu.isEmpty()) {
+            visVuSmoothed = visVu
+            return@LaunchedEffect
+        }
+        val prev = visVuSmoothed
+        if (prev.size != visVu.size) {
+            visVuSmoothed = visVu.copyOf()
+            return@LaunchedEffect
+        }
+        val smoothing = (visualizationVuSmoothingPercent.coerceIn(0, 95) / 100f)
+        val mixed = FloatArray(visVu.size)
+        for (i in visVu.indices) {
+            val target = visVu[i].coerceIn(0f, 1f)
+            val current = prev[i].coerceIn(0f, 1f)
+            mixed[i] = (current * smoothing) + (target * (1f - smoothing))
+        }
+        visVuSmoothed = mixed
+    }
+    val channelScopeState = ChannelScopeVisualState(
+        channelHistories = visChannelScopeHistories,
+        triggerModeNative = channelScopePrefs.triggerModeNative,
+        lineWidthDp = channelScopePrefs.lineWidthDp,
+        gridWidthDp = channelScopePrefs.gridWidthDp,
+        verticalGridEnabled = channelScopePrefs.verticalGridEnabled,
+        centerLineEnabled = channelScopePrefs.centerLineEnabled,
+        layout = channelScopePrefs.layout,
+        lineColorModeNoArtwork = channelScopePrefs.lineColorModeNoArtwork,
+        gridColorModeNoArtwork = channelScopePrefs.gridColorModeNoArtwork,
+        lineColorModeWithArtwork = channelScopePrefs.lineColorModeWithArtwork,
+        gridColorModeWithArtwork = channelScopePrefs.gridColorModeWithArtwork,
+        customLineColorArgb = channelScopePrefs.customLineColorArgb,
+        customGridColorArgb = channelScopePrefs.customGridColorArgb
+    )
     val artworkBrightness = remember(artwork) {
         val bitmap = artwork ?: return@remember null
         runCatching {
@@ -1594,11 +1608,11 @@ private fun AlbumArtPlaceholder(
             }
             BasicVisualizationOverlay(
                 mode = visualizationMode,
-                bars = bars,
-                waveformLeft = waveformLeft,
-                waveformRight = waveformRight,
-                vuLevels = vuLevels,
-                channelCount = channelCount,
+                bars = visBarsSmoothed,
+                waveformLeft = visWaveLeft,
+                waveformRight = visWaveRight,
+                vuLevels = visVuSmoothed,
+                channelCount = visChannelCount,
                 barCount = barCount,
                 barRoundnessDp = barRoundnessDp,
                 barOverlayArtwork = barOverlayArtwork,

@@ -1042,6 +1042,7 @@ private fun AppNavigation(
 
     var currentView by remember { mutableStateOf(MainView.Home) }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.Root) }
+    var settingsRouteHistory by remember { mutableStateOf<List<SettingsRoute>>(emptyList()) }
     var selectedPluginName by remember { mutableStateOf<String?>(null) }
     var settingsLaunchedFromPlayer by remember { mutableStateOf(false) }
     var settingsReturnView by remember { mutableStateOf(MainView.Home) }
@@ -3488,9 +3489,32 @@ private fun AppNavigation(
             visualizationMode = fallback
         }
     }
+    val openSettingsRoute: (SettingsRoute, Boolean) -> Unit = { targetRoute, resetHistory ->
+        if (resetHistory) {
+            settingsRouteHistory = emptyList()
+            settingsRoute = targetRoute
+        } else if (settingsRoute != targetRoute) {
+            settingsRouteHistory = (settingsRouteHistory + settingsRoute).takeLast(24)
+            settingsRoute = targetRoute
+        }
+    }
+    val popSettingsRoute: () -> Boolean = {
+        val previousRoute = settingsRouteHistory.lastOrNull()
+        if (previousRoute != null) {
+            settingsRouteHistory = settingsRouteHistory.dropLast(1)
+            settingsRoute = previousRoute
+            true
+        } else if (settingsRoute != SettingsRoute.Root) {
+            settingsRoute = SettingsRoute.Root
+            true
+        } else {
+            false
+        }
+    }
     val exitSettingsToReturnView: () -> Unit = {
         val target = if (settingsLaunchedFromPlayer) settingsReturnView else MainView.Home
         settingsLaunchedFromPlayer = false
+        settingsRouteHistory = emptyList()
         settingsRoute = SettingsRoute.Root
         currentView = target
     }
@@ -3499,7 +3523,7 @@ private fun AppNavigation(
             settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
             settingsLaunchedFromPlayer = true
             selectedPluginName = pluginName
-            settingsRoute = SettingsRoute.PluginDetail
+            openSettingsRoute(SettingsRoute.PluginDetail, true)
             currentView = MainView.Settings
             isPlayerExpanded = false
         }
@@ -3507,35 +3531,35 @@ private fun AppNavigation(
     val openVisualizationSettings: () -> Unit = {
         settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
         settingsLaunchedFromPlayer = true
-        settingsRoute = SettingsRoute.Visualization
+        openSettingsRoute(SettingsRoute.Visualization, true)
         currentView = MainView.Settings
         isPlayerExpanded = false
     }
     val openVisualizationBasicSettings: () -> Unit = {
         settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
         settingsLaunchedFromPlayer = true
-        settingsRoute = SettingsRoute.VisualizationBasic
+        openSettingsRoute(SettingsRoute.VisualizationBasic, true)
         currentView = MainView.Settings
         isPlayerExpanded = false
     }
     val openVisualizationBarsSettings: () -> Unit = {
         settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
         settingsLaunchedFromPlayer = true
-        settingsRoute = SettingsRoute.VisualizationBasicBars
+        openSettingsRoute(SettingsRoute.VisualizationBasicBars, true)
         currentView = MainView.Settings
         isPlayerExpanded = false
     }
     val openVisualizationOscilloscopeSettings: () -> Unit = {
         settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
         settingsLaunchedFromPlayer = true
-        settingsRoute = SettingsRoute.VisualizationBasicOscilloscope
+        openSettingsRoute(SettingsRoute.VisualizationBasicOscilloscope, true)
         currentView = MainView.Settings
         isPlayerExpanded = false
     }
     val openVisualizationVuMetersSettings: () -> Unit = {
         settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
         settingsLaunchedFromPlayer = true
-        settingsRoute = SettingsRoute.VisualizationBasicVuMeters
+        openSettingsRoute(SettingsRoute.VisualizationBasicVuMeters, true)
         currentView = MainView.Settings
         isPlayerExpanded = false
     }
@@ -3588,18 +3612,7 @@ private fun AppNavigation(
         when {
             isPlayerExpanded -> isPlayerExpanded = false
             currentView == MainView.Settings && settingsLaunchedFromPlayer -> exitSettingsToReturnView()
-            currentView == MainView.Settings && settingsRoute != SettingsRoute.Root -> {
-                settingsRoute = when (settingsRoute) {
-                    SettingsRoute.PluginVgmPlayChipSettings -> SettingsRoute.PluginDetail
-                    SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt, SettingsRoute.PluginVgmPlay -> SettingsRoute.AudioPlugins
-                    SettingsRoute.VisualizationBasicBars,
-                    SettingsRoute.VisualizationBasicOscilloscope,
-                    SettingsRoute.VisualizationBasicVuMeters -> SettingsRoute.VisualizationBasic
-                    SettingsRoute.VisualizationBasic -> SettingsRoute.Visualization
-                    SettingsRoute.CacheManager -> SettingsRoute.UrlCache
-                    else -> SettingsRoute.Root
-                }
-            }
+            currentView == MainView.Settings && popSettingsRoute() -> Unit
             currentView == MainView.Settings -> exitSettingsToReturnView()
         }
     }
@@ -3647,7 +3660,7 @@ private fun AppNavigation(
                             if (shouldShowSettingsAction) {
                                 IconButton(onClick = {
                                     settingsLaunchedFromPlayer = false
-                                    settingsRoute = SettingsRoute.Root
+                                    openSettingsRoute(SettingsRoute.Root, true)
                                     currentView = MainView.Settings
                                 }) {
                                     Icon(
@@ -3874,24 +3887,13 @@ private fun AppNavigation(
                                 exitSettingsToReturnView()
                                 return@SettingsScreen
                             }
-                            if (settingsRoute != SettingsRoute.Root) {
-                                settingsRoute = when (settingsRoute) {
-                                    SettingsRoute.PluginVgmPlayChipSettings -> SettingsRoute.PluginDetail
-                                    SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt, SettingsRoute.PluginVgmPlay -> SettingsRoute.AudioPlugins
-                                    SettingsRoute.VisualizationBasicBars,
-                                    SettingsRoute.VisualizationBasicOscilloscope,
-                                    SettingsRoute.VisualizationBasicVuMeters -> SettingsRoute.VisualizationBasic
-                                    SettingsRoute.VisualizationBasic -> SettingsRoute.Visualization
-                                    SettingsRoute.CacheManager -> SettingsRoute.UrlCache
-                                    else -> SettingsRoute.Root
-                                }
-                            } else {
+                            if (!popSettingsRoute()) {
                                 exitSettingsToReturnView()
                             }
                         },
-                        onOpenAudioPlugins = { settingsRoute = SettingsRoute.AudioPlugins },
-                        onOpenGeneralAudio = { settingsRoute = SettingsRoute.GeneralAudio },
-                        onOpenHome = { settingsRoute = SettingsRoute.Home },
+                        onOpenAudioPlugins = { openSettingsRoute(SettingsRoute.AudioPlugins, false) },
+                        onOpenGeneralAudio = { openSettingsRoute(SettingsRoute.GeneralAudio, false) },
+                        onOpenHome = { openSettingsRoute(SettingsRoute.Home, false) },
                         onOpenAudioEffects = {
                             tempMasterVolumeDb = masterVolumeDb
                             tempPluginVolumeDb = pluginVolumeDb
@@ -3933,25 +3935,25 @@ private fun AppNavigation(
                             NativeBridge.setSongGain(0f)
                             Toast.makeText(context, "All song volumes cleared", Toast.LENGTH_SHORT).show()
                         },
-                        onOpenPlayer = { settingsRoute = SettingsRoute.Player },
-                        onOpenVisualization = { settingsRoute = SettingsRoute.Visualization },
-                        onOpenVisualizationBasic = openVisualizationBasicSettings,
-                        onOpenVisualizationBasicBars = openVisualizationBarsSettings,
-                        onOpenVisualizationBasicOscilloscope = openVisualizationOscilloscopeSettings,
-                        onOpenVisualizationBasicVuMeters = openVisualizationVuMetersSettings,
-                        onOpenMisc = { settingsRoute = SettingsRoute.Misc },
-                        onOpenUrlCache = { settingsRoute = SettingsRoute.UrlCache },
+                        onOpenPlayer = { openSettingsRoute(SettingsRoute.Player, false) },
+                        onOpenVisualization = { openSettingsRoute(SettingsRoute.Visualization, false) },
+                        onOpenVisualizationBasic = { openSettingsRoute(SettingsRoute.VisualizationBasic, false) },
+                        onOpenVisualizationBasicBars = { openSettingsRoute(SettingsRoute.VisualizationBasicBars, false) },
+                        onOpenVisualizationBasicOscilloscope = { openSettingsRoute(SettingsRoute.VisualizationBasicOscilloscope, false) },
+                        onOpenVisualizationBasicVuMeters = { openSettingsRoute(SettingsRoute.VisualizationBasicVuMeters, false) },
+                        onOpenMisc = { openSettingsRoute(SettingsRoute.Misc, false) },
+                        onOpenUrlCache = { openSettingsRoute(SettingsRoute.UrlCache, false) },
                         onOpenCacheManager = {
                             refreshCachedSourceFiles()
-                            settingsRoute = SettingsRoute.CacheManager
+                            openSettingsRoute(SettingsRoute.CacheManager, false)
                         },
-                        onOpenUi = { settingsRoute = SettingsRoute.Ui },
-                        onOpenAbout = { settingsRoute = SettingsRoute.About },
-                        onOpenVgmPlayChipSettings = { settingsRoute = SettingsRoute.PluginVgmPlayChipSettings },
+                        onOpenUi = { openSettingsRoute(SettingsRoute.Ui, false) },
+                        onOpenAbout = { openSettingsRoute(SettingsRoute.About, false) },
+                        onOpenVgmPlayChipSettings = { openSettingsRoute(SettingsRoute.PluginVgmPlayChipSettings, false) },
                         selectedPluginName = selectedPluginName,
                         onPluginSelected = { pluginName ->
                             selectedPluginName = pluginName
-                            settingsRoute = SettingsRoute.PluginDetail
+                            openSettingsRoute(SettingsRoute.PluginDetail, false)
                         },
                         onPluginEnabledChanged = { pluginName, enabled ->
                             NativeBridge.setDecoderEnabled(pluginName, enabled)

@@ -298,13 +298,17 @@ private class ChannelScopeGlRenderer(
             val triggerIndex = data.triggerIndices.getOrNull(channel)?.coerceIn(0, history.size - 1)
                 ?: (history.size / 2)
             val phaseOffset = if (data.triggerModeNative == 0) 0 else history.size / 2
-            val startIndex = ((triggerIndex - phaseOffset) % history.size + history.size) % history.size
-            val stepX = cellWidth / (history.size - 1).coerceAtLeast(1).toFloat()
+            val startIndexRaw = ((triggerIndex - phaseOffset) % history.size + history.size) % history.size
+            val edgeTrim = ((history.size * 0.04f).toInt()).coerceIn(0, ((history.size - 2) / 2).coerceAtLeast(0))
+            val visibleSamples = history.size - (edgeTrim * 2)
+            if (visibleSamples < 2) continue
+            val startIndex = (startIndexRaw + edgeTrim) % history.size
+            val stepX = cellWidth / (visibleSamples - 1).coerceAtLeast(1).toFloat()
 
             var prevSample = history[startIndex].coerceIn(-1f, 1f)
             var prevX = left
             var prevY = centerY - (prevSample * ampScale)
-            for (i in 1 until history.size) {
+            for (i in 1 until visibleSamples) {
                 val sample = history[(startIndex + i) % history.size].coerceIn(-1f, 1f)
                 val x = left + i * stepX
                 val y = centerY - (sample * ampScale)

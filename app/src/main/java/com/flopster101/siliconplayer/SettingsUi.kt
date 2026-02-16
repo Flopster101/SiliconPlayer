@@ -2887,10 +2887,20 @@ internal fun PlayerSettingToggleCard(
     onCheckedChange: (Boolean) -> Unit,
     enabled: Boolean = true
 ) {
+    var localChecked by remember(title) { mutableStateOf(checked) }
+    LaunchedEffect(checked) {
+        localChecked = checked
+    }
+
     androidx.compose.material3.ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
         shape = SettingsCardShape,
-        onClick = { if (enabled) onCheckedChange(!checked) }
+        onClick = {
+            if (!enabled) return@ElevatedCard
+            val toggled = !localChecked
+            localChecked = toggled
+            onCheckedChange(toggled)
+        }
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -2911,8 +2921,12 @@ internal fun PlayerSettingToggleCard(
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange,
+                checked = localChecked,
+                onCheckedChange = { newValue ->
+                    if (!enabled) return@Switch
+                    localChecked = newValue
+                    onCheckedChange(newValue)
+                },
                 enabled = enabled
             )
         }

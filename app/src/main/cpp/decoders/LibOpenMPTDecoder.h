@@ -42,6 +42,9 @@ public:
     int getSampleCount();
     std::string getInstrumentNames();
     std::string getSampleNames();
+    int getModuleChannelCount();
+    std::vector<float> getCurrentChannelVuLevels();
+    std::vector<float> getCurrentChannelScopeSamples(int samplesPerChannel);
     void setOutputSampleRate(int sampleRate) override;
     int getPlaybackCapabilities() const override {
         return PLAYBACK_CAP_SEEK |

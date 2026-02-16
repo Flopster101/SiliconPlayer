@@ -421,6 +421,22 @@ Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptSampleNames(JNIEnv* en
     return env->NewStringUTF(value.c_str());
 }
 
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptChannelVuLevels(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewFloatArray(0);
+    }
+    return toJFloatArray(env, audioEngine->getOpenMptChannelVuLevels());
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptChannelScopeSamples(JNIEnv* env, jobject, jint samplesPerChannel) {
+    if (audioEngine == nullptr) {
+        return env->NewFloatArray(0);
+    }
+    return toJFloatArray(env, audioEngine->getOpenMptChannelScopeSamples(static_cast<int>(samplesPerChannel)));
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getVgmGameName(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) return env->NewStringUTF("");

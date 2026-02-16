@@ -205,25 +205,52 @@ private fun guessMimeTypeFromFilename(fileName: String): String {
 private val selectableVisualizationModes: List<VisualizationMode> = listOf(
     VisualizationMode.Bars,
     VisualizationMode.Oscilloscope,
-    VisualizationMode.VuMeters
+    VisualizationMode.VuMeters,
+    VisualizationMode.OpenMptChannelScope
 )
 
 private fun parseEnabledVisualizationModes(raw: String?): Set<VisualizationMode> {
     if (raw.isNullOrBlank()) return selectableVisualizationModes.toSet()
     val parsed = raw
         .split(',')
-        .mapNotNull { token ->
-            val value = token.trim()
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .mapNotNull { value ->
             selectableVisualizationModes.firstOrNull { it.storageValue == value }
         }
         .toSet()
-    return if (parsed.isEmpty()) selectableVisualizationModes.toSet() else parsed
+    if (parsed.isEmpty()) return selectableVisualizationModes.toSet()
+    return parsed
 }
 
 private fun serializeEnabledVisualizationModes(modes: Set<VisualizationMode>): String {
     return selectableVisualizationModes
         .filter { modes.contains(it) }
         .joinToString(",") { it.storageValue }
+}
+
+private fun isVisualizationModeSupported(
+    mode: VisualizationMode,
+    coreNameForUi: String?
+): Boolean {
+    return when (mode) {
+        VisualizationMode.OpenMptChannelScope ->
+            pluginNameForCoreName(coreNameForUi) == "LibOpenMPT"
+        else -> true
+    }
+}
+
+private fun isVisualizationModeSelectable(
+    mode: VisualizationMode,
+    enabledModes: Set<VisualizationMode>,
+    coreNameForUi: String?
+): Boolean {
+    if (!isVisualizationModeSupported(mode, coreNameForUi)) return false
+    return when (mode) {
+        // Specialized mode is availability-driven for now; per-core toggles can be added later.
+        VisualizationMode.OpenMptChannelScope -> true
+        else -> enabledModes.contains(mode)
+    }
 }
 
 
@@ -251,6 +278,8 @@ enum class SettingsRoute {
     VisualizationBasicBars,
     VisualizationBasicOscilloscope,
     VisualizationBasicVuMeters,
+    VisualizationAdvanced,
+    VisualizationAdvancedOpenMptChannelScope,
     Misc,
     Ui,
     About
@@ -660,6 +689,8 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.VisualizationBasicBars -> 3
     SettingsRoute.VisualizationBasicOscilloscope -> 3
     SettingsRoute.VisualizationBasicVuMeters -> 3
+    SettingsRoute.VisualizationAdvanced -> 2
+    SettingsRoute.VisualizationAdvancedOpenMptChannelScope -> 3
     SettingsRoute.Misc -> 1
     SettingsRoute.Ui -> 1
     SettingsRoute.About -> 1
@@ -742,6 +773,20 @@ private object AppPreferenceKeys {
     const val VISUALIZATION_VU_COLOR_MODE_NO_ARTWORK = "visualization_vu_color_mode_no_artwork"
     const val VISUALIZATION_VU_COLOR_MODE_WITH_ARTWORK = "visualization_vu_color_mode_with_artwork"
     const val VISUALIZATION_VU_CUSTOM_COLOR_ARGB = "visualization_vu_custom_color_argb"
+    const val VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS = "visualization_channel_scope_window_ms"
+    const val VISUALIZATION_CHANNEL_SCOPE_TRIGGER_MODE = "visualization_channel_scope_trigger_mode"
+    const val VISUALIZATION_CHANNEL_SCOPE_FPS_MODE = "visualization_channel_scope_fps_mode"
+    const val VISUALIZATION_CHANNEL_SCOPE_LINE_WIDTH_DP = "visualization_channel_scope_line_width_dp"
+    const val VISUALIZATION_CHANNEL_SCOPE_GRID_WIDTH_DP = "visualization_channel_scope_grid_width_dp"
+    const val VISUALIZATION_CHANNEL_SCOPE_VERTICAL_GRID_ENABLED = "visualization_channel_scope_vertical_grid_enabled"
+    const val VISUALIZATION_CHANNEL_SCOPE_CENTER_LINE_ENABLED = "visualization_channel_scope_center_line_enabled"
+    const val VISUALIZATION_CHANNEL_SCOPE_LAYOUT = "visualization_channel_scope_layout"
+    const val VISUALIZATION_CHANNEL_SCOPE_LINE_COLOR_MODE_NO_ARTWORK = "visualization_channel_scope_line_color_mode_no_artwork"
+    const val VISUALIZATION_CHANNEL_SCOPE_GRID_COLOR_MODE_NO_ARTWORK = "visualization_channel_scope_grid_color_mode_no_artwork"
+    const val VISUALIZATION_CHANNEL_SCOPE_LINE_COLOR_MODE_WITH_ARTWORK = "visualization_channel_scope_line_color_mode_with_artwork"
+    const val VISUALIZATION_CHANNEL_SCOPE_GRID_COLOR_MODE_WITH_ARTWORK = "visualization_channel_scope_grid_color_mode_with_artwork"
+    const val VISUALIZATION_CHANNEL_SCOPE_CUSTOM_LINE_COLOR_ARGB = "visualization_channel_scope_custom_line_color_argb"
+    const val VISUALIZATION_CHANNEL_SCOPE_CUSTOM_GRID_COLOR_ARGB = "visualization_channel_scope_custom_grid_color_argb"
 
     // Plugin management keys
     fun decoderEnabledKey(decoderName: String) = "decoder_${decoderName}_enabled"
@@ -3458,10 +3503,19 @@ private fun AppNavigation(
             Intent(context, PlaybackService::class.java).setAction(PlaybackService.ACTION_STOP_CLEAR)
         )
     }
-    val currentCorePluginName = pluginNameForCoreName(lastUsedCoreName)
+    val currentDecoderName = NativeBridge.getCurrentDecoderName().takeIf { it.isNotBlank() }
+    val activeCoreNameForUi = currentDecoderName ?: lastUsedCoreName
+    val currentCorePluginName = pluginNameForCoreName(activeCoreNameForUi)
     val canOpenCurrentCoreSettings = currentCorePluginName != null
-    val availableVisualizationModes = remember(enabledVisualizationModes, metadataChannelCount) {
-        listOf(VisualizationMode.Off) + selectableVisualizationModes.filter { enabledVisualizationModes.contains(it) }
+    val availableVisualizationModes = remember(enabledVisualizationModes, activeCoreNameForUi) {
+        listOf(VisualizationMode.Off) + selectableVisualizationModes.filter { mode ->
+            isVisualizationModeSelectable(mode, enabledVisualizationModes, activeCoreNameForUi)
+        }
+    }
+    LaunchedEffect(availableVisualizationModes, visualizationMode) {
+        if (!availableVisualizationModes.contains(visualizationMode)) {
+            visualizationMode = VisualizationMode.Off
+        }
     }
     val cycleVisualizationMode: () -> Unit = {
         val modes = availableVisualizationModes
@@ -3478,12 +3532,18 @@ private fun AppNavigation(
         val currentMode = visualizationMode
         val previousModes = availableVisualizationModes
         enabledVisualizationModes = normalized
-        if (currentMode != VisualizationMode.Off && !normalized.contains(currentMode)) {
+        if (
+            currentMode != VisualizationMode.Off &&
+            !isVisualizationModeSelectable(currentMode, normalized, activeCoreNameForUi)
+        ) {
             val currentIndex = previousModes.indexOf(currentMode)
             val fallback = if (currentIndex > 0) {
                 previousModes
                     .subList(0, currentIndex)
-                    .lastOrNull { it == VisualizationMode.Off || normalized.contains(it) }
+                    .lastOrNull {
+                        it == VisualizationMode.Off ||
+                            isVisualizationModeSelectable(it, normalized, activeCoreNameForUi)
+                    }
             } else {
                 null
             } ?: VisualizationMode.Off
@@ -3536,13 +3596,6 @@ private fun AppNavigation(
         currentView = MainView.Settings
         isPlayerExpanded = false
     }
-    val openVisualizationBasicSettings: () -> Unit = {
-        settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
-        settingsLaunchedFromPlayer = true
-        openSettingsRoute(SettingsRoute.VisualizationBasic, true)
-        currentView = MainView.Settings
-        isPlayerExpanded = false
-    }
     val openVisualizationBarsSettings: () -> Unit = {
         settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
         settingsLaunchedFromPlayer = true
@@ -3564,11 +3617,19 @@ private fun AppNavigation(
         currentView = MainView.Settings
         isPlayerExpanded = false
     }
+    val openVisualizationOpenMptChannelScopeSettings: () -> Unit = {
+        settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
+        settingsLaunchedFromPlayer = true
+        openSettingsRoute(SettingsRoute.VisualizationAdvancedOpenMptChannelScope, true)
+        currentView = MainView.Settings
+        isPlayerExpanded = false
+    }
     val openSelectedVisualizationSettings: () -> Unit = {
         when (visualizationMode) {
             VisualizationMode.Bars -> openVisualizationBarsSettings()
             VisualizationMode.Oscilloscope -> openVisualizationOscilloscopeSettings()
             VisualizationMode.VuMeters -> openVisualizationVuMetersSettings()
+            VisualizationMode.OpenMptChannelScope -> openVisualizationOpenMptChannelScopeSettings()
             VisualizationMode.Off -> Unit
         }
     }
@@ -3942,6 +4003,10 @@ private fun AppNavigation(
                         onOpenVisualizationBasicBars = { openSettingsRoute(SettingsRoute.VisualizationBasicBars, false) },
                         onOpenVisualizationBasicOscilloscope = { openSettingsRoute(SettingsRoute.VisualizationBasicOscilloscope, false) },
                         onOpenVisualizationBasicVuMeters = { openSettingsRoute(SettingsRoute.VisualizationBasicVuMeters, false) },
+                        onOpenVisualizationAdvanced = { openSettingsRoute(SettingsRoute.VisualizationAdvanced, false) },
+                        onOpenVisualizationAdvancedOpenMptChannelScope = {
+                            openSettingsRoute(SettingsRoute.VisualizationAdvancedOpenMptChannelScope, false)
+                        },
                         onOpenMisc = { openSettingsRoute(SettingsRoute.Misc, false) },
                         onOpenUrlCache = { openSettingsRoute(SettingsRoute.UrlCache, false) },
                         onOpenCacheManager = {
@@ -4255,6 +4320,51 @@ private fun AppNavigation(
                                 )
                                 .apply()
                         },
+                        onResetVisualizationOpenMptChannelScopeSettings = {
+                            prefs.edit()
+                                .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS, 40)
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TRIGGER_MODE,
+                                    VisualizationOscTriggerMode.Rising.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_FPS_MODE,
+                                    VisualizationOscFpsMode.Default.storageValue
+                                )
+                                .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_LINE_WIDTH_DP, 3)
+                                .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GRID_WIDTH_DP, 2)
+                                .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_VERTICAL_GRID_ENABLED, false)
+                                .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CENTER_LINE_ENABLED, false)
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_LAYOUT,
+                                    VisualizationChannelScopeLayout.ColumnFirst.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_LINE_COLOR_MODE_NO_ARTWORK,
+                                    VisualizationOscColorMode.Monet.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GRID_COLOR_MODE_NO_ARTWORK,
+                                    VisualizationOscColorMode.Monet.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_LINE_COLOR_MODE_WITH_ARTWORK,
+                                    VisualizationOscColorMode.Artwork.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GRID_COLOR_MODE_WITH_ARTWORK,
+                                    VisualizationOscColorMode.Artwork.storageValue
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CUSTOM_LINE_COLOR_ARGB,
+                                    0xFF6BD8FF.toInt()
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CUSTOM_GRID_COLOR_ARGB,
+                                    0x66FFFFFF
+                                )
+                                .apply()
+                        },
                         audioFocusInterrupt = audioFocusInterrupt,
                         onAudioFocusInterruptChanged = {
                             audioFocusInterrupt = it
@@ -4489,6 +4599,49 @@ private fun AppNavigation(
                                 .putInt(
                                     AppPreferenceKeys.VISUALIZATION_VU_CUSTOM_COLOR_ARGB,
                                     0xFF6BD8FF.toInt()
+                                )
+                                .apply()
+                            prefs.edit()
+                                .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS, 40)
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TRIGGER_MODE,
+                                    VisualizationOscTriggerMode.Rising.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_FPS_MODE,
+                                    VisualizationOscFpsMode.Default.storageValue
+                                )
+                                .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_LINE_WIDTH_DP, 3)
+                                .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GRID_WIDTH_DP, 2)
+                                .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_VERTICAL_GRID_ENABLED, false)
+                                .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CENTER_LINE_ENABLED, false)
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_LAYOUT,
+                                    VisualizationChannelScopeLayout.ColumnFirst.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_LINE_COLOR_MODE_NO_ARTWORK,
+                                    VisualizationOscColorMode.Monet.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GRID_COLOR_MODE_NO_ARTWORK,
+                                    VisualizationOscColorMode.Monet.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_LINE_COLOR_MODE_WITH_ARTWORK,
+                                    VisualizationOscColorMode.Artwork.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GRID_COLOR_MODE_WITH_ARTWORK,
+                                    VisualizationOscColorMode.Artwork.storageValue
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CUSTOM_LINE_COLOR_ARGB,
+                                    0xFF6BD8FF.toInt()
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CUSTOM_GRID_COLOR_ARGB,
+                                    0x66FFFFFF
                                 )
                                 .apply()
                             browserLaunchLocationId = null

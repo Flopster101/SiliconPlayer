@@ -3,6 +3,7 @@
 #include <fstream>
 #include <algorithm>
 #include <cctype>
+#include <concepts>
 #include <unordered_set>
 #include <sstream>
 
@@ -11,6 +12,11 @@
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
 namespace {
+template <typename T>
+concept HasOpenMptChannelScopeApi = requires(T moduleRef, int channel, float *scope, int count) {
+    moduleRef.get_current_channel_scope(channel, scope, count);
+};
+
 std::string getFirstNonEmptyMetadata(openmpt::module* module, const std::initializer_list<const char*>& keys) {
     if (!module) {
         return "";
@@ -414,6 +420,68 @@ int LibOpenMPTDecoder::getSampleCount() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (!module) return 0;
     return static_cast<int>(module->get_num_samples());
+}
+
+int LibOpenMPTDecoder::getModuleChannelCount() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (moduleChannels > 0) {
+        return moduleChannels;
+    }
+    if (!module) {
+        return 0;
+    }
+    return static_cast<int>(module->get_num_channels());
+}
+
+std::vector<float> LibOpenMPTDecoder::getCurrentChannelVuLevels() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!module) {
+        return {};
+    }
+    const int totalChannels = std::clamp(
+            moduleChannels > 0 ? moduleChannels : static_cast<int>(module->get_num_channels()),
+            0,
+            64
+    );
+    if (totalChannels <= 0) {
+        return {};
+    }
+    std::vector<float> levels;
+    levels.reserve(static_cast<size_t>(totalChannels));
+    for (int channel = 0; channel < totalChannels; ++channel) {
+        const float vu = module->get_current_channel_vu_mono(channel);
+        levels.push_back(std::clamp(vu, 0.0f, 1.0f));
+    }
+    return levels;
+}
+
+std::vector<float> LibOpenMPTDecoder::getCurrentChannelScopeSamples(int samplesPerChannel) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!module) {
+        return {};
+    }
+    if constexpr (!HasOpenMptChannelScopeApi<openmpt::module>) {
+        return {};
+    }
+    const int clampedSamples = std::clamp(samplesPerChannel, 16, 8192);
+    const int totalChannels = std::clamp(
+            moduleChannels > 0 ? moduleChannels : static_cast<int>(module->get_num_channels()),
+            0,
+            64
+    );
+    if (totalChannels <= 0) {
+        return {};
+    }
+    std::vector<float> flattened;
+    flattened.resize(static_cast<size_t>(totalChannels * clampedSamples), 0.0f);
+    for (int channel = 0; channel < totalChannels; ++channel) {
+        float* destination = flattened.data() + (static_cast<size_t>(channel) * clampedSamples);
+        const int written = static_cast<int>(module->get_current_channel_scope(channel, destination, clampedSamples));
+        if (written < clampedSamples && written > 0) {
+            std::fill(destination + written, destination + clampedSamples, 0.0f);
+        }
+    }
+    return flattened;
 }
 
 std::string LibOpenMPTDecoder::getInstrumentNames() {

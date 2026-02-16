@@ -1516,6 +1516,20 @@ std::string AudioEngine::getOpenMptSampleNames() {
     return openMptDecoder ? openMptDecoder->getSampleNames() : "";
 }
 
+std::vector<float> AudioEngine::getOpenMptChannelVuLevels() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return {};
+    auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
+    return openMptDecoder ? openMptDecoder->getCurrentChannelVuLevels() : std::vector<float>{};
+}
+
+std::vector<float> AudioEngine::getOpenMptChannelScopeSamples(int samplesPerChannel) {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return {};
+    auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
+    return openMptDecoder ? openMptDecoder->getCurrentChannelScopeSamples(samplesPerChannel) : std::vector<float>{};
+}
+
 std::string AudioEngine::getVgmGameName() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";

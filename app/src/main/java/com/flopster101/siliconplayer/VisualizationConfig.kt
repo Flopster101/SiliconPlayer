@@ -7,11 +7,26 @@ enum class VisualizationMode(
     Off("off", "Off"),
     Bars("bars", "Bars"),
     Oscilloscope("oscilloscope", "Oscilloscope"),
-    VuMeters("vu_meters", "VU meters");
+    VuMeters("vu_meters", "VU meters"),
+    OpenMptChannelScope("channel_scope", "Channel scope");
 
     companion object {
         fun fromStorage(value: String?): VisualizationMode {
             return entries.firstOrNull { it.storageValue == value } ?: Off
+        }
+    }
+}
+
+enum class VisualizationChannelScopeLayout(
+    val storageValue: String,
+    val label: String
+) {
+    ColumnFirst("column_first", "Column-first (4ch = 1x4)"),
+    BalancedTwoColumn("balanced_two_column", "Balanced (4ch = 2x2)");
+
+    companion object {
+        fun fromStorage(value: String?): VisualizationChannelScopeLayout {
+            return entries.firstOrNull { it.storageValue == value } ?: ColumnFirst
         }
     }
 }

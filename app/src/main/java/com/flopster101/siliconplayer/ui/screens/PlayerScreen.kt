@@ -86,9 +86,11 @@ import androidx.compose.ui.geometry.Size
 import android.view.MotionEvent
 import com.flopster101.siliconplayer.RepeatMode
 import com.flopster101.siliconplayer.VisualizationMode
+import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
 import com.flopster101.siliconplayer.VisualizationOscColorMode
 import com.flopster101.siliconplayer.VisualizationOscFpsMode
 import com.flopster101.siliconplayer.VisualizationVuAnchor
+import com.flopster101.siliconplayer.pluginNameForCoreName
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
 import java.io.File
 import kotlin.math.roundToInt
@@ -176,6 +178,8 @@ fun PlayerScreen(
     var visVu by remember { mutableStateOf(FloatArray(0)) }
     var visVuSmoothed by remember { mutableStateOf(FloatArray(0)) }
     var visChannelCount by remember { mutableIntStateOf(2) }
+    var visOpenMptChannelScopesFlat by remember { mutableStateOf(FloatArray(0)) }
+    var visOpenMptChannelHistories by remember { mutableStateOf<List<FloatArray>>(emptyList()) }
     val context = LocalContext.current
     val prefs = remember {
         context.getSharedPreferences("silicon_player_settings", Context.MODE_PRIVATE)
@@ -304,6 +308,7 @@ fun PlayerScreen(
     var visualizationVuCustomColorArgb by remember {
         mutableIntStateOf(prefs.getInt(vuCustomColorKey, 0xFF6BD8FF.toInt()))
     }
+    val openMptScopePrefs = rememberOpenMptScopePrefs(prefs)
     DisposableEffect(prefs) {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, key ->
             when (key) {
@@ -445,6 +450,7 @@ fun PlayerScreen(
                     visualizationVuCustomColorArgb =
                         sharedPrefs.getInt(vuCustomColorKey, 0xFF6BD8FF.toInt())
                 }
+
             }
         }
         prefs.registerOnSharedPreferenceChangeListener(listener)
@@ -468,7 +474,11 @@ fun PlayerScreen(
         isPlaying,
         visualizationOscWindowMs,
         visualizationOscTriggerModeNative,
-        visualizationOscFpsMode
+        visualizationOscFpsMode,
+        openMptScopePrefs.windowMs,
+        openMptScopePrefs.triggerModeNative,
+        openMptScopePrefs.fpsMode,
+        sampleRateHz
     ) {
         while (true) {
             if (visualizationMode != VisualizationMode.Off && file != null) {
@@ -485,13 +495,31 @@ fun PlayerScreen(
                 visBars = NativeBridge.getVisualizationBars()
                 visVu = NativeBridge.getVisualizationVuLevels()
                 visChannelCount = NativeBridge.getVisualizationChannelCount().coerceAtLeast(1)
+                if (
+                    visualizationMode == VisualizationMode.OpenMptChannelScope &&
+                    pluginNameForCoreName(decoderName) == "LibOpenMPT"
+                ) {
+                    val scopeSamples = computeOpenMptScopeSampleCount(
+                        windowMs = openMptScopePrefs.windowMs,
+                        sampleRateHz = sampleRateHz
+                    )
+                    visOpenMptChannelScopesFlat = NativeBridge.getOpenMptChannelScopeSamples(scopeSamples)
+                }
             }
             val delayMs = if (!isPlaying) {
                 90L
-            } else if (visualizationMode != VisualizationMode.Oscilloscope) {
+            } else if (
+                visualizationMode != VisualizationMode.Oscilloscope &&
+                visualizationMode != VisualizationMode.OpenMptChannelScope
+            ) {
                 33L
             } else {
-                when (visualizationOscFpsMode) {
+                val fpsMode = if (visualizationMode == VisualizationMode.OpenMptChannelScope) {
+                    openMptScopePrefs.fpsMode
+                } else {
+                    visualizationOscFpsMode
+                }
+                when (fpsMode) {
                     VisualizationOscFpsMode.Default -> 33L
                     VisualizationOscFpsMode.Fps60 -> 16L
                     VisualizationOscFpsMode.NativeRefresh -> {
@@ -503,6 +531,46 @@ fun PlayerScreen(
             delay(delayMs)
         }
     }
+    LaunchedEffect(visOpenMptChannelScopesFlat, visualizationMode, openMptScopePrefs.windowMs, sampleRateHz) {
+        if (visualizationMode != VisualizationMode.OpenMptChannelScope || visOpenMptChannelScopesFlat.isEmpty()) {
+            visOpenMptChannelHistories = emptyList()
+            return@LaunchedEffect
+        }
+        val points = computeOpenMptScopeSampleCount(
+            windowMs = openMptScopePrefs.windowMs,
+            sampleRateHz = sampleRateHz
+        )
+        if (visOpenMptChannelScopesFlat.size < points) {
+            visOpenMptChannelHistories = emptyList()
+            return@LaunchedEffect
+        }
+        val channels = (visOpenMptChannelScopesFlat.size / points).coerceIn(1, 64)
+        val clamped = MutableList(channels) { index ->
+            val start = index * points
+            val end = (start + points).coerceAtMost(visOpenMptChannelScopesFlat.size)
+            if (end - start < points) {
+                FloatArray(points)
+            } else {
+                normalizeOpenMptScopeChannel(visOpenMptChannelScopesFlat, start, points)
+            }
+        }
+        visOpenMptChannelHistories = clamped
+    }
+    val openMptScopeVisualState = OpenMptScopeVisualState(
+        channelHistories = visOpenMptChannelHistories,
+        triggerModeNative = openMptScopePrefs.triggerModeNative,
+        lineWidthDp = openMptScopePrefs.lineWidthDp,
+        gridWidthDp = openMptScopePrefs.gridWidthDp,
+        verticalGridEnabled = openMptScopePrefs.verticalGridEnabled,
+        centerLineEnabled = openMptScopePrefs.centerLineEnabled,
+        layout = openMptScopePrefs.layout,
+        lineColorModeNoArtwork = openMptScopePrefs.lineColorModeNoArtwork,
+        gridColorModeNoArtwork = openMptScopePrefs.gridColorModeNoArtwork,
+        lineColorModeWithArtwork = openMptScopePrefs.lineColorModeWithArtwork,
+        gridColorModeWithArtwork = openMptScopePrefs.gridColorModeWithArtwork,
+        customLineColorArgb = openMptScopePrefs.customLineColorArgb,
+        customGridColorArgb = openMptScopePrefs.customGridColorArgb
+    )
     LaunchedEffect(visBars, visualizationBarSmoothingPercent, visualizationMode) {
         if (visualizationMode != VisualizationMode.Bars) {
             visBarsSmoothed = visBars
@@ -764,6 +832,7 @@ fun PlayerScreen(
                         vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
                         vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
                         vuCustomColorArgb = visualizationVuCustomColorArgb,
+                        openMptScopeState = openMptScopeVisualState,
                         waveformLeft = visWaveLeft,
                         waveformRight = visWaveRight,
                         bars = visBarsSmoothed,
@@ -893,6 +962,7 @@ fun PlayerScreen(
                         vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
                         vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
                         vuCustomColorArgb = visualizationVuCustomColorArgb,
+                        openMptScopeState = openMptScopeVisualState,
                         waveformLeft = visWaveLeft,
                         waveformRight = visWaveRight,
                         bars = visBarsSmoothed,
@@ -1186,6 +1256,150 @@ private fun toDisplayFilename(file: File): String {
     return name
 }
 
+private fun computeOpenMptScopeSampleCount(
+    windowMs: Int,
+    sampleRateHz: Int
+): Int {
+    val clampedWindowMs = windowMs.coerceIn(5, 200)
+    val effectiveSampleRate = sampleRateHz.coerceIn(8_000, 192_000)
+    val requested = ((clampedWindowMs.toFloat() / 1000f) * effectiveSampleRate.toFloat()).roundToInt()
+    // Bound to native ring-buffer budget while still scaling with the UI window setting.
+    return requested.coerceIn(128, 8192)
+}
+
+private fun normalizeOpenMptScopeChannel(
+    flatScopes: FloatArray,
+    start: Int,
+    points: Int
+): FloatArray {
+    val centered = FloatArray(points)
+    var sum = 0f
+    for (i in 0 until points) {
+        val sample = flatScopes[start + i].coerceIn(-1f, 1f)
+        centered[i] = sample
+        sum += sample
+    }
+    val mean = sum / points.toFloat()
+    val fixedGain = 1.8f
+    for (i in 0 until points) {
+        centered[i] = ((centered[i] - mean) * fixedGain).coerceIn(-1f, 1f)
+    }
+    return centered
+}
+
+private data class OpenMptScopePrefs(
+    val windowMs: Int,
+    val triggerModeNative: Int,
+    val fpsMode: VisualizationOscFpsMode,
+    val lineWidthDp: Int,
+    val gridWidthDp: Int,
+    val verticalGridEnabled: Boolean,
+    val centerLineEnabled: Boolean,
+    val layout: VisualizationChannelScopeLayout,
+    val lineColorModeNoArtwork: VisualizationOscColorMode,
+    val gridColorModeNoArtwork: VisualizationOscColorMode,
+    val lineColorModeWithArtwork: VisualizationOscColorMode,
+    val gridColorModeWithArtwork: VisualizationOscColorMode,
+    val customLineColorArgb: Int,
+    val customGridColorArgb: Int
+) {
+    companion object {
+        private const val KEY_WINDOW_MS = "visualization_channel_scope_window_ms"
+        private const val KEY_TRIGGER_MODE = "visualization_channel_scope_trigger_mode"
+        private const val KEY_FPS_MODE = "visualization_channel_scope_fps_mode"
+        private const val KEY_LINE_WIDTH_DP = "visualization_channel_scope_line_width_dp"
+        private const val KEY_GRID_WIDTH_DP = "visualization_channel_scope_grid_width_dp"
+        private const val KEY_VERTICAL_GRID_ENABLED = "visualization_channel_scope_vertical_grid_enabled"
+        private const val KEY_CENTER_LINE_ENABLED = "visualization_channel_scope_center_line_enabled"
+        private const val KEY_LAYOUT = "visualization_channel_scope_layout"
+        private const val KEY_LINE_COLOR_MODE_NO_ARTWORK = "visualization_channel_scope_line_color_mode_no_artwork"
+        private const val KEY_GRID_COLOR_MODE_NO_ARTWORK = "visualization_channel_scope_grid_color_mode_no_artwork"
+        private const val KEY_LINE_COLOR_MODE_WITH_ARTWORK = "visualization_channel_scope_line_color_mode_with_artwork"
+        private const val KEY_GRID_COLOR_MODE_WITH_ARTWORK = "visualization_channel_scope_grid_color_mode_with_artwork"
+        private const val KEY_CUSTOM_LINE_COLOR_ARGB = "visualization_channel_scope_custom_line_color_argb"
+        private const val KEY_CUSTOM_GRID_COLOR_ARGB = "visualization_channel_scope_custom_grid_color_argb"
+
+        fun from(sharedPrefs: android.content.SharedPreferences): OpenMptScopePrefs {
+            val triggerModeNative = when (sharedPrefs.getString(KEY_TRIGGER_MODE, "rising")) {
+                "rising" -> 1
+                "falling" -> 2
+                else -> 0
+            }
+            return OpenMptScopePrefs(
+                windowMs = sharedPrefs.getInt(KEY_WINDOW_MS, 40).coerceIn(5, 200),
+                triggerModeNative = triggerModeNative,
+                fpsMode = VisualizationOscFpsMode.fromStorage(
+                    sharedPrefs.getString(KEY_FPS_MODE, VisualizationOscFpsMode.Default.storageValue)
+                ),
+                lineWidthDp = sharedPrefs.getInt(KEY_LINE_WIDTH_DP, 3).coerceIn(1, 12),
+                gridWidthDp = sharedPrefs.getInt(KEY_GRID_WIDTH_DP, 2).coerceIn(1, 8),
+                verticalGridEnabled = sharedPrefs.getBoolean(KEY_VERTICAL_GRID_ENABLED, false),
+                centerLineEnabled = sharedPrefs.getBoolean(KEY_CENTER_LINE_ENABLED, false),
+                layout = VisualizationChannelScopeLayout.fromStorage(
+                    sharedPrefs.getString(KEY_LAYOUT, VisualizationChannelScopeLayout.ColumnFirst.storageValue)
+                ),
+                lineColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                    sharedPrefs.getString(KEY_LINE_COLOR_MODE_NO_ARTWORK, VisualizationOscColorMode.Monet.storageValue),
+                    VisualizationOscColorMode.Monet
+                ),
+                gridColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                    sharedPrefs.getString(KEY_GRID_COLOR_MODE_NO_ARTWORK, VisualizationOscColorMode.Monet.storageValue),
+                    VisualizationOscColorMode.Monet
+                ),
+                lineColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                    sharedPrefs.getString(KEY_LINE_COLOR_MODE_WITH_ARTWORK, VisualizationOscColorMode.Artwork.storageValue),
+                    VisualizationOscColorMode.Artwork
+                ),
+                gridColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                    sharedPrefs.getString(KEY_GRID_COLOR_MODE_WITH_ARTWORK, VisualizationOscColorMode.Artwork.storageValue),
+                    VisualizationOscColorMode.Artwork
+                ),
+                customLineColorArgb = sharedPrefs.getInt(KEY_CUSTOM_LINE_COLOR_ARGB, 0xFF6BD8FF.toInt()),
+                customGridColorArgb = sharedPrefs.getInt(KEY_CUSTOM_GRID_COLOR_ARGB, 0x66FFFFFF)
+            )
+        }
+
+        fun isOpenMptScopeKey(key: String?): Boolean {
+            return key?.startsWith("visualization_channel_scope_") == true
+        }
+    }
+}
+
+@Composable
+private fun rememberOpenMptScopePrefs(
+    sharedPrefs: android.content.SharedPreferences
+): OpenMptScopePrefs {
+    var state by remember(sharedPrefs) { mutableStateOf(OpenMptScopePrefs.from(sharedPrefs)) }
+    DisposableEffect(sharedPrefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+            if (OpenMptScopePrefs.isOpenMptScopeKey(key)) {
+                state = OpenMptScopePrefs.from(prefs)
+            }
+        }
+        sharedPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            sharedPrefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+    return state
+}
+
+private data class OpenMptScopeVisualState(
+    val channelHistories: List<FloatArray>,
+    val triggerModeNative: Int,
+    val lineWidthDp: Int,
+    val gridWidthDp: Int,
+    val verticalGridEnabled: Boolean,
+    val centerLineEnabled: Boolean,
+    val layout: VisualizationChannelScopeLayout,
+    val lineColorModeNoArtwork: VisualizationOscColorMode,
+    val gridColorModeNoArtwork: VisualizationOscColorMode,
+    val lineColorModeWithArtwork: VisualizationOscColorMode,
+    val gridColorModeWithArtwork: VisualizationOscColorMode,
+    val customLineColorArgb: Int,
+    val customGridColorArgb: Int
+)
+
 @Composable
 private fun AlbumArtPlaceholder(
     artwork: ImageBitmap?,
@@ -1216,6 +1430,7 @@ private fun AlbumArtPlaceholder(
     vuColorModeNoArtwork: VisualizationOscColorMode,
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
+    openMptScopeState: OpenMptScopeVisualState,
     waveformLeft: FloatArray,
     waveformRight: FloatArray,
     bars: FloatArray,
@@ -1341,6 +1556,19 @@ private fun AlbumArtPlaceholder(
                 vuColorModeNoArtwork = vuColorModeNoArtwork,
                 vuColorModeWithArtwork = vuColorModeWithArtwork,
                 vuCustomColorArgb = vuCustomColorArgb,
+                openMptChannelHistories = openMptScopeState.channelHistories,
+                openMptScopeTriggerModeNative = openMptScopeState.triggerModeNative,
+                openMptScopeLineWidthDp = openMptScopeState.lineWidthDp,
+                openMptScopeGridWidthDp = openMptScopeState.gridWidthDp,
+                openMptScopeVerticalGridEnabled = openMptScopeState.verticalGridEnabled,
+                openMptScopeCenterLineEnabled = openMptScopeState.centerLineEnabled,
+                openMptScopeLayout = openMptScopeState.layout,
+                openMptScopeLineColorModeNoArtwork = openMptScopeState.lineColorModeNoArtwork,
+                openMptScopeGridColorModeNoArtwork = openMptScopeState.gridColorModeNoArtwork,
+                openMptScopeLineColorModeWithArtwork = openMptScopeState.lineColorModeWithArtwork,
+                openMptScopeGridColorModeWithArtwork = openMptScopeState.gridColorModeWithArtwork,
+                openMptScopeCustomLineColorArgb = openMptScopeState.customLineColorArgb,
+                openMptScopeCustomGridColorArgb = openMptScopeState.customGridColorArgb,
                 modifier = Modifier.matchParentSize()
             )
             androidx.compose.animation.AnimatedVisibility(
@@ -1366,6 +1594,7 @@ private fun AlbumArtPlaceholder(
                                 VisualizationMode.Bars -> Icons.Default.GraphicEq
                                 VisualizationMode.Oscilloscope -> Icons.Default.MonitorHeart
                                 VisualizationMode.VuMeters -> Icons.Default.Equalizer
+                                VisualizationMode.OpenMptChannelScope -> Icons.Default.MonitorHeart
                             },
                             contentDescription = null,
                             tint = badgeContentColor,

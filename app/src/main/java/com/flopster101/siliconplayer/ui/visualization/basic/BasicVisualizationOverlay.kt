@@ -8,10 +8,12 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
+import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
 import androidx.compose.material3.MaterialTheme
 import com.flopster101.siliconplayer.VisualizationMode
 import com.flopster101.siliconplayer.VisualizationOscColorMode
 import com.flopster101.siliconplayer.VisualizationVuAnchor
+import com.flopster101.siliconplayer.ui.visualization.advanced.ChannelScopeVisualization
 import kotlin.math.max
 import kotlin.math.min
 
@@ -47,6 +49,19 @@ fun BasicVisualizationOverlay(
     vuColorModeNoArtwork: VisualizationOscColorMode,
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
+    openMptChannelHistories: List<FloatArray>,
+    openMptScopeTriggerModeNative: Int,
+    openMptScopeLineWidthDp: Int,
+    openMptScopeGridWidthDp: Int,
+    openMptScopeVerticalGridEnabled: Boolean,
+    openMptScopeCenterLineEnabled: Boolean,
+    openMptScopeLayout: VisualizationChannelScopeLayout,
+    openMptScopeLineColorModeNoArtwork: VisualizationOscColorMode,
+    openMptScopeGridColorModeNoArtwork: VisualizationOscColorMode,
+    openMptScopeLineColorModeWithArtwork: VisualizationOscColorMode,
+    openMptScopeGridColorModeWithArtwork: VisualizationOscColorMode,
+    openMptScopeCustomLineColorArgb: Int,
+    openMptScopeCustomGridColorArgb: Int,
     modifier: Modifier = Modifier
 ) {
     if (mode == VisualizationMode.Off) return
@@ -107,6 +122,24 @@ fun BasicVisualizationOverlay(
     val vuColor = vuAccentColor
     val vuLabelColor = deriveVuLabelColor(vuAccentColor)
     val vuBackgroundColor = deriveVuTrackColor(vuAccentColor)
+    val openMptCustomLineColor = Color(openMptScopeCustomLineColorArgb)
+    val openMptCustomGridColor = Color(openMptScopeCustomGridColorArgb)
+    val openMptLineColor = resolveOscColor(
+        hasArtwork = hasArtwork,
+        noArtworkMode = openMptScopeLineColorModeNoArtwork,
+        withArtworkMode = openMptScopeLineColorModeWithArtwork,
+        artworkColor = artworkBaseColor,
+        monetColor = monetOscLineColor,
+        customColor = openMptCustomLineColor
+    )
+    val openMptGridColor = resolveOscColor(
+        hasArtwork = hasArtwork,
+        noArtworkMode = openMptScopeGridColorModeNoArtwork,
+        withArtworkMode = openMptScopeGridColorModeWithArtwork,
+        artworkColor = artworkGridColor,
+        monetColor = monetOscGridColor,
+        customColor = openMptCustomGridColor
+    )
     val barBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
 
     when (mode) {
@@ -146,6 +179,21 @@ fun BasicVisualizationOverlay(
                 vuColor = vuColor,
                 vuLabelColor = vuLabelColor,
                 vuBackgroundColor = vuBackgroundColor,
+                modifier = modifier
+            )
+        }
+
+        VisualizationMode.OpenMptChannelScope -> {
+            ChannelScopeVisualization(
+                channelHistories = openMptChannelHistories,
+                lineColor = openMptLineColor,
+                gridColor = openMptGridColor,
+                lineWidthPx = openMptScopeLineWidthDp.toFloat(),
+                gridWidthPx = openMptScopeGridWidthDp.toFloat(),
+                showVerticalGrid = openMptScopeVerticalGridEnabled,
+                showCenterLine = openMptScopeCenterLineEnabled,
+                triggerModeNative = openMptScopeTriggerModeNative,
+                layoutStrategy = openMptScopeLayout,
                 modifier = modifier
             )
         }

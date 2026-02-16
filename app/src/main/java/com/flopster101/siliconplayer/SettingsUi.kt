@@ -184,6 +184,15 @@ private fun basicVisualizationSettingsPages(): List<VisualizationSettingsPageIte
     )
 )
 
+private fun advancedVisualizationSettingsPages(): List<VisualizationSettingsPageItem> = listOf(
+    VisualizationSettingsPageItem(
+        route = SettingsRoute.VisualizationAdvancedOpenMptChannelScope,
+        mode = VisualizationMode.OpenMptChannelScope,
+        title = "Channel scope",
+        description = "Per-channel scope-style visualization for supported cores."
+    )
+)
+
 private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.Root -> 0
     SettingsRoute.AudioPlugins -> 1
@@ -202,6 +211,8 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.VisualizationBasicBars -> 3
     SettingsRoute.VisualizationBasicOscilloscope -> 3
     SettingsRoute.VisualizationBasicVuMeters -> 3
+    SettingsRoute.VisualizationAdvanced -> 2
+    SettingsRoute.VisualizationAdvancedOpenMptChannelScope -> 3
     SettingsRoute.Misc -> 1
     SettingsRoute.Ui -> 1
     SettingsRoute.About -> 1
@@ -226,6 +237,8 @@ internal fun SettingsScreen(
     onOpenVisualizationBasicBars: () -> Unit,
     onOpenVisualizationBasicOscilloscope: () -> Unit,
     onOpenVisualizationBasicVuMeters: () -> Unit,
+    onOpenVisualizationAdvanced: () -> Unit,
+    onOpenVisualizationAdvancedOpenMptChannelScope: () -> Unit,
     onOpenMisc: () -> Unit,
     onOpenUrlCache: () -> Unit,
     onOpenCacheManager: () -> Unit,
@@ -325,6 +338,7 @@ internal fun SettingsScreen(
     onResetVisualizationBarsSettings: () -> Unit,
     onResetVisualizationOscilloscopeSettings: () -> Unit,
     onResetVisualizationVuSettings: () -> Unit,
+    onResetVisualizationOpenMptChannelScopeSettings: () -> Unit,
     ffmpegSampleRateHz: Int,
     ffmpegCapabilities: Int,
     onFfmpegSampleRateChanged: (Int) -> Unit,
@@ -417,6 +431,8 @@ internal fun SettingsScreen(
         SettingsRoute.VisualizationBasicBars -> "Bars settings"
         SettingsRoute.VisualizationBasicOscilloscope -> "Oscilloscope settings"
         SettingsRoute.VisualizationBasicVuMeters -> "VU meters settings"
+        SettingsRoute.VisualizationAdvanced -> "Advanced visualizations"
+        SettingsRoute.VisualizationAdvancedOpenMptChannelScope -> "Channel scope settings"
         SettingsRoute.Misc -> "Misc settings"
         SettingsRoute.Ui -> "UI settings"
         SettingsRoute.About -> "About"
@@ -513,7 +529,8 @@ internal fun SettingsScreen(
                             } else if (
                                 route == SettingsRoute.VisualizationBasicBars ||
                                 route == SettingsRoute.VisualizationBasicOscilloscope ||
-                                route == SettingsRoute.VisualizationBasicVuMeters
+                                route == SettingsRoute.VisualizationBasicVuMeters ||
+                                route == SettingsRoute.VisualizationAdvancedOpenMptChannelScope
                             ) {
                                 Surface(
                                     shape = CircleShape,
@@ -528,6 +545,8 @@ internal fun SettingsScreen(
                                                     onResetVisualizationOscilloscopeSettings()
                                                 SettingsRoute.VisualizationBasicVuMeters ->
                                                     onResetVisualizationVuSettings()
+                                                SettingsRoute.VisualizationAdvancedOpenMptChannelScope ->
+                                                    onResetVisualizationOpenMptChannelScopeSettings()
                                                 else -> Unit
                                             }
                                         },
@@ -1562,6 +1581,8 @@ internal fun SettingsScreen(
                         var showModeDialog by remember { mutableStateOf(false) }
                         var showEnabledDialog by remember { mutableStateOf(false) }
                         val basicPages = remember { basicVisualizationSettingsPages() }
+                        val advancedPages = remember { advancedVisualizationSettingsPages() }
+                        val allPages = remember { basicPages + advancedPages }
 
                         SettingsSectionLabel("General")
                         SettingsItemCard(
@@ -1573,7 +1594,7 @@ internal fun SettingsScreen(
                         Spacer(modifier = Modifier.height(10.dp))
                         SettingsItemCard(
                             title = "Enabled visualizations",
-                            description = "${enabledVisualizationModes.size}/${basicPages.size} basic modes enabled",
+                            description = "${enabledVisualizationModes.size}/${allPages.size} modes enabled",
                             icon = Icons.Default.Tune,
                             onClick = { showEnabledDialog = true }
                         )
@@ -1591,9 +1612,23 @@ internal fun SettingsScreen(
                             icon = Icons.Default.GraphicEq,
                             onClick = onOpenVisualizationBasic
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Advanced visualizations")
+                        Text(
+                            text = "These visualizations are core-specific.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Advanced visualization settings",
+                            description = "Configure specialized visualizations per core.",
+                            icon = Icons.Default.Tune,
+                            onClick = onOpenVisualizationAdvanced
+                        )
 
                         if (showModeDialog) {
-                            val availableModes = listOf(VisualizationMode.Off) + basicPages
+                            val availableModes = listOf(VisualizationMode.Off) + allPages
                                 .map { it.mode }
                                 .filter { enabledVisualizationModes.contains(it) }
                             AlertDialog(
@@ -1664,7 +1699,7 @@ internal fun SettingsScreen(
                                             )
                                             val options = when (tier) {
                                                 VisualizationTier.Basic -> basicPages.map { it.mode to it.title }
-                                                VisualizationTier.Advanced -> emptyList()
+                                                VisualizationTier.Advanced -> advancedPages.map { it.mode to it.title }
                                                 VisualizationTier.Specialized -> emptyList()
                                             }
                                             if (options.isEmpty()) {
@@ -1742,6 +1777,33 @@ internal fun SettingsScreen(
                                 }
                             )
                             if (index < basicPages.lastIndex) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
+                        }
+                    }
+                    SettingsRoute.VisualizationAdvanced -> {
+                        val advancedPages = remember { advancedVisualizationSettingsPages() }
+                        SettingsSectionLabel("Advanced visualizations")
+                        Text(
+                            text = "These visualizations are tied to specific decoder cores.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        advancedPages.forEachIndexed { index, page ->
+                            SettingsItemCard(
+                                title = page.title,
+                                description = page.description,
+                                icon = Icons.Default.Tune,
+                                onClick = {
+                                    when (page.route) {
+                                        SettingsRoute.VisualizationAdvancedOpenMptChannelScope ->
+                                            onOpenVisualizationAdvancedOpenMptChannelScope()
+                                        else -> Unit
+                                    }
+                                }
+                            )
+                            if (index < advancedPages.lastIndex) {
                                 Spacer(modifier = Modifier.height(10.dp))
                             }
                         }
@@ -2592,6 +2654,479 @@ internal fun SettingsScreen(
                                     vuCustomColorArgb = argb
                                     prefs.edit().putInt(vuCustomColorKey, argb).apply()
                                     showVuCustomColorDialog = false
+                                }
+                            )
+                        }
+                    }
+                    SettingsRoute.VisualizationAdvancedOpenMptChannelScope -> {
+                        val prefsName = "silicon_player_settings"
+                        val scopeWindowKey = "visualization_channel_scope_window_ms"
+                        val scopeTriggerKey = "visualization_channel_scope_trigger_mode"
+                        val scopeFpsModeKey = "visualization_channel_scope_fps_mode"
+                        val scopeLineWidthKey = "visualization_channel_scope_line_width_dp"
+                        val scopeGridWidthKey = "visualization_channel_scope_grid_width_dp"
+                        val scopeVerticalGridEnabledKey = "visualization_channel_scope_vertical_grid_enabled"
+                        val scopeCenterLineEnabledKey = "visualization_channel_scope_center_line_enabled"
+                        val scopeLayoutKey = "visualization_channel_scope_layout"
+                        val scopeLineNoArtworkColorModeKey = "visualization_channel_scope_line_color_mode_no_artwork"
+                        val scopeGridNoArtworkColorModeKey = "visualization_channel_scope_grid_color_mode_no_artwork"
+                        val scopeLineArtworkColorModeKey = "visualization_channel_scope_line_color_mode_with_artwork"
+                        val scopeGridArtworkColorModeKey = "visualization_channel_scope_grid_color_mode_with_artwork"
+                        val scopeCustomLineColorKey = "visualization_channel_scope_custom_line_color_argb"
+                        val scopeCustomGridColorKey = "visualization_channel_scope_custom_grid_color_argb"
+                        val context = LocalContext.current
+                        val prefs = remember(context) {
+                            context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+                        }
+                        var scopeWindowMs by remember {
+                            mutableIntStateOf(prefs.getInt(scopeWindowKey, 40).coerceIn(5, 200))
+                        }
+                        var scopeTriggerMode by remember {
+                            mutableStateOf(
+                                VisualizationOscTriggerMode.fromStorage(
+                                    prefs.getString(scopeTriggerKey, VisualizationOscTriggerMode.Rising.storageValue)
+                                )
+                            )
+                        }
+                        var scopeFpsMode by remember {
+                            mutableStateOf(
+                                VisualizationOscFpsMode.fromStorage(
+                                    prefs.getString(scopeFpsModeKey, VisualizationOscFpsMode.Default.storageValue)
+                                )
+                            )
+                        }
+                        var scopeLineWidthDp by remember {
+                            mutableIntStateOf(prefs.getInt(scopeLineWidthKey, 3).coerceIn(1, 12))
+                        }
+                        var scopeGridWidthDp by remember {
+                            mutableIntStateOf(prefs.getInt(scopeGridWidthKey, 2).coerceIn(1, 8))
+                        }
+                        var scopeVerticalGridEnabled by remember {
+                            mutableStateOf(prefs.getBoolean(scopeVerticalGridEnabledKey, false))
+                        }
+                        var scopeCenterLineEnabled by remember {
+                            mutableStateOf(prefs.getBoolean(scopeCenterLineEnabledKey, false))
+                        }
+                        var scopeLayout by remember {
+                            mutableStateOf(
+                                VisualizationChannelScopeLayout.fromStorage(
+                                    prefs.getString(scopeLayoutKey, VisualizationChannelScopeLayout.ColumnFirst.storageValue)
+                                )
+                            )
+                        }
+                        var scopeLineColorModeNoArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(scopeLineNoArtworkColorModeKey, VisualizationOscColorMode.Monet.storageValue),
+                                    VisualizationOscColorMode.Monet
+                                )
+                            )
+                        }
+                        var scopeGridColorModeNoArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(scopeGridNoArtworkColorModeKey, VisualizationOscColorMode.Monet.storageValue),
+                                    VisualizationOscColorMode.Monet
+                                )
+                            )
+                        }
+                        var scopeLineColorModeWithArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(scopeLineArtworkColorModeKey, VisualizationOscColorMode.Artwork.storageValue),
+                                    VisualizationOscColorMode.Artwork
+                                )
+                            )
+                        }
+                        var scopeGridColorModeWithArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(scopeGridArtworkColorModeKey, VisualizationOscColorMode.Artwork.storageValue),
+                                    VisualizationOscColorMode.Artwork
+                                )
+                            )
+                        }
+                        var scopeCustomLineColorArgb by remember {
+                            mutableIntStateOf(prefs.getInt(scopeCustomLineColorKey, 0xFF6BD8FF.toInt()))
+                        }
+                        var scopeCustomGridColorArgb by remember {
+                            mutableIntStateOf(prefs.getInt(scopeCustomGridColorKey, 0x66FFFFFF))
+                        }
+
+                        var showWindowDialog by remember { mutableStateOf(false) }
+                        var showTriggerDialog by remember { mutableStateOf(false) }
+                        var showFpsModeDialog by remember { mutableStateOf(false) }
+                        var showLineWidthDialog by remember { mutableStateOf(false) }
+                        var showGridWidthDialog by remember { mutableStateOf(false) }
+                        var showLayoutDialog by remember { mutableStateOf(false) }
+                        var showLineNoArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showGridNoArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showLineArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showGridArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showCustomLineColorDialog by remember { mutableStateOf(false) }
+                        var showCustomGridColorDialog by remember { mutableStateOf(false) }
+
+                        SettingsSectionLabel("Channel scope")
+                        SettingsValuePickerCard(
+                            title = "Visible window",
+                            description = "Time span represented by each channel trace history.",
+                            value = "${scopeWindowMs} ms",
+                            onClick = { showWindowDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Trigger",
+                            description = "Sync mode used to stabilize channel traces.",
+                            value = scopeTriggerMode.label,
+                            onClick = { showTriggerDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Scope frame rate",
+                            description = "Rendering rate for channel-scope updates.",
+                            value = scopeFpsMode.label,
+                            onClick = { showFpsModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Layout strategy",
+                            description = "Grid arrangement strategy for channel scopes.",
+                            value = scopeLayout.label,
+                            onClick = { showLayoutDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Line width",
+                            description = "Stroke width for channel scope lines.",
+                            value = "${scopeLineWidthDp}dp",
+                            onClick = { showLineWidthDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Grid width",
+                            description = "Stroke width for scope grid lines.",
+                            value = "${scopeGridWidthDp}dp",
+                            onClick = { showGridWidthDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Show vertical grid lines",
+                            description = "Display vertical time divisions in each channel scope.",
+                            checked = scopeVerticalGridEnabled,
+                            onCheckedChange = { enabled ->
+                                scopeVerticalGridEnabled = enabled
+                                prefs.edit().putBoolean(scopeVerticalGridEnabledKey, enabled).apply()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Show centerline",
+                            description = "Display center reference line in each channel scope.",
+                            checked = scopeCenterLineEnabled,
+                            onCheckedChange = { enabled ->
+                                scopeCenterLineEnabled = enabled
+                                prefs.edit().putBoolean(scopeCenterLineEnabledKey, enabled).apply()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Colors (no artwork)")
+                        SettingsValuePickerCard(
+                            title = "Line color",
+                            description = "Color source used when no artwork is available.",
+                            value = scopeLineColorModeNoArtwork.label,
+                            onClick = { showLineNoArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Grid color",
+                            description = "Color source used when no artwork is available.",
+                            value = scopeGridColorModeNoArtwork.label,
+                            onClick = { showGridNoArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Colors (with artwork)")
+                        SettingsValuePickerCard(
+                            title = "Line color",
+                            description = "Color source used when artwork is available.",
+                            value = scopeLineColorModeWithArtwork.label,
+                            onClick = { showLineArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Grid color",
+                            description = "Color source used when artwork is available.",
+                            value = scopeGridColorModeWithArtwork.label,
+                            onClick = { showGridArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Custom colors")
+                        SettingsValuePickerCard(
+                            title = "Custom line color",
+                            description = "RGB color used when line color mode is Custom.",
+                            value = String.format(Locale.US, "#%06X", scopeCustomLineColorArgb and 0xFFFFFF),
+                            onClick = { showCustomLineColorDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Custom grid color",
+                            description = "RGB color used when grid color mode is Custom.",
+                            value = String.format(Locale.US, "#%06X", scopeCustomGridColorArgb and 0xFFFFFF),
+                            onClick = { showCustomGridColorDialog = true }
+                        )
+
+                        if (showWindowDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Visible window",
+                                unitLabel = "ms",
+                                range = 5..200,
+                                step = 1,
+                                currentValue = scopeWindowMs,
+                                onDismiss = { showWindowDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(5, 200)
+                                    scopeWindowMs = clamped
+                                    prefs.edit().putInt(scopeWindowKey, clamped).apply()
+                                    showWindowDialog = false
+                                }
+                            )
+                        }
+                        if (showTriggerDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTriggerDialog = false },
+                                title = { Text("Channel scope trigger") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationOscTriggerMode.entries.forEach { mode ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTriggerMode = mode
+                                                        prefs.edit().putString(scopeTriggerKey, mode.storageValue).apply()
+                                                        showTriggerDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = mode == scopeTriggerMode,
+                                                    onClick = {
+                                                        scopeTriggerMode = mode
+                                                        prefs.edit().putString(scopeTriggerKey, mode.storageValue).apply()
+                                                        showTriggerDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(mode.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTriggerDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showFpsModeDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showFpsModeDialog = false },
+                                title = { Text("Scope frame rate") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationOscFpsMode.entries.forEach { mode ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeFpsMode = mode
+                                                        prefs.edit().putString(scopeFpsModeKey, mode.storageValue).apply()
+                                                        showFpsModeDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = mode == scopeFpsMode,
+                                                    onClick = {
+                                                        scopeFpsMode = mode
+                                                        prefs.edit().putString(scopeFpsModeKey, mode.storageValue).apply()
+                                                        showFpsModeDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(mode.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showFpsModeDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showLayoutDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showLayoutDialog = false },
+                                title = { Text("Layout strategy") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationChannelScopeLayout.entries.forEach { layout ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeLayout = layout
+                                                        prefs.edit().putString(scopeLayoutKey, layout.storageValue).apply()
+                                                        showLayoutDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = layout == scopeLayout,
+                                                    onClick = {
+                                                        scopeLayout = layout
+                                                        prefs.edit().putString(scopeLayoutKey, layout.storageValue).apply()
+                                                        showLayoutDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(layout.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showLayoutDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showLineWidthDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Scope line width",
+                                unitLabel = "dp",
+                                range = 1..12,
+                                step = 1,
+                                currentValue = scopeLineWidthDp,
+                                onDismiss = { showLineWidthDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(1, 12)
+                                    scopeLineWidthDp = clamped
+                                    prefs.edit().putInt(scopeLineWidthKey, clamped).apply()
+                                    showLineWidthDialog = false
+                                }
+                            )
+                        }
+                        if (showGridWidthDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Grid line width",
+                                unitLabel = "dp",
+                                range = 1..8,
+                                step = 1,
+                                currentValue = scopeGridWidthDp,
+                                onDismiss = { showGridWidthDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(1, 8)
+                                    scopeGridWidthDp = clamped
+                                    prefs.edit().putInt(scopeGridWidthKey, clamped).apply()
+                                    showGridWidthDialog = false
+                                }
+                            )
+                        }
+                        if (showLineNoArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Line color (no artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = scopeLineColorModeNoArtwork,
+                                onDismiss = { showLineNoArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    scopeLineColorModeNoArtwork = mode
+                                    prefs.edit().putString(scopeLineNoArtworkColorModeKey, mode.storageValue).apply()
+                                    showLineNoArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showGridNoArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Grid color (no artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = scopeGridColorModeNoArtwork,
+                                onDismiss = { showGridNoArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    scopeGridColorModeNoArtwork = mode
+                                    prefs.edit().putString(scopeGridNoArtworkColorModeKey, mode.storageValue).apply()
+                                    showGridNoArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showLineArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Line color (with artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Artwork,
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = scopeLineColorModeWithArtwork,
+                                onDismiss = { showLineArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    scopeLineColorModeWithArtwork = mode
+                                    prefs.edit().putString(scopeLineArtworkColorModeKey, mode.storageValue).apply()
+                                    showLineArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showGridArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Grid color (with artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Artwork,
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = scopeGridColorModeWithArtwork,
+                                onDismiss = { showGridArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    scopeGridColorModeWithArtwork = mode
+                                    prefs.edit().putString(scopeGridArtworkColorModeKey, mode.storageValue).apply()
+                                    showGridArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showCustomLineColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom line color",
+                                initialArgb = scopeCustomLineColorArgb,
+                                onDismiss = { showCustomLineColorDialog = false },
+                                onConfirm = { argb ->
+                                    scopeCustomLineColorArgb = argb
+                                    prefs.edit().putInt(scopeCustomLineColorKey, argb).apply()
+                                    showCustomLineColorDialog = false
+                                }
+                            )
+                        }
+                        if (showCustomGridColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom grid color",
+                                initialArgb = scopeCustomGridColorArgb,
+                                onDismiss = { showCustomGridColorDialog = false },
+                                onConfirm = { argb ->
+                                    scopeCustomGridColorArgb = argb
+                                    prefs.edit().putInt(scopeCustomGridColorKey, argb).apply()
+                                    showCustomGridColorDialog = false
                                 }
                             )
                         }

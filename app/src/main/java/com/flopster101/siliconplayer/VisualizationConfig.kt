@@ -46,3 +46,34 @@ enum class VisualizationOscTriggerMode(
         }
     }
 }
+
+enum class VisualizationOscColorMode(
+    val storageValue: String,
+    val label: String
+) {
+    Artwork("artwork", "From artwork"),
+    Monet("monet", "Monet accent"),
+    White("white", "White"),
+    Custom("custom", "Custom");
+
+    companion object {
+        fun fromStorage(value: String?, fallback: VisualizationOscColorMode): VisualizationOscColorMode {
+            return entries.firstOrNull { it.storageValue == value } ?: fallback
+        }
+    }
+}
+
+enum class VisualizationOscFpsMode(
+    val storageValue: String,
+    val label: String
+) {
+    Default("default", "30 fps (Default)"),
+    Fps60("60fps", "60 fps"),
+    NativeRefresh("native_refresh", "Screen refresh rate");
+
+    companion object {
+        fun fromStorage(value: String?): VisualizationOscFpsMode {
+            return entries.firstOrNull { it.storageValue == value } ?: Default
+        }
+    }
+}

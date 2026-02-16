@@ -722,6 +722,16 @@ private object AppPreferenceKeys {
     const val VISUALIZATION_OSC_STEREO = "visualization_osc_stereo"
     const val VISUALIZATION_OSC_WINDOW_MS = "visualization_osc_window_ms"
     const val VISUALIZATION_OSC_TRIGGER_MODE = "visualization_osc_trigger_mode"
+    const val VISUALIZATION_OSC_FPS_MODE = "visualization_osc_fps_mode"
+    const val VISUALIZATION_OSC_LINE_WIDTH_DP = "visualization_osc_line_width_dp"
+    const val VISUALIZATION_OSC_GRID_WIDTH_DP = "visualization_osc_grid_width_dp"
+    const val VISUALIZATION_OSC_VERTICAL_GRID_ENABLED = "visualization_osc_vertical_grid_enabled"
+    const val VISUALIZATION_OSC_LINE_COLOR_MODE_NO_ARTWORK = "visualization_osc_line_color_mode_no_artwork"
+    const val VISUALIZATION_OSC_GRID_COLOR_MODE_NO_ARTWORK = "visualization_osc_grid_color_mode_no_artwork"
+    const val VISUALIZATION_OSC_LINE_COLOR_MODE_WITH_ARTWORK = "visualization_osc_line_color_mode_with_artwork"
+    const val VISUALIZATION_OSC_GRID_COLOR_MODE_WITH_ARTWORK = "visualization_osc_grid_color_mode_with_artwork"
+    const val VISUALIZATION_OSC_CUSTOM_LINE_COLOR_ARGB = "visualization_osc_custom_line_color_argb"
+    const val VISUALIZATION_OSC_CUSTOM_GRID_COLOR_ARGB = "visualization_osc_custom_grid_color_argb"
     const val VISUALIZATION_VU_ANCHOR = "visualization_vu_anchor"
     const val VISUALIZATION_VU_USE_THEME_COLOR = "visualization_vu_use_theme_color"
     const val VISUALIZATION_VU_SMOOTHING_PERCENT = "visualization_vu_smoothing_percent"
@@ -4175,6 +4185,31 @@ private fun AppNavigation(
                                     AppPreferenceKeys.VISUALIZATION_OSC_TRIGGER_MODE,
                                     VisualizationOscTriggerMode.Rising.storageValue
                                 )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_FPS_MODE,
+                                    VisualizationOscFpsMode.Default.storageValue
+                                )
+                                .putInt(AppPreferenceKeys.VISUALIZATION_OSC_LINE_WIDTH_DP, 3)
+                                .putInt(AppPreferenceKeys.VISUALIZATION_OSC_GRID_WIDTH_DP, 2)
+                                .putBoolean(AppPreferenceKeys.VISUALIZATION_OSC_VERTICAL_GRID_ENABLED, false)
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_LINE_COLOR_MODE_NO_ARTWORK,
+                                    VisualizationOscColorMode.Monet.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_GRID_COLOR_MODE_NO_ARTWORK,
+                                    VisualizationOscColorMode.Monet.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_LINE_COLOR_MODE_WITH_ARTWORK,
+                                    VisualizationOscColorMode.Artwork.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_GRID_COLOR_MODE_WITH_ARTWORK,
+                                    VisualizationOscColorMode.Artwork.storageValue
+                                )
+                                .putInt(AppPreferenceKeys.VISUALIZATION_OSC_CUSTOM_LINE_COLOR_ARGB, 0xFF6BD8FF.toInt())
+                                .putInt(AppPreferenceKeys.VISUALIZATION_OSC_CUSTOM_GRID_COLOR_ARGB, 0x66FFFFFF)
                                 .apply()
                         },
                         onResetVisualizationVuSettings = {
@@ -4360,6 +4395,31 @@ private fun AppNavigation(
                                     AppPreferenceKeys.VISUALIZATION_OSC_TRIGGER_MODE,
                                     VisualizationOscTriggerMode.Rising.storageValue
                                 )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_FPS_MODE,
+                                    VisualizationOscFpsMode.Default.storageValue
+                                )
+                                .putInt(AppPreferenceKeys.VISUALIZATION_OSC_LINE_WIDTH_DP, 3)
+                                .putInt(AppPreferenceKeys.VISUALIZATION_OSC_GRID_WIDTH_DP, 2)
+                                .putBoolean(AppPreferenceKeys.VISUALIZATION_OSC_VERTICAL_GRID_ENABLED, false)
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_LINE_COLOR_MODE_NO_ARTWORK,
+                                    VisualizationOscColorMode.Monet.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_GRID_COLOR_MODE_NO_ARTWORK,
+                                    VisualizationOscColorMode.Monet.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_LINE_COLOR_MODE_WITH_ARTWORK,
+                                    VisualizationOscColorMode.Artwork.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_GRID_COLOR_MODE_WITH_ARTWORK,
+                                    VisualizationOscColorMode.Artwork.storageValue
+                                )
+                                .putInt(AppPreferenceKeys.VISUALIZATION_OSC_CUSTOM_LINE_COLOR_ARGB, 0xFF6BD8FF.toInt())
+                                .putInt(AppPreferenceKeys.VISUALIZATION_OSC_CUSTOM_GRID_COLOR_ARGB, 0x66FFFFFF)
                                 .apply()
                             visualizationVuAnchor = VisualizationVuAnchor.Bottom
                             visualizationVuUseThemeColor = true

@@ -82,6 +82,8 @@ import androidx.compose.ui.geometry.Size
 import android.view.MotionEvent
 import com.flopster101.siliconplayer.RepeatMode
 import com.flopster101.siliconplayer.VisualizationMode
+import com.flopster101.siliconplayer.VisualizationOscColorMode
+import com.flopster101.siliconplayer.VisualizationOscFpsMode
 import com.flopster101.siliconplayer.VisualizationVuAnchor
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
 import java.io.File
@@ -171,6 +173,16 @@ fun PlayerScreen(
     val prefs = remember {
         context.getSharedPreferences("silicon_player_settings", Context.MODE_PRIVATE)
     }
+    val oscLineWidthKey = "visualization_osc_line_width_dp"
+    val oscGridWidthKey = "visualization_osc_grid_width_dp"
+    val oscFpsModeKey = "visualization_osc_fps_mode"
+    val oscVerticalGridEnabledKey = "visualization_osc_vertical_grid_enabled"
+    val oscLineNoArtworkColorModeKey = "visualization_osc_line_color_mode_no_artwork"
+    val oscGridNoArtworkColorModeKey = "visualization_osc_grid_color_mode_no_artwork"
+    val oscLineArtworkColorModeKey = "visualization_osc_line_color_mode_with_artwork"
+    val oscGridArtworkColorModeKey = "visualization_osc_grid_color_mode_with_artwork"
+    val oscCustomLineColorKey = "visualization_osc_custom_line_color_argb"
+    val oscCustomGridColorKey = "visualization_osc_custom_grid_color_argb"
     var visualizationOscWindowMs by remember {
         mutableIntStateOf(prefs.getInt("visualization_osc_window_ms", 40).coerceIn(5, 200))
     }
@@ -182,6 +194,60 @@ fun PlayerScreen(
                 else -> 0
             }
         )
+    }
+    var visualizationOscFpsMode by remember {
+        mutableStateOf(
+            VisualizationOscFpsMode.fromStorage(
+                prefs.getString(oscFpsModeKey, VisualizationOscFpsMode.Default.storageValue)
+            )
+        )
+    }
+    var visualizationOscLineWidthDp by remember {
+        mutableIntStateOf(prefs.getInt(oscLineWidthKey, 3).coerceIn(1, 12))
+    }
+    var visualizationOscGridWidthDp by remember {
+        mutableIntStateOf(prefs.getInt(oscGridWidthKey, 2).coerceIn(1, 8))
+    }
+    var visualizationOscVerticalGridEnabled by remember {
+        mutableStateOf(prefs.getBoolean(oscVerticalGridEnabledKey, false))
+    }
+    var visualizationOscLineColorModeNoArtwork by remember {
+        mutableStateOf(
+            VisualizationOscColorMode.fromStorage(
+                prefs.getString(oscLineNoArtworkColorModeKey, VisualizationOscColorMode.Monet.storageValue),
+                VisualizationOscColorMode.Monet
+            )
+        )
+    }
+    var visualizationOscGridColorModeNoArtwork by remember {
+        mutableStateOf(
+            VisualizationOscColorMode.fromStorage(
+                prefs.getString(oscGridNoArtworkColorModeKey, VisualizationOscColorMode.Monet.storageValue),
+                VisualizationOscColorMode.Monet
+            )
+        )
+    }
+    var visualizationOscLineColorModeWithArtwork by remember {
+        mutableStateOf(
+            VisualizationOscColorMode.fromStorage(
+                prefs.getString(oscLineArtworkColorModeKey, VisualizationOscColorMode.Artwork.storageValue),
+                VisualizationOscColorMode.Artwork
+            )
+        )
+    }
+    var visualizationOscGridColorModeWithArtwork by remember {
+        mutableStateOf(
+            VisualizationOscColorMode.fromStorage(
+                prefs.getString(oscGridArtworkColorModeKey, VisualizationOscColorMode.Artwork.storageValue),
+                VisualizationOscColorMode.Artwork
+            )
+        )
+    }
+    var visualizationOscCustomLineColorArgb by remember {
+        mutableIntStateOf(prefs.getInt(oscCustomLineColorKey, 0xFF6BD8FF.toInt()))
+    }
+    var visualizationOscCustomGridColorArgb by remember {
+        mutableIntStateOf(prefs.getInt(oscCustomGridColorKey, 0x66FFFFFF))
     }
     DisposableEffect(prefs) {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, key ->
@@ -199,6 +265,76 @@ fun PlayerScreen(
                         "falling" -> 2
                         else -> 0
                     }
+                }
+                oscFpsModeKey -> {
+                    visualizationOscFpsMode = VisualizationOscFpsMode.fromStorage(
+                        sharedPrefs.getString(oscFpsModeKey, VisualizationOscFpsMode.Default.storageValue)
+                    )
+                }
+
+                oscLineWidthKey -> {
+                    visualizationOscLineWidthDp =
+                        sharedPrefs.getInt(oscLineWidthKey, 3).coerceIn(1, 12)
+                }
+
+                oscGridWidthKey -> {
+                    visualizationOscGridWidthDp =
+                        sharedPrefs.getInt(oscGridWidthKey, 2).coerceIn(1, 8)
+                }
+
+                oscVerticalGridEnabledKey -> {
+                    visualizationOscVerticalGridEnabled =
+                        sharedPrefs.getBoolean(oscVerticalGridEnabledKey, false)
+                }
+
+                oscLineNoArtworkColorModeKey -> {
+                    visualizationOscLineColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            oscLineNoArtworkColorModeKey,
+                            VisualizationOscColorMode.Monet.storageValue
+                        ),
+                        VisualizationOscColorMode.Monet
+                    )
+                }
+
+                oscGridNoArtworkColorModeKey -> {
+                    visualizationOscGridColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            oscGridNoArtworkColorModeKey,
+                            VisualizationOscColorMode.Monet.storageValue
+                        ),
+                        VisualizationOscColorMode.Monet
+                    )
+                }
+
+                oscLineArtworkColorModeKey -> {
+                    visualizationOscLineColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            oscLineArtworkColorModeKey,
+                            VisualizationOscColorMode.Artwork.storageValue
+                        ),
+                        VisualizationOscColorMode.Artwork
+                    )
+                }
+
+                oscGridArtworkColorModeKey -> {
+                    visualizationOscGridColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            oscGridArtworkColorModeKey,
+                            VisualizationOscColorMode.Artwork.storageValue
+                        ),
+                        VisualizationOscColorMode.Artwork
+                    )
+                }
+
+                oscCustomLineColorKey -> {
+                    visualizationOscCustomLineColorArgb =
+                        sharedPrefs.getInt(oscCustomLineColorKey, 0xFF6BD8FF.toInt())
+                }
+
+                oscCustomGridColorKey -> {
+                    visualizationOscCustomGridColorArgb =
+                        sharedPrefs.getInt(oscCustomGridColorKey, 0x66FFFFFF)
                 }
             }
         }
@@ -222,7 +358,8 @@ fun PlayerScreen(
         file?.absolutePath,
         isPlaying,
         visualizationOscWindowMs,
-        visualizationOscTriggerModeNative
+        visualizationOscTriggerModeNative,
+        visualizationOscFpsMode
     ) {
         while (true) {
             if (visualizationMode != VisualizationMode.Off && file != null) {
@@ -240,7 +377,21 @@ fun PlayerScreen(
                 visVu = NativeBridge.getVisualizationVuLevels()
                 visChannelCount = NativeBridge.getVisualizationChannelCount().coerceAtLeast(1)
             }
-            delay(if (isPlaying) 33L else 90L)
+            val delayMs = if (!isPlaying) {
+                90L
+            } else if (visualizationMode != VisualizationMode.Oscilloscope) {
+                33L
+            } else {
+                when (visualizationOscFpsMode) {
+                    VisualizationOscFpsMode.Default -> 33L
+                    VisualizationOscFpsMode.Fps60 -> 16L
+                    VisualizationOscFpsMode.NativeRefresh -> {
+                        val refreshHz = (context.display?.refreshRate ?: 60f).coerceAtLeast(30f)
+                        (1000f / refreshHz).roundToInt().coerceAtLeast(4).toLong()
+                    }
+                }
+            }
+            delay(delayMs)
         }
     }
     LaunchedEffect(visBars, visualizationBarSmoothingPercent, visualizationMode) {
@@ -475,6 +626,15 @@ fun PlayerScreen(
                         barOverlayArtwork = visualizationBarOverlayArtwork,
                         barUseThemeColor = visualizationBarUseThemeColor,
                         oscStereo = visualizationOscStereo,
+                        oscLineWidthDp = visualizationOscLineWidthDp,
+                        oscGridWidthDp = visualizationOscGridWidthDp,
+                        oscVerticalGridEnabled = visualizationOscVerticalGridEnabled,
+                        oscLineColorModeNoArtwork = visualizationOscLineColorModeNoArtwork,
+                        oscGridColorModeNoArtwork = visualizationOscGridColorModeNoArtwork,
+                        oscLineColorModeWithArtwork = visualizationOscLineColorModeWithArtwork,
+                        oscGridColorModeWithArtwork = visualizationOscGridColorModeWithArtwork,
+                        oscCustomLineColorArgb = visualizationOscCustomLineColorArgb,
+                        oscCustomGridColorArgb = visualizationOscCustomGridColorArgb,
                         vuAnchor = visualizationVuAnchor,
                         vuUseThemeColor = visualizationVuUseThemeColor,
                         waveformLeft = visWaveLeft,
@@ -587,6 +747,15 @@ fun PlayerScreen(
                         barOverlayArtwork = visualizationBarOverlayArtwork,
                         barUseThemeColor = visualizationBarUseThemeColor,
                         oscStereo = visualizationOscStereo,
+                        oscLineWidthDp = visualizationOscLineWidthDp,
+                        oscGridWidthDp = visualizationOscGridWidthDp,
+                        oscVerticalGridEnabled = visualizationOscVerticalGridEnabled,
+                        oscLineColorModeNoArtwork = visualizationOscLineColorModeNoArtwork,
+                        oscGridColorModeNoArtwork = visualizationOscGridColorModeNoArtwork,
+                        oscLineColorModeWithArtwork = visualizationOscLineColorModeWithArtwork,
+                        oscGridColorModeWithArtwork = visualizationOscGridColorModeWithArtwork,
+                        oscCustomLineColorArgb = visualizationOscCustomLineColorArgb,
+                        oscCustomGridColorArgb = visualizationOscCustomGridColorArgb,
                         vuAnchor = visualizationVuAnchor,
                         vuUseThemeColor = visualizationVuUseThemeColor,
                         waveformLeft = visWaveLeft,
@@ -778,6 +947,15 @@ private fun AlbumArtPlaceholder(
     barOverlayArtwork: Boolean,
     barUseThemeColor: Boolean,
     oscStereo: Boolean,
+    oscLineWidthDp: Int,
+    oscGridWidthDp: Int,
+    oscVerticalGridEnabled: Boolean,
+    oscLineColorModeNoArtwork: VisualizationOscColorMode,
+    oscGridColorModeNoArtwork: VisualizationOscColorMode,
+    oscLineColorModeWithArtwork: VisualizationOscColorMode,
+    oscGridColorModeWithArtwork: VisualizationOscColorMode,
+    oscCustomLineColorArgb: Int,
+    oscCustomGridColorArgb: Int,
     vuAnchor: VisualizationVuAnchor,
     vuUseThemeColor: Boolean,
     waveformLeft: FloatArray,
@@ -853,6 +1031,16 @@ private fun AlbumArtPlaceholder(
                 barOverlayArtwork = barOverlayArtwork,
                 barUseThemeColor = barUseThemeColor,
                 oscStereo = oscStereo,
+                artwork = artwork,
+                oscLineWidthDp = oscLineWidthDp,
+                oscGridWidthDp = oscGridWidthDp,
+                oscVerticalGridEnabled = oscVerticalGridEnabled,
+                oscLineColorModeNoArtwork = oscLineColorModeNoArtwork,
+                oscGridColorModeNoArtwork = oscGridColorModeNoArtwork,
+                oscLineColorModeWithArtwork = oscLineColorModeWithArtwork,
+                oscGridColorModeWithArtwork = oscGridColorModeWithArtwork,
+                oscCustomLineColorArgb = oscCustomLineColorArgb,
+                oscCustomGridColorArgb = oscCustomGridColorArgb,
                 vuAnchor = vuAnchor,
                 vuUseThemeColor = vuUseThemeColor,
                 modifier = Modifier.matchParentSize()

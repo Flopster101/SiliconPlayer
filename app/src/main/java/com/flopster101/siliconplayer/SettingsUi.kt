@@ -1834,6 +1834,16 @@ internal fun SettingsScreen(
                         val prefsName = "silicon_player_settings"
                         val oscWindowKey = "visualization_osc_window_ms"
                         val oscTriggerKey = "visualization_osc_trigger_mode"
+                        val oscFpsModeKey = "visualization_osc_fps_mode"
+                        val oscLineWidthKey = "visualization_osc_line_width_dp"
+                        val oscGridWidthKey = "visualization_osc_grid_width_dp"
+                        val oscVerticalGridEnabledKey = "visualization_osc_vertical_grid_enabled"
+                        val oscLineNoArtworkColorModeKey = "visualization_osc_line_color_mode_no_artwork"
+                        val oscGridNoArtworkColorModeKey = "visualization_osc_grid_color_mode_no_artwork"
+                        val oscLineArtworkColorModeKey = "visualization_osc_line_color_mode_with_artwork"
+                        val oscGridArtworkColorModeKey = "visualization_osc_grid_color_mode_with_artwork"
+                        val oscCustomLineColorKey = "visualization_osc_custom_line_color_argb"
+                        val oscCustomGridColorKey = "visualization_osc_custom_grid_color_argb"
                         val context = LocalContext.current
                         val prefs = remember(context) {
                             context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -1853,8 +1863,90 @@ internal fun SettingsScreen(
                                 )
                             )
                         }
+                        var visualizationOscFpsMode by remember {
+                            mutableStateOf(
+                                VisualizationOscFpsMode.fromStorage(
+                                    prefs.getString(
+                                        oscFpsModeKey,
+                                        VisualizationOscFpsMode.Default.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var visualizationOscLineWidthDp by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(oscLineWidthKey, 3).coerceIn(1, 12)
+                            )
+                        }
+                        var visualizationOscGridWidthDp by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(oscGridWidthKey, 2).coerceIn(1, 8)
+                            )
+                        }
+                        var visualizationOscVerticalGridEnabled by remember {
+                            mutableStateOf(prefs.getBoolean(oscVerticalGridEnabledKey, false))
+                        }
+                        var oscLineColorModeNoArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        oscLineNoArtworkColorModeKey,
+                                        VisualizationOscColorMode.Monet.storageValue
+                                    ),
+                                    VisualizationOscColorMode.Monet
+                                )
+                            )
+                        }
+                        var oscGridColorModeNoArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        oscGridNoArtworkColorModeKey,
+                                        VisualizationOscColorMode.Monet.storageValue
+                                    ),
+                                    VisualizationOscColorMode.Monet
+                                )
+                            )
+                        }
+                        var oscLineColorModeWithArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        oscLineArtworkColorModeKey,
+                                        VisualizationOscColorMode.Artwork.storageValue
+                                    ),
+                                    VisualizationOscColorMode.Artwork
+                                )
+                            )
+                        }
+                        var oscGridColorModeWithArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        oscGridArtworkColorModeKey,
+                                        VisualizationOscColorMode.Artwork.storageValue
+                                    ),
+                                    VisualizationOscColorMode.Artwork
+                                )
+                            )
+                        }
+                        var oscCustomLineColorArgb by remember {
+                            mutableIntStateOf(prefs.getInt(oscCustomLineColorKey, 0xFF6BD8FF.toInt()))
+                        }
+                        var oscCustomGridColorArgb by remember {
+                            mutableIntStateOf(prefs.getInt(oscCustomGridColorKey, 0x66FFFFFF))
+                        }
                         var showWindowDialog by remember { mutableStateOf(false) }
                         var showTriggerDialog by remember { mutableStateOf(false) }
+                        var showFpsModeDialog by remember { mutableStateOf(false) }
+                        var showLineWidthDialog by remember { mutableStateOf(false) }
+                        var showGridWidthDialog by remember { mutableStateOf(false) }
+                        var showLineNoArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showGridNoArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showLineArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showGridArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showCustomLineColorDialog by remember { mutableStateOf(false) }
+                        var showCustomGridColorDialog by remember { mutableStateOf(false) }
                         SettingsSectionLabel("Oscilloscope")
                         PlayerSettingToggleCard(
                             title = "Stereo mode",
@@ -1875,6 +1967,82 @@ internal fun SettingsScreen(
                             description = visualizationOscTriggerMode.label,
                             icon = Icons.Default.MoreHoriz,
                             onClick = { showTriggerDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Scope frame rate",
+                            description = visualizationOscFpsMode.label,
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showFpsModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Line width",
+                            description = "${visualizationOscLineWidthDp}dp",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showLineWidthDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Grid width",
+                            description = "${visualizationOscGridWidthDp}dp",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showGridWidthDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Show vertical grid lines",
+                            description = "Display vertical time divisions in the oscilloscope.",
+                            checked = visualizationOscVerticalGridEnabled,
+                            onCheckedChange = { enabled ->
+                                visualizationOscVerticalGridEnabled = enabled
+                                prefs.edit().putBoolean(oscVerticalGridEnabledKey, enabled).apply()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Colors (no artwork)")
+                        SettingsItemCard(
+                            title = "Line color",
+                            description = oscLineColorModeNoArtwork.label,
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showLineNoArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Grid color",
+                            description = oscGridColorModeNoArtwork.label,
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showGridNoArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Colors (with artwork)")
+                        SettingsItemCard(
+                            title = "Line color",
+                            description = oscLineColorModeWithArtwork.label,
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showLineArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Grid color",
+                            description = oscGridColorModeWithArtwork.label,
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showGridArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Custom colors")
+                        SettingsItemCard(
+                            title = "Custom line color",
+                            description = String.format(Locale.US, "#%06X", oscCustomLineColorArgb and 0xFFFFFF),
+                            icon = Icons.Default.Palette,
+                            onClick = { showCustomLineColorDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Custom grid color",
+                            description = String.format(Locale.US, "#%06X", oscCustomGridColorArgb and 0xFFFFFF),
+                            icon = Icons.Default.Palette,
+                            onClick = { showCustomGridColorDialog = true }
                         )
                         if (showWindowDialog) {
                             SteppedIntSliderDialog(
@@ -1942,6 +2110,184 @@ internal fun SettingsScreen(
                                     }
                                 },
                                 confirmButton = {}
+                            )
+                        }
+                        if (showFpsModeDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showFpsModeDialog = false },
+                                title = { Text("Scope frame rate") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationOscFpsMode.entries.forEach { mode ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        visualizationOscFpsMode = mode
+                                                        prefs.edit()
+                                                            .putString(oscFpsModeKey, mode.storageValue)
+                                                            .apply()
+                                                        showFpsModeDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = mode == visualizationOscFpsMode,
+                                                    onClick = {
+                                                        visualizationOscFpsMode = mode
+                                                        prefs.edit()
+                                                            .putString(oscFpsModeKey, mode.storageValue)
+                                                            .apply()
+                                                        showFpsModeDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(mode.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showFpsModeDialog = false }) {
+                                        Text("Close")
+                                    }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showLineWidthDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Scope line width",
+                                unitLabel = "dp",
+                                range = 1..12,
+                                step = 1,
+                                currentValue = visualizationOscLineWidthDp,
+                                onDismiss = { showLineWidthDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(1, 12)
+                                    visualizationOscLineWidthDp = clamped
+                                    prefs.edit().putInt(oscLineWidthKey, clamped).apply()
+                                    showLineWidthDialog = false
+                                }
+                            )
+                        }
+                        if (showGridWidthDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Grid line width",
+                                unitLabel = "dp",
+                                range = 1..8,
+                                step = 1,
+                                currentValue = visualizationOscGridWidthDp,
+                                onDismiss = { showGridWidthDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(1, 8)
+                                    visualizationOscGridWidthDp = clamped
+                                    prefs.edit().putInt(oscGridWidthKey, clamped).apply()
+                                    showGridWidthDialog = false
+                                }
+                            )
+                        }
+                        if (showLineNoArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Line color (no artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = oscLineColorModeNoArtwork,
+                                onDismiss = { showLineNoArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    oscLineColorModeNoArtwork = mode
+                                    prefs.edit()
+                                        .putString(oscLineNoArtworkColorModeKey, mode.storageValue)
+                                        .apply()
+                                    showLineNoArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showGridNoArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Grid color (no artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = oscGridColorModeNoArtwork,
+                                onDismiss = { showGridNoArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    oscGridColorModeNoArtwork = mode
+                                    prefs.edit()
+                                        .putString(oscGridNoArtworkColorModeKey, mode.storageValue)
+                                        .apply()
+                                    showGridNoArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showLineArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Line color (with artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Artwork,
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = oscLineColorModeWithArtwork,
+                                onDismiss = { showLineArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    oscLineColorModeWithArtwork = mode
+                                    prefs.edit()
+                                        .putString(oscLineArtworkColorModeKey, mode.storageValue)
+                                        .apply()
+                                    showLineArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showGridArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Grid color (with artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Artwork,
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = oscGridColorModeWithArtwork,
+                                onDismiss = { showGridArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    oscGridColorModeWithArtwork = mode
+                                    prefs.edit()
+                                        .putString(oscGridArtworkColorModeKey, mode.storageValue)
+                                        .apply()
+                                    showGridArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showCustomLineColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom line color",
+                                initialArgb = oscCustomLineColorArgb,
+                                onDismiss = { showCustomLineColorDialog = false },
+                                onConfirm = { argb ->
+                                    oscCustomLineColorArgb = argb
+                                    prefs.edit().putInt(oscCustomLineColorKey, argb).apply()
+                                    showCustomLineColorDialog = false
+                                }
+                            )
+                        }
+                        if (showCustomGridColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom grid color",
+                                initialArgb = oscCustomGridColorArgb,
+                                onDismiss = { showCustomGridColorDialog = false },
+                                onConfirm = { argb ->
+                                    oscCustomGridColorArgb = argb
+                                    prefs.edit().putInt(oscCustomGridColorKey, argb).apply()
+                                    showCustomGridColorDialog = false
+                                }
                             )
                         }
                     }
@@ -4066,6 +4412,111 @@ private fun SteppedIntSliderDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(value) }) {
+                Text("Save")
+            }
+        }
+    )
+}
+
+@Composable
+private fun VisualizationOscColorModeDialog(
+    title: String,
+    options: List<VisualizationOscColorMode>,
+    selectedMode: VisualizationOscColorMode,
+    onDismiss: () -> Unit,
+    onSelect: (VisualizationOscColorMode) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                options.forEach { mode ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(mode) }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = mode == selectedMode,
+                            onClick = { onSelect(mode) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(mode.label)
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        },
+        confirmButton = {}
+    )
+}
+
+@Composable
+private fun VisualizationRgbColorPickerDialog(
+    title: String,
+    initialArgb: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    var red by remember { mutableIntStateOf((initialArgb shr 16) and 0xFF) }
+    var green by remember { mutableIntStateOf((initialArgb shr 8) and 0xFF) }
+    var blue by remember { mutableIntStateOf(initialArgb and 0xFF) }
+
+    fun asArgbInt(r: Int, g: Int, b: Int): Int {
+        return (0xFF shl 24) or ((r and 0xFF) shl 16) or ((g and 0xFF) shl 8) or (b and 0xFF)
+    }
+
+    val previewColor = Color(asArgbInt(red, green, blue))
+    val hex = String.format(Locale.US, "#%02X%02X%02X", red, green, blue)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(36.dp)
+                        .clip(MaterialTheme.shapes.medium)
+                        .background(previewColor)
+                )
+                Text(text = hex, style = MaterialTheme.typography.titleMedium)
+
+                Text("Red: $red", style = MaterialTheme.typography.bodySmall)
+                Slider(
+                    value = red.toFloat(),
+                    onValueChange = { red = it.roundToInt().coerceIn(0, 255) },
+                    valueRange = 0f..255f
+                )
+                Text("Green: $green", style = MaterialTheme.typography.bodySmall)
+                Slider(
+                    value = green.toFloat(),
+                    onValueChange = { green = it.roundToInt().coerceIn(0, 255) },
+                    valueRange = 0f..255f
+                )
+                Text("Blue: $blue", style = MaterialTheme.typography.bodySmall)
+                Slider(
+                    value = blue.toFloat(),
+                    onValueChange = { blue = it.roundToInt().coerceIn(0, 255) },
+                    valueRange = 0f..255f
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(asArgbInt(red, green, blue)) }) {
                 Text("Save")
             }
         }

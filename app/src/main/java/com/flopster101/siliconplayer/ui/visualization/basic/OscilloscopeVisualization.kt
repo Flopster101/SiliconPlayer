@@ -14,6 +14,10 @@ fun OscilloscopeVisualization(
     channelCount: Int,
     oscStereo: Boolean,
     oscColor: Color,
+    gridColor: Color,
+    lineWidthPx: Float,
+    gridWidthPx: Float,
+    showVerticalGrid: Boolean,
     modifier: Modifier = Modifier
 ) {
     Canvas(modifier = modifier.fillMaxSize()) {
@@ -27,6 +31,50 @@ fun OscilloscopeVisualization(
         val centerRight = if (stereo) size.height * 0.72f else half
         val ampScale = if (stereo) size.height * 0.20f else size.height * 0.34f
         val stepX = size.width / (left.size - 1).coerceAtLeast(1)
+        val scopeLineWidth = lineWidthPx.coerceAtLeast(1f)
+        val scopeGridWidth = gridWidthPx.coerceAtLeast(0.5f)
+
+        // Vertical grid (optional)
+        if (showVerticalGrid) {
+            val verticalDivisions = 8
+            for (i in 0..verticalDivisions) {
+                val x = size.width * (i.toFloat() / verticalDivisions.toFloat())
+                drawLine(
+                    color = gridColor,
+                    start = Offset(x, 0f),
+                    end = Offset(x, size.height),
+                    strokeWidth = scopeGridWidth
+                )
+            }
+        }
+        // Horizontal reference lines
+        if (stereo) {
+            drawLine(
+                color = gridColor,
+                start = Offset(0f, centerLeft),
+                end = Offset(size.width, centerLeft),
+                strokeWidth = scopeGridWidth
+            )
+            drawLine(
+                color = gridColor,
+                start = Offset(0f, centerRight),
+                end = Offset(size.width, centerRight),
+                strokeWidth = scopeGridWidth
+            )
+            drawLine(
+                color = gridColor.copy(alpha = (gridColor.alpha * 0.85f).coerceIn(0f, 1f)),
+                start = Offset(0f, half),
+                end = Offset(size.width, half),
+                strokeWidth = scopeGridWidth
+            )
+        } else {
+            drawLine(
+                color = gridColor,
+                start = Offset(0f, half),
+                end = Offset(size.width, half),
+                strokeWidth = scopeGridWidth
+            )
+        }
 
         for (i in 1 until left.size) {
             val x0 = (i - 1) * stepX
@@ -37,7 +85,7 @@ fun OscilloscopeVisualization(
                 color = oscColor,
                 start = Offset(x0, y0Left),
                 end = Offset(x1, y1Left),
-                strokeWidth = 2f
+                strokeWidth = scopeLineWidth
             )
             if (stereo) {
                 val y0Right = centerRight - (right[i - 1].coerceIn(-1f, 1f) * ampScale)
@@ -46,17 +94,9 @@ fun OscilloscopeVisualization(
                     color = oscColor.copy(alpha = 0.78f),
                     start = Offset(x0, y0Right),
                     end = Offset(x1, y1Right),
-                    strokeWidth = 2f
+                    strokeWidth = scopeLineWidth
                 )
             }
-        }
-        if (stereo) {
-            drawLine(
-                color = oscColor.copy(alpha = 0.18f),
-                start = Offset(0f, half),
-                end = Offset(size.width, half),
-                strokeWidth = 1f
-            )
         }
     }
 }

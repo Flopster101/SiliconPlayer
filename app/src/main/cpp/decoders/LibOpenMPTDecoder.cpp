@@ -15,7 +15,7 @@
 
 namespace {
 template <typename T>
-concept HasOpenMptChannelScopeApi = requires(T moduleRef, int channel, float *scope, int count) {
+concept HasChannelScopeApi = requires(T moduleRef, int channel, float *scope, int count) {
     moduleRef.get_current_channel_scope(channel, scope, count);
 };
 
@@ -466,7 +466,7 @@ std::vector<float> LibOpenMPTDecoder::getCurrentChannelScopeSamples(int samplesP
     if (!module) {
         return {};
     }
-    if constexpr (!HasOpenMptChannelScopeApi<openmpt::module>) {
+    if constexpr (!HasChannelScopeApi<openmpt::module>) {
         return {};
     }
     const int clampedSamples = std::clamp(samplesPerChannel, 16, 8192);

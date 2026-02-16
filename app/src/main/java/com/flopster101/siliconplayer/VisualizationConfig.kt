@@ -8,7 +8,7 @@ enum class VisualizationMode(
     Bars("bars", "Bars"),
     Oscilloscope("oscilloscope", "Oscilloscope"),
     VuMeters("vu_meters", "VU meters"),
-    OpenMptChannelScope("channel_scope", "Channel scope");
+    ChannelScope("channel_scope", "Channel scope");
 
     companion object {
         fun fromStorage(value: String?): VisualizationMode {

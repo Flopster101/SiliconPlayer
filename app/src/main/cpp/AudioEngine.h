@@ -65,7 +65,7 @@ public:
     std::string getOpenMptInstrumentNames();
     std::string getOpenMptSampleNames();
     std::vector<float> getOpenMptChannelVuLevels();
-    std::vector<float> getOpenMptChannelScopeSamples(int samplesPerChannel);
+    std::vector<float> getChannelScopeSamples(int samplesPerChannel);
     std::string getVgmGameName();
     std::string getVgmSystemName();
     std::string getVgmReleaseDate();

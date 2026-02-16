@@ -186,8 +186,8 @@ private fun basicVisualizationSettingsPages(): List<VisualizationSettingsPageIte
 
 private fun advancedVisualizationSettingsPages(): List<VisualizationSettingsPageItem> = listOf(
     VisualizationSettingsPageItem(
-        route = SettingsRoute.VisualizationAdvancedOpenMptChannelScope,
-        mode = VisualizationMode.OpenMptChannelScope,
+        route = SettingsRoute.VisualizationAdvancedChannelScope,
+        mode = VisualizationMode.ChannelScope,
         title = "Channel scope",
         description = "Per-channel scope-style visualization for supported cores."
     )
@@ -212,7 +212,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.VisualizationBasicOscilloscope -> 3
     SettingsRoute.VisualizationBasicVuMeters -> 3
     SettingsRoute.VisualizationAdvanced -> 2
-    SettingsRoute.VisualizationAdvancedOpenMptChannelScope -> 3
+    SettingsRoute.VisualizationAdvancedChannelScope -> 3
     SettingsRoute.Misc -> 1
     SettingsRoute.Ui -> 1
     SettingsRoute.About -> 1
@@ -238,7 +238,7 @@ internal fun SettingsScreen(
     onOpenVisualizationBasicOscilloscope: () -> Unit,
     onOpenVisualizationBasicVuMeters: () -> Unit,
     onOpenVisualizationAdvanced: () -> Unit,
-    onOpenVisualizationAdvancedOpenMptChannelScope: () -> Unit,
+    onOpenVisualizationAdvancedChannelScope: () -> Unit,
     onOpenMisc: () -> Unit,
     onOpenUrlCache: () -> Unit,
     onOpenCacheManager: () -> Unit,
@@ -338,7 +338,7 @@ internal fun SettingsScreen(
     onResetVisualizationBarsSettings: () -> Unit,
     onResetVisualizationOscilloscopeSettings: () -> Unit,
     onResetVisualizationVuSettings: () -> Unit,
-    onResetVisualizationOpenMptChannelScopeSettings: () -> Unit,
+    onResetVisualizationChannelScopeSettings: () -> Unit,
     ffmpegSampleRateHz: Int,
     ffmpegCapabilities: Int,
     onFfmpegSampleRateChanged: (Int) -> Unit,
@@ -432,7 +432,7 @@ internal fun SettingsScreen(
         SettingsRoute.VisualizationBasicOscilloscope -> "Oscilloscope settings"
         SettingsRoute.VisualizationBasicVuMeters -> "VU meters settings"
         SettingsRoute.VisualizationAdvanced -> "Advanced visualizations"
-        SettingsRoute.VisualizationAdvancedOpenMptChannelScope -> "Channel scope settings"
+        SettingsRoute.VisualizationAdvancedChannelScope -> "Channel scope settings"
         SettingsRoute.Misc -> "Misc settings"
         SettingsRoute.Ui -> "UI settings"
         SettingsRoute.About -> "About"
@@ -530,7 +530,7 @@ internal fun SettingsScreen(
                                 route == SettingsRoute.VisualizationBasicBars ||
                                 route == SettingsRoute.VisualizationBasicOscilloscope ||
                                 route == SettingsRoute.VisualizationBasicVuMeters ||
-                                route == SettingsRoute.VisualizationAdvancedOpenMptChannelScope
+                                route == SettingsRoute.VisualizationAdvancedChannelScope
                             ) {
                                 Surface(
                                     shape = CircleShape,
@@ -545,8 +545,8 @@ internal fun SettingsScreen(
                                                     onResetVisualizationOscilloscopeSettings()
                                                 SettingsRoute.VisualizationBasicVuMeters ->
                                                     onResetVisualizationVuSettings()
-                                                SettingsRoute.VisualizationAdvancedOpenMptChannelScope ->
-                                                    onResetVisualizationOpenMptChannelScopeSettings()
+                                                SettingsRoute.VisualizationAdvancedChannelScope ->
+                                                    onResetVisualizationChannelScopeSettings()
                                                 else -> Unit
                                             }
                                         },
@@ -1797,8 +1797,8 @@ internal fun SettingsScreen(
                                 icon = Icons.Default.Tune,
                                 onClick = {
                                     when (page.route) {
-                                        SettingsRoute.VisualizationAdvancedOpenMptChannelScope ->
-                                            onOpenVisualizationAdvancedOpenMptChannelScope()
+                                        SettingsRoute.VisualizationAdvancedChannelScope ->
+                                            onOpenVisualizationAdvancedChannelScope()
                                         else -> Unit
                                     }
                                 }
@@ -2658,7 +2658,7 @@ internal fun SettingsScreen(
                             )
                         }
                     }
-                    SettingsRoute.VisualizationAdvancedOpenMptChannelScope -> {
+                    SettingsRoute.VisualizationAdvancedChannelScope -> {
                         val prefsName = "silicon_player_settings"
                         val scopeWindowKey = "visualization_channel_scope_window_ms"
                         val scopeTriggerKey = "visualization_channel_scope_trigger_mode"

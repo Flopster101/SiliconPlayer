@@ -178,7 +178,7 @@ fun PlayerScreen(
     var visVu by remember { mutableStateOf(FloatArray(0)) }
     var visVuSmoothed by remember { mutableStateOf(FloatArray(0)) }
     var visChannelCount by remember { mutableIntStateOf(2) }
-    var visOpenMptChannelScopesFlat by remember { mutableStateOf(FloatArray(0)) }
+    var visChannelScopesFlat by remember { mutableStateOf(FloatArray(0)) }
     var visOpenMptChannelHistories by remember { mutableStateOf<List<FloatArray>>(emptyList()) }
     var visOpenMptLastChannelCount by remember { mutableIntStateOf(1) }
     val context = LocalContext.current
@@ -309,7 +309,7 @@ fun PlayerScreen(
     var visualizationVuCustomColorArgb by remember {
         mutableIntStateOf(prefs.getInt(vuCustomColorKey, 0xFF6BD8FF.toInt()))
     }
-    val openMptScopePrefs = rememberOpenMptScopePrefs(prefs)
+    val channelScopePrefs = rememberChannelScopePrefs(prefs)
     DisposableEffect(prefs) {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, key ->
             when (key) {
@@ -478,9 +478,9 @@ fun PlayerScreen(
         visVu = FloatArray(2)
         visVuSmoothed = FloatArray(2)
         visChannelCount = 2
-        visOpenMptChannelScopesFlat = FloatArray(0)
-        val points = computeOpenMptScopeSampleCount(
-            windowMs = openMptScopePrefs.windowMs,
+        visChannelScopesFlat = FloatArray(0)
+        val points = computeChannelScopeSampleCount(
+            windowMs = channelScopePrefs.windowMs,
             sampleRateHz = sampleRateHz
         )
         val channels = visOpenMptChannelHistories.size
@@ -495,9 +495,9 @@ fun PlayerScreen(
         visualizationOscWindowMs,
         visualizationOscTriggerModeNative,
         visualizationOscFpsMode,
-        openMptScopePrefs.windowMs,
-        openMptScopePrefs.triggerModeNative,
-        openMptScopePrefs.fpsMode,
+        channelScopePrefs.windowMs,
+        channelScopePrefs.triggerModeNative,
+        channelScopePrefs.fpsMode,
         sampleRateHz
     ) {
         while (true) {
@@ -516,26 +516,26 @@ fun PlayerScreen(
                 visVu = NativeBridge.getVisualizationVuLevels()
                 visChannelCount = NativeBridge.getVisualizationChannelCount().coerceAtLeast(1)
                 if (
-                    visualizationMode == VisualizationMode.OpenMptChannelScope &&
+                    visualizationMode == VisualizationMode.ChannelScope &&
                     pluginNameForCoreName(decoderName) == "LibOpenMPT"
                 ) {
-                    val scopeSamples = computeOpenMptScopeSampleCount(
-                        windowMs = openMptScopePrefs.windowMs,
+                    val scopeSamples = computeChannelScopeSampleCount(
+                        windowMs = channelScopePrefs.windowMs,
                         sampleRateHz = sampleRateHz
                     )
-                    visOpenMptChannelScopesFlat = NativeBridge.getOpenMptChannelScopeSamples(scopeSamples)
+                    visChannelScopesFlat = NativeBridge.getChannelScopeSamples(scopeSamples)
                 }
             }
             val delayMs = if (!isPlaying) {
                 90L
             } else if (
                 visualizationMode != VisualizationMode.Oscilloscope &&
-                visualizationMode != VisualizationMode.OpenMptChannelScope
+                visualizationMode != VisualizationMode.ChannelScope
             ) {
                 33L
             } else {
-                val fpsMode = if (visualizationMode == VisualizationMode.OpenMptChannelScope) {
-                    openMptScopePrefs.fpsMode
+                val fpsMode = if (visualizationMode == VisualizationMode.ChannelScope) {
+                    channelScopePrefs.fpsMode
                 } else {
                     visualizationOscFpsMode
                 }
@@ -552,21 +552,21 @@ fun PlayerScreen(
         }
     }
     LaunchedEffect(
-        visOpenMptChannelScopesFlat,
+        visChannelScopesFlat,
         visualizationMode,
-        openMptScopePrefs.windowMs,
+        channelScopePrefs.windowMs,
         sampleRateHz,
         isPlaying
     ) {
-        if (visualizationMode != VisualizationMode.OpenMptChannelScope) {
+        if (visualizationMode != VisualizationMode.ChannelScope) {
             visOpenMptChannelHistories = emptyList()
             return@LaunchedEffect
         }
-        val points = computeOpenMptScopeSampleCount(
-            windowMs = openMptScopePrefs.windowMs,
+        val points = computeChannelScopeSampleCount(
+            windowMs = channelScopePrefs.windowMs,
             sampleRateHz = sampleRateHz
         )
-        if (visOpenMptChannelScopesFlat.isEmpty()) {
+        if (visChannelScopesFlat.isEmpty()) {
             if (!isPlaying) {
                 val channels = visOpenMptChannelHistories.size
                     .takeIf { it > 0 }
@@ -577,7 +577,7 @@ fun PlayerScreen(
             visOpenMptChannelHistories = emptyList()
             return@LaunchedEffect
         }
-        if (visOpenMptChannelScopesFlat.size < points) {
+        if (visChannelScopesFlat.size < points) {
             if (!isPlaying) {
                 val channels = visOpenMptChannelHistories.size
                     .takeIf { it > 0 }
@@ -588,33 +588,33 @@ fun PlayerScreen(
             visOpenMptChannelHistories = emptyList()
             return@LaunchedEffect
         }
-        val channels = (visOpenMptChannelScopesFlat.size / points).coerceIn(1, 64)
+        val channels = (visChannelScopesFlat.size / points).coerceIn(1, 64)
         visOpenMptLastChannelCount = channels
         val clamped = MutableList(channels) { index ->
             val start = index * points
-            val end = (start + points).coerceAtMost(visOpenMptChannelScopesFlat.size)
+            val end = (start + points).coerceAtMost(visChannelScopesFlat.size)
             if (end - start < points) {
                 FloatArray(points)
             } else {
-                normalizeOpenMptScopeChannel(visOpenMptChannelScopesFlat, start, points)
+                normalizeChannelScopeChannel(visChannelScopesFlat, start, points)
             }
         }
         visOpenMptChannelHistories = clamped
     }
-    val openMptScopeVisualState = OpenMptScopeVisualState(
+    val channelScopeVisualState = ChannelScopeVisualState(
         channelHistories = visOpenMptChannelHistories,
-        triggerModeNative = openMptScopePrefs.triggerModeNative,
-        lineWidthDp = openMptScopePrefs.lineWidthDp,
-        gridWidthDp = openMptScopePrefs.gridWidthDp,
-        verticalGridEnabled = openMptScopePrefs.verticalGridEnabled,
-        centerLineEnabled = openMptScopePrefs.centerLineEnabled,
-        layout = openMptScopePrefs.layout,
-        lineColorModeNoArtwork = openMptScopePrefs.lineColorModeNoArtwork,
-        gridColorModeNoArtwork = openMptScopePrefs.gridColorModeNoArtwork,
-        lineColorModeWithArtwork = openMptScopePrefs.lineColorModeWithArtwork,
-        gridColorModeWithArtwork = openMptScopePrefs.gridColorModeWithArtwork,
-        customLineColorArgb = openMptScopePrefs.customLineColorArgb,
-        customGridColorArgb = openMptScopePrefs.customGridColorArgb
+        triggerModeNative = channelScopePrefs.triggerModeNative,
+        lineWidthDp = channelScopePrefs.lineWidthDp,
+        gridWidthDp = channelScopePrefs.gridWidthDp,
+        verticalGridEnabled = channelScopePrefs.verticalGridEnabled,
+        centerLineEnabled = channelScopePrefs.centerLineEnabled,
+        layout = channelScopePrefs.layout,
+        lineColorModeNoArtwork = channelScopePrefs.lineColorModeNoArtwork,
+        gridColorModeNoArtwork = channelScopePrefs.gridColorModeNoArtwork,
+        lineColorModeWithArtwork = channelScopePrefs.lineColorModeWithArtwork,
+        gridColorModeWithArtwork = channelScopePrefs.gridColorModeWithArtwork,
+        customLineColorArgb = channelScopePrefs.customLineColorArgb,
+        customGridColorArgb = channelScopePrefs.customGridColorArgb
     )
     LaunchedEffect(visBars, visualizationBarSmoothingPercent, visualizationMode) {
         if (visualizationMode != VisualizationMode.Bars) {
@@ -877,7 +877,7 @@ fun PlayerScreen(
                         vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
                         vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
                         vuCustomColorArgb = visualizationVuCustomColorArgb,
-                        openMptScopeState = openMptScopeVisualState,
+                        channelScopeState = channelScopeVisualState,
                         waveformLeft = visWaveLeft,
                         waveformRight = visWaveRight,
                         bars = visBarsSmoothed,
@@ -1007,7 +1007,7 @@ fun PlayerScreen(
                         vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
                         vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
                         vuCustomColorArgb = visualizationVuCustomColorArgb,
-                        openMptScopeState = openMptScopeVisualState,
+                        channelScopeState = channelScopeVisualState,
                         waveformLeft = visWaveLeft,
                         waveformRight = visWaveRight,
                         bars = visBarsSmoothed,
@@ -1301,7 +1301,7 @@ private fun toDisplayFilename(file: File): String {
     return name
 }
 
-private fun computeOpenMptScopeSampleCount(
+private fun computeChannelScopeSampleCount(
     windowMs: Int,
     sampleRateHz: Int
 ): Int {
@@ -1312,7 +1312,7 @@ private fun computeOpenMptScopeSampleCount(
     return requested.coerceIn(128, 8192)
 }
 
-private fun normalizeOpenMptScopeChannel(
+private fun normalizeChannelScopeChannel(
     flatScopes: FloatArray,
     start: Int,
     points: Int
@@ -1332,7 +1332,7 @@ private fun normalizeOpenMptScopeChannel(
     return centered
 }
 
-private data class OpenMptScopePrefs(
+private data class ChannelScopePrefs(
     val windowMs: Int,
     val triggerModeNative: Int,
     val fpsMode: VisualizationOscFpsMode,
@@ -1364,13 +1364,13 @@ private data class OpenMptScopePrefs(
         private const val KEY_CUSTOM_LINE_COLOR_ARGB = "visualization_channel_scope_custom_line_color_argb"
         private const val KEY_CUSTOM_GRID_COLOR_ARGB = "visualization_channel_scope_custom_grid_color_argb"
 
-        fun from(sharedPrefs: android.content.SharedPreferences): OpenMptScopePrefs {
+        fun from(sharedPrefs: android.content.SharedPreferences): ChannelScopePrefs {
             val triggerModeNative = when (sharedPrefs.getString(KEY_TRIGGER_MODE, "rising")) {
                 "rising" -> 1
                 "falling" -> 2
                 else -> 0
             }
-            return OpenMptScopePrefs(
+            return ChannelScopePrefs(
                 windowMs = sharedPrefs.getInt(KEY_WINDOW_MS, 40).coerceIn(5, 200),
                 triggerModeNative = triggerModeNative,
                 fpsMode = VisualizationOscFpsMode.fromStorage(
@@ -1404,21 +1404,21 @@ private data class OpenMptScopePrefs(
             )
         }
 
-        fun isOpenMptScopeKey(key: String?): Boolean {
+        fun isChannelScopeKey(key: String?): Boolean {
             return key?.startsWith("visualization_channel_scope_") == true
         }
     }
 }
 
 @Composable
-private fun rememberOpenMptScopePrefs(
+private fun rememberChannelScopePrefs(
     sharedPrefs: android.content.SharedPreferences
-): OpenMptScopePrefs {
-    var state by remember(sharedPrefs) { mutableStateOf(OpenMptScopePrefs.from(sharedPrefs)) }
+): ChannelScopePrefs {
+    var state by remember(sharedPrefs) { mutableStateOf(ChannelScopePrefs.from(sharedPrefs)) }
     DisposableEffect(sharedPrefs) {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
-            if (OpenMptScopePrefs.isOpenMptScopeKey(key)) {
-                state = OpenMptScopePrefs.from(prefs)
+            if (ChannelScopePrefs.isChannelScopeKey(key)) {
+                state = ChannelScopePrefs.from(prefs)
             }
         }
         sharedPrefs.registerOnSharedPreferenceChangeListener(listener)
@@ -1429,7 +1429,7 @@ private fun rememberOpenMptScopePrefs(
     return state
 }
 
-private data class OpenMptScopeVisualState(
+private data class ChannelScopeVisualState(
     val channelHistories: List<FloatArray>,
     val triggerModeNative: Int,
     val lineWidthDp: Int,
@@ -1475,7 +1475,7 @@ private fun AlbumArtPlaceholder(
     vuColorModeNoArtwork: VisualizationOscColorMode,
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
-    openMptScopeState: OpenMptScopeVisualState,
+    channelScopeState: ChannelScopeVisualState,
     waveformLeft: FloatArray,
     waveformRight: FloatArray,
     bars: FloatArray,
@@ -1601,19 +1601,19 @@ private fun AlbumArtPlaceholder(
                 vuColorModeNoArtwork = vuColorModeNoArtwork,
                 vuColorModeWithArtwork = vuColorModeWithArtwork,
                 vuCustomColorArgb = vuCustomColorArgb,
-                openMptChannelHistories = openMptScopeState.channelHistories,
-                openMptScopeTriggerModeNative = openMptScopeState.triggerModeNative,
-                openMptScopeLineWidthDp = openMptScopeState.lineWidthDp,
-                openMptScopeGridWidthDp = openMptScopeState.gridWidthDp,
-                openMptScopeVerticalGridEnabled = openMptScopeState.verticalGridEnabled,
-                openMptScopeCenterLineEnabled = openMptScopeState.centerLineEnabled,
-                openMptScopeLayout = openMptScopeState.layout,
-                openMptScopeLineColorModeNoArtwork = openMptScopeState.lineColorModeNoArtwork,
-                openMptScopeGridColorModeNoArtwork = openMptScopeState.gridColorModeNoArtwork,
-                openMptScopeLineColorModeWithArtwork = openMptScopeState.lineColorModeWithArtwork,
-                openMptScopeGridColorModeWithArtwork = openMptScopeState.gridColorModeWithArtwork,
-                openMptScopeCustomLineColorArgb = openMptScopeState.customLineColorArgb,
-                openMptScopeCustomGridColorArgb = openMptScopeState.customGridColorArgb,
+                openMptChannelHistories = channelScopeState.channelHistories,
+                channelScopeTriggerModeNative = channelScopeState.triggerModeNative,
+                channelScopeLineWidthDp = channelScopeState.lineWidthDp,
+                channelScopeGridWidthDp = channelScopeState.gridWidthDp,
+                channelScopeVerticalGridEnabled = channelScopeState.verticalGridEnabled,
+                channelScopeCenterLineEnabled = channelScopeState.centerLineEnabled,
+                channelScopeLayout = channelScopeState.layout,
+                channelScopeLineColorModeNoArtwork = channelScopeState.lineColorModeNoArtwork,
+                channelScopeGridColorModeNoArtwork = channelScopeState.gridColorModeNoArtwork,
+                channelScopeLineColorModeWithArtwork = channelScopeState.lineColorModeWithArtwork,
+                channelScopeGridColorModeWithArtwork = channelScopeState.gridColorModeWithArtwork,
+                channelScopeCustomLineColorArgb = channelScopeState.customLineColorArgb,
+                channelScopeCustomGridColorArgb = channelScopeState.customGridColorArgb,
                 modifier = Modifier.matchParentSize()
             )
             androidx.compose.animation.AnimatedVisibility(
@@ -1639,7 +1639,7 @@ private fun AlbumArtPlaceholder(
                                 VisualizationMode.Bars -> Icons.Default.GraphicEq
                                 VisualizationMode.Oscilloscope -> Icons.Default.MonitorHeart
                                 VisualizationMode.VuMeters -> Icons.Default.Equalizer
-                                VisualizationMode.OpenMptChannelScope -> Icons.Default.MonitorHeart
+                                VisualizationMode.ChannelScope -> Icons.Default.MonitorHeart
                             },
                             contentDescription = null,
                             tint = badgeContentColor,

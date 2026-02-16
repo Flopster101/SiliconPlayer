@@ -206,7 +206,7 @@ private val selectableVisualizationModes: List<VisualizationMode> = listOf(
     VisualizationMode.Bars,
     VisualizationMode.Oscilloscope,
     VisualizationMode.VuMeters,
-    VisualizationMode.OpenMptChannelScope
+    VisualizationMode.ChannelScope
 )
 
 private fun parseEnabledVisualizationModes(raw: String?): Set<VisualizationMode> {
@@ -234,7 +234,7 @@ private fun isVisualizationModeSupported(
     coreNameForUi: String?
 ): Boolean {
     return when (mode) {
-        VisualizationMode.OpenMptChannelScope ->
+        VisualizationMode.ChannelScope ->
             pluginNameForCoreName(coreNameForUi) == "LibOpenMPT"
         else -> true
     }
@@ -248,7 +248,7 @@ private fun isVisualizationModeSelectable(
     if (!isVisualizationModeSupported(mode, coreNameForUi)) return false
     return when (mode) {
         // Specialized mode is availability-driven for now; per-core toggles can be added later.
-        VisualizationMode.OpenMptChannelScope -> true
+        VisualizationMode.ChannelScope -> true
         else -> enabledModes.contains(mode)
     }
 }
@@ -279,7 +279,7 @@ enum class SettingsRoute {
     VisualizationBasicOscilloscope,
     VisualizationBasicVuMeters,
     VisualizationAdvanced,
-    VisualizationAdvancedOpenMptChannelScope,
+    VisualizationAdvancedChannelScope,
     Misc,
     Ui,
     About
@@ -690,7 +690,7 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.VisualizationBasicOscilloscope -> 3
     SettingsRoute.VisualizationBasicVuMeters -> 3
     SettingsRoute.VisualizationAdvanced -> 2
-    SettingsRoute.VisualizationAdvancedOpenMptChannelScope -> 3
+    SettingsRoute.VisualizationAdvancedChannelScope -> 3
     SettingsRoute.Misc -> 1
     SettingsRoute.Ui -> 1
     SettingsRoute.About -> 1
@@ -3617,10 +3617,10 @@ private fun AppNavigation(
         currentView = MainView.Settings
         isPlayerExpanded = false
     }
-    val openVisualizationOpenMptChannelScopeSettings: () -> Unit = {
+    val openVisualizationChannelScopeSettings: () -> Unit = {
         settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
         settingsLaunchedFromPlayer = true
-        openSettingsRoute(SettingsRoute.VisualizationAdvancedOpenMptChannelScope, true)
+        openSettingsRoute(SettingsRoute.VisualizationAdvancedChannelScope, true)
         currentView = MainView.Settings
         isPlayerExpanded = false
     }
@@ -3629,7 +3629,7 @@ private fun AppNavigation(
             VisualizationMode.Bars -> openVisualizationBarsSettings()
             VisualizationMode.Oscilloscope -> openVisualizationOscilloscopeSettings()
             VisualizationMode.VuMeters -> openVisualizationVuMetersSettings()
-            VisualizationMode.OpenMptChannelScope -> openVisualizationOpenMptChannelScopeSettings()
+            VisualizationMode.ChannelScope -> openVisualizationChannelScopeSettings()
             VisualizationMode.Off -> Unit
         }
     }
@@ -4004,8 +4004,8 @@ private fun AppNavigation(
                         onOpenVisualizationBasicOscilloscope = { openSettingsRoute(SettingsRoute.VisualizationBasicOscilloscope, false) },
                         onOpenVisualizationBasicVuMeters = { openSettingsRoute(SettingsRoute.VisualizationBasicVuMeters, false) },
                         onOpenVisualizationAdvanced = { openSettingsRoute(SettingsRoute.VisualizationAdvanced, false) },
-                        onOpenVisualizationAdvancedOpenMptChannelScope = {
-                            openSettingsRoute(SettingsRoute.VisualizationAdvancedOpenMptChannelScope, false)
+                        onOpenVisualizationAdvancedChannelScope = {
+                            openSettingsRoute(SettingsRoute.VisualizationAdvancedChannelScope, false)
                         },
                         onOpenMisc = { openSettingsRoute(SettingsRoute.Misc, false) },
                         onOpenUrlCache = { openSettingsRoute(SettingsRoute.UrlCache, false) },
@@ -4320,7 +4320,7 @@ private fun AppNavigation(
                                 )
                                 .apply()
                         },
-                        onResetVisualizationOpenMptChannelScopeSettings = {
+                        onResetVisualizationChannelScopeSettings = {
                             prefs.edit()
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS, 40)
                                 .putString(

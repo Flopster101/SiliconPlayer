@@ -430,11 +430,11 @@ Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptChannelVuLevels(JNIEnv
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptChannelScopeSamples(JNIEnv* env, jobject, jint samplesPerChannel) {
+Java_com_flopster101_siliconplayer_NativeBridge_getChannelScopeSamples(JNIEnv* env, jobject, jint samplesPerChannel) {
     if (audioEngine == nullptr) {
         return env->NewFloatArray(0);
     }
-    return toJFloatArray(env, audioEngine->getOpenMptChannelScopeSamples(static_cast<int>(samplesPerChannel)));
+    return toJFloatArray(env, audioEngine->getChannelScopeSamples(static_cast<int>(samplesPerChannel)));
 }
 
 extern "C" JNIEXPORT jstring JNICALL

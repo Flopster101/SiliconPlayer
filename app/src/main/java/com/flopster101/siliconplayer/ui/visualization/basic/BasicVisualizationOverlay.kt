@@ -50,18 +50,18 @@ fun BasicVisualizationOverlay(
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
     openMptChannelHistories: List<FloatArray>,
-    openMptScopeTriggerModeNative: Int,
-    openMptScopeLineWidthDp: Int,
-    openMptScopeGridWidthDp: Int,
-    openMptScopeVerticalGridEnabled: Boolean,
-    openMptScopeCenterLineEnabled: Boolean,
-    openMptScopeLayout: VisualizationChannelScopeLayout,
-    openMptScopeLineColorModeNoArtwork: VisualizationOscColorMode,
-    openMptScopeGridColorModeNoArtwork: VisualizationOscColorMode,
-    openMptScopeLineColorModeWithArtwork: VisualizationOscColorMode,
-    openMptScopeGridColorModeWithArtwork: VisualizationOscColorMode,
-    openMptScopeCustomLineColorArgb: Int,
-    openMptScopeCustomGridColorArgb: Int,
+    channelScopeTriggerModeNative: Int,
+    channelScopeLineWidthDp: Int,
+    channelScopeGridWidthDp: Int,
+    channelScopeVerticalGridEnabled: Boolean,
+    channelScopeCenterLineEnabled: Boolean,
+    channelScopeLayout: VisualizationChannelScopeLayout,
+    channelScopeLineColorModeNoArtwork: VisualizationOscColorMode,
+    channelScopeGridColorModeNoArtwork: VisualizationOscColorMode,
+    channelScopeLineColorModeWithArtwork: VisualizationOscColorMode,
+    channelScopeGridColorModeWithArtwork: VisualizationOscColorMode,
+    channelScopeCustomLineColorArgb: Int,
+    channelScopeCustomGridColorArgb: Int,
     modifier: Modifier = Modifier
 ) {
     if (mode == VisualizationMode.Off) return
@@ -122,20 +122,20 @@ fun BasicVisualizationOverlay(
     val vuColor = vuAccentColor
     val vuLabelColor = deriveVuLabelColor(vuAccentColor)
     val vuBackgroundColor = deriveVuTrackColor(vuAccentColor)
-    val openMptCustomLineColor = Color(openMptScopeCustomLineColorArgb)
-    val openMptCustomGridColor = Color(openMptScopeCustomGridColorArgb)
+    val openMptCustomLineColor = Color(channelScopeCustomLineColorArgb)
+    val openMptCustomGridColor = Color(channelScopeCustomGridColorArgb)
     val openMptLineColor = resolveOscColor(
         hasArtwork = hasArtwork,
-        noArtworkMode = openMptScopeLineColorModeNoArtwork,
-        withArtworkMode = openMptScopeLineColorModeWithArtwork,
+        noArtworkMode = channelScopeLineColorModeNoArtwork,
+        withArtworkMode = channelScopeLineColorModeWithArtwork,
         artworkColor = artworkBaseColor,
         monetColor = monetOscLineColor,
         customColor = openMptCustomLineColor
     )
     val openMptGridColor = resolveOscColor(
         hasArtwork = hasArtwork,
-        noArtworkMode = openMptScopeGridColorModeNoArtwork,
-        withArtworkMode = openMptScopeGridColorModeWithArtwork,
+        noArtworkMode = channelScopeGridColorModeNoArtwork,
+        withArtworkMode = channelScopeGridColorModeWithArtwork,
         artworkColor = artworkGridColor,
         monetColor = monetOscGridColor,
         customColor = openMptCustomGridColor
@@ -183,17 +183,17 @@ fun BasicVisualizationOverlay(
             )
         }
 
-        VisualizationMode.OpenMptChannelScope -> {
+        VisualizationMode.ChannelScope -> {
             ChannelScopeVisualization(
                 channelHistories = openMptChannelHistories,
                 lineColor = openMptLineColor,
                 gridColor = openMptGridColor,
-                lineWidthPx = openMptScopeLineWidthDp.toFloat(),
-                gridWidthPx = openMptScopeGridWidthDp.toFloat(),
-                showVerticalGrid = openMptScopeVerticalGridEnabled,
-                showCenterLine = openMptScopeCenterLineEnabled,
-                triggerModeNative = openMptScopeTriggerModeNative,
-                layoutStrategy = openMptScopeLayout,
+                lineWidthPx = channelScopeLineWidthDp.toFloat(),
+                gridWidthPx = channelScopeGridWidthDp.toFloat(),
+                showVerticalGrid = channelScopeVerticalGridEnabled,
+                showCenterLine = channelScopeCenterLineEnabled,
+                triggerModeNative = channelScopeTriggerModeNative,
+                layoutStrategy = channelScopeLayout,
                 modifier = modifier
             )
         }

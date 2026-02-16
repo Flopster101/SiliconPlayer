@@ -1523,7 +1523,7 @@ std::vector<float> AudioEngine::getOpenMptChannelVuLevels() {
     return openMptDecoder ? openMptDecoder->getCurrentChannelVuLevels() : std::vector<float>{};
 }
 
-std::vector<float> AudioEngine::getOpenMptChannelScopeSamples(int samplesPerChannel) {
+std::vector<float> AudioEngine::getChannelScopeSamples(int samplesPerChannel) {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return {};
     auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());

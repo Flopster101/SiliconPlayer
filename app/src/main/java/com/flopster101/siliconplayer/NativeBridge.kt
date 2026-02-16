@@ -45,7 +45,7 @@ object NativeBridge {
     external fun getOpenMptInstrumentNames(): String
     external fun getOpenMptSampleNames(): String
     external fun getOpenMptChannelVuLevels(): FloatArray
-    external fun getOpenMptChannelScopeSamples(samplesPerChannel: Int): FloatArray
+    external fun getChannelScopeSamples(samplesPerChannel: Int): FloatArray
     external fun getVgmGameName(): String
     external fun getVgmSystemName(): String
     external fun getVgmReleaseDate(): String

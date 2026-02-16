@@ -298,6 +298,18 @@ enum class FilenameDisplayMode(val storageValue: String, val label: String) {
     }
 }
 
+enum class EndFadeCurve(val storageValue: String, val label: String, val nativeValue: Int) {
+    Linear("linear", "Linear", 0),
+    EaseIn("ease_in", "Ease-in", 1),
+    EaseOut("ease_out", "Ease-out", 2);
+
+    companion object {
+        fun fromStorage(value: String?): EndFadeCurve {
+            return entries.firstOrNull { it.storageValue == value } ?: Linear
+        }
+    }
+}
+
 private fun normalizeSourceIdentity(path: String?): String? {
     if (path.isNullOrBlank()) return null
     val trimmed = path.trim()
@@ -663,6 +675,9 @@ private object AppPreferenceKeys {
     const val FILENAME_DISPLAY_MODE = "filename_display_mode"
     const val FILENAME_ONLY_WHEN_TITLE_MISSING = "filename_only_when_title_missing"
     const val UNKNOWN_TRACK_DURATION_SECONDS = "unknown_track_duration_seconds"
+    const val END_FADE_APPLY_TO_ALL_TRACKS = "end_fade_apply_to_all_tracks"
+    const val END_FADE_DURATION_MS = "end_fade_duration_ms"
+    const val END_FADE_CURVE = "end_fade_curve"
 
     // Plugin management keys
     fun decoderEnabledKey(decoderName: String) = "decoder_${decoderName}_enabled"
@@ -1128,6 +1143,23 @@ private fun AppNavigation(
                 AppPreferenceKeys.UNKNOWN_TRACK_DURATION_SECONDS,
                 GmeDefaults.unknownDurationSeconds
             ).coerceIn(1, 86400)
+        )
+    }
+    var endFadeApplyToAllTracks by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.END_FADE_APPLY_TO_ALL_TRACKS, false)
+        )
+    }
+    var endFadeDurationMs by remember {
+        mutableIntStateOf(
+            prefs.getInt(AppPreferenceKeys.END_FADE_DURATION_MS, 10000).coerceIn(100, 120000)
+        )
+    }
+    var endFadeCurve by remember {
+        mutableStateOf(
+            EndFadeCurve.fromStorage(
+                prefs.getString(AppPreferenceKeys.END_FADE_CURVE, EndFadeCurve.Linear.storageValue)
+            )
         )
     }
 
@@ -2761,6 +2793,32 @@ private fun AppNavigation(
         )
     }
 
+    LaunchedEffect(endFadeApplyToAllTracks) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.END_FADE_APPLY_TO_ALL_TRACKS, endFadeApplyToAllTracks)
+            .apply()
+        NativeBridge.setEndFadeApplyToAllTracks(endFadeApplyToAllTracks)
+    }
+
+    LaunchedEffect(endFadeDurationMs) {
+        val normalized = endFadeDurationMs.coerceIn(100, 120000)
+        if (normalized != endFadeDurationMs) {
+            endFadeDurationMs = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(AppPreferenceKeys.END_FADE_DURATION_MS, normalized)
+            .apply()
+        NativeBridge.setEndFadeDurationMs(normalized)
+    }
+
+    LaunchedEffect(endFadeCurve) {
+        prefs.edit()
+            .putString(AppPreferenceKeys.END_FADE_CURVE, endFadeCurve.storageValue)
+            .apply()
+        NativeBridge.setEndFadeCurve(endFadeCurve.nativeValue)
+    }
+
     LaunchedEffect(vgmPlayLoopCount) {
         val normalized = vgmPlayLoopCount.coerceIn(1, 99)
         if (normalized != vgmPlayLoopCount) {
@@ -3761,6 +3819,18 @@ private fun AppNavigation(
                         onUnknownTrackDurationSecondsChanged = { value ->
                             unknownTrackDurationSeconds = value
                         },
+                        endFadeApplyToAllTracks = endFadeApplyToAllTracks,
+                        onEndFadeApplyToAllTracksChanged = { enabled ->
+                            endFadeApplyToAllTracks = enabled
+                        },
+                        endFadeDurationMs = endFadeDurationMs,
+                        onEndFadeDurationMsChanged = { value ->
+                            endFadeDurationMs = value
+                        },
+                        endFadeCurve = endFadeCurve,
+                        onEndFadeCurveChanged = { curve ->
+                            endFadeCurve = curve
+                        },
                         audioFocusInterrupt = audioFocusInterrupt,
                         onAudioFocusInterruptChanged = {
                             audioFocusInterrupt = it
@@ -3922,6 +3992,9 @@ private fun AppNavigation(
                             filenameDisplayMode = FilenameDisplayMode.Always
                             filenameOnlyWhenTitleMissing = false
                             unknownTrackDurationSeconds = GmeDefaults.unknownDurationSeconds
+                            endFadeApplyToAllTracks = false
+                            endFadeDurationMs = 10000
+                            endFadeCurve = EndFadeCurve.Linear
                             browserLaunchLocationId = null
                             browserLaunchDirectoryPath = null
                             onThemeModeChanged(ThemeMode.Auto)

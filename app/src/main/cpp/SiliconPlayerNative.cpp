@@ -189,6 +189,33 @@ Java_com_flopster101_siliconplayer_MainActivity_setAudioPipelineConfig(
     );
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_setEndFadeApplyToAllTracks(
+        JNIEnv*,
+        jobject,
+        jboolean enabled) {
+    ensureEngine();
+    audioEngine->setEndFadeApplyToAllTracks(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_setEndFadeDurationMs(
+        JNIEnv*,
+        jobject,
+        jint durationMs) {
+    ensureEngine();
+    audioEngine->setEndFadeDurationMs(static_cast<int>(durationMs));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_setEndFadeCurve(
+        JNIEnv*,
+        jobject,
+        jint curve) {
+    ensureEngine();
+    audioEngine->setEndFadeCurve(static_cast<int>(curve));
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getTrackTitle(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
@@ -777,6 +804,24 @@ Java_com_flopster101_siliconplayer_NativeBridge_setAudioPipelineConfig(
             resamplerPreference,
             allowFallback
     );
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setEndFadeApplyToAllTracks(
+        JNIEnv* env, jobject thiz, jboolean enabled) {
+    Java_com_flopster101_siliconplayer_MainActivity_setEndFadeApplyToAllTracks(env, thiz, enabled);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setEndFadeDurationMs(
+        JNIEnv* env, jobject thiz, jint durationMs) {
+    Java_com_flopster101_siliconplayer_MainActivity_setEndFadeDurationMs(env, thiz, durationMs);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setEndFadeCurve(
+        JNIEnv* env, jobject thiz, jint curve) {
+    Java_com_flopster101_siliconplayer_MainActivity_setEndFadeCurve(env, thiz, curve);
 }
 
 // Gain control JNI methods

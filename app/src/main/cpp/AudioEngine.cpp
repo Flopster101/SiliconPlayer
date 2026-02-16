@@ -666,10 +666,6 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         bool reachedEnd = false;
         engine->renderResampledLocked(outputData, numFrames, channels, outputSampleRate, reachedEnd);
 
-        // Apply gain and mono downmix
-        engine->applyGain(outputData, numFrames, channels);
-        engine->applyMonoDownmix(outputData, numFrames, channels);
-
         const double callbackDeltaSeconds = (outputSampleRate > 0 && numFrames > 0)
                 ? static_cast<double>(numFrames) / outputSampleRate
                 : 0.0;
@@ -842,6 +838,11 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         } else if (!reachedEnd && callbackDeltaSeconds > 0.0) {
             engine->positionSeconds.fetch_add(callbackDeltaSeconds);
         }
+
+        const double gainTimelinePosition = engine->positionSeconds.load();
+        const float endFadeGain = engine->computeEndFadeGainLocked(gainTimelinePosition);
+        engine->applyGain(outputData, numFrames, channels, endFadeGain);
+        engine->applyMonoDownmix(outputData, numFrames, channels);
 
         const int mode = engine->repeatMode.load();
         if (reachedEnd && mode != 1 && mode != 3) {
@@ -1583,6 +1584,20 @@ void AudioEngine::setForceMono(bool enabled) {
     forceMono.store(enabled);
 }
 
+void AudioEngine::setEndFadeApplyToAllTracks(bool enabled) {
+    endFadeApplyToAllTracks.store(enabled);
+}
+
+void AudioEngine::setEndFadeDurationMs(int durationMs) {
+    const int normalized = std::clamp(durationMs, 100, 120000);
+    endFadeDurationMs.store(normalized);
+}
+
+void AudioEngine::setEndFadeCurve(int curve) {
+    const int normalized = (curve >= 0 && curve <= 2) ? curve : 0;
+    endFadeCurve.store(normalized);
+}
+
 float AudioEngine::getMasterGain() const {
     return masterGainDb.load();
 }
@@ -1604,8 +1619,65 @@ float AudioEngine::dbToGain(float db) {
     return std::pow(10.0f, db / 20.0f);
 }
 
+float AudioEngine::computeEndFadeGainLocked(double playbackPositionSeconds) const {
+    if (!decoder) return 1.0f;
+
+    const int mode = repeatMode.load();
+    if (mode == 2) {
+        return 1.0f; // Repeat at loop point bypasses end fade.
+    }
+    if (mode != 0 && mode != 1 && mode != 3) {
+        return 1.0f;
+    }
+
+    const double durationNow = decoder->getDuration();
+    if (!(durationNow > 0.0) || !std::isfinite(durationNow)) {
+        return 1.0f;
+    }
+
+    const int fadeMs = endFadeDurationMs.load();
+    if (fadeMs <= 0) {
+        return 1.0f;
+    }
+    const double fadeSeconds = static_cast<double>(fadeMs) / 1000.0;
+    if (!(fadeSeconds > 0.0)) {
+        return 1.0f;
+    }
+
+    const bool applyToAll = endFadeApplyToAllTracks.load();
+    const bool reliableDuration =
+            (decoder->getPlaybackCapabilities() & AudioDecoder::PLAYBACK_CAP_RELIABLE_DURATION) != 0;
+    if (reliableDuration && !applyToAll) {
+        return 1.0f;
+    }
+
+    const double fadeStart = std::max(0.0, durationNow - fadeSeconds);
+    if (playbackPositionSeconds <= fadeStart) {
+        return 1.0f;
+    }
+    if (playbackPositionSeconds >= durationNow) {
+        return 0.0f;
+    }
+
+    const double progress = std::clamp(
+            (playbackPositionSeconds - fadeStart) / std::max(0.001, fadeSeconds),
+            0.0,
+            1.0
+    );
+    float gain = static_cast<float>(1.0 - progress);
+    const int curve = endFadeCurve.load();
+    if (curve == 1) {
+        // Ease-in fade: softer attenuation at fade start, stronger near end.
+        gain = static_cast<float>(1.0 - (progress * progress));
+    } else if (curve == 2) {
+        // Ease-out fade: stronger attenuation near fade start.
+        gain = gain * gain;
+    }
+    return std::clamp(gain, 0.0f, 1.0f);
+}
+
 // Apply two-stage gain pipeline: Master → (Plugin or Song)
-void AudioEngine::applyGain(float* buffer, int numFrames, int channels) {
+void AudioEngine::applyGain(float* buffer, int numFrames, int channels, float extraGain) {
     const float masterDb = masterGainDb.load();
     const float pluginDb = pluginGainDb.load();
     const float songDb = songGainDb.load();
@@ -1614,7 +1686,7 @@ void AudioEngine::applyGain(float* buffer, int numFrames, int channels) {
     const float masterGain = dbToGain(masterDb);
     // Song volume overrides plugin volume when not at neutral (0dB)
     const float secondaryGain = (songDb != 0.0f) ? dbToGain(songDb) : dbToGain(pluginDb);
-    const float totalGain = masterGain * secondaryGain;
+    const float totalGain = masterGain * secondaryGain * std::clamp(extraGain, 0.0f, 1.0f);
 
     // Apply gain if not unity (1.0)
     if (totalGain != 1.0f) {

@@ -97,6 +97,9 @@ public:
     void setPluginGain(float gainDb);
     void setSongGain(float gainDb);
     void setForceMono(bool enabled);
+    void setEndFadeApplyToAllTracks(bool enabled);
+    void setEndFadeDurationMs(int durationMs);
+    void setEndFadeCurve(int curve);
     float getMasterGain() const;
     float getPluginGain() const;
     float getSongGain() const;
@@ -146,6 +149,9 @@ private:
     std::atomic<float> pluginGainDb { 0.0f };
     std::atomic<float> songGainDb { 0.0f };
     std::atomic<bool> forceMono { false };
+    std::atomic<bool> endFadeApplyToAllTracks { false };
+    std::atomic<int> endFadeDurationMs { 10000 };
+    std::atomic<int> endFadeCurve { 0 }; // 0 linear, 1 ease-in, 2 ease-out
 
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
     void reconfigureStream(bool resumePlayback);
@@ -163,7 +169,8 @@ private:
 
     // Gain processing helpers
     static float dbToGain(float db);
-    void applyGain(float* buffer, int numFrames, int channels);
+    float computeEndFadeGainLocked(double playbackPositionSeconds) const;
+    void applyGain(float* buffer, int numFrames, int channels, float extraGain = 1.0f);
     void applyMonoDownmix(float* buffer, int numFrames, int channels);
 
     // Callback

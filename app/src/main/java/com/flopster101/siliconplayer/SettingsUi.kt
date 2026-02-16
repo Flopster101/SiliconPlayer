@@ -250,6 +250,12 @@ internal fun SettingsScreen(
     onFilenameOnlyWhenTitleMissingChanged: (Boolean) -> Unit,
     unknownTrackDurationSeconds: Int,
     onUnknownTrackDurationSecondsChanged: (Int) -> Unit,
+    endFadeApplyToAllTracks: Boolean,
+    onEndFadeApplyToAllTracksChanged: (Boolean) -> Unit,
+    endFadeDurationMs: Int,
+    onEndFadeDurationMsChanged: (Int) -> Unit,
+    endFadeCurve: EndFadeCurve,
+    onEndFadeCurveChanged: (EndFadeCurve) -> Unit,
     ffmpegSampleRateHz: Int,
     ffmpegCapabilities: Int,
     onFfmpegSampleRateChanged: (Int) -> Unit,
@@ -1210,6 +1216,8 @@ internal fun SettingsScreen(
                     }
                     SettingsRoute.Player -> {
                         var showUnknownDurationDialog by remember { mutableStateOf(false) }
+                        var showEndFadeDurationDialog by remember { mutableStateOf(false) }
+                        var showEndFadeCurveDialog by remember { mutableStateOf(false) }
                         SettingsSectionLabel("Track duration fallback")
                         SettingsItemCard(
                             title = "Unknown track duration",
@@ -1231,7 +1239,8 @@ internal fun SettingsScreen(
                                         singleLine = true,
                                         label = { Text("Seconds") },
                                         supportingText = { Text("Used when a track has no real tagged duration.") },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        shape = MaterialTheme.shapes.extraLarge
                                     )
                                 },
                                 dismissButton = {
@@ -1248,6 +1257,110 @@ internal fun SettingsScreen(
                                         }
                                     }) {
                                         Text("Save")
+                                    }
+                                }
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("End fadeout")
+                        PlayerSettingToggleCard(
+                            title = "Apply to tracks with known duration",
+                            description = "When disabled, end fadeout only applies to unknown/unreliable-duration tracks.",
+                            checked = endFadeApplyToAllTracks,
+                            onCheckedChange = onEndFadeApplyToAllTracksChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Fade duration",
+                            description = String.format(Locale.US, "%.1f seconds", endFadeDurationMs / 1000.0),
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showEndFadeDurationDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Fade curve",
+                            description = endFadeCurve.label,
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showEndFadeCurveDialog = true }
+                        )
+                        if (showEndFadeDurationDialog) {
+                            var input by remember {
+                                mutableStateOf(
+                                    if (endFadeDurationMs % 1000 == 0) {
+                                        (endFadeDurationMs / 1000).toString()
+                                    } else {
+                                        String.format(Locale.US, "%.1f", endFadeDurationMs / 1000.0)
+                                    }
+                                )
+                            }
+                            AlertDialog(
+                                onDismissRequest = { showEndFadeDurationDialog = false },
+                                title = { Text("Fade duration") },
+                                text = {
+                                    OutlinedTextField(
+                                        value = input,
+                                        onValueChange = { value ->
+                                            input = value.filter { it.isDigit() || it == '.' }.take(6)
+                                        },
+                                        singleLine = true,
+                                        label = { Text("Seconds") },
+                                        supportingText = { Text("0.1s to 120s (default 10.0s)") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        shape = MaterialTheme.shapes.extraLarge
+                                    )
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showEndFadeDurationDialog = false }) {
+                                        Text("Cancel")
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        val parsedSeconds = input.trim().toDoubleOrNull()
+                                        if (parsedSeconds != null && parsedSeconds in 0.1..120.0) {
+                                            onEndFadeDurationMsChanged((parsedSeconds * 1000.0).roundToInt())
+                                            showEndFadeDurationDialog = false
+                                        }
+                                    }) {
+                                        Text("Save")
+                                    }
+                                }
+                            )
+                        }
+                        if (showEndFadeCurveDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showEndFadeCurveDialog = false },
+                                title = { Text("Fade curve") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        EndFadeCurve.entries.forEach { curve ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(MaterialTheme.shapes.medium)
+                                                    .clickable {
+                                                        onEndFadeCurveChanged(curve)
+                                                        showEndFadeCurveDialog = false
+                                                    }
+                                                    .padding(horizontal = 4.dp, vertical = 1.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = curve == endFadeCurve,
+                                                    onClick = {
+                                                        onEndFadeCurveChanged(curve)
+                                                        showEndFadeCurveDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(curve.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = { showEndFadeCurveDialog = false }) {
+                                        Text("Close")
                                     }
                                 }
                             )

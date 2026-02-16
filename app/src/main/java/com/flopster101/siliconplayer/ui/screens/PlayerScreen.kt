@@ -4,6 +4,7 @@ import android.content.Context
 import android.widget.Toast
 import com.flopster101.siliconplayer.NativeBridge
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowLeft
 import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.filled.Loop
+import androidx.compose.material.icons.filled.MonitorHeart
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -54,6 +56,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -162,6 +166,9 @@ fun PlayerScreen(
     var isDraggingDown by remember { mutableStateOf(false) }
     var showTrackInfoDialog by remember { mutableStateOf(false) }
     var showVisualizationPickerDialog by remember { mutableStateOf(false) }
+    var showVisualizationModeBadge by remember { mutableStateOf(false) }
+    var visualizationModeBadgeText by remember { mutableStateOf(visualizationMode.label) }
+    var lastVisualizationModeForBadge by remember { mutableStateOf<VisualizationMode?>(null) }
     var visWaveLeft by remember { mutableStateOf(FloatArray(0)) }
     var visWaveRight by remember { mutableStateOf(FloatArray(0)) }
     var visBars by remember { mutableStateOf(FloatArray(0)) }
@@ -554,6 +561,15 @@ fun PlayerScreen(
     }
     val displayArtist = artist.ifBlank { if (hasTrack) "Unknown Artist" else "Tap a file to play" }
     val displayFilename = file?.let { toDisplayFilename(it) } ?: "No file loaded"
+    LaunchedEffect(visualizationMode) {
+        val previous = lastVisualizationModeForBadge
+        lastVisualizationModeForBadge = visualizationMode
+        if (previous == null || previous == visualizationMode) return@LaunchedEffect
+        visualizationModeBadgeText = visualizationMode.label
+        showVisualizationModeBadge = true
+        delay(1200)
+        showVisualizationModeBadge = false
+    }
 
     // Focus management for keyboard input
     val focusRequester = remember { FocusRequester() }
@@ -714,6 +730,8 @@ fun PlayerScreen(
                     AlbumArtPlaceholder(
                         artwork = artwork,
                         placeholderIcon = noArtworkIcon,
+                        visualizationModeBadgeText = visualizationModeBadgeText,
+                        showVisualizationModeBadge = showVisualizationModeBadge,
                         visualizationMode = visualizationMode,
                         barCount = visualizationBarCount,
                         barRoundnessDp = visualizationBarRoundnessDp,
@@ -823,7 +841,6 @@ fun PlayerScreen(
                         FutureActionStrip(
                             canOpenCoreSettings = canOpenCoreSettings,
                             onOpenCoreSettings = onOpenCoreSettings,
-                            visualizationMode = visualizationMode,
                             onCycleVisualizationMode = onCycleVisualizationMode,
                             onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
                             onOpenAudioEffects = onOpenAudioEffects
@@ -841,6 +858,8 @@ fun PlayerScreen(
                     AlbumArtPlaceholder(
                         artwork = artwork,
                         placeholderIcon = noArtworkIcon,
+                        visualizationModeBadgeText = visualizationModeBadgeText,
+                        showVisualizationModeBadge = showVisualizationModeBadge,
                         visualizationMode = visualizationMode,
                         barCount = visualizationBarCount,
                         barRoundnessDp = visualizationBarRoundnessDp,
@@ -945,7 +964,6 @@ fun PlayerScreen(
                         modifier = Modifier.fillMaxWidth(0.94f),
                         canOpenCoreSettings = canOpenCoreSettings,
                         onOpenCoreSettings = onOpenCoreSettings,
-                        visualizationMode = visualizationMode,
                         onCycleVisualizationMode = onCycleVisualizationMode,
                         onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
                         onOpenAudioEffects = onOpenAudioEffects
@@ -1047,6 +1065,8 @@ private fun toDisplayFilename(file: File): String {
 private fun AlbumArtPlaceholder(
     artwork: ImageBitmap?,
     placeholderIcon: ImageVector,
+    visualizationModeBadgeText: String,
+    showVisualizationModeBadge: Boolean,
     visualizationMode: VisualizationMode,
     barCount: Int,
     barRoundnessDp: Int,
@@ -1077,6 +1097,39 @@ private fun AlbumArtPlaceholder(
     channelCount: Int,
     modifier: Modifier = Modifier
 ) {
+    val artworkBrightness = remember(artwork) {
+        val bitmap = artwork ?: return@remember null
+        runCatching {
+            val pixels = bitmap.toPixelMap()
+            if (pixels.width <= 0 || pixels.height <= 0) return@runCatching 0.5f
+            val stepX = maxOf(1, pixels.width / 32)
+            val stepY = maxOf(1, pixels.height / 32)
+            var sum = 0f
+            var count = 0
+            var y = 0
+            while (y < pixels.height) {
+                var x = 0
+                while (x < pixels.width) {
+                    sum += pixels[x, y].luminance()
+                    count++
+                    x += stepX
+                }
+                y += stepY
+            }
+            if (count > 0) (sum / count) else 0.5f
+        }.getOrNull()
+    }
+    val badgeBackground = when {
+        artworkBrightness == null -> MaterialTheme.colorScheme.surface.copy(alpha = 0.62f)
+        artworkBrightness > 0.5f -> androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.52f)
+        else -> androidx.compose.ui.graphics.Color.White.copy(alpha = 0.4f)
+    }
+    val badgeContentColor = when {
+        artworkBrightness == null -> MaterialTheme.colorScheme.onSurface
+        artworkBrightness > 0.5f -> androidx.compose.ui.graphics.Color.White
+        else -> androidx.compose.ui.graphics.Color.Black
+    }
+
     ElevatedCard(
         modifier = modifier,
         colors = CardDefaults.elevatedCardColors(
@@ -1163,6 +1216,42 @@ private fun AlbumArtPlaceholder(
                 vuCustomColorArgb = vuCustomColorArgb,
                 modifier = Modifier.matchParentSize()
             )
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showVisualizationModeBadge,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 10.dp),
+                enter = fadeIn(animationSpec = tween(170)),
+                exit = fadeOut(animationSpec = tween(260))
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = badgeBackground
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = when (visualizationMode) {
+                                VisualizationMode.Off -> Icons.Default.GraphicEq
+                                VisualizationMode.Bars -> Icons.Default.GraphicEq
+                                VisualizationMode.Oscilloscope -> Icons.Default.MonitorHeart
+                                VisualizationMode.VuMeters -> Icons.Default.Equalizer
+                            },
+                            contentDescription = null,
+                            tint = badgeContentColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = visualizationModeBadgeText,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = badgeContentColor
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -2192,7 +2281,6 @@ private fun FutureActionStrip(
     modifier: Modifier = Modifier,
     canOpenCoreSettings: Boolean,
     onOpenCoreSettings: () -> Unit,
-    visualizationMode: VisualizationMode,
     onCycleVisualizationMode: () -> Unit,
     onOpenVisualizationPicker: () -> Unit,
     onOpenAudioEffects: () -> Unit
@@ -2219,23 +2307,10 @@ private fun FutureActionStrip(
                         onLongClick = onOpenVisualizationPicker
                     )
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
+                Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     Icon(
                         imageVector = Icons.Default.GraphicEq,
                         contentDescription = "Visualization mode"
-                    )
-                    Text(
-                        text = when (visualizationMode) {
-                            VisualizationMode.Off -> "Off"
-                            VisualizationMode.Bars -> "Bars"
-                            VisualizationMode.Oscilloscope -> "Scope"
-                            VisualizationMode.VuMeters -> "VU"
-                        },
-                        style = MaterialTheme.typography.labelLarge
                     )
                 }
             }

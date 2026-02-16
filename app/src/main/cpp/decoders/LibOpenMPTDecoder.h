@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <cstdint>
 
 class LibOpenMPTDecoder : public AudioDecoder {
 public:
@@ -100,6 +101,10 @@ private:
     int currentSubtuneIndex = 0;
     std::vector<std::string> subtuneNames;
     std::vector<double> subtuneDurationsSeconds;
+    std::vector<float> lastChannelScopeSnapshot;
+    std::vector<std::uint8_t> channelScopeFrozenFrameCount;
+    int lastChannelScopeChannels = 0;
+    int lastChannelScopeSamplesPerChannel = 0;
 
     void applyRenderSettingsLocked();
 };

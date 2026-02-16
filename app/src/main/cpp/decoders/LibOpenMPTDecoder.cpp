@@ -3,6 +3,8 @@
 #include <fstream>
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstddef>
 #include <concepts>
 #include <unordered_set>
 #include <sstream>
@@ -228,6 +230,10 @@ void LibOpenMPTDecoder::close() {
     currentSubtuneIndex = 0;
     subtuneNames.clear();
     subtuneDurationsSeconds.clear();
+    lastChannelScopeSnapshot.clear();
+    channelScopeFrozenFrameCount.clear();
+    lastChannelScopeChannels = 0;
+    lastChannelScopeSamplesPerChannel = 0;
 }
 
 int LibOpenMPTDecoder::read(float* buffer, int numFrames) {
@@ -474,11 +480,55 @@ std::vector<float> LibOpenMPTDecoder::getCurrentChannelScopeSamples(int samplesP
     }
     std::vector<float> flattened;
     flattened.resize(static_cast<size_t>(totalChannels * clampedSamples), 0.0f);
+    const bool scopeShapeChanged =
+            lastChannelScopeChannels != totalChannels ||
+            lastChannelScopeSamplesPerChannel != clampedSamples ||
+            lastChannelScopeSnapshot.size() != flattened.size() ||
+            channelScopeFrozenFrameCount.size() != static_cast<size_t>(totalChannels);
+    if (scopeShapeChanged) {
+        lastChannelScopeSnapshot.assign(flattened.size(), 0.0f);
+        channelScopeFrozenFrameCount.assign(static_cast<size_t>(totalChannels), 0);
+        lastChannelScopeChannels = totalChannels;
+        lastChannelScopeSamplesPerChannel = clampedSamples;
+    }
     for (int channel = 0; channel < totalChannels; ++channel) {
-        float* destination = flattened.data() + (static_cast<size_t>(channel) * clampedSamples);
+        const size_t channelOffset = static_cast<size_t>(channel) * clampedSamples;
+        float* destination = flattened.data() + channelOffset;
         const int written = static_cast<int>(module->get_current_channel_scope(channel, destination, clampedSamples));
         if (written < clampedSamples && written > 0) {
             std::fill(destination + written, destination + clampedSamples, 0.0f);
+        }
+        const float* previous = lastChannelScopeSnapshot.data() + channelOffset;
+        bool sameAsPrevious = true;
+        float peak = 0.0f;
+        for (int i = 0; i < clampedSamples; ++i) {
+            const float value = destination[i];
+            if (previous[i] != value) {
+                sameAsPrevious = false;
+            }
+            peak = std::max(peak, std::abs(value));
+        }
+
+        auto& frozenFrames = channelScopeFrozenFrameCount[static_cast<size_t>(channel)];
+        bool suppressStaleScope = false;
+        if (sameAsPrevious && peak > 0.001f) {
+            if (frozenFrames < 255) {
+                frozenFrames++;
+            }
+            if (frozenFrames >= 2) {
+                suppressStaleScope = true;
+            }
+        } else {
+            frozenFrames = 0;
+        }
+
+        std::copy(
+                destination,
+                destination + clampedSamples,
+                lastChannelScopeSnapshot.begin() + static_cast<std::ptrdiff_t>(channelOffset)
+        );
+        if (suppressStaleScope) {
+            std::fill(destination, destination + clampedSamples, 0.0f);
         }
     }
     return flattened;

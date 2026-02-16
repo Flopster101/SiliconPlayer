@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import android.content.Context
 import android.widget.Toast
 import com.flopster101.siliconplayer.NativeBridge
 import androidx.compose.animation.AnimatedContent
@@ -166,6 +167,46 @@ fun PlayerScreen(
     var visVu by remember { mutableStateOf(FloatArray(0)) }
     var visVuSmoothed by remember { mutableStateOf(FloatArray(0)) }
     var visChannelCount by remember { mutableIntStateOf(2) }
+    val context = LocalContext.current
+    val prefs = remember {
+        context.getSharedPreferences("silicon_player_settings", Context.MODE_PRIVATE)
+    }
+    var visualizationOscWindowMs by remember {
+        mutableIntStateOf(prefs.getInt("visualization_osc_window_ms", 40).coerceIn(5, 200))
+    }
+    var visualizationOscTriggerModeNative by remember {
+        mutableIntStateOf(
+            when (prefs.getString("visualization_osc_trigger_mode", "rising")) {
+                "rising" -> 1
+                "falling" -> 2
+                else -> 0
+            }
+        )
+    }
+    DisposableEffect(prefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, key ->
+            when (key) {
+                "visualization_osc_window_ms" -> {
+                    visualizationOscWindowMs =
+                        sharedPrefs.getInt("visualization_osc_window_ms", 40).coerceIn(5, 200)
+                }
+
+                "visualization_osc_trigger_mode" -> {
+                    visualizationOscTriggerModeNative = when (
+                        sharedPrefs.getString("visualization_osc_trigger_mode", "rising")
+                    ) {
+                        "rising" -> 1
+                        "falling" -> 2
+                        else -> 0
+                    }
+                }
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
@@ -176,11 +217,25 @@ fun PlayerScreen(
             sliderPosition = positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0))
         }
     }
-    LaunchedEffect(visualizationMode, file?.absolutePath, isPlaying) {
+    LaunchedEffect(
+        visualizationMode,
+        file?.absolutePath,
+        isPlaying,
+        visualizationOscWindowMs,
+        visualizationOscTriggerModeNative
+    ) {
         while (true) {
             if (visualizationMode != VisualizationMode.Off && file != null) {
-                visWaveLeft = NativeBridge.getVisualizationWaveform(0)
-                visWaveRight = NativeBridge.getVisualizationWaveform(1)
+                visWaveLeft = NativeBridge.getVisualizationWaveformScope(
+                    0,
+                    visualizationOscWindowMs,
+                    visualizationOscTriggerModeNative
+                )
+                visWaveRight = NativeBridge.getVisualizationWaveformScope(
+                    1,
+                    visualizationOscWindowMs,
+                    visualizationOscTriggerModeNative
+                )
                 visBars = NativeBridge.getVisualizationBars()
                 visVu = NativeBridge.getVisualizationVuLevels()
                 visChannelCount = NativeBridge.getVisualizationChannelCount().coerceAtLeast(1)

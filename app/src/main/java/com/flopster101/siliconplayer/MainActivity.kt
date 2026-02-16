@@ -720,6 +720,8 @@ private object AppPreferenceKeys {
     const val VISUALIZATION_BAR_OVERLAY_ARTWORK = "visualization_bar_overlay_artwork"
     const val VISUALIZATION_BAR_USE_THEME_COLOR = "visualization_bar_use_theme_color"
     const val VISUALIZATION_OSC_STEREO = "visualization_osc_stereo"
+    const val VISUALIZATION_OSC_WINDOW_MS = "visualization_osc_window_ms"
+    const val VISUALIZATION_OSC_TRIGGER_MODE = "visualization_osc_trigger_mode"
     const val VISUALIZATION_VU_ANCHOR = "visualization_vu_anchor"
     const val VISUALIZATION_VU_USE_THEME_COLOR = "visualization_vu_use_theme_color"
     const val VISUALIZATION_VU_SMOOTHING_PERCENT = "visualization_vu_smoothing_percent"
@@ -4167,6 +4169,13 @@ private fun AppNavigation(
                         },
                         onResetVisualizationOscilloscopeSettings = {
                             visualizationOscStereo = true
+                            prefs.edit()
+                                .putInt(AppPreferenceKeys.VISUALIZATION_OSC_WINDOW_MS, 40)
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_TRIGGER_MODE,
+                                    VisualizationOscTriggerMode.Rising.storageValue
+                                )
+                                .apply()
                         },
                         onResetVisualizationVuSettings = {
                             visualizationVuAnchor = VisualizationVuAnchor.Bottom
@@ -4345,6 +4354,13 @@ private fun AppNavigation(
                             visualizationBarOverlayArtwork = true
                             visualizationBarUseThemeColor = true
                             visualizationOscStereo = true
+                            prefs.edit()
+                                .putInt(AppPreferenceKeys.VISUALIZATION_OSC_WINDOW_MS, 40)
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_TRIGGER_MODE,
+                                    VisualizationOscTriggerMode.Rising.storageValue
+                                )
+                                .apply()
                             visualizationVuAnchor = VisualizationVuAnchor.Bottom
                             visualizationVuUseThemeColor = true
                             visualizationVuSmoothingPercent = 40

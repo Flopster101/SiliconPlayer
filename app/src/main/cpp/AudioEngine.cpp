@@ -1855,6 +1855,10 @@ void AudioEngine::updateVisualizationDataLocked(const float* buffer, int numFram
         const float left = buffer[base];
         const float right = channels > 1 ? buffer[base + 1] : left;
         const float mono = 0.5f * (left + right);
+        visualizationScopeHistoryLeft[visualizationScopeWriteIndex] = left;
+        visualizationScopeHistoryRight[visualizationScopeWriteIndex] = right;
+        visualizationScopeWriteIndex =
+                (visualizationScopeWriteIndex + 1) % static_cast<int>(visualizationScopeHistoryLeft.size());
         visualizationMonoHistory[visualizationMonoWriteIndex] = mono;
         visualizationMonoWriteIndex = (visualizationMonoWriteIndex + 1) % static_cast<int>(visualizationMonoHistory.size());
         sumSqL += static_cast<double>(left) * left;
@@ -1936,10 +1940,57 @@ void AudioEngine::updateVisualizationDataLocked(const float* buffer, int numFram
     visualizationChannelCount.store(std::clamp(channels, 1, 2));
 }
 
-std::vector<float> AudioEngine::getVisualizationWaveform(int channelIndex) const {
+std::vector<float> AudioEngine::getVisualizationWaveformScope(
+        int channelIndex,
+        int windowMs,
+        int triggerMode
+) const {
     std::lock_guard<std::mutex> lock(visualizationMutex);
-    const auto& source = channelIndex == 1 ? visualizationWaveformRight : visualizationWaveformLeft;
-    return std::vector<float>(source.begin(), source.end());
+    constexpr int kOutputSize = 256;
+    const auto& history = channelIndex == 1 ? visualizationScopeHistoryRight : visualizationScopeHistoryLeft;
+    const int historySize = static_cast<int>(history.size());
+    if (historySize <= 0) {
+        return std::vector<float>(kOutputSize, 0.0f);
+    }
+
+    const int sampleRate = std::max(streamSampleRate, 8000);
+    const int clampedWindowMs = std::clamp(windowMs, 5, 200);
+    int windowFrames = (sampleRate * clampedWindowMs) / 1000;
+    windowFrames = std::clamp(windowFrames, kOutputSize, historySize - 1);
+
+    const int writeIndex = visualizationScopeWriteIndex;
+    int startIndex = (writeIndex - windowFrames + historySize) % historySize;
+
+    if (triggerMode == 1 || triggerMode == 2) {
+        const bool rising = triggerMode == 1;
+        bool found = false;
+        int triggerIndex = -1;
+        for (int offset = 1; offset < windowFrames; ++offset) {
+            const int prevIndex = (startIndex + offset - 1) % historySize;
+            const int currIndex = (startIndex + offset) % historySize;
+            const float prev = history[prevIndex];
+            const float curr = history[currIndex];
+            const bool crossed = rising ? (prev < 0.0f && curr >= 0.0f) : (prev > 0.0f && curr <= 0.0f);
+            if (crossed) {
+                triggerIndex = currIndex;
+                found = true;
+                break;
+            }
+        }
+        if (found && triggerIndex >= 0) {
+            const int preTrigger = windowFrames / 2;
+            startIndex = (triggerIndex - preTrigger + historySize) % historySize;
+        }
+    }
+
+    std::vector<float> output(kOutputSize, 0.0f);
+    const double scale = static_cast<double>(windowFrames - 1) / static_cast<double>(kOutputSize - 1);
+    for (int i = 0; i < kOutputSize; ++i) {
+        const int frameOffset = static_cast<int>(std::round(i * scale));
+        const int idx = (startIndex + frameOffset) % historySize;
+        output[i] = std::clamp(history[idx], -1.0f, 1.0f);
+    }
+    return output;
 }
 
 std::vector<float> AudioEngine::getVisualizationBars() const {

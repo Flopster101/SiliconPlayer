@@ -771,12 +771,19 @@ Java_com_flopster101_siliconplayer_NativeBridge_isTrackVBR(JNIEnv* env, jobject 
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_com_flopster101_siliconplayer_NativeBridge_getVisualizationWaveform(
-        JNIEnv* env, jobject, jint channelIndex) {
+Java_com_flopster101_siliconplayer_NativeBridge_getVisualizationWaveformScope(
+        JNIEnv* env, jobject, jint channelIndex, jint windowMs, jint triggerMode) {
     if (audioEngine == nullptr) {
         return env->NewFloatArray(0);
     }
-    return toJFloatArray(env, audioEngine->getVisualizationWaveform(static_cast<int>(channelIndex)));
+    return toJFloatArray(
+            env,
+            audioEngine->getVisualizationWaveformScope(
+                    static_cast<int>(channelIndex),
+                    static_cast<int>(windowMs),
+                    static_cast<int>(triggerMode)
+            )
+    );
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL

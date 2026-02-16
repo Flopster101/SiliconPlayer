@@ -1831,6 +1831,30 @@ internal fun SettingsScreen(
                         }
                     }
                     SettingsRoute.VisualizationBasicOscilloscope -> {
+                        val prefsName = "silicon_player_settings"
+                        val oscWindowKey = "visualization_osc_window_ms"
+                        val oscTriggerKey = "visualization_osc_trigger_mode"
+                        val context = LocalContext.current
+                        val prefs = remember(context) {
+                            context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+                        }
+                        var visualizationOscWindowMs by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(oscWindowKey, 40).coerceIn(5, 200)
+                            )
+                        }
+                        var visualizationOscTriggerMode by remember {
+                            mutableStateOf(
+                                VisualizationOscTriggerMode.fromStorage(
+                                    prefs.getString(
+                                        oscTriggerKey,
+                                        VisualizationOscTriggerMode.Rising.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var showWindowDialog by remember { mutableStateOf(false) }
+                        var showTriggerDialog by remember { mutableStateOf(false) }
                         SettingsSectionLabel("Oscilloscope")
                         PlayerSettingToggleCard(
                             title = "Stereo mode",
@@ -1838,6 +1862,88 @@ internal fun SettingsScreen(
                             checked = visualizationOscStereo,
                             onCheckedChange = onVisualizationOscStereoChanged
                         )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Visible window",
+                            description = "${visualizationOscWindowMs} ms",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showWindowDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Trigger",
+                            description = visualizationOscTriggerMode.label,
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showTriggerDialog = true }
+                        )
+                        if (showWindowDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Visible window",
+                                unitLabel = "ms",
+                                range = 5..200,
+                                step = 1,
+                                currentValue = visualizationOscWindowMs,
+                                onDismiss = { showWindowDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(5, 200)
+                                    visualizationOscWindowMs = clamped
+                                    prefs.edit()
+                                        .putInt(oscWindowKey, clamped)
+                                        .apply()
+                                    showWindowDialog = false
+                                }
+                            )
+                        }
+                        if (showTriggerDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTriggerDialog = false },
+                                title = { Text("Oscilloscope trigger") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationOscTriggerMode.entries.forEach { mode ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        visualizationOscTriggerMode = mode
+                                                        prefs.edit()
+                                                            .putString(
+                                                                oscTriggerKey,
+                                                                mode.storageValue
+                                                            )
+                                                            .apply()
+                                                        showTriggerDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = mode == visualizationOscTriggerMode,
+                                                    onClick = {
+                                                        visualizationOscTriggerMode = mode
+                                                        prefs.edit()
+                                                            .putString(
+                                                                oscTriggerKey,
+                                                                mode.storageValue
+                                                            )
+                                                            .apply()
+                                                        showTriggerDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(mode.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTriggerDialog = false }) {
+                                        Text("Close")
+                                    }
+                                },
+                                confirmButton = {}
+                            )
+                        }
                     }
                     SettingsRoute.VisualizationBasicVuMeters -> {
                         var showVuAnchorDialog by remember { mutableStateOf(false) }

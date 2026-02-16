@@ -101,7 +101,7 @@ public:
     void setEndFadeApplyToAllTracks(bool enabled);
     void setEndFadeDurationMs(int durationMs);
     void setEndFadeCurve(int curve);
-    std::vector<float> getVisualizationWaveform(int channelIndex) const;
+    std::vector<float> getVisualizationWaveformScope(int channelIndex, int windowMs, int triggerMode) const;
     std::vector<float> getVisualizationBars() const;
     std::vector<float> getVisualizationVuLevels() const;
     int getVisualizationChannelCount() const;
@@ -160,6 +160,9 @@ private:
     mutable std::mutex visualizationMutex;
     std::array<float, 256> visualizationWaveformLeft {};
     std::array<float, 256> visualizationWaveformRight {};
+    std::array<float, 16384> visualizationScopeHistoryLeft {};
+    std::array<float, 16384> visualizationScopeHistoryRight {};
+    int visualizationScopeWriteIndex = 0;
     std::array<float, 256> visualizationBars {};
     std::array<float, 2> visualizationVuLevels {};
     std::atomic<int> visualizationChannelCount { 2 };

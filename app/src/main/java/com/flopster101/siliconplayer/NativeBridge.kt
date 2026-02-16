@@ -85,7 +85,7 @@ object NativeBridge {
     external fun setEndFadeApplyToAllTracks(enabled: Boolean)
     external fun setEndFadeDurationMs(durationMs: Int)
     external fun setEndFadeCurve(curve: Int)
-    external fun getVisualizationWaveform(channelIndex: Int): FloatArray
+    external fun getVisualizationWaveformScope(channelIndex: Int, windowMs: Int, triggerMode: Int): FloatArray
     external fun getVisualizationBars(): FloatArray
     external fun getVisualizationVuLevels(): FloatArray
     external fun getVisualizationChannelCount(): Int

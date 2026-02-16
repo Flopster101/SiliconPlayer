@@ -30,3 +30,19 @@ enum class VisualizationVuAnchor(
         }
     }
 }
+
+enum class VisualizationOscTriggerMode(
+    val storageValue: String,
+    val label: String,
+    val nativeValue: Int
+) {
+    Off("off", "Off", 0),
+    Rising("rising", "Rising edge", 1),
+    Falling("falling", "Falling edge", 2);
+
+    companion object {
+        fun fromStorage(value: String?): VisualizationOscTriggerMode {
+            return entries.firstOrNull { it.storageValue == value } ?: Off
+        }
+    }
+}

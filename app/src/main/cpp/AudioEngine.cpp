@@ -1921,9 +1921,11 @@ void AudioEngine::updateVisualizationDataLocked(const float* buffer, int numFram
         const double avgPower = powerSum / static_cast<double>(count);
         const double magnitude = std::sqrt(avgPower) / static_cast<double>(kVisualizationFftSize);
         const float freqNorm = static_cast<float>(clampedStart - minBin) / static_cast<float>(usableBins);
-        // Mild high-band emphasis to counter natural pink/brown spectral tilt.
-        const float tiltCompensation = 0.5f + (0.8f * std::pow(std::clamp(freqNorm, 0.0f, 1.0f), 0.55f));
-        bars[band] = static_cast<float>(std::clamp(magnitude * static_cast<double>(48.0f * tiltCompensation), 0.0, 1.0));
+        // High-band lift + low-band restraint to avoid first-bar dominance.
+        const float tiltCompensation = 0.45f + (0.95f * std::pow(std::clamp(freqNorm, 0.0f, 1.0f), 0.62f));
+        const double weighted = magnitude * static_cast<double>(90.0f * tiltCompensation);
+        // Soft knee prevents early saturation while preserving detail.
+        bars[band] = static_cast<float>(std::clamp(weighted / (1.0 + weighted), 0.0, 1.0));
     }
 
     std::lock_guard<std::mutex> visLock(visualizationMutex);

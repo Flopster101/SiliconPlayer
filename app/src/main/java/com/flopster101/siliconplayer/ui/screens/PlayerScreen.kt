@@ -833,8 +833,11 @@ private fun VisualizationOverlay(
                     drawRect(color = barBackgroundColor)
                 }
                 val count = barCount.coerceIn(8, 96)
-                val widthPx = size.width
-                val heightPx = size.height
+                val edgePadPx = 8.dp.toPx()
+                val topHeadroomPx = 8.dp.toPx()
+                val widthPx = (size.width - (edgePadPx * 2f)).coerceAtLeast(1f)
+                val heightPx = (size.height - topHeadroomPx).coerceAtLeast(1f)
+                val baselineY = size.height
                 if (widthPx <= 0f || heightPx <= 0f || count <= 0) return@Canvas
                 val gapPx = (widthPx / count) * 0.18f
                 val barWidth = ((widthPx - gapPx * (count - 1)) / count).coerceAtLeast(1f)
@@ -845,11 +848,14 @@ private fun VisualizationOverlay(
                 val minForLog = usableMinIndex.toFloat()
                 val maxForLog = usableMaxIndex.toFloat()
                 val logBase = (maxForLog / minForLog).coerceAtLeast(1.001f)
+                val midShiftBias = 0.80f // <1 moves mids/highs slightly to the right.
                 for (i in 0 until count) {
                     val t0 = i.toFloat() / count.toFloat()
                     val t1 = (i + 1).toFloat() / count.toFloat()
-                    val start = (minForLog * logBase.pow(t0)).roundToInt().coerceIn(usableMinIndex, usableMaxIndex)
-                    val end = (minForLog * logBase.pow(t1)).roundToInt().coerceIn(start, usableMaxIndex)
+                    val t0Mapped = t0.pow(midShiftBias).coerceIn(0f, 1f)
+                    val t1Mapped = t1.pow(midShiftBias).coerceIn(0f, 1f)
+                    val start = (minForLog * logBase.pow(t0Mapped)).roundToInt().coerceIn(usableMinIndex, usableMaxIndex)
+                    val end = (minForLog * logBase.pow(t1Mapped)).roundToInt().coerceIn(start, usableMaxIndex)
 
                     var sum = 0f
                     var bandSumSq = 0.0
@@ -862,13 +868,13 @@ private fun VisualizationOverlay(
                     }
                     val mean = if (bandCount > 0) sum / bandCount.toFloat() else 0f
                     val rms = if (bandCount > 0) kotlin.math.sqrt(bandSumSq / bandCount).toFloat() else 0f
-                    val combined = (rms * 0.8f) + (mean * 0.2f)
-                    val level = combined.toDouble().pow(0.82).toFloat().coerceIn(0f, 1f)
+                    val combined = (rms * 0.9f) + (mean * 0.1f)
+                    val level = combined.toDouble().pow(1.0).toFloat().coerceIn(0f, 1f)
                     val h = level * heightPx
-                    val x = i * (barWidth + gapPx)
+                    val x = edgePadPx + (i * (barWidth + gapPx))
                     drawRoundRect(
                         color = barColor,
-                        topLeft = Offset(x, heightPx - h),
+                        topLeft = Offset(x, baselineY - h),
                         size = Size(barWidth, h),
                         cornerRadius = CornerRadius(radius, radius)
                     )

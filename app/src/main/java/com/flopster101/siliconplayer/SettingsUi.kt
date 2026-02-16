@@ -470,7 +470,7 @@ internal fun SettingsScreen(
                 ) {
                     when (it) {
                     SettingsRoute.Root -> {
-                        SettingsSectionLabel("Audio")
+                        SettingsSectionLabel("General")
                         SettingsItemCard(
                             title = "Audio plugins",
                             description = "Configure each playback core/plugin.",
@@ -492,12 +492,6 @@ internal fun SettingsScreen(
                             onClick = onOpenPlayer
                         )
                         Spacer(modifier = Modifier.height(10.dp))
-                        SettingsItemCard(
-                            title = "Misc settings",
-                            description = "Other app-wide preferences and utilities.",
-                            icon = Icons.Default.MoreHoriz,
-                            onClick = onOpenMisc
-                        )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Other")
                         SettingsItemCard(
@@ -505,6 +499,13 @@ internal fun SettingsScreen(
                             description = "Cached file behavior, limits, and cleanup.",
                             icon = Icons.Default.Link,
                             onClick = onOpenUrlCache
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Misc settings",
+                            description = "Other app-wide preferences and utilities.",
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = onOpenMisc
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Interface")

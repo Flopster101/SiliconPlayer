@@ -74,26 +74,41 @@ private fun computeChannelScopeSampleCount(
 private fun normalizeChannelScopeChannel(
     flatScopes: FloatArray,
     start: Int,
-    points: Int
+    points: Int,
+    dcRemovalEnabled: Boolean
 ): FloatArray {
     val centered = FloatArray(points)
+    val fixedGain = 1.8f
+    if (!dcRemovalEnabled) {
+        for (i in 0 until points) {
+            val sample = flatScopes[start + i].coerceIn(-1f, 1f)
+            centered[i] = (sample * fixedGain).coerceIn(-1f, 1f)
+        }
+        return centered
+    }
     var sum = 0f
+    var minSample = 1f
+    var maxSample = -1f
     for (i in 0 until points) {
         val sample = flatScopes[start + i].coerceIn(-1f, 1f)
-        centered[i] = sample
         sum += sample
+        if (sample < minSample) minSample = sample
+        if (sample > maxSample) maxSample = sample
     }
-    val mean = sum / points.toFloat()
-    val fixedGain = 1.8f
+    val frameMean = sum / points.toFloat()
+    val peakMidpoint = (minSample + maxSample) * 0.5f
+    val dcOffset = (frameMean * 0.7f) + (peakMidpoint * 0.3f)
     for (i in 0 until points) {
-        centered[i] = ((centered[i] - mean) * fixedGain).coerceIn(-1f, 1f)
+        val sample = flatScopes[start + i].coerceIn(-1f, 1f)
+        centered[i] = ((sample - dcOffset) * fixedGain).coerceIn(-1f, 1f)
     }
     return centered
 }
 
 private suspend fun buildChannelScopeHistoriesAsync(
     flatScopes: FloatArray,
-    points: Int
+    points: Int,
+    dcRemovalEnabled: Boolean
 ): List<FloatArray> {
     if (points <= 0 || flatScopes.size < points) {
         return emptyList()
@@ -108,7 +123,13 @@ private suspend fun buildChannelScopeHistoriesAsync(
             if (end - start < points) {
                 histories.add(FloatArray(points))
             } else {
-                histories.add(normalizeChannelScopeChannel(flatScopes, start, points))
+                val normalized = normalizeChannelScopeChannel(
+                    flatScopes = flatScopes,
+                    start = start,
+                    points = points,
+                    dcRemovalEnabled = dcRemovalEnabled
+                )
+                histories.add(normalized)
             }
         }
         histories
@@ -211,6 +232,7 @@ private fun findScopedTriggerIndex(
 
 internal data class ChannelScopePrefs(
     val windowMs: Int,
+    val dcRemovalEnabled: Boolean,
     val triggerModeNative: Int,
     val fpsMode: VisualizationOscFpsMode,
     val lineWidthDp: Int,
@@ -227,6 +249,7 @@ internal data class ChannelScopePrefs(
 ) {
     companion object {
         private const val KEY_WINDOW_MS = "visualization_channel_scope_window_ms"
+        private const val KEY_DC_REMOVAL_ENABLED = "visualization_channel_scope_dc_removal_enabled"
         private const val KEY_TRIGGER_MODE = "visualization_channel_scope_trigger_mode"
         private const val KEY_FPS_MODE = "visualization_channel_scope_fps_mode"
         private const val KEY_LINE_WIDTH_DP = "visualization_channel_scope_line_width_dp"
@@ -249,6 +272,7 @@ internal data class ChannelScopePrefs(
             }
             return ChannelScopePrefs(
                 windowMs = sharedPrefs.getInt(KEY_WINDOW_MS, 40).coerceIn(5, 200),
+                dcRemovalEnabled = sharedPrefs.getBoolean(KEY_DC_REMOVAL_ENABLED, true),
                 triggerModeNative = triggerModeNative,
                 fpsMode = VisualizationOscFpsMode.fromStorage(
                     sharedPrefs.getString(KEY_FPS_MODE, VisualizationOscFpsMode.Default.storageValue)
@@ -506,7 +530,8 @@ internal fun AlbumArtPlaceholder(
         }
         val histories = buildChannelScopeHistoriesAsync(
             flatScopes = visChannelScopesFlat,
-            points = points
+            points = points,
+            dcRemovalEnabled = channelScopePrefs.dcRemovalEnabled
         )
         visChannelScopeLastChannelCount = histories.size.coerceIn(1, 64)
         visChannelScopeHistories = histories

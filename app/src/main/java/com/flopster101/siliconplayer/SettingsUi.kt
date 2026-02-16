@@ -2661,6 +2661,7 @@ internal fun SettingsScreen(
                     SettingsRoute.VisualizationAdvancedChannelScope -> {
                         val prefsName = "silicon_player_settings"
                         val scopeWindowKey = "visualization_channel_scope_window_ms"
+                        val scopeDcRemovalEnabledKey = "visualization_channel_scope_dc_removal_enabled"
                         val scopeTriggerKey = "visualization_channel_scope_trigger_mode"
                         val scopeFpsModeKey = "visualization_channel_scope_fps_mode"
                         val scopeLineWidthKey = "visualization_channel_scope_line_width_dp"
@@ -2687,6 +2688,9 @@ internal fun SettingsScreen(
                                     prefs.getString(scopeTriggerKey, VisualizationOscTriggerMode.Rising.storageValue)
                                 )
                             )
+                        }
+                        var scopeDcRemovalEnabled by remember {
+                            mutableStateOf(prefs.getBoolean(scopeDcRemovalEnabledKey, true))
                         }
                         var scopeFpsMode by remember {
                             mutableStateOf(
@@ -2779,6 +2783,16 @@ internal fun SettingsScreen(
                             description = "Sync mode used to stabilize channel traces.",
                             value = scopeTriggerMode.label,
                             onClick = { showTriggerDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "DC removal",
+                            description = "Center each channel waveform around zero to reduce vertical offset drift.",
+                            checked = scopeDcRemovalEnabled,
+                            onCheckedChange = { enabled ->
+                                scopeDcRemovalEnabled = enabled
+                                prefs.edit().putBoolean(scopeDcRemovalEnabledKey, enabled).apply()
+                            }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         SettingsValuePickerCard(

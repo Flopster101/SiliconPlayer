@@ -34,6 +34,7 @@ fun ChannelScopeVisualization(
         val scopeLineWidth = lineWidthPx.coerceAtLeast(1f)
         val scopeGridWidth = gridWidthPx.coerceAtLeast(0.5f)
         val channelBorderColor = gridColor.copy(alpha = 0.45f)
+        val triggerAnchorFraction = 0.5f
         for (channel in 0 until channels) {
             val col = channel / rows
             val row = channel % rows
@@ -51,8 +52,10 @@ fun ChannelScopeVisualization(
             if (history.size < 2) {
                 continue
             }
-            val triggerIndex = findTriggerIndex(history, triggerModeNative)
-            val phaseOffset = if (triggerModeNative == 0) 0 else history.size / 2
+            val triggerAnchorIndex = ((history.size - 1) * triggerAnchorFraction).toInt()
+                .coerceIn(0, history.size - 1)
+            val triggerIndex = findTriggerIndex(history, triggerModeNative, triggerAnchorIndex)
+            val phaseOffset = if (triggerModeNative == 0) 0 else triggerAnchorIndex
             val startIndex = ((triggerIndex - phaseOffset) % history.size + history.size) % history.size
             val stepX = cellWidth / (history.size - 1).coerceAtLeast(1).toFloat()
 
@@ -120,12 +123,15 @@ private fun resolveGrid(
     }
 }
 
-private fun findTriggerIndex(history: FloatArray?, triggerModeNative: Int): Int {
+private fun findTriggerIndex(
+    history: FloatArray?,
+    triggerModeNative: Int,
+    anchorIndex: Int
+): Int {
     if (history == null || history.size < 2 || triggerModeNative == 0) return 0
     val threshold = 0.0f
-    val centerIndex = history.size / 2
     var bestIndex = -1
-    var bestDistance = Int.MAX_VALUE
+    var bestScore = Float.NEGATIVE_INFINITY
     for (i in 1 until history.size) {
         val prev = history[i - 1]
         val next = history[i]
@@ -135,12 +141,14 @@ private fun findTriggerIndex(history: FloatArray?, triggerModeNative: Int): Int 
             prev > threshold && next <= threshold
         }
         if (hit) {
-            val distance = abs(i - centerIndex)
-            if (distance < bestDistance) {
-                bestDistance = distance
+            val slope = abs(next - prev)
+            val distanceNorm = abs(i - anchorIndex).toFloat() / history.size.toFloat()
+            val score = (slope * 4.0f) - distanceNorm
+            if (score > bestScore) {
+                bestScore = score
                 bestIndex = i
             }
         }
     }
-    return if (bestIndex >= 0) bestIndex else 0
+    return if (bestIndex >= 0) bestIndex else anchorIndex.coerceIn(0, history.size - 1)
 }

@@ -2662,6 +2662,7 @@ internal fun SettingsScreen(
                         val prefsName = "silicon_player_settings"
                         val scopeWindowKey = "visualization_channel_scope_window_ms"
                         val scopeDcRemovalEnabledKey = "visualization_channel_scope_dc_removal_enabled"
+                        val scopeGainPercentKey = "visualization_channel_scope_gain_percent"
                         val scopeTriggerKey = "visualization_channel_scope_trigger_mode"
                         val scopeFpsModeKey = "visualization_channel_scope_fps_mode"
                         val scopeLineWidthKey = "visualization_channel_scope_line_width_dp"
@@ -2691,6 +2692,9 @@ internal fun SettingsScreen(
                         }
                         var scopeDcRemovalEnabled by remember {
                             mutableStateOf(prefs.getBoolean(scopeDcRemovalEnabledKey, true))
+                        }
+                        var scopeGainPercent by remember {
+                            mutableIntStateOf(prefs.getInt(scopeGainPercentKey, 240).coerceIn(25, 600))
                         }
                         var scopeFpsMode by remember {
                             mutableStateOf(
@@ -2758,6 +2762,7 @@ internal fun SettingsScreen(
                         }
 
                         var showWindowDialog by remember { mutableStateOf(false) }
+                        var showGainDialog by remember { mutableStateOf(false) }
                         var showTriggerDialog by remember { mutableStateOf(false) }
                         var showFpsModeDialog by remember { mutableStateOf(false) }
                         var showLineWidthDialog by remember { mutableStateOf(false) }
@@ -2793,6 +2798,13 @@ internal fun SettingsScreen(
                                 scopeDcRemovalEnabled = enabled
                                 prefs.edit().putBoolean(scopeDcRemovalEnabledKey, enabled).apply()
                             }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Gain",
+                            description = "Output gain applied to channel waveforms.",
+                            value = "${scopeGainPercent}%",
+                            onClick = { showGainDialog = true }
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         SettingsValuePickerCard(
@@ -2901,6 +2913,22 @@ internal fun SettingsScreen(
                                     scopeWindowMs = clamped
                                     prefs.edit().putInt(scopeWindowKey, clamped).apply()
                                     showWindowDialog = false
+                                }
+                            )
+                        }
+                        if (showGainDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Scope gain",
+                                unitLabel = "%",
+                                range = 25..600,
+                                step = 5,
+                                currentValue = scopeGainPercent,
+                                onDismiss = { showGainDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(25, 600)
+                                    scopeGainPercent = clamped
+                                    prefs.edit().putInt(scopeGainPercentKey, clamped).apply()
+                                    showGainDialog = false
                                 }
                             )
                         }

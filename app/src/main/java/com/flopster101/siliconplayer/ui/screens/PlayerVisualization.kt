@@ -75,10 +75,11 @@ private fun normalizeChannelScopeChannel(
     flatScopes: FloatArray,
     start: Int,
     points: Int,
-    dcRemovalEnabled: Boolean
+    dcRemovalEnabled: Boolean,
+    gainPercent: Int
 ): FloatArray {
     val centered = FloatArray(points)
-    val fixedGain = 1.8f
+    val fixedGain = (gainPercent.coerceIn(25, 600).toFloat() / 100f)
     if (!dcRemovalEnabled) {
         for (i in 0 until points) {
             val sample = flatScopes[start + i].coerceIn(-1f, 1f)
@@ -108,7 +109,8 @@ private fun normalizeChannelScopeChannel(
 private suspend fun buildChannelScopeHistoriesAsync(
     flatScopes: FloatArray,
     points: Int,
-    dcRemovalEnabled: Boolean
+    dcRemovalEnabled: Boolean,
+    gainPercent: Int
 ): List<FloatArray> {
     if (points <= 0 || flatScopes.size < points) {
         return emptyList()
@@ -127,7 +129,8 @@ private suspend fun buildChannelScopeHistoriesAsync(
                     flatScopes = flatScopes,
                     start = start,
                     points = points,
-                    dcRemovalEnabled = dcRemovalEnabled
+                    dcRemovalEnabled = dcRemovalEnabled,
+                    gainPercent = gainPercent
                 )
                 histories.add(normalized)
             }
@@ -233,6 +236,7 @@ private fun findScopedTriggerIndex(
 internal data class ChannelScopePrefs(
     val windowMs: Int,
     val dcRemovalEnabled: Boolean,
+    val gainPercent: Int,
     val triggerModeNative: Int,
     val fpsMode: VisualizationOscFpsMode,
     val lineWidthDp: Int,
@@ -250,6 +254,7 @@ internal data class ChannelScopePrefs(
     companion object {
         private const val KEY_WINDOW_MS = "visualization_channel_scope_window_ms"
         private const val KEY_DC_REMOVAL_ENABLED = "visualization_channel_scope_dc_removal_enabled"
+        private const val KEY_GAIN_PERCENT = "visualization_channel_scope_gain_percent"
         private const val KEY_TRIGGER_MODE = "visualization_channel_scope_trigger_mode"
         private const val KEY_FPS_MODE = "visualization_channel_scope_fps_mode"
         private const val KEY_LINE_WIDTH_DP = "visualization_channel_scope_line_width_dp"
@@ -273,6 +278,7 @@ internal data class ChannelScopePrefs(
             return ChannelScopePrefs(
                 windowMs = sharedPrefs.getInt(KEY_WINDOW_MS, 40).coerceIn(5, 200),
                 dcRemovalEnabled = sharedPrefs.getBoolean(KEY_DC_REMOVAL_ENABLED, true),
+                gainPercent = sharedPrefs.getInt(KEY_GAIN_PERCENT, 240).coerceIn(25, 600),
                 triggerModeNative = triggerModeNative,
                 fpsMode = VisualizationOscFpsMode.fromStorage(
                     sharedPrefs.getString(KEY_FPS_MODE, VisualizationOscFpsMode.Default.storageValue)
@@ -531,7 +537,8 @@ internal fun AlbumArtPlaceholder(
         val histories = buildChannelScopeHistoriesAsync(
             flatScopes = visChannelScopesFlat,
             points = points,
-            dcRemovalEnabled = channelScopePrefs.dcRemovalEnabled
+            dcRemovalEnabled = channelScopePrefs.dcRemovalEnabled,
+            gainPercent = channelScopePrefs.gainPercent
         )
         visChannelScopeLastChannelCount = histories.size.coerceIn(1, 64)
         visChannelScopeHistories = histories

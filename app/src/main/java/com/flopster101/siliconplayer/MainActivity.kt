@@ -775,6 +775,7 @@ private object AppPreferenceKeys {
     const val VISUALIZATION_VU_CUSTOM_COLOR_ARGB = "visualization_vu_custom_color_argb"
     const val VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS = "visualization_channel_scope_window_ms"
     const val VISUALIZATION_CHANNEL_SCOPE_DC_REMOVAL_ENABLED = "visualization_channel_scope_dc_removal_enabled"
+    const val VISUALIZATION_CHANNEL_SCOPE_GAIN_PERCENT = "visualization_channel_scope_gain_percent"
     const val VISUALIZATION_CHANNEL_SCOPE_TRIGGER_MODE = "visualization_channel_scope_trigger_mode"
     const val VISUALIZATION_CHANNEL_SCOPE_FPS_MODE = "visualization_channel_scope_fps_mode"
     const val VISUALIZATION_CHANNEL_SCOPE_LINE_WIDTH_DP = "visualization_channel_scope_line_width_dp"
@@ -4325,6 +4326,7 @@ private fun AppNavigation(
                             prefs.edit()
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS, 40)
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_DC_REMOVAL_ENABLED, true)
+                                .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GAIN_PERCENT, 240)
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TRIGGER_MODE,
                                     VisualizationOscTriggerMode.Rising.storageValue
@@ -4606,6 +4608,7 @@ private fun AppNavigation(
                             prefs.edit()
                                 .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS, 40)
                                 .putBoolean(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_DC_REMOVAL_ENABLED, true)
+                                .putInt(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GAIN_PERCENT, 240)
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TRIGGER_MODE,
                                     VisualizationOscTriggerMode.Rising.storageValue

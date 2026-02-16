@@ -136,6 +136,7 @@ fun PlayerScreen(
     onCycleVisualizationMode: () -> Unit,
     onSelectVisualizationMode: (VisualizationMode) -> Unit,
     onOpenVisualizationSettings: () -> Unit,
+    onOpenSelectedVisualizationSettings: () -> Unit,
     visualizationBarCount: Int,
     visualizationBarSmoothingPercent: Int,
     visualizationBarRoundnessDp: Int,
@@ -644,7 +645,7 @@ fun PlayerScreen(
             onDismissRequest = { showVisualizationPickerDialog = false },
             title = { Text("Visualization mode") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         text = "Available visualizations depend on the current core and song.",
                         style = MaterialTheme.typography.bodySmall,
@@ -658,7 +659,7 @@ fun PlayerScreen(
                                     onSelectVisualizationMode(mode)
                                     showVisualizationPickerDialog = false
                                 }
-                                .padding(vertical = 2.dp),
+                                .padding(vertical = 1.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             RadioButton(
@@ -680,11 +681,21 @@ fun PlayerScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showVisualizationPickerDialog = false
-                    onOpenVisualizationSettings()
-                }) {
-                    Text("Settings")
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (visualizationMode != VisualizationMode.Off) {
+                        TextButton(onClick = {
+                            showVisualizationPickerDialog = false
+                            onOpenSelectedVisualizationSettings()
+                        }) {
+                            Text("Selected settings")
+                        }
+                    }
+                    TextButton(onClick = {
+                        showVisualizationPickerDialog = false
+                        onOpenVisualizationSettings()
+                    }) {
+                        Text("Settings")
+                    }
                 }
             }
         )

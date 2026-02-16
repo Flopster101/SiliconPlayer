@@ -150,6 +150,40 @@ private fun stripCachedFileHashPrefix(fileName: String): String {
     return hashPrefix.matchEntire(fileName)?.groupValues?.getOrNull(1) ?: fileName
 }
 
+private enum class VisualizationTier(val label: String) {
+    Basic("Basic visualizations"),
+    Advanced("Advanced visualizations"),
+    Specialized("Specialized visualizations")
+}
+
+private data class VisualizationSettingsPageItem(
+    val route: SettingsRoute,
+    val mode: VisualizationMode,
+    val title: String,
+    val description: String
+)
+
+private fun basicVisualizationSettingsPages(): List<VisualizationSettingsPageItem> = listOf(
+    VisualizationSettingsPageItem(
+        route = SettingsRoute.VisualizationBasicBars,
+        mode = VisualizationMode.Bars,
+        title = "Bars",
+        description = "Spectrum bars over artwork or blank background."
+    ),
+    VisualizationSettingsPageItem(
+        route = SettingsRoute.VisualizationBasicOscilloscope,
+        mode = VisualizationMode.Oscilloscope,
+        title = "Oscilloscope",
+        description = "Waveform scope in mono or stereo."
+    ),
+    VisualizationSettingsPageItem(
+        route = SettingsRoute.VisualizationBasicVuMeters,
+        mode = VisualizationMode.VuMeters,
+        title = "VU meters",
+        description = "Channel level meters with configurable anchor."
+    )
+)
+
 private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.Root -> 0
     SettingsRoute.AudioPlugins -> 1
@@ -164,6 +198,10 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.Home -> 1
     SettingsRoute.Player -> 1
     SettingsRoute.Visualization -> 1
+    SettingsRoute.VisualizationBasic -> 2
+    SettingsRoute.VisualizationBasicBars -> 3
+    SettingsRoute.VisualizationBasicOscilloscope -> 3
+    SettingsRoute.VisualizationBasicVuMeters -> 3
     SettingsRoute.Misc -> 1
     SettingsRoute.Ui -> 1
     SettingsRoute.About -> 1
@@ -184,6 +222,10 @@ internal fun SettingsScreen(
     onClearSongAudioParameters: () -> Unit,
     onOpenPlayer: () -> Unit,
     onOpenVisualization: () -> Unit,
+    onOpenVisualizationBasic: () -> Unit,
+    onOpenVisualizationBasicBars: () -> Unit,
+    onOpenVisualizationBasicOscilloscope: () -> Unit,
+    onOpenVisualizationBasicVuMeters: () -> Unit,
     onOpenMisc: () -> Unit,
     onOpenUrlCache: () -> Unit,
     onOpenCacheManager: () -> Unit,
@@ -260,6 +302,8 @@ internal fun SettingsScreen(
     onEndFadeCurveChanged: (EndFadeCurve) -> Unit,
     visualizationMode: VisualizationMode,
     onVisualizationModeChanged: (VisualizationMode) -> Unit,
+    enabledVisualizationModes: Set<VisualizationMode>,
+    onEnabledVisualizationModesChanged: (Set<VisualizationMode>) -> Unit,
     visualizationBarCount: Int,
     onVisualizationBarCountChanged: (Int) -> Unit,
     visualizationBarSmoothingPercent: Int,
@@ -278,6 +322,9 @@ internal fun SettingsScreen(
     onVisualizationVuUseThemeColorChanged: (Boolean) -> Unit,
     visualizationVuSmoothingPercent: Int,
     onVisualizationVuSmoothingPercentChanged: (Int) -> Unit,
+    onResetVisualizationBarsSettings: () -> Unit,
+    onResetVisualizationOscilloscopeSettings: () -> Unit,
+    onResetVisualizationVuSettings: () -> Unit,
     ffmpegSampleRateHz: Int,
     ffmpegCapabilities: Int,
     onFfmpegSampleRateChanged: (Int) -> Unit,
@@ -366,6 +413,10 @@ internal fun SettingsScreen(
         SettingsRoute.Home -> "Home settings"
         SettingsRoute.Player -> "Player settings"
         SettingsRoute.Visualization -> "Visualization settings"
+        SettingsRoute.VisualizationBasic -> "Basic visualizations"
+        SettingsRoute.VisualizationBasicBars -> "Bars settings"
+        SettingsRoute.VisualizationBasicOscilloscope -> "Oscilloscope settings"
+        SettingsRoute.VisualizationBasicVuMeters -> "VU meters settings"
         SettingsRoute.Misc -> "Misc settings"
         SettingsRoute.Ui -> "UI settings"
         SettingsRoute.About -> "About"
@@ -459,6 +510,37 @@ internal fun SettingsScreen(
                                         )
                                     }
                                 }
+                            } else if (
+                                route == SettingsRoute.VisualizationBasicBars ||
+                                route == SettingsRoute.VisualizationBasicOscilloscope ||
+                                route == SettingsRoute.VisualizationBasicVuMeters
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Transparent
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            when (route) {
+                                                SettingsRoute.VisualizationBasicBars ->
+                                                    onResetVisualizationBarsSettings()
+                                                SettingsRoute.VisualizationBasicOscilloscope ->
+                                                    onResetVisualizationOscilloscopeSettings()
+                                                SettingsRoute.VisualizationBasicVuMeters ->
+                                                    onResetVisualizationVuSettings()
+                                                else -> Unit
+                                            }
+                                        },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Restore,
+                                            contentDescription = "Reset visualization settings",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                         androidx.compose.material3.HorizontalDivider()
@@ -540,6 +622,13 @@ internal fun SettingsScreen(
                             icon = Icons.Default.Home,
                             onClick = onOpenHome
                         )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Visualization settings",
+                            description = "Configure player visualizers and rendering style.",
+                            icon = Icons.Default.GraphicEq,
+                            onClick = onOpenVisualization
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Other")
                         SettingsItemCard(
@@ -557,13 +646,6 @@ internal fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSectionLabel("Interface")
-                        SettingsItemCard(
-                            title = "Visualization settings",
-                            description = "Configure player visualizers and rendering style.",
-                            icon = Icons.Default.GraphicEq,
-                            onClick = onOpenVisualization
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
                         SettingsItemCard(
                             title = "UI settings",
                             description = "Appearance and layout preferences.",
@@ -1478,11 +1560,8 @@ internal fun SettingsScreen(
                     }
                     SettingsRoute.Visualization -> {
                         var showModeDialog by remember { mutableStateOf(false) }
-                        var showBarCountDialog by remember { mutableStateOf(false) }
-                        var showBarSmoothingDialog by remember { mutableStateOf(false) }
-                        var showBarRoundnessDialog by remember { mutableStateOf(false) }
-                        var showVuAnchorDialog by remember { mutableStateOf(false) }
-                        var showVuSmoothingDialog by remember { mutableStateOf(false) }
+                        var showEnabledDialog by remember { mutableStateOf(false) }
+                        val basicPages = remember { basicVisualizationSettingsPages() }
 
                         SettingsSectionLabel("General")
                         SettingsItemCard(
@@ -1491,7 +1570,187 @@ internal fun SettingsScreen(
                             icon = Icons.Default.GraphicEq,
                             onClick = { showModeDialog = true }
                         )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Enabled visualizations",
+                            description = "${enabledVisualizationModes.size}/${basicPages.size} basic modes enabled",
+                            icon = Icons.Default.Tune,
+                            onClick = { showEnabledDialog = true }
+                        )
                         Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Basic visualizations")
+                        Text(
+                            text = "These visualizations work on all cores.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsItemCard(
+                            title = "Basic visualization settings",
+                            description = "Configure Bars, Oscilloscope, and VU meters.",
+                            icon = Icons.Default.GraphicEq,
+                            onClick = onOpenVisualizationBasic
+                        )
+
+                        if (showModeDialog) {
+                            val availableModes = listOf(VisualizationMode.Off) + basicPages
+                                .map { it.mode }
+                                .filter { enabledVisualizationModes.contains(it) }
+                            AlertDialog(
+                                onDismissRequest = { showModeDialog = false },
+                                title = { Text("Visualization mode") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            text = "Available modes depend on enabled visualizations and current core/song.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        availableModes.forEach { mode ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        onVisualizationModeChanged(mode)
+                                                        showModeDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = mode == visualizationMode,
+                                                    onClick = {
+                                                        onVisualizationModeChanged(mode)
+                                                        showModeDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(mode.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showModeDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+
+                        if (showEnabledDialog) {
+                            var pendingEnabled by remember(showEnabledDialog) {
+                                mutableStateOf(enabledVisualizationModes)
+                            }
+                            AlertDialog(
+                                onDismissRequest = { showEnabledDialog = false },
+                                title = { Text("Enabled visualizations") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            OutlinedButton(onClick = {
+                                                pendingEnabled = basicPages.map { it.mode }.toSet()
+                                            }) {
+                                                Text("All")
+                                            }
+                                            OutlinedButton(onClick = { pendingEnabled = emptySet() }) {
+                                                Text("None")
+                                            }
+                                        }
+                                        VisualizationTier.entries.forEach { tier ->
+                                            Text(
+                                                text = tier.label,
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            val options = when (tier) {
+                                                VisualizationTier.Basic -> basicPages.map { it.mode to it.title }
+                                                VisualizationTier.Advanced -> emptyList()
+                                                VisualizationTier.Specialized -> emptyList()
+                                            }
+                                            if (options.isEmpty()) {
+                                                Text(
+                                                    text = "No options yet.",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            } else {
+                                                options.forEach { (mode, label) ->
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clickable {
+                                                                pendingEnabled = if (pendingEnabled.contains(mode)) {
+                                                                    pendingEnabled - mode
+                                                                } else {
+                                                                    pendingEnabled + mode
+                                                                }
+                                                            }
+                                                            .padding(vertical = 2.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        androidx.compose.material3.Checkbox(
+                                                            checked = pendingEnabled.contains(mode),
+                                                            onCheckedChange = { checked ->
+                                                                pendingEnabled = if (checked) {
+                                                                    pendingEnabled + mode
+                                                                } else {
+                                                                    pendingEnabled - mode
+                                                                }
+                                                            }
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        Text(label)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showEnabledDialog = false }) { Text("Cancel") }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        onEnabledVisualizationModesChanged(pendingEnabled)
+                                        showEnabledDialog = false
+                                    }) { Text("Apply") }
+                                }
+                            )
+                        }
+                    }
+                    SettingsRoute.VisualizationBasic -> {
+                        val basicPages = remember { basicVisualizationSettingsPages() }
+                        SettingsSectionLabel("Basic visualizations")
+                        Text(
+                            text = "These visualizations work on all cores.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        basicPages.forEachIndexed { index, page ->
+                            SettingsItemCard(
+                                title = page.title,
+                                description = page.description,
+                                icon = Icons.Default.GraphicEq,
+                                onClick = {
+                                    when (page.route) {
+                                        SettingsRoute.VisualizationBasicBars -> onOpenVisualizationBasicBars()
+                                        SettingsRoute.VisualizationBasicOscilloscope -> onOpenVisualizationBasicOscilloscope()
+                                        SettingsRoute.VisualizationBasicVuMeters -> onOpenVisualizationBasicVuMeters()
+                                        else -> Unit
+                                    }
+                                }
+                            )
+                            if (index < basicPages.lastIndex) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
+                        }
+                    }
+                    SettingsRoute.VisualizationBasicBars -> {
+                        var showBarCountDialog by remember { mutableStateOf(false) }
+                        var showBarSmoothingDialog by remember { mutableStateOf(false) }
+                        var showBarRoundnessDialog by remember { mutableStateOf(false) }
+
                         SettingsSectionLabel("Bars")
                         SettingsItemCard(
                             title = "Bar count",
@@ -1527,7 +1786,51 @@ internal fun SettingsScreen(
                             checked = visualizationBarUseThemeColor,
                             onCheckedChange = onVisualizationBarUseThemeColorChanged
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+
+                        if (showBarCountDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Bar count",
+                                unitLabel = "bars",
+                                range = 8..96,
+                                step = 1,
+                                currentValue = visualizationBarCount,
+                                onDismiss = { showBarCountDialog = false },
+                                onConfirm = { value ->
+                                    onVisualizationBarCountChanged(value)
+                                    showBarCountDialog = false
+                                }
+                            )
+                        }
+                        if (showBarSmoothingDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Bar smoothing",
+                                unitLabel = "%",
+                                range = 0..95,
+                                step = 1,
+                                currentValue = visualizationBarSmoothingPercent,
+                                onDismiss = { showBarSmoothingDialog = false },
+                                onConfirm = { value ->
+                                    onVisualizationBarSmoothingPercentChanged(value)
+                                    showBarSmoothingDialog = false
+                                }
+                            )
+                        }
+                        if (showBarRoundnessDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Bar roundness",
+                                unitLabel = "dp",
+                                range = 0..24,
+                                step = 1,
+                                currentValue = visualizationBarRoundnessDp,
+                                onDismiss = { showBarRoundnessDialog = false },
+                                onConfirm = { value ->
+                                    onVisualizationBarRoundnessDpChanged(value)
+                                    showBarRoundnessDialog = false
+                                }
+                            )
+                        }
+                    }
+                    SettingsRoute.VisualizationBasicOscilloscope -> {
                         SettingsSectionLabel("Oscilloscope")
                         PlayerSettingToggleCard(
                             title = "Stereo mode",
@@ -1535,7 +1838,10 @@ internal fun SettingsScreen(
                             checked = visualizationOscStereo,
                             onCheckedChange = onVisualizationOscStereoChanged
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                    SettingsRoute.VisualizationBasicVuMeters -> {
+                        var showVuAnchorDialog by remember { mutableStateOf(false) }
+                        var showVuSmoothingDialog by remember { mutableStateOf(false) }
                         SettingsSectionLabel("VU meters")
                         SettingsItemCard(
                             title = "Anchor position",
@@ -1557,7 +1863,6 @@ internal fun SettingsScreen(
                             checked = visualizationVuUseThemeColor,
                             onCheckedChange = onVisualizationVuUseThemeColorChanged
                         )
-
                         if (showVuSmoothingDialog) {
                             SteppedIntSliderDialog(
                                 title = "VU smoothing",
@@ -1572,96 +1877,6 @@ internal fun SettingsScreen(
                                 }
                             )
                         }
-
-                        if (showModeDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showModeDialog = false },
-                                title = { Text("Visualization mode") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(
-                                            text = "Available modes depend on the current core and song format.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        VisualizationMode.entries.forEach { mode ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        onVisualizationModeChanged(mode)
-                                                        showModeDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = mode == visualizationMode,
-                                                    onClick = {
-                                                        onVisualizationModeChanged(mode)
-                                                        showModeDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(mode.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showModeDialog = false }) {
-                                        Text("Close")
-                                    }
-                                },
-                                confirmButton = {}
-                            )
-                        }
-
-                        if (showBarCountDialog) {
-                            SteppedIntSliderDialog(
-                                title = "Bar count",
-                                unitLabel = "bars",
-                                range = 8..96,
-                                step = 1,
-                                currentValue = visualizationBarCount,
-                                onDismiss = { showBarCountDialog = false },
-                                onConfirm = { value ->
-                                    onVisualizationBarCountChanged(value)
-                                    showBarCountDialog = false
-                                }
-                            )
-                        }
-
-                        if (showBarSmoothingDialog) {
-                            SteppedIntSliderDialog(
-                                title = "Bar smoothing",
-                                unitLabel = "%",
-                                range = 0..95,
-                                step = 1,
-                                currentValue = visualizationBarSmoothingPercent,
-                                onDismiss = { showBarSmoothingDialog = false },
-                                onConfirm = { value ->
-                                    onVisualizationBarSmoothingPercentChanged(value)
-                                    showBarSmoothingDialog = false
-                                }
-                            )
-                        }
-
-                        if (showBarRoundnessDialog) {
-                            SteppedIntSliderDialog(
-                                title = "Bar roundness",
-                                unitLabel = "dp",
-                                range = 0..24,
-                                step = 1,
-                                currentValue = visualizationBarRoundnessDp,
-                                onDismiss = { showBarRoundnessDialog = false },
-                                onConfirm = { value ->
-                                    onVisualizationBarRoundnessDpChanged(value)
-                                    showBarRoundnessDialog = false
-                                }
-                            )
-                        }
-
                         if (showVuAnchorDialog) {
                             AlertDialog(
                                 onDismissRequest = { showVuAnchorDialog = false },

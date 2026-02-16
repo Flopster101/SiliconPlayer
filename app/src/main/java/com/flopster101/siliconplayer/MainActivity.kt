@@ -202,6 +202,30 @@ private fun guessMimeTypeFromFilename(fileName: String): String {
         ?: "application/octet-stream"
 }
 
+private val selectableVisualizationModes: List<VisualizationMode> = listOf(
+    VisualizationMode.Bars,
+    VisualizationMode.Oscilloscope,
+    VisualizationMode.VuMeters
+)
+
+private fun parseEnabledVisualizationModes(raw: String?): Set<VisualizationMode> {
+    if (raw.isNullOrBlank()) return selectableVisualizationModes.toSet()
+    val parsed = raw
+        .split(',')
+        .mapNotNull { token ->
+            val value = token.trim()
+            selectableVisualizationModes.firstOrNull { it.storageValue == value }
+        }
+        .toSet()
+    return if (parsed.isEmpty()) selectableVisualizationModes.toSet() else parsed
+}
+
+private fun serializeEnabledVisualizationModes(modes: Set<VisualizationMode>): String {
+    return selectableVisualizationModes
+        .filter { modes.contains(it) }
+        .joinToString(",") { it.storageValue }
+}
+
 
 private enum class MainView {
     Home,
@@ -223,6 +247,10 @@ enum class SettingsRoute {
     Home,
     Player,
     Visualization,
+    VisualizationBasic,
+    VisualizationBasicBars,
+    VisualizationBasicOscilloscope,
+    VisualizationBasicVuMeters,
     Misc,
     Ui,
     About
@@ -628,6 +656,10 @@ private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.Home -> 1
     SettingsRoute.Player -> 1
     SettingsRoute.Visualization -> 1
+    SettingsRoute.VisualizationBasic -> 2
+    SettingsRoute.VisualizationBasicBars -> 3
+    SettingsRoute.VisualizationBasicOscilloscope -> 3
+    SettingsRoute.VisualizationBasicVuMeters -> 3
     SettingsRoute.Misc -> 1
     SettingsRoute.Ui -> 1
     SettingsRoute.About -> 1
@@ -681,6 +713,7 @@ private object AppPreferenceKeys {
     const val END_FADE_DURATION_MS = "end_fade_duration_ms"
     const val END_FADE_CURVE = "end_fade_curve"
     const val VISUALIZATION_MODE = "visualization_mode"
+    const val VISUALIZATION_ENABLED_MODES = "visualization_enabled_modes"
     const val VISUALIZATION_BAR_COUNT = "visualization_bar_count"
     const val VISUALIZATION_BAR_SMOOTHING_PERCENT = "visualization_bar_smoothing_percent"
     const val VISUALIZATION_BAR_ROUNDNESS_DP = "visualization_bar_roundness_dp"
@@ -1178,6 +1211,13 @@ private fun AppNavigation(
         mutableStateOf(
             VisualizationMode.fromStorage(
                 prefs.getString(AppPreferenceKeys.VISUALIZATION_MODE, VisualizationMode.Off.storageValue)
+            )
+        )
+    }
+    var enabledVisualizationModes by remember {
+        mutableStateOf(
+            parseEnabledVisualizationModes(
+                prefs.getString(AppPreferenceKeys.VISUALIZATION_ENABLED_MODES, null)
             )
         )
     }
@@ -2891,6 +2931,23 @@ private fun AppNavigation(
             .apply()
     }
 
+    LaunchedEffect(enabledVisualizationModes) {
+        val normalized = enabledVisualizationModes.intersect(selectableVisualizationModes.toSet())
+        if (normalized != enabledVisualizationModes) {
+            enabledVisualizationModes = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putString(
+                AppPreferenceKeys.VISUALIZATION_ENABLED_MODES,
+                serializeEnabledVisualizationModes(normalized)
+            )
+            .apply()
+        if (visualizationMode != VisualizationMode.Off && !normalized.contains(visualizationMode)) {
+            visualizationMode = VisualizationMode.Off
+        }
+    }
+
     LaunchedEffect(visualizationBarCount) {
         val normalized = visualizationBarCount.coerceIn(8, 96)
         if (normalized != visualizationBarCount) {
@@ -3383,13 +3440,8 @@ private fun AppNavigation(
     }
     val currentCorePluginName = pluginNameForCoreName(lastUsedCoreName)
     val canOpenCurrentCoreSettings = currentCorePluginName != null
-    val availableVisualizationModes = remember(metadataChannelCount) {
-        listOf(
-            VisualizationMode.Off,
-            VisualizationMode.Bars,
-            VisualizationMode.Oscilloscope,
-            VisualizationMode.VuMeters
-        )
+    val availableVisualizationModes = remember(enabledVisualizationModes, metadataChannelCount) {
+        listOf(VisualizationMode.Off) + selectableVisualizationModes.filter { enabledVisualizationModes.contains(it) }
     }
     val cycleVisualizationMode: () -> Unit = {
         val modes = availableVisualizationModes
@@ -3399,6 +3451,23 @@ private fun AppNavigation(
     val setVisualizationMode: (VisualizationMode) -> Unit = { mode ->
         if (availableVisualizationModes.contains(mode)) {
             visualizationMode = mode
+        }
+    }
+    val setEnabledVisualizationModes: (Set<VisualizationMode>) -> Unit = { requested ->
+        val normalized = requested.intersect(selectableVisualizationModes.toSet())
+        val currentMode = visualizationMode
+        val previousModes = availableVisualizationModes
+        enabledVisualizationModes = normalized
+        if (currentMode != VisualizationMode.Off && !normalized.contains(currentMode)) {
+            val currentIndex = previousModes.indexOf(currentMode)
+            val fallback = if (currentIndex > 0) {
+                previousModes
+                    .subList(0, currentIndex)
+                    .lastOrNull { it == VisualizationMode.Off || normalized.contains(it) }
+            } else {
+                null
+            } ?: VisualizationMode.Off
+            visualizationMode = fallback
         }
     }
     val exitSettingsToReturnView: () -> Unit = {
@@ -3423,6 +3492,42 @@ private fun AppNavigation(
         settingsRoute = SettingsRoute.Visualization
         currentView = MainView.Settings
         isPlayerExpanded = false
+    }
+    val openVisualizationBasicSettings: () -> Unit = {
+        settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
+        settingsLaunchedFromPlayer = true
+        settingsRoute = SettingsRoute.VisualizationBasic
+        currentView = MainView.Settings
+        isPlayerExpanded = false
+    }
+    val openVisualizationBarsSettings: () -> Unit = {
+        settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
+        settingsLaunchedFromPlayer = true
+        settingsRoute = SettingsRoute.VisualizationBasicBars
+        currentView = MainView.Settings
+        isPlayerExpanded = false
+    }
+    val openVisualizationOscilloscopeSettings: () -> Unit = {
+        settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
+        settingsLaunchedFromPlayer = true
+        settingsRoute = SettingsRoute.VisualizationBasicOscilloscope
+        currentView = MainView.Settings
+        isPlayerExpanded = false
+    }
+    val openVisualizationVuMetersSettings: () -> Unit = {
+        settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
+        settingsLaunchedFromPlayer = true
+        settingsRoute = SettingsRoute.VisualizationBasicVuMeters
+        currentView = MainView.Settings
+        isPlayerExpanded = false
+    }
+    val openSelectedVisualizationSettings: () -> Unit = {
+        when (visualizationMode) {
+            VisualizationMode.Bars -> openVisualizationBarsSettings()
+            VisualizationMode.Oscilloscope -> openVisualizationOscilloscopeSettings()
+            VisualizationMode.VuMeters -> openVisualizationVuMetersSettings()
+            VisualizationMode.Off -> Unit
+        }
     }
 
     LaunchedEffect(keepScreenOn, isPlayerExpanded) {
@@ -3469,6 +3574,10 @@ private fun AppNavigation(
                 settingsRoute = when (settingsRoute) {
                     SettingsRoute.PluginVgmPlayChipSettings -> SettingsRoute.PluginDetail
                     SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt, SettingsRoute.PluginVgmPlay -> SettingsRoute.AudioPlugins
+                    SettingsRoute.VisualizationBasicBars,
+                    SettingsRoute.VisualizationBasicOscilloscope,
+                    SettingsRoute.VisualizationBasicVuMeters -> SettingsRoute.VisualizationBasic
+                    SettingsRoute.VisualizationBasic -> SettingsRoute.Visualization
                     SettingsRoute.CacheManager -> SettingsRoute.UrlCache
                     else -> SettingsRoute.Root
                 }
@@ -3751,6 +3860,10 @@ private fun AppNavigation(
                                 settingsRoute = when (settingsRoute) {
                                     SettingsRoute.PluginVgmPlayChipSettings -> SettingsRoute.PluginDetail
                                     SettingsRoute.PluginDetail, SettingsRoute.PluginFfmpeg, SettingsRoute.PluginOpenMpt, SettingsRoute.PluginVgmPlay -> SettingsRoute.AudioPlugins
+                                    SettingsRoute.VisualizationBasicBars,
+                                    SettingsRoute.VisualizationBasicOscilloscope,
+                                    SettingsRoute.VisualizationBasicVuMeters -> SettingsRoute.VisualizationBasic
+                                    SettingsRoute.VisualizationBasic -> SettingsRoute.Visualization
                                     SettingsRoute.CacheManager -> SettingsRoute.UrlCache
                                     else -> SettingsRoute.Root
                                 }
@@ -3804,6 +3917,10 @@ private fun AppNavigation(
                         },
                         onOpenPlayer = { settingsRoute = SettingsRoute.Player },
                         onOpenVisualization = { settingsRoute = SettingsRoute.Visualization },
+                        onOpenVisualizationBasic = openVisualizationBasicSettings,
+                        onOpenVisualizationBasicBars = openVisualizationBarsSettings,
+                        onOpenVisualizationBasicOscilloscope = openVisualizationOscilloscopeSettings,
+                        onOpenVisualizationBasicVuMeters = openVisualizationVuMetersSettings,
                         onOpenMisc = { settingsRoute = SettingsRoute.Misc },
                         onOpenUrlCache = { settingsRoute = SettingsRoute.UrlCache },
                         onOpenCacheManager = {
@@ -4001,6 +4118,10 @@ private fun AppNavigation(
                         onVisualizationModeChanged = { mode ->
                             setVisualizationMode(mode)
                         },
+                        enabledVisualizationModes = enabledVisualizationModes,
+                        onEnabledVisualizationModesChanged = { modes ->
+                            setEnabledVisualizationModes(modes)
+                        },
                         visualizationBarCount = visualizationBarCount,
                         onVisualizationBarCountChanged = { value ->
                             visualizationBarCount = value
@@ -4036,6 +4157,21 @@ private fun AppNavigation(
                         visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
                         onVisualizationVuSmoothingPercentChanged = { value ->
                             visualizationVuSmoothingPercent = value
+                        },
+                        onResetVisualizationBarsSettings = {
+                            visualizationBarCount = 40
+                            visualizationBarSmoothingPercent = 60
+                            visualizationBarRoundnessDp = 6
+                            visualizationBarOverlayArtwork = true
+                            visualizationBarUseThemeColor = true
+                        },
+                        onResetVisualizationOscilloscopeSettings = {
+                            visualizationOscStereo = true
+                        },
+                        onResetVisualizationVuSettings = {
+                            visualizationVuAnchor = VisualizationVuAnchor.Bottom
+                            visualizationVuUseThemeColor = true
+                            visualizationVuSmoothingPercent = 40
                         },
                         audioFocusInterrupt = audioFocusInterrupt,
                         onAudioFocusInterruptChanged = {
@@ -4202,6 +4338,7 @@ private fun AppNavigation(
                             endFadeDurationMs = 10000
                             endFadeCurve = EndFadeCurve.Linear
                             visualizationMode = VisualizationMode.Off
+                            enabledVisualizationModes = selectableVisualizationModes.toSet()
                             visualizationBarCount = 40
                             visualizationBarSmoothingPercent = 60
                             visualizationBarRoundnessDp = 6
@@ -4490,6 +4627,7 @@ private fun AppNavigation(
                         onCycleVisualizationMode = cycleVisualizationMode,
                         onSelectVisualizationMode = setVisualizationMode,
                         onOpenVisualizationSettings = openVisualizationSettings,
+                        onOpenSelectedVisualizationSettings = openSelectedVisualizationSettings,
                         visualizationBarCount = visualizationBarCount,
                         visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
                         visualizationBarRoundnessDp = visualizationBarRoundnessDp,
@@ -4744,6 +4882,7 @@ private fun AppNavigation(
                     onCycleVisualizationMode = cycleVisualizationMode,
                     onSelectVisualizationMode = setVisualizationMode,
                     onOpenVisualizationSettings = openVisualizationSettings,
+                    onOpenSelectedVisualizationSettings = openSelectedVisualizationSettings,
                     visualizationBarCount = visualizationBarCount,
                     visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
                     visualizationBarRoundnessDp = visualizationBarRoundnessDp,

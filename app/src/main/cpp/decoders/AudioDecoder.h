@@ -38,6 +38,12 @@ public:
     virtual std::string getBitDepthLabel() { return "Unknown"; }
     virtual int getDisplayChannelCount() { return getChannelCount(); }
     virtual int getChannelCount() = 0;
+    virtual int getSubtuneCount() const { return 1; }
+    virtual int getCurrentSubtuneIndex() const { return 0; }
+    virtual bool selectSubtune(int /*index*/) { return false; }
+    virtual std::string getSubtuneTitle(int /*index*/) { return ""; }
+    virtual std::string getSubtuneArtist(int /*index*/) { return ""; }
+    virtual double getSubtuneDurationSeconds(int /*index*/) { return 0.0; }
     virtual std::string getTitle() = 0;
     virtual std::string getArtist() = 0;
     virtual std::string getComposer() { return ""; }

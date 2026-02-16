@@ -119,6 +119,9 @@ fun PlayerScreen(
     onPreviousSubtune: () -> Unit,
     onNextSubtune: () -> Unit,
     onOpenSubtuneSelector: () -> Unit,
+    canPreviousSubtune: Boolean,
+    canNextSubtune: Boolean,
+    canOpenSubtuneSelector: Boolean,
     onCycleRepeatMode: () -> Unit,
     canOpenCoreSettings: Boolean,
     onOpenCoreSettings: () -> Unit,
@@ -192,21 +195,25 @@ fun PlayerScreen(
                     }
                     // Left Arrow: Seek backward 5 seconds (without Ctrl)
                     Key.DirectionLeft -> {
-                        if (!keyEvent.isCtrlPressed && canSeek && hasReliableDuration) {
+                        if (keyEvent.isCtrlPressed && canPreviousSubtune) {
+                            onPreviousSubtune()
+                            true
+                        } else if (!keyEvent.isCtrlPressed && canSeek && hasReliableDuration) {
                             val newPosition = (positionSeconds - 5.0).coerceAtLeast(0.0)
                             onSeek(newPosition)
                             true
                         } else false
-                        // Note: Ctrl+Left for previous subtune not implemented yet (subtunes not ready)
                     }
                     // Right Arrow: Seek forward 5 seconds (without Ctrl)
                     Key.DirectionRight -> {
-                        if (!keyEvent.isCtrlPressed && canSeek && hasReliableDuration) {
+                        if (keyEvent.isCtrlPressed && canNextSubtune) {
+                            onNextSubtune()
+                            true
+                        } else if (!keyEvent.isCtrlPressed && canSeek && hasReliableDuration) {
                             val newPosition = (positionSeconds + 5.0).coerceAtMost(durationSeconds)
                             onSeek(newPosition)
                             true
                         } else false
-                        // Note: Ctrl+Right for next subtune not implemented yet (subtunes not ready)
                     }
                     // Page Up: Previous track
                     Key.PageUp -> {
@@ -391,6 +398,9 @@ fun PlayerScreen(
                             onPreviousSubtune = onPreviousSubtune,
                             onNextSubtune = onNextSubtune,
                             onOpenSubtuneSelector = onOpenSubtuneSelector,
+                            canPreviousSubtune = canPreviousSubtune,
+                            canNextSubtune = canNextSubtune,
+                            canOpenSubtuneSelector = canOpenSubtuneSelector,
                             onStopAndClear = onStopAndClear,
                             onCycleRepeatMode = onCycleRepeatMode
                         )
@@ -478,6 +488,9 @@ fun PlayerScreen(
                         onPreviousSubtune = onPreviousSubtune,
                         onNextSubtune = onNextSubtune,
                         onOpenSubtuneSelector = onOpenSubtuneSelector,
+                        canPreviousSubtune = canPreviousSubtune,
+                        canNextSubtune = canNextSubtune,
+                        canOpenSubtuneSelector = canOpenSubtuneSelector,
                         onStopAndClear = onStopAndClear,
                         onCycleRepeatMode = onCycleRepeatMode
                     )
@@ -1368,6 +1381,9 @@ private fun TransportControls(
     onPreviousSubtune: () -> Unit,
     onNextSubtune: () -> Unit,
     onOpenSubtuneSelector: () -> Unit,
+    canPreviousSubtune: Boolean,
+    canNextSubtune: Boolean,
+    canOpenSubtuneSelector: Boolean,
     onStopAndClear: () -> Unit,
     onCycleRepeatMode: () -> Unit
 ) {
@@ -1551,7 +1567,7 @@ private fun TransportControls(
             ) {
                 FilledTonalIconButton(
                     onClick = onPreviousSubtune,
-                    enabled = false,
+                    enabled = canPreviousSubtune,
                     modifier = Modifier.size(subtuneButtonSize),
                     shape = MaterialTheme.shapes.large,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
@@ -1566,7 +1582,7 @@ private fun TransportControls(
                 Spacer(modifier = Modifier.width(subtuneGap))
                 FilledTonalIconButton(
                     onClick = onOpenSubtuneSelector,
-                    enabled = false,
+                    enabled = canOpenSubtuneSelector,
                     modifier = Modifier.size(subtuneButtonSize),
                     shape = MaterialTheme.shapes.large,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
@@ -1581,7 +1597,7 @@ private fun TransportControls(
                 Spacer(modifier = Modifier.width(subtuneGap))
                 FilledTonalIconButton(
                     onClick = onNextSubtune,
-                    enabled = false,
+                    enabled = canNextSubtune,
                     modifier = Modifier.size(subtuneButtonSize),
                     shape = MaterialTheme.shapes.large,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(

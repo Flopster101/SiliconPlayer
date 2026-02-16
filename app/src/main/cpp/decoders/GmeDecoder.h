@@ -24,6 +24,12 @@ public:
     std::string getBitDepthLabel() override;
     int getDisplayChannelCount() override;
     int getChannelCount() override;
+    int getSubtuneCount() const override;
+    int getCurrentSubtuneIndex() const override;
+    bool selectSubtune(int index) override;
+    std::string getSubtuneTitle(int index) override;
+    std::string getSubtuneArtist(int index) override;
+    double getSubtuneDurationSeconds(int index) override;
     std::string getTitle() override;
     std::string getArtist() override;
     std::string getComposer() override;
@@ -57,7 +63,7 @@ public:
 
 private:
     Music_Emu* emu = nullptr;
-    std::mutex decodeMutex;
+    mutable std::mutex decodeMutex;
 
     double duration = 0.0;
     int bitDepth = 16;
@@ -92,6 +98,7 @@ private:
     int voiceCount = 0;
 
     void closeInternal();
+    bool applyTrackInfoLocked(int trackIndex);
     void applyRepeatBehaviorLocked();
     void applyCoreOptionsLocked();
     int resolveOpenSampleRateLocked(const char* path) const;

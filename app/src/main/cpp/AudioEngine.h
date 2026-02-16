@@ -46,6 +46,12 @@ public:
     int getBitDepth();
     std::string getBitDepthLabel();
     std::string getCurrentDecoderName();
+    int getSubtuneCount();
+    int getCurrentSubtuneIndex();
+    bool selectSubtune(int index);
+    std::string getSubtuneTitle(int index);
+    std::string getSubtuneArtist(int index);
+    double getSubtuneDurationSeconds(int index);
     int getDecoderRenderSampleRateHz() const;
     int getOutputStreamSampleRateHz() const;
     std::string getOpenMptModuleTypeLong();

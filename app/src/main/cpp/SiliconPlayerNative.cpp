@@ -658,6 +658,56 @@ Java_com_flopster101_siliconplayer_NativeBridge_getCurrentDecoderName(JNIEnv* en
 }
 
 extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSubtuneCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) {
+        return 0;
+    }
+    return static_cast<jint>(audioEngine->getSubtuneCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getCurrentSubtuneIndex(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) {
+        return 0;
+    }
+    return static_cast<jint>(audioEngine->getCurrentSubtuneIndex());
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_selectSubtune(JNIEnv*, jobject, jint index) {
+    if (audioEngine == nullptr) {
+        return JNI_FALSE;
+    }
+    return audioEngine->selectSubtune(static_cast<int>(index)) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSubtuneTitle(JNIEnv* env, jobject, jint index) {
+    if (audioEngine == nullptr) {
+        return env->NewStringUTF("");
+    }
+    const std::string value = audioEngine->getSubtuneTitle(static_cast<int>(index));
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSubtuneArtist(JNIEnv* env, jobject, jint index) {
+    if (audioEngine == nullptr) {
+        return env->NewStringUTF("");
+    }
+    const std::string value = audioEngine->getSubtuneArtist(static_cast<int>(index));
+    return env->NewStringUTF(value.c_str());
+}
+
+extern "C" JNIEXPORT jdouble JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSubtuneDurationSeconds(JNIEnv*, jobject, jint index) {
+    if (audioEngine == nullptr) {
+        return 0.0;
+    }
+    return static_cast<jdouble>(audioEngine->getSubtuneDurationSeconds(static_cast<int>(index)));
+}
+
+extern "C" JNIEXPORT jint JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getDecoderRenderSampleRateHz(JNIEnv* env, jobject thiz) {
     return Java_com_flopster101_siliconplayer_MainActivity_getDecoderRenderSampleRateHz(env, thiz);
 }

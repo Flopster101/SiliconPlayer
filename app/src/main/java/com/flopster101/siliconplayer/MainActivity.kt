@@ -168,6 +168,13 @@ private data class RemoteDownloadResult(
     val cancelled: Boolean = false
 )
 
+private data class SubtuneEntry(
+    val index: Int,
+    val title: String,
+    val artist: String,
+    val durationSeconds: Double
+)
+
 private fun formatByteCount(bytes: Long): String {
     if (bytes < 1024L) return "$bytes B"
     val units = arrayOf("KB", "MB", "GB", "TB")
@@ -178,6 +185,14 @@ private fun formatByteCount(bytes: Long): String {
         unitIndex++
     }
     return String.format(Locale.US, "%.1f %s", value, units[unitIndex])
+}
+
+private fun formatShortDuration(seconds: Double): String {
+    if (seconds <= 0.0 || !seconds.isFinite()) return "--:--"
+    val totalSeconds = seconds.toInt().coerceAtLeast(0)
+    val minutes = totalSeconds / 60
+    val remainingSeconds = totalSeconds % 60
+    return String.format(Locale.US, "%d:%02d", minutes, remainingSeconds)
 }
 
 private fun guessMimeTypeFromFilename(fileName: String): String {
@@ -946,6 +961,10 @@ private fun AppNavigation(
     var metadataSampleRate by remember { mutableIntStateOf(0) }
     var metadataChannelCount by remember { mutableIntStateOf(0) }
     var metadataBitDepthLabel by remember { mutableStateOf("Unknown") }
+    var subtuneCount by remember { mutableIntStateOf(0) }
+    var currentSubtuneIndex by remember { mutableIntStateOf(0) }
+    var subtuneEntries by remember { mutableStateOf<List<SubtuneEntry>>(emptyList()) }
+    var showSubtuneSelectorDialog by remember { mutableStateOf(false) }
     var repeatModeCapabilitiesFlags by remember { mutableIntStateOf(REPEAT_CAP_ALL) }
     var playbackCapabilitiesFlags by remember {
         mutableIntStateOf(
@@ -1754,6 +1773,43 @@ private fun AppNavigation(
         )
     }
 
+    fun refreshSubtuneState() {
+        val currentFile = selectedFile
+        if (currentFile == null) {
+            subtuneCount = 0
+            currentSubtuneIndex = 0
+            subtuneEntries = emptyList()
+            showSubtuneSelectorDialog = false
+            return
+        }
+        val count = NativeBridge.getSubtuneCount().coerceAtLeast(0)
+        subtuneCount = count
+        currentSubtuneIndex = if (count <= 0) {
+            0
+        } else {
+            NativeBridge.getCurrentSubtuneIndex().coerceIn(0, count - 1)
+        }
+    }
+
+    fun refreshSubtuneEntries() {
+        val count = subtuneCount
+        if (count <= 0) {
+            subtuneEntries = emptyList()
+            return
+        }
+        subtuneEntries = (0 until count).map { index ->
+            val title = NativeBridge.getSubtuneTitle(index).trim()
+            val artist = NativeBridge.getSubtuneArtist(index).trim()
+            val durationSeconds = NativeBridge.getSubtuneDurationSeconds(index)
+            SubtuneEntry(
+                index = index,
+                title = title.ifBlank { "Subtune ${index + 1}" },
+                artist = artist,
+                durationSeconds = durationSeconds
+            )
+        }
+    }
+
     fun resolveShareableFileForRecent(entry: RecentPathEntry): File? {
         val normalized = normalizeSourceIdentity(entry.path) ?: return null
         val uri = Uri.parse(normalized)
@@ -1876,6 +1932,31 @@ private fun AppNavigation(
         duration = snapshot.durationSeconds
     }
 
+    fun selectSubtune(index: Int): Boolean {
+        if (selectedFile == null) return false
+        if (!NativeBridge.selectSubtune(index)) {
+            Toast.makeText(context, "Unable to switch subtune", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        applyNativeTrackSnapshot(readNativeTrackSnapshot())
+        position = 0.0
+        duration = NativeBridge.getDuration()
+        isPlaying = NativeBridge.isEnginePlaying()
+        refreshRepeatModeForTrack()
+        refreshSubtuneState()
+        val sourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
+        if (sourceId != null) {
+            addRecentPlayedTrack(
+                path = sourceId,
+                locationId = if (isLocalPlayableFile(selectedFile)) lastBrowserLocationId else null,
+                title = metadataTitle,
+                artist = metadataArtist
+            )
+        }
+        syncPlaybackService()
+        return true
+    }
+
     fun clearPlaybackMetadataState() {
         selectedFile = null
         currentPlaybackSourceId = null
@@ -1887,6 +1968,10 @@ private fun AppNavigation(
         metadataSampleRate = 0
         metadataChannelCount = 0
         metadataBitDepthLabel = "Unknown"
+        subtuneCount = 0
+        currentSubtuneIndex = 0
+        subtuneEntries = emptyList()
+        showSubtuneSelectorDialog = false
         repeatModeCapabilitiesFlags = REPEAT_CAP_ALL
         playbackCapabilitiesFlags = PLAYBACK_CAP_SEEK or
             PLAYBACK_CAP_RELIABLE_DURATION or
@@ -1923,6 +2008,7 @@ private fun AppNavigation(
         }
         NativeBridge.loadAudio(file.absolutePath)
         applyNativeTrackSnapshot(readNativeTrackSnapshot())
+        refreshSubtuneState()
         position = 0.0
         artworkBitmap = null
         refreshRepeatModeForTrack()
@@ -2021,6 +2107,7 @@ private fun AppNavigation(
                 songVolumeDb = 0f
                 NativeBridge.setSongGain(0f)
                 applyNativeTrackSnapshot(snapshot)
+                refreshSubtuneState()
                 position = 0.0
                 artworkBitmap = null
                 refreshRepeatModeForTrack()
@@ -2300,6 +2387,7 @@ private fun AppNavigation(
         }
 
         applyNativeTrackSnapshot(readNativeTrackSnapshot())
+        refreshSubtuneState()
         position = NativeBridge.getPosition()
         isPlaying = NativeBridge.isEnginePlaying()
         artworkBitmap = null
@@ -2360,6 +2448,17 @@ private fun AppNavigation(
                 displayFile = selectedFile,
                 sourceId = currentPlaybackSourceId
             )
+        }
+    }
+
+    LaunchedEffect(selectedFile, currentPlaybackSourceId, isPlayerSurfaceVisible) {
+        if (!isPlayerSurfaceVisible || selectedFile == null) {
+            subtuneCount = 0
+            currentSubtuneIndex = 0
+            subtuneEntries = emptyList()
+            showSubtuneSelectorDialog = false
+        } else {
+            refreshSubtuneState()
         }
     }
 
@@ -4000,6 +4099,9 @@ private fun AppNavigation(
                         onPreviousSubtune = {},
                         onNextSubtune = {},
                         onOpenSubtuneSelector = {},
+                        canPreviousSubtune = false,
+                        canNextSubtune = false,
+                        canOpenSubtuneSelector = false,
                         onCycleRepeatMode = {},
                         canOpenCoreSettings = canOpenCurrentCoreSettings,
                         onOpenCoreSettings = openCurrentCoreSettings,
@@ -4216,9 +4318,30 @@ private fun AppNavigation(
                     },
                     onPreviousTrack = { handlePreviousTrackAction() },
                     onNextTrack = { playAdjacentTrack(1) },
-                    onPreviousSubtune = {},
-                    onNextSubtune = {},
-                    onOpenSubtuneSelector = {},
+                    onPreviousSubtune = {
+                        val target = (currentSubtuneIndex - 1).coerceAtLeast(0)
+                        if (target != currentSubtuneIndex) {
+                            selectSubtune(target)
+                        }
+                    },
+                    onNextSubtune = {
+                        val maxIndex = (subtuneCount - 1).coerceAtLeast(0)
+                        val target = (currentSubtuneIndex + 1).coerceAtMost(maxIndex)
+                        if (target != currentSubtuneIndex) {
+                            selectSubtune(target)
+                        }
+                    },
+                    onOpenSubtuneSelector = {
+                        if (subtuneCount > 1) {
+                            refreshSubtuneEntries()
+                            showSubtuneSelectorDialog = true
+                        } else {
+                            Toast.makeText(context, "No subtunes available", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    canPreviousSubtune = subtuneCount > 1 && currentSubtuneIndex > 0,
+                    canNextSubtune = subtuneCount > 1 && currentSubtuneIndex < (subtuneCount - 1),
+                    canOpenSubtuneSelector = subtuneCount > 1,
                     onCycleRepeatMode = { cycleRepeatMode() },
                     canOpenCoreSettings = canOpenCurrentCoreSettings,
                     onOpenCoreSettings = openCurrentCoreSettings,
@@ -4378,6 +4501,78 @@ private fun AppNavigation(
                     confirmButton = {
                         TextButton(onClick = { showSoxExperimentalDialog = false }) {
                             Text("OK")
+                        }
+                    }
+                )
+            }
+
+            if (showSubtuneSelectorDialog) {
+                AlertDialog(
+                    onDismissRequest = { showSubtuneSelectorDialog = false },
+                    title = { Text("Subtunes") },
+                    text = {
+                        if (subtuneEntries.isEmpty()) {
+                            Text("No subtunes available.")
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 360.dp)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                subtuneEntries.forEach { entry ->
+                                    val isCurrent = entry.index == currentSubtuneIndex
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(MaterialTheme.shapes.medium)
+                                            .clickable {
+                                                selectSubtune(entry.index)
+                                                showSubtuneSelectorDialog = false
+                                            },
+                                        shape = MaterialTheme.shapes.medium,
+                                        color = if (isCurrent) {
+                                            MaterialTheme.colorScheme.primaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceContainerHigh
+                                        }
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                                        ) {
+                                            Text(
+                                                text = "${entry.index + 1}. ${entry.title}",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            val details = buildString {
+                                                append(formatShortDuration(entry.durationSeconds))
+                                                if (entry.artist.isNotBlank()) {
+                                                    append(" • ")
+                                                    append(entry.artist)
+                                                }
+                                            }
+                                            Text(
+                                                text = details,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showSubtuneSelectorDialog = false }) {
+                            Text("Close")
                         }
                     }
                 )

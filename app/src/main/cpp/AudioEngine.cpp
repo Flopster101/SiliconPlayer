@@ -1239,6 +1239,54 @@ std::string AudioEngine::getCurrentDecoderName() {
     return decoder->getName();
 }
 
+int AudioEngine::getSubtuneCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return 0;
+    }
+    return decoder->getSubtuneCount();
+}
+
+int AudioEngine::getCurrentSubtuneIndex() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return 0;
+    }
+    return decoder->getCurrentSubtuneIndex();
+}
+
+bool AudioEngine::selectSubtune(int index) {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return false;
+    }
+    return decoder->selectSubtune(index);
+}
+
+std::string AudioEngine::getSubtuneTitle(int index) {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return "";
+    }
+    return decoder->getSubtuneTitle(index);
+}
+
+std::string AudioEngine::getSubtuneArtist(int index) {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return "";
+    }
+    return decoder->getSubtuneArtist(index);
+}
+
+double AudioEngine::getSubtuneDurationSeconds(int index) {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return 0.0;
+    }
+    return decoder->getSubtuneDurationSeconds(index);
+}
+
 int AudioEngine::getDecoderRenderSampleRateHz() const {
     return decoderRenderSampleRate;
 }

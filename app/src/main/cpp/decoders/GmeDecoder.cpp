@@ -44,6 +44,16 @@ int resolveLoopStartMs(const gme_info_t* info) {
     return -1;
 }
 
+int resolveDurationMs(const gme_info_t* info) {
+    if (!info) return 0;
+    int durationMs = info->play_length;
+    if (durationMs <= 0) durationMs = info->length;
+    if (durationMs <= 0 && info->intro_length > 0 && info->loop_length > 0) {
+        durationMs = info->intro_length + (info->loop_length * 2);
+    }
+    return durationMs;
+}
+
 double parseDoubleString(const std::string& value, double fallback) {
     char* end = nullptr;
     const double parsed = std::strtod(value.c_str(), &end);
@@ -116,37 +126,7 @@ bool GmeDecoder::open(const char* path) {
         return false;
     }
 
-    gme_info_t* info = nullptr;
-    const gme_err_t infoErr = gme_track_info(emu, &info, activeTrack);
-    if (infoErr == nullptr && info != nullptr) {
-        systemName = safeString(info->system);
-        gameName = safeString(info->game);
-        title = safeString(info->song);
-        artist = safeString(info->author);
-        composer = safeString(info->author);
-        genre = systemName;
-        copyrightText = safeString(info->copyright);
-        commentText = safeString(info->comment);
-        dumper = safeString(info->dumper);
-
-        int durationMs = info->play_length;
-        if (durationMs <= 0) durationMs = info->length;
-        if (durationMs <= 0 && info->intro_length > 0 && info->loop_length > 0) {
-            durationMs = info->intro_length + (info->loop_length * 2);
-        }
-        loopStartMs = resolveLoopStartMs(info);
-        loopLengthMs = info->loop_length;
-        hasLoopPoint = loopStartMs >= 0 && loopLengthMs > 0;
-        duration = durationMs > 0 ? static_cast<double>(durationMs) / 1000.0 : 0.0;
-        gme_free_info(info);
-    } else {
-        duration = 0.0;
-        systemName.clear();
-        gameName.clear();
-        copyrightText.clear();
-        commentText.clear();
-        dumper.clear();
-    }
+    applyTrackInfoLocked(activeTrack);
     voiceCount = std::max(0, gme_voice_count(emu));
 
     if (isSpcTrack && spcUseNativeSampleRate && activeSampleRate != 32000) {
@@ -168,10 +148,67 @@ bool GmeDecoder::open(const char* path) {
             closeInternal();
             return false;
         }
+        applyTrackInfoLocked(activeTrack);
     }
 
     applyRepeatBehaviorLocked();
     applyCoreOptionsLocked();
+    return true;
+}
+
+bool GmeDecoder::applyTrackInfoLocked(int trackIndex) {
+    if (!emu || trackIndex < 0 || trackIndex >= trackCount) {
+        duration = 0.0;
+        loopStartMs = -1;
+        loopLengthMs = -1;
+        hasLoopPoint = false;
+        title.clear();
+        artist.clear();
+        composer.clear();
+        genre.clear();
+        systemName.clear();
+        gameName.clear();
+        copyrightText.clear();
+        commentText.clear();
+        dumper.clear();
+        return false;
+    }
+
+    gme_info_t* info = nullptr;
+    const gme_err_t infoErr = gme_track_info(emu, &info, trackIndex);
+    if (infoErr != nullptr || info == nullptr) {
+        duration = 0.0;
+        loopStartMs = -1;
+        loopLengthMs = -1;
+        hasLoopPoint = false;
+        title.clear();
+        artist.clear();
+        composer.clear();
+        genre.clear();
+        systemName.clear();
+        gameName.clear();
+        copyrightText.clear();
+        commentText.clear();
+        dumper.clear();
+        return false;
+    }
+
+    systemName = safeString(info->system);
+    gameName = safeString(info->game);
+    title = safeString(info->song);
+    artist = safeString(info->author);
+    composer = safeString(info->author);
+    genre = systemName;
+    copyrightText = safeString(info->copyright);
+    commentText = safeString(info->comment);
+    dumper = safeString(info->dumper);
+
+    const int durationMs = resolveDurationMs(info);
+    loopStartMs = resolveLoopStartMs(info);
+    loopLengthMs = info->loop_length;
+    hasLoopPoint = loopStartMs >= 0 && loopLengthMs > 0;
+    duration = durationMs > 0 ? static_cast<double>(durationMs) / 1000.0 : 0.0;
+    gme_free_info(info);
     return true;
 }
 
@@ -347,6 +384,88 @@ int GmeDecoder::getDisplayChannelCount() {
 
 int GmeDecoder::getChannelCount() {
     return channels;
+}
+
+int GmeDecoder::getSubtuneCount() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return trackCount;
+}
+
+int GmeDecoder::getCurrentSubtuneIndex() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return activeTrack;
+}
+
+bool GmeDecoder::selectSubtune(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!emu || index < 0 || index >= trackCount) {
+        return false;
+    }
+    if (index == activeTrack) {
+        return true;
+    }
+
+    // libgme repeat/fade behavior is latched on track start.
+    applyRepeatBehaviorLocked();
+    applyCoreOptionsLocked();
+    const gme_err_t startErr = gme_start_track(emu, index);
+    if (startErr != nullptr) {
+        LOGE("gme_start_track(selectSubtune) failed: %s", startErr);
+        return false;
+    }
+    activeTrack = index;
+    pendingTerminalEnd = false;
+    playbackPositionSeconds = 0.0;
+    lastTellMs = 0;
+    applyRepeatBehaviorLocked();
+    applyCoreOptionsLocked();
+    applyTrackInfoLocked(activeTrack);
+    return true;
+}
+
+std::string GmeDecoder::getSubtuneTitle(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!emu || index < 0 || index >= trackCount) {
+        return "";
+    }
+    gme_info_t* info = nullptr;
+    const gme_err_t infoErr = gme_track_info(emu, &info, index);
+    if (infoErr != nullptr || info == nullptr) {
+        return "";
+    }
+    const std::string value = safeString(info->song);
+    gme_free_info(info);
+    return value;
+}
+
+std::string GmeDecoder::getSubtuneArtist(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!emu || index < 0 || index >= trackCount) {
+        return "";
+    }
+    gme_info_t* info = nullptr;
+    const gme_err_t infoErr = gme_track_info(emu, &info, index);
+    if (infoErr != nullptr || info == nullptr) {
+        return "";
+    }
+    const std::string value = safeString(info->author);
+    gme_free_info(info);
+    return value;
+}
+
+double GmeDecoder::getSubtuneDurationSeconds(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!emu || index < 0 || index >= trackCount) {
+        return 0.0;
+    }
+    gme_info_t* info = nullptr;
+    const gme_err_t infoErr = gme_track_info(emu, &info, index);
+    if (infoErr != nullptr || info == nullptr) {
+        return 0.0;
+    }
+    const int durationMs = resolveDurationMs(info);
+    gme_free_info(info);
+    return durationMs > 0 ? static_cast<double>(durationMs) / 1000.0 : 0.0;
 }
 
 std::string GmeDecoder::getTitle() {

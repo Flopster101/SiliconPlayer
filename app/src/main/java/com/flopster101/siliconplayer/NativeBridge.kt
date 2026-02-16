@@ -27,6 +27,12 @@ object NativeBridge {
     external fun getRepeatModeCapabilities(): Int
     external fun getPlaybackCapabilities(): Int
     external fun getCurrentDecoderName(): String
+    external fun getSubtuneCount(): Int
+    external fun getCurrentSubtuneIndex(): Int
+    external fun selectSubtune(index: Int): Boolean
+    external fun getSubtuneTitle(index: Int): String
+    external fun getSubtuneArtist(index: Int): String
+    external fun getSubtuneDurationSeconds(index: Int): Double
     external fun getDecoderRenderSampleRateHz(): Int
     external fun getOutputStreamSampleRateHz(): Int
     external fun getOpenMptModuleTypeLong(): String

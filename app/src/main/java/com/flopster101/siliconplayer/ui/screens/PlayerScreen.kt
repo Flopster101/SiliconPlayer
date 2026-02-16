@@ -183,6 +183,12 @@ fun PlayerScreen(
     val oscGridArtworkColorModeKey = "visualization_osc_grid_color_mode_with_artwork"
     val oscCustomLineColorKey = "visualization_osc_custom_line_color_argb"
     val oscCustomGridColorKey = "visualization_osc_custom_grid_color_argb"
+    val barColorModeNoArtworkKey = "visualization_bar_color_mode_no_artwork"
+    val barColorModeWithArtworkKey = "visualization_bar_color_mode_with_artwork"
+    val barCustomColorKey = "visualization_bar_custom_color_argb"
+    val vuColorModeNoArtworkKey = "visualization_vu_color_mode_no_artwork"
+    val vuColorModeWithArtworkKey = "visualization_vu_color_mode_with_artwork"
+    val vuCustomColorKey = "visualization_vu_custom_color_argb"
     var visualizationOscWindowMs by remember {
         mutableIntStateOf(prefs.getInt("visualization_osc_window_ms", 40).coerceIn(5, 200))
     }
@@ -248,6 +254,44 @@ fun PlayerScreen(
     }
     var visualizationOscCustomGridColorArgb by remember {
         mutableIntStateOf(prefs.getInt(oscCustomGridColorKey, 0x66FFFFFF))
+    }
+    var visualizationBarColorModeNoArtwork by remember {
+        mutableStateOf(
+            VisualizationOscColorMode.fromStorage(
+                prefs.getString(barColorModeNoArtworkKey, VisualizationOscColorMode.Monet.storageValue),
+                VisualizationOscColorMode.Monet
+            )
+        )
+    }
+    var visualizationBarColorModeWithArtwork by remember {
+        mutableStateOf(
+            VisualizationOscColorMode.fromStorage(
+                prefs.getString(barColorModeWithArtworkKey, VisualizationOscColorMode.Artwork.storageValue),
+                VisualizationOscColorMode.Artwork
+            )
+        )
+    }
+    var visualizationBarCustomColorArgb by remember {
+        mutableIntStateOf(prefs.getInt(barCustomColorKey, 0xFF6BD8FF.toInt()))
+    }
+    var visualizationVuColorModeNoArtwork by remember {
+        mutableStateOf(
+            VisualizationOscColorMode.fromStorage(
+                prefs.getString(vuColorModeNoArtworkKey, VisualizationOscColorMode.Monet.storageValue),
+                VisualizationOscColorMode.Monet
+            )
+        )
+    }
+    var visualizationVuColorModeWithArtwork by remember {
+        mutableStateOf(
+            VisualizationOscColorMode.fromStorage(
+                prefs.getString(vuColorModeWithArtworkKey, VisualizationOscColorMode.Artwork.storageValue),
+                VisualizationOscColorMode.Artwork
+            )
+        )
+    }
+    var visualizationVuCustomColorArgb by remember {
+        mutableIntStateOf(prefs.getInt(vuCustomColorKey, 0xFF6BD8FF.toInt()))
     }
     DisposableEffect(prefs) {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, key ->
@@ -335,6 +379,56 @@ fun PlayerScreen(
                 oscCustomGridColorKey -> {
                     visualizationOscCustomGridColorArgb =
                         sharedPrefs.getInt(oscCustomGridColorKey, 0x66FFFFFF)
+                }
+
+                barColorModeNoArtworkKey -> {
+                    visualizationBarColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            barColorModeNoArtworkKey,
+                            VisualizationOscColorMode.Monet.storageValue
+                        ),
+                        VisualizationOscColorMode.Monet
+                    )
+                }
+
+                barColorModeWithArtworkKey -> {
+                    visualizationBarColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            barColorModeWithArtworkKey,
+                            VisualizationOscColorMode.Artwork.storageValue
+                        ),
+                        VisualizationOscColorMode.Artwork
+                    )
+                }
+
+                barCustomColorKey -> {
+                    visualizationBarCustomColorArgb =
+                        sharedPrefs.getInt(barCustomColorKey, 0xFF6BD8FF.toInt())
+                }
+
+                vuColorModeNoArtworkKey -> {
+                    visualizationVuColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            vuColorModeNoArtworkKey,
+                            VisualizationOscColorMode.Monet.storageValue
+                        ),
+                        VisualizationOscColorMode.Monet
+                    )
+                }
+
+                vuColorModeWithArtworkKey -> {
+                    visualizationVuColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            vuColorModeWithArtworkKey,
+                            VisualizationOscColorMode.Artwork.storageValue
+                        ),
+                        VisualizationOscColorMode.Artwork
+                    )
+                }
+
+                vuCustomColorKey -> {
+                    visualizationVuCustomColorArgb =
+                        sharedPrefs.getInt(vuCustomColorKey, 0xFF6BD8FF.toInt())
                 }
             }
         }
@@ -625,6 +719,9 @@ fun PlayerScreen(
                         barRoundnessDp = visualizationBarRoundnessDp,
                         barOverlayArtwork = visualizationBarOverlayArtwork,
                         barUseThemeColor = visualizationBarUseThemeColor,
+                        barColorModeNoArtwork = visualizationBarColorModeNoArtwork,
+                        barColorModeWithArtwork = visualizationBarColorModeWithArtwork,
+                        barCustomColorArgb = visualizationBarCustomColorArgb,
                         oscStereo = visualizationOscStereo,
                         oscLineWidthDp = visualizationOscLineWidthDp,
                         oscGridWidthDp = visualizationOscGridWidthDp,
@@ -637,6 +734,9 @@ fun PlayerScreen(
                         oscCustomGridColorArgb = visualizationOscCustomGridColorArgb,
                         vuAnchor = visualizationVuAnchor,
                         vuUseThemeColor = visualizationVuUseThemeColor,
+                        vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
+                        vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
+                        vuCustomColorArgb = visualizationVuCustomColorArgb,
                         waveformLeft = visWaveLeft,
                         waveformRight = visWaveRight,
                         bars = visBarsSmoothed,
@@ -746,6 +846,9 @@ fun PlayerScreen(
                         barRoundnessDp = visualizationBarRoundnessDp,
                         barOverlayArtwork = visualizationBarOverlayArtwork,
                         barUseThemeColor = visualizationBarUseThemeColor,
+                        barColorModeNoArtwork = visualizationBarColorModeNoArtwork,
+                        barColorModeWithArtwork = visualizationBarColorModeWithArtwork,
+                        barCustomColorArgb = visualizationBarCustomColorArgb,
                         oscStereo = visualizationOscStereo,
                         oscLineWidthDp = visualizationOscLineWidthDp,
                         oscGridWidthDp = visualizationOscGridWidthDp,
@@ -758,6 +861,9 @@ fun PlayerScreen(
                         oscCustomGridColorArgb = visualizationOscCustomGridColorArgb,
                         vuAnchor = visualizationVuAnchor,
                         vuUseThemeColor = visualizationVuUseThemeColor,
+                        vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
+                        vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
+                        vuCustomColorArgb = visualizationVuCustomColorArgb,
                         waveformLeft = visWaveLeft,
                         waveformRight = visWaveRight,
                         bars = visBarsSmoothed,
@@ -946,6 +1052,9 @@ private fun AlbumArtPlaceholder(
     barRoundnessDp: Int,
     barOverlayArtwork: Boolean,
     barUseThemeColor: Boolean,
+    barColorModeNoArtwork: VisualizationOscColorMode,
+    barColorModeWithArtwork: VisualizationOscColorMode,
+    barCustomColorArgb: Int,
     oscStereo: Boolean,
     oscLineWidthDp: Int,
     oscGridWidthDp: Int,
@@ -958,6 +1067,9 @@ private fun AlbumArtPlaceholder(
     oscCustomGridColorArgb: Int,
     vuAnchor: VisualizationVuAnchor,
     vuUseThemeColor: Boolean,
+    vuColorModeNoArtwork: VisualizationOscColorMode,
+    vuColorModeWithArtwork: VisualizationOscColorMode,
+    vuCustomColorArgb: Int,
     waveformLeft: FloatArray,
     waveformRight: FloatArray,
     bars: FloatArray,
@@ -1030,6 +1142,9 @@ private fun AlbumArtPlaceholder(
                 barRoundnessDp = barRoundnessDp,
                 barOverlayArtwork = barOverlayArtwork,
                 barUseThemeColor = barUseThemeColor,
+                barColorModeNoArtwork = barColorModeNoArtwork,
+                barColorModeWithArtwork = barColorModeWithArtwork,
+                barCustomColorArgb = barCustomColorArgb,
                 oscStereo = oscStereo,
                 artwork = artwork,
                 oscLineWidthDp = oscLineWidthDp,
@@ -1043,6 +1158,9 @@ private fun AlbumArtPlaceholder(
                 oscCustomGridColorArgb = oscCustomGridColorArgb,
                 vuAnchor = vuAnchor,
                 vuUseThemeColor = vuUseThemeColor,
+                vuColorModeNoArtwork = vuColorModeNoArtwork,
+                vuColorModeWithArtwork = vuColorModeWithArtwork,
+                vuCustomColorArgb = vuCustomColorArgb,
                 modifier = Modifier.matchParentSize()
             )
         }

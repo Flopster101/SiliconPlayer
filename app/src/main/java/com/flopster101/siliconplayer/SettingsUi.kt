@@ -1747,9 +1747,45 @@ internal fun SettingsScreen(
                         }
                     }
                     SettingsRoute.VisualizationBasicBars -> {
+                        val prefsName = "silicon_player_settings"
+                        val barColorModeNoArtworkKey = "visualization_bar_color_mode_no_artwork"
+                        val barColorModeWithArtworkKey = "visualization_bar_color_mode_with_artwork"
+                        val barCustomColorKey = "visualization_bar_custom_color_argb"
+                        val context = LocalContext.current
+                        val prefs = remember(context) {
+                            context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+                        }
+                        var barColorModeNoArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        barColorModeNoArtworkKey,
+                                        VisualizationOscColorMode.Monet.storageValue
+                                    ),
+                                    VisualizationOscColorMode.Monet
+                                )
+                            )
+                        }
+                        var barColorModeWithArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        barColorModeWithArtworkKey,
+                                        VisualizationOscColorMode.Artwork.storageValue
+                                    ),
+                                    VisualizationOscColorMode.Artwork
+                                )
+                            )
+                        }
+                        var barCustomColorArgb by remember {
+                            mutableIntStateOf(prefs.getInt(barCustomColorKey, 0xFF6BD8FF.toInt()))
+                        }
                         var showBarCountDialog by remember { mutableStateOf(false) }
                         var showBarSmoothingDialog by remember { mutableStateOf(false) }
                         var showBarRoundnessDialog by remember { mutableStateOf(false) }
+                        var showBarColorModeNoArtworkDialog by remember { mutableStateOf(false) }
+                        var showBarColorModeWithArtworkDialog by remember { mutableStateOf(false) }
+                        var showBarCustomColorDialog by remember { mutableStateOf(false) }
 
                         SettingsSectionLabel("Bars")
                         SettingsItemCard(
@@ -1785,6 +1821,30 @@ internal fun SettingsScreen(
                             description = "Use app theme color for bars instead of alternate accent.",
                             checked = visualizationBarUseThemeColor,
                             onCheckedChange = onVisualizationBarUseThemeColorChanged
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Colors (no artwork)")
+                        SettingsItemCard(
+                            title = "Bar color",
+                            description = barColorModeNoArtwork.label,
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showBarColorModeNoArtworkDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsSectionLabel("Colors (with artwork)")
+                        SettingsItemCard(
+                            title = "Bar color",
+                            description = barColorModeWithArtwork.label,
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showBarColorModeWithArtworkDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsSectionLabel("Custom color")
+                        SettingsItemCard(
+                            title = "Custom bar color",
+                            description = String.format(Locale.US, "#%06X", barCustomColorArgb and 0xFFFFFF),
+                            icon = Icons.Default.Palette,
+                            onClick = { showBarCustomColorDialog = true }
                         )
 
                         if (showBarCountDialog) {
@@ -1826,6 +1886,53 @@ internal fun SettingsScreen(
                                 onConfirm = { value ->
                                     onVisualizationBarRoundnessDpChanged(value)
                                     showBarRoundnessDialog = false
+                                }
+                            )
+                        }
+                        if (showBarColorModeNoArtworkDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Bar color (no artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = barColorModeNoArtwork,
+                                onDismiss = { showBarColorModeNoArtworkDialog = false },
+                                onSelect = { mode ->
+                                    barColorModeNoArtwork = mode
+                                    prefs.edit().putString(barColorModeNoArtworkKey, mode.storageValue).apply()
+                                    showBarColorModeNoArtworkDialog = false
+                                }
+                            )
+                        }
+                        if (showBarColorModeWithArtworkDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Bar color (with artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Artwork,
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = barColorModeWithArtwork,
+                                onDismiss = { showBarColorModeWithArtworkDialog = false },
+                                onSelect = { mode ->
+                                    barColorModeWithArtwork = mode
+                                    prefs.edit().putString(barColorModeWithArtworkKey, mode.storageValue).apply()
+                                    showBarColorModeWithArtworkDialog = false
+                                }
+                            )
+                        }
+                        if (showBarCustomColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom bar color",
+                                initialArgb = barCustomColorArgb,
+                                onDismiss = { showBarCustomColorDialog = false },
+                                onConfirm = { argb ->
+                                    barCustomColorArgb = argb
+                                    prefs.edit().putInt(barCustomColorKey, argb).apply()
+                                    showBarCustomColorDialog = false
                                 }
                             )
                         }
@@ -2292,8 +2399,44 @@ internal fun SettingsScreen(
                         }
                     }
                     SettingsRoute.VisualizationBasicVuMeters -> {
+                        val prefsName = "silicon_player_settings"
+                        val vuColorModeNoArtworkKey = "visualization_vu_color_mode_no_artwork"
+                        val vuColorModeWithArtworkKey = "visualization_vu_color_mode_with_artwork"
+                        val vuCustomColorKey = "visualization_vu_custom_color_argb"
+                        val context = LocalContext.current
+                        val prefs = remember(context) {
+                            context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+                        }
+                        var vuColorModeNoArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        vuColorModeNoArtworkKey,
+                                        VisualizationOscColorMode.Monet.storageValue
+                                    ),
+                                    VisualizationOscColorMode.Monet
+                                )
+                            )
+                        }
+                        var vuColorModeWithArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        vuColorModeWithArtworkKey,
+                                        VisualizationOscColorMode.Artwork.storageValue
+                                    ),
+                                    VisualizationOscColorMode.Artwork
+                                )
+                            )
+                        }
+                        var vuCustomColorArgb by remember {
+                            mutableIntStateOf(prefs.getInt(vuCustomColorKey, 0xFF6BD8FF.toInt()))
+                        }
                         var showVuAnchorDialog by remember { mutableStateOf(false) }
                         var showVuSmoothingDialog by remember { mutableStateOf(false) }
+                        var showVuColorModeNoArtworkDialog by remember { mutableStateOf(false) }
+                        var showVuColorModeWithArtworkDialog by remember { mutableStateOf(false) }
+                        var showVuCustomColorDialog by remember { mutableStateOf(false) }
                         SettingsSectionLabel("VU meters")
                         SettingsItemCard(
                             title = "Anchor position",
@@ -2314,6 +2457,30 @@ internal fun SettingsScreen(
                             description = "Use app theme color for VU bars instead of alternate accent.",
                             checked = visualizationVuUseThemeColor,
                             onCheckedChange = onVisualizationVuUseThemeColorChanged
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Colors (no artwork)")
+                        SettingsItemCard(
+                            title = "VU color",
+                            description = vuColorModeNoArtwork.label,
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showVuColorModeNoArtworkDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsSectionLabel("Colors (with artwork)")
+                        SettingsItemCard(
+                            title = "VU color",
+                            description = vuColorModeWithArtwork.label,
+                            icon = Icons.Default.MoreHoriz,
+                            onClick = { showVuColorModeWithArtworkDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsSectionLabel("Custom color")
+                        SettingsItemCard(
+                            title = "Custom VU color",
+                            description = String.format(Locale.US, "#%06X", vuCustomColorArgb and 0xFFFFFF),
+                            icon = Icons.Default.Palette,
+                            onClick = { showVuCustomColorDialog = true }
                         )
                         if (showVuSmoothingDialog) {
                             SteppedIntSliderDialog(
@@ -2365,6 +2532,53 @@ internal fun SettingsScreen(
                                     }
                                 },
                                 confirmButton = {}
+                            )
+                        }
+                        if (showVuColorModeNoArtworkDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "VU color (no artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = vuColorModeNoArtwork,
+                                onDismiss = { showVuColorModeNoArtworkDialog = false },
+                                onSelect = { mode ->
+                                    vuColorModeNoArtwork = mode
+                                    prefs.edit().putString(vuColorModeNoArtworkKey, mode.storageValue).apply()
+                                    showVuColorModeNoArtworkDialog = false
+                                }
+                            )
+                        }
+                        if (showVuColorModeWithArtworkDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "VU color (with artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Artwork,
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = vuColorModeWithArtwork,
+                                onDismiss = { showVuColorModeWithArtworkDialog = false },
+                                onSelect = { mode ->
+                                    vuColorModeWithArtwork = mode
+                                    prefs.edit().putString(vuColorModeWithArtworkKey, mode.storageValue).apply()
+                                    showVuColorModeWithArtworkDialog = false
+                                }
+                            )
+                        }
+                        if (showVuCustomColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom VU color",
+                                initialArgb = vuCustomColorArgb,
+                                onDismiss = { showVuCustomColorDialog = false },
+                                onConfirm = { argb ->
+                                    vuCustomColorArgb = argb
+                                    prefs.edit().putInt(vuCustomColorKey, argb).apply()
+                                    showVuCustomColorDialog = false
+                                }
                             )
                         }
                     }

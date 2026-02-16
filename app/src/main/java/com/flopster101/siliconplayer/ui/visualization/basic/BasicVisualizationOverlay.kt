@@ -5,6 +5,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.material3.MaterialTheme
 import com.flopster101.siliconplayer.VisualizationMode
@@ -25,6 +27,9 @@ fun BasicVisualizationOverlay(
     barRoundnessDp: Int,
     barOverlayArtwork: Boolean,
     barUseThemeColor: Boolean,
+    barColorModeNoArtwork: VisualizationOscColorMode,
+    barColorModeWithArtwork: VisualizationOscColorMode,
+    barCustomColorArgb: Int,
     oscStereo: Boolean,
     artwork: ImageBitmap?,
     oscLineWidthDp: Int,
@@ -38,11 +43,14 @@ fun BasicVisualizationOverlay(
     oscCustomGridColorArgb: Int,
     vuAnchor: VisualizationVuAnchor,
     vuUseThemeColor: Boolean,
+    vuColorModeNoArtwork: VisualizationOscColorMode,
+    vuColorModeWithArtwork: VisualizationOscColorMode,
+    vuCustomColorArgb: Int,
     modifier: Modifier = Modifier
 ) {
     if (mode == VisualizationMode.Off) return
 
-    val barColor = if (barUseThemeColor) {
+    val monetBarColor = if (barUseThemeColor) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
     } else {
         MaterialTheme.colorScheme.tertiary.copy(alpha = 0.85f)
@@ -54,8 +62,17 @@ fun BasicVisualizationOverlay(
     } ?: monetOscLineColor
     val artworkGridColor = artworkBaseColor.copy(alpha = 0.34f)
     val hasArtwork = artwork != null
+    val barCustomColor = Color(barCustomColorArgb)
     val customLineColor = Color(oscCustomLineColorArgb)
     val customGridColor = Color(oscCustomGridColorArgb)
+    val barColor = resolveOscColor(
+        hasArtwork = hasArtwork,
+        noArtworkMode = barColorModeNoArtwork,
+        withArtworkMode = barColorModeWithArtwork,
+        artworkColor = artworkBaseColor.copy(alpha = monetBarColor.alpha),
+        monetColor = monetBarColor,
+        customColor = barCustomColor.copy(alpha = monetBarColor.alpha)
+    )
     val oscColor = resolveOscColor(
         hasArtwork = hasArtwork,
         noArtworkMode = oscLineColorModeNoArtwork,
@@ -72,12 +89,23 @@ fun BasicVisualizationOverlay(
         monetColor = monetOscGridColor,
         customColor = customGridColor
     )
-    val vuColor = if (vuUseThemeColor) {
+    val monetVuColor = if (vuUseThemeColor) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
     } else {
         MaterialTheme.colorScheme.tertiary.copy(alpha = 0.9f)
     }
-    val vuBackgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+    val vuCustomColor = Color(vuCustomColorArgb)
+    val vuAccentColor = resolveOscColor(
+        hasArtwork = hasArtwork,
+        noArtworkMode = vuColorModeNoArtwork,
+        withArtworkMode = vuColorModeWithArtwork,
+        artworkColor = artworkBaseColor.copy(alpha = monetVuColor.alpha),
+        monetColor = monetVuColor,
+        customColor = vuCustomColor.copy(alpha = monetVuColor.alpha)
+    )
+    val vuColor = vuAccentColor
+    val vuLabelColor = deriveVuLabelColor(vuAccentColor)
+    val vuBackgroundColor = deriveVuTrackColor(vuAccentColor)
     val barBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
 
     when (mode) {
@@ -114,6 +142,7 @@ fun BasicVisualizationOverlay(
                 channelCount = channelCount,
                 vuAnchor = vuAnchor,
                 vuColor = vuColor,
+                vuLabelColor = vuLabelColor,
                 vuBackgroundColor = vuBackgroundColor,
                 modifier = modifier
             )
@@ -121,6 +150,17 @@ fun BasicVisualizationOverlay(
 
         VisualizationMode.Off -> Unit
     }
+}
+
+private fun deriveVuTrackColor(accent: Color): Color {
+    val neutral = if (accent.luminance() > 0.56f) Color.Black else Color.White
+    // Tonal track variant: tied to accent with contrast-aware neutral shift.
+    return lerp(accent, neutral, 0.72f).copy(alpha = 0.62f)
+}
+
+private fun deriveVuLabelColor(accent: Color): Color {
+    // Label should match the filled VU color.
+    return accent
 }
 
 private fun resolveOscColor(

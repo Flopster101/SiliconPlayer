@@ -719,6 +719,9 @@ private object AppPreferenceKeys {
     const val VISUALIZATION_BAR_ROUNDNESS_DP = "visualization_bar_roundness_dp"
     const val VISUALIZATION_BAR_OVERLAY_ARTWORK = "visualization_bar_overlay_artwork"
     const val VISUALIZATION_BAR_USE_THEME_COLOR = "visualization_bar_use_theme_color"
+    const val VISUALIZATION_BAR_COLOR_MODE_NO_ARTWORK = "visualization_bar_color_mode_no_artwork"
+    const val VISUALIZATION_BAR_COLOR_MODE_WITH_ARTWORK = "visualization_bar_color_mode_with_artwork"
+    const val VISUALIZATION_BAR_CUSTOM_COLOR_ARGB = "visualization_bar_custom_color_argb"
     const val VISUALIZATION_OSC_STEREO = "visualization_osc_stereo"
     const val VISUALIZATION_OSC_WINDOW_MS = "visualization_osc_window_ms"
     const val VISUALIZATION_OSC_TRIGGER_MODE = "visualization_osc_trigger_mode"
@@ -735,6 +738,9 @@ private object AppPreferenceKeys {
     const val VISUALIZATION_VU_ANCHOR = "visualization_vu_anchor"
     const val VISUALIZATION_VU_USE_THEME_COLOR = "visualization_vu_use_theme_color"
     const val VISUALIZATION_VU_SMOOTHING_PERCENT = "visualization_vu_smoothing_percent"
+    const val VISUALIZATION_VU_COLOR_MODE_NO_ARTWORK = "visualization_vu_color_mode_no_artwork"
+    const val VISUALIZATION_VU_COLOR_MODE_WITH_ARTWORK = "visualization_vu_color_mode_with_artwork"
+    const val VISUALIZATION_VU_CUSTOM_COLOR_ARGB = "visualization_vu_custom_color_argb"
 
     // Plugin management keys
     fun decoderEnabledKey(decoderName: String) = "decoder_${decoderName}_enabled"
@@ -4176,6 +4182,20 @@ private fun AppNavigation(
                             visualizationBarRoundnessDp = 6
                             visualizationBarOverlayArtwork = true
                             visualizationBarUseThemeColor = true
+                            prefs.edit()
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_BAR_COLOR_MODE_NO_ARTWORK,
+                                    VisualizationOscColorMode.Monet.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_BAR_COLOR_MODE_WITH_ARTWORK,
+                                    VisualizationOscColorMode.Artwork.storageValue
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_BAR_CUSTOM_COLOR_ARGB,
+                                    0xFF6BD8FF.toInt()
+                                )
+                                .apply()
                         },
                         onResetVisualizationOscilloscopeSettings = {
                             visualizationOscStereo = true
@@ -4216,6 +4236,20 @@ private fun AppNavigation(
                             visualizationVuAnchor = VisualizationVuAnchor.Bottom
                             visualizationVuUseThemeColor = true
                             visualizationVuSmoothingPercent = 40
+                            prefs.edit()
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_VU_COLOR_MODE_NO_ARTWORK,
+                                    VisualizationOscColorMode.Monet.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_VU_COLOR_MODE_WITH_ARTWORK,
+                                    VisualizationOscColorMode.Artwork.storageValue
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_VU_CUSTOM_COLOR_ARGB,
+                                    0xFF6BD8FF.toInt()
+                                )
+                                .apply()
                         },
                         audioFocusInterrupt = audioFocusInterrupt,
                         onAudioFocusInterruptChanged = {
@@ -4388,6 +4422,20 @@ private fun AppNavigation(
                             visualizationBarRoundnessDp = 6
                             visualizationBarOverlayArtwork = true
                             visualizationBarUseThemeColor = true
+                            prefs.edit()
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_BAR_COLOR_MODE_NO_ARTWORK,
+                                    VisualizationOscColorMode.Monet.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_BAR_COLOR_MODE_WITH_ARTWORK,
+                                    VisualizationOscColorMode.Artwork.storageValue
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_BAR_CUSTOM_COLOR_ARGB,
+                                    0xFF6BD8FF.toInt()
+                                )
+                                .apply()
                             visualizationOscStereo = true
                             prefs.edit()
                                 .putInt(AppPreferenceKeys.VISUALIZATION_OSC_WINDOW_MS, 40)
@@ -4424,6 +4472,20 @@ private fun AppNavigation(
                             visualizationVuAnchor = VisualizationVuAnchor.Bottom
                             visualizationVuUseThemeColor = true
                             visualizationVuSmoothingPercent = 40
+                            prefs.edit()
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_VU_COLOR_MODE_NO_ARTWORK,
+                                    VisualizationOscColorMode.Monet.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_VU_COLOR_MODE_WITH_ARTWORK,
+                                    VisualizationOscColorMode.Artwork.storageValue
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_VU_CUSTOM_COLOR_ARGB,
+                                    0xFF6BD8FF.toInt()
+                                )
+                                .apply()
                             browserLaunchLocationId = null
                             browserLaunchDirectoryPath = null
                             onThemeModeChanged(ThemeMode.Auto)

@@ -29,6 +29,7 @@ fun VuMetersVisualization(
     channelCount: Int,
     vuAnchor: VisualizationVuAnchor,
     vuColor: Color,
+    vuLabelColor: Color,
     vuBackgroundColor: Color,
     modifier: Modifier = Modifier
 ) {
@@ -67,7 +68,7 @@ fun VuMetersVisualization(
                     Text(
                         text = label,
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = vuLabelColor,
                         modifier = Modifier.width(42.dp)
                     )
                     LinearProgressIndicator(

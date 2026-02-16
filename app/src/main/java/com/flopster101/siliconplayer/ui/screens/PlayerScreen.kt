@@ -95,7 +95,11 @@ import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOv
 import java.io.File
 import kotlin.math.roundToInt
 import kotlin.math.pow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.coroutineContext
 import androidx.compose.foundation.text.selection.SelectionContainer
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -179,8 +183,8 @@ fun PlayerScreen(
     var visVuSmoothed by remember { mutableStateOf(FloatArray(0)) }
     var visChannelCount by remember { mutableIntStateOf(2) }
     var visChannelScopesFlat by remember { mutableStateOf(FloatArray(0)) }
-    var visOpenMptChannelHistories by remember { mutableStateOf<List<FloatArray>>(emptyList()) }
-    var visOpenMptLastChannelCount by remember { mutableIntStateOf(1) }
+    var visChannelScopeHistories by remember { mutableStateOf<List<FloatArray>>(emptyList()) }
+    var visChannelScopeLastChannelCount by remember { mutableIntStateOf(1) }
     val context = LocalContext.current
     val prefs = remember {
         context.getSharedPreferences("silicon_player_settings", Context.MODE_PRIVATE)
@@ -483,10 +487,10 @@ fun PlayerScreen(
             windowMs = channelScopePrefs.windowMs,
             sampleRateHz = sampleRateHz
         )
-        val channels = visOpenMptChannelHistories.size
+        val channels = visChannelScopeHistories.size
             .takeIf { it > 0 }
-            ?: visOpenMptLastChannelCount.coerceIn(1, 64)
-        visOpenMptChannelHistories = List(channels) { FloatArray(points) }
+            ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
+        visChannelScopeHistories = List(channels) { FloatArray(points) }
     }
     LaunchedEffect(
         visualizationMode,
@@ -559,7 +563,7 @@ fun PlayerScreen(
         isPlaying
     ) {
         if (visualizationMode != VisualizationMode.ChannelScope) {
-            visOpenMptChannelHistories = emptyList()
+            visChannelScopeHistories = emptyList()
             return@LaunchedEffect
         }
         val points = computeChannelScopeSampleCount(
@@ -568,41 +572,35 @@ fun PlayerScreen(
         )
         if (visChannelScopesFlat.isEmpty()) {
             if (!isPlaying) {
-                val channels = visOpenMptChannelHistories.size
+                val channels = visChannelScopeHistories.size
                     .takeIf { it > 0 }
-                    ?: visOpenMptLastChannelCount.coerceIn(1, 64)
-                visOpenMptChannelHistories = List(channels) { FloatArray(points) }
+                    ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
+                visChannelScopeHistories = List(channels) { FloatArray(points) }
                 return@LaunchedEffect
             }
-            visOpenMptChannelHistories = emptyList()
+            visChannelScopeHistories = emptyList()
             return@LaunchedEffect
         }
         if (visChannelScopesFlat.size < points) {
             if (!isPlaying) {
-                val channels = visOpenMptChannelHistories.size
+                val channels = visChannelScopeHistories.size
                     .takeIf { it > 0 }
-                    ?: visOpenMptLastChannelCount.coerceIn(1, 64)
-                visOpenMptChannelHistories = List(channels) { FloatArray(points) }
+                    ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
+                visChannelScopeHistories = List(channels) { FloatArray(points) }
                 return@LaunchedEffect
             }
-            visOpenMptChannelHistories = emptyList()
+            visChannelScopeHistories = emptyList()
             return@LaunchedEffect
         }
-        val channels = (visChannelScopesFlat.size / points).coerceIn(1, 64)
-        visOpenMptLastChannelCount = channels
-        val clamped = MutableList(channels) { index ->
-            val start = index * points
-            val end = (start + points).coerceAtMost(visChannelScopesFlat.size)
-            if (end - start < points) {
-                FloatArray(points)
-            } else {
-                normalizeChannelScopeChannel(visChannelScopesFlat, start, points)
-            }
-        }
-        visOpenMptChannelHistories = clamped
+        val histories = buildChannelScopeHistoriesAsync(
+            flatScopes = visChannelScopesFlat,
+            points = points
+        )
+        visChannelScopeLastChannelCount = histories.size.coerceIn(1, 64)
+        visChannelScopeHistories = histories
     }
     val channelScopeVisualState = ChannelScopeVisualState(
-        channelHistories = visOpenMptChannelHistories,
+        channelHistories = visChannelScopeHistories,
         triggerModeNative = channelScopePrefs.triggerModeNative,
         lineWidthDp = channelScopePrefs.lineWidthDp,
         gridWidthDp = channelScopePrefs.gridWidthDp,
@@ -1330,6 +1328,30 @@ private fun normalizeChannelScopeChannel(
         centered[i] = ((centered[i] - mean) * fixedGain).coerceIn(-1f, 1f)
     }
     return centered
+}
+
+private suspend fun buildChannelScopeHistoriesAsync(
+    flatScopes: FloatArray,
+    points: Int
+): List<FloatArray> {
+    if (points <= 0 || flatScopes.size < points) {
+        return emptyList()
+    }
+    return withContext(Dispatchers.Default) {
+        val channels = (flatScopes.size / points).coerceIn(1, 64)
+        val histories = ArrayList<FloatArray>(channels)
+        for (index in 0 until channels) {
+            coroutineContext.ensureActive()
+            val start = index * points
+            val end = (start + points).coerceAtMost(flatScopes.size)
+            if (end - start < points) {
+                histories.add(FloatArray(points))
+            } else {
+                histories.add(normalizeChannelScopeChannel(flatScopes, start, points))
+            }
+        }
+        histories
+    }
 }
 
 private data class ChannelScopePrefs(

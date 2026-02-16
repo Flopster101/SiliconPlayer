@@ -510,16 +510,21 @@ std::vector<float> LibOpenMPTDecoder::getCurrentChannelScopeSamples(int samplesP
         }
 
         auto& frozenFrames = channelScopeFrozenFrameCount[static_cast<size_t>(channel)];
+        const float channelVu = std::clamp(module->get_current_channel_vu_mono(channel), 0.0f, 1.0f);
+        const bool likelyFreshSignal =
+                (peak > 0.001f) &&
+                (!sameAsPrevious || channelVu > 0.0005f);
         bool suppressStaleScope = false;
-        if (sameAsPrevious && peak > 0.001f) {
+        if (likelyFreshSignal) {
+            frozenFrames = 0;
+        } else {
             if (frozenFrames < 255) {
                 frozenFrames++;
             }
-            if (frozenFrames >= 2) {
+            // Require multiple stale/silent frames before flattening to avoid 1-frame flicker.
+            if (frozenFrames >= 3) {
                 suppressStaleScope = true;
             }
-        } else {
-            frozenFrames = 0;
         }
 
         std::copy(

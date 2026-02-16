@@ -989,36 +989,151 @@ fun PlayerScreen(
         )
     }
     if (showVisualizationPickerDialog) {
+        val dialogConfiguration = LocalConfiguration.current
+        val optionScrollState = rememberScrollState()
+        var optionViewportHeightPx by remember { mutableFloatStateOf(0f) }
+        val listMaxHeight = dialogConfiguration.screenHeightDp.dp * 0.42f
+        val basicModes = availableVisualizationModes.filter {
+            it == VisualizationMode.Off ||
+                it == VisualizationMode.Bars ||
+                it == VisualizationMode.Oscilloscope ||
+                it == VisualizationMode.VuMeters
+        }
+        val advancedModes = availableVisualizationModes.filterNot { basicModes.contains(it) }
+        val scrollbarThumbFraction = remember(optionScrollState.maxValue, optionViewportHeightPx) {
+            if (optionViewportHeightPx <= 0f) {
+                1f
+            } else {
+                val contentHeight = optionViewportHeightPx + optionScrollState.maxValue.toFloat()
+                (optionViewportHeightPx / contentHeight).coerceIn(0.08f, 1f)
+            }
+        }
+        val scrollbarOffsetFraction = remember(optionScrollState.value, optionScrollState.maxValue) {
+            if (optionScrollState.maxValue <= 0) 0f
+            else optionScrollState.value.toFloat() / optionScrollState.maxValue.toFloat()
+        }
         AlertDialog(
             onDismissRequest = { showVisualizationPickerDialog = false },
             title = { Text("Visualization mode") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         text = "Available visualizations depend on the current core and song.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    availableVisualizationModes.forEach { mode ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onSelectVisualizationMode(mode)
-                                    showVisualizationPickerDialog = false
-                                }
-                                .padding(vertical = 1.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = listMaxHeight)
+                            .onSizeChanged { optionViewportHeightPx = it.height.toFloat() }
+                    ) {
+                        CompositionLocalProvider(
+                            androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement provides false
                         ) {
-                            RadioButton(
-                                selected = mode == visualizationMode,
-                                onClick = {
-                                    onSelectVisualizationMode(mode)
-                                    showVisualizationPickerDialog = false
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(end = 10.dp)
+                                    .verticalScroll(optionScrollState),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = "Basic",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 2.dp, bottom = 1.dp)
+                                )
+                                basicModes.forEach { mode ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                onSelectVisualizationMode(mode)
+                                                showVisualizationPickerDialog = false
+                                            }
+                                            .padding(vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = mode == visualizationMode,
+                                            onClick = {
+                                                onSelectVisualizationMode(mode)
+                                                showVisualizationPickerDialog = false
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = mode.label,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
                                 }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Advanced",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 1.dp)
+                                )
+                                if (advancedModes.isEmpty()) {
+                                    Text(
+                                        text = "No advanced visualizations available yet.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(vertical = 2.dp)
+                                    )
+                                } else {
+                                    advancedModes.forEach { mode ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    onSelectVisualizationMode(mode)
+                                                    showVisualizationPickerDialog = false
+                                                }
+                                                .padding(vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            RadioButton(
+                                                selected = mode == visualizationMode,
+                                                onClick = {
+                                                    onSelectVisualizationMode(mode)
+                                                    showVisualizationPickerDialog = false
+                                                }
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = mode.label,
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (optionScrollState.maxValue > 0 && optionViewportHeightPx > 0f) {
+                            val thumbHeightPx = optionViewportHeightPx * scrollbarThumbFraction
+                            val maxOffsetPx = (optionViewportHeightPx - thumbHeightPx).coerceAtLeast(0f)
+                            val thumbOffsetPx = maxOffsetPx * scrollbarOffsetFraction
+                            val dialogDensity = LocalDensity.current
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .width(4.dp)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f))
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(mode.label)
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(y = with(dialogDensity) { thumbOffsetPx.toDp() })
+                                    .width(4.dp)
+                                    .height(with(dialogDensity) { thumbHeightPx.toDp() })
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f))
+                            )
                         }
                     }
                 }

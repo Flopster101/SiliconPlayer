@@ -82,6 +82,7 @@ import android.view.MotionEvent
 import com.flopster101.siliconplayer.RepeatMode
 import com.flopster101.siliconplayer.VisualizationMode
 import com.flopster101.siliconplayer.VisualizationVuAnchor
+import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
 import java.io.File
 import kotlin.math.roundToInt
 import kotlin.math.pow
@@ -774,7 +775,7 @@ private fun AlbumArtPlaceholder(
                     }
                 }
             }
-            VisualizationOverlay(
+            BasicVisualizationOverlay(
                 mode = visualizationMode,
                 bars = bars,
                 waveformLeft = waveformLeft,
@@ -791,196 +792,6 @@ private fun AlbumArtPlaceholder(
                 modifier = Modifier.matchParentSize()
             )
         }
-    }
-}
-
-@Composable
-private fun VisualizationOverlay(
-    mode: VisualizationMode,
-    bars: FloatArray,
-    waveformLeft: FloatArray,
-    waveformRight: FloatArray,
-    vuLevels: FloatArray,
-    channelCount: Int,
-    barCount: Int,
-    barRoundnessDp: Int,
-    barOverlayArtwork: Boolean,
-    barUseThemeColor: Boolean,
-    oscStereo: Boolean,
-    vuAnchor: VisualizationVuAnchor,
-    vuUseThemeColor: Boolean,
-    modifier: Modifier = Modifier
-) {
-    if (mode == VisualizationMode.Off) return
-    val barColor = if (barUseThemeColor) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
-    } else {
-        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.85f)
-    }
-    val oscColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
-    val vuColor = if (vuUseThemeColor) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-    } else {
-        MaterialTheme.colorScheme.tertiary.copy(alpha = 0.9f)
-    }
-    val vuBackgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-    val barBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
-
-    when (mode) {
-        VisualizationMode.Bars -> {
-            Canvas(modifier = modifier.fillMaxSize()) {
-                if (!barOverlayArtwork) {
-                    drawRect(color = barBackgroundColor)
-                }
-                val count = barCount.coerceIn(8, 96)
-                val edgePadPx = 8.dp.toPx()
-                val topHeadroomPx = 8.dp.toPx()
-                val widthPx = (size.width - (edgePadPx * 2f)).coerceAtLeast(1f)
-                val heightPx = (size.height - topHeadroomPx).coerceAtLeast(1f)
-                val baselineY = size.height
-                if (widthPx <= 0f || heightPx <= 0f || count <= 0) return@Canvas
-                val gapPx = (widthPx / count) * 0.18f
-                val barWidth = ((widthPx - gapPx * (count - 1)) / count).coerceAtLeast(1f)
-                val radius = barRoundnessDp.dp.toPx().coerceAtMost(barWidth * 0.45f)
-                val source = if (bars.isNotEmpty()) bars else FloatArray(256) { 0f }
-                val usableMinIndex = 1
-                val usableMaxIndex = (source.size - 1).coerceAtLeast(usableMinIndex + 1)
-                val minForLog = usableMinIndex.toFloat()
-                val maxForLog = usableMaxIndex.toFloat()
-                val logBase = (maxForLog / minForLog).coerceAtLeast(1.001f)
-                val midShiftBias = 0.80f // <1 moves mids/highs slightly to the right.
-                for (i in 0 until count) {
-                    val t0 = i.toFloat() / count.toFloat()
-                    val t1 = (i + 1).toFloat() / count.toFloat()
-                    val t0Mapped = t0.pow(midShiftBias).coerceIn(0f, 1f)
-                    val t1Mapped = t1.pow(midShiftBias).coerceIn(0f, 1f)
-                    val start = (minForLog * logBase.pow(t0Mapped)).roundToInt().coerceIn(usableMinIndex, usableMaxIndex)
-                    val end = (minForLog * logBase.pow(t1Mapped)).roundToInt().coerceIn(start, usableMaxIndex)
-
-                    var sum = 0f
-                    var bandSumSq = 0.0
-                    var bandCount = 0
-                    for (idx in start..end) {
-                        val v = source[idx].coerceAtLeast(0f)
-                        sum += v
-                        bandSumSq += (v * v).toDouble()
-                        bandCount += 1
-                    }
-                    val mean = if (bandCount > 0) sum / bandCount.toFloat() else 0f
-                    val rms = if (bandCount > 0) kotlin.math.sqrt(bandSumSq / bandCount).toFloat() else 0f
-                    val combined = (rms * 0.9f) + (mean * 0.1f)
-                    val level = combined.toDouble().pow(1.0).toFloat().coerceIn(0f, 1f)
-                    val h = level * heightPx
-                    val x = edgePadPx + (i * (barWidth + gapPx))
-                    drawRoundRect(
-                        color = barColor,
-                        topLeft = Offset(x, baselineY - h),
-                        size = Size(barWidth, h),
-                        cornerRadius = CornerRadius(radius, radius)
-                    )
-                }
-            }
-        }
-        VisualizationMode.Oscilloscope -> {
-            Canvas(modifier = modifier.fillMaxSize()) {
-                val stereo = oscStereo && channelCount > 1
-                val left = if (waveformLeft.isNotEmpty()) waveformLeft else FloatArray(256)
-                val right = if (waveformRight.isNotEmpty()) waveformRight else left
-                if (left.isEmpty()) return@Canvas
-
-                val half = size.height / 2f
-                val centerLeft = if (stereo) size.height * 0.30f else half
-                val centerRight = if (stereo) size.height * 0.72f else half
-                val ampScale = if (stereo) size.height * 0.20f else size.height * 0.34f
-                val stepX = size.width / (left.size - 1).coerceAtLeast(1)
-
-                for (i in 1 until left.size) {
-                    val x0 = (i - 1) * stepX
-                    val x1 = i * stepX
-                    val y0Left = centerLeft - (left[i - 1].coerceIn(-1f, 1f) * ampScale)
-                    val y1Left = centerLeft - (left[i].coerceIn(-1f, 1f) * ampScale)
-                    drawLine(
-                        color = oscColor,
-                        start = Offset(x0, y0Left),
-                        end = Offset(x1, y1Left),
-                        strokeWidth = 2f
-                    )
-                    if (stereo) {
-                        val y0Right = centerRight - (right[i - 1].coerceIn(-1f, 1f) * ampScale)
-                        val y1Right = centerRight - (right[i].coerceIn(-1f, 1f) * ampScale)
-                        drawLine(
-                            color = oscColor.copy(alpha = 0.78f),
-                            start = Offset(x0, y0Right),
-                            end = Offset(x1, y1Right),
-                            strokeWidth = 2f
-                        )
-                    }
-                }
-                if (stereo) {
-                    drawLine(
-                        color = oscColor.copy(alpha = 0.18f),
-                        start = Offset(0f, half),
-                        end = Offset(size.width, half),
-                        strokeWidth = 1f
-                    )
-                }
-            }
-        }
-        VisualizationMode.VuMeters -> {
-            val levels = vuLevels
-            val showStereo = channelCount > 1
-            val rows = if (showStereo) 2 else 1
-            val align = when (vuAnchor) {
-                VisualizationVuAnchor.Top -> Alignment.TopCenter
-                VisualizationVuAnchor.Center -> Alignment.Center
-                VisualizationVuAnchor.Bottom -> Alignment.BottomCenter
-            }
-            Box(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                contentAlignment = align
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    repeat(rows) { idx ->
-                        val label = when {
-                            showStereo && idx == 0 -> "Left"
-                            showStereo && idx == 1 -> "Right"
-                            else -> "Mono"
-                        }
-                        val raw = levels.getOrElse(idx) { 0f }.coerceIn(0f, 1f)
-                        val db = 20f * kotlin.math.log10(raw.coerceAtLeast(0.0001f))
-                        val dbFloor = -58f
-                        val norm = ((db - dbFloor) / -dbFloor).coerceIn(0f, 1f)
-                        val value = norm.toDouble().pow(0.62).toFloat().coerceIn(0f, 1f)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.width(42.dp)
-                            )
-                            LinearProgressIndicator(
-                                progress = { value },
-                                modifier = Modifier
-                                    .height(10.dp)
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(50)),
-                                color = vuColor,
-                                trackColor = vuBackgroundColor
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        VisualizationMode.Off -> Unit
     }
 }
 

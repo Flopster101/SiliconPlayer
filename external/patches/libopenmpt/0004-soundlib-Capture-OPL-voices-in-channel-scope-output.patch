@@ -1,0 +1,321 @@
+From c2b282399cf23823fd241f8d53807d9117544dc3 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Mon, 16 Feb 2026 16:36:47 -0300
+Subject: [PATCH] soundlib: capture OPL voices in channel scope output
+
+---
+ soundlib/OPL.cpp     | 30 +++++++++++++--
+ soundlib/OPL.h       |  4 +-
+ soundlib/Sndfile.cpp | 42 +++++++++++++-------
+ soundlib/Sndfile.h   |  2 +
+ soundlib/Sndmix.cpp  | 11 +++++-
+ soundlib/opal.h      | 92 ++++++++++++++++++++++++++++++++++++++++++++
+ 6 files changed, 161 insertions(+), 20 deletions(-)
+
+diff --git a/soundlib/OPL.cpp b/soundlib/OPL.cpp
+index afc305a65..973c8a85e 100644
+--- a/soundlib/OPL.cpp
++++ b/soundlib/OPL.cpp
+@@ -53,19 +53,41 @@ void OPL::Initialize(uint32 sampleRate)
+ }
+ 
+ 
+-void OPL::Mix(int32 *target, size_t count, uint32 volumeFactorQ16)
++void OPL::Mix(int32 *target, size_t count, uint32 volumeFactorQ16, ScopeTapCallback scopeTap, void *scopeTapUser)
+ {
+ 	if(!m_isActive)
+ 		return;
+ 
+ 	// This factor causes a sample voice to be more or less as loud as an OPL voice
+ 	const int32 factor = Util::muldiv_unsigned(volumeFactorQ16, 6169, (1 << 16));
++	std::array<int16, OPL_CHANNELS> channelLeft{};
++	std::array<int16, OPL_CHANNELS> channelRight{};
+ 	while(count--)
+ 	{
+ 		int16 l, r;
+-		m_opl->Sample(&l, &r);
+-		target[0] += l * factor;
+-		target[1] += r * factor;
++		m_opl->SampleWithChannels(&l, &r, channelLeft.data(), channelRight.data());
++		const int32 mixedLeft = static_cast<int32>(l) * factor;
++		const int32 mixedRight = static_cast<int32>(r) * factor;
++		target[0] += mixedLeft;
++		target[1] += mixedRight;
++		if(scopeTap != nullptr)
++		{
++			for(uint8 oplCh = 0; oplCh < OPL_CHANNELS; oplCh++)
++			{
++				const CHANNELINDEX trackerChannel = m_OPLtoChan[oplCh];
++				if(trackerChannel == CHANNELINDEX_INVALID)
++				{
++					continue;
++				}
++				const int32 channelMixLeft = static_cast<int32>(channelLeft[oplCh]) * factor;
++				const int32 channelMixRight = static_cast<int32>(channelRight[oplCh]) * factor;
++				if(channelMixLeft == 0 && channelMixRight == 0)
++				{
++					continue;
++				}
++				scopeTap(scopeTapUser, trackerChannel, channelMixLeft, channelMixRight);
++			}
++		}
+ 		target += 2;
+ 	}
+ }
+diff --git a/soundlib/OPL.h b/soundlib/OPL.h
+index 214a00602..a0ac0c2eb 100644
+--- a/soundlib/OPL.h
++++ b/soundlib/OPL.h
+@@ -80,12 +80,14 @@ public:
+ 		virtual ~IRegisterLogger() {}
+ 	};
+ 
++	using ScopeTapCallback = void (*)(void *user, CHANNELINDEX channel, int32 left, int32 right);
++
+ 	explicit OPL(uint32 sampleRate);
+ 	explicit OPL(IRegisterLogger &logger);
+ 	~OPL();
+ 
+ 	void Initialize(uint32 sampleRate);
+-	void Mix(int32 *buffer, size_t count, uint32 volumeFactorQ16);
++	void Mix(int32 *buffer, size_t count, uint32 volumeFactorQ16, ScopeTapCallback scopeTap = nullptr, void *scopeTapUser = nullptr);
+ 
+ 	void NoteOff(CHANNELINDEX c);
+ 	void NoteCut(CHANNELINDEX c, bool unassign = true);
+diff --git a/soundlib/Sndfile.cpp b/soundlib/Sndfile.cpp
+index 821d9c51f..e99483697 100644
+--- a/soundlib/Sndfile.cpp
++++ b/soundlib/Sndfile.cpp
+@@ -941,34 +941,48 @@ void CSoundFile::ResetChannelScopeBuffers()
+ 	}
+ }
+ 
+-void CSoundFile::PushChannelScopeDiff(CHANNELINDEX channel, const mixsample_t *before, const mixsample_t *after, int32 sampleCount)
++void CSoundFile::PushChannelScopeSample(CHANNELINDEX channel, float sample)
+ {
+-	if(channel >= MAX_CHANNELS || before == nullptr || after == nullptr || sampleCount <= 0)
++	if(channel >= MAX_CHANNELS)
+ 	{
+ 		return;
+ 	}
+ 	ChannelScopeBuffer &buffer = m_channelScopeBuffers[channel];
++	buffer.data[buffer.writePos] = std::clamp(sample, -1.0f, 1.0f);
++	buffer.writePos++;
++	if(buffer.writePos >= kChannelScopeBufferSize)
++	{
++		buffer.writePos = 0;
++	}
++	if(buffer.available < kChannelScopeBufferSize)
++	{
++		buffer.available++;
++	}
++}
++
++void CSoundFile::PushChannelScopeStereoSample(CHANNELINDEX channel, float left, float right)
++{
+ #ifdef MPT_INTMIXER
+ 	const float intToFloat = m_PlayConfig.getIntToFloat();
+ 	const float scale = intToFloat * 0.5f;
+ #else
+ 	const float scale = 0.5f;
+ #endif
++	PushChannelScopeSample(channel, (left + right) * scale);
++}
++
++void CSoundFile::PushChannelScopeDiff(CHANNELINDEX channel, const mixsample_t *before, const mixsample_t *after, int32 sampleCount)
++{
++	if(channel >= MAX_CHANNELS || before == nullptr || after == nullptr || sampleCount <= 0)
++	{
++		return;
++	}
+ 	for(int32 i = 0; i < sampleCount; ++i)
+ 	{
+ 		const int32 interleavedIndex = i * 2;
+-		const float left = static_cast<float>(after[interleavedIndex + 0] - before[interleavedIndex + 0]);
+-		const float right = static_cast<float>(after[interleavedIndex + 1] - before[interleavedIndex + 1]);
+-		buffer.data[buffer.writePos] = std::clamp((left + right) * scale, -1.0f, 1.0f);
+-		buffer.writePos++;
+-		if(buffer.writePos >= kChannelScopeBufferSize)
+-		{
+-			buffer.writePos = 0;
+-		}
+-		if(buffer.available < kChannelScopeBufferSize)
+-		{
+-			buffer.available++;
+-		}
++		const float left = static_cast<float>(after[interleavedIndex + 0]) - static_cast<float>(before[interleavedIndex + 0]);
++		const float right = static_cast<float>(after[interleavedIndex + 1]) - static_cast<float>(before[interleavedIndex + 1]);
++		PushChannelScopeStereoSample(channel, left, right);
+ 	}
+ }
+ 
+diff --git a/soundlib/Sndfile.h b/soundlib/Sndfile.h
+index 56f99e0bc..eb5e79578 100644
+--- a/soundlib/Sndfile.h
++++ b/soundlib/Sndfile.h
+@@ -1003,6 +1003,8 @@ private:
+ 	void ProcessDSP(uint32 countChunk);
+ 	void ProcessPlugins(uint32 nCount);
+ 	void ProcessInputChannels(IAudioSource &source, std::size_t countChunk);
++	void PushChannelScopeSample(CHANNELINDEX channel, float sample);
++	void PushChannelScopeStereoSample(CHANNELINDEX channel, float left, float right);
+ 	void PushChannelScopeDiff(CHANNELINDEX channel, const mixsample_t *before, const mixsample_t *after, int32 sampleCount);
+ public:
+ 	samplecount_t GetTotalSampleCount() const { return m_PlayState.m_lTotalSampleCount; }
+diff --git a/soundlib/Sndmix.cpp b/soundlib/Sndmix.cpp
+index 32bf40bb0..c96786254 100644
+--- a/soundlib/Sndmix.cpp
++++ b/soundlib/Sndmix.cpp
+@@ -306,7 +306,16 @@ samplecount_t CSoundFile::Read(samplecount_t count, IAudioTarget &target, IAudio
+ 
+ 		if(m_opl)
+ 		{
+-			m_opl->Mix(MixSoundBuffer, countChunk, m_OPLVolumeFactor * m_nVSTiVolume / 48);
++			m_opl->Mix(
++				MixSoundBuffer,
++				countChunk,
++				m_OPLVolumeFactor * m_nVSTiVolume / 48,
++				[](void *user, CHANNELINDEX channel, int32 left, int32 right)
++				{
++					auto *sndFile = static_cast<CSoundFile *>(user);
++					sndFile->PushChannelScopeStereoSample(channel, static_cast<float>(left), static_cast<float>(right));
++				},
++				this);
+ 		}
+ 
+ #ifndef NO_REVERB
+diff --git a/soundlib/opal.h b/soundlib/opal.h
+index b10ad285d..65c45ac0a 100644
+--- a/soundlib/opal.h
++++ b/soundlib/opal.h
+@@ -178,14 +178,18 @@ class Opal {
+         void                SetSampleRate(int sample_rate);
+         void                Port(uint16_t reg_num, uint8_t val);
+         void                Sample(int16_t *left, int16_t *right);
++        void                SampleWithChannels(int16_t *left, int16_t *right, int16_t *channelLeft, int16_t *channelRight);
+ 
+     protected:
+         void                Init(int sample_rate);
+         void                Output(int16_t &left, int16_t &right);
++        void                OutputWithChannels(int16_t &left, int16_t &right, int16_t *channelLeft, int16_t *channelRight);
+ 
+         int32_t             SampleRate;
+         int32_t             SampleAccum;
+         int16_t             LastOutput[2], CurrOutput[2];
++        int16_t             LastChannelOutputL[NumChannels], LastChannelOutputR[NumChannels];
++        int16_t             CurrChannelOutputL[NumChannels], CurrChannelOutputR[NumChannels];
+         Channel             Chan[NumChannels];
+         Operator            Op[NumOperators];
+ //      uint16_t            ExpTable[256];
+@@ -372,6 +376,12 @@ void Opal::SetSampleRate(int sample_rate) {
+     SampleAccum = 0;
+     LastOutput[0] = LastOutput[1] = 0;
+     CurrOutput[0] = CurrOutput[1] = 0;
++    for(int i = 0; i < NumChannels; i++) {
++        LastChannelOutputL[i] = 0;
++        LastChannelOutputR[i] = 0;
++        CurrChannelOutputL[i] = 0;
++        CurrChannelOutputR[i] = 0;
++    }
+ }
+ 
+ 
+@@ -582,6 +592,36 @@ void Opal::Sample(int16_t *left, int16_t *right) {
+     SampleAccum += OPL3SampleRate;
+ }
+ 
++//--------------------------------------------------------------------------------------------------
++void Opal::SampleWithChannels(int16_t *left, int16_t *right, int16_t *channelLeft, int16_t *channelRight) {
++
++    // If the destination sample rate is higher than the OPL3 sample rate, we need to skip ahead
++    while (SampleAccum >= SampleRate) {
++
++        LastOutput[0] = CurrOutput[0];
++        LastOutput[1] = CurrOutput[1];
++        for(int i = 0; i < NumChannels; i++) {
++            LastChannelOutputL[i] = CurrChannelOutputL[i];
++            LastChannelOutputR[i] = CurrChannelOutputR[i];
++        }
++
++        OutputWithChannels(CurrOutput[0], CurrOutput[1], CurrChannelOutputL, CurrChannelOutputR);
++
++        SampleAccum -= SampleRate;
++    }
++
++    // Mix with the partial accumulation
++    const int32_t fract = Util::muldivr(SampleAccum, 65536, SampleRate);
++    *left = static_cast<int16_t>(LastOutput[0] + ((fract * (CurrOutput[0] - LastOutput[0])) / 65536));
++    *right = static_cast<int16_t>(LastOutput[1] + ((fract * (CurrOutput[1] - LastOutput[1])) / 65536));
++    for(int i = 0; i < NumChannels; i++) {
++        channelLeft[i] = static_cast<int16_t>(LastChannelOutputL[i] + ((fract * (CurrChannelOutputL[i] - LastChannelOutputL[i])) / 65536));
++        channelRight[i] = static_cast<int16_t>(LastChannelOutputR[i] + ((fract * (CurrChannelOutputR[i] - LastChannelOutputR[i])) / 65536));
++    }
++
++    SampleAccum += OPL3SampleRate;
++}
++
+ 
+ 
+ //==================================================================================================
+@@ -636,6 +676,58 @@ void Opal::Output(int16_t &left, int16_t &right) {
+     }
+ }
+ 
++//--------------------------------------------------------------------------------------------------
++void Opal::OutputWithChannels(int16_t &left, int16_t &right, int16_t *channelLeft, int16_t *channelRight) {
++
++    int32_t leftmix = 0, rightmix = 0;
++
++    // Sum the output of each channel
++    for (int i = 0; i < NumChannels; i++) {
++
++        int16_t chanleft, chanright;
++        Chan[i].Output(chanleft, chanright);
++        channelLeft[i] = chanleft;
++        channelRight[i] = chanright;
++
++        leftmix += chanleft;
++        rightmix += chanright;
++    }
++
++    // Clamp
++    if (leftmix < -0x8000)
++        left = -0x8000;
++    else if (leftmix > 0x7FFF)
++        left = 0x7FFF;
++    else
++        left = static_cast<int16_t>(leftmix);
++
++    if (rightmix < -0x8000)
++        right = -0x8000;
++    else if (rightmix > 0x7FFF)
++        right = 0x7FFF;
++    else
++        right = static_cast<int16_t>(rightmix);
++
++    Clock++;
++
++    // Tremolo.  According to this post, the OPL3 tremolo is a 13,440 sample length triangle wave
++    // with a peak at 26 and a trough at 0 and is simply added to the logarithmic level accumulator
++    //      http://forums.submarine.org.uk/phpBB/viewtopic.php?f=9&t=1171
++    TremoloClock = (TremoloClock + 1) % 13440;
++    TremoloLevel = ((TremoloClock < 13440 / 2) ? TremoloClock : 13440 - TremoloClock) / 256;
++    if (!TremoloDepth)
++        TremoloLevel >>= 2;
++
++    // Vibrato.  This appears to be a 8 sample long triangle wave with a magnitude of the three
++    // high bits of the channel frequency, positive and negative, divided by two if the vibrato
++    // depth is zero.  It is only cycled every 1,024 samples.
++    VibratoTick++;
++    if (VibratoTick >= 1024) {
++        VibratoTick = 0;
++        VibratoClock = (VibratoClock + 1) & 7;
++    }
++}
++
+ 
+ 
+ //==================================================================================================
+-- 
+2.53.0
+

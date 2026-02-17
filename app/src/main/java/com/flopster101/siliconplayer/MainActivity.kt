@@ -4118,7 +4118,8 @@ private fun AppNavigation(
                         )
                     }
                     MainView.Settings -> Box(modifier = Modifier.padding(mainPadding)) {
-                        SettingsScreen(
+                        val settingsContent: @Composable () -> Unit = {
+                            SettingsScreen(
                         route = settingsRoute,
                         bottomContentPadding = miniPlayerListInset,
                         onBack = {
@@ -5318,7 +5319,9 @@ private fun AppNavigation(
                                 Toast.LENGTH_SHORT
                             ).show()
                         }
-                        )
+                            )
+                        }
+                        settingsContent()
                     }
                 }
             }

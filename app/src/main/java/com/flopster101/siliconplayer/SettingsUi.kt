@@ -571,6 +571,2139 @@ internal fun SettingsScreen(
                 }
             }
 
+    @Composable
+    fun VisualizationAdvancedChannelScopeSettingsRouteImpl() {
+                        val prefsName = "silicon_player_settings"
+                        val scopeWindowKey = "visualization_channel_scope_window_ms"
+                        val scopeRenderBackendKey = "visualization_channel_scope_render_backend"
+                        val scopeDcRemovalEnabledKey = "visualization_channel_scope_dc_removal_enabled"
+                        val scopeGainPercentKey = "visualization_channel_scope_gain_percent"
+                        val scopeTriggerKey = "visualization_channel_scope_trigger_mode"
+                        val scopeFpsModeKey = "visualization_channel_scope_fps_mode"
+                        val scopeLineWidthKey = "visualization_channel_scope_line_width_dp"
+                        val scopeGridWidthKey = "visualization_channel_scope_grid_width_dp"
+                        val scopeVerticalGridEnabledKey = "visualization_channel_scope_vertical_grid_enabled"
+                        val scopeCenterLineEnabledKey = "visualization_channel_scope_center_line_enabled"
+                        val scopeShowArtworkBackgroundKey = "visualization_channel_scope_show_artwork_background"
+                        val scopeBackgroundModeKey = "visualization_channel_scope_background_mode"
+                        val scopeCustomBackgroundColorKey = "visualization_channel_scope_custom_background_color_argb"
+                        val scopeLayoutKey = "visualization_channel_scope_layout"
+                        val scopeLineNoArtworkColorModeKey = "visualization_channel_scope_line_color_mode_no_artwork"
+                        val scopeGridNoArtworkColorModeKey = "visualization_channel_scope_grid_color_mode_no_artwork"
+                        val scopeLineArtworkColorModeKey = "visualization_channel_scope_line_color_mode_with_artwork"
+                        val scopeGridArtworkColorModeKey = "visualization_channel_scope_grid_color_mode_with_artwork"
+                        val scopeCustomLineColorKey = "visualization_channel_scope_custom_line_color_argb"
+                        val scopeCustomGridColorKey = "visualization_channel_scope_custom_grid_color_argb"
+                        val scopeTextEnabledKey = "visualization_channel_scope_text_enabled"
+                        val scopeTextAnchorKey = "visualization_channel_scope_text_anchor"
+                        val scopeTextPaddingKey = "visualization_channel_scope_text_padding_dp"
+                        val scopeTextSizeKey = "visualization_channel_scope_text_size_sp"
+                        val scopeTextHideWhenOverflowKey = "visualization_channel_scope_text_hide_when_overflow"
+                        val scopeTextShadowEnabledKey = "visualization_channel_scope_text_shadow_enabled"
+                        val scopeTextFontKey = "visualization_channel_scope_text_font"
+                        val scopeTextColorModeKey = "visualization_channel_scope_text_color_mode"
+                        val scopeCustomTextColorKey = "visualization_channel_scope_custom_text_color_argb"
+                        val scopeTextNoteFormatKey = "visualization_channel_scope_text_note_format"
+                        val scopeTextShowChannelKey = "visualization_channel_scope_text_show_channel"
+                        val scopeTextShowNoteKey = "visualization_channel_scope_text_show_note"
+                        val scopeTextShowVolumeKey = "visualization_channel_scope_text_show_volume"
+                        val scopeTextShowEffectKey = "visualization_channel_scope_text_show_effect"
+                        val scopeTextShowInstrumentSampleKey = "visualization_channel_scope_text_show_instrument_sample"
+                        val scopeTextVuEnabledKey = "visualization_channel_scope_text_vu_enabled"
+                        val scopeTextVuAnchorKey = "visualization_channel_scope_text_vu_anchor"
+                        val scopeTextVuColorModeKey = "visualization_channel_scope_text_vu_color_mode"
+                        val scopeTextVuCustomColorKey = "visualization_channel_scope_text_vu_custom_color_argb"
+                        val context = LocalContext.current
+                        val prefs = remember(context) {
+                            context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+                        }
+                        var scopeWindowMs by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeWindowKey,
+                                    AppDefaults.Visualization.ChannelScope.windowMs
+                                ).coerceIn(
+                                    AppDefaults.Visualization.ChannelScope.windowRangeMs.first,
+                                    AppDefaults.Visualization.ChannelScope.windowRangeMs.last
+                                )
+                            )
+                        }
+                        var scopeTriggerMode by remember {
+                            mutableStateOf(
+                                VisualizationOscTriggerMode.fromStorage(
+                                    prefs.getString(
+                                        scopeTriggerKey,
+                                        AppDefaults.Visualization.ChannelScope.triggerMode.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeRenderBackend by remember {
+                            mutableStateOf(
+                                VisualizationRenderBackend.fromStorage(
+                                    prefs.getString(
+                                        scopeRenderBackendKey,
+                                        AppDefaults.Visualization.ChannelScope.renderBackend.storageValue
+                                    ),
+                                    AppDefaults.Visualization.ChannelScope.renderBackend
+                                )
+                            )
+                        }
+                        var scopeDcRemovalEnabled by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeDcRemovalEnabledKey,
+                                    AppDefaults.Visualization.ChannelScope.dcRemovalEnabled
+                                )
+                            )
+                        }
+                        var scopeGainPercent by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeGainPercentKey,
+                                    AppDefaults.Visualization.ChannelScope.gainPercent
+                                ).coerceIn(
+                                    AppDefaults.Visualization.ChannelScope.gainRangePercent.first,
+                                    AppDefaults.Visualization.ChannelScope.gainRangePercent.last
+                                )
+                            )
+                        }
+                        var scopeFpsMode by remember {
+                            mutableStateOf(
+                                VisualizationOscFpsMode.fromStorage(
+                                    prefs.getString(
+                                        scopeFpsModeKey,
+                                        AppDefaults.Visualization.ChannelScope.fpsMode.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeLineWidthDp by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeLineWidthKey,
+                                    AppDefaults.Visualization.ChannelScope.lineWidthDp
+                                ).coerceIn(
+                                    AppDefaults.Visualization.ChannelScope.lineWidthRangeDp.first,
+                                    AppDefaults.Visualization.ChannelScope.lineWidthRangeDp.last
+                                )
+                            )
+                        }
+                        var scopeGridWidthDp by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeGridWidthKey,
+                                    AppDefaults.Visualization.ChannelScope.gridWidthDp
+                                ).coerceIn(
+                                    AppDefaults.Visualization.ChannelScope.gridWidthRangeDp.first,
+                                    AppDefaults.Visualization.ChannelScope.gridWidthRangeDp.last
+                                )
+                            )
+                        }
+                        var scopeVerticalGridEnabled by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeVerticalGridEnabledKey,
+                                    AppDefaults.Visualization.ChannelScope.verticalGridEnabled
+                                )
+                            )
+                        }
+                        var scopeCenterLineEnabled by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeCenterLineEnabledKey,
+                                    AppDefaults.Visualization.ChannelScope.centerLineEnabled
+                                )
+                            )
+                        }
+                        var scopeShowArtworkBackground by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeShowArtworkBackgroundKey,
+                                    AppDefaults.Visualization.ChannelScope.showArtworkBackground
+                                )
+                            )
+                        }
+                        var scopeBackgroundMode by remember {
+                            mutableStateOf(
+                                VisualizationChannelScopeBackgroundMode.fromStorage(
+                                    prefs.getString(
+                                        scopeBackgroundModeKey,
+                                        AppDefaults.Visualization.ChannelScope.backgroundMode.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeCustomBackgroundColorArgb by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeCustomBackgroundColorKey,
+                                    AppDefaults.Visualization.ChannelScope.customBackgroundColorArgb
+                                )
+                            )
+                        }
+                        var scopeLayout by remember {
+                            mutableStateOf(
+                                VisualizationChannelScopeLayout.fromStorage(
+                                    prefs.getString(
+                                        scopeLayoutKey,
+                                        AppDefaults.Visualization.ChannelScope.layout.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeLineColorModeNoArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        scopeLineNoArtworkColorModeKey,
+                                        AppDefaults.Visualization.ChannelScope.lineColorModeNoArtwork.storageValue
+                                    ),
+                                    AppDefaults.Visualization.ChannelScope.lineColorModeNoArtwork
+                                )
+                            )
+                        }
+                        var scopeGridColorModeNoArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        scopeGridNoArtworkColorModeKey,
+                                        AppDefaults.Visualization.ChannelScope.gridColorModeNoArtwork.storageValue
+                                    ),
+                                    AppDefaults.Visualization.ChannelScope.gridColorModeNoArtwork
+                                )
+                            )
+                        }
+                        var scopeLineColorModeWithArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        scopeLineArtworkColorModeKey,
+                                        AppDefaults.Visualization.ChannelScope.lineColorModeWithArtwork.storageValue
+                                    ),
+                                    AppDefaults.Visualization.ChannelScope.lineColorModeWithArtwork
+                                )
+                            )
+                        }
+                        var scopeGridColorModeWithArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        scopeGridArtworkColorModeKey,
+                                        AppDefaults.Visualization.ChannelScope.gridColorModeWithArtwork.storageValue
+                                    ),
+                                    AppDefaults.Visualization.ChannelScope.gridColorModeWithArtwork
+                                )
+                            )
+                        }
+                        var scopeCustomLineColorArgb by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeCustomLineColorKey,
+                                    AppDefaults.Visualization.ChannelScope.customLineColorArgb
+                                )
+                            )
+                        }
+                        var scopeCustomGridColorArgb by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeCustomGridColorKey,
+                                    AppDefaults.Visualization.ChannelScope.customGridColorArgb
+                                )
+                            )
+                        }
+                        var scopeTextEnabled by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextEnabledKey,
+                                    AppDefaults.Visualization.ChannelScope.textEnabled
+                                )
+                            )
+                        }
+                        var scopeTextAnchor by remember {
+                            mutableStateOf(
+                                VisualizationChannelScopeTextAnchor.fromStorage(
+                                    prefs.getString(
+                                        scopeTextAnchorKey,
+                                        AppDefaults.Visualization.ChannelScope.textAnchor.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeTextPaddingDp by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeTextPaddingKey,
+                                    AppDefaults.Visualization.ChannelScope.textPaddingDp
+                                ).coerceIn(
+                                    AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.first,
+                                    AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.last
+                                )
+                            )
+                        }
+                        var scopeTextSizeSp by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeTextSizeKey,
+                                    AppDefaults.Visualization.ChannelScope.textSizeSp
+                                ).coerceIn(
+                                    AppDefaults.Visualization.ChannelScope.textSizeRangeSp.first,
+                                    AppDefaults.Visualization.ChannelScope.textSizeRangeSp.last
+                                )
+                            )
+                        }
+                        var scopeTextHideWhenOverflow by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextHideWhenOverflowKey,
+                                    AppDefaults.Visualization.ChannelScope.textHideWhenOverflow
+                                )
+                            )
+                        }
+                        var scopeTextShadowEnabled by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextShadowEnabledKey,
+                                    AppDefaults.Visualization.ChannelScope.textShadowEnabled
+                                )
+                            )
+                        }
+                        var scopeTextFont by remember {
+                            mutableStateOf(
+                                VisualizationChannelScopeTextFont.fromStorage(
+                                    prefs.getString(
+                                        scopeTextFontKey,
+                                        AppDefaults.Visualization.ChannelScope.textFont.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeTextColorMode by remember {
+                            mutableStateOf(
+                                VisualizationChannelScopeTextColorMode.fromStorage(
+                                    prefs.getString(
+                                        scopeTextColorModeKey,
+                                        AppDefaults.Visualization.ChannelScope.textColorMode.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeCustomTextColorArgb by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeCustomTextColorKey,
+                                    AppDefaults.Visualization.ChannelScope.customTextColorArgb
+                                )
+                            )
+                        }
+                        var scopeTextNoteFormat by remember {
+                            mutableStateOf(
+                                VisualizationNoteNameFormat.fromStorage(
+                                    prefs.getString(
+                                        scopeTextNoteFormatKey,
+                                        AppDefaults.Visualization.ChannelScope.textNoteFormat.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeTextShowChannel by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextShowChannelKey,
+                                    AppDefaults.Visualization.ChannelScope.textShowChannel
+                                )
+                            )
+                        }
+                        var scopeTextShowNote by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextShowNoteKey,
+                                    AppDefaults.Visualization.ChannelScope.textShowNote
+                                )
+                            )
+                        }
+                        var scopeTextShowVolume by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextShowVolumeKey,
+                                    AppDefaults.Visualization.ChannelScope.textShowVolume
+                                )
+                            )
+                        }
+                        var scopeTextShowEffect by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextShowEffectKey,
+                                    AppDefaults.Visualization.ChannelScope.textShowEffect
+                                )
+                            )
+                        }
+                        var scopeTextShowInstrumentSample by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextShowInstrumentSampleKey,
+                                    AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
+                                )
+                            )
+                        }
+                        var scopeTextVuEnabled by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextVuEnabledKey,
+                                    AppDefaults.Visualization.ChannelScope.textVuEnabled
+                                )
+                            )
+                        }
+                        var scopeTextVuAnchor by remember {
+                            mutableStateOf(
+                                VisualizationVuAnchor.fromStorage(
+                                    prefs.getString(
+                                        scopeTextVuAnchorKey,
+                                        AppDefaults.Visualization.ChannelScope.textVuAnchor.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeTextVuColorMode by remember {
+                            mutableStateOf(
+                                VisualizationChannelScopeTextColorMode.fromStorage(
+                                    prefs.getString(
+                                        scopeTextVuColorModeKey,
+                                        AppDefaults.Visualization.ChannelScope.textVuColorMode.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeTextVuCustomColorArgb by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeTextVuCustomColorKey,
+                                    AppDefaults.Visualization.ChannelScope.textVuCustomColorArgb
+                                )
+                            )
+                        }
+
+                        var showWindowDialog by remember { mutableStateOf(false) }
+                        var showRendererBackendDialog by remember { mutableStateOf(false) }
+                        var showGainDialog by remember { mutableStateOf(false) }
+                        var showTriggerDialog by remember { mutableStateOf(false) }
+                        var showFpsModeDialog by remember { mutableStateOf(false) }
+                        var showLineWidthDialog by remember { mutableStateOf(false) }
+                        var showGridWidthDialog by remember { mutableStateOf(false) }
+                        var showBackgroundModeDialog by remember { mutableStateOf(false) }
+                        var showCustomBackgroundColorDialog by remember { mutableStateOf(false) }
+                        var showLayoutDialog by remember { mutableStateOf(false) }
+                        var showLineNoArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showGridNoArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showLineArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showGridArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showCustomLineColorDialog by remember { mutableStateOf(false) }
+                        var showCustomGridColorDialog by remember { mutableStateOf(false) }
+                        var showTextAnchorDialog by remember { mutableStateOf(false) }
+                        var showTextPaddingDialog by remember { mutableStateOf(false) }
+                        var showTextSizeDialog by remember { mutableStateOf(false) }
+                        var showTextFontDialog by remember { mutableStateOf(false) }
+                        var showTextColorModeDialog by remember { mutableStateOf(false) }
+                        var showCustomTextColorDialog by remember { mutableStateOf(false) }
+                        var showTextVuAnchorDialog by remember { mutableStateOf(false) }
+                        var showTextVuColorModeDialog by remember { mutableStateOf(false) }
+                        var showTextVuCustomColorDialog by remember { mutableStateOf(false) }
+                        var showTextNoteFormatDialog by remember { mutableStateOf(false) }
+
+                        SettingsSectionLabel("Channel scope")
+                        SettingsValuePickerCard(
+                            title = "Visible window",
+                            description = "Time span represented by each channel trace history.",
+                            value = "${scopeWindowMs} ms",
+                            onClick = { showWindowDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Trigger",
+                            description = "Sync mode used to stabilize channel traces.",
+                            value = scopeTriggerMode.label,
+                            onClick = { showTriggerDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Renderer backend",
+                            description = "Select rendering path for Channel scope.",
+                            value = scopeRenderBackend.label,
+                            onClick = { showRendererBackendDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "DC removal",
+                            description = "Center each channel waveform around zero to reduce vertical offset drift.",
+                            checked = scopeDcRemovalEnabled,
+                            onCheckedChange = { enabled ->
+                                scopeDcRemovalEnabled = enabled
+                                prefs.edit().putBoolean(scopeDcRemovalEnabledKey, enabled).apply()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Gain",
+                            description = "Output gain applied to channel waveforms.",
+                            value = "${scopeGainPercent}%",
+                            onClick = { showGainDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Scope frame rate",
+                            description = "Rendering rate for channel-scope updates.",
+                            value = scopeFpsMode.label,
+                            onClick = { showFpsModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Layout strategy",
+                            description = "Grid arrangement strategy for channel scopes.",
+                            value = scopeLayout.label,
+                            onClick = { showLayoutDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Line width",
+                            description = "Stroke width for channel scope lines.",
+                            value = "${scopeLineWidthDp}dp",
+                            onClick = { showLineWidthDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Grid width",
+                            description = "Stroke width for scope grid lines.",
+                            value = "${scopeGridWidthDp}dp",
+                            onClick = { showGridWidthDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Show vertical grid lines",
+                            description = "Display vertical time divisions in each channel scope.",
+                            checked = scopeVerticalGridEnabled,
+                            onCheckedChange = { enabled ->
+                                scopeVerticalGridEnabled = enabled
+                                prefs.edit().putBoolean(scopeVerticalGridEnabledKey, enabled).apply()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Show centerline",
+                            description = "Display center reference line in each channel scope.",
+                            checked = scopeCenterLineEnabled,
+                            onCheckedChange = { enabled ->
+                                scopeCenterLineEnabled = enabled
+                                prefs.edit().putBoolean(scopeCenterLineEnabledKey, enabled).apply()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Show artwork background",
+                            description = "Render album artwork/placeholder behind the channel scope.",
+                            checked = scopeShowArtworkBackground,
+                            onCheckedChange = { enabled ->
+                                scopeShowArtworkBackground = enabled
+                                prefs.edit().putBoolean(scopeShowArtworkBackgroundKey, enabled).apply()
+                            }
+                        )
+                        if (!scopeShowArtworkBackground) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Background color",
+                                description = "Background source when artwork is hidden.",
+                                value = scopeBackgroundMode.label,
+                                onClick = { showBackgroundModeDialog = true }
+                            )
+                            if (scopeBackgroundMode == VisualizationChannelScopeBackgroundMode.Custom) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                SettingsValuePickerCard(
+                                    title = "Custom background color",
+                                    description = "RGB color used when background color mode is Custom.",
+                                    value = String.format(Locale.US, "#%06X", scopeCustomBackgroundColorArgb and 0xFFFFFF),
+                                    onClick = { showCustomBackgroundColorDialog = true }
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Colors (no artwork)")
+                        SettingsValuePickerCard(
+                            title = "Line color",
+                            description = "Color source used when no artwork is available.",
+                            value = scopeLineColorModeNoArtwork.label,
+                            onClick = { showLineNoArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Grid color",
+                            description = "Color source used when no artwork is available.",
+                            value = scopeGridColorModeNoArtwork.label,
+                            onClick = { showGridNoArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Colors (with artwork)")
+                        SettingsValuePickerCard(
+                            title = "Line color",
+                            description = "Color source used when artwork is available.",
+                            value = scopeLineColorModeWithArtwork.label,
+                            onClick = { showLineArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Grid color",
+                            description = "Color source used when artwork is available.",
+                            value = scopeGridColorModeWithArtwork.label,
+                            onClick = { showGridArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Custom colors")
+                        SettingsValuePickerCard(
+                            title = "Custom line color",
+                            description = "RGB color used when line color mode is Custom.",
+                            value = String.format(Locale.US, "#%06X", scopeCustomLineColorArgb and 0xFFFFFF),
+                            onClick = { showCustomLineColorDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Custom grid color",
+                            description = "RGB color used when grid color mode is Custom.",
+                            value = String.format(Locale.US, "#%06X", scopeCustomGridColorArgb and 0xFFFFFF),
+                            onClick = { showCustomGridColorDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Text overlay")
+                        PlayerSettingToggleCard(
+                            title = "Show channel text",
+                            description = "Display per-channel labels and live tracker values on each scope.",
+                            checked = scopeTextEnabled,
+                            onCheckedChange = { enabled ->
+                                scopeTextEnabled = enabled
+                                prefs.edit().putBoolean(scopeTextEnabledKey, enabled).apply()
+                            }
+                        )
+                        if (scopeTextEnabled) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Text anchor",
+                                description = "Position of text inside each channel scope.",
+                                value = scopeTextAnchor.label,
+                                onClick = { showTextAnchorDialog = true }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Text padding",
+                                description = "Padding from the selected anchor.",
+                                value = "${scopeTextPaddingDp}dp",
+                                onClick = { showTextPaddingDialog = true }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Text size",
+                                description = "Font size for per-channel overlay text.",
+                                value = "${scopeTextSizeSp}sp",
+                                onClick = { showTextSizeDialog = true }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Text font",
+                                description = "Typeface used for per-channel overlay text.",
+                                value = scopeTextFont.label,
+                                onClick = { showTextFontDialog = true }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Text color",
+                                description = "Color source for channel-scope text overlay.",
+                                value = scopeTextColorMode.label,
+                                onClick = { showTextColorModeDialog = true }
+                            )
+                            if (scopeTextColorMode == VisualizationChannelScopeTextColorMode.Custom) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                SettingsValuePickerCard(
+                                    title = "Custom text color",
+                                    description = "RGB color used when text color mode is Custom.",
+                                    value = String.format(Locale.US, "#%06X", scopeCustomTextColorArgb and 0xFFFFFF),
+                                    onClick = { showCustomTextColorDialog = true }
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Hide when still too large",
+                                description = "Hide text if it still cannot fit after auto downscaling.",
+                                checked = scopeTextHideWhenOverflow,
+                                onCheckedChange = { enabled ->
+                                    scopeTextHideWhenOverflow = enabled
+                                    prefs.edit().putBoolean(scopeTextHideWhenOverflowKey, enabled).apply()
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Text shadow",
+                                description = "Render a subtle drop shadow for better contrast on bright or matching backgrounds.",
+                                checked = scopeTextShadowEnabled,
+                                onCheckedChange = { enabled ->
+                                    scopeTextShadowEnabled = enabled
+                                    prefs.edit().putBoolean(scopeTextShadowEnabledKey, enabled).apply()
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Note naming",
+                                description = "Format used for note names in the overlay.",
+                                value = scopeTextNoteFormat.label,
+                                onClick = { showTextNoteFormatDialog = true }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Show channel label",
+                                description = "Show channel index or Amiga L/R label.",
+                                checked = scopeTextShowChannel,
+                                onCheckedChange = { enabled ->
+                                    scopeTextShowChannel = enabled
+                                    prefs.edit().putBoolean(scopeTextShowChannelKey, enabled).apply()
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Show note",
+                                description = "Show current note name.",
+                                checked = scopeTextShowNote,
+                                onCheckedChange = { enabled ->
+                                    scopeTextShowNote = enabled
+                                    prefs.edit().putBoolean(scopeTextShowNoteKey, enabled).apply()
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Show volume",
+                                description = "Show current channel volume value.",
+                                checked = scopeTextShowVolume,
+                                onCheckedChange = { enabled ->
+                                    scopeTextShowVolume = enabled
+                                    prefs.edit().putBoolean(scopeTextShowVolumeKey, enabled).apply()
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Show effect",
+                                description = "Show active effect command and parameter.",
+                                checked = scopeTextShowEffect,
+                                onCheckedChange = { enabled ->
+                                    scopeTextShowEffect = enabled
+                                    prefs.edit().putBoolean(scopeTextShowEffectKey, enabled).apply()
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Show instrument/sample",
+                                description = "Show active instrument or sample index.",
+                                checked = scopeTextShowInstrumentSample,
+                                onCheckedChange = { enabled ->
+                                    scopeTextShowInstrumentSample = enabled
+                                    prefs.edit().putBoolean(scopeTextShowInstrumentSampleKey, enabled).apply()
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Show VU strip",
+                                description = "Show a per-channel VU strip at top or bottom edge.",
+                                checked = scopeTextVuEnabled,
+                                onCheckedChange = { enabled ->
+                                    scopeTextVuEnabled = enabled
+                                    prefs.edit().putBoolean(scopeTextVuEnabledKey, enabled).apply()
+                                }
+                            )
+                            if (scopeTextVuEnabled) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                SettingsValuePickerCard(
+                                    title = "VU strip anchor",
+                                    description = "Place VU strip at top or bottom of each channel cell.",
+                                    value = scopeTextVuAnchor.label,
+                                    onClick = { showTextVuAnchorDialog = true }
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                SettingsValuePickerCard(
+                                    title = "VU strip color",
+                                    description = "Color source used by the VU strip.",
+                                    value = scopeTextVuColorMode.label,
+                                    onClick = { showTextVuColorModeDialog = true }
+                                )
+                                if (scopeTextVuColorMode == VisualizationChannelScopeTextColorMode.Custom) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    SettingsValuePickerCard(
+                                        title = "Custom VU strip color",
+                                        description = "RGB color used when VU strip color mode is Custom.",
+                                        value = String.format(Locale.US, "#%06X", scopeTextVuCustomColorArgb and 0xFFFFFF),
+                                        onClick = { showTextVuCustomColorDialog = true }
+                                    )
+                                }
+                            }
+                        }
+
+                        if (showWindowDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Visible window",
+                                unitLabel = "ms",
+                                range = AppDefaults.Visualization.ChannelScope.windowRangeMs,
+                                step = 1,
+                                currentValue = scopeWindowMs,
+                                onDismiss = { showWindowDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(5, 200)
+                                    scopeWindowMs = clamped
+                                    prefs.edit().putInt(scopeWindowKey, clamped).apply()
+                                    showWindowDialog = false
+                                }
+                            )
+                        }
+                        if (showGainDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Scope gain",
+                                unitLabel = "%",
+                                range = AppDefaults.Visualization.ChannelScope.gainRangePercent,
+                                step = 5,
+                                currentValue = scopeGainPercent,
+                                onDismiss = { showGainDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(25, 600)
+                                    scopeGainPercent = clamped
+                                    prefs.edit().putInt(scopeGainPercentKey, clamped).apply()
+                                    showGainDialog = false
+                                }
+                            )
+                        }
+                        if (showRendererBackendDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showRendererBackendDialog = false },
+                                title = { Text("Renderer backend") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationRenderBackend.entries.forEach { backend ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeRenderBackend = backend
+                                                        prefs.edit().putString(scopeRenderBackendKey, backend.storageValue).apply()
+                                                        showRendererBackendDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = backend == scopeRenderBackend,
+                                                    onClick = {
+                                                        scopeRenderBackend = backend
+                                                        prefs.edit().putString(scopeRenderBackendKey, backend.storageValue).apply()
+                                                        showRendererBackendDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(backend.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showRendererBackendDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showTriggerDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTriggerDialog = false },
+                                title = { Text("Channel scope trigger") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationOscTriggerMode.entries.forEach { mode ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTriggerMode = mode
+                                                        prefs.edit().putString(scopeTriggerKey, mode.storageValue).apply()
+                                                        showTriggerDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = mode == scopeTriggerMode,
+                                                    onClick = {
+                                                        scopeTriggerMode = mode
+                                                        prefs.edit().putString(scopeTriggerKey, mode.storageValue).apply()
+                                                        showTriggerDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(mode.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTriggerDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showBackgroundModeDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showBackgroundModeDialog = false },
+                                title = { Text("Scope background color") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationChannelScopeBackgroundMode.entries.forEach { mode ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeBackgroundMode = mode
+                                                        prefs.edit().putString(scopeBackgroundModeKey, mode.storageValue).apply()
+                                                        showBackgroundModeDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = mode == scopeBackgroundMode,
+                                                    onClick = {
+                                                        scopeBackgroundMode = mode
+                                                        prefs.edit().putString(scopeBackgroundModeKey, mode.storageValue).apply()
+                                                        showBackgroundModeDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(mode.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showBackgroundModeDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showCustomBackgroundColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom scope background color",
+                                initialArgb = scopeCustomBackgroundColorArgb,
+                                onDismiss = { showCustomBackgroundColorDialog = false },
+                                onConfirm = { argb ->
+                                    scopeCustomBackgroundColorArgb = argb
+                                    prefs.edit().putInt(scopeCustomBackgroundColorKey, argb).apply()
+                                    showCustomBackgroundColorDialog = false
+                                }
+                            )
+                        }
+                        if (showFpsModeDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showFpsModeDialog = false },
+                                title = { Text("Scope frame rate") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationOscFpsMode.entries.forEach { mode ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeFpsMode = mode
+                                                        prefs.edit().putString(scopeFpsModeKey, mode.storageValue).apply()
+                                                        showFpsModeDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = mode == scopeFpsMode,
+                                                    onClick = {
+                                                        scopeFpsMode = mode
+                                                        prefs.edit().putString(scopeFpsModeKey, mode.storageValue).apply()
+                                                        showFpsModeDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(mode.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showFpsModeDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showLayoutDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showLayoutDialog = false },
+                                title = { Text("Layout strategy") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationChannelScopeLayout.entries.forEach { layout ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeLayout = layout
+                                                        prefs.edit().putString(scopeLayoutKey, layout.storageValue).apply()
+                                                        showLayoutDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = layout == scopeLayout,
+                                                    onClick = {
+                                                        scopeLayout = layout
+                                                        prefs.edit().putString(scopeLayoutKey, layout.storageValue).apply()
+                                                        showLayoutDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(layout.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showLayoutDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showLineWidthDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Scope line width",
+                                unitLabel = "dp",
+                                range = AppDefaults.Visualization.ChannelScope.lineWidthRangeDp,
+                                step = 1,
+                                currentValue = scopeLineWidthDp,
+                                onDismiss = { showLineWidthDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(1, 12)
+                                    scopeLineWidthDp = clamped
+                                    prefs.edit().putInt(scopeLineWidthKey, clamped).apply()
+                                    showLineWidthDialog = false
+                                }
+                            )
+                        }
+                        if (showGridWidthDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Grid line width",
+                                unitLabel = "dp",
+                                range = AppDefaults.Visualization.ChannelScope.gridWidthRangeDp,
+                                step = 1,
+                                currentValue = scopeGridWidthDp,
+                                onDismiss = { showGridWidthDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(1, 8)
+                                    scopeGridWidthDp = clamped
+                                    prefs.edit().putInt(scopeGridWidthKey, clamped).apply()
+                                    showGridWidthDialog = false
+                                }
+                            )
+                        }
+                        if (showLineNoArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Line color (no artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = scopeLineColorModeNoArtwork,
+                                onDismiss = { showLineNoArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    scopeLineColorModeNoArtwork = mode
+                                    prefs.edit().putString(scopeLineNoArtworkColorModeKey, mode.storageValue).apply()
+                                    showLineNoArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showGridNoArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Grid color (no artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = scopeGridColorModeNoArtwork,
+                                onDismiss = { showGridNoArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    scopeGridColorModeNoArtwork = mode
+                                    prefs.edit().putString(scopeGridNoArtworkColorModeKey, mode.storageValue).apply()
+                                    showGridNoArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showLineArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Line color (with artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Artwork,
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = scopeLineColorModeWithArtwork,
+                                onDismiss = { showLineArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    scopeLineColorModeWithArtwork = mode
+                                    prefs.edit().putString(scopeLineArtworkColorModeKey, mode.storageValue).apply()
+                                    showLineArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showGridArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Grid color (with artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Artwork,
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = scopeGridColorModeWithArtwork,
+                                onDismiss = { showGridArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    scopeGridColorModeWithArtwork = mode
+                                    prefs.edit().putString(scopeGridArtworkColorModeKey, mode.storageValue).apply()
+                                    showGridArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showCustomLineColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom line color",
+                                initialArgb = scopeCustomLineColorArgb,
+                                onDismiss = { showCustomLineColorDialog = false },
+                                onConfirm = { argb ->
+                                    scopeCustomLineColorArgb = argb
+                                    prefs.edit().putInt(scopeCustomLineColorKey, argb).apply()
+                                    showCustomLineColorDialog = false
+                                }
+                            )
+                        }
+                        if (showCustomGridColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom grid color",
+                                initialArgb = scopeCustomGridColorArgb,
+                                onDismiss = { showCustomGridColorDialog = false },
+                                onConfirm = { argb ->
+                                    scopeCustomGridColorArgb = argb
+                                    prefs.edit().putInt(scopeCustomGridColorKey, argb).apply()
+                                    showCustomGridColorDialog = false
+                                }
+                            )
+                        }
+                        if (showTextAnchorDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTextAnchorDialog = false },
+                                title = { Text("Text anchor") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationChannelScopeTextAnchor.entries.forEach { entry ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTextAnchor = entry
+                                                        prefs.edit().putString(scopeTextAnchorKey, entry.storageValue).apply()
+                                                        showTextAnchorDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = entry == scopeTextAnchor,
+                                                    onClick = {
+                                                        scopeTextAnchor = entry
+                                                        prefs.edit().putString(scopeTextAnchorKey, entry.storageValue).apply()
+                                                        showTextAnchorDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(entry.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTextAnchorDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showTextPaddingDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Text padding",
+                                unitLabel = "dp",
+                                range = AppDefaults.Visualization.ChannelScope.textPaddingRangeDp,
+                                step = 1,
+                                currentValue = scopeTextPaddingDp,
+                                onDismiss = { showTextPaddingDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(
+                                        AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.first,
+                                        AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.last
+                                    )
+                                    scopeTextPaddingDp = clamped
+                                    prefs.edit().putInt(scopeTextPaddingKey, clamped).apply()
+                                    showTextPaddingDialog = false
+                                }
+                            )
+                        }
+                        if (showTextSizeDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Text size",
+                                unitLabel = "sp",
+                                range = AppDefaults.Visualization.ChannelScope.textSizeRangeSp,
+                                step = 1,
+                                currentValue = scopeTextSizeSp,
+                                onDismiss = { showTextSizeDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(
+                                        AppDefaults.Visualization.ChannelScope.textSizeRangeSp.first,
+                                        AppDefaults.Visualization.ChannelScope.textSizeRangeSp.last
+                                    )
+                                    scopeTextSizeSp = clamped
+                                    prefs.edit().putInt(scopeTextSizeKey, clamped).apply()
+                                    showTextSizeDialog = false
+                                }
+                            )
+                        }
+                        if (showTextColorModeDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTextColorModeDialog = false },
+                                title = { Text("Text color") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationChannelScopeTextColorMode.entries.forEach { entry ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTextColorMode = entry
+                                                        prefs.edit().putString(scopeTextColorModeKey, entry.storageValue).apply()
+                                                        showTextColorModeDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = entry == scopeTextColorMode,
+                                                    onClick = {
+                                                        scopeTextColorMode = entry
+                                                        prefs.edit().putString(scopeTextColorModeKey, entry.storageValue).apply()
+                                                        showTextColorModeDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(entry.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTextColorModeDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showTextFontDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTextFontDialog = false },
+                                title = { Text("Text font") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationChannelScopeTextFont.entries.forEach { entry ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTextFont = entry
+                                                        prefs.edit().putString(scopeTextFontKey, entry.storageValue).apply()
+                                                        showTextFontDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = entry == scopeTextFont,
+                                                    onClick = {
+                                                        scopeTextFont = entry
+                                                        prefs.edit().putString(scopeTextFontKey, entry.storageValue).apply()
+                                                        showTextFontDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(entry.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTextFontDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showTextVuAnchorDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTextVuAnchorDialog = false },
+                                title = { Text("VU strip anchor") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        listOf(VisualizationVuAnchor.Top, VisualizationVuAnchor.Bottom).forEach { entry ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTextVuAnchor = entry
+                                                        prefs.edit().putString(scopeTextVuAnchorKey, entry.storageValue).apply()
+                                                        showTextVuAnchorDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = entry == scopeTextVuAnchor,
+                                                    onClick = {
+                                                        scopeTextVuAnchor = entry
+                                                        prefs.edit().putString(scopeTextVuAnchorKey, entry.storageValue).apply()
+                                                        showTextVuAnchorDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(entry.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTextVuAnchorDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showTextVuColorModeDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTextVuColorModeDialog = false },
+                                title = { Text("VU strip color") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationChannelScopeTextColorMode.entries.forEach { entry ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTextVuColorMode = entry
+                                                        prefs.edit().putString(scopeTextVuColorModeKey, entry.storageValue).apply()
+                                                        showTextVuColorModeDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = entry == scopeTextVuColorMode,
+                                                    onClick = {
+                                                        scopeTextVuColorMode = entry
+                                                        prefs.edit().putString(scopeTextVuColorModeKey, entry.storageValue).apply()
+                                                        showTextVuColorModeDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(entry.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTextVuColorModeDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showTextVuCustomColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom VU strip color",
+                                initialArgb = scopeTextVuCustomColorArgb,
+                                onDismiss = { showTextVuCustomColorDialog = false },
+                                onConfirm = { argb ->
+                                    scopeTextVuCustomColorArgb = argb
+                                    prefs.edit().putInt(scopeTextVuCustomColorKey, argb).apply()
+                                    showTextVuCustomColorDialog = false
+                                }
+                            )
+                        }
+                        if (showCustomTextColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom text color",
+                                initialArgb = scopeCustomTextColorArgb,
+                                onDismiss = { showCustomTextColorDialog = false },
+                                onConfirm = { argb ->
+                                    scopeCustomTextColorArgb = argb
+                                    prefs.edit().putInt(scopeCustomTextColorKey, argb).apply()
+                                    showCustomTextColorDialog = false
+                                }
+                            )
+                        }
+                        if (showTextNoteFormatDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTextNoteFormatDialog = false },
+                                title = { Text("Note naming") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationNoteNameFormat.entries.forEach { entry ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTextNoteFormat = entry
+                                                        prefs.edit().putString(scopeTextNoteFormatKey, entry.storageValue).apply()
+                                                        showTextNoteFormatDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = entry == scopeTextNoteFormat,
+                                                    onClick = {
+                                                        scopeTextNoteFormat = entry
+                                                        prefs.edit().putString(scopeTextNoteFormatKey, entry.storageValue).apply()
+                                                        showTextNoteFormatDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(entry.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTextNoteFormatDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+    }
+
+
+    @Composable
+    fun VisualizationBasicOscilloscopeSettingsRouteImpl() {
+                        val prefsName = "silicon_player_settings"
+                        val oscWindowKey = "visualization_osc_window_ms"
+                        val oscTriggerKey = "visualization_osc_trigger_mode"
+                        val oscFpsModeKey = "visualization_osc_fps_mode"
+                        val oscLineWidthKey = "visualization_osc_line_width_dp"
+                        val oscGridWidthKey = "visualization_osc_grid_width_dp"
+                        val oscVerticalGridEnabledKey = "visualization_osc_vertical_grid_enabled"
+                        val oscCenterLineEnabledKey = "visualization_osc_center_line_enabled"
+                        val oscLineNoArtworkColorModeKey = "visualization_osc_line_color_mode_no_artwork"
+                        val oscGridNoArtworkColorModeKey = "visualization_osc_grid_color_mode_no_artwork"
+                        val oscLineArtworkColorModeKey = "visualization_osc_line_color_mode_with_artwork"
+                        val oscGridArtworkColorModeKey = "visualization_osc_grid_color_mode_with_artwork"
+                        val oscCustomLineColorKey = "visualization_osc_custom_line_color_argb"
+                        val oscCustomGridColorKey = "visualization_osc_custom_grid_color_argb"
+                        val context = LocalContext.current
+                        val prefs = remember(context) {
+                            context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+                        }
+                        var visualizationOscWindowMs by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(oscWindowKey, AppDefaults.Visualization.Oscilloscope.windowMs).coerceIn(
+                                    AppDefaults.Visualization.Oscilloscope.windowRangeMs.first,
+                                    AppDefaults.Visualization.Oscilloscope.windowRangeMs.last
+                                )
+                            )
+                        }
+                        var visualizationOscTriggerMode by remember {
+                            mutableStateOf(
+                                VisualizationOscTriggerMode.fromStorage(
+                                    prefs.getString(
+                                        oscTriggerKey,
+                                        AppDefaults.Visualization.Oscilloscope.triggerMode.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var visualizationOscFpsMode by remember {
+                            mutableStateOf(
+                                VisualizationOscFpsMode.fromStorage(
+                                    prefs.getString(
+                                        oscFpsModeKey,
+                                        AppDefaults.Visualization.Oscilloscope.fpsMode.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var visualizationOscLineWidthDp by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    oscLineWidthKey,
+                                    AppDefaults.Visualization.Oscilloscope.lineWidthDp
+                                ).coerceIn(
+                                    AppDefaults.Visualization.Oscilloscope.lineWidthRangeDp.first,
+                                    AppDefaults.Visualization.Oscilloscope.lineWidthRangeDp.last
+                                )
+                            )
+                        }
+                        var visualizationOscGridWidthDp by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    oscGridWidthKey,
+                                    AppDefaults.Visualization.Oscilloscope.gridWidthDp
+                                ).coerceIn(
+                                    AppDefaults.Visualization.Oscilloscope.gridWidthRangeDp.first,
+                                    AppDefaults.Visualization.Oscilloscope.gridWidthRangeDp.last
+                                )
+                            )
+                        }
+                        var visualizationOscVerticalGridEnabled by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    oscVerticalGridEnabledKey,
+                                    AppDefaults.Visualization.Oscilloscope.verticalGridEnabled
+                                )
+                            )
+                        }
+                        var visualizationOscCenterLineEnabled by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    oscCenterLineEnabledKey,
+                                    AppDefaults.Visualization.Oscilloscope.centerLineEnabled
+                                )
+                            )
+                        }
+                        var oscLineColorModeNoArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        oscLineNoArtworkColorModeKey,
+                                        AppDefaults.Visualization.Oscilloscope.lineColorModeNoArtwork.storageValue
+                                    ),
+                                    AppDefaults.Visualization.Oscilloscope.lineColorModeNoArtwork
+                                )
+                            )
+                        }
+                        var oscGridColorModeNoArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        oscGridNoArtworkColorModeKey,
+                                        AppDefaults.Visualization.Oscilloscope.gridColorModeNoArtwork.storageValue
+                                    ),
+                                    AppDefaults.Visualization.Oscilloscope.gridColorModeNoArtwork
+                                )
+                            )
+                        }
+                        var oscLineColorModeWithArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        oscLineArtworkColorModeKey,
+                                        AppDefaults.Visualization.Oscilloscope.lineColorModeWithArtwork.storageValue
+                                    ),
+                                    AppDefaults.Visualization.Oscilloscope.lineColorModeWithArtwork
+                                )
+                            )
+                        }
+                        var oscGridColorModeWithArtwork by remember {
+                            mutableStateOf(
+                                VisualizationOscColorMode.fromStorage(
+                                    prefs.getString(
+                                        oscGridArtworkColorModeKey,
+                                        AppDefaults.Visualization.Oscilloscope.gridColorModeWithArtwork.storageValue
+                                    ),
+                                    AppDefaults.Visualization.Oscilloscope.gridColorModeWithArtwork
+                                )
+                            )
+                        }
+                        var oscCustomLineColorArgb by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    oscCustomLineColorKey,
+                                    AppDefaults.Visualization.Oscilloscope.customLineColorArgb
+                                )
+                            )
+                        }
+                        var oscCustomGridColorArgb by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    oscCustomGridColorKey,
+                                    AppDefaults.Visualization.Oscilloscope.customGridColorArgb
+                                )
+                            )
+                        }
+                        var showWindowDialog by remember { mutableStateOf(false) }
+                        var showTriggerDialog by remember { mutableStateOf(false) }
+                        var showFpsModeDialog by remember { mutableStateOf(false) }
+                        var showLineWidthDialog by remember { mutableStateOf(false) }
+                        var showGridWidthDialog by remember { mutableStateOf(false) }
+                        var showLineNoArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showGridNoArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showLineArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showGridArtworkColorModeDialog by remember { mutableStateOf(false) }
+                        var showCustomLineColorDialog by remember { mutableStateOf(false) }
+                        var showCustomGridColorDialog by remember { mutableStateOf(false) }
+                        SettingsSectionLabel("Oscilloscope")
+                        PlayerSettingToggleCard(
+                            title = "Stereo mode",
+                            description = "Render stereo waveform when channel layout supports it.",
+                            checked = visualizationOscStereo,
+                            onCheckedChange = onVisualizationOscStereoChanged
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Visible window",
+                            description = "Time span shown across the oscilloscope view.",
+                            value = "${visualizationOscWindowMs} ms",
+                            onClick = { showWindowDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Trigger",
+                            description = "Sync mode used to stabilize waveform start point.",
+                            value = visualizationOscTriggerMode.label,
+                            onClick = { showTriggerDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Scope frame rate",
+                            description = "Rendering rate for oscilloscope updates.",
+                            value = visualizationOscFpsMode.label,
+                            onClick = { showFpsModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Line width",
+                            description = "Stroke width for waveform lines.",
+                            value = "${visualizationOscLineWidthDp}dp",
+                            onClick = { showLineWidthDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Grid width",
+                            description = "Stroke width for grid lines.",
+                            value = "${visualizationOscGridWidthDp}dp",
+                            onClick = { showGridWidthDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Show vertical grid lines",
+                            description = "Display vertical time divisions in the oscilloscope.",
+                            checked = visualizationOscVerticalGridEnabled,
+                            onCheckedChange = { enabled ->
+                                visualizationOscVerticalGridEnabled = enabled
+                                prefs.edit().putBoolean(oscVerticalGridEnabledKey, enabled).apply()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Show centerline",
+                            description = "Display the waveform center reference line.",
+                            checked = visualizationOscCenterLineEnabled,
+                            onCheckedChange = { enabled ->
+                                visualizationOscCenterLineEnabled = enabled
+                                prefs.edit().putBoolean(oscCenterLineEnabledKey, enabled).apply()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Colors (no artwork)")
+                        SettingsValuePickerCard(
+                            title = "Line color",
+                            description = "Color source used when no artwork is available.",
+                            value = oscLineColorModeNoArtwork.label,
+                            onClick = { showLineNoArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Grid color",
+                            description = "Color source used when no artwork is available.",
+                            value = oscGridColorModeNoArtwork.label,
+                            onClick = { showGridNoArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Colors (with artwork)")
+                        SettingsValuePickerCard(
+                            title = "Line color",
+                            description = "Color source used when artwork is available.",
+                            value = oscLineColorModeWithArtwork.label,
+                            onClick = { showLineArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Grid color",
+                            description = "Color source used when artwork is available.",
+                            value = oscGridColorModeWithArtwork.label,
+                            onClick = { showGridArtworkColorModeDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Custom colors")
+                        SettingsValuePickerCard(
+                            title = "Custom line color",
+                            description = "RGB color used when line color mode is Custom.",
+                            value = String.format(Locale.US, "#%06X", oscCustomLineColorArgb and 0xFFFFFF),
+                            onClick = { showCustomLineColorDialog = true }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsValuePickerCard(
+                            title = "Custom grid color",
+                            description = "RGB color used when grid color mode is Custom.",
+                            value = String.format(Locale.US, "#%06X", oscCustomGridColorArgb and 0xFFFFFF),
+                            onClick = { showCustomGridColorDialog = true }
+                        )
+                        if (showWindowDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Visible window",
+                                unitLabel = "ms",
+                                range = AppDefaults.Visualization.Oscilloscope.windowRangeMs,
+                                step = 1,
+                                currentValue = visualizationOscWindowMs,
+                                onDismiss = { showWindowDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(5, 200)
+                                    visualizationOscWindowMs = clamped
+                                    prefs.edit()
+                                        .putInt(oscWindowKey, clamped)
+                                        .apply()
+                                    showWindowDialog = false
+                                }
+                            )
+                        }
+                        if (showTriggerDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTriggerDialog = false },
+                                title = { Text("Oscilloscope trigger") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationOscTriggerMode.entries.forEach { mode ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        visualizationOscTriggerMode = mode
+                                                        prefs.edit()
+                                                            .putString(
+                                                                oscTriggerKey,
+                                                                mode.storageValue
+                                                            )
+                                                            .apply()
+                                                        showTriggerDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = mode == visualizationOscTriggerMode,
+                                                    onClick = {
+                                                        visualizationOscTriggerMode = mode
+                                                        prefs.edit()
+                                                            .putString(
+                                                                oscTriggerKey,
+                                                                mode.storageValue
+                                                            )
+                                                            .apply()
+                                                        showTriggerDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(mode.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTriggerDialog = false }) {
+                                        Text("Close")
+                                    }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showFpsModeDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showFpsModeDialog = false },
+                                title = { Text("Scope frame rate") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationOscFpsMode.entries.forEach { mode ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        visualizationOscFpsMode = mode
+                                                        prefs.edit()
+                                                            .putString(oscFpsModeKey, mode.storageValue)
+                                                            .apply()
+                                                        showFpsModeDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = mode == visualizationOscFpsMode,
+                                                    onClick = {
+                                                        visualizationOscFpsMode = mode
+                                                        prefs.edit()
+                                                            .putString(oscFpsModeKey, mode.storageValue)
+                                                            .apply()
+                                                        showFpsModeDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(mode.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showFpsModeDialog = false }) {
+                                        Text("Close")
+                                    }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showLineWidthDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Scope line width",
+                                unitLabel = "dp",
+                                range = AppDefaults.Visualization.Oscilloscope.lineWidthRangeDp,
+                                step = 1,
+                                currentValue = visualizationOscLineWidthDp,
+                                onDismiss = { showLineWidthDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(1, 12)
+                                    visualizationOscLineWidthDp = clamped
+                                    prefs.edit().putInt(oscLineWidthKey, clamped).apply()
+                                    showLineWidthDialog = false
+                                }
+                            )
+                        }
+                        if (showGridWidthDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Grid line width",
+                                unitLabel = "dp",
+                                range = AppDefaults.Visualization.Oscilloscope.gridWidthRangeDp,
+                                step = 1,
+                                currentValue = visualizationOscGridWidthDp,
+                                onDismiss = { showGridWidthDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(1, 8)
+                                    visualizationOscGridWidthDp = clamped
+                                    prefs.edit().putInt(oscGridWidthKey, clamped).apply()
+                                    showGridWidthDialog = false
+                                }
+                            )
+                        }
+                        if (showLineNoArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Line color (no artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = oscLineColorModeNoArtwork,
+                                onDismiss = { showLineNoArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    oscLineColorModeNoArtwork = mode
+                                    prefs.edit()
+                                        .putString(oscLineNoArtworkColorModeKey, mode.storageValue)
+                                        .apply()
+                                    showLineNoArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showGridNoArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Grid color (no artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = oscGridColorModeNoArtwork,
+                                onDismiss = { showGridNoArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    oscGridColorModeNoArtwork = mode
+                                    prefs.edit()
+                                        .putString(oscGridNoArtworkColorModeKey, mode.storageValue)
+                                        .apply()
+                                    showGridNoArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showLineArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Line color (with artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Artwork,
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = oscLineColorModeWithArtwork,
+                                onDismiss = { showLineArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    oscLineColorModeWithArtwork = mode
+                                    prefs.edit()
+                                        .putString(oscLineArtworkColorModeKey, mode.storageValue)
+                                        .apply()
+                                    showLineArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showGridArtworkColorModeDialog) {
+                            VisualizationOscColorModeDialog(
+                                title = "Grid color (with artwork)",
+                                options = listOf(
+                                    VisualizationOscColorMode.Artwork,
+                                    VisualizationOscColorMode.Monet,
+                                    VisualizationOscColorMode.White,
+                                    VisualizationOscColorMode.Custom
+                                ),
+                                selectedMode = oscGridColorModeWithArtwork,
+                                onDismiss = { showGridArtworkColorModeDialog = false },
+                                onSelect = { mode ->
+                                    oscGridColorModeWithArtwork = mode
+                                    prefs.edit()
+                                        .putString(oscGridArtworkColorModeKey, mode.storageValue)
+                                        .apply()
+                                    showGridArtworkColorModeDialog = false
+                                }
+                            )
+                        }
+                        if (showCustomLineColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom line color",
+                                initialArgb = oscCustomLineColorArgb,
+                                onDismiss = { showCustomLineColorDialog = false },
+                                onConfirm = { argb ->
+                                    oscCustomLineColorArgb = argb
+                                    prefs.edit().putInt(oscCustomLineColorKey, argb).apply()
+                                    showCustomLineColorDialog = false
+                                }
+                            )
+                        }
+                        if (showCustomGridColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom grid color",
+                                initialArgb = oscCustomGridColorArgb,
+                                onDismiss = { showCustomGridColorDialog = false },
+                                onConfirm = { argb ->
+                                    oscCustomGridColorArgb = argb
+                                    prefs.edit().putInt(oscCustomGridColorKey, argb).apply()
+                                    showCustomGridColorDialog = false
+                                }
+                            )
+                        }
+    }
+
+
+    @Composable
+    fun CacheManagerSettingsRouteImpl() {
+                        var selectedPaths by remember { mutableStateOf(setOf<String>()) }
+                        var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+                        LaunchedEffect(cachedSourceFiles) {
+                            val existing = cachedSourceFiles.map { it.absolutePath }.toSet()
+                            selectedPaths = selectedPaths.filterTo(mutableSetOf()) { it in existing }
+                        }
+                        LaunchedEffect(route) {
+                            onRefreshCachedSourceFiles()
+                        }
+                        val inSelectionMode = selectedPaths.isNotEmpty()
+                        val totalBytes = cachedSourceFiles.sumOf { it.sizeBytes.coerceAtLeast(0L) }
+                        BackHandler(enabled = inSelectionMode) {
+                            selectedPaths = emptySet()
+                        }
+
+                        SettingsSectionLabel("Overview")
+                        Text(
+                            text = "${cachedSourceFiles.size} files • ${formatCacheByteCount(totalBytes)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { showDeleteConfirmDialog = true },
+                                enabled = inSelectionMode,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Delete (${selectedPaths.size})")
+                            }
+                            OutlinedButton(
+                                onClick = { onExportCachedSourceFiles(selectedPaths.toList()) },
+                                enabled = inSelectionMode,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Link,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Export (${selectedPaths.size})")
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    selectedPaths = cachedSourceFiles.map { it.absolutePath }.toSet()
+                                },
+                                enabled = cachedSourceFiles.isNotEmpty(),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Select all")
+                            }
+                            OutlinedButton(
+                                onClick = { selectedPaths = emptySet() },
+                                enabled = inSelectionMode,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Deselect all")
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Tap files to select. Back clears selection first.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (cachedSourceFiles.isEmpty()) {
+                            Text(
+                                text = "No cached files.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            SettingsSectionLabel("Files")
+                            cachedSourceFiles.forEach { entry ->
+                                val isSelected = selectedPaths.contains(entry.absolutePath)
+                                val sourceLine = entry.sourceId ?: "Source: unknown"
+                                Surface(
+                                    shape = SettingsCardShape,
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.surfaceContainer
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .combinedClickable(
+                                            onLongClick = {
+                                                selectedPaths = if (isSelected) {
+                                                    selectedPaths - entry.absolutePath
+                                                } else {
+                                                    selectedPaths + entry.absolutePath
+                                                }
+                                            },
+                                            onClick = {
+                                                if (selectedPaths.isEmpty()) {
+                                                    selectedPaths = setOf(entry.absolutePath)
+                                                } else {
+                                                    selectedPaths = if (isSelected) {
+                                                        selectedPaths - entry.absolutePath
+                                                    } else {
+                                                        selectedPaths + entry.absolutePath
+                                                    }
+                                                }
+                                            }
+                                        )
+                                ) {
+                                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                        Text(
+                                            text = stripCachedFileHashPrefix(entry.fileName),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            maxLines = 1
+                                        )
+                                        Spacer(modifier = Modifier.height(3.dp))
+                                        Text(
+                                            text = "${formatCacheByteCount(entry.sizeBytes)} • $sourceLine",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isSelected) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                            maxLines = 2
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
+                        }
+
+
+                        if (showDeleteConfirmDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showDeleteConfirmDialog = false },
+                                title = { Text("Delete selected cached files?") },
+                                text = { Text("This removes ${selectedPaths.size} selected cached file(s).") },
+                                dismissButton = {
+                                    TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                                        Text("Cancel")
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        onDeleteCachedSourceFiles(selectedPaths.toList())
+                                        selectedPaths = emptySet()
+                                        showDeleteConfirmDialog = false
+                                    }) {
+                                        Text("Delete")
+                                    }
+                                }
+                            )
+                        }
+    }
+
+            @Composable
+            fun VisualizationAdvancedChannelScopeSettingsRoute() {
+                VisualizationAdvancedChannelScopeSettingsRouteImpl()
+            }
+
+            @Composable
+            fun VisualizationBasicOscilloscopeSettingsRoute() {
+                VisualizationBasicOscilloscopeSettingsRouteImpl()
+            }
+
+            @Composable
+            fun CacheManagerSettingsRoute() {
+                CacheManagerSettingsRouteImpl()
+            }
             AnimatedContent(
                 targetState = route,
                 transitionSpec = {
@@ -607,15 +2740,16 @@ internal fun SettingsScreen(
                     .fillMaxSize()
                     .padding(start = 16.dp, end = 16.dp, top = 12.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(
-                            state = rememberScrollState(),
-                            enabled = !(route == SettingsRoute.AudioPlugins && pluginPriorityEditMode)
-                        )
-                ) {
-                    when (it) {
+                val routeContent: @Composable () -> Unit = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(
+                                state = rememberScrollState(),
+                                enabled = !(route == SettingsRoute.AudioPlugins && pluginPriorityEditMode)
+                            )
+                    ) {
+                        when (it) {
                     SettingsRoute.Root -> {
                         SettingsSectionLabel("General")
                         SettingsItemCard(
@@ -2035,514 +4169,7 @@ internal fun SettingsScreen(
                         }
                     }
                     SettingsRoute.VisualizationBasicOscilloscope -> {
-                        val prefsName = "silicon_player_settings"
-                        val oscWindowKey = "visualization_osc_window_ms"
-                        val oscTriggerKey = "visualization_osc_trigger_mode"
-                        val oscFpsModeKey = "visualization_osc_fps_mode"
-                        val oscLineWidthKey = "visualization_osc_line_width_dp"
-                        val oscGridWidthKey = "visualization_osc_grid_width_dp"
-                        val oscVerticalGridEnabledKey = "visualization_osc_vertical_grid_enabled"
-                        val oscCenterLineEnabledKey = "visualization_osc_center_line_enabled"
-                        val oscLineNoArtworkColorModeKey = "visualization_osc_line_color_mode_no_artwork"
-                        val oscGridNoArtworkColorModeKey = "visualization_osc_grid_color_mode_no_artwork"
-                        val oscLineArtworkColorModeKey = "visualization_osc_line_color_mode_with_artwork"
-                        val oscGridArtworkColorModeKey = "visualization_osc_grid_color_mode_with_artwork"
-                        val oscCustomLineColorKey = "visualization_osc_custom_line_color_argb"
-                        val oscCustomGridColorKey = "visualization_osc_custom_grid_color_argb"
-                        val context = LocalContext.current
-                        val prefs = remember(context) {
-                            context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-                        }
-                        var visualizationOscWindowMs by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(oscWindowKey, AppDefaults.Visualization.Oscilloscope.windowMs).coerceIn(
-                                    AppDefaults.Visualization.Oscilloscope.windowRangeMs.first,
-                                    AppDefaults.Visualization.Oscilloscope.windowRangeMs.last
-                                )
-                            )
-                        }
-                        var visualizationOscTriggerMode by remember {
-                            mutableStateOf(
-                                VisualizationOscTriggerMode.fromStorage(
-                                    prefs.getString(
-                                        oscTriggerKey,
-                                        AppDefaults.Visualization.Oscilloscope.triggerMode.storageValue
-                                    )
-                                )
-                            )
-                        }
-                        var visualizationOscFpsMode by remember {
-                            mutableStateOf(
-                                VisualizationOscFpsMode.fromStorage(
-                                    prefs.getString(
-                                        oscFpsModeKey,
-                                        AppDefaults.Visualization.Oscilloscope.fpsMode.storageValue
-                                    )
-                                )
-                            )
-                        }
-                        var visualizationOscLineWidthDp by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    oscLineWidthKey,
-                                    AppDefaults.Visualization.Oscilloscope.lineWidthDp
-                                ).coerceIn(
-                                    AppDefaults.Visualization.Oscilloscope.lineWidthRangeDp.first,
-                                    AppDefaults.Visualization.Oscilloscope.lineWidthRangeDp.last
-                                )
-                            )
-                        }
-                        var visualizationOscGridWidthDp by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    oscGridWidthKey,
-                                    AppDefaults.Visualization.Oscilloscope.gridWidthDp
-                                ).coerceIn(
-                                    AppDefaults.Visualization.Oscilloscope.gridWidthRangeDp.first,
-                                    AppDefaults.Visualization.Oscilloscope.gridWidthRangeDp.last
-                                )
-                            )
-                        }
-                        var visualizationOscVerticalGridEnabled by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    oscVerticalGridEnabledKey,
-                                    AppDefaults.Visualization.Oscilloscope.verticalGridEnabled
-                                )
-                            )
-                        }
-                        var visualizationOscCenterLineEnabled by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    oscCenterLineEnabledKey,
-                                    AppDefaults.Visualization.Oscilloscope.centerLineEnabled
-                                )
-                            )
-                        }
-                        var oscLineColorModeNoArtwork by remember {
-                            mutableStateOf(
-                                VisualizationOscColorMode.fromStorage(
-                                    prefs.getString(
-                                        oscLineNoArtworkColorModeKey,
-                                        AppDefaults.Visualization.Oscilloscope.lineColorModeNoArtwork.storageValue
-                                    ),
-                                    AppDefaults.Visualization.Oscilloscope.lineColorModeNoArtwork
-                                )
-                            )
-                        }
-                        var oscGridColorModeNoArtwork by remember {
-                            mutableStateOf(
-                                VisualizationOscColorMode.fromStorage(
-                                    prefs.getString(
-                                        oscGridNoArtworkColorModeKey,
-                                        AppDefaults.Visualization.Oscilloscope.gridColorModeNoArtwork.storageValue
-                                    ),
-                                    AppDefaults.Visualization.Oscilloscope.gridColorModeNoArtwork
-                                )
-                            )
-                        }
-                        var oscLineColorModeWithArtwork by remember {
-                            mutableStateOf(
-                                VisualizationOscColorMode.fromStorage(
-                                    prefs.getString(
-                                        oscLineArtworkColorModeKey,
-                                        AppDefaults.Visualization.Oscilloscope.lineColorModeWithArtwork.storageValue
-                                    ),
-                                    AppDefaults.Visualization.Oscilloscope.lineColorModeWithArtwork
-                                )
-                            )
-                        }
-                        var oscGridColorModeWithArtwork by remember {
-                            mutableStateOf(
-                                VisualizationOscColorMode.fromStorage(
-                                    prefs.getString(
-                                        oscGridArtworkColorModeKey,
-                                        AppDefaults.Visualization.Oscilloscope.gridColorModeWithArtwork.storageValue
-                                    ),
-                                    AppDefaults.Visualization.Oscilloscope.gridColorModeWithArtwork
-                                )
-                            )
-                        }
-                        var oscCustomLineColorArgb by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    oscCustomLineColorKey,
-                                    AppDefaults.Visualization.Oscilloscope.customLineColorArgb
-                                )
-                            )
-                        }
-                        var oscCustomGridColorArgb by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    oscCustomGridColorKey,
-                                    AppDefaults.Visualization.Oscilloscope.customGridColorArgb
-                                )
-                            )
-                        }
-                        var showWindowDialog by remember { mutableStateOf(false) }
-                        var showTriggerDialog by remember { mutableStateOf(false) }
-                        var showFpsModeDialog by remember { mutableStateOf(false) }
-                        var showLineWidthDialog by remember { mutableStateOf(false) }
-                        var showGridWidthDialog by remember { mutableStateOf(false) }
-                        var showLineNoArtworkColorModeDialog by remember { mutableStateOf(false) }
-                        var showGridNoArtworkColorModeDialog by remember { mutableStateOf(false) }
-                        var showLineArtworkColorModeDialog by remember { mutableStateOf(false) }
-                        var showGridArtworkColorModeDialog by remember { mutableStateOf(false) }
-                        var showCustomLineColorDialog by remember { mutableStateOf(false) }
-                        var showCustomGridColorDialog by remember { mutableStateOf(false) }
-                        SettingsSectionLabel("Oscilloscope")
-                        PlayerSettingToggleCard(
-                            title = "Stereo mode",
-                            description = "Render stereo waveform when channel layout supports it.",
-                            checked = visualizationOscStereo,
-                            onCheckedChange = onVisualizationOscStereoChanged
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Visible window",
-                            description = "Time span shown across the oscilloscope view.",
-                            value = "${visualizationOscWindowMs} ms",
-                            onClick = { showWindowDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Trigger",
-                            description = "Sync mode used to stabilize waveform start point.",
-                            value = visualizationOscTriggerMode.label,
-                            onClick = { showTriggerDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Scope frame rate",
-                            description = "Rendering rate for oscilloscope updates.",
-                            value = visualizationOscFpsMode.label,
-                            onClick = { showFpsModeDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Line width",
-                            description = "Stroke width for waveform lines.",
-                            value = "${visualizationOscLineWidthDp}dp",
-                            onClick = { showLineWidthDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Grid width",
-                            description = "Stroke width for grid lines.",
-                            value = "${visualizationOscGridWidthDp}dp",
-                            onClick = { showGridWidthDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        PlayerSettingToggleCard(
-                            title = "Show vertical grid lines",
-                            description = "Display vertical time divisions in the oscilloscope.",
-                            checked = visualizationOscVerticalGridEnabled,
-                            onCheckedChange = { enabled ->
-                                visualizationOscVerticalGridEnabled = enabled
-                                prefs.edit().putBoolean(oscVerticalGridEnabledKey, enabled).apply()
-                            }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        PlayerSettingToggleCard(
-                            title = "Show centerline",
-                            description = "Display the waveform center reference line.",
-                            checked = visualizationOscCenterLineEnabled,
-                            onCheckedChange = { enabled ->
-                                visualizationOscCenterLineEnabled = enabled
-                                prefs.edit().putBoolean(oscCenterLineEnabledKey, enabled).apply()
-                            }
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        SettingsSectionLabel("Colors (no artwork)")
-                        SettingsValuePickerCard(
-                            title = "Line color",
-                            description = "Color source used when no artwork is available.",
-                            value = oscLineColorModeNoArtwork.label,
-                            onClick = { showLineNoArtworkColorModeDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Grid color",
-                            description = "Color source used when no artwork is available.",
-                            value = oscGridColorModeNoArtwork.label,
-                            onClick = { showGridNoArtworkColorModeDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        SettingsSectionLabel("Colors (with artwork)")
-                        SettingsValuePickerCard(
-                            title = "Line color",
-                            description = "Color source used when artwork is available.",
-                            value = oscLineColorModeWithArtwork.label,
-                            onClick = { showLineArtworkColorModeDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Grid color",
-                            description = "Color source used when artwork is available.",
-                            value = oscGridColorModeWithArtwork.label,
-                            onClick = { showGridArtworkColorModeDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        SettingsSectionLabel("Custom colors")
-                        SettingsValuePickerCard(
-                            title = "Custom line color",
-                            description = "RGB color used when line color mode is Custom.",
-                            value = String.format(Locale.US, "#%06X", oscCustomLineColorArgb and 0xFFFFFF),
-                            onClick = { showCustomLineColorDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Custom grid color",
-                            description = "RGB color used when grid color mode is Custom.",
-                            value = String.format(Locale.US, "#%06X", oscCustomGridColorArgb and 0xFFFFFF),
-                            onClick = { showCustomGridColorDialog = true }
-                        )
-                        if (showWindowDialog) {
-                            SteppedIntSliderDialog(
-                                title = "Visible window",
-                                unitLabel = "ms",
-                                range = AppDefaults.Visualization.Oscilloscope.windowRangeMs,
-                                step = 1,
-                                currentValue = visualizationOscWindowMs,
-                                onDismiss = { showWindowDialog = false },
-                                onConfirm = { value ->
-                                    val clamped = value.coerceIn(5, 200)
-                                    visualizationOscWindowMs = clamped
-                                    prefs.edit()
-                                        .putInt(oscWindowKey, clamped)
-                                        .apply()
-                                    showWindowDialog = false
-                                }
-                            )
-                        }
-                        if (showTriggerDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showTriggerDialog = false },
-                                title = { Text("Oscilloscope trigger") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        VisualizationOscTriggerMode.entries.forEach { mode ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        visualizationOscTriggerMode = mode
-                                                        prefs.edit()
-                                                            .putString(
-                                                                oscTriggerKey,
-                                                                mode.storageValue
-                                                            )
-                                                            .apply()
-                                                        showTriggerDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = mode == visualizationOscTriggerMode,
-                                                    onClick = {
-                                                        visualizationOscTriggerMode = mode
-                                                        prefs.edit()
-                                                            .putString(
-                                                                oscTriggerKey,
-                                                                mode.storageValue
-                                                            )
-                                                            .apply()
-                                                        showTriggerDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(mode.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showTriggerDialog = false }) {
-                                        Text("Close")
-                                    }
-                                },
-                                confirmButton = {}
-                            )
-                        }
-                        if (showFpsModeDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showFpsModeDialog = false },
-                                title = { Text("Scope frame rate") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        VisualizationOscFpsMode.entries.forEach { mode ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        visualizationOscFpsMode = mode
-                                                        prefs.edit()
-                                                            .putString(oscFpsModeKey, mode.storageValue)
-                                                            .apply()
-                                                        showFpsModeDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = mode == visualizationOscFpsMode,
-                                                    onClick = {
-                                                        visualizationOscFpsMode = mode
-                                                        prefs.edit()
-                                                            .putString(oscFpsModeKey, mode.storageValue)
-                                                            .apply()
-                                                        showFpsModeDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(mode.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showFpsModeDialog = false }) {
-                                        Text("Close")
-                                    }
-                                },
-                                confirmButton = {}
-                            )
-                        }
-                        if (showLineWidthDialog) {
-                            SteppedIntSliderDialog(
-                                title = "Scope line width",
-                                unitLabel = "dp",
-                                range = AppDefaults.Visualization.Oscilloscope.lineWidthRangeDp,
-                                step = 1,
-                                currentValue = visualizationOscLineWidthDp,
-                                onDismiss = { showLineWidthDialog = false },
-                                onConfirm = { value ->
-                                    val clamped = value.coerceIn(1, 12)
-                                    visualizationOscLineWidthDp = clamped
-                                    prefs.edit().putInt(oscLineWidthKey, clamped).apply()
-                                    showLineWidthDialog = false
-                                }
-                            )
-                        }
-                        if (showGridWidthDialog) {
-                            SteppedIntSliderDialog(
-                                title = "Grid line width",
-                                unitLabel = "dp",
-                                range = AppDefaults.Visualization.Oscilloscope.gridWidthRangeDp,
-                                step = 1,
-                                currentValue = visualizationOscGridWidthDp,
-                                onDismiss = { showGridWidthDialog = false },
-                                onConfirm = { value ->
-                                    val clamped = value.coerceIn(1, 8)
-                                    visualizationOscGridWidthDp = clamped
-                                    prefs.edit().putInt(oscGridWidthKey, clamped).apply()
-                                    showGridWidthDialog = false
-                                }
-                            )
-                        }
-                        if (showLineNoArtworkColorModeDialog) {
-                            VisualizationOscColorModeDialog(
-                                title = "Line color (no artwork)",
-                                options = listOf(
-                                    VisualizationOscColorMode.Monet,
-                                    VisualizationOscColorMode.White,
-                                    VisualizationOscColorMode.Custom
-                                ),
-                                selectedMode = oscLineColorModeNoArtwork,
-                                onDismiss = { showLineNoArtworkColorModeDialog = false },
-                                onSelect = { mode ->
-                                    oscLineColorModeNoArtwork = mode
-                                    prefs.edit()
-                                        .putString(oscLineNoArtworkColorModeKey, mode.storageValue)
-                                        .apply()
-                                    showLineNoArtworkColorModeDialog = false
-                                }
-                            )
-                        }
-                        if (showGridNoArtworkColorModeDialog) {
-                            VisualizationOscColorModeDialog(
-                                title = "Grid color (no artwork)",
-                                options = listOf(
-                                    VisualizationOscColorMode.Monet,
-                                    VisualizationOscColorMode.White,
-                                    VisualizationOscColorMode.Custom
-                                ),
-                                selectedMode = oscGridColorModeNoArtwork,
-                                onDismiss = { showGridNoArtworkColorModeDialog = false },
-                                onSelect = { mode ->
-                                    oscGridColorModeNoArtwork = mode
-                                    prefs.edit()
-                                        .putString(oscGridNoArtworkColorModeKey, mode.storageValue)
-                                        .apply()
-                                    showGridNoArtworkColorModeDialog = false
-                                }
-                            )
-                        }
-                        if (showLineArtworkColorModeDialog) {
-                            VisualizationOscColorModeDialog(
-                                title = "Line color (with artwork)",
-                                options = listOf(
-                                    VisualizationOscColorMode.Artwork,
-                                    VisualizationOscColorMode.Monet,
-                                    VisualizationOscColorMode.White,
-                                    VisualizationOscColorMode.Custom
-                                ),
-                                selectedMode = oscLineColorModeWithArtwork,
-                                onDismiss = { showLineArtworkColorModeDialog = false },
-                                onSelect = { mode ->
-                                    oscLineColorModeWithArtwork = mode
-                                    prefs.edit()
-                                        .putString(oscLineArtworkColorModeKey, mode.storageValue)
-                                        .apply()
-                                    showLineArtworkColorModeDialog = false
-                                }
-                            )
-                        }
-                        if (showGridArtworkColorModeDialog) {
-                            VisualizationOscColorModeDialog(
-                                title = "Grid color (with artwork)",
-                                options = listOf(
-                                    VisualizationOscColorMode.Artwork,
-                                    VisualizationOscColorMode.Monet,
-                                    VisualizationOscColorMode.White,
-                                    VisualizationOscColorMode.Custom
-                                ),
-                                selectedMode = oscGridColorModeWithArtwork,
-                                onDismiss = { showGridArtworkColorModeDialog = false },
-                                onSelect = { mode ->
-                                    oscGridColorModeWithArtwork = mode
-                                    prefs.edit()
-                                        .putString(oscGridArtworkColorModeKey, mode.storageValue)
-                                        .apply()
-                                    showGridArtworkColorModeDialog = false
-                                }
-                            )
-                        }
-                        if (showCustomLineColorDialog) {
-                            VisualizationRgbColorPickerDialog(
-                                title = "Custom line color",
-                                initialArgb = oscCustomLineColorArgb,
-                                onDismiss = { showCustomLineColorDialog = false },
-                                onConfirm = { argb ->
-                                    oscCustomLineColorArgb = argb
-                                    prefs.edit().putInt(oscCustomLineColorKey, argb).apply()
-                                    showCustomLineColorDialog = false
-                                }
-                            )
-                        }
-                        if (showCustomGridColorDialog) {
-                            VisualizationRgbColorPickerDialog(
-                                title = "Custom grid color",
-                                initialArgb = oscCustomGridColorArgb,
-                                onDismiss = { showCustomGridColorDialog = false },
-                                onConfirm = { argb ->
-                                    oscCustomGridColorArgb = argb
-                                    prefs.edit().putInt(oscCustomGridColorKey, argb).apply()
-                                    showCustomGridColorDialog = false
-                                }
-                            )
-                        }
+                        VisualizationBasicOscilloscopeSettingsRoute()
                     }
                     SettingsRoute.VisualizationBasicVuMeters -> {
                         val prefsName = "silicon_player_settings"
@@ -2731,1422 +4358,7 @@ internal fun SettingsScreen(
                         }
                     }
                     SettingsRoute.VisualizationAdvancedChannelScope -> {
-                        val prefsName = "silicon_player_settings"
-                        val scopeWindowKey = "visualization_channel_scope_window_ms"
-                        val scopeRenderBackendKey = "visualization_channel_scope_render_backend"
-                        val scopeDcRemovalEnabledKey = "visualization_channel_scope_dc_removal_enabled"
-                        val scopeGainPercentKey = "visualization_channel_scope_gain_percent"
-                        val scopeTriggerKey = "visualization_channel_scope_trigger_mode"
-                        val scopeFpsModeKey = "visualization_channel_scope_fps_mode"
-                        val scopeLineWidthKey = "visualization_channel_scope_line_width_dp"
-                        val scopeGridWidthKey = "visualization_channel_scope_grid_width_dp"
-                        val scopeVerticalGridEnabledKey = "visualization_channel_scope_vertical_grid_enabled"
-                        val scopeCenterLineEnabledKey = "visualization_channel_scope_center_line_enabled"
-                        val scopeShowArtworkBackgroundKey = "visualization_channel_scope_show_artwork_background"
-                        val scopeBackgroundModeKey = "visualization_channel_scope_background_mode"
-                        val scopeCustomBackgroundColorKey = "visualization_channel_scope_custom_background_color_argb"
-                        val scopeLayoutKey = "visualization_channel_scope_layout"
-                        val scopeLineNoArtworkColorModeKey = "visualization_channel_scope_line_color_mode_no_artwork"
-                        val scopeGridNoArtworkColorModeKey = "visualization_channel_scope_grid_color_mode_no_artwork"
-                        val scopeLineArtworkColorModeKey = "visualization_channel_scope_line_color_mode_with_artwork"
-                        val scopeGridArtworkColorModeKey = "visualization_channel_scope_grid_color_mode_with_artwork"
-                        val scopeCustomLineColorKey = "visualization_channel_scope_custom_line_color_argb"
-                        val scopeCustomGridColorKey = "visualization_channel_scope_custom_grid_color_argb"
-                        val scopeTextEnabledKey = "visualization_channel_scope_text_enabled"
-                        val scopeTextAnchorKey = "visualization_channel_scope_text_anchor"
-                        val scopeTextPaddingKey = "visualization_channel_scope_text_padding_dp"
-                        val scopeTextSizeKey = "visualization_channel_scope_text_size_sp"
-                        val scopeTextHideWhenOverflowKey = "visualization_channel_scope_text_hide_when_overflow"
-                        val scopeTextShadowEnabledKey = "visualization_channel_scope_text_shadow_enabled"
-                        val scopeTextFontKey = "visualization_channel_scope_text_font"
-                        val scopeTextColorModeKey = "visualization_channel_scope_text_color_mode"
-                        val scopeCustomTextColorKey = "visualization_channel_scope_custom_text_color_argb"
-                        val scopeTextNoteFormatKey = "visualization_channel_scope_text_note_format"
-                        val scopeTextShowChannelKey = "visualization_channel_scope_text_show_channel"
-                        val scopeTextShowNoteKey = "visualization_channel_scope_text_show_note"
-                        val scopeTextShowVolumeKey = "visualization_channel_scope_text_show_volume"
-                        val scopeTextShowEffectKey = "visualization_channel_scope_text_show_effect"
-                        val scopeTextShowInstrumentSampleKey = "visualization_channel_scope_text_show_instrument_sample"
-                        val scopeTextVuEnabledKey = "visualization_channel_scope_text_vu_enabled"
-                        val scopeTextVuAnchorKey = "visualization_channel_scope_text_vu_anchor"
-                        val scopeTextVuColorModeKey = "visualization_channel_scope_text_vu_color_mode"
-                        val scopeTextVuCustomColorKey = "visualization_channel_scope_text_vu_custom_color_argb"
-                        val context = LocalContext.current
-                        val prefs = remember(context) {
-                            context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-                        }
-                        var scopeWindowMs by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    scopeWindowKey,
-                                    AppDefaults.Visualization.ChannelScope.windowMs
-                                ).coerceIn(
-                                    AppDefaults.Visualization.ChannelScope.windowRangeMs.first,
-                                    AppDefaults.Visualization.ChannelScope.windowRangeMs.last
-                                )
-                            )
-                        }
-                        var scopeTriggerMode by remember {
-                            mutableStateOf(
-                                VisualizationOscTriggerMode.fromStorage(
-                                    prefs.getString(
-                                        scopeTriggerKey,
-                                        AppDefaults.Visualization.ChannelScope.triggerMode.storageValue
-                                    )
-                                )
-                            )
-                        }
-                        var scopeRenderBackend by remember {
-                            mutableStateOf(
-                                VisualizationRenderBackend.fromStorage(
-                                    prefs.getString(
-                                        scopeRenderBackendKey,
-                                        AppDefaults.Visualization.ChannelScope.renderBackend.storageValue
-                                    ),
-                                    AppDefaults.Visualization.ChannelScope.renderBackend
-                                )
-                            )
-                        }
-                        var scopeDcRemovalEnabled by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    scopeDcRemovalEnabledKey,
-                                    AppDefaults.Visualization.ChannelScope.dcRemovalEnabled
-                                )
-                            )
-                        }
-                        var scopeGainPercent by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    scopeGainPercentKey,
-                                    AppDefaults.Visualization.ChannelScope.gainPercent
-                                ).coerceIn(
-                                    AppDefaults.Visualization.ChannelScope.gainRangePercent.first,
-                                    AppDefaults.Visualization.ChannelScope.gainRangePercent.last
-                                )
-                            )
-                        }
-                        var scopeFpsMode by remember {
-                            mutableStateOf(
-                                VisualizationOscFpsMode.fromStorage(
-                                    prefs.getString(
-                                        scopeFpsModeKey,
-                                        AppDefaults.Visualization.ChannelScope.fpsMode.storageValue
-                                    )
-                                )
-                            )
-                        }
-                        var scopeLineWidthDp by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    scopeLineWidthKey,
-                                    AppDefaults.Visualization.ChannelScope.lineWidthDp
-                                ).coerceIn(
-                                    AppDefaults.Visualization.ChannelScope.lineWidthRangeDp.first,
-                                    AppDefaults.Visualization.ChannelScope.lineWidthRangeDp.last
-                                )
-                            )
-                        }
-                        var scopeGridWidthDp by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    scopeGridWidthKey,
-                                    AppDefaults.Visualization.ChannelScope.gridWidthDp
-                                ).coerceIn(
-                                    AppDefaults.Visualization.ChannelScope.gridWidthRangeDp.first,
-                                    AppDefaults.Visualization.ChannelScope.gridWidthRangeDp.last
-                                )
-                            )
-                        }
-                        var scopeVerticalGridEnabled by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    scopeVerticalGridEnabledKey,
-                                    AppDefaults.Visualization.ChannelScope.verticalGridEnabled
-                                )
-                            )
-                        }
-                        var scopeCenterLineEnabled by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    scopeCenterLineEnabledKey,
-                                    AppDefaults.Visualization.ChannelScope.centerLineEnabled
-                                )
-                            )
-                        }
-                        var scopeShowArtworkBackground by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    scopeShowArtworkBackgroundKey,
-                                    AppDefaults.Visualization.ChannelScope.showArtworkBackground
-                                )
-                            )
-                        }
-                        var scopeBackgroundMode by remember {
-                            mutableStateOf(
-                                VisualizationChannelScopeBackgroundMode.fromStorage(
-                                    prefs.getString(
-                                        scopeBackgroundModeKey,
-                                        AppDefaults.Visualization.ChannelScope.backgroundMode.storageValue
-                                    )
-                                )
-                            )
-                        }
-                        var scopeCustomBackgroundColorArgb by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    scopeCustomBackgroundColorKey,
-                                    AppDefaults.Visualization.ChannelScope.customBackgroundColorArgb
-                                )
-                            )
-                        }
-                        var scopeLayout by remember {
-                            mutableStateOf(
-                                VisualizationChannelScopeLayout.fromStorage(
-                                    prefs.getString(
-                                        scopeLayoutKey,
-                                        AppDefaults.Visualization.ChannelScope.layout.storageValue
-                                    )
-                                )
-                            )
-                        }
-                        var scopeLineColorModeNoArtwork by remember {
-                            mutableStateOf(
-                                VisualizationOscColorMode.fromStorage(
-                                    prefs.getString(
-                                        scopeLineNoArtworkColorModeKey,
-                                        AppDefaults.Visualization.ChannelScope.lineColorModeNoArtwork.storageValue
-                                    ),
-                                    AppDefaults.Visualization.ChannelScope.lineColorModeNoArtwork
-                                )
-                            )
-                        }
-                        var scopeGridColorModeNoArtwork by remember {
-                            mutableStateOf(
-                                VisualizationOscColorMode.fromStorage(
-                                    prefs.getString(
-                                        scopeGridNoArtworkColorModeKey,
-                                        AppDefaults.Visualization.ChannelScope.gridColorModeNoArtwork.storageValue
-                                    ),
-                                    AppDefaults.Visualization.ChannelScope.gridColorModeNoArtwork
-                                )
-                            )
-                        }
-                        var scopeLineColorModeWithArtwork by remember {
-                            mutableStateOf(
-                                VisualizationOscColorMode.fromStorage(
-                                    prefs.getString(
-                                        scopeLineArtworkColorModeKey,
-                                        AppDefaults.Visualization.ChannelScope.lineColorModeWithArtwork.storageValue
-                                    ),
-                                    AppDefaults.Visualization.ChannelScope.lineColorModeWithArtwork
-                                )
-                            )
-                        }
-                        var scopeGridColorModeWithArtwork by remember {
-                            mutableStateOf(
-                                VisualizationOscColorMode.fromStorage(
-                                    prefs.getString(
-                                        scopeGridArtworkColorModeKey,
-                                        AppDefaults.Visualization.ChannelScope.gridColorModeWithArtwork.storageValue
-                                    ),
-                                    AppDefaults.Visualization.ChannelScope.gridColorModeWithArtwork
-                                )
-                            )
-                        }
-                        var scopeCustomLineColorArgb by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    scopeCustomLineColorKey,
-                                    AppDefaults.Visualization.ChannelScope.customLineColorArgb
-                                )
-                            )
-                        }
-                        var scopeCustomGridColorArgb by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    scopeCustomGridColorKey,
-                                    AppDefaults.Visualization.ChannelScope.customGridColorArgb
-                                )
-                            )
-                        }
-                        var scopeTextEnabled by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    scopeTextEnabledKey,
-                                    AppDefaults.Visualization.ChannelScope.textEnabled
-                                )
-                            )
-                        }
-                        var scopeTextAnchor by remember {
-                            mutableStateOf(
-                                VisualizationChannelScopeTextAnchor.fromStorage(
-                                    prefs.getString(
-                                        scopeTextAnchorKey,
-                                        AppDefaults.Visualization.ChannelScope.textAnchor.storageValue
-                                    )
-                                )
-                            )
-                        }
-                        var scopeTextPaddingDp by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    scopeTextPaddingKey,
-                                    AppDefaults.Visualization.ChannelScope.textPaddingDp
-                                ).coerceIn(
-                                    AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.first,
-                                    AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.last
-                                )
-                            )
-                        }
-                        var scopeTextSizeSp by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    scopeTextSizeKey,
-                                    AppDefaults.Visualization.ChannelScope.textSizeSp
-                                ).coerceIn(
-                                    AppDefaults.Visualization.ChannelScope.textSizeRangeSp.first,
-                                    AppDefaults.Visualization.ChannelScope.textSizeRangeSp.last
-                                )
-                            )
-                        }
-                        var scopeTextHideWhenOverflow by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    scopeTextHideWhenOverflowKey,
-                                    AppDefaults.Visualization.ChannelScope.textHideWhenOverflow
-                                )
-                            )
-                        }
-                        var scopeTextShadowEnabled by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    scopeTextShadowEnabledKey,
-                                    AppDefaults.Visualization.ChannelScope.textShadowEnabled
-                                )
-                            )
-                        }
-                        var scopeTextFont by remember {
-                            mutableStateOf(
-                                VisualizationChannelScopeTextFont.fromStorage(
-                                    prefs.getString(
-                                        scopeTextFontKey,
-                                        AppDefaults.Visualization.ChannelScope.textFont.storageValue
-                                    )
-                                )
-                            )
-                        }
-                        var scopeTextColorMode by remember {
-                            mutableStateOf(
-                                VisualizationChannelScopeTextColorMode.fromStorage(
-                                    prefs.getString(
-                                        scopeTextColorModeKey,
-                                        AppDefaults.Visualization.ChannelScope.textColorMode.storageValue
-                                    )
-                                )
-                            )
-                        }
-                        var scopeCustomTextColorArgb by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    scopeCustomTextColorKey,
-                                    AppDefaults.Visualization.ChannelScope.customTextColorArgb
-                                )
-                            )
-                        }
-                        var scopeTextNoteFormat by remember {
-                            mutableStateOf(
-                                VisualizationNoteNameFormat.fromStorage(
-                                    prefs.getString(
-                                        scopeTextNoteFormatKey,
-                                        AppDefaults.Visualization.ChannelScope.textNoteFormat.storageValue
-                                    )
-                                )
-                            )
-                        }
-                        var scopeTextShowChannel by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    scopeTextShowChannelKey,
-                                    AppDefaults.Visualization.ChannelScope.textShowChannel
-                                )
-                            )
-                        }
-                        var scopeTextShowNote by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    scopeTextShowNoteKey,
-                                    AppDefaults.Visualization.ChannelScope.textShowNote
-                                )
-                            )
-                        }
-                        var scopeTextShowVolume by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    scopeTextShowVolumeKey,
-                                    AppDefaults.Visualization.ChannelScope.textShowVolume
-                                )
-                            )
-                        }
-                        var scopeTextShowEffect by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    scopeTextShowEffectKey,
-                                    AppDefaults.Visualization.ChannelScope.textShowEffect
-                                )
-                            )
-                        }
-                        var scopeTextShowInstrumentSample by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    scopeTextShowInstrumentSampleKey,
-                                    AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
-                                )
-                            )
-                        }
-                        var scopeTextVuEnabled by remember {
-                            mutableStateOf(
-                                prefs.getBoolean(
-                                    scopeTextVuEnabledKey,
-                                    AppDefaults.Visualization.ChannelScope.textVuEnabled
-                                )
-                            )
-                        }
-                        var scopeTextVuAnchor by remember {
-                            mutableStateOf(
-                                VisualizationVuAnchor.fromStorage(
-                                    prefs.getString(
-                                        scopeTextVuAnchorKey,
-                                        AppDefaults.Visualization.ChannelScope.textVuAnchor.storageValue
-                                    )
-                                )
-                            )
-                        }
-                        var scopeTextVuColorMode by remember {
-                            mutableStateOf(
-                                VisualizationChannelScopeTextColorMode.fromStorage(
-                                    prefs.getString(
-                                        scopeTextVuColorModeKey,
-                                        AppDefaults.Visualization.ChannelScope.textVuColorMode.storageValue
-                                    )
-                                )
-                            )
-                        }
-                        var scopeTextVuCustomColorArgb by remember {
-                            mutableIntStateOf(
-                                prefs.getInt(
-                                    scopeTextVuCustomColorKey,
-                                    AppDefaults.Visualization.ChannelScope.textVuCustomColorArgb
-                                )
-                            )
-                        }
-
-                        var showWindowDialog by remember { mutableStateOf(false) }
-                        var showRendererBackendDialog by remember { mutableStateOf(false) }
-                        var showGainDialog by remember { mutableStateOf(false) }
-                        var showTriggerDialog by remember { mutableStateOf(false) }
-                        var showFpsModeDialog by remember { mutableStateOf(false) }
-                        var showLineWidthDialog by remember { mutableStateOf(false) }
-                        var showGridWidthDialog by remember { mutableStateOf(false) }
-                        var showBackgroundModeDialog by remember { mutableStateOf(false) }
-                        var showCustomBackgroundColorDialog by remember { mutableStateOf(false) }
-                        var showLayoutDialog by remember { mutableStateOf(false) }
-                        var showLineNoArtworkColorModeDialog by remember { mutableStateOf(false) }
-                        var showGridNoArtworkColorModeDialog by remember { mutableStateOf(false) }
-                        var showLineArtworkColorModeDialog by remember { mutableStateOf(false) }
-                        var showGridArtworkColorModeDialog by remember { mutableStateOf(false) }
-                        var showCustomLineColorDialog by remember { mutableStateOf(false) }
-                        var showCustomGridColorDialog by remember { mutableStateOf(false) }
-                        var showTextAnchorDialog by remember { mutableStateOf(false) }
-                        var showTextPaddingDialog by remember { mutableStateOf(false) }
-                        var showTextSizeDialog by remember { mutableStateOf(false) }
-                        var showTextFontDialog by remember { mutableStateOf(false) }
-                        var showTextColorModeDialog by remember { mutableStateOf(false) }
-                        var showCustomTextColorDialog by remember { mutableStateOf(false) }
-                        var showTextVuAnchorDialog by remember { mutableStateOf(false) }
-                        var showTextVuColorModeDialog by remember { mutableStateOf(false) }
-                        var showTextVuCustomColorDialog by remember { mutableStateOf(false) }
-                        var showTextNoteFormatDialog by remember { mutableStateOf(false) }
-
-                        SettingsSectionLabel("Channel scope")
-                        SettingsValuePickerCard(
-                            title = "Visible window",
-                            description = "Time span represented by each channel trace history.",
-                            value = "${scopeWindowMs} ms",
-                            onClick = { showWindowDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Trigger",
-                            description = "Sync mode used to stabilize channel traces.",
-                            value = scopeTriggerMode.label,
-                            onClick = { showTriggerDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Renderer backend",
-                            description = "Select rendering path for Channel scope.",
-                            value = scopeRenderBackend.label,
-                            onClick = { showRendererBackendDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        PlayerSettingToggleCard(
-                            title = "DC removal",
-                            description = "Center each channel waveform around zero to reduce vertical offset drift.",
-                            checked = scopeDcRemovalEnabled,
-                            onCheckedChange = { enabled ->
-                                scopeDcRemovalEnabled = enabled
-                                prefs.edit().putBoolean(scopeDcRemovalEnabledKey, enabled).apply()
-                            }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Gain",
-                            description = "Output gain applied to channel waveforms.",
-                            value = "${scopeGainPercent}%",
-                            onClick = { showGainDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Scope frame rate",
-                            description = "Rendering rate for channel-scope updates.",
-                            value = scopeFpsMode.label,
-                            onClick = { showFpsModeDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Layout strategy",
-                            description = "Grid arrangement strategy for channel scopes.",
-                            value = scopeLayout.label,
-                            onClick = { showLayoutDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Line width",
-                            description = "Stroke width for channel scope lines.",
-                            value = "${scopeLineWidthDp}dp",
-                            onClick = { showLineWidthDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Grid width",
-                            description = "Stroke width for scope grid lines.",
-                            value = "${scopeGridWidthDp}dp",
-                            onClick = { showGridWidthDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        PlayerSettingToggleCard(
-                            title = "Show vertical grid lines",
-                            description = "Display vertical time divisions in each channel scope.",
-                            checked = scopeVerticalGridEnabled,
-                            onCheckedChange = { enabled ->
-                                scopeVerticalGridEnabled = enabled
-                                prefs.edit().putBoolean(scopeVerticalGridEnabledKey, enabled).apply()
-                            }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        PlayerSettingToggleCard(
-                            title = "Show centerline",
-                            description = "Display center reference line in each channel scope.",
-                            checked = scopeCenterLineEnabled,
-                            onCheckedChange = { enabled ->
-                                scopeCenterLineEnabled = enabled
-                                prefs.edit().putBoolean(scopeCenterLineEnabledKey, enabled).apply()
-                            }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        PlayerSettingToggleCard(
-                            title = "Show artwork background",
-                            description = "Render album artwork/placeholder behind the channel scope.",
-                            checked = scopeShowArtworkBackground,
-                            onCheckedChange = { enabled ->
-                                scopeShowArtworkBackground = enabled
-                                prefs.edit().putBoolean(scopeShowArtworkBackgroundKey, enabled).apply()
-                            }
-                        )
-                        if (!scopeShowArtworkBackground) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            SettingsValuePickerCard(
-                                title = "Background color",
-                                description = "Background source when artwork is hidden.",
-                                value = scopeBackgroundMode.label,
-                                onClick = { showBackgroundModeDialog = true }
-                            )
-                            if (scopeBackgroundMode == VisualizationChannelScopeBackgroundMode.Custom) {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                SettingsValuePickerCard(
-                                    title = "Custom background color",
-                                    description = "RGB color used when background color mode is Custom.",
-                                    value = String.format(Locale.US, "#%06X", scopeCustomBackgroundColorArgb and 0xFFFFFF),
-                                    onClick = { showCustomBackgroundColorDialog = true }
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        SettingsSectionLabel("Colors (no artwork)")
-                        SettingsValuePickerCard(
-                            title = "Line color",
-                            description = "Color source used when no artwork is available.",
-                            value = scopeLineColorModeNoArtwork.label,
-                            onClick = { showLineNoArtworkColorModeDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Grid color",
-                            description = "Color source used when no artwork is available.",
-                            value = scopeGridColorModeNoArtwork.label,
-                            onClick = { showGridNoArtworkColorModeDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        SettingsSectionLabel("Colors (with artwork)")
-                        SettingsValuePickerCard(
-                            title = "Line color",
-                            description = "Color source used when artwork is available.",
-                            value = scopeLineColorModeWithArtwork.label,
-                            onClick = { showLineArtworkColorModeDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Grid color",
-                            description = "Color source used when artwork is available.",
-                            value = scopeGridColorModeWithArtwork.label,
-                            onClick = { showGridArtworkColorModeDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        SettingsSectionLabel("Custom colors")
-                        SettingsValuePickerCard(
-                            title = "Custom line color",
-                            description = "RGB color used when line color mode is Custom.",
-                            value = String.format(Locale.US, "#%06X", scopeCustomLineColorArgb and 0xFFFFFF),
-                            onClick = { showCustomLineColorDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        SettingsValuePickerCard(
-                            title = "Custom grid color",
-                            description = "RGB color used when grid color mode is Custom.",
-                            value = String.format(Locale.US, "#%06X", scopeCustomGridColorArgb and 0xFFFFFF),
-                            onClick = { showCustomGridColorDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        SettingsSectionLabel("Text overlay")
-                        PlayerSettingToggleCard(
-                            title = "Show channel text",
-                            description = "Display per-channel labels and live tracker values on each scope.",
-                            checked = scopeTextEnabled,
-                            onCheckedChange = { enabled ->
-                                scopeTextEnabled = enabled
-                                prefs.edit().putBoolean(scopeTextEnabledKey, enabled).apply()
-                            }
-                        )
-                        if (scopeTextEnabled) {
-                            Spacer(modifier = Modifier.height(10.dp))
-                            SettingsValuePickerCard(
-                                title = "Text anchor",
-                                description = "Position of text inside each channel scope.",
-                                value = scopeTextAnchor.label,
-                                onClick = { showTextAnchorDialog = true }
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            SettingsValuePickerCard(
-                                title = "Text padding",
-                                description = "Padding from the selected anchor.",
-                                value = "${scopeTextPaddingDp}dp",
-                                onClick = { showTextPaddingDialog = true }
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            SettingsValuePickerCard(
-                                title = "Text size",
-                                description = "Font size for per-channel overlay text.",
-                                value = "${scopeTextSizeSp}sp",
-                                onClick = { showTextSizeDialog = true }
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            SettingsValuePickerCard(
-                                title = "Text font",
-                                description = "Typeface used for per-channel overlay text.",
-                                value = scopeTextFont.label,
-                                onClick = { showTextFontDialog = true }
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            SettingsValuePickerCard(
-                                title = "Text color",
-                                description = "Color source for channel-scope text overlay.",
-                                value = scopeTextColorMode.label,
-                                onClick = { showTextColorModeDialog = true }
-                            )
-                            if (scopeTextColorMode == VisualizationChannelScopeTextColorMode.Custom) {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                SettingsValuePickerCard(
-                                    title = "Custom text color",
-                                    description = "RGB color used when text color mode is Custom.",
-                                    value = String.format(Locale.US, "#%06X", scopeCustomTextColorArgb and 0xFFFFFF),
-                                    onClick = { showCustomTextColorDialog = true }
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            PlayerSettingToggleCard(
-                                title = "Hide when still too large",
-                                description = "Hide text if it still cannot fit after auto downscaling.",
-                                checked = scopeTextHideWhenOverflow,
-                                onCheckedChange = { enabled ->
-                                    scopeTextHideWhenOverflow = enabled
-                                    prefs.edit().putBoolean(scopeTextHideWhenOverflowKey, enabled).apply()
-                                }
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            PlayerSettingToggleCard(
-                                title = "Text shadow",
-                                description = "Render a subtle drop shadow for better contrast on bright or matching backgrounds.",
-                                checked = scopeTextShadowEnabled,
-                                onCheckedChange = { enabled ->
-                                    scopeTextShadowEnabled = enabled
-                                    prefs.edit().putBoolean(scopeTextShadowEnabledKey, enabled).apply()
-                                }
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            SettingsValuePickerCard(
-                                title = "Note naming",
-                                description = "Format used for note names in the overlay.",
-                                value = scopeTextNoteFormat.label,
-                                onClick = { showTextNoteFormatDialog = true }
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            PlayerSettingToggleCard(
-                                title = "Show channel label",
-                                description = "Show channel index or Amiga L/R label.",
-                                checked = scopeTextShowChannel,
-                                onCheckedChange = { enabled ->
-                                    scopeTextShowChannel = enabled
-                                    prefs.edit().putBoolean(scopeTextShowChannelKey, enabled).apply()
-                                }
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            PlayerSettingToggleCard(
-                                title = "Show note",
-                                description = "Show current note name.",
-                                checked = scopeTextShowNote,
-                                onCheckedChange = { enabled ->
-                                    scopeTextShowNote = enabled
-                                    prefs.edit().putBoolean(scopeTextShowNoteKey, enabled).apply()
-                                }
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            PlayerSettingToggleCard(
-                                title = "Show volume",
-                                description = "Show current channel volume value.",
-                                checked = scopeTextShowVolume,
-                                onCheckedChange = { enabled ->
-                                    scopeTextShowVolume = enabled
-                                    prefs.edit().putBoolean(scopeTextShowVolumeKey, enabled).apply()
-                                }
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            PlayerSettingToggleCard(
-                                title = "Show effect",
-                                description = "Show active effect command and parameter.",
-                                checked = scopeTextShowEffect,
-                                onCheckedChange = { enabled ->
-                                    scopeTextShowEffect = enabled
-                                    prefs.edit().putBoolean(scopeTextShowEffectKey, enabled).apply()
-                                }
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            PlayerSettingToggleCard(
-                                title = "Show instrument/sample",
-                                description = "Show active instrument or sample index.",
-                                checked = scopeTextShowInstrumentSample,
-                                onCheckedChange = { enabled ->
-                                    scopeTextShowInstrumentSample = enabled
-                                    prefs.edit().putBoolean(scopeTextShowInstrumentSampleKey, enabled).apply()
-                                }
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            PlayerSettingToggleCard(
-                                title = "Show VU strip",
-                                description = "Show a per-channel VU strip at top or bottom edge.",
-                                checked = scopeTextVuEnabled,
-                                onCheckedChange = { enabled ->
-                                    scopeTextVuEnabled = enabled
-                                    prefs.edit().putBoolean(scopeTextVuEnabledKey, enabled).apply()
-                                }
-                            )
-                            if (scopeTextVuEnabled) {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                SettingsValuePickerCard(
-                                    title = "VU strip anchor",
-                                    description = "Place VU strip at top or bottom of each channel cell.",
-                                    value = scopeTextVuAnchor.label,
-                                    onClick = { showTextVuAnchorDialog = true }
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                SettingsValuePickerCard(
-                                    title = "VU strip color",
-                                    description = "Color source used by the VU strip.",
-                                    value = scopeTextVuColorMode.label,
-                                    onClick = { showTextVuColorModeDialog = true }
-                                )
-                                if (scopeTextVuColorMode == VisualizationChannelScopeTextColorMode.Custom) {
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    SettingsValuePickerCard(
-                                        title = "Custom VU strip color",
-                                        description = "RGB color used when VU strip color mode is Custom.",
-                                        value = String.format(Locale.US, "#%06X", scopeTextVuCustomColorArgb and 0xFFFFFF),
-                                        onClick = { showTextVuCustomColorDialog = true }
-                                    )
-                                }
-                            }
-                        }
-
-                        if (showWindowDialog) {
-                            SteppedIntSliderDialog(
-                                title = "Visible window",
-                                unitLabel = "ms",
-                                range = AppDefaults.Visualization.ChannelScope.windowRangeMs,
-                                step = 1,
-                                currentValue = scopeWindowMs,
-                                onDismiss = { showWindowDialog = false },
-                                onConfirm = { value ->
-                                    val clamped = value.coerceIn(5, 200)
-                                    scopeWindowMs = clamped
-                                    prefs.edit().putInt(scopeWindowKey, clamped).apply()
-                                    showWindowDialog = false
-                                }
-                            )
-                        }
-                        if (showGainDialog) {
-                            SteppedIntSliderDialog(
-                                title = "Scope gain",
-                                unitLabel = "%",
-                                range = AppDefaults.Visualization.ChannelScope.gainRangePercent,
-                                step = 5,
-                                currentValue = scopeGainPercent,
-                                onDismiss = { showGainDialog = false },
-                                onConfirm = { value ->
-                                    val clamped = value.coerceIn(25, 600)
-                                    scopeGainPercent = clamped
-                                    prefs.edit().putInt(scopeGainPercentKey, clamped).apply()
-                                    showGainDialog = false
-                                }
-                            )
-                        }
-                        if (showRendererBackendDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showRendererBackendDialog = false },
-                                title = { Text("Renderer backend") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        VisualizationRenderBackend.entries.forEach { backend ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        scopeRenderBackend = backend
-                                                        prefs.edit().putString(scopeRenderBackendKey, backend.storageValue).apply()
-                                                        showRendererBackendDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = backend == scopeRenderBackend,
-                                                    onClick = {
-                                                        scopeRenderBackend = backend
-                                                        prefs.edit().putString(scopeRenderBackendKey, backend.storageValue).apply()
-                                                        showRendererBackendDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(backend.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showRendererBackendDialog = false }) { Text("Close") }
-                                },
-                                confirmButton = {}
-                            )
-                        }
-                        if (showTriggerDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showTriggerDialog = false },
-                                title = { Text("Channel scope trigger") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        VisualizationOscTriggerMode.entries.forEach { mode ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        scopeTriggerMode = mode
-                                                        prefs.edit().putString(scopeTriggerKey, mode.storageValue).apply()
-                                                        showTriggerDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = mode == scopeTriggerMode,
-                                                    onClick = {
-                                                        scopeTriggerMode = mode
-                                                        prefs.edit().putString(scopeTriggerKey, mode.storageValue).apply()
-                                                        showTriggerDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(mode.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showTriggerDialog = false }) { Text("Close") }
-                                },
-                                confirmButton = {}
-                            )
-                        }
-                        if (showBackgroundModeDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showBackgroundModeDialog = false },
-                                title = { Text("Scope background color") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        VisualizationChannelScopeBackgroundMode.entries.forEach { mode ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        scopeBackgroundMode = mode
-                                                        prefs.edit().putString(scopeBackgroundModeKey, mode.storageValue).apply()
-                                                        showBackgroundModeDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = mode == scopeBackgroundMode,
-                                                    onClick = {
-                                                        scopeBackgroundMode = mode
-                                                        prefs.edit().putString(scopeBackgroundModeKey, mode.storageValue).apply()
-                                                        showBackgroundModeDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(mode.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showBackgroundModeDialog = false }) { Text("Close") }
-                                },
-                                confirmButton = {}
-                            )
-                        }
-                        if (showCustomBackgroundColorDialog) {
-                            VisualizationRgbColorPickerDialog(
-                                title = "Custom scope background color",
-                                initialArgb = scopeCustomBackgroundColorArgb,
-                                onDismiss = { showCustomBackgroundColorDialog = false },
-                                onConfirm = { argb ->
-                                    scopeCustomBackgroundColorArgb = argb
-                                    prefs.edit().putInt(scopeCustomBackgroundColorKey, argb).apply()
-                                    showCustomBackgroundColorDialog = false
-                                }
-                            )
-                        }
-                        if (showFpsModeDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showFpsModeDialog = false },
-                                title = { Text("Scope frame rate") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        VisualizationOscFpsMode.entries.forEach { mode ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        scopeFpsMode = mode
-                                                        prefs.edit().putString(scopeFpsModeKey, mode.storageValue).apply()
-                                                        showFpsModeDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = mode == scopeFpsMode,
-                                                    onClick = {
-                                                        scopeFpsMode = mode
-                                                        prefs.edit().putString(scopeFpsModeKey, mode.storageValue).apply()
-                                                        showFpsModeDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(mode.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showFpsModeDialog = false }) { Text("Close") }
-                                },
-                                confirmButton = {}
-                            )
-                        }
-                        if (showLayoutDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showLayoutDialog = false },
-                                title = { Text("Layout strategy") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        VisualizationChannelScopeLayout.entries.forEach { layout ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        scopeLayout = layout
-                                                        prefs.edit().putString(scopeLayoutKey, layout.storageValue).apply()
-                                                        showLayoutDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = layout == scopeLayout,
-                                                    onClick = {
-                                                        scopeLayout = layout
-                                                        prefs.edit().putString(scopeLayoutKey, layout.storageValue).apply()
-                                                        showLayoutDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(layout.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showLayoutDialog = false }) { Text("Close") }
-                                },
-                                confirmButton = {}
-                            )
-                        }
-                        if (showLineWidthDialog) {
-                            SteppedIntSliderDialog(
-                                title = "Scope line width",
-                                unitLabel = "dp",
-                                range = AppDefaults.Visualization.ChannelScope.lineWidthRangeDp,
-                                step = 1,
-                                currentValue = scopeLineWidthDp,
-                                onDismiss = { showLineWidthDialog = false },
-                                onConfirm = { value ->
-                                    val clamped = value.coerceIn(1, 12)
-                                    scopeLineWidthDp = clamped
-                                    prefs.edit().putInt(scopeLineWidthKey, clamped).apply()
-                                    showLineWidthDialog = false
-                                }
-                            )
-                        }
-                        if (showGridWidthDialog) {
-                            SteppedIntSliderDialog(
-                                title = "Grid line width",
-                                unitLabel = "dp",
-                                range = AppDefaults.Visualization.ChannelScope.gridWidthRangeDp,
-                                step = 1,
-                                currentValue = scopeGridWidthDp,
-                                onDismiss = { showGridWidthDialog = false },
-                                onConfirm = { value ->
-                                    val clamped = value.coerceIn(1, 8)
-                                    scopeGridWidthDp = clamped
-                                    prefs.edit().putInt(scopeGridWidthKey, clamped).apply()
-                                    showGridWidthDialog = false
-                                }
-                            )
-                        }
-                        if (showLineNoArtworkColorModeDialog) {
-                            VisualizationOscColorModeDialog(
-                                title = "Line color (no artwork)",
-                                options = listOf(
-                                    VisualizationOscColorMode.Monet,
-                                    VisualizationOscColorMode.White,
-                                    VisualizationOscColorMode.Custom
-                                ),
-                                selectedMode = scopeLineColorModeNoArtwork,
-                                onDismiss = { showLineNoArtworkColorModeDialog = false },
-                                onSelect = { mode ->
-                                    scopeLineColorModeNoArtwork = mode
-                                    prefs.edit().putString(scopeLineNoArtworkColorModeKey, mode.storageValue).apply()
-                                    showLineNoArtworkColorModeDialog = false
-                                }
-                            )
-                        }
-                        if (showGridNoArtworkColorModeDialog) {
-                            VisualizationOscColorModeDialog(
-                                title = "Grid color (no artwork)",
-                                options = listOf(
-                                    VisualizationOscColorMode.Monet,
-                                    VisualizationOscColorMode.White,
-                                    VisualizationOscColorMode.Custom
-                                ),
-                                selectedMode = scopeGridColorModeNoArtwork,
-                                onDismiss = { showGridNoArtworkColorModeDialog = false },
-                                onSelect = { mode ->
-                                    scopeGridColorModeNoArtwork = mode
-                                    prefs.edit().putString(scopeGridNoArtworkColorModeKey, mode.storageValue).apply()
-                                    showGridNoArtworkColorModeDialog = false
-                                }
-                            )
-                        }
-                        if (showLineArtworkColorModeDialog) {
-                            VisualizationOscColorModeDialog(
-                                title = "Line color (with artwork)",
-                                options = listOf(
-                                    VisualizationOscColorMode.Artwork,
-                                    VisualizationOscColorMode.Monet,
-                                    VisualizationOscColorMode.White,
-                                    VisualizationOscColorMode.Custom
-                                ),
-                                selectedMode = scopeLineColorModeWithArtwork,
-                                onDismiss = { showLineArtworkColorModeDialog = false },
-                                onSelect = { mode ->
-                                    scopeLineColorModeWithArtwork = mode
-                                    prefs.edit().putString(scopeLineArtworkColorModeKey, mode.storageValue).apply()
-                                    showLineArtworkColorModeDialog = false
-                                }
-                            )
-                        }
-                        if (showGridArtworkColorModeDialog) {
-                            VisualizationOscColorModeDialog(
-                                title = "Grid color (with artwork)",
-                                options = listOf(
-                                    VisualizationOscColorMode.Artwork,
-                                    VisualizationOscColorMode.Monet,
-                                    VisualizationOscColorMode.White,
-                                    VisualizationOscColorMode.Custom
-                                ),
-                                selectedMode = scopeGridColorModeWithArtwork,
-                                onDismiss = { showGridArtworkColorModeDialog = false },
-                                onSelect = { mode ->
-                                    scopeGridColorModeWithArtwork = mode
-                                    prefs.edit().putString(scopeGridArtworkColorModeKey, mode.storageValue).apply()
-                                    showGridArtworkColorModeDialog = false
-                                }
-                            )
-                        }
-                        if (showCustomLineColorDialog) {
-                            VisualizationRgbColorPickerDialog(
-                                title = "Custom line color",
-                                initialArgb = scopeCustomLineColorArgb,
-                                onDismiss = { showCustomLineColorDialog = false },
-                                onConfirm = { argb ->
-                                    scopeCustomLineColorArgb = argb
-                                    prefs.edit().putInt(scopeCustomLineColorKey, argb).apply()
-                                    showCustomLineColorDialog = false
-                                }
-                            )
-                        }
-                        if (showCustomGridColorDialog) {
-                            VisualizationRgbColorPickerDialog(
-                                title = "Custom grid color",
-                                initialArgb = scopeCustomGridColorArgb,
-                                onDismiss = { showCustomGridColorDialog = false },
-                                onConfirm = { argb ->
-                                    scopeCustomGridColorArgb = argb
-                                    prefs.edit().putInt(scopeCustomGridColorKey, argb).apply()
-                                    showCustomGridColorDialog = false
-                                }
-                            )
-                        }
-                        if (showTextAnchorDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showTextAnchorDialog = false },
-                                title = { Text("Text anchor") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        VisualizationChannelScopeTextAnchor.entries.forEach { entry ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        scopeTextAnchor = entry
-                                                        prefs.edit().putString(scopeTextAnchorKey, entry.storageValue).apply()
-                                                        showTextAnchorDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = entry == scopeTextAnchor,
-                                                    onClick = {
-                                                        scopeTextAnchor = entry
-                                                        prefs.edit().putString(scopeTextAnchorKey, entry.storageValue).apply()
-                                                        showTextAnchorDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(entry.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showTextAnchorDialog = false }) { Text("Close") }
-                                },
-                                confirmButton = {}
-                            )
-                        }
-                        if (showTextPaddingDialog) {
-                            SteppedIntSliderDialog(
-                                title = "Text padding",
-                                unitLabel = "dp",
-                                range = AppDefaults.Visualization.ChannelScope.textPaddingRangeDp,
-                                step = 1,
-                                currentValue = scopeTextPaddingDp,
-                                onDismiss = { showTextPaddingDialog = false },
-                                onConfirm = { value ->
-                                    val clamped = value.coerceIn(
-                                        AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.first,
-                                        AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.last
-                                    )
-                                    scopeTextPaddingDp = clamped
-                                    prefs.edit().putInt(scopeTextPaddingKey, clamped).apply()
-                                    showTextPaddingDialog = false
-                                }
-                            )
-                        }
-                        if (showTextSizeDialog) {
-                            SteppedIntSliderDialog(
-                                title = "Text size",
-                                unitLabel = "sp",
-                                range = AppDefaults.Visualization.ChannelScope.textSizeRangeSp,
-                                step = 1,
-                                currentValue = scopeTextSizeSp,
-                                onDismiss = { showTextSizeDialog = false },
-                                onConfirm = { value ->
-                                    val clamped = value.coerceIn(
-                                        AppDefaults.Visualization.ChannelScope.textSizeRangeSp.first,
-                                        AppDefaults.Visualization.ChannelScope.textSizeRangeSp.last
-                                    )
-                                    scopeTextSizeSp = clamped
-                                    prefs.edit().putInt(scopeTextSizeKey, clamped).apply()
-                                    showTextSizeDialog = false
-                                }
-                            )
-                        }
-                        if (showTextColorModeDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showTextColorModeDialog = false },
-                                title = { Text("Text color") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        VisualizationChannelScopeTextColorMode.entries.forEach { entry ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        scopeTextColorMode = entry
-                                                        prefs.edit().putString(scopeTextColorModeKey, entry.storageValue).apply()
-                                                        showTextColorModeDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = entry == scopeTextColorMode,
-                                                    onClick = {
-                                                        scopeTextColorMode = entry
-                                                        prefs.edit().putString(scopeTextColorModeKey, entry.storageValue).apply()
-                                                        showTextColorModeDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(entry.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showTextColorModeDialog = false }) { Text("Close") }
-                                },
-                                confirmButton = {}
-                            )
-                        }
-                        if (showTextFontDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showTextFontDialog = false },
-                                title = { Text("Text font") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        VisualizationChannelScopeTextFont.entries.forEach { entry ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        scopeTextFont = entry
-                                                        prefs.edit().putString(scopeTextFontKey, entry.storageValue).apply()
-                                                        showTextFontDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = entry == scopeTextFont,
-                                                    onClick = {
-                                                        scopeTextFont = entry
-                                                        prefs.edit().putString(scopeTextFontKey, entry.storageValue).apply()
-                                                        showTextFontDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(entry.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showTextFontDialog = false }) { Text("Close") }
-                                },
-                                confirmButton = {}
-                            )
-                        }
-                        if (showTextVuAnchorDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showTextVuAnchorDialog = false },
-                                title = { Text("VU strip anchor") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        listOf(VisualizationVuAnchor.Top, VisualizationVuAnchor.Bottom).forEach { entry ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        scopeTextVuAnchor = entry
-                                                        prefs.edit().putString(scopeTextVuAnchorKey, entry.storageValue).apply()
-                                                        showTextVuAnchorDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = entry == scopeTextVuAnchor,
-                                                    onClick = {
-                                                        scopeTextVuAnchor = entry
-                                                        prefs.edit().putString(scopeTextVuAnchorKey, entry.storageValue).apply()
-                                                        showTextVuAnchorDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(entry.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showTextVuAnchorDialog = false }) { Text("Close") }
-                                },
-                                confirmButton = {}
-                            )
-                        }
-                        if (showTextVuColorModeDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showTextVuColorModeDialog = false },
-                                title = { Text("VU strip color") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        VisualizationChannelScopeTextColorMode.entries.forEach { entry ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        scopeTextVuColorMode = entry
-                                                        prefs.edit().putString(scopeTextVuColorModeKey, entry.storageValue).apply()
-                                                        showTextVuColorModeDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = entry == scopeTextVuColorMode,
-                                                    onClick = {
-                                                        scopeTextVuColorMode = entry
-                                                        prefs.edit().putString(scopeTextVuColorModeKey, entry.storageValue).apply()
-                                                        showTextVuColorModeDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(entry.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showTextVuColorModeDialog = false }) { Text("Close") }
-                                },
-                                confirmButton = {}
-                            )
-                        }
-                        if (showTextVuCustomColorDialog) {
-                            VisualizationRgbColorPickerDialog(
-                                title = "Custom VU strip color",
-                                initialArgb = scopeTextVuCustomColorArgb,
-                                onDismiss = { showTextVuCustomColorDialog = false },
-                                onConfirm = { argb ->
-                                    scopeTextVuCustomColorArgb = argb
-                                    prefs.edit().putInt(scopeTextVuCustomColorKey, argb).apply()
-                                    showTextVuCustomColorDialog = false
-                                }
-                            )
-                        }
-                        if (showCustomTextColorDialog) {
-                            VisualizationRgbColorPickerDialog(
-                                title = "Custom text color",
-                                initialArgb = scopeCustomTextColorArgb,
-                                onDismiss = { showCustomTextColorDialog = false },
-                                onConfirm = { argb ->
-                                    scopeCustomTextColorArgb = argb
-                                    prefs.edit().putInt(scopeCustomTextColorKey, argb).apply()
-                                    showCustomTextColorDialog = false
-                                }
-                            )
-                        }
-                        if (showTextNoteFormatDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showTextNoteFormatDialog = false },
-                                title = { Text("Note naming") },
-                                text = {
-                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        VisualizationNoteNameFormat.entries.forEach { entry ->
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        scopeTextNoteFormat = entry
-                                                        prefs.edit().putString(scopeTextNoteFormatKey, entry.storageValue).apply()
-                                                        showTextNoteFormatDialog = false
-                                                    }
-                                                    .padding(vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                RadioButton(
-                                                    selected = entry == scopeTextNoteFormat,
-                                                    onClick = {
-                                                        scopeTextNoteFormat = entry
-                                                        prefs.edit().putString(scopeTextNoteFormatKey, entry.storageValue).apply()
-                                                        showTextNoteFormatDialog = false
-                                                    }
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(entry.label)
-                                            }
-                                        }
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showTextNoteFormatDialog = false }) { Text("Close") }
-                                },
-                                confirmButton = {}
-                            )
-                        }
+                        VisualizationAdvancedChannelScopeSettingsRoute()
                     }
                     SettingsRoute.Misc -> {
                         SettingsSectionLabel("Browser behavior")
@@ -4349,200 +4561,25 @@ internal fun SettingsScreen(
                         }
                     }
                     SettingsRoute.CacheManager -> {
-                        var selectedPaths by remember { mutableStateOf(setOf<String>()) }
-                        var showDeleteConfirmDialog by remember { mutableStateOf(false) }
-                        LaunchedEffect(cachedSourceFiles) {
-                            val existing = cachedSourceFiles.map { it.absolutePath }.toSet()
-                            selectedPaths = selectedPaths.filterTo(mutableSetOf()) { it in existing }
-                        }
-                        LaunchedEffect(route) {
-                            onRefreshCachedSourceFiles()
-                        }
-                        val inSelectionMode = selectedPaths.isNotEmpty()
-                        val totalBytes = cachedSourceFiles.sumOf { it.sizeBytes.coerceAtLeast(0L) }
-                        BackHandler(enabled = inSelectionMode) {
-                            selectedPaths = emptySet()
-                        }
-
-                        SettingsSectionLabel("Overview")
-                        Text(
-                            text = "${cachedSourceFiles.size} files • ${formatCacheByteCount(totalBytes)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = { showDeleteConfirmDialog = true },
-                                enabled = inSelectionMode,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Delete (${selectedPaths.size})")
-                            }
-                            OutlinedButton(
-                                onClick = { onExportCachedSourceFiles(selectedPaths.toList()) },
-                                enabled = inSelectionMode,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Link,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Export (${selectedPaths.size})")
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    selectedPaths = cachedSourceFiles.map { it.absolutePath }.toSet()
-                                },
-                                enabled = cachedSourceFiles.isNotEmpty(),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Select all")
-                            }
-                            OutlinedButton(
-                                onClick = { selectedPaths = emptySet() },
-                                enabled = inSelectionMode,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Deselect all")
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "Tap files to select. Back clears selection first.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        if (cachedSourceFiles.isEmpty()) {
-                            Text(
-                                text = "No cached files.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            SettingsSectionLabel("Files")
-                            cachedSourceFiles.forEach { entry ->
-                                val isSelected = selectedPaths.contains(entry.absolutePath)
-                                val sourceLine = entry.sourceId ?: "Source: unknown"
-                                Surface(
-                                    shape = SettingsCardShape,
-                                    color = if (isSelected) {
-                                        MaterialTheme.colorScheme.primaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceContainer
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .combinedClickable(
-                                            onLongClick = {
-                                                selectedPaths = if (isSelected) {
-                                                    selectedPaths - entry.absolutePath
-                                                } else {
-                                                    selectedPaths + entry.absolutePath
-                                                }
-                                            },
-                                            onClick = {
-                                                if (selectedPaths.isEmpty()) {
-                                                    selectedPaths = setOf(entry.absolutePath)
-                                                } else {
-                                                    selectedPaths = if (isSelected) {
-                                                        selectedPaths - entry.absolutePath
-                                                    } else {
-                                                        selectedPaths + entry.absolutePath
-                                                    }
-                                                }
-                                            }
-                                        )
-                                ) {
-                                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                                        Text(
-                                            text = stripCachedFileHashPrefix(entry.fileName),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            maxLines = 1
-                                        )
-                                        Spacer(modifier = Modifier.height(3.dp))
-                                        Text(
-                                            text = "${formatCacheByteCount(entry.sizeBytes)} • $sourceLine",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (isSelected) {
-                                                MaterialTheme.colorScheme.onPrimaryContainer
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            },
-                                            maxLines = 2
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(10.dp))
-                            }
-                        }
-
-                        if (showDeleteConfirmDialog) {
-                            AlertDialog(
-                                onDismissRequest = { showDeleteConfirmDialog = false },
-                                title = { Text("Delete selected cached files?") },
-                                text = { Text("This removes ${selectedPaths.size} selected cached file(s).") },
-                                dismissButton = {
-                                    TextButton(onClick = { showDeleteConfirmDialog = false }) {
-                                        Text("Cancel")
-                                    }
-                                },
-                                confirmButton = {
-                                    TextButton(onClick = {
-                                        onDeleteCachedSourceFiles(selectedPaths.toList())
-                                        selectedPaths = emptySet()
-                                        showDeleteConfirmDialog = false
-                                    }) {
-                                        Text("Delete")
-                                    }
-                                }
-                            )
-                        }
+                        CacheManagerSettingsRoute()
                     }
                     SettingsRoute.Ui -> ThemeModeSelectorCard(
                         selectedMode = themeMode,
                         onSelectedModeChanged = onThemeModeChanged
                     )
-                    SettingsRoute.About -> AboutSettingsBody()
-                    }
-                    if (bottomContentPadding > 0.dp) {
-                        Spacer(modifier = Modifier.height(bottomContentPadding))
+                        SettingsRoute.About -> AboutSettingsBody()
+                        }
+                        if (bottomContentPadding > 0.dp) {
+                            Spacer(modifier = Modifier.height(bottomContentPadding))
+                        }
                     }
                 }
+                routeContent()
             }
         }
     }
+
+
 
     pendingResetAction?.let { action ->
         val title: String

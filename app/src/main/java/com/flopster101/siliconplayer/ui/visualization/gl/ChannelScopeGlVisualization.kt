@@ -29,6 +29,7 @@ fun ChannelScopeGlVisualization(
     channelHistories: List<FloatArray>,
     lineColor: Color,
     gridColor: Color,
+    backgroundColor: Color,
     lineWidthPx: Float,
     gridWidthPx: Float,
     showVerticalGrid: Boolean,
@@ -56,6 +57,7 @@ fun ChannelScopeGlVisualization(
                 channelHistories = channelHistories,
                 lineColorArgb = lineColor.toArgb(),
                 gridColorArgb = gridColor.toArgb(),
+                backgroundColorArgb = backgroundColor.toArgb(),
                 lineWidthPx = lineWidthPx,
                 gridWidthPx = gridWidthPx,
                 showVerticalGrid = showVerticalGrid,
@@ -99,6 +101,7 @@ private data class ChannelScopeGlFrame(
     val layoutStrategy: VisualizationChannelScopeLayout,
     val lineColorArgb: Int,
     val gridColorArgb: Int,
+    val backgroundColorArgb: Int,
     val lineWidthPx: Float,
     val gridWidthPx: Float,
     val outerCornerRadiusPx: Float
@@ -119,6 +122,7 @@ private class ChannelScopeGlSurfaceView(context: Context) : GLSurfaceView(contex
         channelHistories: List<FloatArray>,
         lineColorArgb: Int,
         gridColorArgb: Int,
+        backgroundColorArgb: Int,
         lineWidthPx: Float,
         gridWidthPx: Float,
         showVerticalGrid: Boolean,
@@ -138,6 +142,7 @@ private class ChannelScopeGlSurfaceView(context: Context) : GLSurfaceView(contex
                 layoutStrategy = layoutStrategy,
                 lineColorArgb = lineColorArgb,
                 gridColorArgb = gridColorArgb,
+                backgroundColorArgb = backgroundColorArgb,
                 lineWidthPx = lineWidthPx.coerceAtLeast(1f),
                 gridWidthPx = gridWidthPx.coerceAtLeast(0.5f),
                 outerCornerRadiusPx = outerCornerRadiusPx.coerceAtLeast(0f)
@@ -224,11 +229,17 @@ private class ChannelScopeGlRenderer(
             lastHudPublishNs = nowNs
         }
 
-        GLES20.glClearColor(0f, 0f, 0f, 0f)
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         if (!rendererReady || program == 0) return
 
         val data = frameData ?: return
+        val bg = data.backgroundColorArgb
+        val bgA = ((bg ushr 24) and 0xFF) / 255f
+        val bgR = ((bg ushr 16) and 0xFF) / 255f
+        val bgG = ((bg ushr 8) and 0xFF) / 255f
+        val bgB = (bg and 0xFF) / 255f
+        GLES20.glClearColor(bgR, bgG, bgB, bgA)
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+
         val histories = data.channelHistories
         if (histories.isEmpty()) return
 

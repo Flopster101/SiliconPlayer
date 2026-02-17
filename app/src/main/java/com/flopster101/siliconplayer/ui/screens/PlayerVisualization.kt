@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -1080,7 +1081,11 @@ internal fun AlbumArtPlaceholder(
     }
     val themePrimaryColor = MaterialTheme.colorScheme.primary
     val useScopeArtworkBackground =
-        visualizationMode != VisualizationMode.ChannelScope || channelScopePrefs.showArtworkBackground
+        visualizationMode != VisualizationMode.ChannelScope ||
+            (
+                channelScopePrefs.showArtworkBackground &&
+                    channelScopePrefs.renderBackend != VisualizationRenderBackend.OpenGlSurface
+                )
     val scopeBackgroundColor = remember(
         artwork,
         themePrimaryColor,
@@ -1211,6 +1216,7 @@ internal fun AlbumArtPlaceholder(
                 channelScopeGridColorModeWithArtwork = channelScopeState.gridColorModeWithArtwork,
                 channelScopeCustomLineColorArgb = channelScopeState.customLineColorArgb,
                 channelScopeCustomGridColorArgb = channelScopeState.customGridColorArgb,
+                channelScopeBackgroundColorArgb = scopeBackgroundColor.toArgb(),
                 channelScopeTextEnabled = channelScopeState.textEnabled,
                 channelScopeTextAnchor = channelScopeState.textAnchor,
                 channelScopeTextPaddingDp = channelScopeState.textPaddingDp,

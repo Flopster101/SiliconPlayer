@@ -679,6 +679,8 @@ internal fun AlbumArtPlaceholder(
     var visChannelScopeLastChannelCount by remember { mutableIntStateOf(1) }
     var visChannelScopeTriggerIndices by remember { mutableStateOf(IntArray(0)) }
     var visChannelScopeTextStates by remember { mutableStateOf<List<ChannelScopeChannelTextState>>(emptyList()) }
+    var visChannelScopeTextRawCache by remember { mutableStateOf(IntArray(0)) }
+    var visChannelScopeLastTextPollNs by remember { mutableStateOf(0L) }
     var visOpenMptInstrumentNamesByIndex by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
     var visOpenMptSampleNamesByIndex by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
     var visDebugUpdateFps by remember { mutableIntStateOf(0) }
@@ -718,6 +720,8 @@ internal fun AlbumArtPlaceholder(
         visChannelScopeHistories = List(channels) { FloatArray(points) }
         visChannelScopeTriggerIndices = IntArray(channels) { points / 2 }
         visChannelScopeTextStates = emptyList()
+        visChannelScopeTextRawCache = IntArray(0)
+        visChannelScopeLastTextPollNs = 0L
         visOpenMptInstrumentNamesByIndex = emptyMap()
         visOpenMptSampleNamesByIndex = emptyMap()
         visDebugUpdateFps = 0
@@ -771,6 +775,7 @@ internal fun AlbumArtPlaceholder(
     ) {
         while (true) {
             if (visualizationMode != VisualizationMode.Off && file != null && isPlaying) {
+                val nowNs = System.nanoTime()
                 visWaveLeft = NativeBridge.getVisualizationWaveformScope(
                     0,
                     visualizationOscWindowMs,
@@ -798,11 +803,19 @@ internal fun AlbumArtPlaceholder(
                     } else {
                         visChannelCount.coerceIn(1, 64)
                     }
-                    visChannelScopeTextStates = parseChannelScopeTextStates(
-                        NativeBridge.getChannelScopeTextState(scopeChannels)
-                    )
+                    val textPollIntervalNs = 120_000_000L
+                    if (
+                        visChannelScopeLastTextPollNs == 0L ||
+                        nowNs - visChannelScopeLastTextPollNs >= textPollIntervalNs
+                    ) {
+                        val rawText = NativeBridge.getChannelScopeTextState(scopeChannels)
+                        if (!rawText.contentEquals(visChannelScopeTextRawCache)) {
+                            visChannelScopeTextRawCache = rawText.copyOf()
+                            visChannelScopeTextStates = parseChannelScopeTextStates(rawText)
+                        }
+                        visChannelScopeLastTextPollNs = nowNs
+                    }
                 }
-                val nowNs = System.nanoTime()
                 if (visDebugAccumulator.windowStartNs == 0L) {
                     visDebugAccumulator.windowStartNs = nowNs
                 }
@@ -863,6 +876,8 @@ internal fun AlbumArtPlaceholder(
             visChannelScopeHistories = emptyList()
             visChannelScopeTriggerIndices = IntArray(0)
             visChannelScopeTextStates = emptyList()
+            visChannelScopeTextRawCache = IntArray(0)
+            visChannelScopeLastTextPollNs = 0L
             return@LaunchedEffect
         }
         val points = computeChannelScopeSampleCount(
@@ -881,6 +896,8 @@ internal fun AlbumArtPlaceholder(
             visChannelScopeHistories = emptyList()
             visChannelScopeTriggerIndices = IntArray(0)
             visChannelScopeTextStates = emptyList()
+            visChannelScopeTextRawCache = IntArray(0)
+            visChannelScopeLastTextPollNs = 0L
             return@LaunchedEffect
         }
         if (visChannelScopesFlat.size < points) {
@@ -895,6 +912,8 @@ internal fun AlbumArtPlaceholder(
             visChannelScopeHistories = emptyList()
             visChannelScopeTriggerIndices = IntArray(0)
             visChannelScopeTextStates = emptyList()
+            visChannelScopeTextRawCache = IntArray(0)
+            visChannelScopeLastTextPollNs = 0L
             return@LaunchedEffect
         }
         val histories = buildChannelScopeHistoriesAsync(

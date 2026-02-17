@@ -522,7 +522,6 @@ build_lazyusf2() {
 
     local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
     local PROJECT_PATH="$ABSOLUTE_PATH/lazyusf2"
-    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
     local LIB_OUTPUT=""
 
     if [ ! -d "$PROJECT_PATH" ]; then
@@ -532,13 +531,13 @@ build_lazyusf2() {
 
     mkdir -p "$INSTALL_DIR/lib" "$INSTALL_DIR/include/lazyusf2"
 
-    if [ "$ABI" = "arm64-v8a" ] || [ "$ABI" = "armeabi-v7a" ]; then
-        echo "lazyusf2: using Makefile build for ARM ABI ($ABI) to avoid x86 dynarec sources."
-        (
-            cd "$PROJECT_PATH"
-            make clean >/dev/null 2>&1 || true
+    echo "lazyusf2: using Makefile build for ABI ($ABI)."
+    (
+        cd "$PROJECT_PATH"
+        make clean >/dev/null 2>&1 || true
 
-            if [ "$ABI" = "arm64-v8a" ]; then
+        case "$ABI" in
+            "arm64-v8a")
                 make -j$(nproc) liblazyusf.a \
                     CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
                     AR="$TOOLCHAIN/bin/llvm-ar" \
@@ -547,42 +546,48 @@ build_lazyusf2() {
                     OBJS_RECOMPILER_64="" \
                     OPTS_AArch64="" \
                     ROPTS_AArch64="-DARCH_MIN_ARM_NEON"
-            else
+                ;;
+            "armeabi-v7a")
                 make -j$(nproc) liblazyusf.a \
                     CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
                     AR="$TOOLCHAIN/bin/llvm-ar" \
                     CPU="arm" \
                     ARCH="32" \
+                    FLAGS_32="-fPIC" \
                     OBJS_RECOMPILER_32="" \
                     OPTS_arm="" \
                     ROPTS_arm=""
-            fi
-        )
+                ;;
+            "x86")
+                make -j$(nproc) liblazyusf.a \
+                    CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
+                    AR="$TOOLCHAIN/bin/llvm-ar" \
+                    CPU="x86" \
+                    ARCH="32" \
+                    FLAGS_32="-fPIC -msse -mmmx -msse2" \
+                    OBJS_RECOMPILER_32="" \
+                    OPTS_x86="" \
+                    ROPTS_x86="-DARCH_MIN_SSE2"
+                ;;
+            "x86_64")
+                make -j$(nproc) liblazyusf.a \
+                    CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
+                    AR="$TOOLCHAIN/bin/llvm-ar" \
+                    CPU="x86_64" \
+                    ARCH="64" \
+                    FLAGS_64="-fPIC" \
+                    OBJS_RECOMPILER_64="" \
+                    OPTS_x86_64="" \
+                    ROPTS_x86_64="-DARCH_MIN_SSE2"
+                ;;
+            *)
+                echo "Unsupported ABI for lazyusf2: $ABI"
+                return 1
+                ;;
+        esac
+    )
 
-        LIB_OUTPUT="$PROJECT_PATH/liblazyusf.a"
-    else
-        rm -rf "$BUILD_DIR"
-        mkdir -p "$BUILD_DIR"
-
-        cmake \
-            -S "$PROJECT_PATH" \
-            -B "$BUILD_DIR" \
-            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DANDROID_ABI="$ABI" \
-            -DANDROID_PLATFORM="android-$ANDROID_API" \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_SHARED_LIBS=OFF \
-            -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-
-        cmake --build "$BUILD_DIR" --target lazyusf2 -j$(nproc)
-
-        if [ -f "$BUILD_DIR/liblazyusf2.a" ]; then
-            LIB_OUTPUT="$BUILD_DIR/liblazyusf2.a"
-        else
-            LIB_OUTPUT="$(find "$BUILD_DIR" -type f -name 'liblazyusf2.a' | head -n 1)"
-        fi
-    fi
+    LIB_OUTPUT="$PROJECT_PATH/liblazyusf.a"
 
     if [ -z "$LIB_OUTPUT" ] || [ ! -f "$LIB_OUTPUT" ]; then
         echo "Error: lazyusf2 static library not found after build."

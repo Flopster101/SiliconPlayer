@@ -2,10 +2,13 @@ package com.flopster101.siliconplayer.ui.visualization.basic
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -39,6 +42,8 @@ import kotlin.math.ceil
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.flopster101.siliconplayer.NativeBridge
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
 fun BasicVisualizationOverlay(
@@ -361,18 +366,98 @@ private fun ChannelScopeTextOverlay(
                     contentAlignment = resolveTextAlignment(anchor)
                 ) {
                     if (line.isNotEmpty()) {
-                        Text(
-                            text = line,
-                            color = textColor,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = textSizeSp.coerceIn(8, 22).sp,
-                                lineHeight = textSizeSp.coerceIn(8, 22).sp,
-                                platformStyle = PlatformTextStyle(includeFontPadding = false)
-                            ),
-                            textAlign = resolveTextAlign(anchor),
-                            maxLines = 1,
-                            modifier = Modifier.padding(paddingDp.dp)
+                        val scale = textSizeSp.coerceIn(8, 22).toFloat() / 8f
+                        val noteSlot = (24f * scale).dp
+                        val volumeSlot = (30f * scale).dp
+                        val effectSlot = (20f * scale).dp
+                        val textStyle = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = textSizeSp.coerceIn(8, 22).sp,
+                            lineHeight = textSizeSp.coerceIn(8, 22).sp,
+                            platformStyle = PlatformTextStyle(includeFontPadding = false)
                         )
+                        val content = buildChannelScopeTextFields(
+                            channel = channel,
+                            state = channelTextStates.getOrNull(channel),
+                            noteFormat = noteFormat,
+                            showChannel = showChannel,
+                            showNote = showNote,
+                            showVolume = showVolume,
+                            showEffect = showEffect,
+                            showInstrumentSample = showInstrumentSample,
+                            sideCounts = sideCounts
+                        )
+                        Row(
+                            modifier = Modifier
+                                .padding(paddingDp.dp)
+                                .widthIn(max = cellWidth),
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            var hasPrevious = false
+                            if (content.channel != null) {
+                                Text(
+                                    text = content.channel,
+                                    color = textColor,
+                                    style = textStyle,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Clip
+                                )
+                                hasPrevious = true
+                            }
+                            if (content.note != null) {
+                                if (hasPrevious) Text("•", color = textColor, style = textStyle)
+                                Box(modifier = Modifier.width(noteSlot), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = content.note,
+                                        color = textColor,
+                                        style = textStyle,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Clip
+                                    )
+                                }
+                                hasPrevious = true
+                            }
+                            if (content.volume != null) {
+                                if (hasPrevious) Text("•", color = textColor, style = textStyle)
+                                Box(modifier = Modifier.width(volumeSlot), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = content.volume,
+                                        color = textColor,
+                                        style = textStyle,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Clip
+                                    )
+                                }
+                                hasPrevious = true
+                            }
+                            if (content.effect != null) {
+                                if (hasPrevious) Text("•", color = textColor, style = textStyle)
+                                Box(modifier = Modifier.width(effectSlot), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = content.effect,
+                                        color = textColor,
+                                        style = textStyle,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Clip
+                                    )
+                                }
+                                hasPrevious = true
+                            }
+                            if (content.instrumentOrSample != null) {
+                                if (hasPrevious) Text("•", color = textColor, style = textStyle)
+                                Text(
+                                    text = content.instrumentOrSample,
+                                    color = textColor,
+                                    style = textStyle,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(start = 2.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -402,6 +487,14 @@ private fun resolveTextAlign(anchor: VisualizationChannelScopeTextAnchor): TextA
     }
 }
 
+private data class ChannelScopeTextFields(
+    val channel: String?,
+    val note: String?,
+    val volume: String?,
+    val effect: String?,
+    val instrumentOrSample: String?
+)
+
 private fun buildChannelScopeTextLine(
     channel: Int,
     state: ChannelScopeChannelTextState?,
@@ -413,26 +506,39 @@ private fun buildChannelScopeTextLine(
     showInstrumentSample: Boolean,
     sideCounts: IntArray
 ): String {
-    val segments = ArrayList<String>(5)
-    if (showChannel) {
-        segments.add(resolveChannelLabel(channel, state, sideCounts))
-    }
-    if (showNote) {
-        val noteText = formatNoteName(state?.note ?: -1, noteFormat)
-        if (noteText != null) segments.add(noteText)
-    }
-    if (showVolume) {
-        val volume = state?.volume ?: 0
-        segments.add(formatVolume(volume))
-    }
-    if (showEffect) {
-        segments.add(formatEffect(state))
-    }
-    if (showInstrumentSample) {
-        val instrumentText = formatInstrumentOrSample(state)
-        if (instrumentText != null) segments.add(instrumentText)
-    }
+    val f = buildChannelScopeTextFields(
+        channel = channel,
+        state = state,
+        noteFormat = noteFormat,
+        showChannel = showChannel,
+        showNote = showNote,
+        showVolume = showVolume,
+        showEffect = showEffect,
+        showInstrumentSample = showInstrumentSample,
+        sideCounts = sideCounts
+    )
+    val segments = listOfNotNull(f.channel, f.note, f.volume, f.effect, f.instrumentOrSample)
     return segments.joinToString(separator = " • ")
+}
+
+private fun buildChannelScopeTextFields(
+    channel: Int,
+    state: ChannelScopeChannelTextState?,
+    noteFormat: VisualizationNoteNameFormat,
+    showChannel: Boolean,
+    showNote: Boolean,
+    showVolume: Boolean,
+    showEffect: Boolean,
+    showInstrumentSample: Boolean,
+    sideCounts: IntArray
+): ChannelScopeTextFields {
+    return ChannelScopeTextFields(
+        channel = if (showChannel) resolveChannelLabel(channel, state, sideCounts) else null,
+        note = if (showNote) (formatNoteName(state?.note ?: -1, noteFormat) ?: "--") else null,
+        volume = if (showVolume) formatVolume(state?.volume ?: 0) else null,
+        effect = if (showEffect) formatEffect(state) else null,
+        instrumentOrSample = if (showInstrumentSample) formatInstrumentOrSample(state) else null
+    )
 }
 
 private fun resolveChannelLabel(

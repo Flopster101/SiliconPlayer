@@ -195,31 +195,6 @@ private fun advancedVisualizationSettingsPages(): List<VisualizationSettingsPage
     )
 )
 
-private fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
-    SettingsRoute.Root -> 0
-    SettingsRoute.AudioPlugins -> 1
-    SettingsRoute.PluginDetail -> 2
-    SettingsRoute.PluginVgmPlayChipSettings -> 3
-    SettingsRoute.PluginFfmpeg -> 2
-    SettingsRoute.PluginOpenMpt -> 2
-    SettingsRoute.PluginVgmPlay -> 2
-    SettingsRoute.UrlCache -> 1
-    SettingsRoute.CacheManager -> 2
-    SettingsRoute.GeneralAudio -> 1
-    SettingsRoute.Home -> 1
-    SettingsRoute.Player -> 1
-    SettingsRoute.Visualization -> 1
-    SettingsRoute.VisualizationBasic -> 2
-    SettingsRoute.VisualizationBasicBars -> 3
-    SettingsRoute.VisualizationBasicOscilloscope -> 3
-    SettingsRoute.VisualizationBasicVuMeters -> 3
-    SettingsRoute.VisualizationAdvanced -> 2
-    SettingsRoute.VisualizationAdvancedChannelScope -> 3
-    SettingsRoute.Misc -> 1
-    SettingsRoute.Ui -> 1
-    SettingsRoute.About -> 1
-}
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 internal fun SettingsScreen(

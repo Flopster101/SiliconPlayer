@@ -253,6 +253,11 @@ private fun isVisualizationModeSelectable(
     }
 }
 
+private fun defaultChannelScopeTextSizeSp(context: Context): Int {
+    val tabletLike = context.resources.configuration.smallestScreenWidthDp >= 600
+    return if (tabletLike) 10 else AppDefaults.Visualization.ChannelScope.textSizeSp
+}
+
 
 private enum class MainView {
     Home,
@@ -1091,6 +1096,17 @@ private fun AppNavigation(
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember(context) {
         context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    val defaultScopeTextSizeSp = remember(context) { defaultChannelScopeTextSizeSp(context) }
+    LaunchedEffect(prefs, defaultScopeTextSizeSp) {
+        if (!prefs.contains(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SIZE_SP)) {
+            prefs.edit()
+                .putInt(
+                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SIZE_SP,
+                    defaultScopeTextSizeSp
+                )
+                .apply()
+        }
     }
     val volumeDatabase = remember(context) {
         VolumeDatabase.getInstance(context)
@@ -4556,7 +4572,7 @@ private fun AppNavigation(
                                 )
                                 .putInt(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SIZE_SP,
-                                    AppDefaults.Visualization.ChannelScope.textSizeSp
+                                    defaultScopeTextSizeSp
                                 )
                                 .putBoolean(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_HIDE_WHEN_OVERFLOW,
@@ -4958,7 +4974,7 @@ private fun AppNavigation(
                                 )
                                 .putInt(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SIZE_SP,
-                                    AppDefaults.Visualization.ChannelScope.textSizeSp
+                                    defaultScopeTextSizeSp
                                 )
                                 .putBoolean(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_HIDE_WHEN_OVERFLOW,

@@ -51,6 +51,7 @@ import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
 import com.flopster101.siliconplayer.VisualizationChannelScopeTextAnchor
 import com.flopster101.siliconplayer.VisualizationChannelScopeBackgroundMode
+import com.flopster101.siliconplayer.VisualizationChannelScopeTextColorMode
 import com.flopster101.siliconplayer.VisualizationMode
 import com.flopster101.siliconplayer.VisualizationNoteNameFormat
 import com.flopster101.siliconplayer.VisualizationOscColorMode
@@ -358,6 +359,9 @@ internal data class ChannelScopePrefs(
     val textPaddingDp: Int,
     val textSizeSp: Int,
     val textHideWhenOverflow: Boolean,
+    val textShadowEnabled: Boolean,
+    val textColorMode: VisualizationChannelScopeTextColorMode,
+    val customTextColorArgb: Int,
     val textNoteFormat: VisualizationNoteNameFormat,
     val textShowChannel: Boolean,
     val textShowNote: Boolean,
@@ -391,6 +395,9 @@ internal data class ChannelScopePrefs(
         private const val KEY_TEXT_PADDING_DP = "visualization_channel_scope_text_padding_dp"
         private const val KEY_TEXT_SIZE_SP = "visualization_channel_scope_text_size_sp"
         private const val KEY_TEXT_HIDE_WHEN_OVERFLOW = "visualization_channel_scope_text_hide_when_overflow"
+        private const val KEY_TEXT_SHADOW_ENABLED = "visualization_channel_scope_text_shadow_enabled"
+        private const val KEY_TEXT_COLOR_MODE = "visualization_channel_scope_text_color_mode"
+        private const val KEY_CUSTOM_TEXT_COLOR_ARGB = "visualization_channel_scope_custom_text_color_argb"
         private const val KEY_TEXT_NOTE_FORMAT = "visualization_channel_scope_text_note_format"
         private const val KEY_TEXT_SHOW_CHANNEL = "visualization_channel_scope_text_show_channel"
         private const val KEY_TEXT_SHOW_NOTE = "visualization_channel_scope_text_show_note"
@@ -544,6 +551,20 @@ internal data class ChannelScopePrefs(
                     KEY_TEXT_HIDE_WHEN_OVERFLOW,
                     AppDefaults.Visualization.ChannelScope.textHideWhenOverflow
                 ),
+                textShadowEnabled = sharedPrefs.getBoolean(
+                    KEY_TEXT_SHADOW_ENABLED,
+                    AppDefaults.Visualization.ChannelScope.textShadowEnabled
+                ),
+                textColorMode = VisualizationChannelScopeTextColorMode.fromStorage(
+                    sharedPrefs.getString(
+                        KEY_TEXT_COLOR_MODE,
+                        AppDefaults.Visualization.ChannelScope.textColorMode.storageValue
+                    )
+                ),
+                customTextColorArgb = sharedPrefs.getInt(
+                    KEY_CUSTOM_TEXT_COLOR_ARGB,
+                    AppDefaults.Visualization.ChannelScope.customTextColorArgb
+                ),
                 textNoteFormat = VisualizationNoteNameFormat.fromStorage(
                     sharedPrefs.getString(
                         KEY_TEXT_NOTE_FORMAT,
@@ -622,6 +643,9 @@ private data class ChannelScopeVisualState(
     val textPaddingDp: Int,
     val textSizeSp: Int,
     val textHideWhenOverflow: Boolean,
+    val textShadowEnabled: Boolean,
+    val textColorMode: VisualizationChannelScopeTextColorMode,
+    val customTextColorArgb: Int,
     val textNoteFormat: VisualizationNoteNameFormat,
     val textShowChannel: Boolean,
     val textShowNote: Boolean,
@@ -1007,6 +1031,9 @@ internal fun AlbumArtPlaceholder(
         textPaddingDp = channelScopePrefs.textPaddingDp,
         textSizeSp = channelScopePrefs.textSizeSp,
         textHideWhenOverflow = channelScopePrefs.textHideWhenOverflow,
+        textShadowEnabled = channelScopePrefs.textShadowEnabled,
+        textColorMode = channelScopePrefs.textColorMode,
+        customTextColorArgb = channelScopePrefs.customTextColorArgb,
         textNoteFormat = channelScopePrefs.textNoteFormat,
         textShowChannel = channelScopePrefs.textShowChannel,
         textShowNote = channelScopePrefs.textShowNote,
@@ -1189,6 +1216,9 @@ internal fun AlbumArtPlaceholder(
                 channelScopeTextPaddingDp = channelScopeState.textPaddingDp,
                 channelScopeTextSizeSp = channelScopeState.textSizeSp,
                 channelScopeTextHideWhenOverflow = channelScopeState.textHideWhenOverflow,
+                channelScopeTextShadowEnabled = channelScopeState.textShadowEnabled,
+                channelScopeTextColorMode = channelScopeState.textColorMode,
+                channelScopeCustomTextColorArgb = channelScopeState.customTextColorArgb,
                 channelScopeTextNoteFormat = channelScopeState.textNoteFormat,
                 channelScopeTextShowChannel = channelScopeState.textShowChannel,
                 channelScopeTextShowNote = channelScopeState.textShowNote,

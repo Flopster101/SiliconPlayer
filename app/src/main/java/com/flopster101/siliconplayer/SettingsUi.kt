@@ -2757,6 +2757,9 @@ internal fun SettingsScreen(
                         val scopeTextPaddingKey = "visualization_channel_scope_text_padding_dp"
                         val scopeTextSizeKey = "visualization_channel_scope_text_size_sp"
                         val scopeTextHideWhenOverflowKey = "visualization_channel_scope_text_hide_when_overflow"
+                        val scopeTextShadowEnabledKey = "visualization_channel_scope_text_shadow_enabled"
+                        val scopeTextColorModeKey = "visualization_channel_scope_text_color_mode"
+                        val scopeCustomTextColorKey = "visualization_channel_scope_custom_text_color_argb"
                         val scopeTextNoteFormatKey = "visualization_channel_scope_text_note_format"
                         val scopeTextShowChannelKey = "visualization_channel_scope_text_show_channel"
                         val scopeTextShowNoteKey = "visualization_channel_scope_text_show_note"
@@ -3010,6 +3013,32 @@ internal fun SettingsScreen(
                                 )
                             )
                         }
+                        var scopeTextShadowEnabled by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextShadowEnabledKey,
+                                    AppDefaults.Visualization.ChannelScope.textShadowEnabled
+                                )
+                            )
+                        }
+                        var scopeTextColorMode by remember {
+                            mutableStateOf(
+                                VisualizationChannelScopeTextColorMode.fromStorage(
+                                    prefs.getString(
+                                        scopeTextColorModeKey,
+                                        AppDefaults.Visualization.ChannelScope.textColorMode.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeCustomTextColorArgb by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeCustomTextColorKey,
+                                    AppDefaults.Visualization.ChannelScope.customTextColorArgb
+                                )
+                            )
+                        }
                         var scopeTextNoteFormat by remember {
                             mutableStateOf(
                                 VisualizationNoteNameFormat.fromStorage(
@@ -3080,6 +3109,8 @@ internal fun SettingsScreen(
                         var showTextAnchorDialog by remember { mutableStateOf(false) }
                         var showTextPaddingDialog by remember { mutableStateOf(false) }
                         var showTextSizeDialog by remember { mutableStateOf(false) }
+                        var showTextColorModeDialog by remember { mutableStateOf(false) }
+                        var showCustomTextColorDialog by remember { mutableStateOf(false) }
                         var showTextNoteFormatDialog by remember { mutableStateOf(false) }
 
                         SettingsSectionLabel("Channel scope")
@@ -3275,6 +3306,22 @@ internal fun SettingsScreen(
                                 onClick = { showTextSizeDialog = true }
                             )
                             Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Text color",
+                                description = "Color source for channel-scope text overlay.",
+                                value = scopeTextColorMode.label,
+                                onClick = { showTextColorModeDialog = true }
+                            )
+                            if (scopeTextColorMode == VisualizationChannelScopeTextColorMode.Custom) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                SettingsValuePickerCard(
+                                    title = "Custom text color",
+                                    description = "RGB color used when text color mode is Custom.",
+                                    value = String.format(Locale.US, "#%06X", scopeCustomTextColorArgb and 0xFFFFFF),
+                                    onClick = { showCustomTextColorDialog = true }
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
                             PlayerSettingToggleCard(
                                 title = "Hide when still too large",
                                 description = "Hide text if it still cannot fit after auto downscaling.",
@@ -3282,6 +3329,16 @@ internal fun SettingsScreen(
                                 onCheckedChange = { enabled ->
                                     scopeTextHideWhenOverflow = enabled
                                     prefs.edit().putBoolean(scopeTextHideWhenOverflowKey, enabled).apply()
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Text shadow",
+                                description = "Render a subtle drop shadow for better contrast on bright or matching backgrounds.",
+                                checked = scopeTextShadowEnabled,
+                                onCheckedChange = { enabled ->
+                                    scopeTextShadowEnabled = enabled
+                                    prefs.edit().putBoolean(scopeTextShadowEnabledKey, enabled).apply()
                                 }
                             )
                             Spacer(modifier = Modifier.height(10.dp))
@@ -3776,6 +3833,56 @@ internal fun SettingsScreen(
                                     scopeTextSizeSp = clamped
                                     prefs.edit().putInt(scopeTextSizeKey, clamped).apply()
                                     showTextSizeDialog = false
+                                }
+                            )
+                        }
+                        if (showTextColorModeDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTextColorModeDialog = false },
+                                title = { Text("Text color") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationChannelScopeTextColorMode.entries.forEach { entry ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTextColorMode = entry
+                                                        prefs.edit().putString(scopeTextColorModeKey, entry.storageValue).apply()
+                                                        showTextColorModeDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = entry == scopeTextColorMode,
+                                                    onClick = {
+                                                        scopeTextColorMode = entry
+                                                        prefs.edit().putString(scopeTextColorModeKey, entry.storageValue).apply()
+                                                        showTextColorModeDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(entry.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTextColorModeDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showCustomTextColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom text color",
+                                initialArgb = scopeCustomTextColorArgb,
+                                onDismiss = { showCustomTextColorDialog = false },
+                                onConfirm = { argb ->
+                                    scopeCustomTextColorArgb = argb
+                                    prefs.edit().putInt(scopeCustomTextColorKey, argb).apply()
+                                    showCustomTextColorDialog = false
                                 }
                             )
                         }

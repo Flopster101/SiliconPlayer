@@ -155,6 +155,22 @@ enum class VisualizationNoteNameFormat(
     }
 }
 
+enum class VisualizationChannelScopeTextColorMode(
+    val storageValue: String,
+    val label: String
+) {
+    Monet("monet", "Monet accent"),
+    OpenMptInspired("openmpt_inspired", "OpenMPT-inspired"),
+    White("white", "White"),
+    Custom("custom", "Custom");
+
+    companion object {
+        fun fromStorage(value: String?): VisualizationChannelScopeTextColorMode {
+            return entries.firstOrNull { it.storageValue == value } ?: Monet
+        }
+    }
+}
+
 enum class VisualizationOscFpsMode(
     val storageValue: String,
     val label: String

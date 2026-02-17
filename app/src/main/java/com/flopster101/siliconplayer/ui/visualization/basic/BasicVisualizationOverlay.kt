@@ -18,12 +18,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.style.TextAlign
 import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
 import com.flopster101.siliconplayer.VisualizationChannelScopeTextAnchor
+import com.flopster101.siliconplayer.VisualizationChannelScopeTextColorMode
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -100,6 +103,9 @@ fun BasicVisualizationOverlay(
     channelScopeTextPaddingDp: Int,
     channelScopeTextSizeSp: Int,
     channelScopeTextHideWhenOverflow: Boolean,
+    channelScopeTextShadowEnabled: Boolean,
+    channelScopeTextColorMode: VisualizationChannelScopeTextColorMode,
+    channelScopeCustomTextColorArgb: Int,
     channelScopeTextNoteFormat: VisualizationNoteNameFormat,
     channelScopeTextShowChannel: Boolean,
     channelScopeTextShowNote: Boolean,
@@ -170,6 +176,7 @@ fun BasicVisualizationOverlay(
     val vuBackgroundColor = deriveVuTrackColor(vuAccentColor)
     val channelScopeCustomLineColor = Color(channelScopeCustomLineColorArgb)
     val channelScopeCustomGridColor = Color(channelScopeCustomGridColorArgb)
+    val channelScopeCustomTextColor = Color(channelScopeCustomTextColorArgb)
     val channelScopeCornerRadiusShape = RoundedCornerShape(channelScopeCornerRadiusDp.coerceIn(0, 48).dp)
     val channelScopeCornerRadiusPx = with(LocalDensity.current) {
         channelScopeCornerRadiusDp.coerceIn(0, 48).dp.toPx()
@@ -189,6 +196,11 @@ fun BasicVisualizationOverlay(
         artworkColor = artworkGridColor,
         monetColor = monetOscGridColor,
         customColor = channelScopeCustomGridColor
+    )
+    val channelScopeTextPalette = resolveChannelScopeTextPalette(
+        mode = channelScopeTextColorMode,
+        monetColor = monetOscLineColor,
+        customColor = channelScopeCustomTextColor
     )
     val barBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
 
@@ -298,13 +310,14 @@ fun BasicVisualizationOverlay(
                         paddingDp = channelScopeTextPaddingDp,
                         textSizeSp = channelScopeTextSizeSp,
                         hideWhenOverflow = channelScopeTextHideWhenOverflow,
+                        textShadowEnabled = channelScopeTextShadowEnabled,
                         noteFormat = channelScopeTextNoteFormat,
                         showChannel = channelScopeTextShowChannel,
                         showNote = channelScopeTextShowNote,
                         showVolume = channelScopeTextShowVolume,
                         showEffect = channelScopeTextShowEffect,
                         showInstrumentSample = channelScopeTextShowInstrumentSample,
-                        textColor = channelScopeLineColor.copy(alpha = 0.93f),
+                        textPalette = channelScopeTextPalette,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -312,6 +325,50 @@ fun BasicVisualizationOverlay(
         }
 
         VisualizationMode.Off -> Unit
+    }
+}
+
+private data class ChannelScopeTextPalette(
+    val channel: Color,
+    val note: Color,
+    val volume: Color,
+    val effect: Color,
+    val instrumentOrSample: Color,
+    val separator: Color
+)
+
+private fun resolveChannelScopeTextPalette(
+    mode: VisualizationChannelScopeTextColorMode,
+    monetColor: Color,
+    customColor: Color
+): ChannelScopeTextPalette {
+    val uniform = when (mode) {
+        VisualizationChannelScopeTextColorMode.Monet -> monetColor.copy(alpha = 0.93f)
+        VisualizationChannelScopeTextColorMode.White -> Color.White
+        VisualizationChannelScopeTextColorMode.Custom -> customColor
+        VisualizationChannelScopeTextColorMode.OpenMptInspired -> Color.Unspecified
+    }
+    if (mode != VisualizationChannelScopeTextColorMode.OpenMptInspired) {
+        return ChannelScopeTextPalette(
+            channel = uniform,
+            note = uniform,
+            volume = uniform,
+            effect = uniform,
+            instrumentOrSample = uniform,
+            separator = uniform.copy(alpha = 0.86f)
+        )
+    }
+    // Inspired by OpenMPT pattern syntax-highlight groups (dark schemes).
+    return when (mode) {
+        VisualizationChannelScopeTextColorMode.OpenMptInspired -> ChannelScopeTextPalette(
+            channel = Color(0xFFBABDB6),
+            note = Color(0xFF729FCF),
+            volume = Color(0xFF8AE234),
+            effect = Color(0xFFFCAF3E),
+            instrumentOrSample = Color.White,
+            separator = Color.White.copy(alpha = 0.78f)
+        )
+        else -> error("Unhandled channel scope text color mode: $mode")
     }
 }
 
@@ -332,13 +389,14 @@ private fun ChannelScopeTextOverlay(
     paddingDp: Int,
     textSizeSp: Int,
     hideWhenOverflow: Boolean,
+    textShadowEnabled: Boolean,
     noteFormat: VisualizationNoteNameFormat,
     showChannel: Boolean,
     showNote: Boolean,
     showVolume: Boolean,
     showEffect: Boolean,
     showInstrumentSample: Boolean,
-    textColor: Color,
+    textPalette: ChannelScopeTextPalette,
     modifier: Modifier = Modifier
 ) {
     if (channelHistories.isEmpty()) return
@@ -422,6 +480,15 @@ private fun ChannelScopeTextOverlay(
                         val textStyle = MaterialTheme.typography.labelSmall.copy(
                             fontSize = effectiveTextSizeSp.sp,
                             lineHeight = effectiveTextSizeSp.sp,
+                            shadow = if (textShadowEnabled) {
+                                Shadow(
+                                    color = Color.Black.copy(alpha = 0.62f),
+                                    offset = Offset(0f, 1.25f),
+                                    blurRadius = 2.4f
+                                )
+                            } else {
+                                null
+                            },
                             platformStyle = PlatformTextStyle(includeFontPadding = false)
                         )
                         Row(
@@ -435,7 +502,7 @@ private fun ChannelScopeTextOverlay(
                             if (content.channel != null) {
                                 Text(
                                     text = content.channel,
-                                    color = textColor,
+                                    color = textPalette.channel,
                                     style = textStyle,
                                     maxLines = 1,
                                     overflow = TextOverflow.Clip
@@ -443,11 +510,11 @@ private fun ChannelScopeTextOverlay(
                                 hasPrevious = true
                             }
                             if (content.note != null) {
-                                if (hasPrevious) Text("•", color = textColor, style = textStyle)
+                                if (hasPrevious) Text("•", color = textPalette.separator, style = textStyle)
                                 Box(modifier = Modifier.width(noteSlot), contentAlignment = Alignment.Center) {
                                     Text(
                                         text = content.note,
-                                        color = textColor,
+                                        color = textPalette.note,
                                         style = textStyle,
                                         textAlign = TextAlign.Center,
                                         maxLines = 1,
@@ -457,11 +524,11 @@ private fun ChannelScopeTextOverlay(
                                 hasPrevious = true
                             }
                             if (content.volume != null) {
-                                if (hasPrevious) Text("•", color = textColor, style = textStyle)
+                                if (hasPrevious) Text("•", color = textPalette.separator, style = textStyle)
                                 Box(modifier = Modifier.width(volumeSlot), contentAlignment = Alignment.Center) {
                                     Text(
                                         text = content.volume,
-                                        color = textColor,
+                                        color = textPalette.volume,
                                         style = textStyle,
                                         textAlign = TextAlign.Center,
                                         maxLines = 1,
@@ -471,11 +538,11 @@ private fun ChannelScopeTextOverlay(
                                 hasPrevious = true
                             }
                             if (content.effect != null) {
-                                if (hasPrevious) Text("•", color = textColor, style = textStyle)
+                                if (hasPrevious) Text("•", color = textPalette.separator, style = textStyle)
                                 Box(modifier = Modifier.width(effectSlot), contentAlignment = Alignment.Center) {
                                     Text(
                                         text = content.effect,
-                                        color = textColor,
+                                        color = textPalette.effect,
                                         style = textStyle,
                                         textAlign = TextAlign.Center,
                                         maxLines = 1,
@@ -485,10 +552,10 @@ private fun ChannelScopeTextOverlay(
                                 hasPrevious = true
                             }
                             if (content.instrumentOrSample != null) {
-                                if (hasPrevious) Text("•", color = textColor, style = textStyle)
+                                if (hasPrevious) Text("•", color = textPalette.separator, style = textStyle)
                                 Text(
                                     text = content.instrumentOrSample,
-                                    color = textColor,
+                                    color = textPalette.instrumentOrSample,
                                     style = textStyle,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -511,17 +578,6 @@ private fun resolveTextAlignment(anchor: VisualizationChannelScopeTextAnchor): A
         VisualizationChannelScopeTextAnchor.BottomRight -> Alignment.BottomEnd
         VisualizationChannelScopeTextAnchor.BottomCenter -> Alignment.BottomCenter
         VisualizationChannelScopeTextAnchor.BottomLeft -> Alignment.BottomStart
-    }
-}
-
-private fun resolveTextAlign(anchor: VisualizationChannelScopeTextAnchor): TextAlign {
-    return when (anchor) {
-        VisualizationChannelScopeTextAnchor.TopLeft,
-        VisualizationChannelScopeTextAnchor.BottomLeft -> TextAlign.Left
-        VisualizationChannelScopeTextAnchor.TopCenter,
-        VisualizationChannelScopeTextAnchor.BottomCenter -> TextAlign.Center
-        VisualizationChannelScopeTextAnchor.TopRight,
-        VisualizationChannelScopeTextAnchor.BottomRight -> TextAlign.Right
     }
 }
 

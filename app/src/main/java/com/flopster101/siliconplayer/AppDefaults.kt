@@ -82,6 +82,9 @@ object AppDefaults {
             const val textPaddingDp = 6
             const val textSizeSp = 8
             const val textHideWhenOverflow = true
+            const val textShadowEnabled = true
+            val textColorMode = VisualizationChannelScopeTextColorMode.Monet
+            const val customTextColorArgb = 0xFFFFFFFF.toInt()
             val textNoteFormat = VisualizationNoteNameFormat.American
             const val textShowChannel = true
             const val textShowNote = true

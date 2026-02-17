@@ -28,3 +28,6 @@
 [submodule "external/libresidfp"]
 	path = external/libresidfp
 	url = https://github.com/libsidplayfp/libresidfp
+[submodule "external/resid"]
+	path = external/resid
+	url = https://github.com/libsidplayfp/resid

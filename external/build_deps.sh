@@ -680,6 +680,96 @@ build_fluidsynth() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build libresidfp
+# -----------------------------------------------------------------------------
+build_libresidfp() {
+    local ABI=$1
+    echo "Building libresidfp for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/libresidfp"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+    local CONFIGURE_HOST=""
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "libresidfp source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    if [ -f "$INSTALL_DIR/lib/libresidfp.a" ] && \
+       [ -f "$INSTALL_DIR/include/residfp/residfp.h" ] && \
+       [ -f "$INSTALL_DIR/lib/pkgconfig/libresidfp.pc" ]; then
+        echo "libresidfp already built for $ABI -> skipping"
+        return 0
+    fi
+
+    case "$ABI" in
+        "arm64-v8a")
+            CONFIGURE_HOST="aarch64-linux-android"
+            ;;
+        "armeabi-v7a")
+            CONFIGURE_HOST="arm-linux-androideabi"
+            ;;
+        "x86_64")
+            CONFIGURE_HOST="x86_64-linux-android"
+            ;;
+        "x86")
+            CONFIGURE_HOST="i686-linux-android"
+            ;;
+        *)
+            echo "Unsupported ABI for libresidfp: $ABI"
+            return 1
+            ;;
+    esac
+
+    if [ ! -f "$PROJECT_PATH/configure" ]; then
+        if ! command -v autoreconf >/dev/null 2>&1; then
+            echo "Error: libresidfp needs autotools bootstrap, but 'autoreconf' is missing."
+            return 1
+        fi
+
+        echo "Bootstrapping libresidfp with autoreconf..."
+        (cd "$PROJECT_PATH" && autoreconf -vfi) || {
+            echo "Error: libresidfp autoreconf failed."
+            return 1
+        }
+    fi
+
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
+
+    (
+        cd "$BUILD_DIR"
+        "$PROJECT_PATH/configure" \
+            --host="$CONFIGURE_HOST" \
+            --prefix="$INSTALL_DIR" \
+            --disable-shared \
+            --enable-static \
+            CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
+            CXX="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang++" \
+            AR="$TOOLCHAIN/bin/llvm-ar" \
+            RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
+            STRIP="$TOOLCHAIN/bin/llvm-strip" \
+            CFLAGS="-fPIC" \
+            CXXFLAGS="-fPIC"
+
+        make -j$(nproc)
+        make install
+    )
+
+    if [ ! -f "$INSTALL_DIR/lib/libresidfp.a" ]; then
+        local built_lib
+        built_lib="$(find "$BUILD_DIR" -type f -name 'libresidfp.a' | head -n 1)"
+        if [ -z "$built_lib" ]; then
+            echo "Error: libresidfp static library not found after build."
+            return 1
+        fi
+        mkdir -p "$INSTALL_DIR/lib"
+        cp "$built_lib" "$INSTALL_DIR/lib/"
+    fi
+}
+
+# -----------------------------------------------------------------------------
 # Function: Build libsidplayfp
 # -----------------------------------------------------------------------------
 build_libsidplayfp() {
@@ -694,6 +784,11 @@ build_libsidplayfp() {
     if [ ! -d "$PROJECT_PATH" ]; then
         echo "libsidplayfp source not found at $PROJECT_PATH (skipping)."
         return 0
+    fi
+
+    # Build libresidfp first when available so sidplayfp can enable RESIDFP.
+    if [ -d "$ABSOLUTE_PATH/libresidfp" ]; then
+        build_libresidfp "$ABI"
     fi
 
     case "$ABI" in
@@ -745,6 +840,10 @@ build_libsidplayfp() {
 
     (
         cd "$BUILD_DIR"
+        PKG_CONFIG_PATH="$INSTALL_DIR/lib/pkgconfig" \
+        PKG_CONFIG_LIBDIR="$INSTALL_DIR/lib/pkgconfig" \
+        RESIDFP_CFLAGS="-I$INSTALL_DIR/include" \
+        RESIDFP_LIBS="-L$INSTALL_DIR/lib -lresidfp" \
         "$PROJECT_PATH/configure" \
             --host="$CONFIGURE_HOST" \
             --prefix="$INSTALL_DIR" \
@@ -787,8 +886,8 @@ build_libsidplayfp() {
 usage() {
     echo "Usage: $0 <abi|all> <lib|all[,lib2,...]>"
     echo "  ABI: all, arm64-v8a, armeabi-v7a, x86_64, x86"
-    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libsidplayfp, lazyusf2, fluidsynth"
-    echo "  Aliases: sox/soxr, gme, sid/sidplayfp, usf/lazyusf, fluid/libfluidsynth"
+    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresidfp, libsidplayfp, lazyusf2, fluidsynth"
+    echo "  Aliases: sox/soxr, gme, residfp, sid/sidplayfp, usf/lazyusf, fluid/libfluidsynth"
 }
 
 if [ "$#" -eq 1 ]; then
@@ -817,6 +916,9 @@ normalize_lib_name() {
             ;;
         gme)
             echo "libgme"
+            ;;
+        residfp)
+            echo "libresidfp"
             ;;
         sid|sidplayfp)
             echo "libsidplayfp"
@@ -868,7 +970,7 @@ is_valid_abi() {
 is_valid_lib() {
     local lib="$1"
     case "$lib" in
-        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libsidplayfp|lazyusf2|fluidsynth)
+        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresidfp|libsidplayfp|lazyusf2|fluidsynth)
             return 0
             ;;
         *)
@@ -979,6 +1081,10 @@ for ABI in "${ABIS[@]}"; do
 
     if target_has_lib "libgme"; then
         build_libgme "$ABI"
+    fi
+
+    if target_has_lib "libresidfp"; then
+        build_libresidfp "$ABI"
     fi
 
     if target_has_lib "libsidplayfp"; then

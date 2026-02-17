@@ -28,6 +28,7 @@ add_library(
         decoders/VGMDecoder.cpp
         decoders/GmeDecoder.cpp
         decoders/LibSidPlayFpDecoder.cpp
+        decoders/LazyUsf2Decoder.cpp
         decoders/CPConvStub.c
 )
 
@@ -88,6 +89,10 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
     add_library(libgme STATIC IMPORTED)
     set_target_properties(libgme PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libgme.a")
 
+    # Import lazyusf2 (Static)
+    add_library(liblazyusf2 STATIC IMPORTED)
+    set_target_properties(liblazyusf2 PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/liblazyusf2.a")
+
     # Import libsidplayfp + libresidfp (Static)
     add_library(libsidplayfp STATIC IMPORTED)
     set_target_properties(libsidplayfp PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libsidplayfp.a")
@@ -125,6 +130,7 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
             libvgm-emu
             libvgm-utils
             libgme
+            liblazyusf2
             libsidplayfp
             libresidfp
             libresid

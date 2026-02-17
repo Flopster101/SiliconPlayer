@@ -111,6 +111,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.vectorResource
+import com.flopster101.siliconplayer.playback.loadPlayableSiblingFilesForExternalIntent
+import com.flopster101.siliconplayer.session.exportCachedFilesToTree
 import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import com.flopster101.siliconplayer.ui.dialogs.AudioEffectsDialog
 import java.io.BufferedInputStream
@@ -123,7 +125,6 @@ import android.content.IntentFilter
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.net.Uri
-import android.provider.DocumentsContract
 import android.provider.Settings
 import android.os.Environment
 import android.util.Log
@@ -137,8 +138,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.TimeoutCancellationException
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -1008,206 +1007,6 @@ private fun AppNavigation(
 
     fun isLocalPlayableFile(file: File?): Boolean = file?.exists() == true && file.isFile
 
-    suspend fun downloadRemoteUrlToCache(
-        url: String,
-        requestUrl: String,
-        onStatus: suspend (RemoteLoadUiState) -> Unit
-    ): RemoteDownloadResult = withContext(Dispatchers.IO) {
-        val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
-        var target = remoteCacheFileForSource(cacheRoot, url)
-        suspend fun emitStatus(state: RemoteLoadUiState) {
-            withContext(Dispatchers.Main.immediate) {
-                onStatus(state)
-            }
-        }
-        findExistingCachedFileForSource(cacheRoot, url)?.let { existing ->
-            existing.setLastModified(System.currentTimeMillis())
-            rememberSourceForCachedFile(cacheRoot, existing.name, url)
-            Log.d(URL_SOURCE_TAG, "Using existing cached file: ${existing.absolutePath} (${existing.length()} bytes)")
-            return@withContext RemoteDownloadResult(file = existing)
-        }
-
-        var temp = File(target.absolutePath + ".part")
-        Log.d(URL_SOURCE_TAG, "Downloading URL to cache: source=$url request=$requestUrl")
-        emitStatus(
-            RemoteLoadUiState(
-                sourceId = url,
-                phase = RemoteLoadPhase.Connecting,
-                indeterminate = true
-            )
-        )
-
-        suspend fun openWithRedirects(initialUrl: String, maxRedirects: Int = 6): Pair<HttpURLConnection?, String?> {
-            var currentUrl = initialUrl
-            repeat(maxRedirects + 1) { hop ->
-                kotlin.coroutines.coroutineContext.ensureActive()
-                val connection = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 15_000
-                    readTimeout = 30_000
-                    instanceFollowRedirects = false
-                    requestMethod = "GET"
-                    setRequestProperty("User-Agent", "SiliconPlayer/1.0 (Android)")
-                    setRequestProperty("Accept", "*/*")
-                    setRequestProperty("Connection", "close")
-                    setRequestProperty("Icy-MetaData", "1")
-                }
-                val responseCode = connection.responseCode
-                if (responseCode in 300..399) {
-                    val location = connection.getHeaderField("Location")
-                    Log.d(
-                        URL_SOURCE_TAG,
-                        "Redirect hop=$hop code=$responseCode from=$currentUrl to=${location ?: "<missing>"}"
-                    )
-                    connection.disconnect()
-                    if (location.isNullOrBlank()) {
-                        return Pair(null, "Redirect missing Location header (HTTP $responseCode)")
-                    }
-                    currentUrl = URL(URL(currentUrl), location).toString()
-                    return@repeat
-                }
-                Log.d(URL_SOURCE_TAG, "HTTP response code=$responseCode finalUrl=$currentUrl")
-                if (responseCode !in 200..299) {
-                    connection.disconnect()
-                    return Pair(null, "HTTP $responseCode")
-                }
-                return Pair(connection, null)
-            }
-            Log.e(URL_SOURCE_TAG, "Too many redirects for URL: $initialUrl")
-            return Pair(null, "Too many redirects")
-        }
-
-        var connection: HttpURLConnection? = null
-        return@withContext try {
-            val (openedConnection, openError) = openWithRedirects(requestUrl)
-            connection = openedConnection
-            if (connection == null) {
-                Log.e(URL_SOURCE_TAG, "HTTP open failed for URL: source=$url request=$requestUrl")
-                RemoteDownloadResult(
-                    file = null,
-                    errorMessage = openError ?: "Connection failed"
-                )
-            } else {
-                val contentDispositionName = filenameFromContentDisposition(
-                    connection.getHeaderField("Content-Disposition")
-                )
-                if (!contentDispositionName.isNullOrBlank()) {
-                    val resolvedTarget = File(cacheRoot, "${sha1Hex(url)}_$contentDispositionName")
-                    if (resolvedTarget.absolutePath != target.absolutePath) {
-                        target = resolvedTarget
-                        temp = File(target.absolutePath + ".part")
-                        findExistingCachedFileForSource(cacheRoot, url)?.let { existing ->
-                            existing.setLastModified(System.currentTimeMillis())
-                            rememberSourceForCachedFile(cacheRoot, existing.name, url)
-                            Log.d(
-                                URL_SOURCE_TAG,
-                                "Using existing cached file after Content-Disposition resolution: ${existing.absolutePath} (${existing.length()} bytes)"
-                            )
-                            return@withContext RemoteDownloadResult(file = existing)
-                        }
-                    }
-                }
-                val expectedBytes = connection.contentLengthLong
-                var totalBytes = 0L
-                var latestBytesPerSecond: Long? = null
-                val startedAtMs = System.currentTimeMillis()
-                var lastSpeedSampleBytes = 0L
-                var lastSpeedSampleMs = startedAtMs
-                var lastUiUpdateMs = 0L
-                suspend fun publishDownloadStatus(force: Boolean = false) {
-                    val now = System.currentTimeMillis()
-                    if (!force && now - lastUiUpdateMs < 120L) return
-                    lastUiUpdateMs = now
-                    val hasKnownTotal = expectedBytes > 0L
-                    val percentValue = if (hasKnownTotal) {
-                        ((totalBytes * 100L) / expectedBytes).toInt().coerceIn(0, 100)
-                    } else {
-                        null
-                    }
-                    emitStatus(
-                        RemoteLoadUiState(
-                            sourceId = url,
-                            phase = RemoteLoadPhase.Downloading,
-                            downloadedBytes = totalBytes,
-                            totalBytes = expectedBytes.takeIf { it > 0L },
-                            bytesPerSecond = latestBytesPerSecond,
-                            percent = percentValue,
-                            indeterminate = !hasKnownTotal
-                        )
-                    )
-                }
-
-                publishDownloadStatus(force = true)
-                BufferedInputStream(connection.inputStream).use { input ->
-                    FileOutputStream(temp).use { output ->
-                        val buffer = ByteArray(16 * 1024)
-                        while (true) {
-                            kotlin.coroutines.coroutineContext.ensureActive()
-                            val read = input.read(buffer)
-                            if (read <= 0) break
-                            output.write(buffer, 0, read)
-                            totalBytes += read
-                            val now = System.currentTimeMillis()
-                            val deltaMs = now - lastSpeedSampleMs
-                            if (deltaMs >= 350L) {
-                                val deltaBytes = totalBytes - lastSpeedSampleBytes
-                                latestBytesPerSecond = ((deltaBytes * 1000L) / deltaMs).coerceAtLeast(0L)
-                                lastSpeedSampleBytes = totalBytes
-                                lastSpeedSampleMs = now
-                            }
-                            publishDownloadStatus()
-                        }
-                        output.flush()
-                    }
-                }
-                publishDownloadStatus(force = true)
-                Log.d(
-                    URL_SOURCE_TAG,
-                    "Download complete bytes=$totalBytes expected=$expectedBytes temp=${temp.absolutePath}"
-                )
-                if (totalBytes <= 0L) {
-                    return@withContext RemoteDownloadResult(
-                        file = null,
-                        errorMessage = "Downloaded 0 bytes"
-                    )
-                }
-                if (!temp.renameTo(target)) {
-                    temp.copyTo(target, overwrite = true)
-                    temp.delete()
-                }
-                rememberSourceForCachedFile(cacheRoot, target.name, url)
-                Log.d(URL_SOURCE_TAG, "Cached file ready: ${target.absolutePath} (${target.length()} bytes)")
-                val elapsedMs = (System.currentTimeMillis() - startedAtMs).coerceAtLeast(1L)
-                val avgSpeed = (totalBytes * 1000L) / elapsedMs
-                emitStatus(
-                    RemoteLoadUiState(
-                        sourceId = url,
-                        phase = RemoteLoadPhase.Downloading,
-                        downloadedBytes = totalBytes,
-                        totalBytes = expectedBytes.takeIf { it > 0L },
-                        bytesPerSecond = latestBytesPerSecond ?: avgSpeed,
-                        percent = if (expectedBytes > 0L) 100 else null,
-                        indeterminate = expectedBytes <= 0L
-                    )
-                )
-                RemoteDownloadResult(file = target)
-            }
-        } catch (_: CancellationException) {
-            Log.d(URL_SOURCE_TAG, "Download cancelled for URL: $url")
-            RemoteDownloadResult(file = null, errorMessage = "Cancelled", cancelled = true)
-        } catch (t: Throwable) {
-            Log.e(URL_SOURCE_TAG, "Download failed for URL: $url (${t::class.java.simpleName}: ${t.message})")
-            RemoteDownloadResult(
-                file = null,
-                errorMessage = "${t::class.java.simpleName}: ${t.message ?: "unknown error"}"
-            )
-        } finally {
-            connection?.disconnect()
-            if (temp.exists() && (target.length() <= 0L)) {
-                temp.delete()
-            }
-        }
-    }
-
     fun refreshCachedSourceFiles() {
         appScope.launch(Dispatchers.IO) {
             val files = listCachedSourceFiles(File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR))
@@ -1229,69 +1028,22 @@ private fun AppNavigation(
             return@rememberLauncherForActivityResult
         }
         appScope.launch(Dispatchers.IO) {
-            var exported = 0
-            var failed = 0
-            val parentDocumentUri = try {
-                DocumentsContract.buildDocumentUriUsingTree(
-                    treeUri,
-                    DocumentsContract.getTreeDocumentId(treeUri)
-                )
-            } catch (_: Throwable) {
-                null
-            }
-            if (parentDocumentUri == null) {
+            val result = exportCachedFilesToTree(
+                context = context,
+                treeUri = treeUri,
+                selectedPaths = selectedPaths
+            )
+            if (result.invalidDestination) {
                 withContext(Dispatchers.Main.immediate) {
                     Toast.makeText(context, "Export failed: invalid destination", Toast.LENGTH_SHORT).show()
                 }
                 return@launch
             }
-            val hashPrefixRegex = Regex("^[0-9a-fA-F]{40}_(.+)$")
-            selectedPaths.distinct().forEach { absolutePath ->
-                val sourceFile = File(absolutePath)
-                if (!sourceFile.exists() || !sourceFile.isFile) {
-                    failed++
-                    return@forEach
-                }
-                val baseName = hashPrefixRegex.matchEntire(sourceFile.name)?.groupValues?.getOrNull(1)
-                    ?: sourceFile.name
-                val dotIndex = baseName.lastIndexOf('.')
-                val stem = if (dotIndex > 0) baseName.substring(0, dotIndex) else baseName
-                val ext = if (dotIndex > 0) baseName.substring(dotIndex) else ""
-                val mimeType = guessMimeTypeFromFilename(baseName)
-                var destinationUri: Uri? = null
-                for (attempt in 0..24) {
-                    val candidateName = if (attempt == 0) baseName else "$stem ($attempt)$ext"
-                    destinationUri = try {
-                        DocumentsContract.createDocument(
-                            context.contentResolver,
-                            parentDocumentUri,
-                            mimeType,
-                            candidateName
-                        )
-                    } catch (_: Throwable) {
-                        null
-                    }
-                    if (destinationUri != null) break
-                }
-                if (destinationUri == null) {
-                    failed++
-                    return@forEach
-                }
-                val copied = try {
-                    context.contentResolver.openOutputStream(destinationUri, "w")?.use { output ->
-                        sourceFile.inputStream().use { input ->
-                            input.copyTo(output)
-                        }
-                    } != null
-                } catch (_: Throwable) {
-                    false
-                }
-                if (copied) exported++ else failed++
-            }
             withContext(Dispatchers.Main.immediate) {
                 Toast.makeText(
                     context,
-                    "Exported $exported file(s)" + if (failed > 0) " ($failed failed)" else "",
+                    "Exported ${result.exportedCount} file(s)" +
+                        if (result.failedCount > 0) " (${result.failedCount} failed)" else "",
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -1327,27 +1079,12 @@ private fun AppNavigation(
                 // Async: Load directory context for prev/next controls if from external intent
                 if (pendingFileFromExternalIntent) {
                     launch {
-                        try {
-                            withTimeout(15_000) { // 15 second timeout
-                                val parentDir = file.parentFile
-                                if (parentDir?.exists() == true && parentDir.isDirectory) {
-                                    val loadedFiles = withContext(Dispatchers.IO) {
-                                        repository.getFiles(parentDir)
-                                    }
-                                    // Filter to playable files only
-                                    val playableFiles = loadedFiles
-                                        .asSequence()
-                                        .filter { !it.isDirectory }
-                                        .map { it.file }
-                                        .toList()
-                                    visiblePlayableFiles = playableFiles
-                                }
-                            }
-                        } catch (e: TimeoutCancellationException) {
-                            // Timeout - prev/next stay disabled, no error shown
-                        } catch (e: Exception) {
-                            // Other error - prev/next stay disabled
-                            e.printStackTrace()
+                        val playableFiles = loadPlayableSiblingFilesForExternalIntent(
+                            repository = repository,
+                            file = file
+                        )
+                        if (playableFiles != null) {
+                            visiblePlayableFiles = playableFiles
                         }
                     }
                 }
@@ -1362,10 +1099,11 @@ private fun AppNavigation(
 
     fun syncPlaybackService() {
         val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
-        val resolvedSourceId = currentPlaybackSourceId
-            ?: selectedFile
-                ?.takeIf { it.absolutePath.startsWith(cacheRoot.absolutePath) }
-                ?.let { sourceIdForCachedFileName(cacheRoot, it.name) }
+        val resolvedSourceId = resolvePlaybackServiceSourceId(
+            selectedFile = selectedFile,
+            currentPlaybackSourceId = currentPlaybackSourceId,
+            cacheRoot = cacheRoot
+        )
         syncPlaybackServiceForState(
             context = context,
             selectedFile = selectedFile,
@@ -1379,84 +1117,45 @@ private fun AppNavigation(
     }
 
     fun refreshSubtuneState() {
-        val currentFile = selectedFile
-        if (currentFile == null) {
+        val state = readSubtuneState(selectedFile)
+        if (state.count <= 0) {
             subtuneCount = 0
             currentSubtuneIndex = 0
             subtuneEntries = emptyList()
             showSubtuneSelectorDialog = false
             return
         }
-        val count = NativeBridge.getSubtuneCount().coerceAtLeast(0)
-        subtuneCount = count
-        currentSubtuneIndex = if (count <= 0) {
-            0
-        } else {
-            NativeBridge.getCurrentSubtuneIndex().coerceIn(0, count - 1)
-        }
+        subtuneCount = state.count
+        currentSubtuneIndex = state.currentIndex
     }
 
     fun refreshSubtuneEntries() {
-        val count = subtuneCount
-        if (count <= 0) {
-            subtuneEntries = emptyList()
-            return
-        }
-        subtuneEntries = (0 until count).map { index ->
-            val title = NativeBridge.getSubtuneTitle(index).trim()
-            val artist = NativeBridge.getSubtuneArtist(index).trim()
-            val durationSeconds = NativeBridge.getSubtuneDurationSeconds(index)
-            SubtuneEntry(
-                index = index,
-                title = title.ifBlank { "Subtune ${index + 1}" },
-                artist = artist,
-                durationSeconds = durationSeconds
-            )
-        }
+        subtuneEntries = readSubtuneEntries(subtuneCount)
     }
 
     fun resolveShareableFileForRecent(entry: RecentPathEntry): File? {
-        val normalized = normalizeSourceIdentity(entry.path) ?: return null
-        val uri = Uri.parse(normalized)
-        val scheme = uri.scheme?.lowercase(Locale.ROOT)
-        return when (scheme) {
-            "http", "https" -> {
-                findExistingCachedFileForSource(File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR), normalized)
-                    ?.takeIf { it.exists() && it.isFile }
-            }
-            "file" -> {
-                uri.path?.let { File(it) }?.takeIf { it.exists() && it.isFile }
-            }
-            else -> {
-                File(normalized).takeIf { it.exists() && it.isFile }
-            }
-        }
+        return resolveShareableFileForRecentEntry(context, entry)
     }
 
     fun addRecentFolder(path: String, locationId: String?) {
-        val normalized = normalizeSourceIdentity(path) ?: path
-        val updated = listOf(
-            RecentPathEntry(path = normalized, locationId = locationId, title = null, artist = null)
-        ) + recentFolders.filterNot { samePath(it.path, normalized) }
-        recentFolders = updated.take(recentFoldersLimit)
+        recentFolders = buildUpdatedRecentFolders(
+            current = recentFolders,
+            newPath = path,
+            locationId = locationId,
+            limit = recentFoldersLimit
+        )
         writeRecentEntries(prefs, AppPreferenceKeys.RECENT_FOLDERS, recentFolders, recentFoldersLimit)
     }
 
     fun addRecentPlayedTrack(path: String, locationId: String?, title: String? = null, artist: String? = null) {
-        val normalized = normalizeSourceIdentity(path) ?: path
-        val existing = recentPlayedFiles.firstOrNull { samePath(it.path, normalized) }
-        val resolvedTitle = title?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.title
-        val resolvedArtist = artist?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.artist
-        val updated = listOf(
-            RecentPathEntry(
-                path = normalized,
-                locationId = locationId ?: existing?.locationId,
-                title = resolvedTitle,
-                artist = resolvedArtist
-            )
-        ) +
-            recentPlayedFiles.filterNot { samePath(it.path, normalized) }
-        recentPlayedFiles = updated.take(recentFilesLimit)
+        recentPlayedFiles = buildUpdatedRecentPlayedTracks(
+            current = recentPlayedFiles,
+            newPath = path,
+            locationId = locationId,
+            title = title,
+            artist = artist,
+            limit = recentFilesLimit
+        )
         writeRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, recentPlayedFiles, recentFilesLimit)
     }
 
@@ -1483,30 +1182,27 @@ private fun AppNavigation(
     }
 
     fun refreshRepeatModeForTrack() {
-        val allowTrackRepeat = selectedFile == null || duration > 0.0
-        val allowSubtuneRepeat = allowTrackRepeat && (selectedFile == null || subtuneCount > 1)
-        activeRepeatMode = resolveActiveRepeatMode(
+        activeRepeatMode = resolveTrackRepeatMode(
+            selectedFile = selectedFile,
+            durationSeconds = duration,
+            subtuneCount = subtuneCount,
             preferredRepeatMode = preferredRepeatMode,
-            repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags,
-            includeSubtuneRepeat = allowSubtuneRepeat,
-            includeTrackRepeat = allowTrackRepeat
+            repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags
         )
-        val hasActiveSource = selectedFile != null || !currentPlaybackSourceId.isNullOrBlank()
-        if (hasActiveSource && !seekInProgress) {
+        if (shouldApplyRepeatModeNow(selectedFile, currentPlaybackSourceId, seekInProgress)) {
             applyRepeatModeToNative(activeRepeatMode)
         }
     }
 
     fun cycleRepeatMode() {
-        if (!supportsLiveRepeatMode(playbackCapabilitiesFlags)) return
-        if (seekInProgress) return
-        val allowTrackRepeat = selectedFile == null || duration > 0.0
-        val allowSubtuneRepeat = allowTrackRepeat && (selectedFile == null || subtuneCount > 1)
-        val next = cycleRepeatModeValue(
+        val next = resolveNextRepeatMode(
+            playbackCapabilitiesFlags = playbackCapabilitiesFlags,
+            seekInProgress = seekInProgress,
+            selectedFile = selectedFile,
+            durationSeconds = duration,
+            subtuneCount = subtuneCount,
             activeRepeatMode = activeRepeatMode,
-            repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags,
-            includeSubtuneRepeat = allowSubtuneRepeat,
-            includeTrackRepeat = allowTrackRepeat
+            repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags
         ) ?: return
         preferredRepeatMode = next
         activeRepeatMode = next
@@ -1541,36 +1237,42 @@ private fun AppNavigation(
     }
 
     fun applyNativeTrackSnapshot(snapshot: NativeTrackSnapshot) {
-        val decoderName = snapshot.decoderName
-        decoderName?.let {
-            lastUsedCoreName = it
-            val decoderPluginVolumeDb = readPluginVolumeForDecoder(prefs, it)
-            pluginVolumeDb = decoderPluginVolumeDb
-            NativeBridge.setPluginGain(decoderPluginVolumeDb)
+        val applied = buildSnapshotApplicationResult(snapshot, prefs)
+        applied.decoderName?.let { decoderName ->
+            lastUsedCoreName = decoderName
+            applied.pluginVolumeDb?.let { decoderPluginVolumeDb ->
+                pluginVolumeDb = decoderPluginVolumeDb
+                NativeBridge.setPluginGain(decoderPluginVolumeDb)
+            }
         }
-        metadataTitle = snapshot.title
-        metadataArtist = snapshot.artist
-        metadataSampleRate = snapshot.sampleRateHz
-        metadataChannelCount = snapshot.channelCount
-        metadataBitDepthLabel = snapshot.bitDepthLabel
-        repeatModeCapabilitiesFlags = snapshot.repeatModeCapabilitiesFlags
-        playbackCapabilitiesFlags = snapshot.playbackCapabilitiesFlags
-        duration = snapshot.durationSeconds
+        metadataTitle = applied.title
+        metadataArtist = applied.artist
+        metadataSampleRate = applied.sampleRateHz
+        metadataChannelCount = applied.channelCount
+        metadataBitDepthLabel = applied.bitDepthLabel
+        repeatModeCapabilitiesFlags = applied.repeatModeCapabilitiesFlags
+        playbackCapabilitiesFlags = applied.playbackCapabilitiesFlags
+        duration = applied.durationSeconds
     }
 
     fun selectSubtune(index: Int): Boolean {
-        if (selectedFile == null) return false
-        if (!NativeBridge.selectSubtune(index)) {
+        val result = selectSubtuneAndReadState(
+            index = index,
+            selectedFile = selectedFile,
+            currentPlaybackSourceId = currentPlaybackSourceId
+        )
+        if (!result.success) {
             Toast.makeText(context, "Unable to switch subtune", Toast.LENGTH_SHORT).show()
             return false
         }
-        applyNativeTrackSnapshot(readNativeTrackSnapshot())
+        val snapshot = result.snapshot ?: return false
+        applyNativeTrackSnapshot(snapshot)
         position = 0.0
-        duration = NativeBridge.getDuration()
-        isPlaying = NativeBridge.isEnginePlaying()
+        duration = result.durationSeconds
+        isPlaying = result.isPlaying
         refreshRepeatModeForTrack()
         refreshSubtuneState()
-        val sourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
+        val sourceId = result.sourceId
         if (sourceId != null) {
             addRecentPlayedTrack(
                 path = sourceId,
@@ -1660,238 +1362,106 @@ private fun AppNavigation(
         syncPlaybackService()
     }
 
-    fun applyManualInputSelection(
-        rawInput: String,
-        options: ManualSourceOpenOptions = ManualSourceOpenOptions(),
-        expandOverride: Boolean? = null
+    fun primeManualRemoteOpenState(resolved: ManualSourceResolution) {
+        resetAndOptionallyKeepLastTrack(keepLastTrack = false)
+        selectedFile = resolved.displayFile
+        currentPlaybackSourceId = resolved.sourceId
+        visiblePlayableFiles = emptyList()
+        isPlayerSurfaceVisible = true
+        songVolumeDb = 0f
+        NativeBridge.setSongGain(0f)
+        remoteLoadUiState = RemoteLoadUiState(
+            sourceId = resolved.sourceId,
+            phase = RemoteLoadPhase.Connecting,
+            indeterminate = true
+        )
+    }
+
+    fun applyManualRemoteOpenSuccess(
+        result: ManualRemoteOpenSuccess,
+        expandOverride: Boolean?
     ) {
-        val resolved = resolveManualSourceInput(rawInput)
-        if (resolved == null) {
-            Toast.makeText(
-                context,
-                "Enter a valid file/folder path, file:// path, or http(s) URL",
-                Toast.LENGTH_SHORT
-            ).show()
-            return
-        }
+        selectedFile = result.displayFile
+        currentPlaybackSourceId = result.sourceId
+        visiblePlayableFiles = emptyList()
+        isPlayerSurfaceVisible = true
+        songVolumeDb = 0f
+        NativeBridge.setSongGain(0f)
+        applyNativeTrackSnapshot(result.snapshot)
+        refreshSubtuneState()
+        position = 0.0
+        artworkBitmap = null
+        refreshRepeatModeForTrack()
+        addRecentPlayedTrack(
+            path = result.sourceId,
+            locationId = null,
+            title = metadataTitle,
+            artist = metadataArtist
+        )
+        applyRepeatModeToNative(activeRepeatMode)
+        NativeBridge.startEngine()
+        isPlaying = true
+        scheduleRecentTrackMetadataRefresh(
+            sourceId = result.sourceId,
+            locationId = null
+        )
+        isPlayerExpanded = expandOverride ?: openPlayerOnTrackSelect
+        syncPlaybackService()
+    }
 
-        fun storageLocationForPath(path: String): String? {
-            return storageDescriptors
-                .filter { path == it.rootPath || path.startsWith("${it.rootPath}/") }
-                .maxByOrNull { it.rootPath.length }
-                ?.rootPath
-        }
+    fun failManualOpen(reason: String) {
+        Toast.makeText(
+            context,
+            "Unable to open source: $reason",
+            Toast.LENGTH_LONG
+        ).show()
+    }
 
-        if (resolved.type == ManualSourceType.LocalDirectory) {
-            val directoryPath = resolved.directoryPath ?: return
-            browserLaunchLocationId = storageLocationForPath(directoryPath)
-            browserLaunchDirectoryPath = directoryPath
-            currentView = MainView.Browser
-            addRecentFolder(
-                path = directoryPath,
-                locationId = browserLaunchLocationId
-            )
-            return
-        }
-
-        if (resolved.type == ManualSourceType.LocalFile) {
-            val localFile = resolved.localFile ?: return
-            appScope.launch {
-                val contextualPlayableFiles = withContext(Dispatchers.IO) {
-                    val parent = localFile.parentFile
-                    if (parent != null && parent.exists() && parent.isDirectory) {
-                        repository.getFiles(parent)
-                            .asSequence()
-                            .filterNot { it.isDirectory }
-                            .map { it.file }
-                            .toList()
-                    } else {
-                        listOf(localFile)
-                    }
-                }
-                visiblePlayableFiles = contextualPlayableFiles
-                applyTrackSelection(
-                    file = localFile,
-                    autoStart = true,
-                    expandOverride = openPlayerOnTrackSelect,
-                    sourceIdOverride = resolved.sourceId
-                )
-            }
-            return
-        }
-
+    fun launchManualRemoteSelection(
+        resolved: ManualSourceResolution,
+        options: ManualSourceOpenOptions,
+        expandOverride: Boolean?
+    ) {
         remoteLoadJob?.cancel()
         remoteLoadJob = appScope.launch {
-            fun snapshotAppearsValid(snapshot: NativeTrackSnapshot): Boolean {
-                return snapshot.sampleRateHz > 0 ||
-                    snapshot.durationSeconds > 0.0 ||
-                    snapshot.title.isNotBlank() ||
-                    snapshot.artist.isNotBlank()
-            }
-
-            fun publishOpenFromSnapshot(displayFile: File, sourceId: String, snapshot: NativeTrackSnapshot) {
-                selectedFile = displayFile
-                currentPlaybackSourceId = sourceId
-                visiblePlayableFiles = emptyList()
-                isPlayerSurfaceVisible = true
-                songVolumeDb = 0f
-                NativeBridge.setSongGain(0f)
-                applyNativeTrackSnapshot(snapshot)
-                refreshSubtuneState()
-                position = 0.0
-                artworkBitmap = null
-                refreshRepeatModeForTrack()
-                addRecentPlayedTrack(
-                    path = sourceId,
-                    locationId = null,
-                    title = metadataTitle,
-                    artist = metadataArtist
-                )
-                applyRepeatModeToNative(activeRepeatMode)
-                NativeBridge.startEngine()
-                isPlaying = true
-                scheduleRecentTrackMetadataRefresh(
-                    sourceId = sourceId,
-                    locationId = null
-                )
-                isPlayerExpanded = expandOverride ?: openPlayerOnTrackSelect
-                syncPlaybackService()
-            }
-
-            fun failOpen(reason: String) {
-                Toast.makeText(
-                    context,
-                    "Unable to open source: $reason",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-
             try {
-                resetAndOptionallyKeepLastTrack(keepLastTrack = false)
-                selectedFile = resolved.displayFile
-                currentPlaybackSourceId = resolved.sourceId
-                visiblePlayableFiles = emptyList()
-                isPlayerSurfaceVisible = true
-                songVolumeDb = 0f
-                NativeBridge.setSongGain(0f)
-                remoteLoadUiState = RemoteLoadUiState(
-                    sourceId = resolved.sourceId,
-                    phase = RemoteLoadPhase.Connecting,
-                    indeterminate = true
-                )
+                primeManualRemoteOpenState(resolved)
 
-                var streamingFailureReason: String? = null
-                if (!options.forceCaching) {
-                    try {
-                        Log.d(
-                            URL_SOURCE_TAG,
-                            "Attempting direct stream open: source=${resolved.sourceId} request=${resolved.requestUrl}"
-                        )
-                        val snapshot = withContext(Dispatchers.IO) {
-                            withTimeout(20_000L) {
-                                NativeBridge.loadAudio(resolved.requestUrl)
-                                readNativeTrackSnapshot()
-                            }
-                        }
-                        if (snapshotAppearsValid(snapshot)) {
-                            Log.d(
-                                URL_SOURCE_TAG,
-                                "Direct stream open appears successful (sampleRate=${snapshot.sampleRateHz}, duration=${snapshot.durationSeconds})"
-                            )
-                            publishOpenFromSnapshot(
-                                displayFile = resolved.displayFile ?: File("/virtual/remote/stream"),
-                                sourceId = resolved.sourceId,
-                                snapshot = snapshot
-                            )
-                            return@launch
-                        }
-                        streamingFailureReason = "direct streaming returned no playable metadata"
-                        Log.d(URL_SOURCE_TAG, "Direct stream open returned empty snapshot; falling back to cache download")
-                    } catch (_: TimeoutCancellationException) {
-                        streamingFailureReason = "direct streaming timed out"
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (t: Throwable) {
-                        streamingFailureReason = "direct streaming error (${t::class.java.simpleName}: ${t.message ?: "unknown"})"
-                        Log.e(
-                            URL_SOURCE_TAG,
-                            "Direct stream open threw ${t::class.java.simpleName}: ${t.message}; falling back to cache download"
-                        )
-                    }
-                } else {
-                    Log.d(URL_SOURCE_TAG, "Force caching enabled; skipping direct stream open for: ${resolved.sourceId}")
-                }
-
-                val downloadResult = downloadRemoteUrlToCache(
-                    url = resolved.sourceId,
-                    requestUrl = resolved.requestUrl,
-                    onStatus = { state ->
-                        remoteLoadUiState = state
-                    }
-                )
-                if (downloadResult.cancelled) {
-                    Toast.makeText(context, "Download cancelled", Toast.LENGTH_SHORT).show()
-                    return@launch
-                }
-                val cachedFile = downloadResult.file
-                if (cachedFile == null) {
-                    val reason = buildString {
-                        streamingFailureReason?.let {
-                            append(it)
-                            append("; ")
-                        }
-                        append("cache download failed")
-                        downloadResult.errorMessage?.let { append(" ($it)") }
-                    }
-                    Log.e(URL_SOURCE_TAG, "Cache download/open failed for URL: ${resolved.sourceId} reason=$reason")
-                    failOpen(reason)
-                    return@launch
-                }
-
-                withContext(Dispatchers.IO) {
-                    val protectedPaths = buildSet {
-                        add(cachedFile.absolutePath)
-                        selectedFile?.absolutePath?.let { add(it) }
-                    }
-                    val pruned = enforceRemoteCacheLimits(
+                when (
+                    val remoteResult = executeManualRemoteOpen(
+                        resolved = resolved,
+                        forceCaching = options.forceCaching,
                         cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
-                        maxTracks = urlCacheMaxTracks,
-                        maxBytes = urlCacheMaxBytes,
-                        protectedPaths = protectedPaths
+                        selectedFileAbsolutePath = selectedFile?.absolutePath,
+                        urlCacheMaxTracks = urlCacheMaxTracks,
+                        urlCacheMaxBytes = urlCacheMaxBytes,
+                        onStatus = { state -> remoteLoadUiState = state },
+                        downloadToCache = { sourceId, requestUrl, onStatus ->
+                            downloadRemoteUrlToCache(
+                                context = context,
+                                url = sourceId,
+                                requestUrl = requestUrl,
+                                onStatus = onStatus
+                            )
+                        }
                     )
-                    if (pruned.deletedFiles > 0) {
-                        Log.d(
-                            URL_SOURCE_TAG,
-                            "Pruned remote cache after download: deleted=${pruned.deletedFiles} freed=${pruned.freedBytes} limits=(tracks=$urlCacheMaxTracks bytes=$urlCacheMaxBytes)"
+                ) {
+                    is ManualRemoteOpenResult.Success -> {
+                        applyManualRemoteOpenSuccess(
+                            result = remoteResult.value,
+                            expandOverride = expandOverride
                         )
                     }
-                }
-
-                Log.d(URL_SOURCE_TAG, "Opening downloaded cached file: ${cachedFile.absolutePath}")
-                remoteLoadUiState = RemoteLoadUiState(
-                    sourceId = resolved.sourceId,
-                    phase = RemoteLoadPhase.Opening,
-                    downloadedBytes = cachedFile.length(),
-                    totalBytes = cachedFile.length(),
-                    percent = 100,
-                    indeterminate = false
-                )
-
-                val cachedSnapshot = withContext(Dispatchers.IO) {
-                    withTimeout(20_000L) {
-                        NativeBridge.loadAudio(cachedFile.absolutePath)
-                        readNativeTrackSnapshot()
+                    ManualRemoteOpenResult.DownloadCancelled -> {
+                        Toast.makeText(context, "Download cancelled", Toast.LENGTH_SHORT).show()
+                        return@launch
+                    }
+                    is ManualRemoteOpenResult.Failed -> {
+                        Log.e(URL_SOURCE_TAG, "Cache download/open failed for URL: ${resolved.sourceId} reason=${remoteResult.reason}")
+                        failManualOpen(remoteResult.reason)
+                        return@launch
                     }
                 }
-                if (!snapshotAppearsValid(cachedSnapshot)) {
-                    failOpen("cached file opened but returned no playable metadata")
-                    return@launch
-                }
-                publishOpenFromSnapshot(
-                    displayFile = cachedFile,
-                    sourceId = resolved.sourceId,
-                    snapshot = cachedSnapshot
-                )
             } catch (_: CancellationException) {
                 Log.d(URL_SOURCE_TAG, "Remote open cancelled for source=${resolved.sourceId}")
             } finally {
@@ -1901,34 +1471,81 @@ private fun AppNavigation(
         }
     }
 
-    fun resumeLastStoppedTrack(autoStart: Boolean = true): Boolean {
-        val resumable = lastStoppedFile?.takeIf { it.exists() && it.isFile }
-        if (resumable != null) {
-            applyTrackSelection(
-                file = resumable,
-                autoStart = autoStart,
-                expandOverride = null
-            )
-            return true
+    fun applyManualInputSelection(
+        rawInput: String,
+        options: ManualSourceOpenOptions = ManualSourceOpenOptions(),
+        expandOverride: Boolean? = null
+    ) {
+        when (val action = resolveManualInputAction(rawInput, storageDescriptors)) {
+            ManualInputAction.Invalid -> {
+                Toast.makeText(context, MANUAL_INPUT_INVALID_MESSAGE, Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            is ManualInputAction.OpenDirectory -> {
+                browserLaunchLocationId = action.locationId
+                browserLaunchDirectoryPath = action.directoryPath
+                currentView = MainView.Browser
+                addRecentFolder(
+                    path = action.directoryPath,
+                    locationId = action.locationId
+                )
+                return
+            }
+
+            is ManualInputAction.OpenLocalFile -> {
+                appScope.launch {
+                    val localFile = action.file
+                    val contextualPlayableFiles = loadContextualPlayableFilesForManualSelection(
+                        repository = repository,
+                        localFile = localFile
+                    )
+                    visiblePlayableFiles = contextualPlayableFiles
+                    applyTrackSelection(
+                        file = localFile,
+                        autoStart = true,
+                        expandOverride = openPlayerOnTrackSelect,
+                        sourceIdOverride = action.sourceId
+                    )
+                }
+                return
+            }
+
+            is ManualInputAction.OpenRemote -> {
+                launchManualRemoteSelection(
+                    resolved = action.resolved,
+                    options = options,
+                    expandOverride = expandOverride
+                )
+                return
+            }
         }
-        val sourceId = lastStoppedSourceId?.takeIf { it.isNotBlank() } ?: run {
-            lastStoppedFile = null
-            lastStoppedSourceId = null
-            return false
-        }
-        applyManualInputSelection(
-            rawInput = sourceId,
-            options = ManualSourceOpenOptions(forceCaching = urlOrPathForceCaching),
-            expandOverride = isPlayerExpanded
-        )
-        return true
     }
 
-    fun currentTrackIndex(): Int {
-        return currentTrackIndexForList(
-            selectedFile = selectedFile,
-            visiblePlayableFiles = visiblePlayableFiles
-        )
+    fun resumeLastStoppedTrack(autoStart: Boolean = true): Boolean {
+        return when (val target = resolveResumeTarget(lastStoppedFile, lastStoppedSourceId)) {
+            is ResumeTarget.LocalFile -> {
+                applyTrackSelection(
+                    file = target.file,
+                    autoStart = autoStart,
+                    expandOverride = null
+                )
+                true
+            }
+            is ResumeTarget.SourceId -> {
+                applyManualInputSelection(
+                    rawInput = target.sourceId,
+                    options = ManualSourceOpenOptions(forceCaching = urlOrPathForceCaching),
+                    expandOverride = isPlayerExpanded
+                )
+                true
+            }
+            null -> {
+                lastStoppedFile = null
+                lastStoppedSourceId = null
+                false
+            }
+        }
     }
 
     fun playAdjacentTrack(offset: Int): Boolean {
@@ -1947,73 +1564,49 @@ private fun AppNavigation(
 
     fun handlePreviousTrackAction(): Boolean {
         val hasTrackLoaded = selectedFile != null
-        val shouldRestartCurrent = shouldRestartCurrentTrackOnPrevious(
+        val hasPreviousTrack = adjacentTrackForOffset(
+            selectedFile = selectedFile,
+            visiblePlayableFiles = visiblePlayableFiles,
+            offset = -1
+        ) != null
+        return when (
+            resolvePreviousTrackAction(
             previousRestartsAfterThreshold = previousRestartsAfterThreshold,
             hasTrackLoaded = hasTrackLoaded,
-            positionSeconds = position
+            positionSeconds = position,
+            hasPreviousTrack = hasPreviousTrack
         )
-
-        if (shouldRestartCurrent) {
-            NativeBridge.seekTo(0.0)
-            position = 0.0
-            syncPlaybackService()
-            return true
+        ) {
+            PreviousTrackAction.RestartCurrent -> {
+                NativeBridge.seekTo(0.0)
+                position = 0.0
+                syncPlaybackService()
+                true
+            }
+            PreviousTrackAction.PlayPreviousTrack -> {
+                playAdjacentTrack(-1)
+            }
+            PreviousTrackAction.NoAction -> {
+                false
+            }
         }
-
-        if (playAdjacentTrack(-1)) return true
-
-        if (hasTrackLoaded) {
-            NativeBridge.seekTo(0.0)
-            position = 0.0
-            syncPlaybackService()
-            return true
-        }
-        return false
     }
 
     fun restorePlayerStateFromSessionAndNative(openExpanded: Boolean) {
-        var sourcePath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null)?.trim()
-            ?.takeIf { it.isNotBlank() } ?: return
         val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
-        if (sourcePath.startsWith("/virtual/remote/")) {
-            val legacyName = sourcePath.substringAfterLast('/').trim()
-            val recovered = sourceIdForCachedFileName(cacheRoot, legacyName)
-            if (!recovered.isNullOrBlank()) {
-                sourcePath = recovered
-            } else {
-                // Legacy virtual-only source has no recoverable URL; avoid restoring broken state.
-                return
-            }
-        }
-        if (sourcePath.startsWith(cacheRoot.absolutePath)) {
-            val recovered = sourceIdForCachedFileName(cacheRoot, File(sourcePath).name)
-            if (!recovered.isNullOrBlank()) {
-                sourcePath = recovered
-            }
-        }
-        val normalizedSource = normalizeSourceIdentity(sourcePath) ?: sourcePath
-        val sourceUri = Uri.parse(normalizedSource)
-        val sourceScheme = sourceUri.scheme?.lowercase(Locale.ROOT)
-        val isRemoteSource = sourceScheme == "http" || sourceScheme == "https"
-        val displayFile = if (isRemoteSource) {
-            findExistingCachedFileForSource(cacheRoot, normalizedSource)
-                ?: File("/virtual/remote/${remoteFilenameHintFromUri(sourceUri) ?: "remote"}")
-        } else {
-            val localPath = when (sourceScheme) {
-                "file" -> sourceUri.path
-                else -> normalizedSource
-            }
-            localPath?.let { File(it) } ?: File(normalizedSource)
-        }
-        selectedFile = displayFile
-        currentPlaybackSourceId = normalizedSource
+        val restoreTarget = resolveSessionRestoreTarget(
+            rawSessionPath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null),
+            cacheRoot = cacheRoot
+        ) ?: return
+        selectedFile = restoreTarget.displayFile
+        currentPlaybackSourceId = restoreTarget.sourceId
         isPlayerSurfaceVisible = true
         isPlayerExpanded = openExpanded
 
         val isLoaded = NativeBridge.getTrackSampleRate() > 0
-        if (!isLoaded && displayFile.exists() && displayFile.isFile) {
-            loadSongVolumeForFile(displayFile.absolutePath)
-            NativeBridge.loadAudio(displayFile.absolutePath)
+        if (!isLoaded && restoreTarget.displayFile.exists() && restoreTarget.displayFile.isFile) {
+            loadSongVolumeForFile(restoreTarget.displayFile.absolutePath)
+            NativeBridge.loadAudio(restoreTarget.displayFile.absolutePath)
         }
 
         applyNativeTrackSnapshot(readNativeTrackSnapshot())
@@ -2053,10 +1646,8 @@ private fun AppNavigation(
             isPlaying = nextIsPlaying
 
             if (!nextSeekInProgress) {
-                val nativeSubtuneCount = NativeBridge.getSubtuneCount().coerceAtLeast(1)
-                val nativeSubtuneIndex = NativeBridge.getCurrentSubtuneIndex()
-                    .coerceIn(0, nativeSubtuneCount - 1)
-                if (nativeSubtuneCount != subtuneCount || nativeSubtuneIndex != currentSubtuneIndex) {
+                val nativeSubtuneCursor = readNativeSubtuneCursor()
+                if (hasNativeSubtuneCursorChanged(nativeSubtuneCursor, subtuneCount, currentSubtuneIndex)) {
                     applyNativeTrackSnapshot(readNativeTrackSnapshot())
                     refreshSubtuneState()
                     refreshRepeatModeForTrack()
@@ -2081,7 +1672,7 @@ private fun AppNavigation(
                     }
                 }
                 metadataPollElapsedMs += pollDelayMs
-                if (metadataPollElapsedMs >= 540L || metadataTitle.isBlank() || metadataArtist.isBlank()) {
+                if (shouldPollTrackMetadata(metadataPollElapsedMs, metadataTitle, metadataArtist)) {
                     metadataPollElapsedMs = 0L
                     val nextTitle = NativeBridge.getTrackTitle()
                     val nextArtist = NativeBridge.getTrackArtist()
@@ -4947,8 +4538,8 @@ private fun AppNavigation(
                         onStopAndClear = {},
                         durationSeconds = duration,
                         positionSeconds = position,
-                        canPreviousTrack = currentTrackIndex() > 0,
-                        canNextTrack = currentTrackIndex() in 0 until (visiblePlayableFiles.size - 1),
+                        canPreviousTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) > 0,
+                        canNextTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) in 0 until (visiblePlayableFiles.size - 1),
                         title = metadataTitle,
                         artist = metadataArtist,
                         sampleRateHz = metadataSampleRate,
@@ -5052,8 +4643,8 @@ private fun AppNavigation(
                         positionSeconds = position,
                         durationSeconds = duration,
                         hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
-                        canPreviousTrack = currentTrackIndex() > 0,
-                        canNextTrack = currentTrackIndex() in 0 until (visiblePlayableFiles.size - 1),
+                        canPreviousTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) > 0,
+                        canNextTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) in 0 until (visiblePlayableFiles.size - 1),
                         onExpand = {
                             collapseFromSwipe = false
                             expandFromMiniDrag = miniExpandPreviewProgress > 0f
@@ -5184,8 +4775,8 @@ private fun AppNavigation(
                     onStopAndClear = stopAndEmptyTrack,
                     durationSeconds = duration,
                     positionSeconds = position,
-                    canPreviousTrack = currentTrackIndex() > 0,
-                    canNextTrack = currentTrackIndex() in 0 until (visiblePlayableFiles.size - 1),
+                    canPreviousTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) > 0,
+                    canNextTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) in 0 until (visiblePlayableFiles.size - 1),
                     title = metadataTitle,
                     artist = metadataArtist,
                     sampleRateHz = metadataSampleRate,

@@ -299,3 +299,72 @@ internal fun writeRecentEntries(
     }
     prefs.edit().putString(key, array.toString()).apply()
 }
+
+internal fun buildUpdatedRecentFolders(
+    current: List<RecentPathEntry>,
+    newPath: String,
+    locationId: String?,
+    limit: Int
+): List<RecentPathEntry> {
+    val normalized = normalizeSourceIdentity(newPath) ?: newPath
+    val updated = listOf(
+        RecentPathEntry(path = normalized, locationId = locationId, title = null, artist = null)
+    ) + current.filterNot { samePath(it.path, normalized) }
+    return updated.take(limit)
+}
+
+internal fun buildUpdatedRecentPlayedTracks(
+    current: List<RecentPathEntry>,
+    newPath: String,
+    locationId: String?,
+    title: String? = null,
+    artist: String? = null,
+    limit: Int
+): List<RecentPathEntry> {
+    val normalized = normalizeSourceIdentity(newPath) ?: newPath
+    val existing = current.firstOrNull { samePath(it.path, normalized) }
+    val resolvedTitle = title?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.title
+    val resolvedArtist = artist?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.artist
+    val updated = listOf(
+        RecentPathEntry(
+            path = normalized,
+            locationId = locationId ?: existing?.locationId,
+            title = resolvedTitle,
+            artist = resolvedArtist
+        )
+    ) + current.filterNot { samePath(it.path, normalized) }
+    return updated.take(limit)
+}
+
+internal fun resolveShareableFileForRecentEntry(
+    context: Context,
+    entry: RecentPathEntry
+): File? {
+    val normalized = normalizeSourceIdentity(entry.path) ?: return null
+    val uri = Uri.parse(normalized)
+    val scheme = uri.scheme?.lowercase(Locale.ROOT)
+    return when (scheme) {
+        "http", "https" -> {
+            findExistingCachedFileForSource(File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR), normalized)
+                ?.takeIf { it.exists() && it.isFile }
+        }
+
+        "file" -> {
+            uri.path?.let { File(it) }?.takeIf { it.exists() && it.isFile }
+        }
+
+        else -> {
+            File(normalized).takeIf { it.exists() && it.isFile }
+        }
+    }
+}
+
+internal fun resolveStorageLocationForPath(
+    path: String,
+    descriptors: List<StorageDescriptor>
+): String? {
+    return descriptors
+        .filter { path == it.rootPath || path.startsWith("${it.rootPath}/") }
+        .maxByOrNull { it.rootPath.length }
+        ?.rootPath
+}

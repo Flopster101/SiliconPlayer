@@ -16,10 +16,27 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 namespace {
-constexpr unsigned int kRenderCyclesPerChunk = 5000;
+constexpr unsigned int kRenderCyclesMin = 2000;
+constexpr unsigned int kRenderCyclesMax = 20000;
+constexpr unsigned int kEstimatedSidCyclesPerSecond = 1000000;
+constexpr int kTransientEmptyPlayRetries = 4;
 
 std::string safeString(const char* value) {
     return value ? std::string(value) : "";
+}
+
+unsigned int computeRenderCyclesForFrames(int framesNeeded, int sampleRateHz) {
+    if (framesNeeded <= 0 || sampleRateHz <= 0) {
+        return kRenderCyclesMin;
+    }
+    const uint64_t estimated =
+            (static_cast<uint64_t>(framesNeeded) * kEstimatedSidCyclesPerSecond) /
+            static_cast<uint64_t>(sampleRateHz);
+    return static_cast<unsigned int>(std::clamp<uint64_t>(
+            estimated,
+            kRenderCyclesMin,
+            kRenderCyclesMax
+    ));
 }
 }
 
@@ -172,6 +189,7 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
     const int channels = std::clamp(outputChannels, 1, 2);
 
     int framesWritten = 0;
+    int emptyPlayRetries = 0;
     while (framesWritten < numFrames) {
         const size_t pendingAvailableSamples =
                 pendingMixedSamples.size() > pendingMixedOffset
@@ -201,20 +219,32 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
             continue;
         }
 
-        const int produced = player->play(kRenderCyclesPerChunk);
+        const int framesRemaining = numFrames - framesWritten;
+        const unsigned int renderCycles = computeRenderCyclesForFrames(framesRemaining, sampleRate);
+        const int produced = player->play(renderCycles);
         if (produced < 0) {
             LOGE("sidplayfp play failed: %s", player->error());
             break;
         }
         if (produced == 0) {
-            break;
+            emptyPlayRetries += 1;
+            if (emptyPlayRetries >= kTransientEmptyPlayRetries) {
+                break;
+            }
+            continue;
         }
+        emptyPlayRetries = 0;
 
         std::vector<int16_t> mixed(static_cast<size_t>(produced) * static_cast<size_t>(channels));
         const unsigned int mixedSamples = player->mix(mixed.data(), static_cast<unsigned int>(produced));
         if (mixedSamples < static_cast<unsigned int>(channels)) {
-            break;
+            emptyPlayRetries += 1;
+            if (emptyPlayRetries >= kTransientEmptyPlayRetries) {
+                break;
+            }
+            continue;
         }
+        emptyPlayRetries = 0;
         pendingMixedSamples.insert(
                 pendingMixedSamples.end(),
                 mixed.begin(),
@@ -239,7 +269,8 @@ void LibSidPlayFpDecoder::seek(double seconds) {
     pendingMixedOffset = 0;
     const uint32_t targetMs = static_cast<uint32_t>(seconds * 1000.0);
     while (player->timeMs() < targetMs) {
-        const int produced = player->play(kRenderCyclesPerChunk);
+        const unsigned int renderCycles = computeRenderCyclesForFrames(1024, sampleRate);
+        const int produced = player->play(renderCycles);
         if (produced <= 0) break;
     }
 }

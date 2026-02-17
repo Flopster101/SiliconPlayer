@@ -4,6 +4,7 @@
 #include "AudioEngine.h"
 #include "decoders/DecoderRegistry.h"
 #include <vector>
+#include <string_view>
 
 #include <mutex>
 static AudioEngine *audioEngine = nullptr;
@@ -44,12 +45,133 @@ static jintArray toJIntArray(JNIEnv* env, const std::vector<int32_t>& values) {
     return array;
 }
 
+static bool isValidUtf8(std::string_view text) {
+    size_t i = 0;
+    const size_t n = text.size();
+    while (i < n) {
+        const unsigned char c = static_cast<unsigned char>(text[i]);
+        if (c <= 0x7F) {
+            ++i;
+            continue;
+        }
+
+        if (c >= 0xC2 && c <= 0xDF) {
+            if (i + 1 >= n) return false;
+            const unsigned char c1 = static_cast<unsigned char>(text[i + 1]);
+            if ((c1 & 0xC0) != 0x80) return false;
+            i += 2;
+            continue;
+        }
+
+        if (c == 0xE0) {
+            if (i + 2 >= n) return false;
+            const unsigned char c1 = static_cast<unsigned char>(text[i + 1]);
+            const unsigned char c2 = static_cast<unsigned char>(text[i + 2]);
+            if (c1 < 0xA0 || c1 > 0xBF || (c2 & 0xC0) != 0x80) return false;
+            i += 3;
+            continue;
+        }
+
+        if (c >= 0xE1 && c <= 0xEC) {
+            if (i + 2 >= n) return false;
+            const unsigned char c1 = static_cast<unsigned char>(text[i + 1]);
+            const unsigned char c2 = static_cast<unsigned char>(text[i + 2]);
+            if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) return false;
+            i += 3;
+            continue;
+        }
+
+        if (c == 0xED) {
+            if (i + 2 >= n) return false;
+            const unsigned char c1 = static_cast<unsigned char>(text[i + 1]);
+            const unsigned char c2 = static_cast<unsigned char>(text[i + 2]);
+            if (c1 < 0x80 || c1 > 0x9F || (c2 & 0xC0) != 0x80) return false;
+            i += 3;
+            continue;
+        }
+
+        if (c >= 0xEE && c <= 0xEF) {
+            if (i + 2 >= n) return false;
+            const unsigned char c1 = static_cast<unsigned char>(text[i + 1]);
+            const unsigned char c2 = static_cast<unsigned char>(text[i + 2]);
+            if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80) return false;
+            i += 3;
+            continue;
+        }
+
+        if (c == 0xF0) {
+            if (i + 3 >= n) return false;
+            const unsigned char c1 = static_cast<unsigned char>(text[i + 1]);
+            const unsigned char c2 = static_cast<unsigned char>(text[i + 2]);
+            const unsigned char c3 = static_cast<unsigned char>(text[i + 3]);
+            if (c1 < 0x90 || c1 > 0xBF ||
+                (c2 & 0xC0) != 0x80 ||
+                (c3 & 0xC0) != 0x80) return false;
+            i += 4;
+            continue;
+        }
+
+        if (c >= 0xF1 && c <= 0xF3) {
+            if (i + 3 >= n) return false;
+            const unsigned char c1 = static_cast<unsigned char>(text[i + 1]);
+            const unsigned char c2 = static_cast<unsigned char>(text[i + 2]);
+            const unsigned char c3 = static_cast<unsigned char>(text[i + 3]);
+            if ((c1 & 0xC0) != 0x80 ||
+                (c2 & 0xC0) != 0x80 ||
+                (c3 & 0xC0) != 0x80) return false;
+            i += 4;
+            continue;
+        }
+
+        if (c == 0xF4) {
+            if (i + 3 >= n) return false;
+            const unsigned char c1 = static_cast<unsigned char>(text[i + 1]);
+            const unsigned char c2 = static_cast<unsigned char>(text[i + 2]);
+            const unsigned char c3 = static_cast<unsigned char>(text[i + 3]);
+            if (c1 < 0x80 || c1 > 0x8F ||
+                (c2 & 0xC0) != 0x80 ||
+                (c3 & 0xC0) != 0x80) return false;
+            i += 4;
+            continue;
+        }
+
+        return false;
+    }
+    return true;
+}
+
+static std::string latin1ToUtf8(std::string_view latin1) {
+    std::string utf8;
+    utf8.reserve(latin1.size() * 2);
+    for (unsigned char c : latin1) {
+        if (c < 0x80) {
+            utf8.push_back(static_cast<char>(c));
+        } else {
+            utf8.push_back(static_cast<char>(0xC0 | (c >> 6)));
+            utf8.push_back(static_cast<char>(0x80 | (c & 0x3F)));
+        }
+    }
+    return utf8;
+}
+
+static jstring toJString(JNIEnv* env, std::string_view value) {
+    if (value.empty()) {
+        return env->NewStringUTF("");
+    }
+    if (isValidUtf8(value)) {
+        const std::string utf8(value);
+        return env->NewStringUTF(utf8.c_str());
+    }
+    const std::string converted = latin1ToUtf8(value);
+    return env->NewStringUTF(converted.c_str());
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_stringFromJNI(
         JNIEnv* env,
         jobject /* this */) {
     std::string hello = "Hello from AAudio C++";
-    return env->NewStringUTF(hello.c_str());
+    return toJString(env, hello);
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -248,37 +370,37 @@ Java_com_flopster101_siliconplayer_MainActivity_setEndFadeCurve(
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getTrackTitle(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("");
+        return toJString(env, "");
     }
     std::string value = audioEngine->getTitle();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getTrackArtist(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("");
+        return toJString(env, "");
     }
     std::string value = audioEngine->getArtist();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getTrackComposer(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("");
+        return toJString(env, "");
     }
     std::string value = audioEngine->getComposer();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getTrackGenre(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("");
+        return toJString(env, "");
     }
     std::string value = audioEngine->getGenre();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jint JNICALL
@@ -308,10 +430,10 @@ Java_com_flopster101_siliconplayer_MainActivity_getTrackBitDepth(JNIEnv* env, jo
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getTrackBitDepthLabel(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("Unknown");
+        return toJString(env, "Unknown");
     }
     std::string value = audioEngine->getBitDepthLabel();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jint JNICALL
@@ -337,10 +459,10 @@ Java_com_flopster101_siliconplayer_MainActivity_getPlaybackCapabilities(JNIEnv* 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getCurrentDecoderName(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("");
+        return toJString(env, "");
     }
     std::string value = audioEngine->getCurrentDecoderName();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jint JNICALL
@@ -362,28 +484,28 @@ Java_com_flopster101_siliconplayer_MainActivity_getOutputStreamSampleRateHz(JNIE
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptModuleTypeLong(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("");
+        return toJString(env, "");
     }
     std::string value = audioEngine->getOpenMptModuleTypeLong();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptTracker(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("");
+        return toJString(env, "");
     }
     std::string value = audioEngine->getOpenMptTracker();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptSongMessage(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("");
+        return toJString(env, "");
     }
     std::string value = audioEngine->getOpenMptSongMessage();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jint JNICALL
@@ -421,19 +543,19 @@ Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptSampleCount(JNIEnv*, j
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptInstrumentNames(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("");
+        return toJString(env, "");
     }
     std::string value = audioEngine->getOpenMptInstrumentNames();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getOpenMptSampleNames(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("");
+        return toJString(env, "");
     }
     std::string value = audioEngine->getOpenMptSampleNames();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
@@ -462,44 +584,44 @@ Java_com_flopster101_siliconplayer_NativeBridge_getChannelScopeTextState(JNIEnv*
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getVgmGameName(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getVgmGameName();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getVgmSystemName(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getVgmSystemName();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getVgmReleaseDate(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getVgmReleaseDate();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getVgmEncodedBy(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getVgmEncodedBy();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getVgmNotes(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getVgmNotes();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getVgmFileVersion(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getVgmFileVersion();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jint JNICALL
@@ -510,9 +632,9 @@ Java_com_flopster101_siliconplayer_NativeBridge_getVgmDeviceCount(JNIEnv*, jobje
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getVgmUsedChipList(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getVgmUsedChipList();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
@@ -523,72 +645,72 @@ Java_com_flopster101_siliconplayer_NativeBridge_getVgmHasLoopPoint(JNIEnv*, jobj
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getFfmpegCodecName(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getFfmpegCodecName();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getFfmpegContainerName(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getFfmpegContainerName();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getFfmpegSampleFormatName(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getFfmpegSampleFormatName();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getFfmpegChannelLayoutName(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getFfmpegChannelLayoutName();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getFfmpegEncoderName(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getFfmpegEncoderName();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getGmeSystemName(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getGmeSystemName();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getGmeGameName(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getGmeGameName();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getGmeCopyright(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getGmeCopyright();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getGmeComment(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getGmeComment();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getGmeDumper(JNIEnv* env, jobject) {
-    if (audioEngine == nullptr) return env->NewStringUTF("");
+    if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getGmeDumper();
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jint JNICALL
@@ -764,19 +886,19 @@ Java_com_flopster101_siliconplayer_NativeBridge_selectSubtune(JNIEnv*, jobject, 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getSubtuneTitle(JNIEnv* env, jobject, jint index) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("");
+        return toJString(env, "");
     }
     const std::string value = audioEngine->getSubtuneTitle(static_cast<int>(index));
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getSubtuneArtist(JNIEnv* env, jobject, jint index) {
     if (audioEngine == nullptr) {
-        return env->NewStringUTF("");
+        return toJString(env, "");
     }
     const std::string value = audioEngine->getSubtuneArtist(static_cast<int>(index));
-    return env->NewStringUTF(value.c_str());
+    return toJString(env, value);
 }
 
 extern "C" JNIEXPORT jdouble JNICALL

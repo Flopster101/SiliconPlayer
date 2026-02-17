@@ -2954,10 +2954,15 @@ private fun AppNavigation(
     }
 
     LaunchedEffect(sidPlayFpCoreSampleRateHz) {
+        val normalized = sidPlayFpCoreSampleRateHz.coerceIn(8000, 48000)
+        if (normalized != sidPlayFpCoreSampleRateHz) {
+            sidPlayFpCoreSampleRateHz = normalized
+            return@LaunchedEffect
+        }
         prefs.edit()
-            .putInt(CorePreferenceKeys.CORE_RATE_SIDPLAYFP, sidPlayFpCoreSampleRateHz)
+            .putInt(CorePreferenceKeys.CORE_RATE_SIDPLAYFP, normalized)
             .apply()
-        NativeBridge.setCoreOutputSampleRate("LibSIDPlayFP", sidPlayFpCoreSampleRateHz)
+        NativeBridge.setCoreOutputSampleRate("LibSIDPlayFP", normalized)
     }
 
     LaunchedEffect(gmeTempoPercent) {

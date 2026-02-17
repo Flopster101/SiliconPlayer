@@ -22,6 +22,8 @@ constexpr unsigned int kRenderCyclesMax = 20000;
 constexpr unsigned int kEstimatedSidCyclesPerSecond = 1000000;
 constexpr int kTransientEmptyPlayRetries = 4;
 constexpr double kDefaultSidDurationSeconds = 180.0;
+constexpr int kSidLiteMinSampleRateHz = 8000;
+constexpr int kSidLiteMaxSampleRateHz = 48000;
 
 std::string safeString(const char* value) {
     return value ? std::string(value) : "";
@@ -50,6 +52,10 @@ int parseIntString(const std::string& raw, int fallback) {
     } catch (...) {
         return fallback;
     }
+}
+
+int clampSidLiteSampleRate(int sampleRateHz) {
+    return std::clamp(sampleRateHz, kSidLiteMinSampleRateHz, kSidLiteMaxSampleRateHz);
 }
 
 std::string sidClockToString(SidTuneInfo::clock_t clock) {
@@ -432,12 +438,13 @@ int LibSidPlayFpDecoder::getSampleRate() {
 void LibSidPlayFpDecoder::setOutputSampleRate(int sampleRateHz) {
     if (sampleRateHz <= 0) return;
     std::lock_guard<std::mutex> lock(decodeMutex);
-    if (requestedSampleRate == sampleRateHz) return;
-    requestedSampleRate = sampleRateHz;
+    const int normalizedRate = clampSidLiteSampleRate(sampleRateHz);
+    if (requestedSampleRate == normalizedRate) return;
+    requestedSampleRate = normalizedRate;
     // SID sample-rate changes are restart-required.
     // Keep the requested value and apply it on next configure/open.
     if (!player) {
-        activeSampleRate = sampleRateHz;
+        activeSampleRate = normalizedRate;
     }
 }
 

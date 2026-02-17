@@ -20,6 +20,7 @@ constexpr unsigned int kRenderCyclesMin = 2000;
 constexpr unsigned int kRenderCyclesMax = 20000;
 constexpr unsigned int kEstimatedSidCyclesPerSecond = 1000000;
 constexpr int kTransientEmptyPlayRetries = 4;
+constexpr double kDefaultSidDurationSeconds = 180.0;
 
 std::string safeString(const char* value) {
     return value ? std::string(value) : "";
@@ -37,6 +38,17 @@ unsigned int computeRenderCyclesForFrames(int framesNeeded, int sampleRateHz) {
             kRenderCyclesMin,
             kRenderCyclesMax
     ));
+}
+
+int parseIntString(const std::string& raw, int fallback) {
+    try {
+        size_t consumed = 0;
+        const int parsed = std::stoi(raw, &consumed);
+        if (consumed != raw.size()) return fallback;
+        return parsed;
+    } catch (...) {
+        return fallback;
+    }
 }
 }
 
@@ -74,6 +86,7 @@ void LibSidPlayFpDecoder::refreshMetadataLocked() {
     sidChipCount = 1;
     subtuneTitles.assign(std::max(1, subtuneCount), "");
     subtuneArtists.assign(std::max(1, subtuneCount), "");
+    subtuneDurationsSeconds.assign(std::max(1, subtuneCount), fallbackDurationSeconds);
 
     if (!tune) return;
     const SidTuneInfo* info = tune->getInfo();
@@ -135,6 +148,9 @@ bool LibSidPlayFpDecoder::openInternalLocked(const char* path) {
     subtuneCount = tuneInfo ? std::max(1u, tuneInfo->songs()) : 1u;
     const unsigned int startSong = tuneInfo ? tuneInfo->startSong() : 1u;
     currentSubtuneIndex = std::clamp(static_cast<int>(startSong) - 1, 0, subtuneCount - 1);
+    if (!(fallbackDurationSeconds > 0.0)) {
+        fallbackDurationSeconds = kDefaultSidDurationSeconds;
+    }
 
     if (!selectSubtuneLocked(currentSubtuneIndex)) {
         return false;
@@ -156,6 +172,7 @@ bool LibSidPlayFpDecoder::open(const char* path) {
     genre.clear();
     subtuneTitles.clear();
     subtuneArtists.clear();
+    subtuneDurationsSeconds.clear();
     subtuneCount = 1;
     currentSubtuneIndex = 0;
     outputChannels = 2;
@@ -175,6 +192,7 @@ void LibSidPlayFpDecoder::close() {
     genre.clear();
     subtuneTitles.clear();
     subtuneArtists.clear();
+    subtuneDurationsSeconds.clear();
     subtuneCount = 1;
     currentSubtuneIndex = 0;
     outputChannels = 2;
@@ -229,6 +247,12 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
         if (produced == 0) {
             emptyPlayRetries += 1;
             if (emptyPlayRetries >= kTransientEmptyPlayRetries) {
+                if (repeatMode.load() == 2) {
+                    if (selectSubtuneLocked(currentSubtuneIndex)) {
+                        emptyPlayRetries = 0;
+                        continue;
+                    }
+                }
                 break;
             }
             continue;
@@ -240,6 +264,12 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
         if (mixedSamples < static_cast<unsigned int>(channels)) {
             emptyPlayRetries += 1;
             if (emptyPlayRetries >= kTransientEmptyPlayRetries) {
+                if (repeatMode.load() == 2) {
+                    if (selectSubtuneLocked(currentSubtuneIndex)) {
+                        emptyPlayRetries = 0;
+                        continue;
+                    }
+                }
                 break;
             }
             continue;
@@ -276,7 +306,12 @@ void LibSidPlayFpDecoder::seek(double seconds) {
 }
 
 double LibSidPlayFpDecoder::getDuration() {
-    return 0.0; // SID files typically have no reliable embedded duration.
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (currentSubtuneIndex >= 0 &&
+        currentSubtuneIndex < static_cast<int>(subtuneDurationsSeconds.size())) {
+        return subtuneDurationsSeconds[currentSubtuneIndex];
+    }
+    return fallbackDurationSeconds;
 }
 
 int LibSidPlayFpDecoder::getSampleRate() {
@@ -294,6 +329,32 @@ void LibSidPlayFpDecoder::setOutputSampleRate(int sampleRateHz) {
             selectSubtuneLocked(currentSubtuneIndex);
         }
     }
+}
+
+void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
+    if (!name || !value) return;
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    const std::string optionName(name);
+    const std::string optionValue(value);
+    if (optionName == "sidplayfp.unknown_duration_seconds") {
+        const int parsed = parseIntString(optionValue, static_cast<int>(fallbackDurationSeconds));
+        const int clamped = std::clamp(parsed, 1, 86400);
+        fallbackDurationSeconds = static_cast<double>(clamped);
+        if (!subtuneDurationsSeconds.empty()) {
+            for (double& durationSeconds : subtuneDurationsSeconds) {
+                durationSeconds = fallbackDurationSeconds;
+            }
+        }
+    }
+}
+
+int LibSidPlayFpDecoder::getOptionApplyPolicy(const char* name) const {
+    if (!name) return OPTION_APPLY_LIVE;
+    const std::string optionName(name);
+    if (optionName == "sidplayfp.unknown_duration_seconds") {
+        return OPTION_APPLY_LIVE;
+    }
+    return OPTION_APPLY_LIVE;
 }
 
 int LibSidPlayFpDecoder::getBitDepth() {
@@ -337,8 +398,10 @@ std::string LibSidPlayFpDecoder::getSubtuneArtist(int index) {
     return subtuneArtists[index];
 }
 
-double LibSidPlayFpDecoder::getSubtuneDurationSeconds(int /*index*/) {
-    return 0.0;
+double LibSidPlayFpDecoder::getSubtuneDurationSeconds(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (index < 0 || index >= static_cast<int>(subtuneDurationsSeconds.size())) return 0.0;
+    return subtuneDurationsSeconds[index];
 }
 
 std::string LibSidPlayFpDecoder::getTitle() {
@@ -361,12 +424,20 @@ std::string LibSidPlayFpDecoder::getGenre() {
     return genre;
 }
 
+void LibSidPlayFpDecoder::setRepeatMode(int mode) {
+    const int normalizedMode = (mode >= 0 && mode <= 3) ? mode : 0;
+    repeatMode.store(normalizedMode);
+}
+
 int LibSidPlayFpDecoder::getPlaybackCapabilities() const {
-    return PLAYBACK_CAP_LIVE_REPEAT_MODE;
+    return PLAYBACK_CAP_SEEK |
+           PLAYBACK_CAP_RELIABLE_DURATION |
+           PLAYBACK_CAP_LIVE_REPEAT_MODE |
+           PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
 }
 
 int LibSidPlayFpDecoder::getRepeatModeCapabilities() const {
-    return REPEAT_CAP_TRACK;
+    return REPEAT_CAP_TRACK | REPEAT_CAP_LOOP_POINT;
 }
 
 double LibSidPlayFpDecoder::getPlaybackPositionSeconds() {

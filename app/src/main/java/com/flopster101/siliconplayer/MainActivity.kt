@@ -3071,6 +3071,13 @@ private fun AppNavigation(
             policy = CoreOptionApplyPolicy.Live,
             optionLabel = "Unknown track duration"
         )
+        applyCoreOptionWithPolicy(
+            coreName = "LibSIDPlayFP",
+            optionName = SidPlayFpOptionKeys.UNKNOWN_DURATION_SECONDS,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Unknown track duration"
+        )
     }
 
     LaunchedEffect(endFadeApplyToAllTracks) {

@@ -344,8 +344,8 @@ private fun ChannelScopeTextOverlay(
         for (col in 0 until columns) {
             for (row in 0 until rows) {
                 val channel = (col * rows) + row
-                val line = if (channel < channels) {
-                    buildChannelScopeTextLine(
+                val content = if (channel < channels) {
+                    buildChannelScopeTextFields(
                         channel = channel,
                         state = channelTextStates.getOrNull(channel),
                         noteFormat = noteFormat,
@@ -357,15 +357,27 @@ private fun ChannelScopeTextOverlay(
                         sideCounts = sideCounts
                     )
                 } else {
-                    ""
+                    ChannelScopeTextFields(
+                        channel = null,
+                        note = null,
+                        volume = null,
+                        effect = null,
+                        instrumentOrSample = null
+                    )
                 }
+                val hasContent =
+                    content.channel != null ||
+                        content.note != null ||
+                        content.volume != null ||
+                        content.effect != null ||
+                        content.instrumentOrSample != null
                 Box(
                     modifier = Modifier
                         .offset(x = cellWidth * col, y = cellHeight * row)
                         .size(cellWidth, cellHeight),
                     contentAlignment = resolveTextAlignment(anchor)
                 ) {
-                    if (line.isNotEmpty()) {
+                    if (hasContent) {
                         val scale = textSizeSp.coerceIn(8, 22).toFloat() / 8f
                         val noteSlot = (24f * scale).dp
                         val volumeSlot = (30f * scale).dp
@@ -374,17 +386,6 @@ private fun ChannelScopeTextOverlay(
                             fontSize = textSizeSp.coerceIn(8, 22).sp,
                             lineHeight = textSizeSp.coerceIn(8, 22).sp,
                             platformStyle = PlatformTextStyle(includeFontPadding = false)
-                        )
-                        val content = buildChannelScopeTextFields(
-                            channel = channel,
-                            state = channelTextStates.getOrNull(channel),
-                            noteFormat = noteFormat,
-                            showChannel = showChannel,
-                            showNote = showNote,
-                            showVolume = showVolume,
-                            showEffect = showEffect,
-                            showInstrumentSample = showInstrumentSample,
-                            sideCounts = sideCounts
                         )
                         Row(
                             modifier = Modifier
@@ -494,32 +495,6 @@ private data class ChannelScopeTextFields(
     val effect: String?,
     val instrumentOrSample: String?
 )
-
-private fun buildChannelScopeTextLine(
-    channel: Int,
-    state: ChannelScopeChannelTextState?,
-    noteFormat: VisualizationNoteNameFormat,
-    showChannel: Boolean,
-    showNote: Boolean,
-    showVolume: Boolean,
-    showEffect: Boolean,
-    showInstrumentSample: Boolean,
-    sideCounts: IntArray
-): String {
-    val f = buildChannelScopeTextFields(
-        channel = channel,
-        state = state,
-        noteFormat = noteFormat,
-        showChannel = showChannel,
-        showNote = showNote,
-        showVolume = showVolume,
-        showEffect = showEffect,
-        showInstrumentSample = showInstrumentSample,
-        sideCounts = sideCounts
-    )
-    val segments = listOfNotNull(f.channel, f.note, f.volume, f.effect, f.instrumentOrSample)
-    return segments.joinToString(separator = " • ")
-}
 
 private fun buildChannelScopeTextFields(
     channel: Int,

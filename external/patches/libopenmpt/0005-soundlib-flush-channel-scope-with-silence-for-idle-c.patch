@@ -1,7 +1,8 @@
-From 6d29a66971817f92630c33ecf985d1be9609316f Mon Sep 17 00:00:00 2001
+From 99236017b24b13802011b65c867f7b5176ec7cfb Mon Sep 17 00:00:00 2001
 From: Flopster101 <nahuelgomez329@gmail.com>
 Date: Mon, 16 Feb 2026 20:56:25 -0300
-Subject: [PATCH] soundlib: flush channel scope with silence for idle channels
+Subject: [PATCH 5/6] soundlib: flush channel scope with silence for idle
+ channels
 
 ---
  soundlib/Fastmix.cpp | 25 ++++++++++++++++++++++++-

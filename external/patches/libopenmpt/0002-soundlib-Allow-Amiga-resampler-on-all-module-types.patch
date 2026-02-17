@@ -1,7 +1,7 @@
-From bc58d2818193b6cf167fbbcc2d9d9b26b1488b27 Mon Sep 17 00:00:00 2001
+From 3ae1c71e130887796eb919e38af875d9de1503c8 Mon Sep 17 00:00:00 2001
 From: Flopster101 <nahuelgomez329@gmail.com>
 Date: Sat, 14 Feb 2026 16:20:31 -0300
-Subject: [PATCH 2/2] soundlib: Allow Amiga resampler on all module types
+Subject: [PATCH 2/6] soundlib: Allow Amiga resampler on all module types
 
 ---
  soundlib/Sndfile.cpp | 2 +-

@@ -1,7 +1,7 @@
-From 14788dadffd12220b610e30ed6e17b12500317b5 Mon Sep 17 00:00:00 2001
+From 674ca9456e29d6809631149207fbb9bc413215e2 Mon Sep 17 00:00:00 2001
 From: Flopster101 <nahuelgomez329@gmail.com>
 Date: Sat, 14 Feb 2026 16:20:31 -0300
-Subject: [PATCH 1/2] soundlib: Disable XM FT2-style volume ramping override
+Subject: [PATCH 1/6] soundlib: Disable XM FT2-style volume ramping override
 
 ---
  soundlib/Sndmix.cpp | 8 +++-----

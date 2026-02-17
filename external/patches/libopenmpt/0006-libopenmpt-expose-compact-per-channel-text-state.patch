@@ -1,0 +1,144 @@
+From a916e37773bdf05266d801f24d9238d03b72bcae Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Mon, 16 Feb 2026 21:28:07 -0300
+Subject: [PATCH 6/6] libopenmpt: expose compact per-channel text state
+
+---
+ libopenmpt/libopenmpt.hpp      | 12 ++++++
+ libopenmpt/libopenmpt_cxx.cpp  |  3 ++
+ libopenmpt/libopenmpt_impl.cpp | 69 ++++++++++++++++++++++++++++++++++
+ libopenmpt/libopenmpt_impl.hpp |  1 +
+ 4 files changed, 85 insertions(+)
+
+diff --git a/libopenmpt/libopenmpt.hpp b/libopenmpt/libopenmpt.hpp
+index 55c8fbdf9..c990068a3 100644
+--- a/libopenmpt/libopenmpt.hpp
++++ b/libopenmpt/libopenmpt.hpp
+@@ -959,6 +959,18 @@ public:
+ 	  \since 0.8.0
+ 	*/
+ 	LIBOPENMPT_CXX_API_MEMBER std::int32_t get_current_channel_scope( std::int32_t channel, float * scope, std::int32_t count ) const;
++	//! Get compact live tracker state for a channel.
++	/*!
++	  \param channel The channel whose state should be retrieved.
++	  \param state Destination integer array.
++	  \param count Number of integer slots available in \c state.
++	  \return Number of integer fields written (0 on invalid arguments).
++	  \remarks Field order:
++	  [0]=note, [1]=volume, [2]=effect letter ASCII (0 when none),
++	  [3]=effect parameter, [4]=instrument index, [5]=sample index.
++	  \since 0.8.0
++	*/
++	LIBOPENMPT_CXX_API_MEMBER std::int32_t get_current_channel_text_state( std::int32_t channel, std::int32_t * state, std::int32_t count ) const;
+ 
+ 	//! Get the number of sub-songs
+ 	/*!
+diff --git a/libopenmpt/libopenmpt_cxx.cpp b/libopenmpt/libopenmpt_cxx.cpp
+index b6f335a49..4291a7e0a 100644
+--- a/libopenmpt/libopenmpt_cxx.cpp
++++ b/libopenmpt/libopenmpt_cxx.cpp
+@@ -364,6 +364,9 @@ float module::get_current_channel_vu_rear_right( std::int32_t channel ) const {
+ std::int32_t module::get_current_channel_scope( std::int32_t channel, float * scope, std::int32_t count ) const {
+ 	return impl->get_current_channel_scope( channel, scope, count );
+ }
++std::int32_t module::get_current_channel_text_state( std::int32_t channel, std::int32_t * state, std::int32_t count ) const {
++	return impl->get_current_channel_text_state( channel, state, count );
++}
+ 
+ std::int32_t module::get_num_subsongs() const {
+ 	return impl->get_num_subsongs();
+diff --git a/libopenmpt/libopenmpt_impl.cpp b/libopenmpt/libopenmpt_impl.cpp
+index 82daf260b..2c9d62de0 100644
+--- a/libopenmpt/libopenmpt_impl.cpp
++++ b/libopenmpt/libopenmpt_impl.cpp
+@@ -1414,6 +1414,75 @@ std::int32_t module_impl::get_current_channel_scope( std::int32_t channel, float
+ 	}
+ 	return m_sndFile->GetChannelScopeSamples(static_cast<OpenMPT::CHANNELINDEX>(channel), scope, count);
+ }
++std::int32_t module_impl::get_current_channel_text_state( std::int32_t channel, std::int32_t * state, std::int32_t count ) const {
++	if(state == nullptr || count <= 0 || channel < 0 || channel >= m_sndFile->GetNumChannels())
++	{
++		return 0;
++	}
++	const auto &chn = m_sndFile->m_PlayState.Chn[channel];
++	const int fields = std::min<std::int32_t>(count, 6);
++	for(int i = 0; i < fields; ++i)
++	{
++		state[i] = 0;
++	}
++
++	OpenMPT::ModCommand::NOTE note = chn.nNote;
++	if(!OpenMPT::ModCommand::IsNote(note))
++	{
++		note = chn.nLastNote;
++	}
++	state[0] = OpenMPT::ModCommand::IsNote(note) ? static_cast<std::int32_t>(note) : -1;
++	if(fields >= 2)
++	{
++		state[1] = std::max(0, std::min(256, chn.nVolume));
++	}
++	if(fields >= 3)
++	{
++		char effectLetter = 0;
++		if(chn.rowCommand.command != OpenMPT::CMD_NONE)
++		{
++			effectLetter = m_sndFile->GetModSpecifications().GetEffectLetter(chn.rowCommand.command);
++		}
++		state[2] = effectLetter ? static_cast<std::int32_t>(static_cast<unsigned char>(effectLetter)) : 0;
++	}
++	if(fields >= 4)
++	{
++		state[3] = (chn.rowCommand.command != OpenMPT::CMD_NONE) ? static_cast<std::int32_t>(chn.rowCommand.param) : -1;
++	}
++	if(fields >= 5)
++	{
++		std::int32_t instrIndex = -1;
++		if(chn.pModInstrument != nullptr)
++		{
++			for(OpenMPT::INSTRUMENTINDEX i = 1; i <= m_sndFile->GetNumInstruments(); ++i)
++			{
++				if(m_sndFile->Instruments[i] == chn.pModInstrument)
++				{
++					instrIndex = static_cast<std::int32_t>(i);
++					break;
++				}
++			}
++		}
++		state[4] = instrIndex;
++	}
++	if(fields >= 6)
++	{
++		std::int32_t sampleIndex = -1;
++		if(chn.pModSample != nullptr)
++		{
++			for(OpenMPT::SAMPLEINDEX i = 1; i <= m_sndFile->GetNumSamples(); ++i)
++			{
++				if(&m_sndFile->GetSample(i) == chn.pModSample)
++				{
++					sampleIndex = static_cast<std::int32_t>(i);
++					break;
++				}
++			}
++		}
++		state[5] = sampleIndex;
++	}
++	return fields;
++}
+ 
+ std::int32_t module_impl::get_num_subsongs() const {
+ 	std::unique_ptr<subsongs_type> subsongs_temp = has_subsongs_inited() ? std::unique_ptr<subsongs_type>() : std::make_unique<subsongs_type>( get_subsongs() );
+diff --git a/libopenmpt/libopenmpt_impl.hpp b/libopenmpt/libopenmpt_impl.hpp
+index dfc211b10..bf633e5da 100644
+--- a/libopenmpt/libopenmpt_impl.hpp
++++ b/libopenmpt/libopenmpt_impl.hpp
+@@ -240,6 +240,7 @@ public:
+ 	float get_current_channel_vu_rear_left( std::int32_t channel ) const;
+ 	float get_current_channel_vu_rear_right( std::int32_t channel ) const;
+ 	std::int32_t get_current_channel_scope( std::int32_t channel, float * scope, std::int32_t count ) const;
++	std::int32_t get_current_channel_text_state( std::int32_t channel, std::int32_t * state, std::int32_t count ) const;
+ 	std::int32_t get_num_subsongs() const;
+ 	std::int32_t get_num_channels() const;
+ 	std::int32_t get_num_orders() const;
+-- 
+2.53.0
+

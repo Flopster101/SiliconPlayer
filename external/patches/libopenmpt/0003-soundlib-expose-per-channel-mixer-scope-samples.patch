@@ -1,7 +1,7 @@
-From cefebccad6a9e36e6202b456a6bca2e7eaaf9f21 Mon Sep 17 00:00:00 2001
+From b81b5de94c7a4275a13d6d0dac5fe2d19ddd93b2 Mon Sep 17 00:00:00 2001
 From: Codex <codex@local>
 Date: Mon, 16 Feb 2026 15:10:50 -0300
-Subject: [PATCH] soundlib: expose per-channel mixer scope samples
+Subject: [PATCH 3/6] soundlib: expose per-channel mixer scope samples
 
 ---
  libopenmpt/libopenmpt.hpp      | 10 +++++

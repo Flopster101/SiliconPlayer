@@ -357,6 +357,7 @@ internal data class ChannelScopePrefs(
     val textAnchor: VisualizationChannelScopeTextAnchor,
     val textPaddingDp: Int,
     val textSizeSp: Int,
+    val textHideWhenOverflow: Boolean,
     val textNoteFormat: VisualizationNoteNameFormat,
     val textShowChannel: Boolean,
     val textShowNote: Boolean,
@@ -389,6 +390,7 @@ internal data class ChannelScopePrefs(
         private const val KEY_TEXT_ANCHOR = "visualization_channel_scope_text_anchor"
         private const val KEY_TEXT_PADDING_DP = "visualization_channel_scope_text_padding_dp"
         private const val KEY_TEXT_SIZE_SP = "visualization_channel_scope_text_size_sp"
+        private const val KEY_TEXT_HIDE_WHEN_OVERFLOW = "visualization_channel_scope_text_hide_when_overflow"
         private const val KEY_TEXT_NOTE_FORMAT = "visualization_channel_scope_text_note_format"
         private const val KEY_TEXT_SHOW_CHANNEL = "visualization_channel_scope_text_show_channel"
         private const val KEY_TEXT_SHOW_NOTE = "visualization_channel_scope_text_show_note"
@@ -538,6 +540,10 @@ internal data class ChannelScopePrefs(
                     AppDefaults.Visualization.ChannelScope.textSizeRangeSp.first,
                     AppDefaults.Visualization.ChannelScope.textSizeRangeSp.last
                 ),
+                textHideWhenOverflow = sharedPrefs.getBoolean(
+                    KEY_TEXT_HIDE_WHEN_OVERFLOW,
+                    AppDefaults.Visualization.ChannelScope.textHideWhenOverflow
+                ),
                 textNoteFormat = VisualizationNoteNameFormat.fromStorage(
                     sharedPrefs.getString(
                         KEY_TEXT_NOTE_FORMAT,
@@ -615,6 +621,7 @@ private data class ChannelScopeVisualState(
     val textAnchor: VisualizationChannelScopeTextAnchor,
     val textPaddingDp: Int,
     val textSizeSp: Int,
+    val textHideWhenOverflow: Boolean,
     val textNoteFormat: VisualizationNoteNameFormat,
     val textShowChannel: Boolean,
     val textShowNote: Boolean,
@@ -999,6 +1006,7 @@ internal fun AlbumArtPlaceholder(
         textAnchor = channelScopePrefs.textAnchor,
         textPaddingDp = channelScopePrefs.textPaddingDp,
         textSizeSp = channelScopePrefs.textSizeSp,
+        textHideWhenOverflow = channelScopePrefs.textHideWhenOverflow,
         textNoteFormat = channelScopePrefs.textNoteFormat,
         textShowChannel = channelScopePrefs.textShowChannel,
         textShowNote = channelScopePrefs.textShowNote,
@@ -1180,6 +1188,7 @@ internal fun AlbumArtPlaceholder(
                 channelScopeTextAnchor = channelScopeState.textAnchor,
                 channelScopeTextPaddingDp = channelScopeState.textPaddingDp,
                 channelScopeTextSizeSp = channelScopeState.textSizeSp,
+                channelScopeTextHideWhenOverflow = channelScopeState.textHideWhenOverflow,
                 channelScopeTextNoteFormat = channelScopeState.textNoteFormat,
                 channelScopeTextShowChannel = channelScopeState.textShowChannel,
                 channelScopeTextShowNote = channelScopeState.textShowNote,

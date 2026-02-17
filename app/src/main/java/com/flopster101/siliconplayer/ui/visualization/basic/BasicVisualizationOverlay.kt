@@ -99,6 +99,7 @@ fun BasicVisualizationOverlay(
     channelScopeTextAnchor: VisualizationChannelScopeTextAnchor,
     channelScopeTextPaddingDp: Int,
     channelScopeTextSizeSp: Int,
+    channelScopeTextHideWhenOverflow: Boolean,
     channelScopeTextNoteFormat: VisualizationNoteNameFormat,
     channelScopeTextShowChannel: Boolean,
     channelScopeTextShowNote: Boolean,
@@ -296,6 +297,7 @@ fun BasicVisualizationOverlay(
                         anchor = channelScopeTextAnchor,
                         paddingDp = channelScopeTextPaddingDp,
                         textSizeSp = channelScopeTextSizeSp,
+                        hideWhenOverflow = channelScopeTextHideWhenOverflow,
                         noteFormat = channelScopeTextNoteFormat,
                         showChannel = channelScopeTextShowChannel,
                         showNote = channelScopeTextShowNote,
@@ -329,6 +331,7 @@ private fun ChannelScopeTextOverlay(
     anchor: VisualizationChannelScopeTextAnchor,
     paddingDp: Int,
     textSizeSp: Int,
+    hideWhenOverflow: Boolean,
     noteFormat: VisualizationNoteNameFormat,
     showChannel: Boolean,
     showNote: Boolean,
@@ -347,6 +350,32 @@ private fun ChannelScopeTextOverlay(
         val safeRows = rows.coerceAtLeast(1)
         val cellWidth = maxWidth / safeCols
         val cellHeight = maxHeight / safeRows
+        val selectedTextSizeSp = textSizeSp.coerceIn(6, 22)
+        val minimumAutoTextSizeSp = (selectedTextSizeSp - 6).coerceAtLeast(6)
+        val effectiveTextSizeSp = computeAutoChannelScopeTextSizeSp(
+            selectedTextSizeSp = selectedTextSizeSp,
+            minimumTextSizeSp = minimumAutoTextSizeSp,
+            cellWidthDp = cellWidth.value,
+            paddingDp = paddingDp.toFloat(),
+            showChannel = showChannel,
+            showNote = showNote,
+            showVolume = showVolume,
+            showEffect = showEffect,
+            showInstrumentSample = showInstrumentSample
+        )
+        val canRenderAtEffectiveSize = estimateChannelScopeTextWidthDp(
+            sp = effectiveTextSizeSp,
+            paddingDp = paddingDp.toFloat(),
+            showChannel = showChannel,
+            showNote = showNote,
+            showVolume = showVolume,
+            showEffect = showEffect,
+            showInstrumentSample = showInstrumentSample
+        ) <= cellWidth.value
+        val showText = !hideWhenOverflow || canRenderAtEffectiveSize
+        if (!showText) {
+            return@BoxWithConstraints
+        }
         for (col in 0 until columns) {
             for (row in 0 until rows) {
                 val channel = (col * rows) + row
@@ -386,13 +415,13 @@ private fun ChannelScopeTextOverlay(
                     contentAlignment = resolveTextAlignment(anchor)
                 ) {
                     if (hasContent) {
-                        val scale = textSizeSp.coerceIn(8, 22).toFloat() / 8f
+                        val scale = effectiveTextSizeSp.toFloat() / 8f
                         val noteSlot = (24f * scale).dp
                         val volumeSlot = (30f * scale).dp
                         val effectSlot = (20f * scale).dp
                         val textStyle = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = textSizeSp.coerceIn(8, 22).sp,
-                            lineHeight = textSizeSp.coerceIn(8, 22).sp,
+                            fontSize = effectiveTextSizeSp.sp,
+                            lineHeight = effectiveTextSizeSp.sp,
                             platformStyle = PlatformTextStyle(includeFontPadding = false)
                         )
                         Row(
@@ -596,6 +625,92 @@ private fun formatInstrumentOrSample(
         }
     }
     return null
+}
+
+private fun computeAutoChannelScopeTextSizeSp(
+    selectedTextSizeSp: Int,
+    minimumTextSizeSp: Int,
+    cellWidthDp: Float,
+    paddingDp: Float,
+    showChannel: Boolean,
+    showNote: Boolean,
+    showVolume: Boolean,
+    showEffect: Boolean,
+    showInstrumentSample: Boolean
+): Int {
+    val selected = selectedTextSizeSp.coerceIn(6, 22)
+    val minimum = minimumTextSizeSp.coerceAtMost(selected).coerceAtLeast(6)
+    val availableWidth = cellWidthDp.coerceAtLeast(0f)
+    if (
+        estimateChannelScopeTextWidthDp(
+            sp = selected,
+            paddingDp = paddingDp,
+            showChannel = showChannel,
+            showNote = showNote,
+            showVolume = showVolume,
+            showEffect = showEffect,
+            showInstrumentSample = showInstrumentSample
+        ) <= availableWidth
+    ) {
+        return selected
+    }
+    var size = selected
+    while (
+        size > minimum &&
+            estimateChannelScopeTextWidthDp(
+                sp = size,
+                paddingDp = paddingDp,
+                showChannel = showChannel,
+                showNote = showNote,
+                showVolume = showVolume,
+                showEffect = showEffect,
+                showInstrumentSample = showInstrumentSample
+            ) > availableWidth
+    ) {
+        size--
+    }
+    return size
+}
+
+private fun estimateChannelScopeTextWidthDp(
+    sp: Int,
+    paddingDp: Float,
+    showChannel: Boolean,
+    showNote: Boolean,
+    showVolume: Boolean,
+    showEffect: Boolean,
+    showInstrumentSample: Boolean
+): Float {
+    val scale = sp.toFloat() / 8f
+    var fieldCount = 0
+    var width = 0f
+    if (showChannel) {
+        width += 26f * scale
+        fieldCount++
+    }
+    if (showNote) {
+        width += 24f * scale
+        fieldCount++
+    }
+    if (showVolume) {
+        width += 30f * scale
+        fieldCount++
+    }
+    if (showEffect) {
+        width += 20f * scale
+        fieldCount++
+    }
+    if (showInstrumentSample) {
+        // Reserve a larger leading slot so autoscale triggers sooner on dense layouts.
+        width += 28f * scale
+        fieldCount++
+    }
+    val separators = (fieldCount - 1).coerceAtLeast(0)
+    width += separators * (8f * scale) // Bullet glyph width estimate (conservative)
+    width += separators * 3f // Row spacing estimate
+    width += paddingDp * 2f
+    width += 4f // safety margin
+    return width
 }
 
 private fun resolveChannelScopeTextGrid(

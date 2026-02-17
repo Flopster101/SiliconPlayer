@@ -81,6 +81,7 @@ object AppDefaults {
             val textAnchor = VisualizationChannelScopeTextAnchor.TopLeft
             const val textPaddingDp = 6
             const val textSizeSp = 8
+            const val textHideWhenOverflow = true
             val textNoteFormat = VisualizationNoteNameFormat.American
             const val textShowChannel = true
             const val textShowNote = true
@@ -93,7 +94,7 @@ object AppDefaults {
             val lineWidthRangeDp = 1..12
             val gridWidthRangeDp = 1..8
             val textPaddingRangeDp = 0..24
-            val textSizeRangeSp = 8..22
+            val textSizeRangeSp = 6..22
         }
     }
 }

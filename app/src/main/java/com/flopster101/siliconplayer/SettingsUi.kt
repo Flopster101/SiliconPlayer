@@ -2756,6 +2756,7 @@ internal fun SettingsScreen(
                         val scopeTextAnchorKey = "visualization_channel_scope_text_anchor"
                         val scopeTextPaddingKey = "visualization_channel_scope_text_padding_dp"
                         val scopeTextSizeKey = "visualization_channel_scope_text_size_sp"
+                        val scopeTextHideWhenOverflowKey = "visualization_channel_scope_text_hide_when_overflow"
                         val scopeTextNoteFormatKey = "visualization_channel_scope_text_note_format"
                         val scopeTextShowChannelKey = "visualization_channel_scope_text_show_channel"
                         val scopeTextShowNoteKey = "visualization_channel_scope_text_show_note"
@@ -2998,6 +2999,14 @@ internal fun SettingsScreen(
                                 ).coerceIn(
                                     AppDefaults.Visualization.ChannelScope.textSizeRangeSp.first,
                                     AppDefaults.Visualization.ChannelScope.textSizeRangeSp.last
+                                )
+                            )
+                        }
+                        var scopeTextHideWhenOverflow by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextHideWhenOverflowKey,
+                                    AppDefaults.Visualization.ChannelScope.textHideWhenOverflow
                                 )
                             )
                         }
@@ -3264,6 +3273,16 @@ internal fun SettingsScreen(
                                 description = "Font size for per-channel overlay text.",
                                 value = "${scopeTextSizeSp}sp",
                                 onClick = { showTextSizeDialog = true }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Hide when still too large",
+                                description = "Hide text if it still cannot fit after auto downscaling.",
+                                checked = scopeTextHideWhenOverflow,
+                                onCheckedChange = { enabled ->
+                                    scopeTextHideWhenOverflow = enabled
+                                    prefs.edit().putBoolean(scopeTextHideWhenOverflowKey, enabled).apply()
+                                }
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             SettingsValuePickerCard(

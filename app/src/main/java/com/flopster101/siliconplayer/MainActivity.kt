@@ -799,6 +799,7 @@ private object AppPreferenceKeys {
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_ANCHOR = "visualization_channel_scope_text_anchor"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_PADDING_DP = "visualization_channel_scope_text_padding_dp"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SIZE_SP = "visualization_channel_scope_text_size_sp"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_HIDE_WHEN_OVERFLOW = "visualization_channel_scope_text_hide_when_overflow"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_NOTE_FORMAT = "visualization_channel_scope_text_note_format"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_CHANNEL = "visualization_channel_scope_text_show_channel"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_NOTE = "visualization_channel_scope_text_show_note"
@@ -4553,6 +4554,10 @@ private fun AppNavigation(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SIZE_SP,
                                     AppDefaults.Visualization.ChannelScope.textSizeSp
                                 )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_HIDE_WHEN_OVERFLOW,
+                                    AppDefaults.Visualization.ChannelScope.textHideWhenOverflow
+                                )
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_NOTE_FORMAT,
                                     AppDefaults.Visualization.ChannelScope.textNoteFormat.storageValue
@@ -4934,6 +4939,10 @@ private fun AppNavigation(
                                 .putInt(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SIZE_SP,
                                     AppDefaults.Visualization.ChannelScope.textSizeSp
+                                )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_HIDE_WHEN_OVERFLOW,
+                                    AppDefaults.Visualization.ChannelScope.textHideWhenOverflow
                                 )
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_NOTE_FORMAT,

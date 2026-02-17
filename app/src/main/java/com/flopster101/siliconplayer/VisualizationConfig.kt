@@ -171,6 +171,23 @@ enum class VisualizationChannelScopeTextColorMode(
     }
 }
 
+enum class VisualizationChannelScopeTextFont(
+    val storageValue: String,
+    val label: String
+) {
+    System("system", "System"),
+    RaccoonSerif("raccoon_serif", "Raccoon Serif"),
+    RaccoonMono("raccoon_mono", "Raccoon Mono"),
+    RetroCuteMono("retro_cute_mono", "Retro Pixel Cute Mono"),
+    RetroThick("retro_thick", "Retro Pixel Thick");
+
+    companion object {
+        fun fromStorage(value: String?): VisualizationChannelScopeTextFont {
+            return entries.firstOrNull { it.storageValue == value } ?: RetroCuteMono
+        }
+    }
+}
+
 enum class VisualizationOscFpsMode(
     val storageValue: String,
     val label: String

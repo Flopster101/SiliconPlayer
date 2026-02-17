@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
 import com.flopster101.siliconplayer.VisualizationChannelScopeTextAnchor
 import com.flopster101.siliconplayer.VisualizationChannelScopeTextColorMode
+import com.flopster101.siliconplayer.VisualizationChannelScopeTextFont
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,6 +48,9 @@ import androidx.compose.ui.unit.sp
 import com.flopster101.siliconplayer.NativeBridge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import com.flopster101.siliconplayer.R
 
 @Composable
 fun BasicVisualizationOverlay(
@@ -105,6 +109,7 @@ fun BasicVisualizationOverlay(
     channelScopeTextSizeSp: Int,
     channelScopeTextHideWhenOverflow: Boolean,
     channelScopeTextShadowEnabled: Boolean,
+    channelScopeTextFont: VisualizationChannelScopeTextFont,
     channelScopeTextColorMode: VisualizationChannelScopeTextColorMode,
     channelScopeCustomTextColorArgb: Int,
     channelScopeTextNoteFormat: VisualizationNoteNameFormat,
@@ -313,6 +318,7 @@ fun BasicVisualizationOverlay(
                         textSizeSp = channelScopeTextSizeSp,
                         hideWhenOverflow = channelScopeTextHideWhenOverflow,
                         textShadowEnabled = channelScopeTextShadowEnabled,
+                        textFont = channelScopeTextFont,
                         noteFormat = channelScopeTextNoteFormat,
                         showChannel = channelScopeTextShowChannel,
                         showNote = channelScopeTextShowNote,
@@ -392,6 +398,7 @@ private fun ChannelScopeTextOverlay(
     textSizeSp: Int,
     hideWhenOverflow: Boolean,
     textShadowEnabled: Boolean,
+    textFont: VisualizationChannelScopeTextFont,
     noteFormat: VisualizationNoteNameFormat,
     showChannel: Boolean,
     showNote: Boolean,
@@ -411,6 +418,7 @@ private fun ChannelScopeTextOverlay(
         val cellWidth = maxWidth / safeCols
         val cellHeight = maxHeight / safeRows
         val selectedTextSizeSp = textSizeSp.coerceIn(6, 22)
+        val textFontFamily = remember(textFont) { resolveChannelScopeTextFontFamily(textFont) }
         val minimumAutoTextSizeSp = (selectedTextSizeSp - 6).coerceAtLeast(6)
         val effectiveTextSizeSp = computeAutoChannelScopeTextSizeSp(
             selectedTextSizeSp = selectedTextSizeSp,
@@ -482,6 +490,7 @@ private fun ChannelScopeTextOverlay(
                         val textStyle = MaterialTheme.typography.labelSmall.copy(
                             fontSize = effectiveTextSizeSp.sp,
                             lineHeight = effectiveTextSizeSp.sp,
+                            fontFamily = textFontFamily,
                             shadow = if (textShadowEnabled) {
                                 Shadow(
                                     color = Color.Black.copy(alpha = 0.62f),
@@ -569,6 +578,16 @@ private fun ChannelScopeTextOverlay(
                 }
             }
         }
+    }
+}
+
+private fun resolveChannelScopeTextFontFamily(font: VisualizationChannelScopeTextFont): FontFamily {
+    return when (font) {
+        VisualizationChannelScopeTextFont.System -> FontFamily.Default
+        VisualizationChannelScopeTextFont.RaccoonSerif -> FontFamily(Font(R.font.raccoon_serif_base))
+        VisualizationChannelScopeTextFont.RaccoonMono -> FontFamily(Font(R.font.raccoon_serif_mono))
+        VisualizationChannelScopeTextFont.RetroCuteMono -> FontFamily(Font(R.font.retro_pixel_cute_mono))
+        VisualizationChannelScopeTextFont.RetroThick -> FontFamily(Font(R.font.retro_pixel_thick))
     }
 }
 

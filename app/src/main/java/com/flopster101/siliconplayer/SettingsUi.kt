@@ -2758,6 +2758,7 @@ internal fun SettingsScreen(
                         val scopeTextSizeKey = "visualization_channel_scope_text_size_sp"
                         val scopeTextHideWhenOverflowKey = "visualization_channel_scope_text_hide_when_overflow"
                         val scopeTextShadowEnabledKey = "visualization_channel_scope_text_shadow_enabled"
+                        val scopeTextFontKey = "visualization_channel_scope_text_font"
                         val scopeTextColorModeKey = "visualization_channel_scope_text_color_mode"
                         val scopeCustomTextColorKey = "visualization_channel_scope_custom_text_color_argb"
                         val scopeTextNoteFormatKey = "visualization_channel_scope_text_note_format"
@@ -3021,6 +3022,16 @@ internal fun SettingsScreen(
                                 )
                             )
                         }
+                        var scopeTextFont by remember {
+                            mutableStateOf(
+                                VisualizationChannelScopeTextFont.fromStorage(
+                                    prefs.getString(
+                                        scopeTextFontKey,
+                                        AppDefaults.Visualization.ChannelScope.textFont.storageValue
+                                    )
+                                )
+                            )
+                        }
                         var scopeTextColorMode by remember {
                             mutableStateOf(
                                 VisualizationChannelScopeTextColorMode.fromStorage(
@@ -3109,6 +3120,7 @@ internal fun SettingsScreen(
                         var showTextAnchorDialog by remember { mutableStateOf(false) }
                         var showTextPaddingDialog by remember { mutableStateOf(false) }
                         var showTextSizeDialog by remember { mutableStateOf(false) }
+                        var showTextFontDialog by remember { mutableStateOf(false) }
                         var showTextColorModeDialog by remember { mutableStateOf(false) }
                         var showCustomTextColorDialog by remember { mutableStateOf(false) }
                         var showTextNoteFormatDialog by remember { mutableStateOf(false) }
@@ -3304,6 +3316,13 @@ internal fun SettingsScreen(
                                 description = "Font size for per-channel overlay text.",
                                 value = "${scopeTextSizeSp}sp",
                                 onClick = { showTextSizeDialog = true }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Text font",
+                                description = "Typeface used for per-channel overlay text.",
+                                value = scopeTextFont.label,
+                                onClick = { showTextFontDialog = true }
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             SettingsValuePickerCard(
@@ -3870,6 +3889,44 @@ internal fun SettingsScreen(
                                 },
                                 dismissButton = {
                                     TextButton(onClick = { showTextColorModeDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showTextFontDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTextFontDialog = false },
+                                title = { Text("Text font") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationChannelScopeTextFont.entries.forEach { entry ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTextFont = entry
+                                                        prefs.edit().putString(scopeTextFontKey, entry.storageValue).apply()
+                                                        showTextFontDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = entry == scopeTextFont,
+                                                    onClick = {
+                                                        scopeTextFont = entry
+                                                        prefs.edit().putString(scopeTextFontKey, entry.storageValue).apply()
+                                                        showTextFontDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(entry.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTextFontDialog = false }) { Text("Close") }
                                 },
                                 confirmButton = {}
                             )

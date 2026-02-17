@@ -801,6 +801,7 @@ private object AppPreferenceKeys {
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SIZE_SP = "visualization_channel_scope_text_size_sp"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_HIDE_WHEN_OVERFLOW = "visualization_channel_scope_text_hide_when_overflow"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHADOW_ENABLED = "visualization_channel_scope_text_shadow_enabled"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_FONT = "visualization_channel_scope_text_font"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_COLOR_MODE = "visualization_channel_scope_text_color_mode"
     const val VISUALIZATION_CHANNEL_SCOPE_CUSTOM_TEXT_COLOR_ARGB = "visualization_channel_scope_custom_text_color_argb"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_NOTE_FORMAT = "visualization_channel_scope_text_note_format"
@@ -4566,6 +4567,10 @@ private fun AppNavigation(
                                     AppDefaults.Visualization.ChannelScope.textShadowEnabled
                                 )
                                 .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_FONT,
+                                    AppDefaults.Visualization.ChannelScope.textFont.storageValue
+                                )
+                                .putString(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_COLOR_MODE,
                                     AppDefaults.Visualization.ChannelScope.textColorMode.storageValue
                                 )
@@ -4962,6 +4967,10 @@ private fun AppNavigation(
                                 .putBoolean(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHADOW_ENABLED,
                                     AppDefaults.Visualization.ChannelScope.textShadowEnabled
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_FONT,
+                                    AppDefaults.Visualization.ChannelScope.textFont.storageValue
                                 )
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_COLOR_MODE,

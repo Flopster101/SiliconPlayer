@@ -53,6 +53,7 @@ import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
 import com.flopster101.siliconplayer.VisualizationChannelScopeTextAnchor
 import com.flopster101.siliconplayer.VisualizationChannelScopeBackgroundMode
 import com.flopster101.siliconplayer.VisualizationChannelScopeTextColorMode
+import com.flopster101.siliconplayer.VisualizationChannelScopeTextFont
 import com.flopster101.siliconplayer.VisualizationMode
 import com.flopster101.siliconplayer.VisualizationNoteNameFormat
 import com.flopster101.siliconplayer.VisualizationOscColorMode
@@ -361,6 +362,7 @@ internal data class ChannelScopePrefs(
     val textSizeSp: Int,
     val textHideWhenOverflow: Boolean,
     val textShadowEnabled: Boolean,
+    val textFont: VisualizationChannelScopeTextFont,
     val textColorMode: VisualizationChannelScopeTextColorMode,
     val customTextColorArgb: Int,
     val textNoteFormat: VisualizationNoteNameFormat,
@@ -397,6 +399,7 @@ internal data class ChannelScopePrefs(
         private const val KEY_TEXT_SIZE_SP = "visualization_channel_scope_text_size_sp"
         private const val KEY_TEXT_HIDE_WHEN_OVERFLOW = "visualization_channel_scope_text_hide_when_overflow"
         private const val KEY_TEXT_SHADOW_ENABLED = "visualization_channel_scope_text_shadow_enabled"
+        private const val KEY_TEXT_FONT = "visualization_channel_scope_text_font"
         private const val KEY_TEXT_COLOR_MODE = "visualization_channel_scope_text_color_mode"
         private const val KEY_CUSTOM_TEXT_COLOR_ARGB = "visualization_channel_scope_custom_text_color_argb"
         private const val KEY_TEXT_NOTE_FORMAT = "visualization_channel_scope_text_note_format"
@@ -556,6 +559,12 @@ internal data class ChannelScopePrefs(
                     KEY_TEXT_SHADOW_ENABLED,
                     AppDefaults.Visualization.ChannelScope.textShadowEnabled
                 ),
+                textFont = VisualizationChannelScopeTextFont.fromStorage(
+                    sharedPrefs.getString(
+                        KEY_TEXT_FONT,
+                        AppDefaults.Visualization.ChannelScope.textFont.storageValue
+                    )
+                ),
                 textColorMode = VisualizationChannelScopeTextColorMode.fromStorage(
                     sharedPrefs.getString(
                         KEY_TEXT_COLOR_MODE,
@@ -645,6 +654,7 @@ private data class ChannelScopeVisualState(
     val textSizeSp: Int,
     val textHideWhenOverflow: Boolean,
     val textShadowEnabled: Boolean,
+    val textFont: VisualizationChannelScopeTextFont,
     val textColorMode: VisualizationChannelScopeTextColorMode,
     val customTextColorArgb: Int,
     val textNoteFormat: VisualizationNoteNameFormat,
@@ -1033,6 +1043,7 @@ internal fun AlbumArtPlaceholder(
         textSizeSp = channelScopePrefs.textSizeSp,
         textHideWhenOverflow = channelScopePrefs.textHideWhenOverflow,
         textShadowEnabled = channelScopePrefs.textShadowEnabled,
+        textFont = channelScopePrefs.textFont,
         textColorMode = channelScopePrefs.textColorMode,
         customTextColorArgb = channelScopePrefs.customTextColorArgb,
         textNoteFormat = channelScopePrefs.textNoteFormat,
@@ -1223,6 +1234,7 @@ internal fun AlbumArtPlaceholder(
                 channelScopeTextSizeSp = channelScopeState.textSizeSp,
                 channelScopeTextHideWhenOverflow = channelScopeState.textHideWhenOverflow,
                 channelScopeTextShadowEnabled = channelScopeState.textShadowEnabled,
+                channelScopeTextFont = channelScopeState.textFont,
                 channelScopeTextColorMode = channelScopeState.textColorMode,
                 channelScopeCustomTextColorArgb = channelScopeState.customTextColorArgb,
                 channelScopeTextNoteFormat = channelScopeState.textNoteFormat,

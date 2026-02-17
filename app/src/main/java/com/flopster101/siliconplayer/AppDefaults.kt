@@ -92,6 +92,10 @@ object AppDefaults {
             const val textShowVolume = true
             const val textShowEffect = true
             const val textShowInstrumentSample = true
+            const val textVuEnabled = false
+            val textVuAnchor = VisualizationVuAnchor.Bottom
+            val textVuColorMode = VisualizationChannelScopeTextColorMode.OpenMptInspired
+            const val textVuCustomColorArgb = 0xFFFFFFFF.toInt()
 
             val windowRangeMs = 5..200
             val gainRangePercent = 25..600

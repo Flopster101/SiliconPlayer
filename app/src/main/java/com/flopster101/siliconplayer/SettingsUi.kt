@@ -2767,6 +2767,10 @@ internal fun SettingsScreen(
                         val scopeTextShowVolumeKey = "visualization_channel_scope_text_show_volume"
                         val scopeTextShowEffectKey = "visualization_channel_scope_text_show_effect"
                         val scopeTextShowInstrumentSampleKey = "visualization_channel_scope_text_show_instrument_sample"
+                        val scopeTextVuEnabledKey = "visualization_channel_scope_text_vu_enabled"
+                        val scopeTextVuAnchorKey = "visualization_channel_scope_text_vu_anchor"
+                        val scopeTextVuColorModeKey = "visualization_channel_scope_text_vu_color_mode"
+                        val scopeTextVuCustomColorKey = "visualization_channel_scope_text_vu_custom_color_argb"
                         val context = LocalContext.current
                         val prefs = remember(context) {
                             context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -3100,6 +3104,42 @@ internal fun SettingsScreen(
                                 )
                             )
                         }
+                        var scopeTextVuEnabled by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextVuEnabledKey,
+                                    AppDefaults.Visualization.ChannelScope.textVuEnabled
+                                )
+                            )
+                        }
+                        var scopeTextVuAnchor by remember {
+                            mutableStateOf(
+                                VisualizationVuAnchor.fromStorage(
+                                    prefs.getString(
+                                        scopeTextVuAnchorKey,
+                                        AppDefaults.Visualization.ChannelScope.textVuAnchor.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeTextVuColorMode by remember {
+                            mutableStateOf(
+                                VisualizationChannelScopeTextColorMode.fromStorage(
+                                    prefs.getString(
+                                        scopeTextVuColorModeKey,
+                                        AppDefaults.Visualization.ChannelScope.textVuColorMode.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeTextVuCustomColorArgb by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeTextVuCustomColorKey,
+                                    AppDefaults.Visualization.ChannelScope.textVuCustomColorArgb
+                                )
+                            )
+                        }
 
                         var showWindowDialog by remember { mutableStateOf(false) }
                         var showRendererBackendDialog by remember { mutableStateOf(false) }
@@ -3123,6 +3163,9 @@ internal fun SettingsScreen(
                         var showTextFontDialog by remember { mutableStateOf(false) }
                         var showTextColorModeDialog by remember { mutableStateOf(false) }
                         var showCustomTextColorDialog by remember { mutableStateOf(false) }
+                        var showTextVuAnchorDialog by remember { mutableStateOf(false) }
+                        var showTextVuColorModeDialog by remember { mutableStateOf(false) }
+                        var showTextVuCustomColorDialog by remember { mutableStateOf(false) }
                         var showTextNoteFormatDialog by remember { mutableStateOf(false) }
 
                         SettingsSectionLabel("Channel scope")
@@ -3417,6 +3460,41 @@ internal fun SettingsScreen(
                                     prefs.edit().putBoolean(scopeTextShowInstrumentSampleKey, enabled).apply()
                                 }
                             )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Show VU strip",
+                                description = "Show a per-channel VU strip at top or bottom edge.",
+                                checked = scopeTextVuEnabled,
+                                onCheckedChange = { enabled ->
+                                    scopeTextVuEnabled = enabled
+                                    prefs.edit().putBoolean(scopeTextVuEnabledKey, enabled).apply()
+                                }
+                            )
+                            if (scopeTextVuEnabled) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                SettingsValuePickerCard(
+                                    title = "VU strip anchor",
+                                    description = "Place VU strip at top or bottom of each channel cell.",
+                                    value = scopeTextVuAnchor.label,
+                                    onClick = { showTextVuAnchorDialog = true }
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                SettingsValuePickerCard(
+                                    title = "VU strip color",
+                                    description = "Color source used by the VU strip.",
+                                    value = scopeTextVuColorMode.label,
+                                    onClick = { showTextVuColorModeDialog = true }
+                                )
+                                if (scopeTextVuColorMode == VisualizationChannelScopeTextColorMode.Custom) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    SettingsValuePickerCard(
+                                        title = "Custom VU strip color",
+                                        description = "RGB color used when VU strip color mode is Custom.",
+                                        value = String.format(Locale.US, "#%06X", scopeTextVuCustomColorArgb and 0xFFFFFF),
+                                        onClick = { showTextVuCustomColorDialog = true }
+                                    )
+                                }
+                            }
                         }
 
                         if (showWindowDialog) {
@@ -3929,6 +4007,94 @@ internal fun SettingsScreen(
                                     TextButton(onClick = { showTextFontDialog = false }) { Text("Close") }
                                 },
                                 confirmButton = {}
+                            )
+                        }
+                        if (showTextVuAnchorDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTextVuAnchorDialog = false },
+                                title = { Text("VU strip anchor") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        listOf(VisualizationVuAnchor.Top, VisualizationVuAnchor.Bottom).forEach { entry ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTextVuAnchor = entry
+                                                        prefs.edit().putString(scopeTextVuAnchorKey, entry.storageValue).apply()
+                                                        showTextVuAnchorDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = entry == scopeTextVuAnchor,
+                                                    onClick = {
+                                                        scopeTextVuAnchor = entry
+                                                        prefs.edit().putString(scopeTextVuAnchorKey, entry.storageValue).apply()
+                                                        showTextVuAnchorDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(entry.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTextVuAnchorDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showTextVuColorModeDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTextVuColorModeDialog = false },
+                                title = { Text("VU strip color") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationChannelScopeTextColorMode.entries.forEach { entry ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTextVuColorMode = entry
+                                                        prefs.edit().putString(scopeTextVuColorModeKey, entry.storageValue).apply()
+                                                        showTextVuColorModeDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = entry == scopeTextVuColorMode,
+                                                    onClick = {
+                                                        scopeTextVuColorMode = entry
+                                                        prefs.edit().putString(scopeTextVuColorModeKey, entry.storageValue).apply()
+                                                        showTextVuColorModeDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(entry.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTextVuColorModeDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showTextVuCustomColorDialog) {
+                            VisualizationRgbColorPickerDialog(
+                                title = "Custom VU strip color",
+                                initialArgb = scopeTextVuCustomColorArgb,
+                                onDismiss = { showTextVuCustomColorDialog = false },
+                                onConfirm = { argb ->
+                                    scopeTextVuCustomColorArgb = argb
+                                    prefs.edit().putInt(scopeTextVuCustomColorKey, argb).apply()
+                                    showTextVuCustomColorDialog = false
+                                }
                             )
                         }
                         if (showCustomTextColorDialog) {

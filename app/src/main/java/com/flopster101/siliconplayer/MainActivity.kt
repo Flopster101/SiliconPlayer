@@ -815,6 +815,10 @@ private object AppPreferenceKeys {
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_VOLUME = "visualization_channel_scope_text_show_volume"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_EFFECT = "visualization_channel_scope_text_show_effect"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT_SAMPLE = "visualization_channel_scope_text_show_instrument_sample"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_ENABLED = "visualization_channel_scope_text_vu_enabled"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_ANCHOR = "visualization_channel_scope_text_vu_anchor"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_COLOR_MODE = "visualization_channel_scope_text_vu_color_mode"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_CUSTOM_COLOR_ARGB = "visualization_channel_scope_text_vu_custom_color_argb"
 
     // Plugin management keys
     fun decoderEnabledKey(decoderName: String) = "decoder_${decoderName}_enabled"
@@ -4618,6 +4622,22 @@ private fun AppNavigation(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT_SAMPLE,
                                     AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
                                 )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_ENABLED,
+                                    AppDefaults.Visualization.ChannelScope.textVuEnabled
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_ANCHOR,
+                                    AppDefaults.Visualization.ChannelScope.textVuAnchor.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_COLOR_MODE,
+                                    AppDefaults.Visualization.ChannelScope.textVuColorMode.storageValue
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_CUSTOM_COLOR_ARGB,
+                                    AppDefaults.Visualization.ChannelScope.textVuCustomColorArgb
+                                )
                                 .apply()
                         },
                         audioFocusInterrupt = audioFocusInterrupt,
@@ -5019,6 +5039,22 @@ private fun AppNavigation(
                                 .putBoolean(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT_SAMPLE,
                                     AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
+                                )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_ENABLED,
+                                    AppDefaults.Visualization.ChannelScope.textVuEnabled
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_ANCHOR,
+                                    AppDefaults.Visualization.ChannelScope.textVuAnchor.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_COLOR_MODE,
+                                    AppDefaults.Visualization.ChannelScope.textVuColorMode.storageValue
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_CUSTOM_COLOR_ARGB,
+                                    AppDefaults.Visualization.ChannelScope.textVuCustomColorArgb
                                 )
                                 .apply()
                             browserLaunchLocationId = null

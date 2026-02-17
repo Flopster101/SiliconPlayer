@@ -370,7 +370,11 @@ internal data class ChannelScopePrefs(
     val textShowNote: Boolean,
     val textShowVolume: Boolean,
     val textShowEffect: Boolean,
-    val textShowInstrumentSample: Boolean
+    val textShowInstrumentSample: Boolean,
+    val textVuEnabled: Boolean,
+    val textVuAnchor: VisualizationVuAnchor,
+    val textVuColorMode: VisualizationChannelScopeTextColorMode,
+    val textVuCustomColorArgb: Int
 ) {
     companion object {
         private const val KEY_WINDOW_MS = "visualization_channel_scope_window_ms"
@@ -408,6 +412,10 @@ internal data class ChannelScopePrefs(
         private const val KEY_TEXT_SHOW_VOLUME = "visualization_channel_scope_text_show_volume"
         private const val KEY_TEXT_SHOW_EFFECT = "visualization_channel_scope_text_show_effect"
         private const val KEY_TEXT_SHOW_INSTRUMENT_SAMPLE = "visualization_channel_scope_text_show_instrument_sample"
+        private const val KEY_TEXT_VU_ENABLED = "visualization_channel_scope_text_vu_enabled"
+        private const val KEY_TEXT_VU_ANCHOR = "visualization_channel_scope_text_vu_anchor"
+        private const val KEY_TEXT_VU_COLOR_MODE = "visualization_channel_scope_text_vu_color_mode"
+        private const val KEY_TEXT_VU_CUSTOM_COLOR_ARGB = "visualization_channel_scope_text_vu_custom_color_argb"
 
         fun from(sharedPrefs: android.content.SharedPreferences): ChannelScopePrefs {
             val defaultTriggerStorage = AppDefaults.Visualization.ChannelScope.triggerMode.storageValue
@@ -600,6 +608,26 @@ internal data class ChannelScopePrefs(
                 textShowInstrumentSample = sharedPrefs.getBoolean(
                     KEY_TEXT_SHOW_INSTRUMENT_SAMPLE,
                     AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
+                ),
+                textVuEnabled = sharedPrefs.getBoolean(
+                    KEY_TEXT_VU_ENABLED,
+                    AppDefaults.Visualization.ChannelScope.textVuEnabled
+                ),
+                textVuAnchor = VisualizationVuAnchor.fromStorage(
+                    sharedPrefs.getString(
+                        KEY_TEXT_VU_ANCHOR,
+                        AppDefaults.Visualization.ChannelScope.textVuAnchor.storageValue
+                    )
+                ),
+                textVuColorMode = VisualizationChannelScopeTextColorMode.fromStorage(
+                    sharedPrefs.getString(
+                        KEY_TEXT_VU_COLOR_MODE,
+                        AppDefaults.Visualization.ChannelScope.textVuColorMode.storageValue
+                    )
+                ),
+                textVuCustomColorArgb = sharedPrefs.getInt(
+                    KEY_TEXT_VU_CUSTOM_COLOR_ARGB,
+                    AppDefaults.Visualization.ChannelScope.textVuCustomColorArgb
                 )
             )
         }
@@ -662,7 +690,11 @@ private data class ChannelScopeVisualState(
     val textShowNote: Boolean,
     val textShowVolume: Boolean,
     val textShowEffect: Boolean,
-    val textShowInstrumentSample: Boolean
+    val textShowInstrumentSample: Boolean,
+    val textVuEnabled: Boolean,
+    val textVuAnchor: VisualizationVuAnchor,
+    val textVuColorMode: VisualizationChannelScopeTextColorMode,
+    val textVuCustomColorArgb: Int
 )
 
 @Composable
@@ -1051,7 +1083,11 @@ internal fun AlbumArtPlaceholder(
         textShowNote = channelScopePrefs.textShowNote,
         textShowVolume = channelScopePrefs.textShowVolume,
         textShowEffect = channelScopePrefs.textShowEffect,
-        textShowInstrumentSample = channelScopePrefs.textShowInstrumentSample
+        textShowInstrumentSample = channelScopePrefs.textShowInstrumentSample,
+        textVuEnabled = channelScopePrefs.textVuEnabled,
+        textVuAnchor = channelScopePrefs.textVuAnchor,
+        textVuColorMode = channelScopePrefs.textVuColorMode,
+        textVuCustomColorArgb = channelScopePrefs.textVuCustomColorArgb
     )
     val artworkBrightness = remember(artwork) {
         val bitmap = artwork ?: return@remember null
@@ -1243,6 +1279,10 @@ internal fun AlbumArtPlaceholder(
                 channelScopeTextShowVolume = channelScopeState.textShowVolume,
                 channelScopeTextShowEffect = channelScopeState.textShowEffect,
                 channelScopeTextShowInstrumentSample = channelScopeState.textShowInstrumentSample,
+                channelScopeTextVuEnabled = channelScopeState.textVuEnabled,
+                channelScopeTextVuAnchor = channelScopeState.textVuAnchor,
+                channelScopeTextVuColorMode = channelScopeState.textVuColorMode,
+                channelScopeTextVuCustomColorArgb = channelScopeState.textVuCustomColorArgb,
                 channelScopeCornerRadiusDp = artworkCornerRadiusDp.coerceIn(0, 48),
                 channelScopeOnFrameStats = { fps, frameMs ->
                     visDebugDrawFps = fps.coerceAtLeast(0)

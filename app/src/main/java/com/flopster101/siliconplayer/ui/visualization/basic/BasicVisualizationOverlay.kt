@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -43,6 +44,7 @@ import com.flopster101.siliconplayer.ui.visualization.gl.ChannelScopeGlTextureVi
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.ceil
+import kotlin.math.floor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.flopster101.siliconplayer.NativeBridge
@@ -118,6 +120,10 @@ fun BasicVisualizationOverlay(
     channelScopeTextShowVolume: Boolean,
     channelScopeTextShowEffect: Boolean,
     channelScopeTextShowInstrumentSample: Boolean,
+    channelScopeTextVuEnabled: Boolean,
+    channelScopeTextVuAnchor: VisualizationVuAnchor,
+    channelScopeTextVuColorMode: VisualizationChannelScopeTextColorMode,
+    channelScopeTextVuCustomColorArgb: Int,
     channelScopeCornerRadiusDp: Int = 0,
     channelScopeOnFrameStats: ((fps: Int, frameMs: Int) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -183,6 +189,7 @@ fun BasicVisualizationOverlay(
     val channelScopeCustomLineColor = Color(channelScopeCustomLineColorArgb)
     val channelScopeCustomGridColor = Color(channelScopeCustomGridColorArgb)
     val channelScopeCustomTextColor = Color(channelScopeCustomTextColorArgb)
+    val channelScopeVuCustomColor = Color(channelScopeTextVuCustomColorArgb)
     val channelScopeCornerRadiusShape = RoundedCornerShape(channelScopeCornerRadiusDp.coerceIn(0, 48).dp)
     val channelScopeCornerRadiusPx = with(LocalDensity.current) {
         channelScopeCornerRadiusDp.coerceIn(0, 48).dp.toPx()
@@ -207,6 +214,11 @@ fun BasicVisualizationOverlay(
         mode = channelScopeTextColorMode,
         monetColor = monetOscLineColor,
         customColor = channelScopeCustomTextColor
+    )
+    val channelScopeVuColor = resolveChannelScopeVuColor(
+        mode = channelScopeTextVuColorMode,
+        monetColor = monetOscLineColor,
+        customColor = channelScopeVuCustomColor
     )
     val barBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)
 
@@ -306,7 +318,7 @@ fun BasicVisualizationOverlay(
                         )
                     }
                 }
-                if (channelScopeTextEnabled && channelScopeHistories.isNotEmpty()) {
+                if ((channelScopeTextEnabled || channelScopeTextVuEnabled) && channelScopeHistories.isNotEmpty()) {
                     ChannelScopeTextOverlay(
                         channelHistories = channelScopeHistories,
                         channelTextStates = channelScopeTextStates,
@@ -320,11 +332,15 @@ fun BasicVisualizationOverlay(
                         textShadowEnabled = channelScopeTextShadowEnabled,
                         textFont = channelScopeTextFont,
                         noteFormat = channelScopeTextNoteFormat,
-                        showChannel = channelScopeTextShowChannel,
-                        showNote = channelScopeTextShowNote,
-                        showVolume = channelScopeTextShowVolume,
-                        showEffect = channelScopeTextShowEffect,
-                        showInstrumentSample = channelScopeTextShowInstrumentSample,
+                        showChannel = channelScopeTextEnabled && channelScopeTextShowChannel,
+                        showNote = channelScopeTextEnabled && channelScopeTextShowNote,
+                        showVolume = channelScopeTextEnabled && channelScopeTextShowVolume,
+                        showEffect = channelScopeTextEnabled && channelScopeTextShowEffect,
+                        showInstrumentSample = channelScopeTextEnabled && channelScopeTextShowInstrumentSample,
+                        vuEnabled = channelScopeTextVuEnabled,
+                        vuAnchor = channelScopeTextVuAnchor,
+                        vuColor = channelScopeVuColor,
+                        vuInsetPx = channelScopeGridWidthDp.toFloat().coerceAtLeast(1f),
                         textPalette = channelScopeTextPalette,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -386,6 +402,19 @@ private fun deriveVuTrackColor(accent: Color): Color {
     return lerp(accent, neutral, 0.72f).copy(alpha = 0.62f)
 }
 
+private fun resolveChannelScopeVuColor(
+    mode: VisualizationChannelScopeTextColorMode,
+    monetColor: Color,
+    customColor: Color
+): Color {
+    return when (mode) {
+        VisualizationChannelScopeTextColorMode.Monet -> monetColor.copy(alpha = 0.92f)
+        VisualizationChannelScopeTextColorMode.OpenMptInspired -> Color(0xFF8AE234)
+        VisualizationChannelScopeTextColorMode.White -> Color.White
+        VisualizationChannelScopeTextColorMode.Custom -> customColor
+    }
+}
+
 @Composable
 private fun ChannelScopeTextOverlay(
     channelHistories: List<FloatArray>,
@@ -405,6 +434,10 @@ private fun ChannelScopeTextOverlay(
     showVolume: Boolean,
     showEffect: Boolean,
     showInstrumentSample: Boolean,
+    vuEnabled: Boolean,
+    vuAnchor: VisualizationVuAnchor,
+    vuColor: Color,
+    vuInsetPx: Float,
     textPalette: ChannelScopeTextPalette,
     modifier: Modifier = Modifier
 ) {
@@ -417,6 +450,9 @@ private fun ChannelScopeTextOverlay(
         val safeRows = rows.coerceAtLeast(1)
         val cellWidth = maxWidth / safeCols
         val cellHeight = maxHeight / safeRows
+        val vuStripHeightDp = with(LocalDensity.current) {
+            floor(2.dp.toPx()).coerceAtLeast(1f).toDp()
+        }
         val selectedTextSizeSp = textSizeSp.coerceIn(6, 22)
         val textFontFamily = remember(textFont) { resolveChannelScopeTextFontFamily(textFont) }
         val minimumAutoTextSizeSp = (selectedTextSizeSp - 6).coerceAtLeast(6)
@@ -441,9 +477,6 @@ private fun ChannelScopeTextOverlay(
             showInstrumentSample = showInstrumentSample
         ) <= cellWidth.value
         val showText = !hideWhenOverflow || canRenderAtEffectiveSize
-        if (!showText) {
-            return@BoxWithConstraints
-        }
         for (col in 0 until columns) {
             for (row in 0 until rows) {
                 val channel = (col * rows) + row
@@ -482,7 +515,35 @@ private fun ChannelScopeTextOverlay(
                         .size(cellWidth, cellHeight),
                     contentAlignment = resolveTextAlignment(anchor)
                 ) {
-                    if (hasContent) {
+                    val vuLevel = if (channel < channels) {
+                        computeChannelScopeVuLevel(channelHistories[channel])
+                    } else {
+                        0f
+                    }
+                    if (vuEnabled) {
+                        val meterTrackColor = vuColor.copy(alpha = 0.25f)
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val h = vuStripHeightDp.toPx().coerceAtLeast(1f)
+                            val inset = vuInsetPx.coerceAtLeast(1f)
+                            val usableWidth = (size.width - (inset * 2f)).coerceAtLeast(0f)
+                            val y = if (vuAnchor == VisualizationVuAnchor.Top) {
+                                inset
+                            } else {
+                                (size.height - h - inset).coerceAtLeast(0f)
+                            }
+                            drawRect(
+                                color = meterTrackColor,
+                                topLeft = Offset(inset, y),
+                                size = androidx.compose.ui.geometry.Size(usableWidth, h)
+                            )
+                            drawRect(
+                                color = vuColor,
+                                topLeft = Offset(inset, y),
+                                size = androidx.compose.ui.geometry.Size(usableWidth * vuLevel.coerceIn(0f, 1f), h)
+                            )
+                        }
+                    }
+                    if (showText && hasContent) {
                         val scale = effectiveTextSizeSp.toFloat() / 8f
                         val noteSlot = (24f * scale).dp
                         val volumeSlot = (30f * scale).dp
@@ -579,6 +640,19 @@ private fun ChannelScopeTextOverlay(
             }
         }
     }
+}
+
+private fun computeChannelScopeVuLevel(history: FloatArray): Float {
+    if (history.isEmpty()) return 0f
+    var peak = 0f
+    var i = 0
+    val step = max(1, history.size / 64)
+    while (i < history.size) {
+        val sample = kotlin.math.abs(history[i])
+        if (sample > peak) peak = sample
+        i += step
+    }
+    return peak.coerceIn(0f, 1f)
 }
 
 private fun resolveChannelScopeTextFontFamily(font: VisualizationChannelScopeTextFont): FontFamily {

@@ -354,6 +354,8 @@ internal fun SettingsScreen(
     onVgmPlaySampleRateChanged: (Int) -> Unit,
     gmeSampleRateHz: Int,
     onGmeSampleRateChanged: (Int) -> Unit,
+    sidPlayFpSampleRateHz: Int,
+    onSidPlayFpSampleRateChanged: (Int) -> Unit,
     gmeTempoPercent: Int,
     onGmeTempoPercentChanged: (Int) -> Unit,
     gmeStereoSeparationPercent: Int,
@@ -3085,6 +3087,7 @@ internal fun SettingsScreen(
                                 "LibOpenMPT" -> openMptSampleRateHz
                                 "VGMPlay" -> vgmPlaySampleRateHz
                                 "Game Music Emu" -> gmeSampleRateHz
+                                "LibSIDPlayFP" -> sidPlayFpSampleRateHz
                                 else -> fixedSampleRateHz
                             }
                             val onSampleRateSelected: ((Int) -> Unit)? = when (selectedPluginName) {
@@ -3092,6 +3095,7 @@ internal fun SettingsScreen(
                                 "LibOpenMPT" -> onOpenMptSampleRateChanged
                                 "VGMPlay" -> onVgmPlaySampleRateChanged
                                 "Game Music Emu" -> onGmeSampleRateChanged
+                                "LibSIDPlayFP" -> onSidPlayFpSampleRateChanged
                                 else -> null
                             }
                             val fixedRateLabel = if (fixedSampleRateHz > 0) {

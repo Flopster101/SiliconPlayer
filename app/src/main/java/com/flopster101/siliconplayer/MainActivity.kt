@@ -1492,6 +1492,11 @@ private fun AppNavigation(
             prefs.getInt(CorePreferenceKeys.CORE_RATE_GME, GmeDefaults.coreSampleRateHz)
         )
     }
+    var sidPlayFpCoreSampleRateHz by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.CORE_RATE_SIDPLAYFP, SidPlayFpDefaults.coreSampleRateHz)
+        )
+    }
     var gmeTempoPercent by remember {
         mutableIntStateOf(
             prefs.getInt(CorePreferenceKeys.GME_TEMPO_PERCENT, GmeDefaults.tempoPercent)
@@ -2946,6 +2951,13 @@ private fun AppNavigation(
             .putInt(CorePreferenceKeys.CORE_RATE_GME, gmeCoreSampleRateHz)
             .apply()
         NativeBridge.setCoreOutputSampleRate("Game Music Emu", gmeCoreSampleRateHz)
+    }
+
+    LaunchedEffect(sidPlayFpCoreSampleRateHz) {
+        prefs.edit()
+            .putInt(CorePreferenceKeys.CORE_RATE_SIDPLAYFP, sidPlayFpCoreSampleRateHz)
+            .apply()
+        NativeBridge.setCoreOutputSampleRate("LibSIDPlayFP", sidPlayFpCoreSampleRateHz)
     }
 
     LaunchedEffect(gmeTempoPercent) {
@@ -4710,6 +4722,8 @@ private fun AppNavigation(
                         onVgmPlaySampleRateChanged = { vgmPlayCoreSampleRateHz = it },
                         gmeSampleRateHz = gmeCoreSampleRateHz,
                         onGmeSampleRateChanged = { gmeCoreSampleRateHz = it },
+                        sidPlayFpSampleRateHz = sidPlayFpCoreSampleRateHz,
+                        onSidPlayFpSampleRateChanged = { sidPlayFpCoreSampleRateHz = it },
                         gmeTempoPercent = gmeTempoPercent,
                         onGmeTempoPercentChanged = { gmeTempoPercent = it },
                         gmeStereoSeparationPercent = gmeStereoSeparationPercent,

@@ -104,7 +104,7 @@ std::vector<std::string> LibSidPlayFpDecoder::getSupportedExtensions() {
 
 bool LibSidPlayFpDecoder::applyConfigLocked() {
     if (!player || !config || !sidBuilder) return false;
-    config->frequency = static_cast<uint_least32_t>(sampleRate);
+    config->frequency = static_cast<uint_least32_t>(requestedSampleRate);
     config->playback = SidConfig::STEREO;
     config->samplingMethod = SidConfig::INTERPOLATE;
     config->sidEmulation = sidBuilder.get();
@@ -112,6 +112,7 @@ bool LibSidPlayFpDecoder::applyConfigLocked() {
         LOGE("sidplayfp config failed: %s", player->error());
         return false;
     }
+    activeSampleRate = requestedSampleRate;
     return true;
 }
 
@@ -348,7 +349,7 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
         }
 
         const int framesRemaining = numFrames - framesWritten;
-        const unsigned int renderCycles = computeRenderCyclesForFrames(framesRemaining, sampleRate);
+        const unsigned int renderCycles = computeRenderCyclesForFrames(framesRemaining, activeSampleRate);
         const int produced = player->play(renderCycles);
         if (produced < 0) {
             LOGE("sidplayfp play failed: %s", player->error());
@@ -409,7 +410,7 @@ void LibSidPlayFpDecoder::seek(double seconds) {
     pendingMixedOffset = 0;
     const uint32_t targetMs = static_cast<uint32_t>(seconds * 1000.0);
     while (player->timeMs() < targetMs) {
-        const unsigned int renderCycles = computeRenderCyclesForFrames(1024, sampleRate);
+        const unsigned int renderCycles = computeRenderCyclesForFrames(1024, activeSampleRate);
         const int produced = player->play(renderCycles);
         if (produced <= 0) break;
     }
@@ -425,19 +426,18 @@ double LibSidPlayFpDecoder::getDuration() {
 }
 
 int LibSidPlayFpDecoder::getSampleRate() {
-    return sampleRate;
+    return player ? activeSampleRate : requestedSampleRate;
 }
 
 void LibSidPlayFpDecoder::setOutputSampleRate(int sampleRateHz) {
     if (sampleRateHz <= 0) return;
     std::lock_guard<std::mutex> lock(decodeMutex);
-    if (sampleRate == sampleRateHz) return;
-    sampleRate = sampleRateHz;
-    if (player && config) {
-        applyConfigLocked();
-        if (tune) {
-            selectSubtuneLocked(currentSubtuneIndex);
-        }
+    if (requestedSampleRate == sampleRateHz) return;
+    requestedSampleRate = sampleRateHz;
+    // SID sample-rate changes are restart-required.
+    // Keep the requested value and apply it on next configure/open.
+    if (!player) {
+        activeSampleRate = sampleRateHz;
     }
 }
 

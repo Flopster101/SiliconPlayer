@@ -74,7 +74,8 @@ private:
     std::vector<double> subtuneDurationsSeconds;
     int subtuneCount = 1;
     int currentSubtuneIndex = 0;
-    int sampleRate = 48000;
+    int requestedSampleRate = 48000;
+    int activeSampleRate = 48000;
     int outputChannels = 2;
     int sidChipCount = 1;
     int sidVoiceCount = 3;

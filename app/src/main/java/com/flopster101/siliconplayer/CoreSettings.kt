@@ -5,6 +5,7 @@ object CorePreferenceKeys {
     const val CORE_RATE_OPENMPT = "core_rate_openmpt"
     const val CORE_RATE_VGMPLAY = "core_rate_vgmplay"
     const val CORE_RATE_GME = "core_rate_gme"
+    const val CORE_RATE_SIDPLAYFP = "core_rate_sidplayfp"
     const val OPENMPT_STEREO_SEPARATION_PERCENT = "openmpt_stereo_separation_percent"
     const val OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT = "openmpt_stereo_separation_amiga_percent"
     const val OPENMPT_INTERPOLATION_FILTER_LENGTH = "openmpt_interpolation_filter_length"
@@ -71,4 +72,8 @@ object GmeDefaults {
     const val spcInterpolation = 0
     const val spcUseNativeSampleRate = true
     const val unknownDurationSeconds = 180
+}
+
+object SidPlayFpDefaults {
+    const val coreSampleRateHz = 0
 }

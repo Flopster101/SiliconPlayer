@@ -4,6 +4,7 @@ plugins {
 }
 
 import java.io.ByteArrayOutputStream
+import java.io.File
 
 fun gitShortSha(): String {
     return try {
@@ -22,6 +23,7 @@ fun gitShortSha(): String {
 android {
     namespace = "com.flopster101.siliconplayer"
     compileSdk = 34
+    buildToolsVersion = "36.1.0"
 
     defaultConfig {
         applicationId = "com.flopster101.siliconplayer"
@@ -93,4 +95,111 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+}
+
+fun resolveAndroidSdkDir(): File {
+    val sdkEnv = System.getenv("ANDROID_SDK_ROOT")
+        ?: System.getenv("ANDROID_HOME")
+    require(!sdkEnv.isNullOrBlank()) { "ANDROID_SDK_ROOT/ANDROID_HOME is not set" }
+    val sdkDir = File(sdkEnv)
+    require(sdkDir.isDirectory) { "Android SDK directory not found: $sdkDir" }
+    return sdkDir
+}
+
+fun resolveBuildToolsDir(sdkDir: File): File {
+    val configured = android.buildToolsVersion
+    require(!configured.isNullOrBlank()) { "android.buildToolsVersion must be set" }
+    val configuredDir = File(sdkDir, "build-tools/$configured")
+    require(configuredDir.isDirectory) { "Configured build-tools directory not found: $configuredDir" }
+    return configuredDir
+}
+
+fun zipalignSupports16k(zipalign: File): Boolean {
+    val out = ByteArrayOutputStream()
+    val err = ByteArrayOutputStream()
+    try {
+        exec {
+            commandLine(zipalign.absolutePath)
+            standardOutput = out
+            errorOutput = err
+            isIgnoreExitValue = true
+        }
+    } catch (_: Exception) {
+        return false
+    }
+    val usage = out.toString() + "\n" + err.toString()
+    return usage.contains("-P")
+}
+
+val alignDebugApk16k by tasks.registering {
+    group = "build"
+    description = "Zipalign debug APK native libs to 16KB page boundaries and re-sign."
+
+    doLast {
+        val apk = layout.buildDirectory.file("outputs/apk/debug/app-debug.apk").get().asFile
+        if (!apk.exists()) {
+            throw GradleException("Debug APK not found at: ${apk.absolutePath}")
+        }
+
+        val sdkDir = resolveAndroidSdkDir()
+        val buildToolsDir = resolveBuildToolsDir(sdkDir)
+        val zipalign = File(buildToolsDir, "zipalign")
+        val apksigner = File(buildToolsDir, "apksigner")
+        require(zipalign.exists() && zipalign.canExecute()) {
+            "zipalign not found/executable at ${zipalign.absolutePath}"
+        }
+        require(apksigner.exists() && apksigner.canExecute()) {
+            "apksigner not found/executable at ${apksigner.absolutePath}"
+        }
+        require(zipalignSupports16k(zipalign)) {
+            "Configured zipalign does not support '-P 16': ${zipalign.absolutePath}"
+        }
+
+        logger.lifecycle("Using zipalign: ${zipalign.absolutePath}")
+        logger.lifecycle("Using apksigner: ${apksigner.absolutePath}")
+
+        val alignedUnsigned = File(apk.parentFile, "app-debug-aligned-unsigned.apk")
+        val alignedSigned = File(apk.parentFile, "app-debug-aligned-signed.apk")
+
+        exec {
+            commandLine(
+                zipalign.absolutePath,
+                "-f",
+                "-P", "16",
+                "-v", "4",
+                apk.absolutePath,
+                alignedUnsigned.absolutePath
+            )
+        }
+
+        val debugKeystore = File(System.getProperty("user.home"), ".android/debug.keystore")
+        require(debugKeystore.exists()) { "Debug keystore not found at ${debugKeystore.absolutePath}" }
+
+        exec {
+            commandLine(
+                apksigner.absolutePath,
+                "sign",
+                "--ks", debugKeystore.absolutePath,
+                "--ks-key-alias", "androiddebugkey",
+                "--ks-pass", "pass:android",
+                "--key-pass", "pass:android",
+                "--out", alignedSigned.absolutePath,
+                alignedUnsigned.absolutePath
+            )
+        }
+
+        copy {
+            from(alignedSigned)
+            into(apk.parentFile)
+            rename { apk.name }
+        }
+        alignedUnsigned.delete()
+        alignedSigned.delete()
+    }
+}
+
+tasks.configureEach {
+    if (name == "assembleDebug") {
+        finalizedBy(alignDebugApk16k)
+    }
 }

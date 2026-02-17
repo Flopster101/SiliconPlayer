@@ -29,6 +29,16 @@ add_library(
         decoders/CPConvStub.c
 )
 
+# Android 15+ prefers 16KB page-aligned native libraries.
+if (ANDROID)
+    target_link_options(
+            siliconplayer
+            PRIVATE
+            "-Wl,-z,max-page-size=16384"
+            "-Wl,-z,common-page-size=16384"
+    )
+endif()
+
 include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
 
     # Find Android libraries

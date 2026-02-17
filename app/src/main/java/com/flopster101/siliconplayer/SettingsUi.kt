@@ -251,6 +251,7 @@ internal fun SettingsScreen(
     onPluginSelected: (String) -> Unit,
     onPluginEnabledChanged: (String, Boolean) -> Unit,
     onPluginPriorityChanged: (String, Int) -> Unit,
+    onPluginPriorityOrderChanged: (List<String>) -> Unit,
     onPluginExtensionsChanged: (String, Array<String>) -> Unit,
     autoPlayOnTrackSelect: Boolean,
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
@@ -2890,10 +2891,7 @@ internal fun SettingsScreen(
                         val swapThresholdPx = itemStepPx * 0.62f
 
                         fun persistPriorityOrder(order: List<String>) {
-                            order.forEachIndexed { index, pluginName ->
-                                val newPriority = index
-                                onPluginPriorityChanged(pluginName, newPriority)
-                            }
+                            onPluginPriorityOrderChanged(order)
                         }
 
                         fun movePlugin(pluginName: String, direction: Int): Boolean {
@@ -3070,16 +3068,11 @@ internal fun SettingsScreen(
                         Spacer(modifier = Modifier.height(10.dp))
                         SettingsItemCard(
                             title = "Reset plugin priority order",
-                            description = "Restore plugin priority order to each plugin's built-in default priority.",
+                            description = "Restore plugin order to built-in defaults and renumber priorities sequentially.",
                             icon = Icons.Default.Tune,
                             onClick = {
                                 orderedPluginNames = defaultPluginOrder
-                                defaultPluginOrder.forEach { pluginName ->
-                                    onPluginPriorityChanged(
-                                        pluginName,
-                                        NativeBridge.getDecoderDefaultPriority(pluginName)
-                                    )
-                                }
+                                persistPriorityOrder(defaultPluginOrder)
                                 draggingPluginName = null
                                 dragVisualOffsetPx = 0f
                                 dragSwapRemainderPx = 0f
@@ -5984,6 +5977,8 @@ private fun PluginDetailScreen(
     var enabledExtensions by remember {
         mutableStateOf(NativeBridge.getDecoderEnabledExtensions(pluginName).toSet())
     }
+    val pluginCount = remember { NativeBridge.getRegisteredDecoderNames().size }
+    val maxPriority = (pluginCount - 1).coerceAtLeast(0)
     var showPriorityDialog by remember { mutableStateOf(false) }
     var showExtensionsDialog by remember { mutableStateOf(false) }
 
@@ -6005,8 +6000,8 @@ private fun PluginDetailScreen(
         // Priority
         SettingsSectionLabel("Priority")
         SettingsItemCard(
-            title = "Plugin priority: $priority",
-            description = "Lower value means higher priority. Plugins are tried in ascending order for matching extensions. Click to change.",
+            title = "Plugin order index: $priority",
+            description = "Priority values are kept sequential and match the plugin list order. 0 is first.",
             icon = Icons.Default.Tune,
             onClick = { showPriorityDialog = true }
         )
@@ -6029,10 +6024,10 @@ private fun PluginDetailScreen(
     if (showPriorityDialog) {
         PriorityPickerDialog(
             currentPriority = priority,
+            maxPriority = maxPriority,
             onPrioritySelected = { newPriority ->
                 priority = newPriority
                 onPriorityChanged(newPriority)
-                NativeBridge.setDecoderPriority(pluginName, newPriority)
                 showPriorityDialog = false
             },
             onDismiss = { showPriorityDialog = false }
@@ -6055,7 +6050,6 @@ private fun PluginDetailScreen(
                     newEnabled.toTypedArray()
                 }
                 onExtensionsChanged(extensionsArray)
-                NativeBridge.setDecoderEnabledExtensions(pluginName, extensionsArray)
             },
             onDismiss = { showExtensionsDialog = false }
         )
@@ -6463,10 +6457,12 @@ private fun VisualizationRgbColorPickerDialog(
 @Composable
 private fun PriorityPickerDialog(
     currentPriority: Int,
+    maxPriority: Int,
     onPrioritySelected: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var tempPriority by remember { mutableIntStateOf(currentPriority) }
+    val safeMaxPriority = maxPriority.coerceAtLeast(0)
+    var tempPriority by remember { mutableIntStateOf(currentPriority.coerceIn(0, safeMaxPriority)) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -6474,7 +6470,7 @@ private fun PriorityPickerDialog(
         text = {
             Column {
                 Text(
-                    text = "Lower value means higher priority. Plugins are tried in ascending order when multiple plugins support the same extension.",
+                    text = "Priorities are order indexes: 0 is first. Values stay sequential to match the plugin list.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -6482,19 +6478,21 @@ private fun PriorityPickerDialog(
                     text = "Priority: $tempPriority",
                     style = MaterialTheme.typography.titleMedium
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                Slider(
-                    value = tempPriority.toFloat(),
-                    onValueChange = { tempPriority = it.roundToInt() },
-                    valueRange = 0f..100f,
-                    steps = 19 // 0, 5, 10, ..., 100
-                )
+                if (safeMaxPriority > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Slider(
+                        value = tempPriority.toFloat(),
+                        onValueChange = { tempPriority = it.roundToInt().coerceIn(0, safeMaxPriority) },
+                        valueRange = 0f..safeMaxPriority.toFloat(),
+                        steps = (safeMaxPriority - 1).coerceAtLeast(0)
+                    )
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("0 (Highest)", style = MaterialTheme.typography.labelSmall)
-                    Text("100 (Lowest)", style = MaterialTheme.typography.labelSmall)
+                    Text("$safeMaxPriority (Lowest)", style = MaterialTheme.typography.labelSmall)
                 }
             }
         },

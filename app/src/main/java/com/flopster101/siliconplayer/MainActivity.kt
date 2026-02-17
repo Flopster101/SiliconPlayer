@@ -851,6 +851,10 @@ private fun loadPluginConfigurations(prefs: android.content.SharedPreferences) {
             NativeBridge.setDecoderEnabledExtensions(decoderName, extensions)
         }
     }
+
+    // Keep runtime priority values dense and in the same order shown by the UI.
+    normalizeDecoderPriorityValues()
+    persistAllPluginConfigurations(prefs)
 }
 
 private fun savePluginConfiguration(prefs: android.content.SharedPreferences, decoderName: String) {
@@ -877,6 +881,36 @@ private fun savePluginConfiguration(prefs: android.content.SharedPreferences, de
     }
 
     editor.apply()
+}
+
+private fun normalizeDecoderPriorityValues() {
+    val decoderNames = NativeBridge.getRegisteredDecoderNames().toList()
+    val sorted = decoderNames.sortedWith(
+        compareBy<String> { NativeBridge.getDecoderPriority(it) }
+            .thenBy { it }
+    )
+    sorted.forEachIndexed { index, decoderName ->
+        if (NativeBridge.getDecoderPriority(decoderName) != index) {
+            NativeBridge.setDecoderPriority(decoderName, index)
+        }
+    }
+}
+
+private fun persistAllPluginConfigurations(prefs: android.content.SharedPreferences) {
+    NativeBridge.getRegisteredDecoderNames().forEach { decoderName ->
+        savePluginConfiguration(prefs, decoderName)
+    }
+}
+
+private fun applyDecoderPriorityOrder(
+    orderedDecoderNames: List<String>,
+    prefs: android.content.SharedPreferences
+) {
+    orderedDecoderNames.forEachIndexed { index, decoderName ->
+        NativeBridge.setDecoderPriority(decoderName, index)
+    }
+    normalizeDecoderPriorityValues()
+    persistAllPluginConfigurations(prefs)
 }
 
 private fun readPluginVolumeForDecoder(
@@ -4518,7 +4552,11 @@ private fun AppNavigation(
                         },
                         onPluginPriorityChanged = { pluginName, priority ->
                             NativeBridge.setDecoderPriority(pluginName, priority)
-                            savePluginConfiguration(prefs, pluginName)
+                            normalizeDecoderPriorityValues()
+                            persistAllPluginConfigurations(prefs)
+                        },
+                        onPluginPriorityOrderChanged = { orderedPluginNames ->
+                            applyDecoderPriorityOrder(orderedPluginNames, prefs)
                         },
                         onPluginExtensionsChanged = { pluginName, extensions ->
                             NativeBridge.setDecoderEnabledExtensions(pluginName, extensions)

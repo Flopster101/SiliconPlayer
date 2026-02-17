@@ -33,9 +33,15 @@ public:
     void filter(bool enable);
 
 private:
+    bool applySamplingConfiguration();
+
     reSID::SID& sid;
     int bufferSize = 0;
     uint8_t voiceMask = 0x07;
+    SidConfig::sid_model_t currentModel = SidConfig::MOS8580;
+    float lastSystemClockHz = 0.0f;
+    float lastSampleRateHz = 0.0f;
+    SidConfig::sampling_method_t requestedSampling = SidConfig::INTERPOLATE;
 };
 
 } // namespace libsidplayfp

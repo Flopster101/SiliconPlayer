@@ -64,11 +64,15 @@ void ReSidEmu::filter(bool enable) {
     sid.enable_filter(enable);
 }
 
-void ReSidEmu::sampling(float systemclock, float freq, SidConfig::sampling_method_t method) {
-    reSID::sampling_method sampleMethod;
-    switch (method) {
+bool ReSidEmu::applySamplingConfiguration() {
+    reSID::sampling_method sampleMethod = reSID::SAMPLE_INTERPOLATE;
+    switch (requestedSampling) {
         case SidConfig::INTERPOLATE:
-            sampleMethod = reSID::SAMPLE_FAST;
+            // Upstream reSID fast mode is non-cycle-accurate and explicitly hacky for MOS8580.
+            // Keep fast path for 6581, but force interpolated for 8580 to avoid filter corruption.
+            sampleMethod = (currentModel == SidConfig::MOS8580)
+                           ? reSID::SAMPLE_INTERPOLATE
+                           : reSID::SAMPLE_FAST;
             break;
         case SidConfig::RESAMPLE_INTERPOLATE:
             sampleMethod = reSID::SAMPLE_RESAMPLE;
@@ -76,12 +80,23 @@ void ReSidEmu::sampling(float systemclock, float freq, SidConfig::sampling_metho
         default:
             m_status = false;
             m_error = ERR_INVALID_SAMPLING;
-            return;
+            return false;
     }
 
-    if (!sid.set_sampling_parameters(systemclock, sampleMethod, freq)) {
+    if (!sid.set_sampling_parameters(lastSystemClockHz, sampleMethod, lastSampleRateHz)) {
         m_status = false;
         m_error = ERR_UNSUPPORTED_FREQ;
+        return false;
+    }
+    return true;
+}
+
+void ReSidEmu::sampling(float systemclock, float freq, SidConfig::sampling_method_t method) {
+    lastSystemClockHz = systemclock;
+    lastSampleRateHz = freq;
+    requestedSampling = method;
+
+    if (!applySamplingConfiguration()) {
         return;
     }
 
@@ -92,6 +107,7 @@ void ReSidEmu::sampling(float systemclock, float freq, SidConfig::sampling_metho
 }
 
 void ReSidEmu::model(SidConfig::sid_model_t model, bool digiboost) {
+    currentModel = model;
     reSID::chip_model chipModel;
     short sample = 0;
     voiceMask &= 0x07;
@@ -116,6 +132,13 @@ void ReSidEmu::model(SidConfig::sid_model_t model, bool digiboost) {
     sid.set_chip_model(chipModel);
     sid.set_voice_mask(voiceMask);
     sid.input(sample);
+
+    if (lastSystemClockHz > 0.0f && lastSampleRateHz > 0.0f) {
+        if (!applySamplingConfiguration()) {
+            return;
+        }
+    }
+
     m_status = true;
 }
 

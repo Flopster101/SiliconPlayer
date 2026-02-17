@@ -261,7 +261,12 @@ bool LibSidPlayFpDecoder::applyConfigLocked() {
             config->forceSidModel = false;
             break;
     }
-    config->samplingMethod = reSidFpFastSampling ? SidConfig::INTERPOLATE : SidConfig::RESAMPLE_INTERPOLATE;
+    const bool force8580Model = (sidModelMode == SidModelMode::Mos8580);
+    const bool allowFastSampling = !(activeBackend == SidBackend::ReSID && force8580Model);
+    config->samplingMethod =
+            (reSidFpFastSampling && allowFastSampling)
+            ? SidConfig::INTERPOLATE
+            : SidConfig::RESAMPLE_INTERPOLATE;
     config->digiBoost = digiBoost8580;
     config->sidEmulation = sidBuilder.get();
     if (!player->config(*config)) {

@@ -111,6 +111,7 @@ private:
     std::atomic<int> repeatMode { 0 }; // 0 none, 1 repeat track, 2 repeat loop-point style
     std::vector<int16_t> pendingMixedSamples;
     size_t pendingMixedOffset = 0;
+    std::vector<int16_t> mixedScratchSamples;
     SidBackend selectedBackend = SidBackend::ReSIDfp;
     SidBackend activeBackend = SidBackend::ReSIDfp;
     SidClockMode sidClockMode = SidClockMode::Auto;

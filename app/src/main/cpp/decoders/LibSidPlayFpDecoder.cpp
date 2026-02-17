@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <cstring>
 #include <sstream>
 #include <vector>
 
@@ -22,7 +23,8 @@ namespace {
 constexpr unsigned int kRenderCyclesMin = 2000;
 constexpr unsigned int kRenderCyclesMax = 20000;
 constexpr unsigned int kEstimatedSidCyclesPerSecond = 1000000;
-constexpr int kTransientEmptyPlayRetries = 4;
+constexpr int kTransientEmptyPlayRetries = 12;
+constexpr int kSidReadPrefillFrames = 1024;
 constexpr double kDefaultSidDurationSeconds = 180.0;
 constexpr int kSidLiteMinSampleRateHz = 8000;
 constexpr int kSidLiteMaxSampleRateHz = 48000;
@@ -435,6 +437,11 @@ bool LibSidPlayFpDecoder::openInternalLocked(const char* path) {
     if (!(fallbackDurationSeconds > 0.0)) {
         fallbackDurationSeconds = kDefaultSidDurationSeconds;
     }
+    pendingMixedSamples.clear();
+    pendingMixedOffset = 0;
+    pendingMixedSamples.reserve(static_cast<size_t>(kSidReadPrefillFrames) * 4u);
+    mixedScratchSamples.clear();
+    mixedScratchSamples.reserve(static_cast<size_t>(kSidReadPrefillFrames) * 4u);
 
     if (!selectSubtuneLocked(currentSubtuneIndex)) {
         return false;
@@ -470,6 +477,9 @@ bool LibSidPlayFpDecoder::open(const char* path) {
     sidCurrentModelSummary.clear();
     sidBaseAddressSummary.clear();
     sidCommentSummary.clear();
+    pendingMixedSamples.clear();
+    pendingMixedOffset = 0;
+    mixedScratchSamples.clear();
     return openInternalLocked(path);
 }
 
@@ -501,6 +511,7 @@ void LibSidPlayFpDecoder::close() {
     sidCommentSummary.clear();
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
+    mixedScratchSamples.clear();
 }
 
 int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
@@ -530,17 +541,21 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
                 pendingMixedSamples.clear();
                 pendingMixedOffset = 0;
             } else if (pendingMixedOffset > 4096u) {
-                pendingMixedSamples.erase(
-                        pendingMixedSamples.begin(),
-                        pendingMixedSamples.begin() + static_cast<std::ptrdiff_t>(pendingMixedOffset)
+                const size_t remainingSamples = pendingMixedSamples.size() - pendingMixedOffset;
+                std::memmove(
+                        pendingMixedSamples.data(),
+                        pendingMixedSamples.data() + pendingMixedOffset,
+                        remainingSamples * sizeof(int16_t)
                 );
+                pendingMixedSamples.resize(remainingSamples);
                 pendingMixedOffset = 0;
             }
             continue;
         }
 
         const int framesRemaining = numFrames - framesWritten;
-        const unsigned int renderCycles = computeRenderCyclesForFrames(framesRemaining, activeSampleRate);
+        const int renderTargetFrames = std::max(framesRemaining, kSidReadPrefillFrames);
+        const unsigned int renderCycles = computeRenderCyclesForFrames(renderTargetFrames, activeSampleRate);
         const int produced = player->play(renderCycles);
         if (produced < 0) {
             LOGE("sidplayfp play failed: %s", player->error());
@@ -561,8 +576,14 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
         }
         emptyPlayRetries = 0;
 
-        std::vector<int16_t> mixed(static_cast<size_t>(produced) * static_cast<size_t>(channels));
-        const unsigned int mixedSamples = player->mix(mixed.data(), static_cast<unsigned int>(produced));
+        const size_t requiredMixedSamples = static_cast<size_t>(produced) * static_cast<size_t>(channels);
+        if (mixedScratchSamples.size() < requiredMixedSamples) {
+            mixedScratchSamples.resize(requiredMixedSamples);
+        }
+        const unsigned int mixedSamples = player->mix(
+                mixedScratchSamples.data(),
+                static_cast<unsigned int>(produced)
+        );
         if (mixedSamples < static_cast<unsigned int>(channels)) {
             emptyPlayRetries += 1;
             if (emptyPlayRetries >= kTransientEmptyPlayRetries) {
@@ -579,8 +600,8 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
         emptyPlayRetries = 0;
         pendingMixedSamples.insert(
                 pendingMixedSamples.end(),
-                mixed.begin(),
-                mixed.begin() + static_cast<std::ptrdiff_t>(mixedSamples)
+                mixedScratchSamples.begin(),
+                mixedScratchSamples.begin() + static_cast<std::ptrdiff_t>(mixedSamples)
         );
     }
 

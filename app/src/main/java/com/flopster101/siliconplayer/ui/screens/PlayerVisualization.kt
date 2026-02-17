@@ -49,8 +49,10 @@ import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.AppDefaults
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
+import com.flopster101.siliconplayer.VisualizationChannelScopeTextAnchor
 import com.flopster101.siliconplayer.VisualizationChannelScopeBackgroundMode
 import com.flopster101.siliconplayer.VisualizationMode
+import com.flopster101.siliconplayer.VisualizationNoteNameFormat
 import com.flopster101.siliconplayer.VisualizationOscColorMode
 import com.flopster101.siliconplayer.VisualizationOscFpsMode
 import com.flopster101.siliconplayer.VisualizationRenderBackend
@@ -58,6 +60,7 @@ import com.flopster101.siliconplayer.VisualizationVuAnchor
 import com.flopster101.siliconplayer.pluginNameForCoreName
 import com.flopster101.siliconplayer.visualizationRenderBackendForMode
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
+import com.flopster101.siliconplayer.ui.visualization.channel.ChannelScopeChannelTextState
 import java.io.File
 import kotlin.coroutines.coroutineContext
 import kotlin.math.roundToInt
@@ -196,17 +199,6 @@ private suspend fun buildChannelScopeHistoriesAsync(
     }
 }
 
-internal data class ChannelScopeChannelTextState(
-    val channelIndex: Int,
-    val note: Int,
-    val volume: Int,
-    val effectLetterAscii: Int,
-    val effectParam: Int,
-    val instrumentIndex: Int,
-    val sampleIndex: Int,
-    val flags: Int
-)
-
 private fun parseChannelScopeTextStates(
     flat: IntArray
 ): List<ChannelScopeChannelTextState> {
@@ -343,7 +335,17 @@ internal data class ChannelScopePrefs(
     val customGridColorArgb: Int,
     val showArtworkBackground: Boolean,
     val backgroundMode: VisualizationChannelScopeBackgroundMode,
-    val customBackgroundColorArgb: Int
+    val customBackgroundColorArgb: Int,
+    val textEnabled: Boolean,
+    val textAnchor: VisualizationChannelScopeTextAnchor,
+    val textPaddingDp: Int,
+    val textSizeSp: Int,
+    val textNoteFormat: VisualizationNoteNameFormat,
+    val textShowChannel: Boolean,
+    val textShowNote: Boolean,
+    val textShowVolume: Boolean,
+    val textShowEffect: Boolean,
+    val textShowInstrumentSample: Boolean
 ) {
     companion object {
         private const val KEY_WINDOW_MS = "visualization_channel_scope_window_ms"
@@ -366,6 +368,16 @@ internal data class ChannelScopePrefs(
         private const val KEY_GRID_COLOR_MODE_WITH_ARTWORK = "visualization_channel_scope_grid_color_mode_with_artwork"
         private const val KEY_CUSTOM_LINE_COLOR_ARGB = "visualization_channel_scope_custom_line_color_argb"
         private const val KEY_CUSTOM_GRID_COLOR_ARGB = "visualization_channel_scope_custom_grid_color_argb"
+        private const val KEY_TEXT_ENABLED = "visualization_channel_scope_text_enabled"
+        private const val KEY_TEXT_ANCHOR = "visualization_channel_scope_text_anchor"
+        private const val KEY_TEXT_PADDING_DP = "visualization_channel_scope_text_padding_dp"
+        private const val KEY_TEXT_SIZE_SP = "visualization_channel_scope_text_size_sp"
+        private const val KEY_TEXT_NOTE_FORMAT = "visualization_channel_scope_text_note_format"
+        private const val KEY_TEXT_SHOW_CHANNEL = "visualization_channel_scope_text_show_channel"
+        private const val KEY_TEXT_SHOW_NOTE = "visualization_channel_scope_text_show_note"
+        private const val KEY_TEXT_SHOW_VOLUME = "visualization_channel_scope_text_show_volume"
+        private const val KEY_TEXT_SHOW_EFFECT = "visualization_channel_scope_text_show_effect"
+        private const val KEY_TEXT_SHOW_INSTRUMENT_SAMPLE = "visualization_channel_scope_text_show_instrument_sample"
 
         fun from(sharedPrefs: android.content.SharedPreferences): ChannelScopePrefs {
             val defaultTriggerStorage = AppDefaults.Visualization.ChannelScope.triggerMode.storageValue
@@ -484,6 +496,56 @@ internal data class ChannelScopePrefs(
                 customBackgroundColorArgb = sharedPrefs.getInt(
                     KEY_CUSTOM_BACKGROUND_COLOR_ARGB,
                     AppDefaults.Visualization.ChannelScope.customBackgroundColorArgb
+                ),
+                textEnabled = sharedPrefs.getBoolean(
+                    KEY_TEXT_ENABLED,
+                    AppDefaults.Visualization.ChannelScope.textEnabled
+                ),
+                textAnchor = VisualizationChannelScopeTextAnchor.fromStorage(
+                    sharedPrefs.getString(
+                        KEY_TEXT_ANCHOR,
+                        AppDefaults.Visualization.ChannelScope.textAnchor.storageValue
+                    )
+                ),
+                textPaddingDp = sharedPrefs.getInt(
+                    KEY_TEXT_PADDING_DP,
+                    AppDefaults.Visualization.ChannelScope.textPaddingDp
+                ).coerceIn(
+                    AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.first,
+                    AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.last
+                ),
+                textSizeSp = sharedPrefs.getInt(
+                    KEY_TEXT_SIZE_SP,
+                    AppDefaults.Visualization.ChannelScope.textSizeSp
+                ).coerceIn(
+                    AppDefaults.Visualization.ChannelScope.textSizeRangeSp.first,
+                    AppDefaults.Visualization.ChannelScope.textSizeRangeSp.last
+                ),
+                textNoteFormat = VisualizationNoteNameFormat.fromStorage(
+                    sharedPrefs.getString(
+                        KEY_TEXT_NOTE_FORMAT,
+                        AppDefaults.Visualization.ChannelScope.textNoteFormat.storageValue
+                    )
+                ),
+                textShowChannel = sharedPrefs.getBoolean(
+                    KEY_TEXT_SHOW_CHANNEL,
+                    AppDefaults.Visualization.ChannelScope.textShowChannel
+                ),
+                textShowNote = sharedPrefs.getBoolean(
+                    KEY_TEXT_SHOW_NOTE,
+                    AppDefaults.Visualization.ChannelScope.textShowNote
+                ),
+                textShowVolume = sharedPrefs.getBoolean(
+                    KEY_TEXT_SHOW_VOLUME,
+                    AppDefaults.Visualization.ChannelScope.textShowVolume
+                ),
+                textShowEffect = sharedPrefs.getBoolean(
+                    KEY_TEXT_SHOW_EFFECT,
+                    AppDefaults.Visualization.ChannelScope.textShowEffect
+                ),
+                textShowInstrumentSample = sharedPrefs.getBoolean(
+                    KEY_TEXT_SHOW_INSTRUMENT_SAMPLE,
+                    AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
                 )
             )
         }
@@ -529,7 +591,17 @@ private data class ChannelScopeVisualState(
     val lineColorModeWithArtwork: VisualizationOscColorMode,
     val gridColorModeWithArtwork: VisualizationOscColorMode,
     val customLineColorArgb: Int,
-    val customGridColorArgb: Int
+    val customGridColorArgb: Int,
+    val textEnabled: Boolean,
+    val textAnchor: VisualizationChannelScopeTextAnchor,
+    val textPaddingDp: Int,
+    val textSizeSp: Int,
+    val textNoteFormat: VisualizationNoteNameFormat,
+    val textShowChannel: Boolean,
+    val textShowNote: Boolean,
+    val textShowVolume: Boolean,
+    val textShowEffect: Boolean,
+    val textShowInstrumentSample: Boolean
 )
 
 @Composable
@@ -689,8 +761,13 @@ internal fun AlbumArtPlaceholder(
                         sampleRateHz = sampleRateHz
                     )
                     visChannelScopesFlat = NativeBridge.getChannelScopeSamples(scopeSamples)
+                    val scopeChannels = if (scopeSamples > 0) {
+                        (visChannelScopesFlat.size / scopeSamples).coerceIn(1, 64)
+                    } else {
+                        visChannelCount.coerceIn(1, 64)
+                    }
                     visChannelScopeTextStates = parseChannelScopeTextStates(
-                        NativeBridge.getChannelScopeTextState(visChannelCount.coerceIn(1, 64))
+                        NativeBridge.getChannelScopeTextState(scopeChannels)
                     )
                 }
                 val nowNs = System.nanoTime()
@@ -864,7 +941,17 @@ internal fun AlbumArtPlaceholder(
         lineColorModeWithArtwork = channelScopePrefs.lineColorModeWithArtwork,
         gridColorModeWithArtwork = channelScopePrefs.gridColorModeWithArtwork,
         customLineColorArgb = channelScopePrefs.customLineColorArgb,
-        customGridColorArgb = channelScopePrefs.customGridColorArgb
+        customGridColorArgb = channelScopePrefs.customGridColorArgb,
+        textEnabled = channelScopePrefs.textEnabled,
+        textAnchor = channelScopePrefs.textAnchor,
+        textPaddingDp = channelScopePrefs.textPaddingDp,
+        textSizeSp = channelScopePrefs.textSizeSp,
+        textNoteFormat = channelScopePrefs.textNoteFormat,
+        textShowChannel = channelScopePrefs.textShowChannel,
+        textShowNote = channelScopePrefs.textShowNote,
+        textShowVolume = channelScopePrefs.textShowVolume,
+        textShowEffect = channelScopePrefs.textShowEffect,
+        textShowInstrumentSample = channelScopePrefs.textShowInstrumentSample
     )
     val artworkBrightness = remember(artwork) {
         val bitmap = artwork ?: return@remember null
@@ -1019,6 +1106,7 @@ internal fun AlbumArtPlaceholder(
                 vuColorModeWithArtwork = vuColorModeWithArtwork,
                 vuCustomColorArgb = vuCustomColorArgb,
                 channelScopeHistories = channelScopeState.channelHistories,
+                channelScopeTextStates = channelScopeState.channelTextStates,
                 channelScopeTriggerModeNative = channelScopeState.triggerModeNative,
                 channelScopeTriggerIndices = channelScopeState.triggerIndices,
                 channelScopeRenderBackend = channelScopeState.renderBackend,
@@ -1033,6 +1121,16 @@ internal fun AlbumArtPlaceholder(
                 channelScopeGridColorModeWithArtwork = channelScopeState.gridColorModeWithArtwork,
                 channelScopeCustomLineColorArgb = channelScopeState.customLineColorArgb,
                 channelScopeCustomGridColorArgb = channelScopeState.customGridColorArgb,
+                channelScopeTextEnabled = channelScopeState.textEnabled,
+                channelScopeTextAnchor = channelScopeState.textAnchor,
+                channelScopeTextPaddingDp = channelScopeState.textPaddingDp,
+                channelScopeTextSizeSp = channelScopeState.textSizeSp,
+                channelScopeTextNoteFormat = channelScopeState.textNoteFormat,
+                channelScopeTextShowChannel = channelScopeState.textShowChannel,
+                channelScopeTextShowNote = channelScopeState.textShowNote,
+                channelScopeTextShowVolume = channelScopeState.textShowVolume,
+                channelScopeTextShowEffect = channelScopeState.textShowEffect,
+                channelScopeTextShowInstrumentSample = channelScopeState.textShowInstrumentSample,
                 channelScopeCornerRadiusDp = artworkCornerRadiusDp.coerceIn(0, 48),
                 channelScopeOnFrameStats = { fps, frameMs ->
                     visDebugDrawFps = fps.coerceAtLeast(0)

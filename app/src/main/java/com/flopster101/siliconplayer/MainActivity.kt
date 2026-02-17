@@ -795,6 +795,16 @@ private object AppPreferenceKeys {
     const val VISUALIZATION_CHANNEL_SCOPE_GRID_COLOR_MODE_WITH_ARTWORK = "visualization_channel_scope_grid_color_mode_with_artwork"
     const val VISUALIZATION_CHANNEL_SCOPE_CUSTOM_LINE_COLOR_ARGB = "visualization_channel_scope_custom_line_color_argb"
     const val VISUALIZATION_CHANNEL_SCOPE_CUSTOM_GRID_COLOR_ARGB = "visualization_channel_scope_custom_grid_color_argb"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_ENABLED = "visualization_channel_scope_text_enabled"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_ANCHOR = "visualization_channel_scope_text_anchor"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_PADDING_DP = "visualization_channel_scope_text_padding_dp"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SIZE_SP = "visualization_channel_scope_text_size_sp"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_NOTE_FORMAT = "visualization_channel_scope_text_note_format"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_CHANNEL = "visualization_channel_scope_text_show_channel"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_NOTE = "visualization_channel_scope_text_show_note"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_VOLUME = "visualization_channel_scope_text_show_volume"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_EFFECT = "visualization_channel_scope_text_show_effect"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT_SAMPLE = "visualization_channel_scope_text_show_instrument_sample"
 
     // Plugin management keys
     fun decoderEnabledKey(decoderName: String) = "decoder_${decoderName}_enabled"
@@ -4527,6 +4537,46 @@ private fun AppNavigation(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CUSTOM_GRID_COLOR_ARGB,
                                     AppDefaults.Visualization.ChannelScope.customGridColorArgb
                                 )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_ENABLED,
+                                    AppDefaults.Visualization.ChannelScope.textEnabled
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_ANCHOR,
+                                    AppDefaults.Visualization.ChannelScope.textAnchor.storageValue
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_PADDING_DP,
+                                    AppDefaults.Visualization.ChannelScope.textPaddingDp
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SIZE_SP,
+                                    AppDefaults.Visualization.ChannelScope.textSizeSp
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_NOTE_FORMAT,
+                                    AppDefaults.Visualization.ChannelScope.textNoteFormat.storageValue
+                                )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_CHANNEL,
+                                    AppDefaults.Visualization.ChannelScope.textShowChannel
+                                )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_NOTE,
+                                    AppDefaults.Visualization.ChannelScope.textShowNote
+                                )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_VOLUME,
+                                    AppDefaults.Visualization.ChannelScope.textShowVolume
+                                )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_EFFECT,
+                                    AppDefaults.Visualization.ChannelScope.textShowEffect
+                                )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT_SAMPLE,
+                                    AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
+                                )
                                 .apply()
                         },
                         audioFocusInterrupt = audioFocusInterrupt,
@@ -4868,6 +4918,46 @@ private fun AppNavigation(
                                 .putInt(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CUSTOM_GRID_COLOR_ARGB,
                                     AppDefaults.Visualization.ChannelScope.customGridColorArgb
+                                )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_ENABLED,
+                                    AppDefaults.Visualization.ChannelScope.textEnabled
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_ANCHOR,
+                                    AppDefaults.Visualization.ChannelScope.textAnchor.storageValue
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_PADDING_DP,
+                                    AppDefaults.Visualization.ChannelScope.textPaddingDp
+                                )
+                                .putInt(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SIZE_SP,
+                                    AppDefaults.Visualization.ChannelScope.textSizeSp
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_NOTE_FORMAT,
+                                    AppDefaults.Visualization.ChannelScope.textNoteFormat.storageValue
+                                )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_CHANNEL,
+                                    AppDefaults.Visualization.ChannelScope.textShowChannel
+                                )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_NOTE,
+                                    AppDefaults.Visualization.ChannelScope.textShowNote
+                                )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_VOLUME,
+                                    AppDefaults.Visualization.ChannelScope.textShowVolume
+                                )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_EFFECT,
+                                    AppDefaults.Visualization.ChannelScope.textShowEffect
+                                )
+                                .putBoolean(
+                                    AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT_SAMPLE,
+                                    AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
                                 )
                                 .apply()
                             browserLaunchLocationId = null

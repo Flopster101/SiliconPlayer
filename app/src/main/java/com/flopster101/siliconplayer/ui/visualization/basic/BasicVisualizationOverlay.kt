@@ -1,7 +1,14 @@
 package com.flopster101.siliconplayer.ui.visualization.basic
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -10,19 +17,28 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.style.TextAlign
 import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
+import com.flopster101.siliconplayer.VisualizationChannelScopeTextAnchor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.flopster101.siliconplayer.VisualizationMode
+import com.flopster101.siliconplayer.VisualizationNoteNameFormat
 import com.flopster101.siliconplayer.VisualizationOscColorMode
 import com.flopster101.siliconplayer.VisualizationRenderBackend
 import com.flopster101.siliconplayer.VisualizationVuAnchor
+import com.flopster101.siliconplayer.ui.visualization.channel.ChannelScopeChannelTextState
 import com.flopster101.siliconplayer.ui.visualization.advanced.ChannelScopeVisualization
 import com.flopster101.siliconplayer.ui.visualization.gl.ChannelScopeGlVisualization
 import com.flopster101.siliconplayer.ui.visualization.gl.ChannelScopeGlTextureVisualization
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.ceil
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.flopster101.siliconplayer.NativeBridge
 
 @Composable
 fun BasicVisualizationOverlay(
@@ -57,6 +73,7 @@ fun BasicVisualizationOverlay(
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
     channelScopeHistories: List<FloatArray>,
+    channelScopeTextStates: List<ChannelScopeChannelTextState>,
     channelScopeTriggerModeNative: Int,
     channelScopeTriggerIndices: IntArray,
     channelScopeRenderBackend: VisualizationRenderBackend,
@@ -71,6 +88,16 @@ fun BasicVisualizationOverlay(
     channelScopeGridColorModeWithArtwork: VisualizationOscColorMode,
     channelScopeCustomLineColorArgb: Int,
     channelScopeCustomGridColorArgb: Int,
+    channelScopeTextEnabled: Boolean,
+    channelScopeTextAnchor: VisualizationChannelScopeTextAnchor,
+    channelScopeTextPaddingDp: Int,
+    channelScopeTextSizeSp: Int,
+    channelScopeTextNoteFormat: VisualizationNoteNameFormat,
+    channelScopeTextShowChannel: Boolean,
+    channelScopeTextShowNote: Boolean,
+    channelScopeTextShowVolume: Boolean,
+    channelScopeTextShowEffect: Boolean,
+    channelScopeTextShowInstrumentSample: Boolean,
     channelScopeCornerRadiusDp: Int = 0,
     channelScopeOnFrameStats: ((fps: Int, frameMs: Int) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -199,55 +226,75 @@ fun BasicVisualizationOverlay(
         }
 
         VisualizationMode.ChannelScope -> {
-            when (channelScopeRenderBackend) {
-                VisualizationRenderBackend.Compose -> {
-                    ChannelScopeVisualization(
-                        channelHistories = channelScopeHistories,
-                        lineColor = channelScopeLineColor,
-                        gridColor = channelScopeGridColor,
-                        lineWidthPx = channelScopeLineWidthDp.toFloat(),
-                        gridWidthPx = channelScopeGridWidthDp.toFloat(),
-                        showVerticalGrid = channelScopeVerticalGridEnabled,
-                        showCenterLine = channelScopeCenterLineEnabled,
-                        triggerModeNative = channelScopeTriggerModeNative,
-                        triggerIndices = channelScopeTriggerIndices,
-                        layoutStrategy = channelScopeLayout,
-                        outerCornerRadiusPx = channelScopeCornerRadiusPx,
-                        modifier = modifier.clip(channelScopeCornerRadiusShape)
-                    )
+            Box(modifier = modifier.clip(channelScopeCornerRadiusShape)) {
+                when (channelScopeRenderBackend) {
+                    VisualizationRenderBackend.Compose -> {
+                        ChannelScopeVisualization(
+                            channelHistories = channelScopeHistories,
+                            lineColor = channelScopeLineColor,
+                            gridColor = channelScopeGridColor,
+                            lineWidthPx = channelScopeLineWidthDp.toFloat(),
+                            gridWidthPx = channelScopeGridWidthDp.toFloat(),
+                            showVerticalGrid = channelScopeVerticalGridEnabled,
+                            showCenterLine = channelScopeCenterLineEnabled,
+                            triggerModeNative = channelScopeTriggerModeNative,
+                            triggerIndices = channelScopeTriggerIndices,
+                            layoutStrategy = channelScopeLayout,
+                            outerCornerRadiusPx = channelScopeCornerRadiusPx,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    VisualizationRenderBackend.OpenGlTexture -> {
+                        ChannelScopeGlTextureVisualization(
+                            channelHistories = channelScopeHistories,
+                            lineColor = channelScopeLineColor,
+                            gridColor = channelScopeGridColor,
+                            lineWidthPx = channelScopeLineWidthDp.toFloat(),
+                            gridWidthPx = channelScopeGridWidthDp.toFloat(),
+                            showVerticalGrid = channelScopeVerticalGridEnabled,
+                            showCenterLine = channelScopeCenterLineEnabled,
+                            triggerModeNative = channelScopeTriggerModeNative,
+                            triggerIndices = channelScopeTriggerIndices,
+                            layoutStrategy = channelScopeLayout,
+                            outerCornerRadiusPx = channelScopeCornerRadiusPx,
+                            onFrameStats = channelScopeOnFrameStats,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    VisualizationRenderBackend.OpenGlSurface -> {
+                        ChannelScopeGlVisualization(
+                            channelHistories = channelScopeHistories,
+                            lineColor = channelScopeLineColor,
+                            gridColor = channelScopeGridColor,
+                            lineWidthPx = channelScopeLineWidthDp.toFloat(),
+                            gridWidthPx = channelScopeGridWidthDp.toFloat(),
+                            showVerticalGrid = channelScopeVerticalGridEnabled,
+                            showCenterLine = channelScopeCenterLineEnabled,
+                            triggerModeNative = channelScopeTriggerModeNative,
+                            triggerIndices = channelScopeTriggerIndices,
+                            layoutStrategy = channelScopeLayout,
+                            outerCornerRadiusPx = channelScopeCornerRadiusPx,
+                            onFrameStats = channelScopeOnFrameStats,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
-                VisualizationRenderBackend.OpenGlTexture -> {
-                    ChannelScopeGlTextureVisualization(
+                if (channelScopeTextEnabled && channelScopeHistories.isNotEmpty()) {
+                    ChannelScopeTextOverlay(
                         channelHistories = channelScopeHistories,
-                        lineColor = channelScopeLineColor,
-                        gridColor = channelScopeGridColor,
-                        lineWidthPx = channelScopeLineWidthDp.toFloat(),
-                        gridWidthPx = channelScopeGridWidthDp.toFloat(),
-                        showVerticalGrid = channelScopeVerticalGridEnabled,
-                        showCenterLine = channelScopeCenterLineEnabled,
-                        triggerModeNative = channelScopeTriggerModeNative,
-                        triggerIndices = channelScopeTriggerIndices,
+                        channelTextStates = channelScopeTextStates,
                         layoutStrategy = channelScopeLayout,
-                        outerCornerRadiusPx = channelScopeCornerRadiusPx,
-                        onFrameStats = channelScopeOnFrameStats,
-                        modifier = modifier.clip(channelScopeCornerRadiusShape)
-                    )
-                }
-                VisualizationRenderBackend.OpenGlSurface -> {
-                    ChannelScopeGlVisualization(
-                        channelHistories = channelScopeHistories,
-                        lineColor = channelScopeLineColor,
-                        gridColor = channelScopeGridColor,
-                        lineWidthPx = channelScopeLineWidthDp.toFloat(),
-                        gridWidthPx = channelScopeGridWidthDp.toFloat(),
-                        showVerticalGrid = channelScopeVerticalGridEnabled,
-                        showCenterLine = channelScopeCenterLineEnabled,
-                        triggerModeNative = channelScopeTriggerModeNative,
-                        triggerIndices = channelScopeTriggerIndices,
-                        layoutStrategy = channelScopeLayout,
-                        outerCornerRadiusPx = channelScopeCornerRadiusPx,
-                        onFrameStats = channelScopeOnFrameStats,
-                        modifier = modifier.clip(channelScopeCornerRadiusShape)
+                        anchor = channelScopeTextAnchor,
+                        paddingDp = channelScopeTextPaddingDp,
+                        textSizeSp = channelScopeTextSizeSp,
+                        noteFormat = channelScopeTextNoteFormat,
+                        showChannel = channelScopeTextShowChannel,
+                        showNote = channelScopeTextShowNote,
+                        showVolume = channelScopeTextShowVolume,
+                        showEffect = channelScopeTextShowEffect,
+                        showInstrumentSample = channelScopeTextShowInstrumentSample,
+                        textColor = channelScopeLineColor.copy(alpha = 0.93f),
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
@@ -261,6 +308,205 @@ private fun deriveVuTrackColor(accent: Color): Color {
     val neutral = if (accent.luminance() > 0.56f) Color.Black else Color.White
     // Tonal track variant: tied to accent with contrast-aware neutral shift.
     return lerp(accent, neutral, 0.72f).copy(alpha = 0.62f)
+}
+
+@Composable
+private fun ChannelScopeTextOverlay(
+    channelHistories: List<FloatArray>,
+    channelTextStates: List<ChannelScopeChannelTextState>,
+    layoutStrategy: VisualizationChannelScopeLayout,
+    anchor: VisualizationChannelScopeTextAnchor,
+    paddingDp: Int,
+    textSizeSp: Int,
+    noteFormat: VisualizationNoteNameFormat,
+    showChannel: Boolean,
+    showNote: Boolean,
+    showVolume: Boolean,
+    showEffect: Boolean,
+    showInstrumentSample: Boolean,
+    textColor: Color,
+    modifier: Modifier = Modifier
+) {
+    if (channelHistories.isEmpty()) return
+    val channels = channelHistories.size
+    val (columns, rows) = resolveChannelScopeTextGrid(channels, layoutStrategy)
+    val sideCounts = IntArray(2)
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val safeCols = columns.coerceAtLeast(1)
+        val safeRows = rows.coerceAtLeast(1)
+        val cellWidth = maxWidth / safeCols
+        val cellHeight = maxHeight / safeRows
+        for (col in 0 until columns) {
+            for (row in 0 until rows) {
+                val channel = (col * rows) + row
+                val line = if (channel < channels) {
+                    buildChannelScopeTextLine(
+                        channel = channel,
+                        state = channelTextStates.getOrNull(channel),
+                        noteFormat = noteFormat,
+                        showChannel = showChannel,
+                        showNote = showNote,
+                        showVolume = showVolume,
+                        showEffect = showEffect,
+                        showInstrumentSample = showInstrumentSample,
+                        sideCounts = sideCounts
+                    )
+                } else {
+                    ""
+                }
+                Box(
+                    modifier = Modifier
+                        .offset(x = cellWidth * col, y = cellHeight * row)
+                        .size(cellWidth, cellHeight),
+                    contentAlignment = resolveTextAlignment(anchor)
+                ) {
+                    if (line.isNotEmpty()) {
+                        Text(
+                            text = line,
+                            color = textColor,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = textSizeSp.coerceIn(8, 22).sp,
+                                lineHeight = textSizeSp.coerceIn(8, 22).sp,
+                                platformStyle = PlatformTextStyle(includeFontPadding = false)
+                            ),
+                            textAlign = resolveTextAlign(anchor),
+                            maxLines = 1,
+                            modifier = Modifier.padding(paddingDp.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun resolveTextAlignment(anchor: VisualizationChannelScopeTextAnchor): Alignment {
+    return when (anchor) {
+        VisualizationChannelScopeTextAnchor.TopLeft -> Alignment.TopStart
+        VisualizationChannelScopeTextAnchor.TopCenter -> Alignment.TopCenter
+        VisualizationChannelScopeTextAnchor.TopRight -> Alignment.TopEnd
+        VisualizationChannelScopeTextAnchor.BottomRight -> Alignment.BottomEnd
+        VisualizationChannelScopeTextAnchor.BottomCenter -> Alignment.BottomCenter
+        VisualizationChannelScopeTextAnchor.BottomLeft -> Alignment.BottomStart
+    }
+}
+
+private fun resolveTextAlign(anchor: VisualizationChannelScopeTextAnchor): TextAlign {
+    return when (anchor) {
+        VisualizationChannelScopeTextAnchor.TopLeft,
+        VisualizationChannelScopeTextAnchor.BottomLeft -> TextAlign.Left
+        VisualizationChannelScopeTextAnchor.TopCenter,
+        VisualizationChannelScopeTextAnchor.BottomCenter -> TextAlign.Center
+        VisualizationChannelScopeTextAnchor.TopRight,
+        VisualizationChannelScopeTextAnchor.BottomRight -> TextAlign.Right
+    }
+}
+
+private fun buildChannelScopeTextLine(
+    channel: Int,
+    state: ChannelScopeChannelTextState?,
+    noteFormat: VisualizationNoteNameFormat,
+    showChannel: Boolean,
+    showNote: Boolean,
+    showVolume: Boolean,
+    showEffect: Boolean,
+    showInstrumentSample: Boolean,
+    sideCounts: IntArray
+): String {
+    val segments = ArrayList<String>(5)
+    if (showChannel) {
+        segments.add(resolveChannelLabel(channel, state, sideCounts))
+    }
+    if (showNote) {
+        val noteText = formatNoteName(state?.note ?: -1, noteFormat)
+        if (noteText != null) segments.add(noteText)
+    }
+    if (showVolume) {
+        val volume = state?.volume ?: 0
+        segments.add(formatVolume(volume))
+    }
+    if (showEffect) {
+        segments.add(formatEffect(state))
+    }
+    if (showInstrumentSample) {
+        val instrumentText = formatInstrumentOrSample(state)
+        if (instrumentText != null) segments.add(instrumentText)
+    }
+    return segments.joinToString(separator = " • ")
+}
+
+private fun resolveChannelLabel(
+    channel: Int,
+    state: ChannelScopeChannelTextState?,
+    sideCounts: IntArray
+): String {
+    val flags = state?.flags ?: 0
+    val isLeft = (flags and NativeBridge.CHANNEL_SCOPE_TEXT_FLAG_AMIGA_LEFT) != 0
+    val isRight = (flags and NativeBridge.CHANNEL_SCOPE_TEXT_FLAG_AMIGA_RIGHT) != 0
+    if (isLeft) {
+        sideCounts[0] = sideCounts[0] + 1
+        return if (sideCounts[0] <= 2) "L${sideCounts[0]}" else "Ch ${channel + 1}"
+    }
+    if (isRight) {
+        sideCounts[1] = sideCounts[1] + 1
+        return if (sideCounts[1] <= 2) "R${sideCounts[1]}" else "Ch ${channel + 1}"
+    }
+    return "Ch ${channel + 1}"
+}
+
+private fun formatNoteName(note: Int, format: VisualizationNoteNameFormat): String? {
+    if (note <= 0) return null
+    val idx = (note - 1) % 12
+    val octave = (note - 1) / 12
+    val names = if (format == VisualizationNoteNameFormat.International) {
+        arrayOf("Do", "Do#", "Re", "Re#", "Mi", "Fa", "Fa#", "Sol", "Sol#", "La", "La#", "Si")
+    } else {
+        arrayOf("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+    }
+    return "${names[idx]}$octave"
+}
+
+private fun formatVolume(volume: Int): String {
+    return "V" + volume.coerceIn(0, 999).toString().padStart(3, '0')
+}
+
+private fun formatEffect(state: ChannelScopeChannelTextState?): String {
+    if (state == null) return "---"
+    if (state.effectLetterAscii <= 0 || state.effectParam < 0) return "---"
+    val effectChar = state.effectLetterAscii.toChar()
+    val paramHex = state.effectParam.coerceIn(0, 255).toString(16).uppercase().padStart(2, '0')
+    return "$effectChar$paramHex"
+}
+
+private fun formatInstrumentOrSample(state: ChannelScopeChannelTextState?): String? {
+    if (state == null) return null
+    if (state.instrumentIndex > 0) {
+        return "Ins ${state.instrumentIndex}"
+    }
+    if (state.sampleIndex > 0) {
+        return "Smp ${state.sampleIndex}"
+    }
+    return null
+}
+
+private fun resolveChannelScopeTextGrid(
+    channels: Int,
+    strategy: VisualizationChannelScopeLayout
+): Pair<Int, Int> {
+    if (channels <= 1) return 1 to 1
+    return when (strategy) {
+        VisualizationChannelScopeLayout.ColumnFirst -> {
+            val targetRowsPerColumn = 7
+            val columns = if (channels <= 4) 1 else ceil(channels / targetRowsPerColumn.toDouble()).toInt().coerceAtLeast(2)
+            val rows = ceil(channels / columns.toDouble()).toInt().coerceAtLeast(1)
+            columns to rows
+        }
+        VisualizationChannelScopeLayout.BalancedTwoColumn -> {
+            val columns = ceil(kotlin.math.sqrt(channels.toDouble())).toInt().coerceAtLeast(1)
+            val rows = ceil(channels / columns.toDouble()).toInt().coerceAtLeast(1)
+            columns to rows
+        }
+    }
 }
 
 private fun deriveVuLabelColor(accent: Color): Color {

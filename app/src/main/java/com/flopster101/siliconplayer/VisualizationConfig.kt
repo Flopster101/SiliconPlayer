@@ -123,6 +123,38 @@ enum class VisualizationChannelScopeBackgroundMode(
     }
 }
 
+enum class VisualizationChannelScopeTextAnchor(
+    val storageValue: String,
+    val label: String
+) {
+    TopLeft("top_left", "Top left"),
+    TopCenter("top_center", "Top center"),
+    TopRight("top_right", "Top right"),
+    BottomRight("bottom_right", "Bottom right"),
+    BottomCenter("bottom_center", "Bottom center"),
+    BottomLeft("bottom_left", "Bottom left");
+
+    companion object {
+        fun fromStorage(value: String?): VisualizationChannelScopeTextAnchor {
+            return entries.firstOrNull { it.storageValue == value } ?: TopLeft
+        }
+    }
+}
+
+enum class VisualizationNoteNameFormat(
+    val storageValue: String,
+    val label: String
+) {
+    American("american", "American (C, C#, D...)"),
+    International("international", "International (Do, Do#, Re...)");
+
+    companion object {
+        fun fromStorage(value: String?): VisualizationNoteNameFormat {
+            return entries.firstOrNull { it.storageValue == value } ?: American
+        }
+    }
+}
+
 enum class VisualizationOscFpsMode(
     val storageValue: String,
     val label: String

@@ -2752,6 +2752,16 @@ internal fun SettingsScreen(
                         val scopeGridArtworkColorModeKey = "visualization_channel_scope_grid_color_mode_with_artwork"
                         val scopeCustomLineColorKey = "visualization_channel_scope_custom_line_color_argb"
                         val scopeCustomGridColorKey = "visualization_channel_scope_custom_grid_color_argb"
+                        val scopeTextEnabledKey = "visualization_channel_scope_text_enabled"
+                        val scopeTextAnchorKey = "visualization_channel_scope_text_anchor"
+                        val scopeTextPaddingKey = "visualization_channel_scope_text_padding_dp"
+                        val scopeTextSizeKey = "visualization_channel_scope_text_size_sp"
+                        val scopeTextNoteFormatKey = "visualization_channel_scope_text_note_format"
+                        val scopeTextShowChannelKey = "visualization_channel_scope_text_show_channel"
+                        val scopeTextShowNoteKey = "visualization_channel_scope_text_show_note"
+                        val scopeTextShowVolumeKey = "visualization_channel_scope_text_show_volume"
+                        val scopeTextShowEffectKey = "visualization_channel_scope_text_show_effect"
+                        val scopeTextShowInstrumentSampleKey = "visualization_channel_scope_text_show_instrument_sample"
                         val context = LocalContext.current
                         val prefs = remember(context) {
                             context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -2951,6 +2961,96 @@ internal fun SettingsScreen(
                                 )
                             )
                         }
+                        var scopeTextEnabled by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextEnabledKey,
+                                    AppDefaults.Visualization.ChannelScope.textEnabled
+                                )
+                            )
+                        }
+                        var scopeTextAnchor by remember {
+                            mutableStateOf(
+                                VisualizationChannelScopeTextAnchor.fromStorage(
+                                    prefs.getString(
+                                        scopeTextAnchorKey,
+                                        AppDefaults.Visualization.ChannelScope.textAnchor.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeTextPaddingDp by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeTextPaddingKey,
+                                    AppDefaults.Visualization.ChannelScope.textPaddingDp
+                                ).coerceIn(
+                                    AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.first,
+                                    AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.last
+                                )
+                            )
+                        }
+                        var scopeTextSizeSp by remember {
+                            mutableIntStateOf(
+                                prefs.getInt(
+                                    scopeTextSizeKey,
+                                    AppDefaults.Visualization.ChannelScope.textSizeSp
+                                ).coerceIn(
+                                    AppDefaults.Visualization.ChannelScope.textSizeRangeSp.first,
+                                    AppDefaults.Visualization.ChannelScope.textSizeRangeSp.last
+                                )
+                            )
+                        }
+                        var scopeTextNoteFormat by remember {
+                            mutableStateOf(
+                                VisualizationNoteNameFormat.fromStorage(
+                                    prefs.getString(
+                                        scopeTextNoteFormatKey,
+                                        AppDefaults.Visualization.ChannelScope.textNoteFormat.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeTextShowChannel by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextShowChannelKey,
+                                    AppDefaults.Visualization.ChannelScope.textShowChannel
+                                )
+                            )
+                        }
+                        var scopeTextShowNote by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextShowNoteKey,
+                                    AppDefaults.Visualization.ChannelScope.textShowNote
+                                )
+                            )
+                        }
+                        var scopeTextShowVolume by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextShowVolumeKey,
+                                    AppDefaults.Visualization.ChannelScope.textShowVolume
+                                )
+                            )
+                        }
+                        var scopeTextShowEffect by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextShowEffectKey,
+                                    AppDefaults.Visualization.ChannelScope.textShowEffect
+                                )
+                            )
+                        }
+                        var scopeTextShowInstrumentSample by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextShowInstrumentSampleKey,
+                                    AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
+                                )
+                            )
+                        }
 
                         var showWindowDialog by remember { mutableStateOf(false) }
                         var showRendererBackendDialog by remember { mutableStateOf(false) }
@@ -2968,6 +3068,10 @@ internal fun SettingsScreen(
                         var showGridArtworkColorModeDialog by remember { mutableStateOf(false) }
                         var showCustomLineColorDialog by remember { mutableStateOf(false) }
                         var showCustomGridColorDialog by remember { mutableStateOf(false) }
+                        var showTextAnchorDialog by remember { mutableStateOf(false) }
+                        var showTextPaddingDialog by remember { mutableStateOf(false) }
+                        var showTextSizeDialog by remember { mutableStateOf(false) }
+                        var showTextNoteFormatDialog by remember { mutableStateOf(false) }
 
                         SettingsSectionLabel("Channel scope")
                         SettingsValuePickerCard(
@@ -3128,6 +3232,97 @@ internal fun SettingsScreen(
                             value = String.format(Locale.US, "#%06X", scopeCustomGridColorArgb and 0xFFFFFF),
                             onClick = { showCustomGridColorDialog = true }
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        SettingsSectionLabel("Text overlay")
+                        PlayerSettingToggleCard(
+                            title = "Show channel text",
+                            description = "Display per-channel labels and live tracker values on each scope.",
+                            checked = scopeTextEnabled,
+                            onCheckedChange = { enabled ->
+                                scopeTextEnabled = enabled
+                                prefs.edit().putBoolean(scopeTextEnabledKey, enabled).apply()
+                            }
+                        )
+                        if (scopeTextEnabled) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Text anchor",
+                                description = "Position of text inside each channel scope.",
+                                value = scopeTextAnchor.label,
+                                onClick = { showTextAnchorDialog = true }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Text padding",
+                                description = "Padding from the selected anchor.",
+                                value = "${scopeTextPaddingDp}dp",
+                                onClick = { showTextPaddingDialog = true }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Text size",
+                                description = "Font size for per-channel overlay text.",
+                                value = "${scopeTextSizeSp}sp",
+                                onClick = { showTextSizeDialog = true }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsValuePickerCard(
+                                title = "Note naming",
+                                description = "Format used for note names in the overlay.",
+                                value = scopeTextNoteFormat.label,
+                                onClick = { showTextNoteFormatDialog = true }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Show channel label",
+                                description = "Show channel index or Amiga L/R label.",
+                                checked = scopeTextShowChannel,
+                                onCheckedChange = { enabled ->
+                                    scopeTextShowChannel = enabled
+                                    prefs.edit().putBoolean(scopeTextShowChannelKey, enabled).apply()
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Show note",
+                                description = "Show current note name.",
+                                checked = scopeTextShowNote,
+                                onCheckedChange = { enabled ->
+                                    scopeTextShowNote = enabled
+                                    prefs.edit().putBoolean(scopeTextShowNoteKey, enabled).apply()
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Show volume",
+                                description = "Show current channel volume value.",
+                                checked = scopeTextShowVolume,
+                                onCheckedChange = { enabled ->
+                                    scopeTextShowVolume = enabled
+                                    prefs.edit().putBoolean(scopeTextShowVolumeKey, enabled).apply()
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Show effect",
+                                description = "Show active effect command and parameter.",
+                                checked = scopeTextShowEffect,
+                                onCheckedChange = { enabled ->
+                                    scopeTextShowEffect = enabled
+                                    prefs.edit().putBoolean(scopeTextShowEffectKey, enabled).apply()
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            PlayerSettingToggleCard(
+                                title = "Show instrument/sample",
+                                description = "Show active instrument or sample index.",
+                                checked = scopeTextShowInstrumentSample,
+                                onCheckedChange = { enabled ->
+                                    scopeTextShowInstrumentSample = enabled
+                                    prefs.edit().putBoolean(scopeTextShowInstrumentSampleKey, enabled).apply()
+                                }
+                            )
+                        }
 
                         if (showWindowDialog) {
                             SteppedIntSliderDialog(
@@ -3487,6 +3682,120 @@ internal fun SettingsScreen(
                                     prefs.edit().putInt(scopeCustomGridColorKey, argb).apply()
                                     showCustomGridColorDialog = false
                                 }
+                            )
+                        }
+                        if (showTextAnchorDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTextAnchorDialog = false },
+                                title = { Text("Text anchor") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationChannelScopeTextAnchor.entries.forEach { entry ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTextAnchor = entry
+                                                        prefs.edit().putString(scopeTextAnchorKey, entry.storageValue).apply()
+                                                        showTextAnchorDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = entry == scopeTextAnchor,
+                                                    onClick = {
+                                                        scopeTextAnchor = entry
+                                                        prefs.edit().putString(scopeTextAnchorKey, entry.storageValue).apply()
+                                                        showTextAnchorDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(entry.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTextAnchorDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
+                            )
+                        }
+                        if (showTextPaddingDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Text padding",
+                                unitLabel = "dp",
+                                range = AppDefaults.Visualization.ChannelScope.textPaddingRangeDp,
+                                step = 1,
+                                currentValue = scopeTextPaddingDp,
+                                onDismiss = { showTextPaddingDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(
+                                        AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.first,
+                                        AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.last
+                                    )
+                                    scopeTextPaddingDp = clamped
+                                    prefs.edit().putInt(scopeTextPaddingKey, clamped).apply()
+                                    showTextPaddingDialog = false
+                                }
+                            )
+                        }
+                        if (showTextSizeDialog) {
+                            SteppedIntSliderDialog(
+                                title = "Text size",
+                                unitLabel = "sp",
+                                range = AppDefaults.Visualization.ChannelScope.textSizeRangeSp,
+                                step = 1,
+                                currentValue = scopeTextSizeSp,
+                                onDismiss = { showTextSizeDialog = false },
+                                onConfirm = { value ->
+                                    val clamped = value.coerceIn(
+                                        AppDefaults.Visualization.ChannelScope.textSizeRangeSp.first,
+                                        AppDefaults.Visualization.ChannelScope.textSizeRangeSp.last
+                                    )
+                                    scopeTextSizeSp = clamped
+                                    prefs.edit().putInt(scopeTextSizeKey, clamped).apply()
+                                    showTextSizeDialog = false
+                                }
+                            )
+                        }
+                        if (showTextNoteFormatDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showTextNoteFormatDialog = false },
+                                title = { Text("Note naming") },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        VisualizationNoteNameFormat.entries.forEach { entry ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        scopeTextNoteFormat = entry
+                                                        prefs.edit().putString(scopeTextNoteFormatKey, entry.storageValue).apply()
+                                                        showTextNoteFormatDialog = false
+                                                    }
+                                                    .padding(vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RadioButton(
+                                                    selected = entry == scopeTextNoteFormat,
+                                                    onClick = {
+                                                        scopeTextNoteFormat = entry
+                                                        prefs.edit().putString(scopeTextNoteFormatKey, entry.storageValue).apply()
+                                                        showTextNoteFormatDialog = false
+                                                    }
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(entry.label)
+                                            }
+                                        }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showTextNoteFormatDialog = false }) { Text("Close") }
+                                },
+                                confirmButton = {}
                             )
                         }
                     }

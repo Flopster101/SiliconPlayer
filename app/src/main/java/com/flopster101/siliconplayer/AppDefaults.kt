@@ -77,11 +77,23 @@ object AppDefaults {
             val gridColorModeWithArtwork = VisualizationOscColorMode.Artwork
             const val customLineColorArgb = 0xFF6BD8FF.toInt()
             const val customGridColorArgb = 0x66FFFFFF
+            const val textEnabled = true
+            val textAnchor = VisualizationChannelScopeTextAnchor.TopLeft
+            const val textPaddingDp = 6
+            const val textSizeSp = 8
+            val textNoteFormat = VisualizationNoteNameFormat.American
+            const val textShowChannel = true
+            const val textShowNote = true
+            const val textShowVolume = true
+            const val textShowEffect = true
+            const val textShowInstrumentSample = true
 
             val windowRangeMs = 5..200
             val gainRangePercent = 25..600
             val lineWidthRangeDp = 1..12
             val gridWidthRangeDp = 1..8
+            val textPaddingRangeDp = 0..24
+            val textSizeRangeSp = 8..22
         }
     }
 }

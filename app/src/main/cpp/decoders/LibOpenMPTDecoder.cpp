@@ -501,27 +501,52 @@ std::vector<float> LibOpenMPTDecoder::getCurrentChannelScopeSamples(int samplesP
         const float* previous = lastChannelScopeSnapshot.data() + channelOffset;
         bool sameAsPrevious = true;
         float peak = 0.0f;
+        float prevPeak = 0.0f;
+        float deltaSum = 0.0f;
+        float rmsAcc = 0.0f;
         for (int i = 0; i < clampedSamples; ++i) {
             const float value = destination[i];
-            if (previous[i] != value) {
-                sameAsPrevious = false;
-            }
+            const float prevValue = previous[i];
+            if (prevValue != value) sameAsPrevious = false;
+            deltaSum += std::abs(value - prevValue);
+            rmsAcc += value * value;
             peak = std::max(peak, std::abs(value));
+            prevPeak = std::max(prevPeak, std::abs(prevValue));
         }
 
         auto& frozenFrames = channelScopeFrozenFrameCount[static_cast<size_t>(channel)];
         const float channelVu = std::clamp(module->get_current_channel_vu_mono(channel), 0.0f, 1.0f);
+        const float meanDelta = deltaSum / static_cast<float>(clampedSamples);
+        const float rms = std::sqrt(rmsAcc / static_cast<float>(clampedSamples));
+        const bool frameNearlyFrozen = meanDelta < 0.0005f;
+        const bool looksSilentNow = (channelVu < 0.00035f) && (rms < 0.0045f);
+        // Stale tail-hold: non-zero frozen shape while channel output is effectively silent.
+        const bool abruptTailFreeze =
+                looksSilentNow &&
+                (peak > 0.018f || prevPeak > 0.018f) &&
+                (sameAsPrevious || frameNearlyFrozen);
         const bool likelyFreshSignal =
                 (peak > 0.001f) &&
-                (!sameAsPrevious || channelVu > 0.0005f);
+                (!frameNearlyFrozen || channelVu > 0.03f);
         bool suppressStaleScope = false;
-        if (likelyFreshSignal) {
+        if (abruptTailFreeze) {
+            frozenFrames = 3;
+            suppressStaleScope = true;
+        } else if (likelyFreshSignal) {
             frozenFrames = 0;
         } else {
             if (frozenFrames < 255) {
                 frozenFrames++;
             }
-            // Require multiple stale/silent frames before flattening to avoid 1-frame flicker.
+            // Secondary guard for slow VU decay: collapse frozen low-energy shapes earlier.
+            if (!suppressStaleScope &&
+                frameNearlyFrozen &&
+                frozenFrames >= 6 &&
+                channelVu < 0.03f &&
+                (peak > 0.012f || prevPeak > 0.012f)) {
+                suppressStaleScope = true;
+            }
+            // Keep 3-frame debounce to avoid single-frame flatline flicker.
             if (frozenFrames >= 3) {
                 suppressStaleScope = true;
             }

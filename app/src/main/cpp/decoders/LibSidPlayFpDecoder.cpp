@@ -90,7 +90,7 @@ bool LibSidPlayFpDecoder::selectSubtuneLocked(int index) {
     player->reset();
     player->initMixer(true);
     const SidInfo& info = player->info();
-    outputChannels = std::max(1u, info.channels());
+    outputChannels = std::clamp(static_cast<int>(info.channels()), 1, 2);
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
     currentSubtuneIndex = index;
@@ -169,6 +169,7 @@ void LibSidPlayFpDecoder::close() {
 int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (!player || !buffer || numFrames <= 0) return 0;
+    const int channels = std::clamp(outputChannels, 1, 2);
 
     int framesWritten = 0;
     while (framesWritten < numFrames) {
@@ -176,12 +177,12 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
                 pendingMixedSamples.size() > pendingMixedOffset
                         ? (pendingMixedSamples.size() - pendingMixedOffset)
                         : 0u;
-        const int pendingFrames = static_cast<int>(pendingAvailableSamples / 2u);
+        const int pendingFrames = static_cast<int>(pendingAvailableSamples / static_cast<size_t>(channels));
         if (pendingFrames > 0) {
             const int framesToCopy = std::min(numFrames - framesWritten, pendingFrames);
-            const int samplesToCopy = framesToCopy * 2;
+            const int samplesToCopy = framesToCopy * channels;
             for (int i = 0; i < samplesToCopy; ++i) {
-                buffer[(framesWritten * 2) + i] =
+                buffer[(framesWritten * channels) + i] =
                         static_cast<float>(pendingMixedSamples[pendingMixedOffset + static_cast<size_t>(i)]) / 32768.0f;
             }
             framesWritten += framesToCopy;
@@ -209,9 +210,9 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
             break;
         }
 
-        std::vector<int16_t> mixed(static_cast<size_t>(produced) * 2u);
+        std::vector<int16_t> mixed(static_cast<size_t>(produced) * static_cast<size_t>(channels));
         const unsigned int mixedSamples = player->mix(mixed.data(), static_cast<unsigned int>(produced));
-        if (mixedSamples < 2u) {
+        if (mixedSamples < static_cast<unsigned int>(channels)) {
             break;
         }
         pendingMixedSamples.insert(

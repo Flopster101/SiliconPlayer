@@ -69,6 +69,7 @@ private:
     int sampleRate = 48000;
     int outputChannels = 2;
     int sidChipCount = 1;
+    int sidVoiceCount = 3;
     double fallbackDurationSeconds = 180.0;
     std::atomic<int> repeatMode { 0 }; // 0 none, 1 repeat track, 2 repeat loop-point style
     std::vector<int16_t> pendingMixedSamples;

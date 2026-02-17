@@ -84,6 +84,7 @@ void LibSidPlayFpDecoder::refreshMetadataLocked() {
     composer.clear();
     genre.clear();
     sidChipCount = 1;
+    sidVoiceCount = 3;
     subtuneTitles.assign(std::max(1, subtuneCount), "");
     subtuneArtists.assign(std::max(1, subtuneCount), "");
     subtuneDurationsSeconds.assign(std::max(1, subtuneCount), fallbackDurationSeconds);
@@ -93,6 +94,7 @@ void LibSidPlayFpDecoder::refreshMetadataLocked() {
     if (info == nullptr) return;
 
     sidChipCount = std::max(1, info->sidChips());
+    sidVoiceCount = std::max(1, sidChipCount * 3);
     const unsigned int numInfoStrings = info->numberOfInfoStrings();
     if (numInfoStrings > 0) title = safeString(info->infoString(0));
     if (numInfoStrings > 1) artist = safeString(info->infoString(1));
@@ -121,6 +123,9 @@ bool LibSidPlayFpDecoder::selectSubtuneLocked(int index) {
     player->initMixer(true);
     const SidInfo& info = player->info();
     outputChannels = std::clamp(static_cast<int>(info.channels()), 1, 2);
+    const int runtimeSidChips = std::max(1, static_cast<int>(info.numberOfSIDs()));
+    sidChipCount = runtimeSidChips;
+    sidVoiceCount = std::max(1, runtimeSidChips * 3);
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
     currentSubtuneIndex = index;
@@ -177,6 +182,7 @@ bool LibSidPlayFpDecoder::open(const char* path) {
     currentSubtuneIndex = 0;
     outputChannels = 2;
     sidChipCount = 1;
+    sidVoiceCount = 3;
     return openInternalLocked(path);
 }
 
@@ -197,6 +203,7 @@ void LibSidPlayFpDecoder::close() {
     currentSubtuneIndex = 0;
     outputChannels = 2;
     sidChipCount = 1;
+    sidVoiceCount = 3;
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
 }
@@ -366,7 +373,7 @@ std::string LibSidPlayFpDecoder::getBitDepthLabel() {
 }
 
 int LibSidPlayFpDecoder::getDisplayChannelCount() {
-    return sidChipCount;
+    return sidVoiceCount;
 }
 
 int LibSidPlayFpDecoder::getChannelCount() {

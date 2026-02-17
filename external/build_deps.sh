@@ -779,6 +779,25 @@ build_libsidplayfp() {
 # -----------------------------------------------------------------------------
 # Argument Parsing
 # -----------------------------------------------------------------------------
+usage() {
+    echo "Usage: $0 <abi|all> <lib|all[,lib2,...]>"
+    echo "  ABI: all, arm64-v8a, armeabi-v7a, x86_64, x86"
+    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libsidplayfp, lazyusf2, fluidsynth"
+    echo "  Aliases: sox/soxr, gme, sid/sidplayfp, usf/lazyusf, fluid/libfluidsynth"
+}
+
+if [ "$#" -eq 1 ]; then
+    echo "Error: missing second argument."
+    usage
+    exit 1
+fi
+
+if [ "$#" -gt 2 ]; then
+    echo "Error: too many arguments."
+    usage
+    exit 1
+fi
+
 TARGET_ABI=${1:-all}
 TARGET_LIB=${2:-all}
 
@@ -828,6 +847,49 @@ target_has_lib() {
     done
     return 1
 }
+
+is_valid_abi() {
+    local abi="$1"
+    case "$abi" in
+        all|arm64-v8a|armeabi-v7a|x86_64|x86)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+is_valid_lib() {
+    local lib="$1"
+    case "$lib" in
+        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libsidplayfp|lazyusf2|fluidsynth)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+if ! is_valid_abi "$TARGET_ABI"; then
+    echo "Error: invalid ABI '$TARGET_ABI'."
+    usage
+    exit 1
+fi
+
+if [ "$TARGET_LIB" != "all" ]; then
+    IFS=',' read -r -a requested_libs <<< "$TARGET_LIB"
+    for raw in "${requested_libs[@]}"; do
+        item="$(echo "$raw" | xargs)"
+        item="$(normalize_lib_name "$item")"
+        if ! is_valid_lib "$item"; then
+            echo "Error: invalid lib '$raw'."
+            usage
+            exit 1
+        fi
+    done
+fi
 
 # -----------------------------------------------------------------------------
 # Pre-build setup (Apply patches once)

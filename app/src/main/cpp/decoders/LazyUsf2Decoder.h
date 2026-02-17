@@ -37,6 +37,8 @@ public:
     bool getEnableCompare();
     bool getEnableFifoFull();
     void setOutputSampleRate(int sampleRate) override;
+    void setOption(const char* name, const char* value) override;
+    int getOptionApplyPolicy(const char* name) const override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override;
@@ -68,6 +70,7 @@ private:
 
     bool enableCompare = false;
     bool enableFifoFull = false;
+    bool useHleAudio = true;
 
     std::string title;
     std::string artist;

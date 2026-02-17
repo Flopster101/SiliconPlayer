@@ -47,6 +47,7 @@ bool LazyUsf2Decoder::open(const char* path) {
     usf_clear(state);
     enableCompare = false;
     enableFifoFull = false;
+    useHleAudio = true;
     durationSeconds = 0.0;
     durationReliable = false;
     renderedFrames = 0;
@@ -69,6 +70,7 @@ bool LazyUsf2Decoder::open(const char* path) {
 
     usf_set_compare(state, enableCompare ? 1 : 0);
     usf_set_fifo_full(state, enableFifoFull ? 1 : 0);
+    usf_set_hle_audio(state, useHleAudio ? 1 : 0);
 
     needsShutdown = true;
     int32_t nativeRate = 0;
@@ -112,6 +114,7 @@ void LazyUsf2Decoder::closeInternal() {
     durationReliable = false;
     enableCompare = false;
     enableFifoFull = false;
+    useHleAudio = true;
     title.clear();
     artist.clear();
     composer.clear();
@@ -176,6 +179,7 @@ void LazyUsf2Decoder::seekInternalLocked(double seconds) {
     usf_restart(state);
     usf_set_compare(state, enableCompare ? 1 : 0);
     usf_set_fifo_full(state, enableFifoFull ? 1 : 0);
+    usf_set_hle_audio(state, useHleAudio ? 1 : 0);
     renderedFrames = 0;
 
     if (clamped <= 0.0) {
@@ -281,6 +285,32 @@ bool LazyUsf2Decoder::getEnableFifoFull() {
 void LazyUsf2Decoder::setOutputSampleRate(int sampleRate) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     outputSampleRate = std::clamp(sampleRate, kMinSampleRate, kMaxSampleRate);
+}
+
+void LazyUsf2Decoder::setOption(const char* name, const char* value) {
+    if (!name || !value) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    const std::string key = toLowerAscii(trimAscii(name));
+    const std::string rawValue = trimAscii(value);
+    if (key == "lazyusf2.use_hle_audio") {
+        useHleAudio = parseBoolTag(rawValue);
+    }
+}
+
+int LazyUsf2Decoder::getOptionApplyPolicy(const char* name) const {
+    if (!name) {
+        return OPTION_APPLY_LIVE;
+    }
+    std::string key(name);
+    std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    if (key == "lazyusf2.use_hle_audio") {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    return OPTION_APPLY_LIVE;
 }
 
 void LazyUsf2Decoder::setRepeatMode(int mode) {

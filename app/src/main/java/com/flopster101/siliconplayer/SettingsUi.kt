@@ -116,6 +116,7 @@ import androidx.compose.foundation.shape.CircleShape
 import com.flopster101.siliconplayer.pluginsettings.OpenMptSettings
 import com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings
 import com.flopster101.siliconplayer.pluginsettings.GmeSettings
+import com.flopster101.siliconplayer.pluginsettings.LazyUsf2Settings
 import com.flopster101.siliconplayer.pluginsettings.SidPlayFpSettings
 import com.flopster101.siliconplayer.pluginsettings.VgmPlayChipSettingsScreen
 import com.flopster101.siliconplayer.pluginsettings.VgmPlaySettings
@@ -359,6 +360,8 @@ internal fun SettingsScreen(
     onSidPlayFpSampleRateChanged: (Int) -> Unit,
     lazyUsf2SampleRateHz: Int,
     onLazyUsf2SampleRateChanged: (Int) -> Unit,
+    lazyUsf2UseHleAudio: Boolean,
+    onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
     sidPlayFpBackend: Int,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     sidPlayFpClockMode: Int,
@@ -3234,6 +3237,10 @@ internal fun SettingsScreen(
                                     onFilterCurve8580PercentChanged = onSidPlayFpFilterCurve8580PercentChanged,
                                     onReSidFpFastSamplingChanged = onSidPlayFpReSidFpFastSamplingChanged,
                                     onReSidFpCombinedWaveformsStrengthChanged = onSidPlayFpReSidFpCombinedWaveformsStrengthChanged
+                                )
+                                "LazyUSF2" -> LazyUsf2Settings(
+                                    useHleAudio = lazyUsf2UseHleAudio,
+                                    onUseHleAudioChanged = onLazyUsf2UseHleAudioChanged
                                 )
                                 else -> null
                             }

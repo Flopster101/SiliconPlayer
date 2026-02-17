@@ -1502,6 +1502,11 @@ private fun AppNavigation(
             prefs.getInt(CorePreferenceKeys.CORE_RATE_LAZYUSF2, LazyUsf2Defaults.coreSampleRateHz)
         )
     }
+    var lazyUsf2UseHleAudio by remember {
+        mutableStateOf(
+            prefs.getBoolean(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO, LazyUsf2Defaults.useHleAudio)
+        )
+    }
     var sidPlayFpBackend by remember {
         mutableIntStateOf(
             prefs.getInt(CorePreferenceKeys.SIDPLAYFP_BACKEND, SidPlayFpDefaults.backend)
@@ -3059,6 +3064,19 @@ private fun AppNavigation(
             .putInt(CorePreferenceKeys.CORE_RATE_LAZYUSF2, normalized)
             .apply()
         NativeBridge.setCoreOutputSampleRate("LazyUSF2", normalized)
+    }
+
+    LaunchedEffect(lazyUsf2UseHleAudio) {
+        prefs.edit()
+            .putBoolean(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO, lazyUsf2UseHleAudio)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "LazyUSF2",
+            optionName = LazyUsf2OptionKeys.USE_HLE_AUDIO,
+            optionValue = lazyUsf2UseHleAudio.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Use HLE audio"
+        )
     }
 
     LaunchedEffect(sidPlayFpBackend) {
@@ -5009,6 +5027,8 @@ private fun AppNavigation(
                         onSidPlayFpSampleRateChanged = { sidPlayFpCoreSampleRateHz = it },
                         lazyUsf2SampleRateHz = lazyUsf2CoreSampleRateHz,
                         onLazyUsf2SampleRateChanged = { lazyUsf2CoreSampleRateHz = it },
+                        lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
+                        onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
                         sidPlayFpBackend = sidPlayFpBackend,
                         onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
                         sidPlayFpClockMode = sidPlayFpClockMode,
@@ -5136,6 +5156,7 @@ private fun AppNavigation(
                                 CorePreferenceKeys.GME_ACCURACY_ENABLED to gmeAccuracyEnabled,
                                 CorePreferenceKeys.GME_SPC_USE_BUILTIN_FADE to gmeSpcUseBuiltInFade,
                                 CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE to gmeSpcUseNativeSampleRate,
+                                CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO to lazyUsf2UseHleAudio,
                                 CorePreferenceKeys.SIDPLAYFP_FILTER_6581_ENABLED to sidPlayFpFilter6581Enabled,
                                 CorePreferenceKeys.SIDPLAYFP_FILTER_8580_ENABLED to sidPlayFpFilter8580Enabled,
                                 CorePreferenceKeys.SIDPLAYFP_DIGI_BOOST_8580 to sidPlayFpDigiBoost8580,
@@ -5457,6 +5478,7 @@ private fun AppNavigation(
                             gmeCoreSampleRateHz = GmeDefaults.coreSampleRateHz
                             sidPlayFpCoreSampleRateHz = SidPlayFpDefaults.coreSampleRateHz
                             lazyUsf2CoreSampleRateHz = LazyUsf2Defaults.coreSampleRateHz
+                            lazyUsf2UseHleAudio = LazyUsf2Defaults.useHleAudio
                             sidPlayFpBackend = SidPlayFpDefaults.backend
                             sidPlayFpClockMode = SidPlayFpDefaults.clockMode
                             sidPlayFpSidModelMode = SidPlayFpDefaults.sidModelMode
@@ -5501,6 +5523,7 @@ private fun AppNavigation(
                                 remove(CorePreferenceKeys.CORE_RATE_GME)
                                 remove(CorePreferenceKeys.CORE_RATE_SIDPLAYFP)
                                 remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2)
+                                remove(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO)
                                 remove(CorePreferenceKeys.SIDPLAYFP_BACKEND)
                                 remove(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE)
                                 remove(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE)
@@ -5592,6 +5615,9 @@ private fun AppNavigation(
                                     SidPlayFpOptionKeys.RESIDFP_FAST_SAMPLING,
                                     SidPlayFpOptionKeys.RESIDFP_COMBINED_WAVEFORMS_STRENGTH
                                 )
+                                "LazyUSF2" -> listOf(
+                                    LazyUsf2OptionKeys.USE_HLE_AUDIO
+                                )
                                 else -> emptyList()
                             }
                             val requiresPlaybackRestart = optionNamesForReset.any { optionName ->
@@ -5681,7 +5707,11 @@ private fun AppNavigation(
                                 }
                                 "LazyUSF2" -> {
                                     lazyUsf2CoreSampleRateHz = LazyUsf2Defaults.coreSampleRateHz
-                                    prefs.edit().remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2).apply()
+                                    lazyUsf2UseHleAudio = LazyUsf2Defaults.useHleAudio
+                                    prefs.edit()
+                                        .remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2)
+                                        .remove(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO)
+                                        .apply()
                                 }
                                 "LibSIDPlayFP" -> {
                                     sidPlayFpCoreSampleRateHz = SidPlayFpDefaults.coreSampleRateHz

@@ -64,6 +64,8 @@ private:
     int sampleRate = 48000;
     int outputChannels = 2;
     int sidChipCount = 1;
+    std::vector<int16_t> pendingMixedSamples;
+    size_t pendingMixedOffset = 0;
 
     bool openInternalLocked(const char* path);
     bool applyConfigLocked();

@@ -91,6 +91,8 @@ bool LibSidPlayFpDecoder::selectSubtuneLocked(int index) {
     player->initMixer(true);
     const SidInfo& info = player->info();
     outputChannels = std::max(1u, info.channels());
+    pendingMixedSamples.clear();
+    pendingMixedOffset = 0;
     currentSubtuneIndex = index;
     return true;
 }
@@ -160,6 +162,8 @@ void LibSidPlayFpDecoder::close() {
     currentSubtuneIndex = 0;
     outputChannels = 2;
     sidChipCount = 1;
+    pendingMixedSamples.clear();
+    pendingMixedOffset = 0;
 }
 
 int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
@@ -168,6 +172,34 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
 
     int framesWritten = 0;
     while (framesWritten < numFrames) {
+        const size_t pendingAvailableSamples =
+                pendingMixedSamples.size() > pendingMixedOffset
+                        ? (pendingMixedSamples.size() - pendingMixedOffset)
+                        : 0u;
+        const int pendingFrames = static_cast<int>(pendingAvailableSamples / 2u);
+        if (pendingFrames > 0) {
+            const int framesToCopy = std::min(numFrames - framesWritten, pendingFrames);
+            const int samplesToCopy = framesToCopy * 2;
+            for (int i = 0; i < samplesToCopy; ++i) {
+                buffer[(framesWritten * 2) + i] =
+                        static_cast<float>(pendingMixedSamples[pendingMixedOffset + static_cast<size_t>(i)]) / 32768.0f;
+            }
+            framesWritten += framesToCopy;
+            pendingMixedOffset += static_cast<size_t>(samplesToCopy);
+
+            if (pendingMixedOffset >= pendingMixedSamples.size()) {
+                pendingMixedSamples.clear();
+                pendingMixedOffset = 0;
+            } else if (pendingMixedOffset > 4096u) {
+                pendingMixedSamples.erase(
+                        pendingMixedSamples.begin(),
+                        pendingMixedSamples.begin() + static_cast<std::ptrdiff_t>(pendingMixedOffset)
+                );
+                pendingMixedOffset = 0;
+            }
+            continue;
+        }
+
         const int produced = player->play(kRenderCyclesPerChunk);
         if (produced < 0) {
             LOGE("sidplayfp play failed: %s", player->error());
@@ -179,15 +211,14 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
 
         std::vector<int16_t> mixed(static_cast<size_t>(produced) * 2u);
         const unsigned int mixedSamples = player->mix(mixed.data(), static_cast<unsigned int>(produced));
-        const int mixedFrames = static_cast<int>(mixedSamples / 2u);
-        if (mixedFrames <= 0) break;
-
-        const int framesToCopy = std::min(numFrames - framesWritten, mixedFrames);
-        const int samplesToCopy = framesToCopy * 2;
-        for (int i = 0; i < samplesToCopy; ++i) {
-            buffer[(framesWritten * 2) + i] = static_cast<float>(mixed[i]) / 32768.0f;
+        if (mixedSamples < 2u) {
+            break;
         }
-        framesWritten += framesToCopy;
+        pendingMixedSamples.insert(
+                pendingMixedSamples.end(),
+                mixed.begin(),
+                mixed.begin() + static_cast<std::ptrdiff_t>(mixedSamples)
+        );
     }
 
     return framesWritten;
@@ -203,6 +234,8 @@ void LibSidPlayFpDecoder::seek(double seconds) {
 
     // Basic seek fallback: restart subtune then fast-forward in chunks.
     if (!selectSubtuneLocked(currentSubtuneIndex)) return;
+    pendingMixedSamples.clear();
+    pendingMixedOffset = 0;
     const uint32_t targetMs = static_cast<uint32_t>(seconds * 1000.0);
     while (player->timeMs() < targetMs) {
         const int produced = player->play(kRenderCyclesPerChunk);

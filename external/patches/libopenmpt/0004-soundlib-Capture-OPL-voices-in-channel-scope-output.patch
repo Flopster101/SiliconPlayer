@@ -1,4 +1,4 @@
-From c2b282399cf23823fd241f8d53807d9117544dc3 Mon Sep 17 00:00:00 2001
+From e4073efae7de4977359b72a4f4887871578da1ae Mon Sep 17 00:00:00 2001
 From: Flopster101 <nahuelgomez329@gmail.com>
 Date: Mon, 16 Feb 2026 16:36:47 -0300
 Subject: [PATCH] soundlib: capture OPL voices in channel scope output

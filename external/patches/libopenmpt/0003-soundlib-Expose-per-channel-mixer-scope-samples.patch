@@ -1,4 +1,4 @@
-From 40b049797de7db9e19aabd751f23e8d147b246a0 Mon Sep 17 00:00:00 2001
+From cefebccad6a9e36e6202b456a6bca2e7eaaf9f21 Mon Sep 17 00:00:00 2001
 From: Codex <codex@local>
 Date: Mon, 16 Feb 2026 15:10:50 -0300
 Subject: [PATCH] soundlib: expose per-channel mixer scope samples
@@ -197,7 +197,7 @@ index 3b863bcba..821d9c51f 100644
  		m_PlayState.m_nRow = m_PlayState.m_nNextRow = 0;
  		m_PlayState.m_nPattern = 0;
 diff --git a/soundlib/Sndfile.h b/soundlib/Sndfile.h
-index 943819603..ab485a9a6 100644
+index 943819603..56f99e0bc 100644
 --- a/soundlib/Sndfile.h
 +++ b/soundlib/Sndfile.h
 @@ -58,6 +58,7 @@
@@ -242,3 +242,4 @@ index 943819603..ab485a9a6 100644
  	bool HasPositionChanged() { bool b = m_PlayState.m_flags[SONG_POSITIONCHANGED]; m_PlayState.m_flags.reset(SONG_POSITIONCHANGED); return b; }
 -- 
 2.53.0
+

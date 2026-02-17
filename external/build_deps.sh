@@ -53,6 +53,17 @@ apply_libopenmpt_patches() {
         [ -e "$patch_file" ] || continue
         local patch_name
         patch_name="$(basename "$patch_file")"
+        local patch_subject
+        patch_subject="$(sed -n 's/^Subject: \[PATCH\] //p' "$patch_file" | head -n 1)"
+
+        # Secondary idempotency check:
+        # If the patch subject already exists in git history, treat it as applied.
+        # This avoids false negatives from reverse-apply checks when later patches
+        # touched nearby context lines.
+        if [ -n "$patch_subject" ] && git -C "$PROJECT_PATH" log --format=%s | grep -Fxq "$patch_subject"; then
+            echo "libopenmpt patch already applied (subject): $patch_name"
+            continue
+        fi
 
         # Reliable idempotency check:
         # If reverse-apply check succeeds, patch content is already present.

@@ -1,0 +1,89 @@
+From 6d29a66971817f92630c33ecf985d1be9609316f Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Mon, 16 Feb 2026 20:56:25 -0300
+Subject: [PATCH] soundlib: flush channel scope with silence for idle channels
+
+---
+ soundlib/Fastmix.cpp | 25 ++++++++++++++++++++++++-
+ soundlib/Sndfile.cpp | 12 ++++++++++++
+ soundlib/Sndfile.h   |  1 +
+ 3 files changed, 37 insertions(+), 1 deletion(-)
+
+diff --git a/soundlib/Fastmix.cpp b/soundlib/Fastmix.cpp
+index 1e407a9b4..47c5d0426 100644
+--- a/soundlib/Fastmix.cpp
++++ b/soundlib/Fastmix.cpp
+@@ -304,11 +304,34 @@ void CSoundFile::CreateStereoMix(int count)
+ 
+ 	// Channels that are actually mixed and not skipped (because they are paused or muted)
+ 	CHANNELINDEX numChannelsMixed = 0;
++	std::array<bool, MAX_CHANNELS> scopeUpdated{};
+ 
+ 	for(uint32 nChn = 0; nChn < m_nMixChannels; nChn++)
+ 	{
+-		if(MixChannel(count, m_PlayState.Chn[m_PlayState.ChnMix[nChn]], m_PlayState.ChnMix[nChn], numChannelsMixed < m_MixerSettings.m_nMaxMixChannels))
++		const CHANNELINDEX channelIndex = m_PlayState.ChnMix[nChn];
++		const bool mixed = MixChannel(
++			count,
++			m_PlayState.Chn[channelIndex],
++			channelIndex,
++			numChannelsMixed < m_MixerSettings.m_nMaxMixChannels
++		);
++		if(mixed)
++		{
+ 			numChannelsMixed++;
++			if(channelIndex < MAX_CHANNELS)
++			{
++				scopeUpdated[channelIndex] = true;
++			}
++		}
++	}
++
++	const CHANNELINDEX scopeChannels = std::min(GetNumChannels(), static_cast<CHANNELINDEX>(MAX_CHANNELS));
++	for(CHANNELINDEX channel = 0; channel < scopeChannels; channel++)
++	{
++		if(!scopeUpdated[channel])
++		{
++			PushChannelScopeSilence(channel, count);
++		}
+ 	}
+ 	m_nMixStat = std::max(m_nMixStat, numChannelsMixed);
+ }
+diff --git a/soundlib/Sndfile.cpp b/soundlib/Sndfile.cpp
+index e99483697..6789c9167 100644
+--- a/soundlib/Sndfile.cpp
++++ b/soundlib/Sndfile.cpp
+@@ -986,6 +986,18 @@ void CSoundFile::PushChannelScopeDiff(CHANNELINDEX channel, const mixsample_t *b
+ 	}
+ }
+ 
++void CSoundFile::PushChannelScopeSilence(CHANNELINDEX channel, int32 sampleCount)
++{
++	if(channel >= MAX_CHANNELS || sampleCount <= 0)
++	{
++		return;
++	}
++	for(int32 i = 0; i < sampleCount; ++i)
++	{
++		PushChannelScopeSample(channel, 0.0f);
++	}
++}
++
+ 
+ void CSoundFile::ResetPlayPos()
+ {
+diff --git a/soundlib/Sndfile.h b/soundlib/Sndfile.h
+index eb5e79578..b8c3f4d5a 100644
+--- a/soundlib/Sndfile.h
++++ b/soundlib/Sndfile.h
+@@ -1006,6 +1006,7 @@ private:
+ 	void PushChannelScopeSample(CHANNELINDEX channel, float sample);
+ 	void PushChannelScopeStereoSample(CHANNELINDEX channel, float left, float right);
+ 	void PushChannelScopeDiff(CHANNELINDEX channel, const mixsample_t *before, const mixsample_t *after, int32 sampleCount);
++	void PushChannelScopeSilence(CHANNELINDEX channel, int32 sampleCount);
+ public:
+ 	samplecount_t GetTotalSampleCount() const { return m_PlayState.m_lTotalSampleCount; }
+ 	bool HasPositionChanged() { bool b = m_PlayState.m_flags[SONG_POSITIONCHANGED]; m_PlayState.m_flags.reset(SONG_POSITIONCHANGED); return b; }
+-- 
+2.53.0
+

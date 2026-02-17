@@ -22,3 +22,6 @@
 [submodule "external/lazyusf2"]
 	path = external/lazyusf2
 	url = https://bitbucket.org/losnoco/lazyusf2/
+[submodule "external/fluidsynth"]
+	path = external/fluidsynth
+	url = https://github.com/FluidSynth/fluidsynth

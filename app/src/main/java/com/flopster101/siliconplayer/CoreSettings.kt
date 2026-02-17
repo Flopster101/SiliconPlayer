@@ -30,6 +30,13 @@ object CorePreferenceKeys {
     const val GME_SPC_USE_BUILTIN_FADE = "gme_spc_use_builtin_fade"
     const val GME_SPC_INTERPOLATION = "gme_spc_interpolation"
     const val GME_SPC_USE_NATIVE_SAMPLE_RATE = "gme_spc_use_native_sample_rate"
+    const val SIDPLAYFP_BACKEND = "sidplayfp_backend"
+    const val SIDPLAYFP_CLOCK_MODE = "sidplayfp_clock_mode"
+    const val SIDPLAYFP_SID_MODEL_MODE = "sidplayfp_sid_model_mode"
+    const val SIDPLAYFP_FILTER_6581_ENABLED = "sidplayfp_filter_6581_enabled"
+    const val SIDPLAYFP_FILTER_8580_ENABLED = "sidplayfp_filter_8580_enabled"
+    const val SIDPLAYFP_RESIDFP_FAST_SAMPLING = "sidplayfp_residfp_fast_sampling"
+    const val SIDPLAYFP_RESIDFP_COMBINED_WAVEFORMS_STRENGTH = "sidplayfp_residfp_combined_waveforms_strength"
     fun vgmPlayChipCoreKey(chipKey: String) = "vgmplay_chip_core_$chipKey"
 }
 
@@ -76,4 +83,11 @@ object GmeDefaults {
 
 object SidPlayFpDefaults {
     const val coreSampleRateHz = 0
+    const val backend = 0 // 0 ReSIDfp, 1 SIDLite
+    const val clockMode = 0 // 0 Auto, 1 PAL, 2 NTSC
+    const val sidModelMode = 0 // 0 Auto, 1 MOS6581, 2 MOS8580
+    const val filter6581Enabled = true
+    const val filter8580Enabled = true
+    const val reSidFpFastSampling = true
+    const val reSidFpCombinedWaveformsStrength = 0 // 0 Average, 1 Weak, 2 Strong
 }

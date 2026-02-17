@@ -84,6 +84,7 @@ object NativeBridge {
     external fun getSidBackendName(): String
     external fun getSidChipCount(): Int
     external fun getSidModelSummary(): String
+    external fun getSidCurrentModelSummary(): String
     external fun getSidBaseAddressSummary(): String
     external fun getSidCommentSummary(): String
     external fun getTrackBitrate(): Long

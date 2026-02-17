@@ -2,6 +2,7 @@
 #define SILICONPLAYER_LIBSIDPLAYFPDECODER_H
 
 #include "AudioDecoder.h"
+#include <sidplayfp/SidConfig.h>
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -16,6 +17,18 @@ class sidbuilder;
 enum class SidBackend {
     ReSIDfp,
     SIDLite
+};
+
+enum class SidClockMode {
+    Auto,
+    Pal,
+    Ntsc
+};
+
+enum class SidModelMode {
+    Auto,
+    Mos6581,
+    Mos8580
 };
 
 class LibSidPlayFpDecoder : public AudioDecoder {
@@ -50,6 +63,7 @@ public:
     std::string getSidBackendName();
     int getSidChipCountInfo();
     std::string getSidModelSummary();
+    std::string getSidCurrentModelSummary();
     std::string getSidBaseAddressSummary();
     std::string getSidCommentSummary();
     void setOutputSampleRate(int sampleRateHz) override;
@@ -89,7 +103,8 @@ private:
     std::string sidClockName;
     std::string sidSpeedName;
     std::string sidCompatibilityName;
-    std::string sidModelSummary;
+    std::string sidModelSummary; // Declared in tune metadata
+    std::string sidCurrentModelSummary; // Effective model used by player
     std::string sidBaseAddressSummary;
     std::string sidCommentSummary;
     double fallbackDurationSeconds = 180.0;
@@ -98,10 +113,18 @@ private:
     size_t pendingMixedOffset = 0;
     SidBackend selectedBackend = SidBackend::ReSIDfp;
     SidBackend activeBackend = SidBackend::ReSIDfp;
+    SidClockMode sidClockMode = SidClockMode::Auto;
+    SidModelMode sidModelMode = SidModelMode::Auto;
+    bool filter6581Enabled = true;
+    bool filter8580Enabled = true;
+    bool reSidFpFastSampling = true;
+    SidConfig::sid_cw_t reSidFpCombinedWaveformsStrength = SidConfig::AVERAGE;
 
     bool openInternalLocked(const char* path);
     bool applyConfigLocked();
     bool selectSubtuneLocked(int index);
+    void applySidBackendOptionsLocked();
+    void applySidFilterOptionsLocked();
     void refreshMetadataLocked();
 };
 

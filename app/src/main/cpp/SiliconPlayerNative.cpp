@@ -804,6 +804,13 @@ Java_com_flopster101_siliconplayer_NativeBridge_getSidModelSummary(JNIEnv* env, 
 }
 
 extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSidCurrentModelSummary(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getSidCurrentModelSummary();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getSidBaseAddressSummary(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getSidBaseAddressSummary();

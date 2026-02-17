@@ -100,6 +100,7 @@ public:
     std::string getSidBackendName();
     int getSidChipCount();
     std::string getSidModelSummary();
+    std::string getSidCurrentModelSummary();
     std::string getSidBaseAddressSummary();
     std::string getSidCommentSummary();
 

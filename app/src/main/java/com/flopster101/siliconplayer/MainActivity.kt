@@ -1497,6 +1497,53 @@ private fun AppNavigation(
             prefs.getInt(CorePreferenceKeys.CORE_RATE_SIDPLAYFP, SidPlayFpDefaults.coreSampleRateHz)
         )
     }
+    var sidPlayFpBackend by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.SIDPLAYFP_BACKEND, SidPlayFpDefaults.backend)
+        )
+    }
+    var sidPlayFpClockMode by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE, SidPlayFpDefaults.clockMode)
+        )
+    }
+    var sidPlayFpSidModelMode by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE, SidPlayFpDefaults.sidModelMode)
+        )
+    }
+    var sidPlayFpFilter6581Enabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                CorePreferenceKeys.SIDPLAYFP_FILTER_6581_ENABLED,
+                SidPlayFpDefaults.filter6581Enabled
+            )
+        )
+    }
+    var sidPlayFpFilter8580Enabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                CorePreferenceKeys.SIDPLAYFP_FILTER_8580_ENABLED,
+                SidPlayFpDefaults.filter8580Enabled
+            )
+        )
+    }
+    var sidPlayFpReSidFpFastSampling by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                CorePreferenceKeys.SIDPLAYFP_RESIDFP_FAST_SAMPLING,
+                SidPlayFpDefaults.reSidFpFastSampling
+            )
+        )
+    }
+    var sidPlayFpReSidFpCombinedWaveformsStrength by remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.SIDPLAYFP_RESIDFP_COMBINED_WAVEFORMS_STRENGTH,
+                SidPlayFpDefaults.reSidFpCombinedWaveformsStrength
+            )
+        )
+    }
     var gmeTempoPercent by remember {
         mutableIntStateOf(
             prefs.getInt(CorePreferenceKeys.GME_TEMPO_PERCENT, GmeDefaults.tempoPercent)
@@ -2963,6 +3010,117 @@ private fun AppNavigation(
             .putInt(CorePreferenceKeys.CORE_RATE_SIDPLAYFP, normalized)
             .apply()
         NativeBridge.setCoreOutputSampleRate("LibSIDPlayFP", normalized)
+    }
+
+    LaunchedEffect(sidPlayFpBackend) {
+        val normalized = sidPlayFpBackend.coerceIn(0, 1)
+        if (normalized != sidPlayFpBackend) {
+            sidPlayFpBackend = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.SIDPLAYFP_BACKEND, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "LibSIDPlayFP",
+            optionName = SidPlayFpOptionKeys.BACKEND,
+            optionValue = if (normalized == 1) "sidlite" else "residfp",
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Engine"
+        )
+    }
+
+    LaunchedEffect(sidPlayFpClockMode) {
+        val normalized = sidPlayFpClockMode.coerceIn(0, 2)
+        if (normalized != sidPlayFpClockMode) {
+            sidPlayFpClockMode = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "LibSIDPlayFP",
+            optionName = SidPlayFpOptionKeys.CLOCK_MODE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Timing standard"
+        )
+    }
+
+    LaunchedEffect(sidPlayFpSidModelMode) {
+        val normalized = sidPlayFpSidModelMode.coerceIn(0, 2)
+        if (normalized != sidPlayFpSidModelMode) {
+            sidPlayFpSidModelMode = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "LibSIDPlayFP",
+            optionName = SidPlayFpOptionKeys.SID_MODEL_MODE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "SID model"
+        )
+    }
+
+    LaunchedEffect(sidPlayFpFilter6581Enabled) {
+        prefs.edit()
+            .putBoolean(CorePreferenceKeys.SIDPLAYFP_FILTER_6581_ENABLED, sidPlayFpFilter6581Enabled)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "LibSIDPlayFP",
+            optionName = SidPlayFpOptionKeys.FILTER_6581_ENABLED,
+            optionValue = sidPlayFpFilter6581Enabled.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Filter for MOS6581"
+        )
+    }
+
+    LaunchedEffect(sidPlayFpFilter8580Enabled) {
+        prefs.edit()
+            .putBoolean(CorePreferenceKeys.SIDPLAYFP_FILTER_8580_ENABLED, sidPlayFpFilter8580Enabled)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "LibSIDPlayFP",
+            optionName = SidPlayFpOptionKeys.FILTER_8580_ENABLED,
+            optionValue = sidPlayFpFilter8580Enabled.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Filter for MOS8580"
+        )
+    }
+
+    LaunchedEffect(sidPlayFpReSidFpFastSampling) {
+        prefs.edit()
+            .putBoolean(CorePreferenceKeys.SIDPLAYFP_RESIDFP_FAST_SAMPLING, sidPlayFpReSidFpFastSampling)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "LibSIDPlayFP",
+            optionName = SidPlayFpOptionKeys.RESIDFP_FAST_SAMPLING,
+            optionValue = sidPlayFpReSidFpFastSampling.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Fast sampling"
+        )
+    }
+
+    LaunchedEffect(sidPlayFpReSidFpCombinedWaveformsStrength) {
+        val normalized = sidPlayFpReSidFpCombinedWaveformsStrength.coerceIn(0, 2)
+        if (normalized != sidPlayFpReSidFpCombinedWaveformsStrength) {
+            sidPlayFpReSidFpCombinedWaveformsStrength = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.SIDPLAYFP_RESIDFP_COMBINED_WAVEFORMS_STRENGTH, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "LibSIDPlayFP",
+            optionName = SidPlayFpOptionKeys.RESIDFP_COMBINED_WAVEFORMS_STRENGTH,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Combined waveforms"
+        )
     }
 
     LaunchedEffect(gmeTempoPercent) {
@@ -4729,6 +4887,22 @@ private fun AppNavigation(
                         onGmeSampleRateChanged = { gmeCoreSampleRateHz = it },
                         sidPlayFpSampleRateHz = sidPlayFpCoreSampleRateHz,
                         onSidPlayFpSampleRateChanged = { sidPlayFpCoreSampleRateHz = it },
+                        sidPlayFpBackend = sidPlayFpBackend,
+                        onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
+                        sidPlayFpClockMode = sidPlayFpClockMode,
+                        onSidPlayFpClockModeChanged = { sidPlayFpClockMode = it },
+                        sidPlayFpSidModelMode = sidPlayFpSidModelMode,
+                        onSidPlayFpSidModelModeChanged = { sidPlayFpSidModelMode = it },
+                        sidPlayFpFilter6581Enabled = sidPlayFpFilter6581Enabled,
+                        onSidPlayFpFilter6581EnabledChanged = { sidPlayFpFilter6581Enabled = it },
+                        sidPlayFpFilter8580Enabled = sidPlayFpFilter8580Enabled,
+                        onSidPlayFpFilter8580EnabledChanged = { sidPlayFpFilter8580Enabled = it },
+                        sidPlayFpReSidFpFastSampling = sidPlayFpReSidFpFastSampling,
+                        onSidPlayFpReSidFpFastSamplingChanged = { sidPlayFpReSidFpFastSampling = it },
+                        sidPlayFpReSidFpCombinedWaveformsStrength = sidPlayFpReSidFpCombinedWaveformsStrength,
+                        onSidPlayFpReSidFpCombinedWaveformsStrengthChanged = {
+                            sidPlayFpReSidFpCombinedWaveformsStrength = it
+                        },
                         gmeTempoPercent = gmeTempoPercent,
                         onGmeTempoPercentChanged = { gmeTempoPercent = it },
                         gmeStereoSeparationPercent = gmeStereoSeparationPercent,
@@ -4800,6 +4974,7 @@ private fun AppNavigation(
                                 CorePreferenceKeys.CORE_RATE_OPENMPT to openMptCoreSampleRateHz,
                                 CorePreferenceKeys.CORE_RATE_VGMPLAY to vgmPlayCoreSampleRateHz,
                                 CorePreferenceKeys.CORE_RATE_GME to gmeCoreSampleRateHz,
+                                CorePreferenceKeys.CORE_RATE_SIDPLAYFP to sidPlayFpCoreSampleRateHz,
                                 CorePreferenceKeys.VGMPLAY_LOOP_COUNT to vgmPlayLoopCount,
                                 CorePreferenceKeys.VGMPLAY_VSYNC_RATE to vgmPlayVsyncRate,
                                 CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE to vgmPlayResampleMode,
@@ -4810,6 +4985,10 @@ private fun AppNavigation(
                                 CorePreferenceKeys.GME_EQ_TREBLE_DECIBEL to gmeEqTrebleDecibel,
                                 CorePreferenceKeys.GME_EQ_BASS_HZ to gmeEqBassHz,
                                 CorePreferenceKeys.GME_SPC_INTERPOLATION to gmeSpcInterpolation,
+                                CorePreferenceKeys.SIDPLAYFP_BACKEND to sidPlayFpBackend,
+                                CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE to sidPlayFpClockMode,
+                                CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE to sidPlayFpSidModelMode,
+                                CorePreferenceKeys.SIDPLAYFP_RESIDFP_COMBINED_WAVEFORMS_STRENGTH to sidPlayFpReSidFpCombinedWaveformsStrength,
                                 CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT to openMptStereoSeparationPercent,
                                 CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT to openMptStereoSeparationAmigaPercent,
                                 CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH to openMptInterpolationFilterLength,
@@ -4823,6 +5002,9 @@ private fun AppNavigation(
                                 CorePreferenceKeys.GME_ACCURACY_ENABLED to gmeAccuracyEnabled,
                                 CorePreferenceKeys.GME_SPC_USE_BUILTIN_FADE to gmeSpcUseBuiltInFade,
                                 CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE to gmeSpcUseNativeSampleRate,
+                                CorePreferenceKeys.SIDPLAYFP_FILTER_6581_ENABLED to sidPlayFpFilter6581Enabled,
+                                CorePreferenceKeys.SIDPLAYFP_FILTER_8580_ENABLED to sidPlayFpFilter8580Enabled,
+                                CorePreferenceKeys.SIDPLAYFP_RESIDFP_FAST_SAMPLING to sidPlayFpReSidFpFastSampling,
                                 CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES to openMptAmigaResamplerApplyAllModules,
                                 CorePreferenceKeys.OPENMPT_FT2_XM_VOLUME_RAMPING to openMptFt2XmVolumeRamping,
                                 CorePreferenceKeys.OPENMPT_SURROUND_ENABLED to openMptSurroundEnabled
@@ -5138,6 +5320,14 @@ private fun AppNavigation(
                             openMptCoreSampleRateHz = OpenMptDefaults.coreSampleRateHz
                             vgmPlayCoreSampleRateHz = VgmPlayDefaults.coreSampleRateHz
                             gmeCoreSampleRateHz = GmeDefaults.coreSampleRateHz
+                            sidPlayFpCoreSampleRateHz = SidPlayFpDefaults.coreSampleRateHz
+                            sidPlayFpBackend = SidPlayFpDefaults.backend
+                            sidPlayFpClockMode = SidPlayFpDefaults.clockMode
+                            sidPlayFpSidModelMode = SidPlayFpDefaults.sidModelMode
+                            sidPlayFpFilter6581Enabled = SidPlayFpDefaults.filter6581Enabled
+                            sidPlayFpFilter8580Enabled = SidPlayFpDefaults.filter8580Enabled
+                            sidPlayFpReSidFpFastSampling = SidPlayFpDefaults.reSidFpFastSampling
+                            sidPlayFpReSidFpCombinedWaveformsStrength = SidPlayFpDefaults.reSidFpCombinedWaveformsStrength
                             gmeTempoPercent = GmeDefaults.tempoPercent
                             gmeStereoSeparationPercent = GmeDefaults.stereoSeparationPercent
                             gmeEchoEnabled = GmeDefaults.echoEnabled
@@ -5169,6 +5359,14 @@ private fun AppNavigation(
                                 remove(CorePreferenceKeys.CORE_RATE_OPENMPT)
                                 remove(CorePreferenceKeys.CORE_RATE_VGMPLAY)
                                 remove(CorePreferenceKeys.CORE_RATE_GME)
+                                remove(CorePreferenceKeys.CORE_RATE_SIDPLAYFP)
+                                remove(CorePreferenceKeys.SIDPLAYFP_BACKEND)
+                                remove(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE)
+                                remove(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE)
+                                remove(CorePreferenceKeys.SIDPLAYFP_FILTER_6581_ENABLED)
+                                remove(CorePreferenceKeys.SIDPLAYFP_FILTER_8580_ENABLED)
+                                remove(CorePreferenceKeys.SIDPLAYFP_RESIDFP_FAST_SAMPLING)
+                                remove(CorePreferenceKeys.SIDPLAYFP_RESIDFP_COMBINED_WAVEFORMS_STRENGTH)
                                 remove(CorePreferenceKeys.GME_TEMPO_PERCENT)
                                 remove(CorePreferenceKeys.GME_STEREO_SEPARATION_PERCENT)
                                 remove(CorePreferenceKeys.GME_ECHO_ENABLED)
@@ -5239,6 +5437,15 @@ private fun AppNavigation(
                                     GmeOptionKeys.SPC_USE_BUILTIN_FADE,
                                     GmeOptionKeys.SPC_INTERPOLATION,
                                     GmeOptionKeys.SPC_USE_NATIVE_SAMPLE_RATE
+                                )
+                                "LibSIDPlayFP" -> listOf(
+                                    SidPlayFpOptionKeys.BACKEND,
+                                    SidPlayFpOptionKeys.CLOCK_MODE,
+                                    SidPlayFpOptionKeys.SID_MODEL_MODE,
+                                    SidPlayFpOptionKeys.FILTER_6581_ENABLED,
+                                    SidPlayFpOptionKeys.FILTER_8580_ENABLED,
+                                    SidPlayFpOptionKeys.RESIDFP_FAST_SAMPLING,
+                                    SidPlayFpOptionKeys.RESIDFP_COMBINED_WAVEFORMS_STRENGTH
                                 )
                                 else -> emptyList()
                             }
@@ -5324,6 +5531,27 @@ private fun AppNavigation(
                                         remove(CorePreferenceKeys.GME_SPC_USE_BUILTIN_FADE)
                                         remove(CorePreferenceKeys.GME_SPC_INTERPOLATION)
                                         remove(CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE)
+                                        apply()
+                                    }
+                                }
+                                "LibSIDPlayFP" -> {
+                                    sidPlayFpCoreSampleRateHz = SidPlayFpDefaults.coreSampleRateHz
+                                    sidPlayFpBackend = SidPlayFpDefaults.backend
+                                    sidPlayFpClockMode = SidPlayFpDefaults.clockMode
+                                    sidPlayFpSidModelMode = SidPlayFpDefaults.sidModelMode
+                                    sidPlayFpFilter6581Enabled = SidPlayFpDefaults.filter6581Enabled
+                                    sidPlayFpFilter8580Enabled = SidPlayFpDefaults.filter8580Enabled
+                                    sidPlayFpReSidFpFastSampling = SidPlayFpDefaults.reSidFpFastSampling
+                                    sidPlayFpReSidFpCombinedWaveformsStrength = SidPlayFpDefaults.reSidFpCombinedWaveformsStrength
+                                    prefs.edit().apply {
+                                        remove(CorePreferenceKeys.CORE_RATE_SIDPLAYFP)
+                                        remove(CorePreferenceKeys.SIDPLAYFP_BACKEND)
+                                        remove(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE)
+                                        remove(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE)
+                                        remove(CorePreferenceKeys.SIDPLAYFP_FILTER_6581_ENABLED)
+                                        remove(CorePreferenceKeys.SIDPLAYFP_FILTER_8580_ENABLED)
+                                        remove(CorePreferenceKeys.SIDPLAYFP_RESIDFP_FAST_SAMPLING)
+                                        remove(CorePreferenceKeys.SIDPLAYFP_RESIDFP_COMBINED_WAVEFORMS_STRENGTH)
                                         apply()
                                     }
                                 }

@@ -58,13 +58,28 @@ int parseIntString(const std::string& raw, int fallback) {
     }
 }
 
+bool parseBoolString(const std::string& raw, bool fallback) {
+    std::string normalized;
+    normalized.reserve(raw.size());
+    for (char ch : raw) {
+        normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    if (normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on") {
+        return true;
+    }
+    if (normalized == "0" || normalized == "false" || normalized == "no" || normalized == "off") {
+        return false;
+    }
+    return fallback;
+}
+
 SidBackend parseSidBackend(const std::string& raw) {
     std::string normalized;
     normalized.reserve(raw.size());
     for (char ch : raw) {
         normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
     }
-    if (normalized == "sidlite") return SidBackend::SIDLite;
+    if (normalized == "1" || normalized == "sidlite") return SidBackend::SIDLite;
     return SidBackend::ReSIDfp;
 }
 
@@ -74,6 +89,63 @@ int clampSampleRateForBackend(int sampleRateHz, SidBackend backend) {
         return std::clamp(globalClamped, kSidLiteMinSampleRateHz, kSidLiteMaxSampleRateHz);
     }
     return globalClamped;
+}
+
+SidConfig::sid_model_t parseSidModel(const std::string& raw, SidConfig::sid_model_t fallback) {
+    std::string normalized;
+    normalized.reserve(raw.size());
+    for (char ch : raw) {
+        normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    if (normalized == "1" || normalized == "6581" || normalized == "mos6581") {
+        return SidConfig::MOS6581;
+    }
+    if (normalized == "2" || normalized == "8580" || normalized == "mos8580") {
+        return SidConfig::MOS8580;
+    }
+    return fallback;
+}
+
+SidClockMode parseSidClockMode(const std::string& raw, SidClockMode fallback) {
+    std::string normalized;
+    normalized.reserve(raw.size());
+    for (char ch : raw) {
+        normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    if (normalized == "0" || normalized == "auto") return SidClockMode::Auto;
+    if (normalized == "1" || normalized == "pal") return SidClockMode::Pal;
+    if (normalized == "2" || normalized == "ntsc") return SidClockMode::Ntsc;
+    return fallback;
+}
+
+SidModelMode parseSidModelMode(const std::string& raw, SidModelMode fallback) {
+    std::string normalized;
+    normalized.reserve(raw.size());
+    for (char ch : raw) {
+        normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    if (normalized == "0" || normalized == "auto") return SidModelMode::Auto;
+    if (normalized == "1" || normalized == "6581" || normalized == "mos6581") return SidModelMode::Mos6581;
+    if (normalized == "2" || normalized == "8580" || normalized == "mos8580") return SidModelMode::Mos8580;
+    return fallback;
+}
+
+SidConfig::sid_cw_t parseCombinedWaveformsStrength(const std::string& raw, SidConfig::sid_cw_t fallback) {
+    std::string normalized;
+    normalized.reserve(raw.size());
+    for (char ch : raw) {
+        normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    if (normalized == "0" || normalized == "average") {
+        return SidConfig::AVERAGE;
+    }
+    if (normalized == "1" || normalized == "weak") {
+        return SidConfig::WEAK;
+    }
+    if (normalized == "2" || normalized == "strong") {
+        return SidConfig::STRONG;
+    }
+    return fallback;
 }
 
 std::unique_ptr<sidbuilder> createBuilderForBackend(SidBackend backend) {
@@ -138,10 +210,41 @@ std::vector<std::string> LibSidPlayFpDecoder::getSupportedExtensions() {
 
 bool LibSidPlayFpDecoder::applyConfigLocked() {
     if (!player || !config || !sidBuilder) return false;
+    applySidBackendOptionsLocked();
     const int normalizedSampleRate = clampSampleRateForBackend(requestedSampleRate, activeBackend);
     config->frequency = static_cast<uint_least32_t>(normalizedSampleRate);
     config->playback = SidConfig::STEREO;
-    config->samplingMethod = SidConfig::INTERPOLATE;
+    switch (sidClockMode) {
+        case SidClockMode::Pal:
+            config->defaultC64Model = SidConfig::PAL;
+            config->forceC64Model = true;
+            break;
+        case SidClockMode::Ntsc:
+            config->defaultC64Model = SidConfig::NTSC;
+            config->forceC64Model = true;
+            break;
+        case SidClockMode::Auto:
+        default:
+            config->defaultC64Model = SidConfig::PAL;
+            config->forceC64Model = false;
+            break;
+    }
+    switch (sidModelMode) {
+        case SidModelMode::Mos6581:
+            config->defaultSidModel = SidConfig::MOS6581;
+            config->forceSidModel = true;
+            break;
+        case SidModelMode::Mos8580:
+            config->defaultSidModel = SidConfig::MOS8580;
+            config->forceSidModel = true;
+            break;
+        case SidModelMode::Auto:
+        default:
+            config->defaultSidModel = SidConfig::MOS8580;
+            config->forceSidModel = false;
+            break;
+    }
+    config->samplingMethod = reSidFpFastSampling ? SidConfig::INTERPOLATE : SidConfig::RESAMPLE_INTERPOLATE;
     config->sidEmulation = sidBuilder.get();
     if (!player->config(*config)) {
         LOGE("sidplayfp config failed: %s", player->error());
@@ -149,6 +252,41 @@ bool LibSidPlayFpDecoder::applyConfigLocked() {
     }
     activeSampleRate = normalizedSampleRate;
     return true;
+}
+
+void LibSidPlayFpDecoder::applySidBackendOptionsLocked() {
+    if (!sidBuilder) return;
+    if (activeBackend != SidBackend::ReSIDfp) return;
+    auto* reSidBuilder = static_cast<ReSIDfpBuilder*>(sidBuilder.get());
+    if (!reSidBuilder) return;
+    reSidBuilder->combinedWaveformsStrength(reSidFpCombinedWaveformsStrength);
+}
+
+void LibSidPlayFpDecoder::applySidFilterOptionsLocked() {
+    if (!player || !tune) return;
+    const SidTuneInfo* info = tune->getInfo();
+    const int sidCount = std::max(1, static_cast<int>(player->info().numberOfSIDs()));
+    for (int sidIndex = 0; sidIndex < sidCount; ++sidIndex) {
+        SidConfig::sid_model_t model = SidConfig::MOS8580;
+        bool hasForcedModel = false;
+        if (sidModelMode == SidModelMode::Mos6581) {
+            model = SidConfig::MOS6581;
+            hasForcedModel = true;
+        } else if (sidModelMode == SidModelMode::Mos8580) {
+            model = SidConfig::MOS8580;
+            hasForcedModel = true;
+        }
+        if (!hasForcedModel && info != nullptr) {
+            const auto tuneModel = info->sidModel(static_cast<unsigned int>(sidIndex));
+            if (tuneModel == SidTuneInfo::SIDMODEL_6581) {
+                model = SidConfig::MOS6581;
+            } else if (tuneModel == SidTuneInfo::SIDMODEL_8580) {
+                model = SidConfig::MOS8580;
+            }
+        }
+        const bool enabled = (model == SidConfig::MOS6581) ? filter6581Enabled : filter8580Enabled;
+        player->filter(static_cast<unsigned int>(sidIndex), enabled);
+    }
 }
 
 void LibSidPlayFpDecoder::refreshMetadataLocked() {
@@ -163,6 +301,7 @@ void LibSidPlayFpDecoder::refreshMetadataLocked() {
     sidSpeedName.clear();
     sidCompatibilityName.clear();
     sidModelSummary.clear();
+    sidCurrentModelSummary.clear();
     sidBaseAddressSummary.clear();
     sidCommentSummary.clear();
     subtuneTitles.assign(std::max(1, subtuneCount), "");
@@ -192,6 +331,19 @@ void LibSidPlayFpDecoder::refreshMetadataLocked() {
             hasModel = true;
         }
         sidModelSummary = hasModel ? modelSummary.str() : "";
+    }
+
+    {
+        std::ostringstream modelSummary;
+        bool hasModel = false;
+        const SidInfo* runtimeInfo = player ? &player->info() : nullptr;
+        const int runtimeSidCount = runtimeInfo ? std::max(1, static_cast<int>(runtimeInfo->numberOfSIDs())) : 0;
+        for (int i = 0; i < runtimeSidCount; ++i) {
+            if (hasModel) modelSummary << ", ";
+            modelSummary << "SID" << (i + 1) << ":" << sidModelToString(runtimeInfo->sidModel(static_cast<unsigned int>(i)));
+            hasModel = true;
+        }
+        sidCurrentModelSummary = hasModel ? modelSummary.str() : "";
     }
 
     {
@@ -251,6 +403,7 @@ bool LibSidPlayFpDecoder::selectSubtuneLocked(int index) {
     sidChipCount = runtimeSidChips;
     sidVoiceCount = std::max(1, runtimeSidChips * 3);
     sidSpeedName = safeString(info.speedString());
+    applySidFilterOptionsLocked();
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
     currentSubtuneIndex = index;
@@ -314,6 +467,7 @@ bool LibSidPlayFpDecoder::open(const char* path) {
     sidSpeedName.clear();
     sidCompatibilityName.clear();
     sidModelSummary.clear();
+    sidCurrentModelSummary.clear();
     sidBaseAddressSummary.clear();
     sidCommentSummary.clear();
     return openInternalLocked(path);
@@ -342,6 +496,7 @@ void LibSidPlayFpDecoder::close() {
     sidSpeedName.clear();
     sidCompatibilityName.clear();
     sidModelSummary.clear();
+    sidCurrentModelSummary.clear();
     sidBaseAddressSummary.clear();
     sidCommentSummary.clear();
     pendingMixedSamples.clear();
@@ -486,6 +641,64 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
     const std::string optionValue(value);
     if (optionName == "sidplayfp.backend") {
         selectedBackend = parseSidBackend(optionValue);
+        if (!player) {
+            activeBackend = selectedBackend;
+        }
+        return;
+    }
+    if (optionName == "sidplayfp.clock_mode") {
+        sidClockMode = parseSidClockMode(optionValue, sidClockMode);
+        return;
+    }
+    if (optionName == "sidplayfp.sid_model_mode") {
+        sidModelMode = parseSidModelMode(optionValue, sidModelMode);
+        if (player && tune) {
+            applySidFilterOptionsLocked();
+        }
+        return;
+    }
+    if (optionName == "sidplayfp.force_sid_model") {
+        const bool forceModel = parseBoolString(optionValue, sidModelMode != SidModelMode::Auto);
+        sidModelMode = forceModel ? SidModelMode::Mos8580 : SidModelMode::Auto;
+        if (player && tune) {
+            applySidFilterOptionsLocked();
+        }
+        return;
+    }
+    if (optionName == "sidplayfp.sid_model") {
+        const SidConfig::sid_model_t legacyModel = parseSidModel(optionValue, SidConfig::MOS8580);
+        sidModelMode = (legacyModel == SidConfig::MOS6581) ? SidModelMode::Mos6581 : SidModelMode::Mos8580;
+        if (player && tune) {
+            applySidFilterOptionsLocked();
+        }
+        return;
+    }
+    if (optionName == "sidplayfp.filter_6581_enabled") {
+        filter6581Enabled = parseBoolString(optionValue, filter6581Enabled);
+        if (player && tune) {
+            applySidFilterOptionsLocked();
+        }
+        return;
+    }
+    if (optionName == "sidplayfp.filter_8580_enabled") {
+        filter8580Enabled = parseBoolString(optionValue, filter8580Enabled);
+        if (player && tune) {
+            applySidFilterOptionsLocked();
+        }
+        return;
+    }
+    if (optionName == "sidplayfp.residfp_fast_sampling") {
+        reSidFpFastSampling = parseBoolString(optionValue, reSidFpFastSampling);
+        return;
+    }
+    if (optionName == "sidplayfp.residfp_combined_waveforms_strength") {
+        reSidFpCombinedWaveformsStrength = parseCombinedWaveformsStrength(
+                optionValue,
+                reSidFpCombinedWaveformsStrength
+        );
+        if (player && activeBackend == SidBackend::ReSIDfp) {
+            applySidBackendOptionsLocked();
+        }
         return;
     }
     if (optionName == "sidplayfp.unknown_duration_seconds") {
@@ -505,6 +718,30 @@ int LibSidPlayFpDecoder::getOptionApplyPolicy(const char* name) const {
     const std::string optionName(name);
     if (optionName == "sidplayfp.backend") {
         return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    if (optionName == "sidplayfp.clock_mode") {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    if (optionName == "sidplayfp.sid_model_mode") {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    if (optionName == "sidplayfp.force_sid_model") {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    if (optionName == "sidplayfp.sid_model") {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    if (optionName == "sidplayfp.filter_6581_enabled") {
+        return OPTION_APPLY_LIVE;
+    }
+    if (optionName == "sidplayfp.filter_8580_enabled") {
+        return OPTION_APPLY_LIVE;
+    }
+    if (optionName == "sidplayfp.residfp_fast_sampling") {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    if (optionName == "sidplayfp.residfp_combined_waveforms_strength") {
+        return OPTION_APPLY_LIVE;
     }
     if (optionName == "sidplayfp.unknown_duration_seconds") {
         return OPTION_APPLY_LIVE;
@@ -613,6 +850,11 @@ int LibSidPlayFpDecoder::getSidChipCountInfo() {
 std::string LibSidPlayFpDecoder::getSidModelSummary() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return sidModelSummary;
+}
+
+std::string LibSidPlayFpDecoder::getSidCurrentModelSummary() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return sidCurrentModelSummary;
 }
 
 std::string LibSidPlayFpDecoder::getSidBaseAddressSummary() {

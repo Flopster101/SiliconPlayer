@@ -1074,7 +1074,7 @@ void AudioEngine::setUrl(const char* url) {
         }
 
         newDecoder->setOutputSampleRate(targetRate);
-        if (!optionsForDecoder.empty() && std::string(newDecoder->getName()) == "Game Music Emu") {
+        if (!optionsForDecoder.empty()) {
             for (const auto& [name, value] : optionsForDecoder) {
                 newDecoder->setOption(name.c_str(), value.c_str());
             }
@@ -1909,6 +1909,13 @@ std::string AudioEngine::getSidModelSummary() {
     if (!decoder) return "";
     auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
     return sidDecoder ? sidDecoder->getSidModelSummary() : "";
+}
+
+std::string AudioEngine::getSidCurrentModelSummary() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    return sidDecoder ? sidDecoder->getSidCurrentModelSummary() : "";
 }
 
 std::string AudioEngine::getSidBaseAddressSummary() {

@@ -1282,6 +1282,7 @@ private fun TrackInfoDetailsDialog(
     var sidBackendName by remember { mutableStateOf("") }
     var sidChipCount by remember { mutableIntStateOf(0) }
     var sidModelSummary by remember { mutableStateOf("") }
+    var sidCurrentModelSummary by remember { mutableStateOf("") }
     var sidBaseAddressSummary by remember { mutableStateOf("") }
     var sidCommentSummary by remember { mutableStateOf("") }
     val detailsScrollState = rememberScrollState()
@@ -1381,6 +1382,7 @@ private fun TrackInfoDetailsDialog(
                 sidBackendName = NativeBridge.getSidBackendName()
                 sidChipCount = NativeBridge.getSidChipCount()
                 sidModelSummary = NativeBridge.getSidModelSummary()
+                sidCurrentModelSummary = NativeBridge.getSidCurrentModelSummary()
                 sidBaseAddressSummary = NativeBridge.getSidBaseAddressSummary()
                 sidCommentSummary = NativeBridge.getSidCommentSummary()
             } else {
@@ -1391,6 +1393,7 @@ private fun TrackInfoDetailsDialog(
                 sidBackendName = ""
                 sidChipCount = 0
                 sidModelSummary = ""
+                sidCurrentModelSummary = ""
                 sidBaseAddressSummary = ""
                 sidCommentSummary = ""
             }
@@ -1489,11 +1492,12 @@ private fun TrackInfoDetailsDialog(
             append('\n').append("[LibSIDPlayFP]").append('\n')
             if (sidBackendName.isNotBlank()) row("Engine", sidBackendName)
             if (sidFormatName.isNotBlank()) row("Format name", sidFormatName)
-            if (sidClockName.isNotBlank()) row("Clock", sidClockName)
-            if (sidSpeedName.isNotBlank()) row("Speed", sidSpeedName)
+            if (sidClockName.isNotBlank()) row("Declared clock", sidClockName)
+            if (sidSpeedName.isNotBlank()) row("Playback timing", sidSpeedName)
             if (sidCompatibilityName.isNotBlank()) row("Compatibility", sidCompatibilityName)
             if (sidChipCount > 0) row("SID chips", sidChipCount.toString())
-            if (sidModelSummary.isNotBlank()) row("SID models", sidModelSummary)
+            if (sidModelSummary.isNotBlank()) row("SID models (declared)", sidModelSummary)
+            if (sidCurrentModelSummary.isNotBlank()) row("SID models (current)", sidCurrentModelSummary)
             if (sidBaseAddressSummary.isNotBlank()) row("SID base addresses", sidBaseAddressSummary)
             if (sidCommentSummary.isNotBlank()) row("Comments", sidCommentSummary)
         }
@@ -1675,10 +1679,10 @@ private fun TrackInfoDetailsDialog(
                                     TrackInfoDetailsRow("Format name", sidFormatName)
                                 }
                                 if (sidClockName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Clock", sidClockName)
+                                    TrackInfoDetailsRow("Declared clock", sidClockName)
                                 }
                                 if (sidSpeedName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Speed", sidSpeedName)
+                                    TrackInfoDetailsRow("Playback timing", sidSpeedName)
                                 }
                                 if (sidCompatibilityName.isNotBlank()) {
                                     TrackInfoDetailsRow("Compatibility", sidCompatibilityName)
@@ -1687,7 +1691,10 @@ private fun TrackInfoDetailsDialog(
                                     TrackInfoDetailsRow("SID chips", sidChipCount.toString())
                                 }
                                 if (sidModelSummary.isNotBlank()) {
-                                    TrackInfoDetailsRow("SID models", sidModelSummary)
+                                    TrackInfoDetailsRow("SID models (declared)", sidModelSummary)
+                                }
+                                if (sidCurrentModelSummary.isNotBlank()) {
+                                    TrackInfoDetailsRow("SID models (current)", sidCurrentModelSummary)
                                 }
                                 if (sidBaseAddressSummary.isNotBlank()) {
                                     TrackInfoDetailsRow("SID base addresses", sidBaseAddressSummary)

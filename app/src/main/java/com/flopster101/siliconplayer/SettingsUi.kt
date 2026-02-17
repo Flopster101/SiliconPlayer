@@ -116,6 +116,7 @@ import androidx.compose.foundation.shape.CircleShape
 import com.flopster101.siliconplayer.pluginsettings.OpenMptSettings
 import com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings
 import com.flopster101.siliconplayer.pluginsettings.GmeSettings
+import com.flopster101.siliconplayer.pluginsettings.SidPlayFpSettings
 import com.flopster101.siliconplayer.pluginsettings.VgmPlayChipSettingsScreen
 import com.flopster101.siliconplayer.pluginsettings.VgmPlaySettings
 import java.util.Locale
@@ -356,6 +357,20 @@ internal fun SettingsScreen(
     onGmeSampleRateChanged: (Int) -> Unit,
     sidPlayFpSampleRateHz: Int,
     onSidPlayFpSampleRateChanged: (Int) -> Unit,
+    sidPlayFpBackend: Int,
+    onSidPlayFpBackendChanged: (Int) -> Unit,
+    sidPlayFpClockMode: Int,
+    onSidPlayFpClockModeChanged: (Int) -> Unit,
+    sidPlayFpSidModelMode: Int,
+    onSidPlayFpSidModelModeChanged: (Int) -> Unit,
+    sidPlayFpFilter6581Enabled: Boolean,
+    onSidPlayFpFilter6581EnabledChanged: (Boolean) -> Unit,
+    sidPlayFpFilter8580Enabled: Boolean,
+    onSidPlayFpFilter8580EnabledChanged: (Boolean) -> Unit,
+    sidPlayFpReSidFpFastSampling: Boolean,
+    onSidPlayFpReSidFpFastSamplingChanged: (Boolean) -> Unit,
+    sidPlayFpReSidFpCombinedWaveformsStrength: Int,
+    onSidPlayFpReSidFpCombinedWaveformsStrengthChanged: (Int) -> Unit,
     gmeTempoPercent: Int,
     onGmeTempoPercentChanged: (Int) -> Unit,
     gmeStereoSeparationPercent: Int,
@@ -3183,6 +3198,22 @@ internal fun SettingsScreen(
                                     onSpcUseBuiltInFadeChanged = onGmeSpcUseBuiltInFadeChanged,
                                     onSpcInterpolationChanged = onGmeSpcInterpolationChanged,
                                     onSpcUseNativeSampleRateChanged = onGmeSpcUseNativeSampleRateChanged
+                                )
+                                "LibSIDPlayFP" -> SidPlayFpSettings(
+                                    backend = sidPlayFpBackend,
+                                    clockMode = sidPlayFpClockMode,
+                                    sidModelMode = sidPlayFpSidModelMode,
+                                    filter6581Enabled = sidPlayFpFilter6581Enabled,
+                                    filter8580Enabled = sidPlayFpFilter8580Enabled,
+                                    reSidFpFastSampling = sidPlayFpReSidFpFastSampling,
+                                    reSidFpCombinedWaveformsStrength = sidPlayFpReSidFpCombinedWaveformsStrength,
+                                    onBackendChanged = onSidPlayFpBackendChanged,
+                                    onClockModeChanged = onSidPlayFpClockModeChanged,
+                                    onSidModelModeChanged = onSidPlayFpSidModelModeChanged,
+                                    onFilter6581EnabledChanged = onSidPlayFpFilter6581EnabledChanged,
+                                    onFilter8580EnabledChanged = onSidPlayFpFilter8580EnabledChanged,
+                                    onReSidFpFastSamplingChanged = onSidPlayFpReSidFpFastSamplingChanged,
+                                    onReSidFpCombinedWaveformsStrengthChanged = onSidPlayFpReSidFpCombinedWaveformsStrengthChanged
                                 )
                                 else -> null
                             }

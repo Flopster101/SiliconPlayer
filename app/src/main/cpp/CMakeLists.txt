@@ -25,6 +25,7 @@ add_library(
         decoders/LibOpenMPTDecoder.cpp
         decoders/VGMDecoder.cpp
         decoders/GmeDecoder.cpp
+        decoders/LibSidPlayFpDecoder.cpp
         decoders/CPConvStub.c
 )
 
@@ -73,6 +74,13 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
     add_library(libgme STATIC IMPORTED)
     set_target_properties(libgme PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libgme.a")
 
+    # Import libsidplayfp + libresidfp (Static)
+    add_library(libsidplayfp STATIC IMPORTED)
+    set_target_properties(libsidplayfp PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libsidplayfp.a")
+
+    add_library(libresidfp STATIC IMPORTED)
+    set_target_properties(libresidfp PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libresidfp.a")
+
     set(HAS_OPENSSL_PREBUILT FALSE)
     if (EXISTS "${PREBUILT_DIR}/lib/libssl.a" AND EXISTS "${PREBUILT_DIR}/lib/libcrypto.a")
         add_library(libssl STATIC IMPORTED)
@@ -100,6 +108,8 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
             libvgm-emu
             libvgm-utils
             libgme
+            libsidplayfp
+            libresidfp
             z # zlib is needed for openmpt/ffmpeg/vgm
     )
 

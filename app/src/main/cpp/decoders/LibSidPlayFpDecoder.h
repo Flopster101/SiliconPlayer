@@ -1,0 +1,74 @@
+#ifndef SILICONPLAYER_LIBSIDPLAYFPDECODER_H
+#define SILICONPLAYER_LIBSIDPLAYFPDECODER_H
+
+#include "AudioDecoder.h"
+#include <memory>
+#include <mutex>
+#include <string>
+#include <vector>
+
+class sidplayfp;
+class SidTune;
+class SidConfig;
+class SIDLiteBuilder;
+
+class LibSidPlayFpDecoder : public AudioDecoder {
+public:
+    LibSidPlayFpDecoder();
+    ~LibSidPlayFpDecoder() override;
+
+    bool open(const char* path) override;
+    void close() override;
+    int read(float* buffer, int numFrames) override;
+    void seek(double seconds) override;
+    double getDuration() override;
+    int getSampleRate() override;
+    int getBitDepth() override;
+    std::string getBitDepthLabel() override;
+    int getDisplayChannelCount() override;
+    int getChannelCount() override;
+    int getSubtuneCount() const override;
+    int getCurrentSubtuneIndex() const override;
+    bool selectSubtune(int index) override;
+    std::string getSubtuneTitle(int index) override;
+    std::string getSubtuneArtist(int index) override;
+    double getSubtuneDurationSeconds(int index) override;
+    std::string getTitle() override;
+    std::string getArtist() override;
+    std::string getComposer() override;
+    std::string getGenre() override;
+    void setOutputSampleRate(int sampleRateHz) override;
+    int getPlaybackCapabilities() const override;
+    int getRepeatModeCapabilities() const override;
+    double getPlaybackPositionSeconds() override;
+    TimelineMode getTimelineMode() const override { return TimelineMode::Discontinuous; }
+
+    const char* getName() const override { return "LibSIDPlayFP"; }
+    static std::vector<std::string> getSupportedExtensions();
+
+private:
+    mutable std::mutex decodeMutex;
+    std::unique_ptr<sidplayfp> player;
+    std::unique_ptr<SIDLiteBuilder> sidBuilder;
+    std::unique_ptr<SidTune> tune;
+    std::unique_ptr<SidConfig> config;
+
+    std::string title;
+    std::string artist;
+    std::string composer;
+    std::string genre;
+    std::vector<std::string> subtuneTitles;
+    std::vector<std::string> subtuneArtists;
+    int subtuneCount = 1;
+    int currentSubtuneIndex = 0;
+    int sampleRate = 48000;
+    int outputChannels = 2;
+    int sidChipCount = 1;
+
+    bool openInternalLocked(const char* path);
+    bool applyConfigLocked();
+    bool selectSubtuneLocked(int index);
+    void refreshMetadataLocked();
+};
+
+#endif // SILICONPLAYER_LIBSIDPLAYFPDECODER_H

@@ -4,6 +4,7 @@
 #include "decoders/LibOpenMPTDecoder.h"
 #include "decoders/VGMDecoder.h"
 #include "decoders/GmeDecoder.h"
+#include "decoders/LibSidPlayFpDecoder.h"
 #include <android/log.h>
 #include <cmath>
 #include <cstring>
@@ -111,6 +112,10 @@ namespace {
             DecoderRegistry::getInstance().registerDecoder("Game Music Emu", GmeDecoder::getSupportedExtensions(), []() {
                 return std::make_unique<GmeDecoder>();
             }, 6);
+
+            DecoderRegistry::getInstance().registerDecoder("LibSIDPlayFP", LibSidPlayFpDecoder::getSupportedExtensions(), []() {
+                return std::make_unique<LibSidPlayFpDecoder>();
+            }, 7);
         }
     };
     static DecoderRegistration registration;

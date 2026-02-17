@@ -131,6 +131,7 @@ internal fun pluginNameForCoreName(coreName: String?): String? {
         "libopenmpt", "openmpt" -> "LibOpenMPT"
         "vgmplay" -> "VGMPlay"
         "game music emu", "libgme", "gme" -> "Game Music Emu"
+        "libsidplayfp", "sidplayfp", "sid" -> "LibSIDPlayFP"
         else -> null
     }
 }

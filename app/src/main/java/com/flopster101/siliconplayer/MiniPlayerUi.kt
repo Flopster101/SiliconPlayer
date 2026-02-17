@@ -72,6 +72,7 @@ internal fun MiniPlayerBar(
     artwork: ImageBitmap?,
     noArtworkIcon: ImageVector,
     isPlaying: Boolean,
+    seekInProgress: Boolean,
     canResumeStoppedTrack: Boolean,
     positionSeconds: Double,
     durationSeconds: Double,
@@ -267,7 +268,7 @@ internal fun MiniPlayerBar(
                     }
                     IconButton(
                         onClick = onPlayPause,
-                        enabled = hasTrack || canResumeStoppedTrack,
+                        enabled = (hasTrack || canResumeStoppedTrack) && !seekInProgress,
                         modifier = Modifier.size(controlButtonSize)
                     ) {
                         AnimatedContent(

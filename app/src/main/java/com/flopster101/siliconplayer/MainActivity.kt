@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
+import android.os.SystemClock
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -1057,6 +1058,7 @@ class MainActivity : ComponentActivity() {
     external fun getPosition(): Double
     external fun consumeNaturalEndEvent(): Boolean
     external fun seekTo(seconds: Double)
+    external fun isSeekInProgress(): Boolean
     external fun setLooping(enabled: Boolean)
     external fun setRepeatMode(mode: Int)
     external fun getTrackTitle(): String
@@ -1097,6 +1099,7 @@ private fun AppNavigation(
     initialFileToOpen: File?,
     initialFileFromExternalIntent: Boolean
 ) {
+    val seekUiBusyThresholdMs = 500L
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefs = remember(context) {
         context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)
@@ -1141,6 +1144,10 @@ private fun AppNavigation(
     var duration by remember { mutableDoubleStateOf(0.0) }
     var position by remember { mutableDoubleStateOf(0.0) }
     var isPlaying by remember { mutableStateOf(false) }
+    var seekInProgress by remember { mutableStateOf(false) }
+    var seekUiBusy by remember { mutableStateOf(false) }
+    var seekStartedAtMs by remember { mutableLongStateOf(0L) }
+    var seekRequestedAtMs by remember { mutableLongStateOf(0L) }
     var isPlayerExpanded by remember { mutableStateOf(false) }
     var isPlayerSurfaceVisible by remember { mutableStateOf(false) }
     var preferredRepeatMode by remember {
@@ -2233,11 +2240,15 @@ private fun AppNavigation(
             includeSubtuneRepeat = allowSubtuneRepeat,
             includeTrackRepeat = allowTrackRepeat
         )
-        applyRepeatModeToNative(activeRepeatMode)
+        val hasActiveSource = selectedFile != null || !currentPlaybackSourceId.isNullOrBlank()
+        if (hasActiveSource && !seekInProgress) {
+            applyRepeatModeToNative(activeRepeatMode)
+        }
     }
 
     fun cycleRepeatMode() {
         if (!supportsLiveRepeatMode(playbackCapabilitiesFlags)) return
+        if (seekInProgress) return
         val allowTrackRepeat = selectedFile == null || duration > 0.0
         val allowSubtuneRepeat = allowTrackRepeat && (selectedFile == null || subtuneCount > 1)
         val next = cycleRepeatModeValue(
@@ -2327,6 +2338,10 @@ private fun AppNavigation(
         duration = 0.0
         position = 0.0
         isPlaying = false
+        seekInProgress = false
+        seekUiBusy = false
+        seekStartedAtMs = 0L
+        seekRequestedAtMs = 0L
         metadataTitle = ""
         metadataArtist = ""
         metadataSampleRate = 0
@@ -2763,58 +2778,78 @@ private fun AppNavigation(
         while (selectedFile != null) {
             val currentFile = selectedFile
             val pollDelayMs = if (isPlaying) 180L else 320L
-            val nextDuration = NativeBridge.getDuration()
+            val nextSeekInProgress = NativeBridge.isSeekInProgress()
+            val nowMs = SystemClock.elapsedRealtime()
+            if (nextSeekInProgress) {
+                if (!seekInProgress) {
+                    seekStartedAtMs = if (seekRequestedAtMs > 0L) seekRequestedAtMs else nowMs
+                    seekRequestedAtMs = 0L
+                } else if (seekStartedAtMs <= 0L) {
+                    seekStartedAtMs = nowMs
+                }
+                seekUiBusy = seekStartedAtMs > 0L && (nowMs - seekStartedAtMs) >= seekUiBusyThresholdMs
+            } else {
+                seekStartedAtMs = 0L
+                seekRequestedAtMs = 0L
+                seekUiBusy = false
+            }
+            val nextDuration = if (nextSeekInProgress) duration else NativeBridge.getDuration()
             val nextPosition = NativeBridge.getPosition()
             val nextIsPlaying = NativeBridge.isEnginePlaying()
+            seekInProgress = nextSeekInProgress
             duration = nextDuration
             position = nextPosition
             isPlaying = nextIsPlaying
 
-            val nativeSubtuneCount = NativeBridge.getSubtuneCount().coerceAtLeast(1)
-            val nativeSubtuneIndex = NativeBridge.getCurrentSubtuneIndex()
-                .coerceIn(0, nativeSubtuneCount - 1)
-            if (nativeSubtuneCount != subtuneCount || nativeSubtuneIndex != currentSubtuneIndex) {
-                applyNativeTrackSnapshot(readNativeTrackSnapshot())
-                refreshSubtuneState()
-                refreshRepeatModeForTrack()
-                val recentSourceId = currentPlaybackSourceId ?: currentFile?.absolutePath
-                if (recentSourceId != null) {
-                    addRecentPlayedTrack(
-                        path = recentSourceId,
-                        locationId = if (isLocalPlayableFile(currentFile)) lastBrowserLocationId else null,
-                        title = metadataTitle,
-                        artist = metadataArtist
-                    )
+            if (!nextSeekInProgress) {
+                val nativeSubtuneCount = NativeBridge.getSubtuneCount().coerceAtLeast(1)
+                val nativeSubtuneIndex = NativeBridge.getCurrentSubtuneIndex()
+                    .coerceIn(0, nativeSubtuneCount - 1)
+                if (nativeSubtuneCount != subtuneCount || nativeSubtuneIndex != currentSubtuneIndex) {
+                    applyNativeTrackSnapshot(readNativeTrackSnapshot())
+                    refreshSubtuneState()
+                    refreshRepeatModeForTrack()
+                    val recentSourceId = currentPlaybackSourceId ?: currentFile?.absolutePath
+                    if (recentSourceId != null) {
+                        addRecentPlayedTrack(
+                            path = recentSourceId,
+                            locationId = if (isLocalPlayableFile(currentFile)) lastBrowserLocationId else null,
+                            title = metadataTitle,
+                            artist = metadataArtist
+                        )
+                    }
                 }
-            }
 
-            val currentPath = currentPlaybackSourceId ?: currentFile?.absolutePath
-            if (currentPath != playbackWatchPath) {
-                playbackWatchPath = currentPath
+                val currentPath = currentPlaybackSourceId ?: currentFile?.absolutePath
+                if (currentPath != playbackWatchPath) {
+                    playbackWatchPath = currentPath
+                } else {
+                    val endedNaturally = NativeBridge.consumeNaturalEndEvent()
+                    if (endedNaturally && autoPlayNextTrackOnEnd && playAdjacentTrack(1)) {
+                        continue
+                    }
+                }
+                metadataPollElapsedMs += pollDelayMs
+                if (metadataPollElapsedMs >= 540L || metadataTitle.isBlank() || metadataArtist.isBlank()) {
+                    metadataPollElapsedMs = 0L
+                    val nextTitle = NativeBridge.getTrackTitle()
+                    val nextArtist = NativeBridge.getTrackArtist()
+                    val titleChanged = nextTitle != metadataTitle
+                    val artistChanged = nextArtist != metadataArtist
+                    if (titleChanged) metadataTitle = nextTitle
+                    if (artistChanged) metadataArtist = nextArtist
+                    val recentSourceId = currentPlaybackSourceId ?: currentFile?.absolutePath
+                    if ((titleChanged || artistChanged) && recentSourceId != null) {
+                        addRecentPlayedTrack(
+                            path = recentSourceId,
+                            locationId = if (isLocalPlayableFile(currentFile)) lastBrowserLocationId else null,
+                            title = nextTitle,
+                            artist = nextArtist
+                        )
+                    }
+                }
             } else {
-                val endedNaturally = NativeBridge.consumeNaturalEndEvent()
-                if (endedNaturally && autoPlayNextTrackOnEnd && playAdjacentTrack(1)) {
-                    continue
-                }
-            }
-            metadataPollElapsedMs += pollDelayMs
-            if (metadataPollElapsedMs >= 540L || metadataTitle.isBlank() || metadataArtist.isBlank()) {
                 metadataPollElapsedMs = 0L
-                val nextTitle = NativeBridge.getTrackTitle()
-                val nextArtist = NativeBridge.getTrackArtist()
-                val titleChanged = nextTitle != metadataTitle
-                val artistChanged = nextArtist != metadataArtist
-                if (titleChanged) metadataTitle = nextTitle
-                if (artistChanged) metadataArtist = nextArtist
-                val recentSourceId = currentPlaybackSourceId ?: currentFile?.absolutePath
-                if ((titleChanged || artistChanged) && recentSourceId != null) {
-                    addRecentPlayedTrack(
-                        path = recentSourceId,
-                        locationId = if (isLocalPlayableFile(currentFile)) lastBrowserLocationId else null,
-                        title = nextTitle,
-                        artist = nextArtist
-                    )
-                }
             }
             delay(pollDelayMs)
         }
@@ -3636,8 +3671,7 @@ private fun AppNavigation(
             Intent(context, PlaybackService::class.java).setAction(PlaybackService.ACTION_STOP_CLEAR)
         )
     }
-    val currentDecoderName = NativeBridge.getCurrentDecoderName().takeIf { it.isNotBlank() }
-    val activeCoreNameForUi = currentDecoderName ?: lastUsedCoreName
+    val activeCoreNameForUi = lastUsedCoreName
     val currentCorePluginName = pluginNameForCoreName(activeCoreNameForUi)
     val canOpenCurrentCoreSettings = currentCorePluginName != null
     val availableVisualizationModes = remember(enabledVisualizationModes, activeCoreNameForUi) {
@@ -5322,7 +5356,7 @@ private fun AppNavigation(
                         sampleRateHz = metadataSampleRate,
                         channelCount = metadataChannelCount,
                         bitDepthLabel = metadataBitDepthLabel,
-                        decoderName = NativeBridge.getCurrentDecoderName().takeIf { it.isNotBlank() },
+                        decoderName = activeCoreNameForUi,
                         playbackSourceLabel = playbackSourceLabel,
                         pathOrUrl = currentTrackPathOrUrl,
                         artwork = artworkBitmap,
@@ -5331,6 +5365,7 @@ private fun AppNavigation(
                         canCycleRepeatMode = supportsLiveRepeatMode(playbackCapabilitiesFlags),
                         canSeek = canSeekPlayback(playbackCapabilitiesFlags),
                         hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
+                        seekInProgress = seekUiBusy,
                         onSeek = {},
                         onPreviousTrack = {},
                         onNextTrack = {},
@@ -5414,6 +5449,7 @@ private fun AppNavigation(
                         artwork = artworkBitmap,
                         noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
                         isPlaying = isPlaying,
+                        seekInProgress = seekUiBusy,
                         canResumeStoppedTrack = canResumeStoppedTrack,
                         positionSeconds = position,
                         durationSeconds = duration,
@@ -5557,7 +5593,7 @@ private fun AppNavigation(
                     sampleRateHz = metadataSampleRate,
                     channelCount = metadataChannelCount,
                     bitDepthLabel = metadataBitDepthLabel,
-                    decoderName = NativeBridge.getCurrentDecoderName().takeIf { it.isNotBlank() },
+                    decoderName = activeCoreNameForUi,
                     playbackSourceLabel = playbackSourceLabel,
                     pathOrUrl = currentTrackPathOrUrl,
                     artwork = artworkBitmap,
@@ -5566,8 +5602,12 @@ private fun AppNavigation(
                     canCycleRepeatMode = supportsLiveRepeatMode(playbackCapabilitiesFlags),
                     canSeek = canSeekPlayback(playbackCapabilitiesFlags),
                     hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
+                    seekInProgress = seekUiBusy,
                     onSeek = { seconds ->
+                        if (seekInProgress) return@PlayerScreen
                         NativeBridge.seekTo(seconds)
+                        seekRequestedAtMs = SystemClock.elapsedRealtime()
+                        seekUiBusy = false
                         position = seconds
                         syncPlaybackService()
                     },

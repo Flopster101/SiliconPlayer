@@ -90,12 +90,20 @@ class PlaybackService : Service() {
     private val ticker = object : Runnable {
         override fun run() {
             if (currentPath != null) {
-                positionSeconds = NativeBridge.getPosition()
-                durationSeconds = NativeBridge.getDuration()
+                val seekInProgress = NativeBridge.isSeekInProgress()
+                if (!seekInProgress) {
+                    positionSeconds = NativeBridge.getPosition()
+                    durationSeconds = NativeBridge.getDuration()
+                }
                 isPlaying = NativeBridge.isEnginePlaying()
                 updateMediaSessionState()
                 pushNotification()
-                handler.postDelayed(this, if (isPlaying) 400L else 900L)
+                val delayMs = when {
+                    seekInProgress -> 180L
+                    isPlaying -> 400L
+                    else -> 900L
+                }
+                handler.postDelayed(this, delayMs)
             }
         }
     }

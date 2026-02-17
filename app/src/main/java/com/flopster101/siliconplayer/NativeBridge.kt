@@ -19,6 +19,7 @@ object NativeBridge {
     external fun getPosition(): Double
     external fun consumeNaturalEndEvent(): Boolean
     external fun seekTo(seconds: Double)
+    external fun isSeekInProgress(): Boolean
     external fun setLooping(enabled: Boolean)
     external fun setRepeatMode(mode: Int)
     external fun getTrackTitle(): String

@@ -122,10 +122,21 @@ namespace {
 }
 
 AudioEngine::AudioEngine() {
+    seekWorkerThread = std::thread([this]() { seekWorkerLoop(); });
     createStream();
 }
 
 AudioEngine::~AudioEngine() {
+    {
+        std::lock_guard<std::mutex> lock(seekWorkerMutex);
+        seekWorkerStop = true;
+        seekRequestPending = false;
+        seekAbortRequested.store(true);
+    }
+    seekWorkerCv.notify_all();
+    if (seekWorkerThread.joinable()) {
+        seekWorkerThread.join();
+    }
     std::lock_guard<std::mutex> lock(decoderMutex);
     freeOutputSoxrContextLocked();
     closeStream();
@@ -726,6 +737,10 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         int32_t numFrames) {
     auto *engine = static_cast<AudioEngine *>(userData);
     auto *outputData = static_cast<float *>(audioData);
+    if (engine->seekInProgress.load()) {
+        memset(outputData, 0, static_cast<size_t>(numFrames) * 2 * sizeof(float));
+        return AAUDIO_CALLBACK_RESULT_CONTINUE;
+    }
 
     std::lock_guard<std::mutex> lock(engine->decoderMutex);
     if (engine->decoder) {
@@ -992,6 +1007,21 @@ bool AudioEngine::start() {
 }
 
 void AudioEngine::stop() {
+    const bool wasSeeking = seekInProgress.load();
+    if (wasSeeking) {
+        decoderSerial.fetch_add(1);
+        {
+            std::lock_guard<std::mutex> lock(seekWorkerMutex);
+            seekAbortRequested.store(true);
+            seekRequestPending = false;
+        }
+        stopStreamAfterSeek.store(true);
+        seekWorkerCv.notify_one();
+        isPlaying.store(false);
+        naturalEndPending.store(false);
+        return;
+    }
+
     if (stream != nullptr) {
         resumeAfterRebuild.store(false);
         AAudioStream_requestStop(stream);
@@ -1006,12 +1036,14 @@ bool AudioEngine::isEnginePlaying() const {
 
 void AudioEngine::setUrl(const char* url) {
     LOGD("URL set to: %s", url);
+    decoderSerial.fetch_add(1);
 
     // Drop any previously loaded decoder first. If opening the new source fails,
     // playback should not continue from stale decoder state.
     {
         std::lock_guard<std::mutex> lock(decoderMutex);
         decoder.reset();
+        cachedDurationSeconds.store(0.0);
         resetResamplerStateLocked();
         decoderRenderSampleRate = streamSampleRate;
         positionSeconds.store(0.0);
@@ -1020,6 +1052,13 @@ void AudioEngine::setUrl(const char* url) {
         timelineSmoothedSeconds = 0.0;
         timelineSmootherInitialized = false;
         naturalEndPending.store(false);
+    }
+    {
+        std::lock_guard<std::mutex> lock(seekWorkerMutex);
+        seekAbortRequested.store(false);
+        seekRequestPending = false;
+        seekInProgress.store(false);
+        stopStreamAfterSeek.store(false);
     }
 
     auto newDecoder = DecoderRegistry::getInstance().createDecoder(url);
@@ -1053,6 +1092,7 @@ void AudioEngine::setUrl(const char* url) {
             }
         }
         decoder = std::move(newDecoder);
+        cachedDurationSeconds.store(decoder->getDuration());
         resetResamplerStateLocked();
         positionSeconds.store(0.0);
         sharedAbsoluteInputPositionBaseSeconds = 0.0;
@@ -1072,11 +1112,16 @@ void AudioEngine::restart() {
 
 double AudioEngine::getDurationSeconds() {
     const_cast<AudioEngine*>(this)->recoverStreamIfNeeded();
+    if (seekInProgress.load()) {
+        return cachedDurationSeconds.load();
+    }
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) {
         return 0.0;
     }
-    return decoder->getDuration();
+    const double duration = decoder->getDuration();
+    cachedDurationSeconds.store(duration);
+    return duration;
 }
 
 double AudioEngine::getPositionSeconds() {
@@ -1084,20 +1129,126 @@ double AudioEngine::getPositionSeconds() {
     return positionSeconds.load();
 }
 
+bool AudioEngine::isSeekInProgress() const {
+    return seekInProgress.load();
+}
+
 void AudioEngine::seekToSeconds(double seconds) {
-    std::lock_guard<std::mutex> lock(decoderMutex);
-    if (!decoder) {
-        return;
-    }
-    decoder->seek(seconds);
-    resetResamplerStateLocked();
-    const double clamped = seconds < 0.0 ? 0.0 : seconds;
-    positionSeconds.store(clamped);
-    sharedAbsoluteInputPositionBaseSeconds = clamped;
-    outputClockSeconds = clamped;
-    timelineSmoothedSeconds = clamped;
-    timelineSmootherInitialized = false;
+    const uint64_t targetDecoderSerial = decoderSerial.load();
+    const double normalizedTarget = std::max(0.0, seconds);
+    positionSeconds.store(normalizedTarget);
     naturalEndPending.store(false);
+    {
+        std::lock_guard<std::mutex> lock(seekWorkerMutex);
+        seekAbortRequested.store(false);
+        seekRequestSeconds = normalizedTarget;
+        seekRequestDecoderSerial = targetDecoderSerial;
+        seekRequestPending = true;
+        seekInProgress.store(true);
+    }
+    seekWorkerCv.notify_one();
+}
+
+double AudioEngine::runAsyncSeekLocked(double targetSeconds) {
+    if (!decoder) {
+        return 0.0;
+    }
+
+    const int capabilities = decoder->getPlaybackCapabilities();
+    if ((capabilities & AudioDecoder::PLAYBACK_CAP_SEEK) == 0) {
+        const double position = decoder->getPlaybackPositionSeconds();
+        return position >= 0.0 ? position : 0.0;
+    }
+    const double clampedTarget = std::max(0.0, targetSeconds);
+
+    decoder->seek(0.0);
+    const int channels = std::max(1, decoder->getChannelCount());
+    int decoderRate = decoderRenderSampleRate > 0 ? decoderRenderSampleRate : decoder->getSampleRate();
+    if (decoderRate <= 0) {
+        decoderRate = 48000;
+    }
+
+    const int64_t targetFrames = static_cast<int64_t>(std::llround(clampedTarget * decoderRate));
+    int64_t skippedFrames = 0;
+    constexpr int kAsyncSeekChunkFrames = 4096;
+
+    while (skippedFrames < targetFrames) {
+        {
+            std::lock_guard<std::mutex> seekLock(seekWorkerMutex);
+            if (seekRequestPending || seekWorkerStop || seekAbortRequested.load()) {
+                break;
+            }
+        }
+        const int framesToRead = static_cast<int>(std::min<int64_t>(kAsyncSeekChunkFrames, targetFrames - skippedFrames));
+        const size_t neededSamples = static_cast<size_t>(framesToRead) * channels;
+        if (asyncSeekDiscardBuffer.size() < neededSamples) {
+            asyncSeekDiscardBuffer.resize(neededSamples);
+        }
+        const int framesRead = decoder->read(asyncSeekDiscardBuffer.data(), framesToRead);
+        if (framesRead <= 0) {
+            break;
+        }
+        skippedFrames += framesRead;
+    }
+
+    const double decoderPosition = decoder->getPlaybackPositionSeconds();
+    if (decoderPosition >= 0.0) {
+        return decoderPosition;
+    }
+    return static_cast<double>(skippedFrames) / static_cast<double>(decoderRate);
+}
+
+void AudioEngine::seekWorkerLoop() {
+    for (;;) {
+        double targetSeconds = 0.0;
+        uint64_t targetDecoderSerial = 0;
+        {
+            std::unique_lock<std::mutex> lock(seekWorkerMutex);
+            seekWorkerCv.wait(lock, [this]() { return seekWorkerStop || seekRequestPending; });
+            if (seekWorkerStop) {
+                break;
+            }
+            targetSeconds = seekRequestSeconds;
+            targetDecoderSerial = seekRequestDecoderSerial;
+            seekRequestPending = false;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(decoderMutex);
+            if (decoder && targetDecoderSerial == decoderSerial.load() && !seekAbortRequested.load()) {
+                double resolvedPosition = runAsyncSeekLocked(targetSeconds);
+                if (!seekAbortRequested.load()) {
+                    const double duration = decoder->getDuration();
+                    if (duration > 0.0 && repeatMode.load() != 2) {
+                        resolvedPosition = std::clamp(resolvedPosition, 0.0, duration);
+                    } else if (resolvedPosition < 0.0) {
+                        resolvedPosition = 0.0;
+                    }
+                    cachedDurationSeconds.store(duration);
+                    resetResamplerStateLocked();
+                    positionSeconds.store(resolvedPosition);
+                    sharedAbsoluteInputPositionBaseSeconds = resolvedPosition;
+                    outputClockSeconds = resolvedPosition;
+                    timelineSmoothedSeconds = resolvedPosition;
+                    timelineSmootherInitialized = false;
+                    naturalEndPending.store(false);
+                }
+            }
+        }
+
+        if (stopStreamAfterSeek.exchange(false) && stream != nullptr) {
+            resumeAfterRebuild.store(false);
+            AAudioStream_requestStop(stream);
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(seekWorkerMutex);
+            if (!seekRequestPending) {
+                seekInProgress.store(false);
+                seekAbortRequested.store(false);
+            }
+        }
+    }
 }
 
 void AudioEngine::setLooping(bool enabled) {

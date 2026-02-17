@@ -5,6 +5,7 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <condition_variable>
 #include <memory>
 #include <vector>
 #include <unordered_map>
@@ -26,6 +27,7 @@ public:
     double getDurationSeconds();
     double getPositionSeconds();
     void seekToSeconds(double seconds);
+    bool isSeekInProgress() const;
     void setLooping(bool enabled);
     void setRepeatMode(int mode);
     int getRepeatModeCapabilities();
@@ -126,6 +128,7 @@ private:
     std::atomic<bool> looping { false };
     std::atomic<int> repeatMode { 0 };
     std::atomic<double> positionSeconds { 0.0 };
+    std::atomic<double> cachedDurationSeconds { 0.0 };
 
     std::unique_ptr<AudioDecoder> decoder;
     std::mutex decoderMutex;
@@ -209,6 +212,20 @@ private:
     float phase = 0.0f;
     std::atomic<bool> streamNeedsRebuild { false };
     std::atomic<bool> resumeAfterRebuild { false };
+    std::atomic<uint64_t> decoderSerial { 0 };
+    std::thread seekWorkerThread;
+    std::mutex seekWorkerMutex;
+    std::condition_variable seekWorkerCv;
+    bool seekWorkerStop = false;
+    bool seekRequestPending = false;
+    double seekRequestSeconds = 0.0;
+    uint64_t seekRequestDecoderSerial = 0;
+    std::atomic<bool> seekInProgress { false };
+    std::atomic<bool> seekAbortRequested { false };
+    std::atomic<bool> stopStreamAfterSeek { false };
+    std::vector<float> asyncSeekDiscardBuffer;
+    double runAsyncSeekLocked(double targetSeconds);
+    void seekWorkerLoop();
 };
 
 #endif //SILICONPLAYER_AUDIOENGINE_H

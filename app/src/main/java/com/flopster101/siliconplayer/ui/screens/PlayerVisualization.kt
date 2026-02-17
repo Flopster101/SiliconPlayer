@@ -847,48 +847,89 @@ internal fun AlbumArtPlaceholder(
         sampleRateHz,
         decoderName
     ) {
+        data class VisualizationSnapshot(
+            val waveLeft: FloatArray,
+            val waveRight: FloatArray,
+            val bars: FloatArray,
+            val vu: FloatArray,
+            val channelCount: Int,
+            val channelScopesFlat: FloatArray,
+            val channelScopeTextRaw: IntArray?
+        )
         while (true) {
             if (visualizationMode != VisualizationMode.Off && file != null && isPlaying) {
                 val nowNs = System.nanoTime()
-                visWaveLeft = NativeBridge.getVisualizationWaveformScope(
-                    0,
-                    visualizationOscWindowMs,
-                    visualizationOscTriggerModeNative
-                )
-                visWaveRight = NativeBridge.getVisualizationWaveformScope(
-                    1,
-                    visualizationOscWindowMs,
-                    visualizationOscTriggerModeNative
-                )
-                visBars = NativeBridge.getVisualizationBars()
-                visVu = NativeBridge.getVisualizationVuLevels()
-                visChannelCount = NativeBridge.getVisualizationChannelCount().coerceAtLeast(1)
-                if (
-                    visualizationMode == VisualizationMode.ChannelScope &&
-                    pluginNameForCoreName(decoderName) == "LibOpenMPT"
-                ) {
-                    val scopeSamples = computeChannelScopeSampleCount(
-                        windowMs = channelScopePrefs.windowMs,
-                        sampleRateHz = sampleRateHz
-                    )
-                    visChannelScopesFlat = NativeBridge.getChannelScopeSamples(scopeSamples)
-                    val scopeChannels = if (scopeSamples > 0) {
-                        (visChannelScopesFlat.size / scopeSamples).coerceIn(1, 64)
-                    } else {
-                        visChannelCount.coerceIn(1, 64)
-                    }
-                    val textPollIntervalNs = 120_000_000L
-                    if (
-                        visChannelScopeLastTextPollNs == 0L ||
+                val textPollIntervalNs = 120_000_000L
+                val shouldPollText =
+                    visChannelScopeLastTextPollNs == 0L ||
                         nowNs - visChannelScopeLastTextPollNs >= textPollIntervalNs
-                    ) {
-                        val rawText = NativeBridge.getChannelScopeTextState(scopeChannels)
-                        if (!rawText.contentEquals(visChannelScopeTextRawCache)) {
-                            visChannelScopeTextRawCache = rawText.copyOf()
-                            visChannelScopeTextStates = parseChannelScopeTextStates(rawText)
+                val snapshot = withContext(Dispatchers.Default) {
+                    if (NativeBridge.isSeekInProgress()) {
+                        null
+                    } else {
+                        val waveLeft = NativeBridge.getVisualizationWaveformScope(
+                            0,
+                            visualizationOscWindowMs,
+                            visualizationOscTriggerModeNative
+                        )
+                        val waveRight = NativeBridge.getVisualizationWaveformScope(
+                            1,
+                            visualizationOscWindowMs,
+                            visualizationOscTriggerModeNative
+                        )
+                        val bars = NativeBridge.getVisualizationBars()
+                        val vu = NativeBridge.getVisualizationVuLevels()
+                        val channelCount = NativeBridge.getVisualizationChannelCount().coerceAtLeast(1)
+                        var channelScopesFlat = FloatArray(0)
+                        var channelScopeTextRaw: IntArray? = null
+                        if (
+                            visualizationMode == VisualizationMode.ChannelScope &&
+                            pluginNameForCoreName(decoderName) == "LibOpenMPT"
+                        ) {
+                            val scopeSamples = computeChannelScopeSampleCount(
+                                windowMs = channelScopePrefs.windowMs,
+                                sampleRateHz = sampleRateHz
+                            )
+                            channelScopesFlat = NativeBridge.getChannelScopeSamples(scopeSamples)
+                            val scopeChannels = if (scopeSamples > 0) {
+                                (channelScopesFlat.size / scopeSamples).coerceIn(1, 64)
+                            } else {
+                                channelCount.coerceIn(1, 64)
+                            }
+                            if (shouldPollText) {
+                                channelScopeTextRaw = NativeBridge.getChannelScopeTextState(scopeChannels)
+                            }
                         }
-                        visChannelScopeLastTextPollNs = nowNs
+                        VisualizationSnapshot(
+                            waveLeft = waveLeft,
+                            waveRight = waveRight,
+                            bars = bars,
+                            vu = vu,
+                            channelCount = channelCount,
+                            channelScopesFlat = channelScopesFlat,
+                            channelScopeTextRaw = channelScopeTextRaw
+                        )
                     }
+                }
+                if (snapshot == null) {
+                    val delayMs = 90L
+                    delay(delayMs)
+                    continue
+                }
+                visWaveLeft = snapshot.waveLeft
+                visWaveRight = snapshot.waveRight
+                visBars = snapshot.bars
+                visVu = snapshot.vu
+                visChannelCount = snapshot.channelCount
+                if (snapshot.channelScopesFlat.isNotEmpty()) {
+                    visChannelScopesFlat = snapshot.channelScopesFlat
+                }
+                snapshot.channelScopeTextRaw?.let { rawText ->
+                    if (!rawText.contentEquals(visChannelScopeTextRawCache)) {
+                        visChannelScopeTextRawCache = rawText.copyOf()
+                        visChannelScopeTextStates = parseChannelScopeTextStates(rawText)
+                    }
+                    visChannelScopeLastTextPollNs = nowNs
                 }
                 if (visDebugAccumulator.windowStartNs == 0L) {
                     visDebugAccumulator.windowStartNs = nowNs

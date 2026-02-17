@@ -53,7 +53,9 @@ public:
     virtual void setRepeatMode(int /*mode*/) {}
     virtual int getRepeatModeCapabilities() const { return REPEAT_CAP_TRACK; }
     virtual int getPlaybackCapabilities() const {
-        return PLAYBACK_CAP_SEEK | PLAYBACK_CAP_RELIABLE_DURATION | PLAYBACK_CAP_LIVE_REPEAT_MODE;
+        return PLAYBACK_CAP_SEEK |
+               PLAYBACK_CAP_RELIABLE_DURATION |
+               PLAYBACK_CAP_LIVE_REPEAT_MODE;
     }
     virtual int getFixedSampleRateHz() const { return 0; }
     virtual double getPlaybackPositionSeconds() { return -1.0; }

@@ -10,7 +10,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
@@ -132,6 +136,7 @@ fun PlayerScreen(
     canCycleRepeatMode: Boolean,
     canSeek: Boolean,
     hasReliableDuration: Boolean,
+    seekInProgress: Boolean = false,
     onSeek: (Double) -> Unit,
     onPreviousTrack: () -> Unit,
     onNextTrack: () -> Unit,
@@ -653,7 +658,7 @@ fun PlayerScreen(
                 ) {
                     AlbumArtPlaceholder(
                         file = file,
-                        isPlaying = isPlaying,
+                        isPlaying = isPlaying && !seekInProgress,
                         decoderName = decoderName,
                         sampleRateHz = sampleRateHz,
                         artwork = artwork,
@@ -729,6 +734,7 @@ fun PlayerScreen(
                             durationSeconds = durationSeconds,
                             canSeek = canSeek,
                             hasReliableDuration = hasReliableDuration,
+                            seekInProgress = seekInProgress,
                             onSeekInteractionChanged = { isTimelineTouchActive = it },
                             onSliderValueChange = { value ->
                                 isSeeking = true
@@ -748,6 +754,7 @@ fun PlayerScreen(
                             isPlaying = isPlaying,
                             canResumeStoppedTrack = canResumeStoppedTrack,
                             repeatMode = repeatMode,
+                            seekInProgress = seekInProgress,
                             canPreviousTrack = canPreviousTrack,
                             canNextTrack = canNextTrack,
                             canCycleRepeatMode = canCycleRepeatMode,
@@ -789,7 +796,7 @@ fun PlayerScreen(
                 ) {
                     AlbumArtPlaceholder(
                         file = file,
-                        isPlaying = isPlaying,
+                        isPlaying = isPlaying && !seekInProgress,
                         decoderName = decoderName,
                         sampleRateHz = sampleRateHz,
                         artwork = artwork,
@@ -859,6 +866,7 @@ fun PlayerScreen(
                         durationSeconds = durationSeconds,
                         canSeek = canSeek,
                         hasReliableDuration = hasReliableDuration,
+                        seekInProgress = seekInProgress,
                         onSeekInteractionChanged = { isTimelineTouchActive = it },
                         onSliderValueChange = { value ->
                             isSeeking = true
@@ -878,6 +886,7 @@ fun PlayerScreen(
                         isPlaying = isPlaying,
                         canResumeStoppedTrack = canResumeStoppedTrack,
                         repeatMode = repeatMode,
+                        seekInProgress = seekInProgress,
                         canPreviousTrack = canPreviousTrack,
                         canNextTrack = canNextTrack,
                         canCycleRepeatMode = canCycleRepeatMode,
@@ -1892,6 +1901,7 @@ private fun TransportControls(
     isPlaying: Boolean,
     canResumeStoppedTrack: Boolean,
     repeatMode: RepeatMode,
+    seekInProgress: Boolean,
     canPreviousTrack: Boolean,
     canNextTrack: Boolean,
     canCycleRepeatMode: Boolean,
@@ -1964,7 +1974,7 @@ private fun TransportControls(
 
                     FilledTonalIconButton(
                         onClick = onCycleRepeatMode,
-                        enabled = canCycleRepeatMode,
+                        enabled = canCycleRepeatMode && !seekInProgress,
                         modifier = Modifier.size(sideButtonSize),
                         shape = MaterialTheme.shapes.extraLarge,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
@@ -2013,7 +2023,7 @@ private fun TransportControls(
 
                 FilledIconButton(
                     onClick = onPlayPause,
-                    enabled = hasTrack || canResumeStoppedTrack,
+                    enabled = (hasTrack || canResumeStoppedTrack) && !seekInProgress,
                     modifier = Modifier.size(playButtonSize),
                     shape = MaterialTheme.shapes.extraLarge,
                     colors = IconButtonDefaults.filledIconButtonColors(
@@ -2203,6 +2213,7 @@ private fun TimelineSection(
     durationSeconds: Double,
     canSeek: Boolean,
     hasReliableDuration: Boolean,
+    seekInProgress: Boolean,
     onSeekInteractionChanged: (Boolean) -> Unit,
     onSliderValueChange: (Float) -> Unit,
     onSliderValueChangeFinished: () -> Unit
@@ -2220,6 +2231,7 @@ private fun TimelineSection(
             value = normalizedValue,
             maxValue = sliderMax,
             enabled = seekEnabled,
+            seekInProgress = seekInProgress,
             onSeekInteractionChanged = onSeekInteractionChanged,
             onValueChange = onSliderValueChange,
             onValueChangeFinished = onSliderValueChangeFinished,
@@ -2231,10 +2243,18 @@ private fun TimelineSection(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = formatTime(elapsedPositionSeconds),
-                style = MaterialTheme.typography.labelMedium
-            )
+            if (seekInProgress) {
+                Text(
+                    text = "Seeking...",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Text(
+                    text = formatTime(elapsedPositionSeconds),
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
             Text(
                 text = durationText,
                 style = MaterialTheme.typography.labelMedium
@@ -2249,6 +2269,7 @@ private fun LineageStyleSeekBar(
     value: Float,
     maxValue: Float,
     enabled: Boolean,
+    seekInProgress: Boolean,
     onSeekInteractionChanged: (Boolean) -> Unit,
     onValueChange: (Float) -> Unit,
     onValueChangeFinished: () -> Unit,
@@ -2266,6 +2287,15 @@ private fun LineageStyleSeekBar(
     var draggingThumb by remember { mutableStateOf(false) }
     var thumbPressed by remember { mutableStateOf(false) }
     var thumbHovered by remember { mutableStateOf(false) }
+    val seekFlowTransition = rememberInfiniteTransition(label = "seekFlowTransition")
+    val seekFlowPhase by seekFlowTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing)
+        ),
+        label = "seekFlowPhase"
+    )
 
     fun xToValue(x: Float): Float {
         if (barWidthPx <= 0f || maxValue <= 0f) return 0f
@@ -2349,6 +2379,21 @@ private fun LineageStyleSeekBar(
                 size = Size(activeWidth, trackHeightPx),
                 cornerRadius = trackCorner
             )
+        }
+        if (seekInProgress) {
+            val bandWidth = size.width * 0.18f
+            val travel = size.width + bandWidth
+            val bandLeft = (seekFlowPhase * travel) - bandWidth
+            val drawLeft = bandLeft.coerceAtLeast(0f)
+            val drawRight = (bandLeft + bandWidth).coerceAtMost(size.width)
+            if (drawRight > drawLeft) {
+                drawRoundRect(
+                    color = activeColor.copy(alpha = 0.36f),
+                    topLeft = Offset(drawLeft, top),
+                    size = Size(drawRight - drawLeft, trackHeightPx),
+                    cornerRadius = trackCorner
+                )
+            }
         }
 
         val thumbX = activeWidth.coerceIn(0f, size.width)

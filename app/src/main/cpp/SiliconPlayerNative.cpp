@@ -5,6 +5,7 @@
 #include "decoders/DecoderRegistry.h"
 #include <vector>
 #include <string_view>
+#include <thread>
 
 #include <mutex>
 static AudioEngine *audioEngine = nullptr;
@@ -183,7 +184,10 @@ Java_com_flopster101_siliconplayer_MainActivity_startEngine(JNIEnv* env, jobject
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_stopEngine(JNIEnv* env, jobject) {
     if (audioEngine != nullptr) {
-        audioEngine->stop();
+        AudioEngine* engine = audioEngine;
+        std::thread([engine]() {
+            engine->stop();
+        }).detach();
     }
 }
 
@@ -249,6 +253,14 @@ Java_com_flopster101_siliconplayer_MainActivity_seekTo(JNIEnv* env, jobject, jdo
         return;
     }
     audioEngine->seekToSeconds(static_cast<double>(seconds));
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_isSeekInProgress(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) {
+        return JNI_FALSE;
+    }
+    return audioEngine->isSeekInProgress() ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -792,6 +804,11 @@ Java_com_flopster101_siliconplayer_NativeBridge_consumeNaturalEndEvent(JNIEnv* e
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_seekTo(JNIEnv* env, jobject thiz, jdouble seconds) {
     Java_com_flopster101_siliconplayer_MainActivity_seekTo(env, thiz, seconds);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_isSeekInProgress(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_isSeekInProgress(env, thiz);
 }
 
 extern "C" JNIEXPORT void JNICALL

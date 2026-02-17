@@ -357,6 +357,8 @@ internal fun SettingsScreen(
     onGmeSampleRateChanged: (Int) -> Unit,
     sidPlayFpSampleRateHz: Int,
     onSidPlayFpSampleRateChanged: (Int) -> Unit,
+    lazyUsf2SampleRateHz: Int,
+    onLazyUsf2SampleRateChanged: (Int) -> Unit,
     sidPlayFpBackend: Int,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     sidPlayFpClockMode: Int,
@@ -3111,6 +3113,7 @@ internal fun SettingsScreen(
                                 "VGMPlay" -> vgmPlaySampleRateHz
                                 "Game Music Emu" -> gmeSampleRateHz
                                 "LibSIDPlayFP" -> sidPlayFpSampleRateHz
+                                "LazyUSF2" -> lazyUsf2SampleRateHz
                                 else -> fixedSampleRateHz
                             }
                             val onSampleRateSelected: ((Int) -> Unit)? = when (selectedPluginName) {
@@ -3119,6 +3122,7 @@ internal fun SettingsScreen(
                                 "VGMPlay" -> onVgmPlaySampleRateChanged
                                 "Game Music Emu" -> onGmeSampleRateChanged
                                 "LibSIDPlayFP" -> onSidPlayFpSampleRateChanged
+                                "LazyUSF2" -> onLazyUsf2SampleRateChanged
                                 else -> null
                             }
                             val fixedRateLabel = if (fixedSampleRateHz > 0) {

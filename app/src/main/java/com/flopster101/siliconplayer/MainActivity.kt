@@ -1497,6 +1497,11 @@ private fun AppNavigation(
             prefs.getInt(CorePreferenceKeys.CORE_RATE_SIDPLAYFP, SidPlayFpDefaults.coreSampleRateHz)
         )
     }
+    var lazyUsf2CoreSampleRateHz by remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.CORE_RATE_LAZYUSF2, LazyUsf2Defaults.coreSampleRateHz)
+        )
+    }
     var sidPlayFpBackend by remember {
         mutableIntStateOf(
             prefs.getInt(CorePreferenceKeys.SIDPLAYFP_BACKEND, SidPlayFpDefaults.backend)
@@ -3042,6 +3047,18 @@ private fun AppNavigation(
             .putInt(CorePreferenceKeys.CORE_RATE_SIDPLAYFP, normalized)
             .apply()
         NativeBridge.setCoreOutputSampleRate("LibSIDPlayFP", normalized)
+    }
+
+    LaunchedEffect(lazyUsf2CoreSampleRateHz) {
+        val normalized = if (lazyUsf2CoreSampleRateHz <= 0) 0 else lazyUsf2CoreSampleRateHz
+        if (normalized != lazyUsf2CoreSampleRateHz) {
+            lazyUsf2CoreSampleRateHz = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.CORE_RATE_LAZYUSF2, normalized)
+            .apply()
+        NativeBridge.setCoreOutputSampleRate("LazyUSF2", normalized)
     }
 
     LaunchedEffect(sidPlayFpBackend) {
@@ -4990,6 +5007,8 @@ private fun AppNavigation(
                         onGmeSampleRateChanged = { gmeCoreSampleRateHz = it },
                         sidPlayFpSampleRateHz = sidPlayFpCoreSampleRateHz,
                         onSidPlayFpSampleRateChanged = { sidPlayFpCoreSampleRateHz = it },
+                        lazyUsf2SampleRateHz = lazyUsf2CoreSampleRateHz,
+                        onLazyUsf2SampleRateChanged = { lazyUsf2CoreSampleRateHz = it },
                         sidPlayFpBackend = sidPlayFpBackend,
                         onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
                         sidPlayFpClockMode = sidPlayFpClockMode,
@@ -5086,6 +5105,7 @@ private fun AppNavigation(
                                 CorePreferenceKeys.CORE_RATE_VGMPLAY to vgmPlayCoreSampleRateHz,
                                 CorePreferenceKeys.CORE_RATE_GME to gmeCoreSampleRateHz,
                                 CorePreferenceKeys.CORE_RATE_SIDPLAYFP to sidPlayFpCoreSampleRateHz,
+                                CorePreferenceKeys.CORE_RATE_LAZYUSF2 to lazyUsf2CoreSampleRateHz,
                                 CorePreferenceKeys.VGMPLAY_LOOP_COUNT to vgmPlayLoopCount,
                                 CorePreferenceKeys.VGMPLAY_VSYNC_RATE to vgmPlayVsyncRate,
                                 CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE to vgmPlayResampleMode,
@@ -5436,6 +5456,7 @@ private fun AppNavigation(
                             vgmPlayCoreSampleRateHz = VgmPlayDefaults.coreSampleRateHz
                             gmeCoreSampleRateHz = GmeDefaults.coreSampleRateHz
                             sidPlayFpCoreSampleRateHz = SidPlayFpDefaults.coreSampleRateHz
+                            lazyUsf2CoreSampleRateHz = LazyUsf2Defaults.coreSampleRateHz
                             sidPlayFpBackend = SidPlayFpDefaults.backend
                             sidPlayFpClockMode = SidPlayFpDefaults.clockMode
                             sidPlayFpSidModelMode = SidPlayFpDefaults.sidModelMode
@@ -5479,6 +5500,7 @@ private fun AppNavigation(
                                 remove(CorePreferenceKeys.CORE_RATE_VGMPLAY)
                                 remove(CorePreferenceKeys.CORE_RATE_GME)
                                 remove(CorePreferenceKeys.CORE_RATE_SIDPLAYFP)
+                                remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2)
                                 remove(CorePreferenceKeys.SIDPLAYFP_BACKEND)
                                 remove(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE)
                                 remove(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE)
@@ -5656,6 +5678,10 @@ private fun AppNavigation(
                                         remove(CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE)
                                         apply()
                                     }
+                                }
+                                "LazyUSF2" -> {
+                                    lazyUsf2CoreSampleRateHz = LazyUsf2Defaults.coreSampleRateHz
+                                    prefs.edit().remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2).apply()
                                 }
                                 "LibSIDPlayFP" -> {
                                     sidPlayFpCoreSampleRateHz = SidPlayFpDefaults.coreSampleRateHz

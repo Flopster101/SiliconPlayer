@@ -84,7 +84,7 @@ object AppDefaults {
             const val textHideWhenOverflow = true
             const val textShadowEnabled = true
             val textFont = VisualizationChannelScopeTextFont.RetroCuteMono
-            val textColorMode = VisualizationChannelScopeTextColorMode.Monet
+            val textColorMode = VisualizationChannelScopeTextColorMode.OpenMptInspired
             const val customTextColorArgb = 0xFFFFFFFF.toInt()
             val textNoteFormat = VisualizationNoteNameFormat.American
             const val textShowChannel = true

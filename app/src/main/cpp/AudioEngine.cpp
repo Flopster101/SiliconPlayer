@@ -1862,6 +1862,62 @@ int AudioEngine::getGmeLoopLengthMs() {
     return gmeDecoder ? gmeDecoder->getLoopLengthMsInfo() : -1;
 }
 
+std::string AudioEngine::getSidFormatName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    return sidDecoder ? sidDecoder->getSidFormatName() : "";
+}
+
+std::string AudioEngine::getSidClockName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    return sidDecoder ? sidDecoder->getSidClockName() : "";
+}
+
+std::string AudioEngine::getSidSpeedName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    return sidDecoder ? sidDecoder->getSidSpeedName() : "";
+}
+
+std::string AudioEngine::getSidCompatibilityName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    return sidDecoder ? sidDecoder->getSidCompatibilityName() : "";
+}
+
+int AudioEngine::getSidChipCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    return sidDecoder ? sidDecoder->getSidChipCountInfo() : 0;
+}
+
+std::string AudioEngine::getSidModelSummary() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    return sidDecoder ? sidDecoder->getSidModelSummary() : "";
+}
+
+std::string AudioEngine::getSidBaseAddressSummary() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    return sidDecoder ? sidDecoder->getSidBaseAddressSummary() : "";
+}
+
+std::string AudioEngine::getSidCommentSummary() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    return sidDecoder ? sidDecoder->getSidCommentSummary() : "";
+}
+
 // Gain control implementation
 void AudioEngine::setMasterGain(float gainDb) {
     masterGainDb.store(gainDb);

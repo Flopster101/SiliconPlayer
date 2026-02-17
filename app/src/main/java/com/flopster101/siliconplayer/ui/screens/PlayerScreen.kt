@@ -1275,6 +1275,14 @@ private fun TrackInfoDetailsDialog(
     var gmeHasLoopPoint by remember { mutableStateOf(false) }
     var gmeLoopStartMs by remember { mutableIntStateOf(-1) }
     var gmeLoopLengthMs by remember { mutableIntStateOf(-1) }
+    var sidFormatName by remember { mutableStateOf("") }
+    var sidClockName by remember { mutableStateOf("") }
+    var sidSpeedName by remember { mutableStateOf("") }
+    var sidCompatibilityName by remember { mutableStateOf("") }
+    var sidChipCount by remember { mutableIntStateOf(0) }
+    var sidModelSummary by remember { mutableStateOf("") }
+    var sidBaseAddressSummary by remember { mutableStateOf("") }
+    var sidCommentSummary by remember { mutableStateOf("") }
     val detailsScrollState = rememberScrollState()
     var detailsViewportHeightPx by remember { mutableIntStateOf(0) }
 
@@ -1363,6 +1371,25 @@ private fun TrackInfoDetailsDialog(
                 gmeHasLoopPoint = false
                 gmeLoopStartMs = -1
                 gmeLoopLengthMs = -1
+            }
+            if (decoderName.equals("LibSIDPlayFP", ignoreCase = true)) {
+                sidFormatName = NativeBridge.getSidFormatName()
+                sidClockName = NativeBridge.getSidClockName()
+                sidSpeedName = NativeBridge.getSidSpeedName()
+                sidCompatibilityName = NativeBridge.getSidCompatibilityName()
+                sidChipCount = NativeBridge.getSidChipCount()
+                sidModelSummary = NativeBridge.getSidModelSummary()
+                sidBaseAddressSummary = NativeBridge.getSidBaseAddressSummary()
+                sidCommentSummary = NativeBridge.getSidCommentSummary()
+            } else {
+                sidFormatName = ""
+                sidClockName = ""
+                sidSpeedName = ""
+                sidCompatibilityName = ""
+                sidChipCount = 0
+                sidModelSummary = ""
+                sidBaseAddressSummary = ""
+                sidCommentSummary = ""
             }
             delay(500)
         }
@@ -1454,6 +1481,17 @@ private fun TrackInfoDetailsDialog(
             if (gmeCopyright.isNotBlank()) row("Copyright", gmeCopyright)
             if (gmeDumper.isNotBlank()) row("Dumper", gmeDumper)
             if (gmeComment.isNotBlank()) row("Comment", gmeComment)
+        }
+        if (decoderName.equals("LibSIDPlayFP", ignoreCase = true)) {
+            append('\n').append("[LibSIDPlayFP]").append('\n')
+            if (sidFormatName.isNotBlank()) row("Format name", sidFormatName)
+            if (sidClockName.isNotBlank()) row("Clock", sidClockName)
+            if (sidSpeedName.isNotBlank()) row("Speed", sidSpeedName)
+            if (sidCompatibilityName.isNotBlank()) row("Compatibility", sidCompatibilityName)
+            if (sidChipCount > 0) row("SID chips", sidChipCount.toString())
+            if (sidModelSummary.isNotBlank()) row("SID models", sidModelSummary)
+            if (sidBaseAddressSummary.isNotBlank()) row("SID base addresses", sidBaseAddressSummary)
+            if (sidCommentSummary.isNotBlank()) row("Comments", sidCommentSummary)
         }
     }
 
@@ -1617,6 +1655,38 @@ private fun TrackInfoDetailsDialog(
                                 }
                                 if (gmeComment.isNotBlank()) {
                                     TrackInfoDetailsRow("Comment", gmeComment)
+                                }
+                            }
+                            if (decoderName.equals("LibSIDPlayFP", ignoreCase = true)) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "LibSIDPlayFP",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (sidFormatName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Format name", sidFormatName)
+                                }
+                                if (sidClockName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Clock", sidClockName)
+                                }
+                                if (sidSpeedName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Speed", sidSpeedName)
+                                }
+                                if (sidCompatibilityName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Compatibility", sidCompatibilityName)
+                                }
+                                if (sidChipCount > 0) {
+                                    TrackInfoDetailsRow("SID chips", sidChipCount.toString())
+                                }
+                                if (sidModelSummary.isNotBlank()) {
+                                    TrackInfoDetailsRow("SID models", sidModelSummary)
+                                }
+                                if (sidBaseAddressSummary.isNotBlank()) {
+                                    TrackInfoDetailsRow("SID base addresses", sidBaseAddressSummary)
+                                }
+                                if (sidCommentSummary.isNotBlank()) {
+                                    TrackInfoDetailsRow("Comments", sidCommentSummary)
                                 }
                             }
                         }

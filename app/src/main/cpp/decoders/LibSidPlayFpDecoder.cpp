@@ -3,6 +3,7 @@
 #include <android/log.h>
 #include <algorithm>
 #include <cstdint>
+#include <sstream>
 #include <vector>
 
 #include <sidplayfp/sidplayfp.h>
@@ -50,6 +51,42 @@ int parseIntString(const std::string& raw, int fallback) {
         return fallback;
     }
 }
+
+std::string sidClockToString(SidTuneInfo::clock_t clock) {
+    switch (clock) {
+        case SidTuneInfo::CLOCK_PAL: return "PAL";
+        case SidTuneInfo::CLOCK_NTSC: return "NTSC";
+        case SidTuneInfo::CLOCK_ANY: return "Any";
+        case SidTuneInfo::CLOCK_UNKNOWN:
+        default: return "Unknown";
+    }
+}
+
+std::string sidCompatibilityToString(SidTuneInfo::compatibility_t compatibility) {
+    switch (compatibility) {
+        case SidTuneInfo::COMPATIBILITY_C64: return "C64";
+        case SidTuneInfo::COMPATIBILITY_PSID: return "PSID";
+        case SidTuneInfo::COMPATIBILITY_R64: return "Real C64";
+        case SidTuneInfo::COMPATIBILITY_BASIC: return "C64 BASIC";
+        default: return "Unknown";
+    }
+}
+
+std::string sidModelToString(SidTuneInfo::model_t model) {
+    switch (model) {
+        case SidTuneInfo::SIDMODEL_6581: return "6581";
+        case SidTuneInfo::SIDMODEL_8580: return "8580";
+        case SidTuneInfo::SIDMODEL_ANY: return "Any";
+        case SidTuneInfo::SIDMODEL_UNKNOWN:
+        default: return "Unknown";
+    }
+}
+
+std::string sidBaseAddressToString(uint_least16_t address) {
+    std::ostringstream out;
+    out << "0x" << std::hex << std::uppercase << static_cast<int>(address);
+    return out.str();
+}
 }
 
 LibSidPlayFpDecoder::LibSidPlayFpDecoder() = default;
@@ -85,6 +122,13 @@ void LibSidPlayFpDecoder::refreshMetadataLocked() {
     genre.clear();
     sidChipCount = 1;
     sidVoiceCount = 3;
+    sidFormatName.clear();
+    sidClockName.clear();
+    sidSpeedName.clear();
+    sidCompatibilityName.clear();
+    sidModelSummary.clear();
+    sidBaseAddressSummary.clear();
+    sidCommentSummary.clear();
     subtuneTitles.assign(std::max(1, subtuneCount), "");
     subtuneArtists.assign(std::max(1, subtuneCount), "");
     subtuneDurationsSeconds.assign(std::max(1, subtuneCount), fallbackDurationSeconds);
@@ -94,7 +138,51 @@ void LibSidPlayFpDecoder::refreshMetadataLocked() {
     if (info == nullptr) return;
 
     sidChipCount = std::max(1, info->sidChips());
+    if (player) {
+        sidChipCount = std::max(sidChipCount, static_cast<int>(player->info().numberOfSIDs()));
+        sidSpeedName = safeString(player->info().speedString());
+    }
     sidVoiceCount = std::max(1, sidChipCount * 3);
+    sidFormatName = safeString(info->formatString());
+    sidClockName = sidClockToString(info->clockSpeed());
+    sidCompatibilityName = sidCompatibilityToString(info->compatibility());
+
+    {
+        std::ostringstream modelSummary;
+        bool hasModel = false;
+        for (int i = 0; i < sidChipCount; ++i) {
+            if (hasModel) modelSummary << ", ";
+            modelSummary << "SID" << (i + 1) << ":" << sidModelToString(info->sidModel(static_cast<unsigned int>(i)));
+            hasModel = true;
+        }
+        sidModelSummary = hasModel ? modelSummary.str() : "";
+    }
+
+    {
+        std::ostringstream baseSummary;
+        bool hasBase = false;
+        for (int i = 0; i < sidChipCount; ++i) {
+            const uint_least16_t base = info->sidChipBase(static_cast<unsigned int>(i));
+            if (base == 0u) continue;
+            if (hasBase) baseSummary << ", ";
+            baseSummary << "SID" << (i + 1) << ":" << sidBaseAddressToString(base);
+            hasBase = true;
+        }
+        sidBaseAddressSummary = hasBase ? baseSummary.str() : "";
+    }
+
+    if (info->numberOfCommentStrings() > 0) {
+        std::ostringstream comments;
+        bool hasComment = false;
+        for (unsigned int i = 0; i < info->numberOfCommentStrings(); ++i) {
+            const std::string comment = safeString(info->commentString(i));
+            if (comment.empty()) continue;
+            if (hasComment) comments << " | ";
+            comments << comment;
+            hasComment = true;
+        }
+        sidCommentSummary = hasComment ? comments.str() : "";
+    }
     const unsigned int numInfoStrings = info->numberOfInfoStrings();
     if (numInfoStrings > 0) title = safeString(info->infoString(0));
     if (numInfoStrings > 1) artist = safeString(info->infoString(1));
@@ -126,6 +214,7 @@ bool LibSidPlayFpDecoder::selectSubtuneLocked(int index) {
     const int runtimeSidChips = std::max(1, static_cast<int>(info.numberOfSIDs()));
     sidChipCount = runtimeSidChips;
     sidVoiceCount = std::max(1, runtimeSidChips * 3);
+    sidSpeedName = safeString(info.speedString());
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
     currentSubtuneIndex = index;
@@ -183,6 +272,13 @@ bool LibSidPlayFpDecoder::open(const char* path) {
     outputChannels = 2;
     sidChipCount = 1;
     sidVoiceCount = 3;
+    sidFormatName.clear();
+    sidClockName.clear();
+    sidSpeedName.clear();
+    sidCompatibilityName.clear();
+    sidModelSummary.clear();
+    sidBaseAddressSummary.clear();
+    sidCommentSummary.clear();
     return openInternalLocked(path);
 }
 
@@ -204,6 +300,13 @@ void LibSidPlayFpDecoder::close() {
     outputChannels = 2;
     sidChipCount = 1;
     sidVoiceCount = 3;
+    sidFormatName.clear();
+    sidClockName.clear();
+    sidSpeedName.clear();
+    sidCompatibilityName.clear();
+    sidModelSummary.clear();
+    sidBaseAddressSummary.clear();
+    sidCommentSummary.clear();
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
 }
@@ -429,6 +532,46 @@ std::string LibSidPlayFpDecoder::getComposer() {
 std::string LibSidPlayFpDecoder::getGenre() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return genre;
+}
+
+std::string LibSidPlayFpDecoder::getSidFormatName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return sidFormatName;
+}
+
+std::string LibSidPlayFpDecoder::getSidClockName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return sidClockName;
+}
+
+std::string LibSidPlayFpDecoder::getSidSpeedName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return sidSpeedName;
+}
+
+std::string LibSidPlayFpDecoder::getSidCompatibilityName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return sidCompatibilityName;
+}
+
+int LibSidPlayFpDecoder::getSidChipCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return sidChipCount;
+}
+
+std::string LibSidPlayFpDecoder::getSidModelSummary() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return sidModelSummary;
+}
+
+std::string LibSidPlayFpDecoder::getSidBaseAddressSummary() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return sidBaseAddressSummary;
+}
+
+std::string LibSidPlayFpDecoder::getSidCommentSummary() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return sidCommentSummary;
 }
 
 void LibSidPlayFpDecoder::setRepeatMode(int mode) {

@@ -38,6 +38,14 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    std::string getSidFormatName();
+    std::string getSidClockName();
+    std::string getSidSpeedName();
+    std::string getSidCompatibilityName();
+    int getSidChipCountInfo();
+    std::string getSidModelSummary();
+    std::string getSidBaseAddressSummary();
+    std::string getSidCommentSummary();
     void setOutputSampleRate(int sampleRateHz) override;
     void setOption(const char* name, const char* value) override;
     int getOptionApplyPolicy(const char* name) const override;
@@ -70,6 +78,13 @@ private:
     int outputChannels = 2;
     int sidChipCount = 1;
     int sidVoiceCount = 3;
+    std::string sidFormatName;
+    std::string sidClockName;
+    std::string sidSpeedName;
+    std::string sidCompatibilityName;
+    std::string sidModelSummary;
+    std::string sidBaseAddressSummary;
+    std::string sidCommentSummary;
     double fallbackDurationSeconds = 180.0;
     std::atomic<int> repeatMode { 0 }; // 0 none, 1 repeat track, 2 repeat loop-point style
     std::vector<int16_t> pendingMixedSamples;

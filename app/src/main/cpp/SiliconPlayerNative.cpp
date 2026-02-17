@@ -755,6 +755,61 @@ Java_com_flopster101_siliconplayer_NativeBridge_getGmeLoopLengthMs(JNIEnv*, jobj
     return static_cast<jint>(audioEngine->getGmeLoopLengthMs());
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSidFormatName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getSidFormatName();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSidClockName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getSidClockName();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSidSpeedName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getSidSpeedName();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSidCompatibilityName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getSidCompatibilityName();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSidChipCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getSidChipCount());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSidModelSummary(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getSidModelSummary();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSidBaseAddressSummary(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getSidBaseAddressSummary();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSidCommentSummary(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getSidCommentSummary();
+    return toJString(env, value);
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_startEngine(JNIEnv* env, jobject thiz) {
     Java_com_flopster101_siliconplayer_MainActivity_startEngine(env, thiz);

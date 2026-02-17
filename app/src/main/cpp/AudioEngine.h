@@ -93,6 +93,14 @@ public:
     bool getGmeHasLoopPoint();
     int getGmeLoopStartMs();
     int getGmeLoopLengthMs();
+    std::string getSidFormatName();
+    std::string getSidClockName();
+    std::string getSidSpeedName();
+    std::string getSidCompatibilityName();
+    int getSidChipCount();
+    std::string getSidModelSummary();
+    std::string getSidBaseAddressSummary();
+    std::string getSidCommentSummary();
 
     // Bitrate information
     int64_t getTrackBitrate();

@@ -77,6 +77,14 @@ object NativeBridge {
     external fun getGmeHasLoopPoint(): Boolean
     external fun getGmeLoopStartMs(): Int
     external fun getGmeLoopLengthMs(): Int
+    external fun getSidFormatName(): String
+    external fun getSidClockName(): String
+    external fun getSidSpeedName(): String
+    external fun getSidCompatibilityName(): String
+    external fun getSidChipCount(): Int
+    external fun getSidModelSummary(): String
+    external fun getSidBaseAddressSummary(): String
+    external fun getSidCommentSummary(): String
     external fun getTrackBitrate(): Long
     external fun isTrackVBR(): Boolean
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)

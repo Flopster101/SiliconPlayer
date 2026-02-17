@@ -221,6 +221,23 @@ private fun parseChannelScopeTextStates(
     }
 }
 
+private fun parseOpenMptIndexedNames(raw: String): Map<Int, String> {
+    if (raw.isBlank()) return emptyMap()
+    val out = LinkedHashMap<Int, String>()
+    raw.lineSequence().forEach { lineRaw ->
+        val line = lineRaw.trim()
+        if (line.isEmpty()) return@forEach
+        val dotIndex = line.indexOf(". ")
+        if (dotIndex <= 0) return@forEach
+        val index = line.substring(0, dotIndex).toIntOrNull() ?: return@forEach
+        val name = line.substring(dotIndex + 2).trim()
+        if (index > 0) {
+            out[index] = name
+        }
+    }
+    return out
+}
+
 private fun computeChannelScopeTriggerIndices(
     histories: List<FloatArray>,
     triggerModeNative: Int,
@@ -578,6 +595,8 @@ internal fun rememberChannelScopePrefs(
 private data class ChannelScopeVisualState(
     val channelHistories: List<FloatArray>,
     val channelTextStates: List<ChannelScopeChannelTextState>,
+    val instrumentNamesByIndex: Map<Int, String>,
+    val sampleNamesByIndex: Map<Int, String>,
     val triggerModeNative: Int,
     val triggerIndices: IntArray,
     val renderBackend: VisualizationRenderBackend,
@@ -660,6 +679,8 @@ internal fun AlbumArtPlaceholder(
     var visChannelScopeLastChannelCount by remember { mutableIntStateOf(1) }
     var visChannelScopeTriggerIndices by remember { mutableStateOf(IntArray(0)) }
     var visChannelScopeTextStates by remember { mutableStateOf<List<ChannelScopeChannelTextState>>(emptyList()) }
+    var visOpenMptInstrumentNamesByIndex by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
+    var visOpenMptSampleNamesByIndex by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
     var visDebugUpdateFps by remember { mutableIntStateOf(0) }
     var visDebugUpdateFrameMs by remember { mutableIntStateOf(0) }
     var visDebugDrawFps by remember { mutableIntStateOf(0) }
@@ -697,6 +718,8 @@ internal fun AlbumArtPlaceholder(
         visChannelScopeHistories = List(channels) { FloatArray(points) }
         visChannelScopeTriggerIndices = IntArray(channels) { points / 2 }
         visChannelScopeTextStates = emptyList()
+        visOpenMptInstrumentNamesByIndex = emptyMap()
+        visOpenMptSampleNamesByIndex = emptyMap()
         visDebugUpdateFps = 0
         visDebugUpdateFrameMs = 0
         visDebugDrawFps = 0
@@ -706,6 +729,15 @@ internal fun AlbumArtPlaceholder(
         visDebugAccumulator.lastFrameNs = 0L
         visDebugAccumulator.latestFrameMs = 0
         visDebugAccumulator.lastUiPublishNs = 0L
+    }
+    LaunchedEffect(file?.absolutePath, decoderName) {
+        if (file == null || pluginNameForCoreName(decoderName) != "LibOpenMPT") {
+            visOpenMptInstrumentNamesByIndex = emptyMap()
+            visOpenMptSampleNamesByIndex = emptyMap()
+            return@LaunchedEffect
+        }
+        visOpenMptInstrumentNamesByIndex = parseOpenMptIndexedNames(NativeBridge.getOpenMptInstrumentNames())
+        visOpenMptSampleNamesByIndex = parseOpenMptIndexedNames(NativeBridge.getOpenMptSampleNames())
     }
     LaunchedEffect(
         visualizationMode,
@@ -928,6 +960,8 @@ internal fun AlbumArtPlaceholder(
     val channelScopeState = ChannelScopeVisualState(
         channelHistories = visChannelScopeHistories,
         channelTextStates = visChannelScopeTextStates,
+        instrumentNamesByIndex = visOpenMptInstrumentNamesByIndex,
+        sampleNamesByIndex = visOpenMptSampleNamesByIndex,
         triggerModeNative = channelScopePrefs.triggerModeNative,
         triggerIndices = visChannelScopeTriggerIndices,
         renderBackend = channelScopePrefs.renderBackend,
@@ -1107,6 +1141,8 @@ internal fun AlbumArtPlaceholder(
                 vuCustomColorArgb = vuCustomColorArgb,
                 channelScopeHistories = channelScopeState.channelHistories,
                 channelScopeTextStates = channelScopeState.channelTextStates,
+                channelScopeInstrumentNamesByIndex = channelScopeState.instrumentNamesByIndex,
+                channelScopeSampleNamesByIndex = channelScopeState.sampleNamesByIndex,
                 channelScopeTriggerModeNative = channelScopeState.triggerModeNative,
                 channelScopeTriggerIndices = channelScopeState.triggerIndices,
                 channelScopeRenderBackend = channelScopeState.renderBackend,

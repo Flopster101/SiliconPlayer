@@ -79,6 +79,8 @@ fun BasicVisualizationOverlay(
     vuCustomColorArgb: Int,
     channelScopeHistories: List<FloatArray>,
     channelScopeTextStates: List<ChannelScopeChannelTextState>,
+    channelScopeInstrumentNamesByIndex: Map<Int, String>,
+    channelScopeSampleNamesByIndex: Map<Int, String>,
     channelScopeTriggerModeNative: Int,
     channelScopeTriggerIndices: IntArray,
     channelScopeRenderBackend: VisualizationRenderBackend,
@@ -288,6 +290,8 @@ fun BasicVisualizationOverlay(
                     ChannelScopeTextOverlay(
                         channelHistories = channelScopeHistories,
                         channelTextStates = channelScopeTextStates,
+                        instrumentNamesByIndex = channelScopeInstrumentNamesByIndex,
+                        sampleNamesByIndex = channelScopeSampleNamesByIndex,
                         layoutStrategy = channelScopeLayout,
                         anchor = channelScopeTextAnchor,
                         paddingDp = channelScopeTextPaddingDp,
@@ -319,6 +323,8 @@ private fun deriveVuTrackColor(accent: Color): Color {
 private fun ChannelScopeTextOverlay(
     channelHistories: List<FloatArray>,
     channelTextStates: List<ChannelScopeChannelTextState>,
+    instrumentNamesByIndex: Map<Int, String>,
+    sampleNamesByIndex: Map<Int, String>,
     layoutStrategy: VisualizationChannelScopeLayout,
     anchor: VisualizationChannelScopeTextAnchor,
     paddingDp: Int,
@@ -348,6 +354,8 @@ private fun ChannelScopeTextOverlay(
                     buildChannelScopeTextFields(
                         channel = channel,
                         state = channelTextStates.getOrNull(channel),
+                        instrumentNamesByIndex = instrumentNamesByIndex,
+                        sampleNamesByIndex = sampleNamesByIndex,
                         noteFormat = noteFormat,
                         showChannel = showChannel,
                         showNote = showNote,
@@ -499,6 +507,8 @@ private data class ChannelScopeTextFields(
 private fun buildChannelScopeTextFields(
     channel: Int,
     state: ChannelScopeChannelTextState?,
+    instrumentNamesByIndex: Map<Int, String>,
+    sampleNamesByIndex: Map<Int, String>,
     noteFormat: VisualizationNoteNameFormat,
     showChannel: Boolean,
     showNote: Boolean,
@@ -512,7 +522,11 @@ private fun buildChannelScopeTextFields(
         note = if (showNote) (formatNoteName(state?.note ?: -1, noteFormat) ?: "--") else null,
         volume = if (showVolume) formatVolume(state?.volume ?: 0) else null,
         effect = if (showEffect) formatEffect(state) else null,
-        instrumentOrSample = if (showInstrumentSample) formatInstrumentOrSample(state) else null
+        instrumentOrSample = if (showInstrumentSample) {
+            formatInstrumentOrSample(state, instrumentNamesByIndex, sampleNamesByIndex)
+        } else {
+            null
+        }
     )
 }
 
@@ -559,13 +573,27 @@ private fun formatEffect(state: ChannelScopeChannelTextState?): String {
     return "$effectChar$paramHex"
 }
 
-private fun formatInstrumentOrSample(state: ChannelScopeChannelTextState?): String? {
+private fun formatInstrumentOrSample(
+    state: ChannelScopeChannelTextState?,
+    instrumentNamesByIndex: Map<Int, String>,
+    sampleNamesByIndex: Map<Int, String>
+): String? {
     if (state == null) return null
     if (state.instrumentIndex > 0) {
-        return "Ins ${state.instrumentIndex}"
+        val name = instrumentNamesByIndex[state.instrumentIndex].orEmpty()
+        return if (name.isNotBlank()) {
+            "I#${state.instrumentIndex} $name"
+        } else {
+            "I#${state.instrumentIndex}"
+        }
     }
     if (state.sampleIndex > 0) {
-        return "Smp ${state.sampleIndex}"
+        val name = sampleNamesByIndex[state.sampleIndex].orEmpty()
+        return if (name.isNotBlank()) {
+            "S#${state.sampleIndex} $name"
+        } else {
+            "S#${state.sampleIndex}"
+        }
     }
     return null
 }

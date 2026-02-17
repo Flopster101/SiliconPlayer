@@ -514,6 +514,269 @@ build_libgme() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build lazyusf2
+# -----------------------------------------------------------------------------
+build_lazyusf2() {
+    local ABI=$1
+    echo "Building lazyusf2 for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/lazyusf2"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+    local LIB_OUTPUT=""
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "lazyusf2 source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    mkdir -p "$INSTALL_DIR/lib" "$INSTALL_DIR/include/lazyusf2"
+
+    if [ "$ABI" = "arm64-v8a" ] || [ "$ABI" = "armeabi-v7a" ]; then
+        echo "lazyusf2: using Makefile build for ARM ABI ($ABI) to avoid x86 dynarec sources."
+        (
+            cd "$PROJECT_PATH"
+            make clean >/dev/null 2>&1 || true
+
+            if [ "$ABI" = "arm64-v8a" ]; then
+                make -j$(nproc) liblazyusf.a \
+                    CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
+                    AR="$TOOLCHAIN/bin/llvm-ar" \
+                    CPU="AArch64" \
+                    ARCH="64" \
+                    OBJS_RECOMPILER_64="" \
+                    OPTS_AArch64="" \
+                    ROPTS_AArch64="-DARCH_MIN_ARM_NEON"
+            else
+                make -j$(nproc) liblazyusf.a \
+                    CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
+                    AR="$TOOLCHAIN/bin/llvm-ar" \
+                    CPU="arm" \
+                    ARCH="32" \
+                    OBJS_RECOMPILER_32="" \
+                    OPTS_arm="" \
+                    ROPTS_arm=""
+            fi
+        )
+
+        LIB_OUTPUT="$PROJECT_PATH/liblazyusf.a"
+    else
+        rm -rf "$BUILD_DIR"
+        mkdir -p "$BUILD_DIR"
+
+        cmake \
+            -S "$PROJECT_PATH" \
+            -B "$BUILD_DIR" \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+            -DANDROID_ABI="$ABI" \
+            -DANDROID_PLATFORM="android-$ANDROID_API" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+
+        cmake --build "$BUILD_DIR" --target lazyusf2 -j$(nproc)
+
+        if [ -f "$BUILD_DIR/liblazyusf2.a" ]; then
+            LIB_OUTPUT="$BUILD_DIR/liblazyusf2.a"
+        else
+            LIB_OUTPUT="$(find "$BUILD_DIR" -type f -name 'liblazyusf2.a' | head -n 1)"
+        fi
+    fi
+
+    if [ -z "$LIB_OUTPUT" ] || [ ! -f "$LIB_OUTPUT" ]; then
+        echo "Error: lazyusf2 static library not found after build."
+        return 1
+    fi
+    cp "$LIB_OUTPUT" "$INSTALL_DIR/lib/liblazyusf2.a"
+    cp "$LIB_OUTPUT" "$INSTALL_DIR/lib/liblazyusf.a"
+
+    while IFS= read -r header_path; do
+        local rel_path
+        rel_path="${header_path#"$PROJECT_PATH"/}"
+        mkdir -p "$INSTALL_DIR/include/lazyusf2/$(dirname "$rel_path")"
+        cp "$header_path" "$INSTALL_DIR/include/lazyusf2/$rel_path"
+    done < <(find "$PROJECT_PATH" -type f -name '*.h')
+}
+
+# -----------------------------------------------------------------------------
+# Function: Build FluidSynth
+# -----------------------------------------------------------------------------
+build_fluidsynth() {
+    local ABI=$1
+    echo "Building FluidSynth for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/fluidsynth"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "FluidSynth source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR" "$INSTALL_DIR/lib" "$INSTALL_DIR/include"
+
+    cmake \
+        -S "$PROJECT_PATH" \
+        -B "$BUILD_DIR" \
+        -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+        -DANDROID_ABI="$ABI" \
+        -DANDROID_PLATFORM="android-$ANDROID_API" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -Dosal=cpp11 \
+        -Denable-alsa=OFF \
+        -Denable-aufile=OFF \
+        -Denable-dbus=OFF \
+        -Denable-ipv6=OFF \
+        -Denable-jack=OFF \
+        -Denable-ladspa=OFF \
+        -Denable-libinstpatch=OFF \
+        -Denable-libsndfile=OFF \
+        -Denable-midishare=OFF \
+        -Denable-network=OFF \
+        -Denable-oss=OFF \
+        -Denable-dsound=OFF \
+        -Denable-wasapi=OFF \
+        -Denable-waveout=OFF \
+        -Denable-winmidi=OFF \
+        -Denable-sdl3=OFF \
+        -Denable-pulseaudio=OFF \
+        -Denable-pipewire=OFF \
+        -Denable-readline=OFF \
+        -Denable-threads=ON \
+        -Denable-openmp=OFF \
+        -Denable-native-dls=OFF \
+        -Denable-limiter=OFF \
+        -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"
+
+    cmake --build "$BUILD_DIR" --target libfluidsynth -j$(nproc)
+
+    if [ -f "$BUILD_DIR/src/libfluidsynth.a" ]; then
+        cp "$BUILD_DIR/src/libfluidsynth.a" "$INSTALL_DIR/lib/"
+    else
+        local built_lib
+        built_lib="$(find "$BUILD_DIR" -type f -name 'libfluidsynth.a' | head -n 1)"
+        if [ -z "$built_lib" ]; then
+            echo "Error: FluidSynth static library not found after build."
+            return 1
+        fi
+        cp "$built_lib" "$INSTALL_DIR/lib/"
+    fi
+
+    mkdir -p "$INSTALL_DIR/include/fluidsynth"
+    cp "$PROJECT_PATH/include/fluidsynth/"*.h "$INSTALL_DIR/include/fluidsynth/" 2>/dev/null || true
+    cp "$BUILD_DIR/include/fluidsynth/"*.h "$INSTALL_DIR/include/fluidsynth/" 2>/dev/null || true
+    cp "$BUILD_DIR/include/fluidsynth.h" "$INSTALL_DIR/include/" 2>/dev/null || true
+}
+
+# -----------------------------------------------------------------------------
+# Function: Build libsidplayfp
+# -----------------------------------------------------------------------------
+build_libsidplayfp() {
+    local ABI=$1
+    echo "Building libsidplayfp for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/libsidplayfp"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+    local CONFIGURE_HOST=""
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "libsidplayfp source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    case "$ABI" in
+        "arm64-v8a")
+            CONFIGURE_HOST="aarch64-linux-android"
+            ;;
+        "armeabi-v7a")
+            CONFIGURE_HOST="arm-linux-androideabi"
+            ;;
+        "x86_64")
+            CONFIGURE_HOST="x86_64-linux-android"
+            ;;
+        "x86")
+            CONFIGURE_HOST="i686-linux-android"
+            ;;
+        *)
+            echo "Unsupported ABI for libsidplayfp: $ABI"
+            return 1
+            ;;
+    esac
+
+    if [ ! -f "$PROJECT_PATH/configure" ]; then
+        if ! command -v autoreconf >/dev/null 2>&1; then
+            echo "Error: libsidplayfp needs autotools bootstrap, but 'autoreconf' is missing."
+            return 1
+        fi
+
+        # libsidplayfp autotools expects these submodules to exist.
+        # Do not create placeholders; fail hard if missing.
+        if [ ! -d "$PROJECT_PATH/src/builders/exsid-builder/driver/m4" ] || \
+           [ ! -d "$PROJECT_PATH/src/builders/usbsid-builder/driver/m4" ]; then
+            echo "Error: libsidplayfp submodules are missing."
+            echo "Run:"
+            echo "  git -C \"$PROJECT_PATH\" submodule update --init --recursive"
+            return 1
+        fi
+
+        echo "Bootstrapping libsidplayfp with autoreconf..."
+        (cd "$PROJECT_PATH" && autoreconf -vfi) || {
+            echo "Error: libsidplayfp autoreconf failed."
+            echo "Hint: verify submodules are initialized:"
+            echo "  git -C \"$PROJECT_PATH\" submodule update --init --recursive"
+            return 1
+        }
+    fi
+
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
+
+    (
+        cd "$BUILD_DIR"
+        "$PROJECT_PATH/configure" \
+            --host="$CONFIGURE_HOST" \
+            --prefix="$INSTALL_DIR" \
+            --disable-shared \
+            --enable-static \
+            --disable-tests \
+            --enable-tests=no \
+            --enable-testsuite=no \
+            --with-usbsid=no \
+            --with-exsid=no \
+            CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
+            CXX="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang++" \
+            AR="$TOOLCHAIN/bin/llvm-ar" \
+            RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
+            STRIP="$TOOLCHAIN/bin/llvm-strip" \
+            CFLAGS="-fPIC" \
+            CXXFLAGS="-fPIC"
+
+        make -j$(nproc)
+        make install
+    )
+
+    if [ -f "$INSTALL_DIR/lib/libsidplayfp.a" ]; then
+        :
+    else
+        local built_lib
+        built_lib="$(find "$BUILD_DIR" -type f -name 'libsidplayfp.a' | head -n 1)"
+        if [ -z "$built_lib" ]; then
+            echo "Error: libsidplayfp static library not found after build."
+            return 1
+        fi
+        mkdir -p "$INSTALL_DIR/lib"
+        cp "$built_lib" "$INSTALL_DIR/lib/"
+    fi
+}
+
+# -----------------------------------------------------------------------------
 # Argument Parsing
 # -----------------------------------------------------------------------------
 TARGET_ABI=${1:-all}
@@ -530,6 +793,15 @@ normalize_lib_name() {
             ;;
         gme)
             echo "libgme"
+            ;;
+        sid|sidplayfp)
+            echo "libsidplayfp"
+            ;;
+        usf|lazyusf|lazyusf2)
+            echo "lazyusf2"
+            ;;
+        fluid|fluidsynth|libfluidsynth)
+            echo "fluidsynth"
             ;;
         *)
             echo "$lib"
@@ -640,6 +912,18 @@ for ABI in "${ABIS[@]}"; do
 
     if target_has_lib "libgme"; then
         build_libgme "$ABI"
+    fi
+
+    if target_has_lib "libsidplayfp"; then
+        build_libsidplayfp "$ABI"
+    fi
+
+    if target_has_lib "lazyusf2"; then
+        build_lazyusf2 "$ABI"
+    fi
+
+    if target_has_lib "fluidsynth"; then
+        build_fluidsynth "$ABI"
     fi
 done
 

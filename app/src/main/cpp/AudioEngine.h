@@ -66,6 +66,7 @@ public:
     std::string getOpenMptSampleNames();
     std::vector<float> getOpenMptChannelVuLevels();
     std::vector<float> getChannelScopeSamples(int samplesPerChannel);
+    std::vector<int32_t> getChannelScopeTextState(int maxChannels);
     std::string getVgmGameName();
     std::string getVgmSystemName();
     std::string getVgmReleaseDate();

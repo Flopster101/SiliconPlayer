@@ -564,6 +564,55 @@ std::vector<float> LibOpenMPTDecoder::getCurrentChannelScopeSamples(int samplesP
     return flattened;
 }
 
+std::vector<int32_t> LibOpenMPTDecoder::getChannelScopeTextState(int maxChannels) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!module) {
+        return {};
+    }
+    constexpr int kStride = 8;
+    constexpr int kFlagActive = 1 << 0;
+    constexpr int kFlagAmigaLeft = 1 << 1;
+    constexpr int kFlagAmigaRight = 1 << 2;
+    const int totalChannels = std::clamp(
+            moduleChannels > 0 ? moduleChannels : static_cast<int>(module->get_num_channels()),
+            0,
+            64
+    );
+    if (totalChannels <= 0) {
+        return {};
+    }
+    const int requested = std::clamp(maxChannels, 1, 64);
+    const int channels = std::min(totalChannels, requested);
+    std::vector<int32_t> flat(static_cast<size_t>(channels * kStride), -1);
+    for (int channel = 0; channel < channels; ++channel) {
+        const size_t base = static_cast<size_t>(channel * kStride);
+        const float vu = std::clamp(module->get_current_channel_vu_mono(channel), 0.0f, 1.0f);
+        const int volume = static_cast<int>(std::round(vu * 64.0f));
+        int flags = 0;
+        if (volume > 0) {
+            flags |= kFlagActive;
+        }
+        if (isAmigaModule) {
+            // ProTracker-style hard panning map per 4-channel group: L R R L.
+            const int mod4 = channel & 3;
+            if (mod4 == 0 || mod4 == 3) {
+                flags |= kFlagAmigaLeft;
+            } else {
+                flags |= kFlagAmigaRight;
+            }
+        }
+        flat[base + 0] = channel;
+        flat[base + 1] = -1;  // note (stub until native channel-state API is added)
+        flat[base + 2] = volume;
+        flat[base + 3] = -1;  // effect command (stub)
+        flat[base + 4] = -1;  // effect parameter (stub)
+        flat[base + 5] = -1;  // instrument index (stub)
+        flat[base + 6] = -1;  // sample index (stub)
+        flat[base + 7] = flags;
+    }
+    return flat;
+}
+
 std::string LibOpenMPTDecoder::getInstrumentNames() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return instrumentNames;

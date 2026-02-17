@@ -1,6 +1,11 @@
 package com.flopster101.siliconplayer
 
 object NativeBridge {
+    const val CHANNEL_SCOPE_TEXT_STATE_STRIDE = 8
+    const val CHANNEL_SCOPE_TEXT_FLAG_ACTIVE = 1 shl 0
+    const val CHANNEL_SCOPE_TEXT_FLAG_AMIGA_LEFT = 1 shl 1
+    const val CHANNEL_SCOPE_TEXT_FLAG_AMIGA_RIGHT = 1 shl 2
+
     init {
         System.loadLibrary("siliconplayer")
     }
@@ -46,6 +51,7 @@ object NativeBridge {
     external fun getOpenMptSampleNames(): String
     external fun getOpenMptChannelVuLevels(): FloatArray
     external fun getChannelScopeSamples(samplesPerChannel: Int): FloatArray
+    external fun getChannelScopeTextState(maxChannels: Int): IntArray
     external fun getVgmGameName(): String
     external fun getVgmSystemName(): String
     external fun getVgmReleaseDate(): String

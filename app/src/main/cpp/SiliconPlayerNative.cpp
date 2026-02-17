@@ -1,5 +1,6 @@
 #include <jni.h>
 #include <string>
+#include <cstdint>
 #include "AudioEngine.h"
 #include "decoders/DecoderRegistry.h"
 #include <vector>
@@ -25,6 +26,20 @@ static jfloatArray toJFloatArray(JNIEnv* env, const std::vector<float>& values) 
             0,
             static_cast<jsize>(values.size()),
             reinterpret_cast<const jfloat*>(values.data())
+    );
+    return array;
+}
+
+static jintArray toJIntArray(JNIEnv* env, const std::vector<int32_t>& values) {
+    jintArray array = env->NewIntArray(static_cast<jsize>(values.size()));
+    if (array == nullptr || values.empty()) {
+        return array;
+    }
+    env->SetIntArrayRegion(
+            array,
+            0,
+            static_cast<jsize>(values.size()),
+            reinterpret_cast<const jint*>(values.data())
     );
     return array;
 }
@@ -435,6 +450,14 @@ Java_com_flopster101_siliconplayer_NativeBridge_getChannelScopeSamples(JNIEnv* e
         return env->NewFloatArray(0);
     }
     return toJFloatArray(env, audioEngine->getChannelScopeSamples(static_cast<int>(samplesPerChannel)));
+}
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getChannelScopeTextState(JNIEnv* env, jobject, jint maxChannels) {
+    if (audioEngine == nullptr) {
+        return env->NewIntArray(0);
+    }
+    return toJIntArray(env, audioEngine->getChannelScopeTextState(static_cast<int>(maxChannels)));
 }
 
 extern "C" JNIEXPORT jstring JNICALL

@@ -46,6 +46,7 @@ public:
     int getModuleChannelCount();
     std::vector<float> getCurrentChannelVuLevels();
     std::vector<float> getCurrentChannelScopeSamples(int samplesPerChannel);
+    std::vector<int32_t> getChannelScopeTextState(int maxChannels) override;
     void setOutputSampleRate(int sampleRate) override;
     int getPlaybackCapabilities() const override {
         return PLAYBACK_CAP_SEEK |

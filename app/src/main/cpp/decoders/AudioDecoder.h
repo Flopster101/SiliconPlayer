@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 class AudioDecoder {
 public:
@@ -61,6 +62,9 @@ public:
     // Configuration
     virtual void setOption(const char* /*name*/, const char* /*value*/) {}
     virtual int getOptionApplyPolicy(const char* /*name*/) const { return OPTION_APPLY_LIVE; }
+    // Flat per-channel state payload for channel-scope text overlays.
+    // Stride/field semantics are defined on the app side.
+    virtual std::vector<int32_t> getChannelScopeTextState(int /*maxChannels*/) { return {}; }
     virtual const char* getName() const = 0; // Instance name
 };
 

@@ -81,6 +81,7 @@ object NativeBridge {
     external fun getSidClockName(): String
     external fun getSidSpeedName(): String
     external fun getSidCompatibilityName(): String
+    external fun getSidBackendName(): String
     external fun getSidChipCount(): Int
     external fun getSidModelSummary(): String
     external fun getSidBaseAddressSummary(): String

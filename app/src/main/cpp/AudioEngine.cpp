@@ -1890,6 +1890,13 @@ std::string AudioEngine::getSidCompatibilityName() {
     return sidDecoder ? sidDecoder->getSidCompatibilityName() : "";
 }
 
+std::string AudioEngine::getSidBackendName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    return sidDecoder ? sidDecoder->getSidBackendName() : "";
+}
+
 int AudioEngine::getSidChipCount() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return 0;

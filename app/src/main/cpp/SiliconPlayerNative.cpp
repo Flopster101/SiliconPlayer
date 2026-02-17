@@ -783,6 +783,13 @@ Java_com_flopster101_siliconplayer_NativeBridge_getSidCompatibilityName(JNIEnv* 
     return toJString(env, value);
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSidBackendName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getSidBackendName();
+    return toJString(env, value);
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getSidChipCount(JNIEnv*, jobject) {
     if (audioEngine == nullptr) return 0;

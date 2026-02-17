@@ -1279,6 +1279,7 @@ private fun TrackInfoDetailsDialog(
     var sidClockName by remember { mutableStateOf("") }
     var sidSpeedName by remember { mutableStateOf("") }
     var sidCompatibilityName by remember { mutableStateOf("") }
+    var sidBackendName by remember { mutableStateOf("") }
     var sidChipCount by remember { mutableIntStateOf(0) }
     var sidModelSummary by remember { mutableStateOf("") }
     var sidBaseAddressSummary by remember { mutableStateOf("") }
@@ -1377,6 +1378,7 @@ private fun TrackInfoDetailsDialog(
                 sidClockName = NativeBridge.getSidClockName()
                 sidSpeedName = NativeBridge.getSidSpeedName()
                 sidCompatibilityName = NativeBridge.getSidCompatibilityName()
+                sidBackendName = NativeBridge.getSidBackendName()
                 sidChipCount = NativeBridge.getSidChipCount()
                 sidModelSummary = NativeBridge.getSidModelSummary()
                 sidBaseAddressSummary = NativeBridge.getSidBaseAddressSummary()
@@ -1386,6 +1388,7 @@ private fun TrackInfoDetailsDialog(
                 sidClockName = ""
                 sidSpeedName = ""
                 sidCompatibilityName = ""
+                sidBackendName = ""
                 sidChipCount = 0
                 sidModelSummary = ""
                 sidBaseAddressSummary = ""
@@ -1484,6 +1487,7 @@ private fun TrackInfoDetailsDialog(
         }
         if (decoderName.equals("LibSIDPlayFP", ignoreCase = true)) {
             append('\n').append("[LibSIDPlayFP]").append('\n')
+            if (sidBackendName.isNotBlank()) row("Engine", sidBackendName)
             if (sidFormatName.isNotBlank()) row("Format name", sidFormatName)
             if (sidClockName.isNotBlank()) row("Clock", sidClockName)
             if (sidSpeedName.isNotBlank()) row("Speed", sidSpeedName)
@@ -1664,6 +1668,9 @@ private fun TrackInfoDetailsDialog(
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
+                                if (sidBackendName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Engine", sidBackendName)
+                                }
                                 if (sidFormatName.isNotBlank()) {
                                     TrackInfoDetailsRow("Format name", sidFormatName)
                                 }

@@ -2954,7 +2954,7 @@ private fun AppNavigation(
     }
 
     LaunchedEffect(sidPlayFpCoreSampleRateHz) {
-        val normalized = sidPlayFpCoreSampleRateHz.coerceIn(8000, 48000)
+        val normalized = if (sidPlayFpCoreSampleRateHz <= 0) 0 else sidPlayFpCoreSampleRateHz
         if (normalized != sidPlayFpCoreSampleRateHz) {
             sidPlayFpCoreSampleRateHz = normalized
             return@LaunchedEffect

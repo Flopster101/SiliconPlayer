@@ -2,6 +2,7 @@
 
 #include <android/log.h>
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <sstream>
 #include <vector>
@@ -11,6 +12,7 @@
 #include <sidplayfp/SidInfo.h>
 #include <sidplayfp/SidTune.h>
 #include <sidplayfp/SidTuneInfo.h>
+#include <sidplayfp/builders/residfp.h>
 #include <sidplayfp/builders/sidlite.h>
 
 #define LOG_TAG "LibSidPlayFpDecoder"
@@ -24,6 +26,8 @@ constexpr int kTransientEmptyPlayRetries = 4;
 constexpr double kDefaultSidDurationSeconds = 180.0;
 constexpr int kSidLiteMinSampleRateHz = 8000;
 constexpr int kSidLiteMaxSampleRateHz = 48000;
+constexpr int kSidGlobalMinSampleRateHz = 8000;
+constexpr int kSidGlobalMaxSampleRateHz = 192000;
 
 std::string safeString(const char* value) {
     return value ? std::string(value) : "";
@@ -54,8 +58,32 @@ int parseIntString(const std::string& raw, int fallback) {
     }
 }
 
-int clampSidLiteSampleRate(int sampleRateHz) {
-    return std::clamp(sampleRateHz, kSidLiteMinSampleRateHz, kSidLiteMaxSampleRateHz);
+SidBackend parseSidBackend(const std::string& raw) {
+    std::string normalized;
+    normalized.reserve(raw.size());
+    for (char ch : raw) {
+        normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+    if (normalized == "sidlite") return SidBackend::SIDLite;
+    return SidBackend::ReSIDfp;
+}
+
+int clampSampleRateForBackend(int sampleRateHz, SidBackend backend) {
+    const int globalClamped = std::clamp(sampleRateHz, kSidGlobalMinSampleRateHz, kSidGlobalMaxSampleRateHz);
+    if (backend == SidBackend::SIDLite) {
+        return std::clamp(globalClamped, kSidLiteMinSampleRateHz, kSidLiteMaxSampleRateHz);
+    }
+    return globalClamped;
+}
+
+std::unique_ptr<sidbuilder> createBuilderForBackend(SidBackend backend) {
+    switch (backend) {
+        case SidBackend::SIDLite:
+            return std::make_unique<SIDLiteBuilder>("SiliconPlayer SIDLite");
+        case SidBackend::ReSIDfp:
+        default:
+            return std::make_unique<ReSIDfpBuilder>("SiliconPlayer ReSIDfp");
+    }
 }
 
 std::string sidClockToString(SidTuneInfo::clock_t clock) {
@@ -110,7 +138,8 @@ std::vector<std::string> LibSidPlayFpDecoder::getSupportedExtensions() {
 
 bool LibSidPlayFpDecoder::applyConfigLocked() {
     if (!player || !config || !sidBuilder) return false;
-    config->frequency = static_cast<uint_least32_t>(requestedSampleRate);
+    const int normalizedSampleRate = clampSampleRateForBackend(requestedSampleRate, activeBackend);
+    config->frequency = static_cast<uint_least32_t>(normalizedSampleRate);
     config->playback = SidConfig::STEREO;
     config->samplingMethod = SidConfig::INTERPOLATE;
     config->sidEmulation = sidBuilder.get();
@@ -118,7 +147,7 @@ bool LibSidPlayFpDecoder::applyConfigLocked() {
         LOGE("sidplayfp config failed: %s", player->error());
         return false;
     }
-    activeSampleRate = requestedSampleRate;
+    activeSampleRate = normalizedSampleRate;
     return true;
 }
 
@@ -232,7 +261,8 @@ bool LibSidPlayFpDecoder::openInternalLocked(const char* path) {
     if (!path) return false;
 
     player = std::make_unique<sidplayfp>();
-    sidBuilder = std::make_unique<SIDLiteBuilder>("SiliconPlayer");
+    sidBuilder = createBuilderForBackend(selectedBackend);
+    activeBackend = selectedBackend;
     config = std::make_unique<SidConfig>(player->config());
 
     if (!applyConfigLocked()) {
@@ -438,7 +468,8 @@ int LibSidPlayFpDecoder::getSampleRate() {
 void LibSidPlayFpDecoder::setOutputSampleRate(int sampleRateHz) {
     if (sampleRateHz <= 0) return;
     std::lock_guard<std::mutex> lock(decodeMutex);
-    const int normalizedRate = clampSidLiteSampleRate(sampleRateHz);
+    const SidBackend backendForRate = player ? activeBackend : selectedBackend;
+    const int normalizedRate = clampSampleRateForBackend(sampleRateHz, backendForRate);
     if (requestedSampleRate == normalizedRate) return;
     requestedSampleRate = normalizedRate;
     // SID sample-rate changes are restart-required.
@@ -453,6 +484,10 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     const std::string optionName(name);
     const std::string optionValue(value);
+    if (optionName == "sidplayfp.backend") {
+        selectedBackend = parseSidBackend(optionValue);
+        return;
+    }
     if (optionName == "sidplayfp.unknown_duration_seconds") {
         const int parsed = parseIntString(optionValue, static_cast<int>(fallbackDurationSeconds));
         const int clamped = std::clamp(parsed, 1, 86400);
@@ -468,6 +503,9 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
 int LibSidPlayFpDecoder::getOptionApplyPolicy(const char* name) const {
     if (!name) return OPTION_APPLY_LIVE;
     const std::string optionName(name);
+    if (optionName == "sidplayfp.backend") {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
     if (optionName == "sidplayfp.unknown_duration_seconds") {
         return OPTION_APPLY_LIVE;
     }
@@ -559,6 +597,12 @@ std::string LibSidPlayFpDecoder::getSidSpeedName() {
 std::string LibSidPlayFpDecoder::getSidCompatibilityName() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return sidCompatibilityName;
+}
+
+std::string LibSidPlayFpDecoder::getSidBackendName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    const SidBackend backend = player ? activeBackend : selectedBackend;
+    return backend == SidBackend::SIDLite ? "SIDLite" : "ReSIDfp";
 }
 
 int LibSidPlayFpDecoder::getSidChipCountInfo() {

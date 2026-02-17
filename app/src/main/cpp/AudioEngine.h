@@ -97,6 +97,7 @@ public:
     std::string getSidClockName();
     std::string getSidSpeedName();
     std::string getSidCompatibilityName();
+    std::string getSidBackendName();
     int getSidChipCount();
     std::string getSidModelSummary();
     std::string getSidBaseAddressSummary();

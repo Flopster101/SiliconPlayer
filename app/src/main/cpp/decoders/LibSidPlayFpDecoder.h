@@ -11,7 +11,12 @@
 class sidplayfp;
 class SidTune;
 class SidConfig;
-class SIDLiteBuilder;
+class sidbuilder;
+
+enum class SidBackend {
+    ReSIDfp,
+    SIDLite
+};
 
 class LibSidPlayFpDecoder : public AudioDecoder {
 public:
@@ -42,6 +47,7 @@ public:
     std::string getSidClockName();
     std::string getSidSpeedName();
     std::string getSidCompatibilityName();
+    std::string getSidBackendName();
     int getSidChipCountInfo();
     std::string getSidModelSummary();
     std::string getSidBaseAddressSummary();
@@ -61,7 +67,7 @@ public:
 private:
     mutable std::mutex decodeMutex;
     std::unique_ptr<sidplayfp> player;
-    std::unique_ptr<SIDLiteBuilder> sidBuilder;
+    std::unique_ptr<sidbuilder> sidBuilder;
     std::unique_ptr<SidTune> tune;
     std::unique_ptr<SidConfig> config;
 
@@ -90,6 +96,8 @@ private:
     std::atomic<int> repeatMode { 0 }; // 0 none, 1 repeat track, 2 repeat loop-point style
     std::vector<int16_t> pendingMixedSamples;
     size_t pendingMixedOffset = 0;
+    SidBackend selectedBackend = SidBackend::ReSIDfp;
+    SidBackend activeBackend = SidBackend::ReSIDfp;
 
     bool openInternalLocked(const char* path);
     bool applyConfigLocked();

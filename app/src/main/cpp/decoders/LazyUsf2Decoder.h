@@ -43,7 +43,7 @@ public:
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override;
     double getPlaybackPositionSeconds() override;
-    TimelineMode getTimelineMode() const override { return TimelineMode::ContinuousLinear; }
+    TimelineMode getTimelineMode() const override { return TimelineMode::Discontinuous; }
 
     const char* getName() const override { return "LazyUSF2"; }
     static std::vector<std::string> getSupportedExtensions();

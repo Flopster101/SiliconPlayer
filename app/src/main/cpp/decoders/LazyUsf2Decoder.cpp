@@ -47,7 +47,6 @@ bool LazyUsf2Decoder::open(const char* path) {
     usf_clear(state);
     enableCompare = false;
     enableFifoFull = false;
-    useHleAudio = true;
     durationSeconds = 0.0;
     durationReliable = false;
     renderedFrames = 0;
@@ -114,7 +113,6 @@ void LazyUsf2Decoder::closeInternal() {
     durationReliable = false;
     enableCompare = false;
     enableFifoFull = false;
-    useHleAudio = true;
     title.clear();
     artist.clear();
     composer.clear();
@@ -134,37 +132,55 @@ int LazyUsf2Decoder::read(float* buffer, int numFrames) {
         return 0;
     }
 
-    if (durationSeconds > 0.0) {
-        const double playbackSeconds = static_cast<double>(renderedFrames) / outputSampleRate;
-        if (playbackSeconds >= durationSeconds) {
-            return 0;
+    const int mode = repeatMode.load();
+    const bool loopPointRepeat = (mode == 2);
+    const double endBoundarySeconds = loopPointRepeat ? 0.0 : durationSeconds;
+
+    int framesProduced = 0;
+    std::vector<int16_t> pcm(static_cast<size_t>(numFrames) * channels);
+
+    while (framesProduced < numFrames) {
+        int framesToRender = numFrames - framesProduced;
+
+        if (endBoundarySeconds > 0.0) {
+            const int64_t boundaryFrames =
+                    static_cast<int64_t>(std::llround(endBoundarySeconds * outputSampleRate));
+            const int64_t remaining = boundaryFrames - renderedFrames;
+            if (remaining <= 0) {
+                break;
+            }
+            framesToRender = static_cast<int>(std::min<int64_t>(framesToRender, remaining));
         }
+
+        if (framesToRender <= 0) {
+            break;
+        }
+
+        const size_t writeOffsetSamples = static_cast<size_t>(framesProduced) * channels;
+        const char* renderErr = usf_render_resampled(
+                state,
+                pcm.data() + writeOffsetSamples,
+                static_cast<size_t>(framesToRender),
+                outputSampleRate
+        );
+        if (renderErr != nullptr) {
+            LOGE("usf_render_resampled failed: %s", renderErr);
+            break;
+        }
+
+        renderedFrames += framesToRender;
+        framesProduced += framesToRender;
     }
 
-    int framesToRender = numFrames;
-    if (durationSeconds > 0.0) {
-        const int64_t durationFrames = static_cast<int64_t>(std::llround(durationSeconds * outputSampleRate));
-        const int64_t remaining = durationFrames - renderedFrames;
-        if (remaining <= 0) {
-            return 0;
-        }
-        framesToRender = static_cast<int>(std::min<int64_t>(framesToRender, remaining));
-    }
-
-    std::vector<int16_t> pcm(static_cast<size_t>(framesToRender) * channels);
-    const char* renderErr = usf_render_resampled(state, pcm.data(), static_cast<size_t>(framesToRender), outputSampleRate);
-    if (renderErr != nullptr) {
-        LOGE("usf_render_resampled failed: %s", renderErr);
+    if (framesProduced <= 0) {
         return 0;
     }
 
-    const size_t sampleCount = static_cast<size_t>(framesToRender) * channels;
+    const size_t sampleCount = static_cast<size_t>(framesProduced) * channels;
     for (size_t i = 0; i < sampleCount; ++i) {
         buffer[i] = static_cast<float>(pcm[i]) / 32768.0f;
     }
-
-    renderedFrames += framesToRender;
-    return framesToRender;
+    return framesProduced;
 }
 
 void LazyUsf2Decoder::seek(double seconds) {
@@ -314,11 +330,12 @@ int LazyUsf2Decoder::getOptionApplyPolicy(const char* name) const {
 }
 
 void LazyUsf2Decoder::setRepeatMode(int mode) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
     repeatMode.store(mode);
 }
 
 int LazyUsf2Decoder::getRepeatModeCapabilities() const {
-    return REPEAT_CAP_TRACK;
+    return REPEAT_CAP_TRACK | REPEAT_CAP_LOOP_POINT;
 }
 
 int LazyUsf2Decoder::getPlaybackCapabilities() const {

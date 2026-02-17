@@ -16,3 +16,6 @@
 [submodule "external/openssl"]
 	path = external/openssl
 	url = https://github.com/openssl/openssl
+[submodule "external/libsidplayfp"]
+	path = external/libsidplayfp
+	url = https://github.com/libsidplayfp/libsidplayfp

@@ -2225,21 +2225,26 @@ private fun AppNavigation(
     }
 
     fun refreshRepeatModeForTrack() {
-        val allowSubtuneRepeat = selectedFile == null || subtuneCount > 1
+        val allowTrackRepeat = selectedFile == null || duration > 0.0
+        val allowSubtuneRepeat = allowTrackRepeat && (selectedFile == null || subtuneCount > 1)
         activeRepeatMode = resolveActiveRepeatMode(
             preferredRepeatMode = preferredRepeatMode,
             repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags,
-            includeSubtuneRepeat = allowSubtuneRepeat
+            includeSubtuneRepeat = allowSubtuneRepeat,
+            includeTrackRepeat = allowTrackRepeat
         )
         applyRepeatModeToNative(activeRepeatMode)
     }
 
     fun cycleRepeatMode() {
         if (!supportsLiveRepeatMode(playbackCapabilitiesFlags)) return
+        val allowTrackRepeat = selectedFile == null || duration > 0.0
+        val allowSubtuneRepeat = allowTrackRepeat && (selectedFile == null || subtuneCount > 1)
         val next = cycleRepeatModeValue(
             activeRepeatMode = activeRepeatMode,
             repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags,
-            includeSubtuneRepeat = selectedFile == null || subtuneCount > 1
+            includeSubtuneRepeat = allowSubtuneRepeat,
+            includeTrackRepeat = allowTrackRepeat
         ) ?: return
         preferredRepeatMode = next
         activeRepeatMode = next

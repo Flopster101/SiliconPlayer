@@ -63,11 +63,17 @@ fun repeatModeCapabilitiesFlagsForFileFallback(file: File?): Int {
     return flags
 }
 
-fun availableRepeatModesForFlags(flags: Int, includeSubtuneRepeat: Boolean = false): List<RepeatMode> {
+fun availableRepeatModesForFlags(
+    flags: Int,
+    includeSubtuneRepeat: Boolean = false,
+    includeTrackRepeat: Boolean = true
+): List<RepeatMode> {
     val supportsLoopPointRepeat = (flags and REPEAT_CAP_LOOP_POINT) != 0
     return buildList {
         add(RepeatMode.None)
-        add(RepeatMode.Track)
+        if (includeTrackRepeat) {
+            add(RepeatMode.Track)
+        }
         if (includeSubtuneRepeat) {
             add(RepeatMode.Subtune)
         }
@@ -84,24 +90,37 @@ fun resolveRepeatModeForFile(preferredMode: RepeatMode, file: File?): RepeatMode
 fun resolveRepeatModeForFlags(
     preferredMode: RepeatMode,
     flags: Int,
-    includeSubtuneRepeat: Boolean = false
+    includeSubtuneRepeat: Boolean = false,
+    includeTrackRepeat: Boolean = true
 ): RepeatMode {
     val supportsLoopPointRepeat = (flags and REPEAT_CAP_LOOP_POINT) != 0
     return when (preferredMode) {
         RepeatMode.None -> RepeatMode.None
-        RepeatMode.Track -> RepeatMode.Track
+        RepeatMode.Track -> {
+            if (includeTrackRepeat) {
+                RepeatMode.Track
+            } else if (supportsLoopPointRepeat) {
+                RepeatMode.LoopPoint
+            } else {
+                RepeatMode.None
+            }
+        }
         RepeatMode.Subtune -> {
             if (includeSubtuneRepeat) {
                 RepeatMode.Subtune
-            } else {
+            } else if (includeTrackRepeat) {
                 RepeatMode.Track
+            } else if (supportsLoopPointRepeat) {
+                RepeatMode.LoopPoint
+            } else {
+                RepeatMode.None
             }
         }
         RepeatMode.LoopPoint -> {
             if (supportsLoopPointRepeat) {
                 RepeatMode.LoopPoint
             } else {
-                RepeatMode.Track
+                if (includeTrackRepeat) RepeatMode.Track else RepeatMode.None
             }
         }
     }

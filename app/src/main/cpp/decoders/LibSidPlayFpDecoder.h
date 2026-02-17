@@ -15,6 +15,7 @@ class SidConfig;
 class sidbuilder;
 
 enum class SidBackend {
+    ReSID,
     ReSIDfp,
     SIDLite
 };

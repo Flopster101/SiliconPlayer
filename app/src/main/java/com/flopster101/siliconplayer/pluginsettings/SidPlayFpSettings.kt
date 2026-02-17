@@ -40,6 +40,7 @@ internal class SidPlayFpSettings(
                     description = "Select SID emulation backend.",
                     selectedValue = backend,
                     options = listOf(
+                        IntChoice(2, "ReSID"),
                         IntChoice(0, "ReSIDfp"),
                         IntChoice(1, "SIDLite")
                     ),
@@ -96,7 +97,7 @@ internal class SidPlayFpSettings(
             custom {
                 PlayerSettingToggleCard(
                     title = "Digi boost (8580)",
-                    description = "Boosts 8580 volume-register digis (ReSIDfp only).",
+                    description = "Boosts 8580 volume-register digis.",
                     checked = digiBoost8580,
                     onCheckedChange = onDigiBoost8580Changed
                 )
@@ -146,8 +147,8 @@ internal class SidPlayFpSettings(
             spacer()
             custom {
                 PlayerSettingToggleCard(
-                    title = "Fast sampling (ReSIDfp)",
-                    description = "Use lower-cost sampling path for ReSIDfp.",
+                    title = "Fast sampling",
+                    description = "Use lower-cost SID sampling path.",
                     checked = reSidFpFastSampling,
                     onCheckedChange = onReSidFpFastSamplingChanged
                 )

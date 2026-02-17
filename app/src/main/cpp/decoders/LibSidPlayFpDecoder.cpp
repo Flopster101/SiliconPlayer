@@ -15,6 +15,7 @@
 #include <sidplayfp/SidTuneInfo.h>
 #include <sidplayfp/builders/residfp.h>
 #include <sidplayfp/builders/sidlite.h>
+#include "sid/ReSidBuilder.h"
 
 #define LOG_TAG "LibSidPlayFpDecoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -92,6 +93,7 @@ SidBackend parseSidBackend(const std::string& raw) {
     for (char ch : raw) {
         normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
     }
+    if (normalized == "2" || normalized == "resid") return SidBackend::ReSID;
     if (normalized == "1" || normalized == "sidlite") return SidBackend::SIDLite;
     return SidBackend::ReSIDfp;
 }
@@ -163,6 +165,8 @@ SidConfig::sid_cw_t parseCombinedWaveformsStrength(const std::string& raw, SidCo
 
 std::unique_ptr<sidbuilder> createBuilderForBackend(SidBackend backend) {
     switch (backend) {
+        case SidBackend::ReSID:
+            return std::make_unique<ReSidBuilder>("SiliconPlayer ReSID");
         case SidBackend::SIDLite:
             return std::make_unique<SIDLiteBuilder>("SiliconPlayer SIDLite");
         case SidBackend::ReSIDfp:
@@ -915,7 +919,15 @@ std::string LibSidPlayFpDecoder::getSidCompatibilityName() {
 std::string LibSidPlayFpDecoder::getSidBackendName() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     const SidBackend backend = player ? activeBackend : selectedBackend;
-    return backend == SidBackend::SIDLite ? "SIDLite" : "ReSIDfp";
+    switch (backend) {
+        case SidBackend::ReSID:
+            return "ReSID";
+        case SidBackend::SIDLite:
+            return "SIDLite";
+        case SidBackend::ReSIDfp:
+        default:
+            return "ReSIDfp";
+    }
 }
 
 int LibSidPlayFpDecoder::getSidChipCountInfo() {

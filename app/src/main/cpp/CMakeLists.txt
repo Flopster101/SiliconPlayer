@@ -20,6 +20,8 @@ add_library(
         SHARED
         SiliconPlayerNative.cpp
         AudioEngine.cpp
+        decoders/sid/ReSidBuilder.cpp
+        decoders/sid/ReSidEmu.cpp
         decoders/FFmpegDecoder.cpp
         decoders/DecoderRegistry.cpp
         decoders/LibOpenMPTDecoder.cpp
@@ -40,6 +42,8 @@ if (ANDROID)
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
+# ReSID backend implementation requires libsidplayfp internal SID emulation headers.
+include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
 
     # Find Android libraries
     find_library(log-lib log)
@@ -91,6 +95,9 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
     add_library(libresidfp STATIC IMPORTED)
     set_target_properties(libresidfp PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libresidfp.a")
 
+    add_library(libresid STATIC IMPORTED)
+    set_target_properties(libresid PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libresid.a")
+
     set(HAS_OPENSSL_PREBUILT FALSE)
     if (EXISTS "${PREBUILT_DIR}/lib/libssl.a" AND EXISTS "${PREBUILT_DIR}/lib/libcrypto.a")
         add_library(libssl STATIC IMPORTED)
@@ -120,6 +127,7 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
             libgme
             libsidplayfp
             libresidfp
+            libresid
             z # zlib is needed for openmpt/ffmpeg/vgm
     )
 

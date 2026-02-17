@@ -3045,7 +3045,7 @@ private fun AppNavigation(
     }
 
     LaunchedEffect(sidPlayFpBackend) {
-        val normalized = sidPlayFpBackend.coerceIn(0, 1)
+        val normalized = sidPlayFpBackend.coerceIn(0, 2)
         if (normalized != sidPlayFpBackend) {
             sidPlayFpBackend = normalized
             return@LaunchedEffect
@@ -3056,7 +3056,11 @@ private fun AppNavigation(
         applyCoreOptionWithPolicy(
             coreName = "LibSIDPlayFP",
             optionName = SidPlayFpOptionKeys.BACKEND,
-            optionValue = if (normalized == 1) "sidlite" else "residfp",
+            optionValue = when (normalized) {
+                1 -> "sidlite"
+                2 -> "resid"
+                else -> "residfp"
+            },
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
             optionLabel = "Engine"
         )

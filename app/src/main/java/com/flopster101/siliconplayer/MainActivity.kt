@@ -1528,6 +1528,38 @@ private fun AppNavigation(
             )
         )
     }
+    var sidPlayFpDigiBoost8580 by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                CorePreferenceKeys.SIDPLAYFP_DIGI_BOOST_8580,
+                SidPlayFpDefaults.digiBoost8580
+            )
+        )
+    }
+    var sidPlayFpFilterCurve6581Percent by remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.SIDPLAYFP_FILTER_CURVE_6581,
+                SidPlayFpDefaults.filterCurve6581Percent
+            )
+        )
+    }
+    var sidPlayFpFilterRange6581Percent by remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.SIDPLAYFP_FILTER_RANGE_6581,
+                SidPlayFpDefaults.filterRange6581Percent
+            )
+        )
+    }
+    var sidPlayFpFilterCurve8580Percent by remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.SIDPLAYFP_FILTER_CURVE_8580,
+                SidPlayFpDefaults.filterCurve8580Percent
+            )
+        )
+    }
     var sidPlayFpReSidFpFastSampling by remember {
         mutableStateOf(
             prefs.getBoolean(
@@ -3089,6 +3121,73 @@ private fun AppNavigation(
             optionValue = sidPlayFpFilter8580Enabled.toString(),
             policy = CoreOptionApplyPolicy.Live,
             optionLabel = "Filter for MOS8580"
+        )
+    }
+
+    LaunchedEffect(sidPlayFpDigiBoost8580) {
+        prefs.edit()
+            .putBoolean(CorePreferenceKeys.SIDPLAYFP_DIGI_BOOST_8580, sidPlayFpDigiBoost8580)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "LibSIDPlayFP",
+            optionName = SidPlayFpOptionKeys.DIGI_BOOST_8580,
+            optionValue = sidPlayFpDigiBoost8580.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Digi boost (8580)"
+        )
+    }
+
+    LaunchedEffect(sidPlayFpFilterCurve6581Percent) {
+        val normalized = sidPlayFpFilterCurve6581Percent.coerceIn(0, 100)
+        if (normalized != sidPlayFpFilterCurve6581Percent) {
+            sidPlayFpFilterCurve6581Percent = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.SIDPLAYFP_FILTER_CURVE_6581, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "LibSIDPlayFP",
+            optionName = SidPlayFpOptionKeys.FILTER_CURVE_6581,
+            optionValue = String.format(Locale.US, "%.2f", normalized / 100.0),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Filter curve 6581"
+        )
+    }
+
+    LaunchedEffect(sidPlayFpFilterRange6581Percent) {
+        val normalized = sidPlayFpFilterRange6581Percent.coerceIn(0, 100)
+        if (normalized != sidPlayFpFilterRange6581Percent) {
+            sidPlayFpFilterRange6581Percent = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.SIDPLAYFP_FILTER_RANGE_6581, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "LibSIDPlayFP",
+            optionName = SidPlayFpOptionKeys.FILTER_RANGE_6581,
+            optionValue = String.format(Locale.US, "%.2f", normalized / 100.0),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Filter range 6581"
+        )
+    }
+
+    LaunchedEffect(sidPlayFpFilterCurve8580Percent) {
+        val normalized = sidPlayFpFilterCurve8580Percent.coerceIn(0, 100)
+        if (normalized != sidPlayFpFilterCurve8580Percent) {
+            sidPlayFpFilterCurve8580Percent = normalized
+            return@LaunchedEffect
+        }
+        prefs.edit()
+            .putInt(CorePreferenceKeys.SIDPLAYFP_FILTER_CURVE_8580, normalized)
+            .apply()
+        applyCoreOptionWithPolicy(
+            coreName = "LibSIDPlayFP",
+            optionName = SidPlayFpOptionKeys.FILTER_CURVE_8580,
+            optionValue = String.format(Locale.US, "%.2f", normalized / 100.0),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Filter curve 8580"
         )
     }
 
@@ -4897,6 +4996,14 @@ private fun AppNavigation(
                         onSidPlayFpFilter6581EnabledChanged = { sidPlayFpFilter6581Enabled = it },
                         sidPlayFpFilter8580Enabled = sidPlayFpFilter8580Enabled,
                         onSidPlayFpFilter8580EnabledChanged = { sidPlayFpFilter8580Enabled = it },
+                        sidPlayFpDigiBoost8580 = sidPlayFpDigiBoost8580,
+                        onSidPlayFpDigiBoost8580Changed = { sidPlayFpDigiBoost8580 = it },
+                        sidPlayFpFilterCurve6581Percent = sidPlayFpFilterCurve6581Percent,
+                        onSidPlayFpFilterCurve6581PercentChanged = { sidPlayFpFilterCurve6581Percent = it },
+                        sidPlayFpFilterRange6581Percent = sidPlayFpFilterRange6581Percent,
+                        onSidPlayFpFilterRange6581PercentChanged = { sidPlayFpFilterRange6581Percent = it },
+                        sidPlayFpFilterCurve8580Percent = sidPlayFpFilterCurve8580Percent,
+                        onSidPlayFpFilterCurve8580PercentChanged = { sidPlayFpFilterCurve8580Percent = it },
                         sidPlayFpReSidFpFastSampling = sidPlayFpReSidFpFastSampling,
                         onSidPlayFpReSidFpFastSamplingChanged = { sidPlayFpReSidFpFastSampling = it },
                         sidPlayFpReSidFpCombinedWaveformsStrength = sidPlayFpReSidFpCombinedWaveformsStrength,
@@ -4988,6 +5095,9 @@ private fun AppNavigation(
                                 CorePreferenceKeys.SIDPLAYFP_BACKEND to sidPlayFpBackend,
                                 CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE to sidPlayFpClockMode,
                                 CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE to sidPlayFpSidModelMode,
+                                CorePreferenceKeys.SIDPLAYFP_FILTER_CURVE_6581 to sidPlayFpFilterCurve6581Percent,
+                                CorePreferenceKeys.SIDPLAYFP_FILTER_RANGE_6581 to sidPlayFpFilterRange6581Percent,
+                                CorePreferenceKeys.SIDPLAYFP_FILTER_CURVE_8580 to sidPlayFpFilterCurve8580Percent,
                                 CorePreferenceKeys.SIDPLAYFP_RESIDFP_COMBINED_WAVEFORMS_STRENGTH to sidPlayFpReSidFpCombinedWaveformsStrength,
                                 CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT to openMptStereoSeparationPercent,
                                 CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT to openMptStereoSeparationAmigaPercent,
@@ -5004,6 +5114,7 @@ private fun AppNavigation(
                                 CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE to gmeSpcUseNativeSampleRate,
                                 CorePreferenceKeys.SIDPLAYFP_FILTER_6581_ENABLED to sidPlayFpFilter6581Enabled,
                                 CorePreferenceKeys.SIDPLAYFP_FILTER_8580_ENABLED to sidPlayFpFilter8580Enabled,
+                                CorePreferenceKeys.SIDPLAYFP_DIGI_BOOST_8580 to sidPlayFpDigiBoost8580,
                                 CorePreferenceKeys.SIDPLAYFP_RESIDFP_FAST_SAMPLING to sidPlayFpReSidFpFastSampling,
                                 CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES to openMptAmigaResamplerApplyAllModules,
                                 CorePreferenceKeys.OPENMPT_FT2_XM_VOLUME_RAMPING to openMptFt2XmVolumeRamping,
@@ -5326,6 +5437,10 @@ private fun AppNavigation(
                             sidPlayFpSidModelMode = SidPlayFpDefaults.sidModelMode
                             sidPlayFpFilter6581Enabled = SidPlayFpDefaults.filter6581Enabled
                             sidPlayFpFilter8580Enabled = SidPlayFpDefaults.filter8580Enabled
+                            sidPlayFpDigiBoost8580 = SidPlayFpDefaults.digiBoost8580
+                            sidPlayFpFilterCurve6581Percent = SidPlayFpDefaults.filterCurve6581Percent
+                            sidPlayFpFilterRange6581Percent = SidPlayFpDefaults.filterRange6581Percent
+                            sidPlayFpFilterCurve8580Percent = SidPlayFpDefaults.filterCurve8580Percent
                             sidPlayFpReSidFpFastSampling = SidPlayFpDefaults.reSidFpFastSampling
                             sidPlayFpReSidFpCombinedWaveformsStrength = SidPlayFpDefaults.reSidFpCombinedWaveformsStrength
                             gmeTempoPercent = GmeDefaults.tempoPercent
@@ -5365,6 +5480,10 @@ private fun AppNavigation(
                                 remove(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE)
                                 remove(CorePreferenceKeys.SIDPLAYFP_FILTER_6581_ENABLED)
                                 remove(CorePreferenceKeys.SIDPLAYFP_FILTER_8580_ENABLED)
+                                remove(CorePreferenceKeys.SIDPLAYFP_DIGI_BOOST_8580)
+                                remove(CorePreferenceKeys.SIDPLAYFP_FILTER_CURVE_6581)
+                                remove(CorePreferenceKeys.SIDPLAYFP_FILTER_RANGE_6581)
+                                remove(CorePreferenceKeys.SIDPLAYFP_FILTER_CURVE_8580)
                                 remove(CorePreferenceKeys.SIDPLAYFP_RESIDFP_FAST_SAMPLING)
                                 remove(CorePreferenceKeys.SIDPLAYFP_RESIDFP_COMBINED_WAVEFORMS_STRENGTH)
                                 remove(CorePreferenceKeys.GME_TEMPO_PERCENT)
@@ -5541,6 +5660,10 @@ private fun AppNavigation(
                                     sidPlayFpSidModelMode = SidPlayFpDefaults.sidModelMode
                                     sidPlayFpFilter6581Enabled = SidPlayFpDefaults.filter6581Enabled
                                     sidPlayFpFilter8580Enabled = SidPlayFpDefaults.filter8580Enabled
+                                    sidPlayFpDigiBoost8580 = SidPlayFpDefaults.digiBoost8580
+                                    sidPlayFpFilterCurve6581Percent = SidPlayFpDefaults.filterCurve6581Percent
+                                    sidPlayFpFilterRange6581Percent = SidPlayFpDefaults.filterRange6581Percent
+                                    sidPlayFpFilterCurve8580Percent = SidPlayFpDefaults.filterCurve8580Percent
                                     sidPlayFpReSidFpFastSampling = SidPlayFpDefaults.reSidFpFastSampling
                                     sidPlayFpReSidFpCombinedWaveformsStrength = SidPlayFpDefaults.reSidFpCombinedWaveformsStrength
                                     prefs.edit().apply {
@@ -5550,6 +5673,10 @@ private fun AppNavigation(
                                         remove(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE)
                                         remove(CorePreferenceKeys.SIDPLAYFP_FILTER_6581_ENABLED)
                                         remove(CorePreferenceKeys.SIDPLAYFP_FILTER_8580_ENABLED)
+                                        remove(CorePreferenceKeys.SIDPLAYFP_DIGI_BOOST_8580)
+                                        remove(CorePreferenceKeys.SIDPLAYFP_FILTER_CURVE_6581)
+                                        remove(CorePreferenceKeys.SIDPLAYFP_FILTER_RANGE_6581)
+                                        remove(CorePreferenceKeys.SIDPLAYFP_FILTER_CURVE_8580)
                                         remove(CorePreferenceKeys.SIDPLAYFP_RESIDFP_FAST_SAMPLING)
                                         remove(CorePreferenceKeys.SIDPLAYFP_RESIDFP_COMBINED_WAVEFORMS_STRENGTH)
                                         apply()

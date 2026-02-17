@@ -35,6 +35,10 @@ object CorePreferenceKeys {
     const val SIDPLAYFP_SID_MODEL_MODE = "sidplayfp_sid_model_mode"
     const val SIDPLAYFP_FILTER_6581_ENABLED = "sidplayfp_filter_6581_enabled"
     const val SIDPLAYFP_FILTER_8580_ENABLED = "sidplayfp_filter_8580_enabled"
+    const val SIDPLAYFP_DIGI_BOOST_8580 = "sidplayfp_digiboost_8580"
+    const val SIDPLAYFP_FILTER_CURVE_6581 = "sidplayfp_filter_curve_6581"
+    const val SIDPLAYFP_FILTER_RANGE_6581 = "sidplayfp_filter_range_6581"
+    const val SIDPLAYFP_FILTER_CURVE_8580 = "sidplayfp_filter_curve_8580"
     const val SIDPLAYFP_RESIDFP_FAST_SAMPLING = "sidplayfp_residfp_fast_sampling"
     const val SIDPLAYFP_RESIDFP_COMBINED_WAVEFORMS_STRENGTH = "sidplayfp_residfp_combined_waveforms_strength"
     fun vgmPlayChipCoreKey(chipKey: String) = "vgmplay_chip_core_$chipKey"
@@ -88,6 +92,10 @@ object SidPlayFpDefaults {
     const val sidModelMode = 0 // 0 Auto, 1 MOS6581, 2 MOS8580
     const val filter6581Enabled = true
     const val filter8580Enabled = true
+    const val digiBoost8580 = false
+    const val filterCurve6581Percent = 50
+    const val filterRange6581Percent = 50
+    const val filterCurve8580Percent = 50
     const val reSidFpFastSampling = true
     const val reSidFpCombinedWaveformsStrength = 0 // 0 Average, 1 Weak, 2 Strong
 }

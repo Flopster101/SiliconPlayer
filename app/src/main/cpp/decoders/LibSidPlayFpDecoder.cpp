@@ -60,6 +60,17 @@ int parseIntString(const std::string& raw, int fallback) {
     }
 }
 
+double parseDoubleString(const std::string& raw, double fallback) {
+    try {
+        size_t consumed = 0;
+        const double parsed = std::stod(raw, &consumed);
+        if (consumed != raw.size()) return fallback;
+        return parsed;
+    } catch (...) {
+        return fallback;
+    }
+}
+
 bool parseBoolString(const std::string& raw, bool fallback) {
     std::string normalized;
     normalized.reserve(raw.size());
@@ -247,6 +258,7 @@ bool LibSidPlayFpDecoder::applyConfigLocked() {
             break;
     }
     config->samplingMethod = reSidFpFastSampling ? SidConfig::INTERPOLATE : SidConfig::RESAMPLE_INTERPOLATE;
+    config->digiBoost = digiBoost8580;
     config->sidEmulation = sidBuilder.get();
     if (!player->config(*config)) {
         LOGE("sidplayfp config failed: %s", player->error());
@@ -261,6 +273,9 @@ void LibSidPlayFpDecoder::applySidBackendOptionsLocked() {
     if (activeBackend != SidBackend::ReSIDfp) return;
     auto* reSidBuilder = static_cast<ReSIDfpBuilder*>(sidBuilder.get());
     if (!reSidBuilder) return;
+    reSidBuilder->filter6581Curve(reSidFpFilterCurve6581);
+    reSidBuilder->filter6581Range(reSidFpFilterRange6581);
+    reSidBuilder->filter8580Curve(reSidFpFilterCurve8580);
     reSidBuilder->combinedWaveformsStrength(reSidFpCombinedWaveformsStrength);
 }
 
@@ -708,6 +723,34 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
         }
         return;
     }
+    if (optionName == "sidplayfp.digiboost_8580") {
+        digiBoost8580 = parseBoolString(optionValue, digiBoost8580);
+        return;
+    }
+    if (optionName == "sidplayfp.filter_curve_6581") {
+        const double parsed = parseDoubleString(optionValue, reSidFpFilterCurve6581);
+        reSidFpFilterCurve6581 = std::clamp(parsed, 0.0, 1.0);
+        if (player && activeBackend == SidBackend::ReSIDfp) {
+            applySidBackendOptionsLocked();
+        }
+        return;
+    }
+    if (optionName == "sidplayfp.filter_range_6581") {
+        const double parsed = parseDoubleString(optionValue, reSidFpFilterRange6581);
+        reSidFpFilterRange6581 = std::clamp(parsed, 0.0, 1.0);
+        if (player && activeBackend == SidBackend::ReSIDfp) {
+            applySidBackendOptionsLocked();
+        }
+        return;
+    }
+    if (optionName == "sidplayfp.filter_curve_8580") {
+        const double parsed = parseDoubleString(optionValue, reSidFpFilterCurve8580);
+        reSidFpFilterCurve8580 = std::clamp(parsed, 0.0, 1.0);
+        if (player && activeBackend == SidBackend::ReSIDfp) {
+            applySidBackendOptionsLocked();
+        }
+        return;
+    }
     if (optionName == "sidplayfp.residfp_fast_sampling") {
         reSidFpFastSampling = parseBoolString(optionValue, reSidFpFastSampling);
         return;
@@ -756,6 +799,18 @@ int LibSidPlayFpDecoder::getOptionApplyPolicy(const char* name) const {
         return OPTION_APPLY_LIVE;
     }
     if (optionName == "sidplayfp.filter_8580_enabled") {
+        return OPTION_APPLY_LIVE;
+    }
+    if (optionName == "sidplayfp.digiboost_8580") {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    if (optionName == "sidplayfp.filter_curve_6581") {
+        return OPTION_APPLY_LIVE;
+    }
+    if (optionName == "sidplayfp.filter_range_6581") {
+        return OPTION_APPLY_LIVE;
+    }
+    if (optionName == "sidplayfp.filter_curve_8580") {
         return OPTION_APPLY_LIVE;
     }
     if (optionName == "sidplayfp.residfp_fast_sampling") {

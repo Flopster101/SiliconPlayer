@@ -118,6 +118,10 @@ private:
     SidModelMode sidModelMode = SidModelMode::Auto;
     bool filter6581Enabled = true;
     bool filter8580Enabled = true;
+    bool digiBoost8580 = false;
+    double reSidFpFilterCurve6581 = 0.5;
+    double reSidFpFilterRange6581 = 0.5;
+    double reSidFpFilterCurve8580 = 0.5;
     bool reSidFpFastSampling = true;
     SidConfig::sid_cw_t reSidFpCombinedWaveformsStrength = SidConfig::AVERAGE;
 

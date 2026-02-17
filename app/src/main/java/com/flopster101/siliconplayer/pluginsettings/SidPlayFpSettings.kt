@@ -3,6 +3,7 @@ package com.flopster101.siliconplayer.pluginsettings
 import androidx.compose.runtime.Composable
 import com.flopster101.siliconplayer.IntChoice
 import com.flopster101.siliconplayer.OpenMptChoiceSelectorCard
+import com.flopster101.siliconplayer.OpenMptDialogSliderCard
 import com.flopster101.siliconplayer.PlayerSettingToggleCard
 
 internal class SidPlayFpSettings(
@@ -11,6 +12,10 @@ internal class SidPlayFpSettings(
     private val sidModelMode: Int,
     private val filter6581Enabled: Boolean,
     private val filter8580Enabled: Boolean,
+    private val digiBoost8580: Boolean,
+    private val filterCurve6581Percent: Int,
+    private val filterRange6581Percent: Int,
+    private val filterCurve8580Percent: Int,
     private val reSidFpFastSampling: Boolean,
     private val reSidFpCombinedWaveformsStrength: Int,
     private val onBackendChanged: (Int) -> Unit,
@@ -18,6 +23,10 @@ internal class SidPlayFpSettings(
     private val onSidModelModeChanged: (Int) -> Unit,
     private val onFilter6581EnabledChanged: (Boolean) -> Unit,
     private val onFilter8580EnabledChanged: (Boolean) -> Unit,
+    private val onDigiBoost8580Changed: (Boolean) -> Unit,
+    private val onFilterCurve6581PercentChanged: (Int) -> Unit,
+    private val onFilterRange6581PercentChanged: (Int) -> Unit,
+    private val onFilterCurve8580PercentChanged: (Int) -> Unit,
     private val onReSidFpFastSamplingChanged: (Boolean) -> Unit,
     private val onReSidFpCombinedWaveformsStrengthChanged: (Int) -> Unit
 ) : PluginSettings {
@@ -81,6 +90,57 @@ internal class SidPlayFpSettings(
                     description = "Enable SID filter emulation for 8580 model chips.",
                     checked = filter8580Enabled,
                     onCheckedChange = onFilter8580EnabledChanged
+                )
+            }
+            spacer()
+            custom {
+                PlayerSettingToggleCard(
+                    title = "Digi boost (8580)",
+                    description = "Boosts 8580 volume-register digis (ReSIDfp only).",
+                    checked = digiBoost8580,
+                    onCheckedChange = onDigiBoost8580Changed
+                )
+            }
+            spacer()
+            custom {
+                OpenMptDialogSliderCard(
+                    title = "Filter curve 6581",
+                    description = "ReSIDfp 6581 filter curve.",
+                    value = filterCurve6581Percent,
+                    valueRange = 0..100,
+                    step = 1,
+                    valueLabel = { "${it}%" },
+                    showNudgeButtons = true,
+                    nudgeStep = 1,
+                    onValueChanged = onFilterCurve6581PercentChanged
+                )
+            }
+            spacer()
+            custom {
+                OpenMptDialogSliderCard(
+                    title = "Filter range 6581",
+                    description = "ReSIDfp 6581 filter range adjustment.",
+                    value = filterRange6581Percent,
+                    valueRange = 0..100,
+                    step = 1,
+                    valueLabel = { "${it}%" },
+                    showNudgeButtons = true,
+                    nudgeStep = 1,
+                    onValueChanged = onFilterRange6581PercentChanged
+                )
+            }
+            spacer()
+            custom {
+                OpenMptDialogSliderCard(
+                    title = "Filter curve 8580",
+                    description = "ReSIDfp 8580 filter curve.",
+                    value = filterCurve8580Percent,
+                    valueRange = 0..100,
+                    step = 1,
+                    valueLabel = { "${it}%" },
+                    showNudgeButtons = true,
+                    nudgeStep = 1,
+                    onValueChanged = onFilterCurve8580PercentChanged
                 )
             }
             spacer()

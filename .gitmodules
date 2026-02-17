@@ -19,3 +19,6 @@
 [submodule "external/libsidplayfp"]
 	path = external/libsidplayfp
 	url = https://github.com/libsidplayfp/libsidplayfp
+[submodule "external/lazyusf2"]
+	path = external/lazyusf2
+	url = https://bitbucket.org/losnoco/lazyusf2/

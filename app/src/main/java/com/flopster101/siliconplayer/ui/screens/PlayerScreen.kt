@@ -1275,6 +1275,14 @@ private fun TrackInfoDetailsDialog(
     var gmeHasLoopPoint by remember { mutableStateOf(false) }
     var gmeLoopStartMs by remember { mutableIntStateOf(-1) }
     var gmeLoopLengthMs by remember { mutableIntStateOf(-1) }
+    var lazyUsf2GameName by remember { mutableStateOf("") }
+    var lazyUsf2Copyright by remember { mutableStateOf("") }
+    var lazyUsf2Year by remember { mutableStateOf("") }
+    var lazyUsf2UsfBy by remember { mutableStateOf("") }
+    var lazyUsf2LengthTag by remember { mutableStateOf("") }
+    var lazyUsf2FadeTag by remember { mutableStateOf("") }
+    var lazyUsf2EnableCompare by remember { mutableStateOf(false) }
+    var lazyUsf2EnableFifoFull by remember { mutableStateOf(false) }
     var sidFormatName by remember { mutableStateOf("") }
     var sidClockName by remember { mutableStateOf("") }
     var sidSpeedName by remember { mutableStateOf("") }
@@ -1373,6 +1381,25 @@ private fun TrackInfoDetailsDialog(
                 gmeHasLoopPoint = false
                 gmeLoopStartMs = -1
                 gmeLoopLengthMs = -1
+            }
+            if (decoderName.equals("LazyUSF2", ignoreCase = true)) {
+                lazyUsf2GameName = NativeBridge.getLazyUsf2GameName()
+                lazyUsf2Copyright = NativeBridge.getLazyUsf2Copyright()
+                lazyUsf2Year = NativeBridge.getLazyUsf2Year()
+                lazyUsf2UsfBy = NativeBridge.getLazyUsf2UsfBy()
+                lazyUsf2LengthTag = NativeBridge.getLazyUsf2LengthTag()
+                lazyUsf2FadeTag = NativeBridge.getLazyUsf2FadeTag()
+                lazyUsf2EnableCompare = NativeBridge.getLazyUsf2EnableCompare()
+                lazyUsf2EnableFifoFull = NativeBridge.getLazyUsf2EnableFifoFull()
+            } else {
+                lazyUsf2GameName = ""
+                lazyUsf2Copyright = ""
+                lazyUsf2Year = ""
+                lazyUsf2UsfBy = ""
+                lazyUsf2LengthTag = ""
+                lazyUsf2FadeTag = ""
+                lazyUsf2EnableCompare = false
+                lazyUsf2EnableFifoFull = false
             }
             if (decoderName.equals("LibSIDPlayFP", ignoreCase = true)) {
                 sidFormatName = NativeBridge.getSidFormatName()
@@ -1487,6 +1514,17 @@ private fun TrackInfoDetailsDialog(
             if (gmeCopyright.isNotBlank()) row("Copyright", gmeCopyright)
             if (gmeDumper.isNotBlank()) row("Dumper", gmeDumper)
             if (gmeComment.isNotBlank()) row("Comment", gmeComment)
+        }
+        if (decoderName.equals("LazyUSF2", ignoreCase = true)) {
+            append('\n').append("[LazyUSF2]").append('\n')
+            if (lazyUsf2GameName.isNotBlank()) row("Game", lazyUsf2GameName)
+            if (lazyUsf2Year.isNotBlank()) row("Year", lazyUsf2Year)
+            if (lazyUsf2UsfBy.isNotBlank()) row("USF ripper", lazyUsf2UsfBy)
+            if (lazyUsf2Copyright.isNotBlank()) row("Copyright", lazyUsf2Copyright)
+            if (lazyUsf2LengthTag.isNotBlank()) row("Tagged length", lazyUsf2LengthTag)
+            if (lazyUsf2FadeTag.isNotBlank()) row("Tagged fade", lazyUsf2FadeTag)
+            row("Compare hack", if (lazyUsf2EnableCompare) "Enabled" else "Disabled")
+            row("FIFO full hack", if (lazyUsf2EnableFifoFull) "Enabled" else "Disabled")
         }
         if (decoderName.equals("LibSIDPlayFP", ignoreCase = true)) {
             append('\n').append("[LibSIDPlayFP]").append('\n')
@@ -1664,6 +1702,34 @@ private fun TrackInfoDetailsDialog(
                                 if (gmeComment.isNotBlank()) {
                                     TrackInfoDetailsRow("Comment", gmeComment)
                                 }
+                            }
+                            if (decoderName.equals("LazyUSF2", ignoreCase = true)) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "LazyUSF2",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (lazyUsf2GameName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Game", lazyUsf2GameName)
+                                }
+                                if (lazyUsf2Year.isNotBlank()) {
+                                    TrackInfoDetailsRow("Year", lazyUsf2Year)
+                                }
+                                if (lazyUsf2UsfBy.isNotBlank()) {
+                                    TrackInfoDetailsRow("USF ripper", lazyUsf2UsfBy)
+                                }
+                                if (lazyUsf2Copyright.isNotBlank()) {
+                                    TrackInfoDetailsRow("Copyright", lazyUsf2Copyright)
+                                }
+                                if (lazyUsf2LengthTag.isNotBlank()) {
+                                    TrackInfoDetailsRow("Tagged length", lazyUsf2LengthTag)
+                                }
+                                if (lazyUsf2FadeTag.isNotBlank()) {
+                                    TrackInfoDetailsRow("Tagged fade", lazyUsf2FadeTag)
+                                }
+                                TrackInfoDetailsRow("Compare hack", if (lazyUsf2EnableCompare) "Enabled" else "Disabled")
+                                TrackInfoDetailsRow("FIFO full hack", if (lazyUsf2EnableFifoFull) "Enabled" else "Disabled")
                             }
                             if (decoderName.equals("LibSIDPlayFP", ignoreCase = true)) {
                                 Spacer(modifier = Modifier.height(6.dp))

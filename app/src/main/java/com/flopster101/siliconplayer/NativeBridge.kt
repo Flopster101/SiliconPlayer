@@ -77,6 +77,14 @@ object NativeBridge {
     external fun getGmeHasLoopPoint(): Boolean
     external fun getGmeLoopStartMs(): Int
     external fun getGmeLoopLengthMs(): Int
+    external fun getLazyUsf2GameName(): String
+    external fun getLazyUsf2Copyright(): String
+    external fun getLazyUsf2Year(): String
+    external fun getLazyUsf2UsfBy(): String
+    external fun getLazyUsf2LengthTag(): String
+    external fun getLazyUsf2FadeTag(): String
+    external fun getLazyUsf2EnableCompare(): Boolean
+    external fun getLazyUsf2EnableFifoFull(): Boolean
     external fun getSidFormatName(): String
     external fun getSidClockName(): String
     external fun getSidSpeedName(): String

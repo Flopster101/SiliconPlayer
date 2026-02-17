@@ -93,6 +93,14 @@ public:
     bool getGmeHasLoopPoint();
     int getGmeLoopStartMs();
     int getGmeLoopLengthMs();
+    std::string getLazyUsf2GameName();
+    std::string getLazyUsf2Copyright();
+    std::string getLazyUsf2Year();
+    std::string getLazyUsf2UsfBy();
+    std::string getLazyUsf2LengthTag();
+    std::string getLazyUsf2FadeTag();
+    bool getLazyUsf2EnableCompare();
+    bool getLazyUsf2EnableFifoFull();
     std::string getSidFormatName();
     std::string getSidClockName();
     std::string getSidSpeedName();

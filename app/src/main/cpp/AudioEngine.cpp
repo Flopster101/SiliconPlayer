@@ -1867,6 +1867,62 @@ int AudioEngine::getGmeLoopLengthMs() {
     return gmeDecoder ? gmeDecoder->getLoopLengthMsInfo() : -1;
 }
 
+std::string AudioEngine::getLazyUsf2GameName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* lazyUsf2Decoder = dynamic_cast<LazyUsf2Decoder*>(decoder.get());
+    return lazyUsf2Decoder ? lazyUsf2Decoder->getGameName() : "";
+}
+
+std::string AudioEngine::getLazyUsf2Copyright() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* lazyUsf2Decoder = dynamic_cast<LazyUsf2Decoder*>(decoder.get());
+    return lazyUsf2Decoder ? lazyUsf2Decoder->getCopyright() : "";
+}
+
+std::string AudioEngine::getLazyUsf2Year() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* lazyUsf2Decoder = dynamic_cast<LazyUsf2Decoder*>(decoder.get());
+    return lazyUsf2Decoder ? lazyUsf2Decoder->getYear() : "";
+}
+
+std::string AudioEngine::getLazyUsf2UsfBy() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* lazyUsf2Decoder = dynamic_cast<LazyUsf2Decoder*>(decoder.get());
+    return lazyUsf2Decoder ? lazyUsf2Decoder->getUsfBy() : "";
+}
+
+std::string AudioEngine::getLazyUsf2LengthTag() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* lazyUsf2Decoder = dynamic_cast<LazyUsf2Decoder*>(decoder.get());
+    return lazyUsf2Decoder ? lazyUsf2Decoder->getLengthTag() : "";
+}
+
+std::string AudioEngine::getLazyUsf2FadeTag() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* lazyUsf2Decoder = dynamic_cast<LazyUsf2Decoder*>(decoder.get());
+    return lazyUsf2Decoder ? lazyUsf2Decoder->getFadeTag() : "";
+}
+
+bool AudioEngine::getLazyUsf2EnableCompare() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return false;
+    auto* lazyUsf2Decoder = dynamic_cast<LazyUsf2Decoder*>(decoder.get());
+    return lazyUsf2Decoder ? lazyUsf2Decoder->getEnableCompare() : false;
+}
+
+bool AudioEngine::getLazyUsf2EnableFifoFull() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return false;
+    auto* lazyUsf2Decoder = dynamic_cast<LazyUsf2Decoder*>(decoder.get());
+    return lazyUsf2Decoder ? lazyUsf2Decoder->getEnableFifoFull() : false;
+}
+
 std::string AudioEngine::getSidFormatName() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";

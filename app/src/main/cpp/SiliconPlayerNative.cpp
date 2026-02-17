@@ -756,6 +756,60 @@ Java_com_flopster101_siliconplayer_NativeBridge_getGmeLoopLengthMs(JNIEnv*, jobj
 }
 
 extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getLazyUsf2GameName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getLazyUsf2GameName();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getLazyUsf2Copyright(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getLazyUsf2Copyright();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getLazyUsf2Year(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getLazyUsf2Year();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getLazyUsf2UsfBy(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getLazyUsf2UsfBy();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getLazyUsf2LengthTag(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getLazyUsf2LengthTag();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getLazyUsf2FadeTag(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getLazyUsf2FadeTag();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getLazyUsf2EnableCompare(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return JNI_FALSE;
+    return audioEngine->getLazyUsf2EnableCompare() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getLazyUsf2EnableFifoFull(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return JNI_FALSE;
+    return audioEngine->getLazyUsf2EnableFifoFull() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getSidFormatName(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getSidFormatName();

@@ -55,6 +55,12 @@ bool LazyUsf2Decoder::open(const char* path) {
     artist.clear();
     composer.clear();
     genre = "USF";
+    gameName.clear();
+    copyrightText.clear();
+    year.clear();
+    usfBy.clear();
+    lengthTag.clear();
+    fadeTag.clear();
 
     if (!loadPsfTree(sourcePath)) {
         closeInternal();
@@ -110,6 +116,12 @@ void LazyUsf2Decoder::closeInternal() {
     artist.clear();
     composer.clear();
     genre.clear();
+    gameName.clear();
+    copyrightText.clear();
+    year.clear();
+    usfBy.clear();
+    lengthTag.clear();
+    fadeTag.clear();
     sourcePath.clear();
 }
 
@@ -224,6 +236,46 @@ std::string LazyUsf2Decoder::getComposer() {
 std::string LazyUsf2Decoder::getGenre() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return genre;
+}
+
+std::string LazyUsf2Decoder::getGameName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return gameName;
+}
+
+std::string LazyUsf2Decoder::getCopyright() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return copyrightText;
+}
+
+std::string LazyUsf2Decoder::getYear() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return year;
+}
+
+std::string LazyUsf2Decoder::getUsfBy() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return usfBy;
+}
+
+std::string LazyUsf2Decoder::getLengthTag() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return lengthTag;
+}
+
+std::string LazyUsf2Decoder::getFadeTag() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return fadeTag;
+}
+
+bool LazyUsf2Decoder::getEnableCompare() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return enableCompare;
+}
+
+bool LazyUsf2Decoder::getEnableFifoFull() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return enableFifoFull;
 }
 
 void LazyUsf2Decoder::setOutputSampleRate(int sampleRate) {
@@ -454,15 +506,21 @@ bool LazyUsf2Decoder::applyMetadataFromTags(const std::unordered_map<std::string
     if (composer.empty()) {
         composer = artist;
     }
+    gameName = getTag("game");
+    copyrightText = getTag("copyright");
+    year = getTag("year");
+    usfBy = getTag("usfby");
     genre = getTag("genre");
     if (genre.empty()) {
         genre = "USF";
     }
 
+    lengthTag = getTag("length");
+    fadeTag = getTag("fade");
     bool lengthOk = false;
     bool fadeOk = false;
-    const unsigned long lengthMs = parsePsfTimeMs(getTag("length"), lengthOk);
-    const unsigned long fadeMs = parsePsfTimeMs(getTag("fade"), fadeOk);
+    const unsigned long lengthMs = parsePsfTimeMs(lengthTag, lengthOk);
+    const unsigned long fadeMs = parsePsfTimeMs(fadeTag, fadeOk);
     if (lengthOk) {
         const unsigned long totalMs = lengthMs + (fadeOk ? fadeMs : 0u);
         durationSeconds = static_cast<double>(totalMs) / 1000.0;

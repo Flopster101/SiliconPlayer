@@ -28,6 +28,14 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    std::string getGameName();
+    std::string getCopyright();
+    std::string getYear();
+    std::string getUsfBy();
+    std::string getLengthTag();
+    std::string getFadeTag();
+    bool getEnableCompare();
+    bool getEnableFifoFull();
     void setOutputSampleRate(int sampleRate) override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
@@ -65,6 +73,12 @@ private:
     std::string artist;
     std::string composer;
     std::string genre;
+    std::string gameName;
+    std::string copyrightText;
+    std::string year;
+    std::string usfBy;
+    std::string lengthTag;
+    std::string fadeTag;
     std::string sourcePath;
 
     void closeInternal();

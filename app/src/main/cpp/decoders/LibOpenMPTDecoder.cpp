@@ -19,6 +19,11 @@ concept HasChannelScopeApi = requires(T moduleRef, int channel, float *scope, in
     moduleRef.get_current_channel_scope(channel, scope, count);
 };
 
+template <typename T>
+concept HasChannelTextStateApi = requires(T moduleRef, int channel, int32_t *state, int count) {
+    moduleRef.get_current_channel_text_state(channel, state, count);
+};
+
 std::string getFirstNonEmptyMetadata(openmpt::module* module, const std::initializer_list<const char*>& keys) {
     if (!module) {
         return "";
@@ -569,6 +574,9 @@ std::vector<int32_t> LibOpenMPTDecoder::getChannelScopeTextState(int maxChannels
     if (!module) {
         return {};
     }
+    if constexpr (!HasChannelTextStateApi<openmpt::module>) {
+        return {};
+    }
     constexpr int kStride = 8;
     constexpr int kFlagActive = 1 << 0;
     constexpr int kFlagAmigaLeft = 1 << 1;
@@ -586,10 +594,16 @@ std::vector<int32_t> LibOpenMPTDecoder::getChannelScopeTextState(int maxChannels
     std::vector<int32_t> flat(static_cast<size_t>(channels * kStride), -1);
     for (int channel = 0; channel < channels; ++channel) {
         const size_t base = static_cast<size_t>(channel * kStride);
-        const float vu = std::clamp(module->get_current_channel_vu_mono(channel), 0.0f, 1.0f);
-        const int volume = static_cast<int>(std::round(vu * 64.0f));
+        int32_t nativeFields[6] = { -1, 0, 0, -1, -1, -1 };
+        const int written = static_cast<int>(module->get_current_channel_text_state(channel, nativeFields, 6));
+        const int note = (written >= 1) ? nativeFields[0] : -1;
+        const int volume = (written >= 2) ? std::clamp(nativeFields[1], 0, 256) : 0;
+        const int effectLetter = (written >= 3) ? nativeFields[2] : 0;
+        const int effectParam = (written >= 4) ? nativeFields[3] : -1;
+        const int instrument = (written >= 5) ? nativeFields[4] : -1;
+        const int sample = (written >= 6) ? nativeFields[5] : -1;
         int flags = 0;
-        if (volume > 0) {
+        if (volume > 0 || note > 0 || instrument > 0 || sample > 0) {
             flags |= kFlagActive;
         }
         if (isAmigaModule) {
@@ -602,12 +616,12 @@ std::vector<int32_t> LibOpenMPTDecoder::getChannelScopeTextState(int maxChannels
             }
         }
         flat[base + 0] = channel;
-        flat[base + 1] = -1;  // note (stub until native channel-state API is added)
+        flat[base + 1] = note;
         flat[base + 2] = volume;
-        flat[base + 3] = -1;  // effect command (stub)
-        flat[base + 4] = -1;  // effect parameter (stub)
-        flat[base + 5] = -1;  // instrument index (stub)
-        flat[base + 6] = -1;  // sample index (stub)
+        flat[base + 3] = effectLetter;
+        flat[base + 4] = effectParam;
+        flat[base + 5] = instrument;
+        flat[base + 6] = sample;
         flat[base + 7] = flags;
     }
     return flat;

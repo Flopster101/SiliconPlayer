@@ -196,6 +196,39 @@ private suspend fun buildChannelScopeHistoriesAsync(
     }
 }
 
+internal data class ChannelScopeChannelTextState(
+    val channelIndex: Int,
+    val note: Int,
+    val volume: Int,
+    val effectLetterAscii: Int,
+    val effectParam: Int,
+    val instrumentIndex: Int,
+    val sampleIndex: Int,
+    val flags: Int
+)
+
+private fun parseChannelScopeTextStates(
+    flat: IntArray
+): List<ChannelScopeChannelTextState> {
+    val stride = NativeBridge.CHANNEL_SCOPE_TEXT_STATE_STRIDE
+    if (stride <= 0 || flat.isEmpty()) return emptyList()
+    val channels = flat.size / stride
+    if (channels <= 0) return emptyList()
+    return List(channels) { channel ->
+        val base = channel * stride
+        ChannelScopeChannelTextState(
+            channelIndex = flat.getOrElse(base + 0) { channel },
+            note = flat.getOrElse(base + 1) { -1 },
+            volume = flat.getOrElse(base + 2) { 0 },
+            effectLetterAscii = flat.getOrElse(base + 3) { 0 },
+            effectParam = flat.getOrElse(base + 4) { -1 },
+            instrumentIndex = flat.getOrElse(base + 5) { -1 },
+            sampleIndex = flat.getOrElse(base + 6) { -1 },
+            flags = flat.getOrElse(base + 7) { 0 }
+        )
+    }
+}
+
 private fun computeChannelScopeTriggerIndices(
     histories: List<FloatArray>,
     triggerModeNative: Int,
@@ -482,6 +515,7 @@ internal fun rememberChannelScopePrefs(
 
 private data class ChannelScopeVisualState(
     val channelHistories: List<FloatArray>,
+    val channelTextStates: List<ChannelScopeChannelTextState>,
     val triggerModeNative: Int,
     val triggerIndices: IntArray,
     val renderBackend: VisualizationRenderBackend,
@@ -553,6 +587,7 @@ internal fun AlbumArtPlaceholder(
     var visChannelScopeHistories by remember { mutableStateOf<List<FloatArray>>(emptyList()) }
     var visChannelScopeLastChannelCount by remember { mutableIntStateOf(1) }
     var visChannelScopeTriggerIndices by remember { mutableStateOf(IntArray(0)) }
+    var visChannelScopeTextStates by remember { mutableStateOf<List<ChannelScopeChannelTextState>>(emptyList()) }
     var visDebugUpdateFps by remember { mutableIntStateOf(0) }
     var visDebugUpdateFrameMs by remember { mutableIntStateOf(0) }
     var visDebugDrawFps by remember { mutableIntStateOf(0) }
@@ -589,6 +624,7 @@ internal fun AlbumArtPlaceholder(
             ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
         visChannelScopeHistories = List(channels) { FloatArray(points) }
         visChannelScopeTriggerIndices = IntArray(channels) { points / 2 }
+        visChannelScopeTextStates = emptyList()
         visDebugUpdateFps = 0
         visDebugUpdateFrameMs = 0
         visDebugDrawFps = 0
@@ -653,6 +689,9 @@ internal fun AlbumArtPlaceholder(
                         sampleRateHz = sampleRateHz
                     )
                     visChannelScopesFlat = NativeBridge.getChannelScopeSamples(scopeSamples)
+                    visChannelScopeTextStates = parseChannelScopeTextStates(
+                        NativeBridge.getChannelScopeTextState(visChannelCount.coerceIn(1, 64))
+                    )
                 }
                 val nowNs = System.nanoTime()
                 if (visDebugAccumulator.windowStartNs == 0L) {
@@ -714,6 +753,7 @@ internal fun AlbumArtPlaceholder(
         if (visualizationMode != VisualizationMode.ChannelScope) {
             visChannelScopeHistories = emptyList()
             visChannelScopeTriggerIndices = IntArray(0)
+            visChannelScopeTextStates = emptyList()
             return@LaunchedEffect
         }
         val points = computeChannelScopeSampleCount(
@@ -731,6 +771,7 @@ internal fun AlbumArtPlaceholder(
             }
             visChannelScopeHistories = emptyList()
             visChannelScopeTriggerIndices = IntArray(0)
+            visChannelScopeTextStates = emptyList()
             return@LaunchedEffect
         }
         if (visChannelScopesFlat.size < points) {
@@ -744,6 +785,7 @@ internal fun AlbumArtPlaceholder(
             }
             visChannelScopeHistories = emptyList()
             visChannelScopeTriggerIndices = IntArray(0)
+            visChannelScopeTextStates = emptyList()
             return@LaunchedEffect
         }
         val histories = buildChannelScopeHistoriesAsync(
@@ -808,6 +850,7 @@ internal fun AlbumArtPlaceholder(
     }
     val channelScopeState = ChannelScopeVisualState(
         channelHistories = visChannelScopeHistories,
+        channelTextStates = visChannelScopeTextStates,
         triggerModeNative = channelScopePrefs.triggerModeNative,
         triggerIndices = visChannelScopeTriggerIndices,
         renderBackend = channelScopePrefs.renderBackend,

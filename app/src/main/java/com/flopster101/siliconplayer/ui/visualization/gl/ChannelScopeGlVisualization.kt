@@ -333,15 +333,14 @@ private class ChannelScopeGlRenderer(
             val startIndex = (startIndexRaw + edgeTrim) % history.size
             val stepX = cellWidth / (visibleSamples - 1).coerceAtLeast(1).toFloat()
 
-            var prevSample = history[startIndex].coerceIn(-1f, 1f)
+            val firstSample = history[startIndex].coerceIn(-1f, 1f)
             var prevX = left
-            var prevY = centerY - (prevSample * ampScale)
+            var prevY = centerY - (firstSample * ampScale)
             for (i in 1 until visibleSamples) {
                 val sample = history[(startIndex + i) % history.size].coerceIn(-1f, 1f)
                 val x = left + i * stepX
                 val y = centerY - (sample * ampScale)
                 waveformBuilder.addLine(prevX, prevY, x, y)
-                prevSample = sample
                 prevX = x
                 prevY = y
             }

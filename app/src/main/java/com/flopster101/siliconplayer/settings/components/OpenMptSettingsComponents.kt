@@ -135,8 +135,8 @@ internal fun OpenMptDialogSliderCard(
             valueLabelFormatter = valueLabel,
             confirmLabel = "Apply",
             onDismiss = { dialogOpen = false },
-            onConfirm = { value ->
-                onValueChanged(value)
+            onConfirm = { newValue ->
+                onValueChanged(newValue)
                 dialogOpen = false
             }
         )

@@ -262,6 +262,7 @@ private:
     size_t renderQueueOffset = 0;
     std::atomic<int> renderWorkerChunkFrames { 1024 };
     std::atomic<int> renderWorkerTargetFrames { 8192 };
+    std::atomic<int64_t> renderQueueRecoveryBoostUntilNs { 0 };
     std::atomic<uint64_t> renderQueueUnderrunCount { 0 };
     std::atomic<uint64_t> renderQueueUnderrunFrames { 0 };
     std::atomic<uint64_t> renderQueueCallbackCount { 0 };

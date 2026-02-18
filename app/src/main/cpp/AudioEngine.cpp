@@ -12,6 +12,11 @@
 #include <algorithm>
 #include <limits>
 #include <chrono>
+#include <cerrno>
+#include <pthread.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 extern "C" {
 #include <libswresample/swresample.h>
 #include <libavutil/opt.h>
@@ -29,6 +34,41 @@ extern "C" {
 
 // register decoders
 namespace {
+    pid_t currentThreadId() {
+#ifdef SYS_gettid
+        return static_cast<pid_t>(syscall(SYS_gettid));
+#else
+        return getpid();
+#endif
+    }
+
+    void promoteThreadForAudio(const char* role, int targetNice) {
+        const pid_t tid = currentThreadId();
+        const int before = getpriority(PRIO_PROCESS, tid);
+        errno = 0;
+        if (setpriority(PRIO_PROCESS, tid, targetNice) == 0) {
+            const int after = getpriority(PRIO_PROCESS, tid);
+            LOGD(
+                    "Thread priority promoted for %s: tid=%d nice(before=%d after=%d target=%d)",
+                    role,
+                    static_cast<int>(tid),
+                    before,
+                    after,
+                    targetNice
+            );
+            return;
+        }
+
+        const int err = errno;
+        LOGD(
+                "Thread priority promotion skipped for %s: tid=%d targetNice=%d errno=%d",
+                role,
+                static_cast<int>(tid),
+                targetNice,
+                err
+        );
+    }
+
     const char* outputResamplerName(int preference) {
         return preference == 2 ? "SoX" : "Built-in";
     }
@@ -845,14 +885,26 @@ void AudioEngine::updateRenderQueueTuning() {
 }
 
 void AudioEngine::renderWorkerLoop() {
+    pthread_setname_np(pthread_self(), "sp_render");
+    // Best effort: keep decoder/render worker responsive under UI/system load.
+    promoteThreadForAudio("render-worker", -16);
+
     std::vector<float> localBuffer;
     localBuffer.resize(static_cast<size_t>(kRenderChunkFramesMedium) * 2u);
 
     for (;;) {
-        const int targetFrames = std::max(
+        const int baseTargetFrames = std::max(
                 renderWorkerChunkFrames.load(std::memory_order_relaxed) * 2,
                 renderWorkerTargetFrames.load(std::memory_order_relaxed)
         );
+        const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()
+        ).count();
+        const int64_t boostUntilNs = renderQueueRecoveryBoostUntilNs.load(std::memory_order_relaxed);
+        const bool recoveryBoostActive = nowNs < boostUntilNs;
+        const int targetFrames = recoveryBoostActive
+                ? std::max(baseTargetFrames, baseTargetFrames * 3)
+                : baseTargetFrames;
         bool needsFill = false;
         {
             std::unique_lock<std::mutex> lock(renderQueueMutex);
@@ -1006,12 +1058,18 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
     const int framesCopied = engine->popRenderQueue(outputData, numFrames, 2);
     if (framesCopied < numFrames) {
         const uint64_t missingFrames = static_cast<uint64_t>(numFrames - framesCopied);
-        engine->renderQueueUnderrunCount.fetch_add(1, std::memory_order_relaxed);
-        engine->renderQueueUnderrunFrames.fetch_add(missingFrames, std::memory_order_relaxed);
-#ifndef NDEBUG
         const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()
         ).count();
+        // Hold a higher queue target briefly after underrun to absorb transient CPU spikes
+        // during app-switch/system UI animations.
+        engine->renderQueueRecoveryBoostUntilNs.store(
+                nowNs + 2500000000LL,
+                std::memory_order_relaxed
+        );
+        engine->renderQueueUnderrunCount.fetch_add(1, std::memory_order_relaxed);
+        engine->renderQueueUnderrunFrames.fetch_add(missingFrames, std::memory_order_relaxed);
+#ifndef NDEBUG
         const int64_t previousLogNs = engine->renderQueueLastUnderrunLogNs.load(std::memory_order_relaxed);
         if (nowNs - previousLogNs > 1000000000LL) {
             const uint64_t underruns = engine->renderQueueUnderrunCount.load(std::memory_order_relaxed);
@@ -1374,6 +1432,10 @@ double AudioEngine::runAsyncSeekLocked(double targetSeconds) {
 }
 
 void AudioEngine::seekWorkerLoop() {
+    pthread_setname_np(pthread_self(), "sp_seek");
+    // Keep seek worker responsive but below render worker importance.
+    promoteThreadForAudio("seek-worker", -8);
+
     for (;;) {
         double targetSeconds = 0.0;
         uint64_t targetDecoderSerial = 0;

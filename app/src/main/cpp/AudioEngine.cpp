@@ -928,8 +928,17 @@ void AudioEngine::renderWorkerLoop() {
                     nextPosition += callbackDeltaSeconds;
                 }
                 if (decoderPosition >= 0.0) {
-                    const double correction = decoderPosition - nextPosition;
-                    nextPosition += std::clamp(correction * 0.12, -0.25, 0.25);
+                    const bool loopPointRepeatMode = repeatMode.load() == 2;
+                    const double backwardJumpSeconds = nextPosition - decoderPosition;
+                    if (loopPointRepeatMode && backwardJumpSeconds > 0.5) {
+                        // In loop-point mode, backward timeline jumps are expected at wrap.
+                        // Snap immediately to avoid visible "step-back" drift in the seek bar.
+                        nextPosition = decoderPosition;
+                        outputClockSeconds = decoderPosition;
+                    } else {
+                        const double correction = decoderPosition - nextPosition;
+                        nextPosition += std::clamp(correction * 0.12, -0.25, 0.25);
+                    }
                 } else if (calculatedPosition >= 0.0) {
                     const double correction = calculatedPosition - nextPosition;
                     nextPosition += correction * 0.10;

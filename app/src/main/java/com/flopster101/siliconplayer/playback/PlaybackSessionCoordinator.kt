@@ -2,7 +2,7 @@ package com.flopster101.siliconplayer
 
 internal data class PlaybackSessionCoordinator(
     val syncPlaybackService: () -> Unit,
-    val restorePlayerStateFromSessionAndNative: (Boolean) -> Unit
+    val restorePlayerStateFromSessionAndNative: suspend (Boolean) -> Unit
 )
 
 internal fun buildPlaybackSessionCoordinator(

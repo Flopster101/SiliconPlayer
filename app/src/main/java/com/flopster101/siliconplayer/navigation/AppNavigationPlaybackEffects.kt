@@ -32,7 +32,7 @@ internal fun AppNavigationPlaybackEffects(
     duration: Double,
     notificationOpenSignal: Int,
     syncPlaybackService: () -> Unit,
-    restorePlayerStateFromSessionAndNative: (Boolean) -> Unit
+    restorePlayerStateFromSessionAndNative: suspend (Boolean) -> Unit
 ) {
     LaunchedEffect(respondHeadphoneMediaButtons) {
         prefs.edit()

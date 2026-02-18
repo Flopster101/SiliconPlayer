@@ -5,6 +5,8 @@ import android.content.SharedPreferences
 import android.widget.Toast
 import com.flopster101.siliconplayer.playback.ClearedPlaybackState
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 internal fun applyNativeTrackSnapshotAction(
     snapshot: NativeTrackSnapshot,
@@ -148,7 +150,7 @@ internal fun resetAndOptionallyKeepLastTrackAction(
     clearPlaybackMetadataState()
 }
 
-internal fun restorePlayerStateFromSessionAndNativeAction(
+internal suspend fun restorePlayerStateFromSessionAndNativeAction(
     openExpanded: Boolean,
     prefs: SharedPreferences,
     cacheRoot: File,
@@ -170,19 +172,27 @@ internal fun restorePlayerStateFromSessionAndNativeAction(
     ) ?: return
     onSelectedFileChanged(restoreTarget.displayFile)
     onCurrentPlaybackSourceIdChanged(restoreTarget.sourceId)
-    onPlayerSurfaceVisibleChanged(true)
+    onPlayerSurfaceVisibleChanged(false)
     onPlayerExpandedChanged(openExpanded)
 
-    val isLoaded = NativeBridge.getTrackSampleRate() > 0
-    if (!isLoaded && restoreTarget.displayFile.exists() && restoreTarget.displayFile.isFile) {
-        loadSongVolumeForFile(restoreTarget.displayFile.absolutePath)
-        NativeBridge.loadAudio(restoreTarget.displayFile.absolutePath)
+    val snapshotAndState = withContext(Dispatchers.IO) {
+        val isLoaded = NativeBridge.getTrackSampleRate() > 0
+        if (!isLoaded && restoreTarget.displayFile.exists() && restoreTarget.displayFile.isFile) {
+            loadSongVolumeForFile(restoreTarget.displayFile.absolutePath)
+            NativeBridge.loadAudio(restoreTarget.displayFile.absolutePath)
+        }
+        Triple(
+            readNativeTrackSnapshot(),
+            NativeBridge.getPosition(),
+            NativeBridge.isEnginePlaying()
+        )
     }
 
-    applyNativeTrackSnapshot(readNativeTrackSnapshot())
+    applyNativeTrackSnapshot(snapshotAndState.first)
     refreshSubtuneState()
-    onPositionChanged(NativeBridge.getPosition())
-    onIsPlayingChanged(NativeBridge.isEnginePlaying())
+    onPositionChanged(snapshotAndState.second)
+    onIsPlayingChanged(snapshotAndState.third)
     onArtworkBitmapCleared()
     refreshRepeatModeForTrack()
+    onPlayerSurfaceVisibleChanged(true)
 }

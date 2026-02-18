@@ -4,11 +4,9 @@
 #include "AudioDecoder.h"
 #include <sidplayfp/SidConfig.h>
 #include <atomic>
-#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 class sidplayfp;
@@ -115,12 +113,6 @@ private:
     std::vector<int16_t> pendingMixedSamples;
     size_t pendingMixedOffset = 0;
     std::vector<int16_t> mixedScratchSamples;
-    std::mutex queueMutex;
-    std::condition_variable queueCv;
-    std::thread renderThread;
-    bool renderThreadStop = false;
-    std::atomic<bool> renderEnded { false };
-    std::atomic<int> outputChannelsAtomic { 2 };
     std::atomic<double> playbackPositionSecondsAtomic { 0.0 };
     std::atomic<double> currentSubtuneDurationSecondsAtomic { 180.0 };
     SidBackend selectedBackend = SidBackend::ReSIDfp;
@@ -139,9 +131,6 @@ private:
     bool openInternalLocked(const char* path);
     bool applyConfigLocked();
     bool selectSubtuneLocked(int index);
-    void startRenderThreadLocked();
-    void stopRenderThreadLocked();
-    void renderLoop();
     void applySidBackendOptionsLocked();
     void applySidFilterOptionsLocked();
     void refreshMetadataLocked();

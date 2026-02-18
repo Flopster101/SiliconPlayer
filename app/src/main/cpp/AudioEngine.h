@@ -2,6 +2,7 @@
 #define SILICONPLAYER_AUDIOENGINE_H
 
 #include <aaudio/AAudio.h>
+#include <cstdint>
 #include <thread>
 #include <atomic>
 #include <mutex>
@@ -207,6 +208,12 @@ private:
     void renderResampledLocked(float* outputData, int32_t numFrames, int channels, int streamRate, bool& reachedEnd);
     void renderSoxrResampledLocked(float* outputData, int32_t numFrames, int channels, int streamRate, int renderRate, bool& reachedEnd);
     void recoverStreamIfNeeded();
+    void clearRenderQueue();
+    void appendRenderQueue(const float* data, int numFrames, int channels);
+    int popRenderQueue(float* outputData, int numFrames, int channels);
+    int renderQueueFrames() const;
+    void renderWorkerLoop();
+    void updateRenderQueueTuning();
 
     void createStream();
     void closeStream();
@@ -248,6 +255,21 @@ private:
     std::vector<float> asyncSeekDiscardBuffer;
     double runAsyncSeekLocked(double targetSeconds);
     void seekWorkerLoop();
+    std::thread renderWorkerThread;
+    mutable std::mutex renderQueueMutex;
+    std::condition_variable renderWorkerCv;
+    std::vector<float> renderQueueSamples;
+    size_t renderQueueOffset = 0;
+    std::atomic<int> renderWorkerChunkFrames { 1024 };
+    std::atomic<int> renderWorkerTargetFrames { 8192 };
+    std::atomic<uint64_t> renderQueueUnderrunCount { 0 };
+    std::atomic<uint64_t> renderQueueUnderrunFrames { 0 };
+    std::atomic<uint64_t> renderQueueCallbackCount { 0 };
+#ifndef NDEBUG
+    std::atomic<int64_t> renderQueueLastUnderrunLogNs { 0 };
+#endif
+    bool renderWorkerStop = false;
+    std::atomic<bool> renderTerminalStopPending { false };
 };
 
 #endif //SILICONPLAYER_AUDIOENGINE_H

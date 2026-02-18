@@ -36,6 +36,12 @@ namespace {
     constexpr int kVisualizationWaveformSize = 256;
     constexpr int kVisualizationFftSize = 2048;
     constexpr int kVisualizationSpectrumBins = 256;
+    constexpr int kRenderChunkFramesSmall = 512;
+    constexpr int kRenderChunkFramesMedium = 1024;
+    constexpr int kRenderChunkFramesLarge = 2048;
+    constexpr int kRenderTargetFramesSmall = 4096;
+    constexpr int kRenderTargetFramesMedium = 8192;
+    constexpr int kRenderTargetFramesLarge = 16384;
 
     void fftInPlace(std::array<float, kVisualizationFftSize>& real,
                     std::array<float, kVisualizationFftSize>& imag) {
@@ -128,7 +134,9 @@ namespace {
 }
 
 AudioEngine::AudioEngine() {
+    updateRenderQueueTuning();
     seekWorkerThread = std::thread([this]() { seekWorkerLoop(); });
+    renderWorkerThread = std::thread([this]() { renderWorkerLoop(); });
     createStream();
 }
 
@@ -142,6 +150,14 @@ AudioEngine::~AudioEngine() {
     seekWorkerCv.notify_all();
     if (seekWorkerThread.joinable()) {
         seekWorkerThread.join();
+    }
+    {
+        std::lock_guard<std::mutex> lock(renderQueueMutex);
+        renderWorkerStop = true;
+    }
+    renderWorkerCv.notify_all();
+    if (renderWorkerThread.joinable()) {
+        renderWorkerThread.join();
     }
     std::lock_guard<std::mutex> lock(decoderMutex);
     freeOutputSoxrContextLocked();
@@ -736,224 +752,277 @@ void AudioEngine::renderSoxrResampledLocked(
     }
 }
 
+void AudioEngine::clearRenderQueue() {
+    std::lock_guard<std::mutex> lock(renderQueueMutex);
+    renderQueueSamples.clear();
+    renderQueueOffset = 0;
+    renderTerminalStopPending.store(false);
+}
+
+void AudioEngine::appendRenderQueue(const float* data, int numFrames, int channels) {
+    if (!data || numFrames <= 0 || channels <= 0) return;
+    std::lock_guard<std::mutex> lock(renderQueueMutex);
+    if (channels == 2) {
+        const size_t sampleCount = static_cast<size_t>(numFrames) * 2u;
+        renderQueueSamples.insert(renderQueueSamples.end(), data, data + sampleCount);
+        return;
+    }
+
+    renderQueueSamples.reserve(renderQueueSamples.size() + static_cast<size_t>(numFrames) * 2u);
+    for (int i = 0; i < numFrames; ++i) {
+        const float mono = data[i * channels];
+        renderQueueSamples.push_back(mono);
+        renderQueueSamples.push_back(mono);
+    }
+}
+
+int AudioEngine::popRenderQueue(float* outputData, int numFrames, int channels) {
+    if (!outputData || numFrames <= 0 || channels <= 0) return 0;
+    std::lock_guard<std::mutex> lock(renderQueueMutex);
+    const size_t availableSamples = renderQueueSamples.size() > renderQueueOffset
+            ? (renderQueueSamples.size() - renderQueueOffset)
+            : 0u;
+    const int availableFrames = static_cast<int>(availableSamples / static_cast<size_t>(channels));
+    const int framesToCopy = std::min(numFrames, availableFrames);
+    const int samplesToCopy = framesToCopy * channels;
+    if (samplesToCopy > 0) {
+        std::memcpy(
+                outputData,
+                renderQueueSamples.data() + renderQueueOffset,
+                static_cast<size_t>(samplesToCopy) * sizeof(float)
+        );
+        renderQueueOffset += static_cast<size_t>(samplesToCopy);
+        if (renderQueueOffset >= renderQueueSamples.size()) {
+            renderQueueSamples.clear();
+            renderQueueOffset = 0;
+        } else if (renderQueueOffset > 8192u) {
+            const size_t remaining = renderQueueSamples.size() - renderQueueOffset;
+            std::memmove(
+                    renderQueueSamples.data(),
+                    renderQueueSamples.data() + renderQueueOffset,
+                    remaining * sizeof(float)
+            );
+            renderQueueSamples.resize(remaining);
+            renderQueueOffset = 0;
+        }
+    }
+    return framesToCopy;
+}
+
+int AudioEngine::renderQueueFrames() const {
+    std::lock_guard<std::mutex> lock(renderQueueMutex);
+    const size_t availableSamples = renderQueueSamples.size() > renderQueueOffset
+            ? (renderQueueSamples.size() - renderQueueOffset)
+            : 0u;
+    return static_cast<int>(availableSamples / 2u);
+}
+
+void AudioEngine::updateRenderQueueTuning() {
+    int chunkFrames = kRenderChunkFramesMedium;
+    int targetFrames = kRenderTargetFramesMedium;
+    switch (outputBufferPreset) {
+        case 1:
+            chunkFrames = kRenderChunkFramesSmall;
+            targetFrames = kRenderTargetFramesSmall;
+            break;
+        case 3:
+            chunkFrames = kRenderChunkFramesLarge;
+            targetFrames = kRenderTargetFramesLarge;
+            break;
+        case 0:
+        case 2:
+        default:
+            chunkFrames = kRenderChunkFramesMedium;
+            targetFrames = kRenderTargetFramesMedium;
+            break;
+    }
+    if (targetFrames < chunkFrames * 2) {
+        targetFrames = chunkFrames * 2;
+    }
+    renderWorkerChunkFrames.store(chunkFrames, std::memory_order_relaxed);
+    renderWorkerTargetFrames.store(targetFrames, std::memory_order_relaxed);
+    LOGD("Render queue tuning: preset=%d chunk=%d target=%d", outputBufferPreset, chunkFrames, targetFrames);
+}
+
+void AudioEngine::renderWorkerLoop() {
+    std::vector<float> localBuffer;
+    localBuffer.resize(static_cast<size_t>(kRenderChunkFramesMedium) * 2u);
+
+    for (;;) {
+        const int targetFrames = std::max(
+                renderWorkerChunkFrames.load(std::memory_order_relaxed) * 2,
+                renderWorkerTargetFrames.load(std::memory_order_relaxed)
+        );
+        {
+            std::unique_lock<std::mutex> lock(renderQueueMutex);
+            renderWorkerCv.wait_for(lock, std::chrono::milliseconds(8), [this, targetFrames]() {
+                if (renderWorkerStop) return true;
+                if (!isPlaying.load() || seekInProgress.load()) return false;
+                const size_t availableSamples = renderQueueSamples.size() > renderQueueOffset
+                        ? (renderQueueSamples.size() - renderQueueOffset)
+                        : 0u;
+                const int bufferedFrames = static_cast<int>(availableSamples / 2u);
+                return bufferedFrames < targetFrames;
+            });
+            if (renderWorkerStop) {
+                break;
+            }
+        }
+
+        if (!isPlaying.load() || seekInProgress.load()) {
+            continue;
+        }
+
+        bool reachedEnd = false;
+        int channels = 2;
+        const int chunkFrames = std::max(256, renderWorkerChunkFrames.load(std::memory_order_relaxed));
+        {
+            std::lock_guard<std::mutex> lock(decoderMutex);
+            if (!decoder || !isPlaying.load()) {
+                continue;
+            }
+            channels = std::clamp(decoder->getChannelCount(), 1, 2);
+            if (channels <= 0) channels = 2;
+            localBuffer.resize(static_cast<size_t>(chunkFrames) * static_cast<size_t>(channels));
+
+            const int outputSampleRate = streamSampleRate > 0 ? streamSampleRate : 48000;
+            renderResampledLocked(localBuffer.data(), chunkFrames, channels, outputSampleRate, reachedEnd);
+
+            const double callbackDeltaSeconds = (outputSampleRate > 0)
+                    ? static_cast<double>(chunkFrames) / outputSampleRate
+                    : 0.0;
+            if (!reachedEnd && callbackDeltaSeconds > 0.0) {
+                outputClockSeconds += callbackDeltaSeconds;
+            }
+
+            double calculatedPosition = -1.0;
+            if (decoderRenderSampleRate > 0) {
+                calculatedPosition =
+                        sharedAbsoluteInputPositionBaseSeconds +
+                        (static_cast<double>(sharedAbsoluteInputPosition) / decoderRenderSampleRate);
+                if (calculatedPosition < 0.0) {
+                    calculatedPosition = 0.0;
+                }
+            }
+            double decoderPosition = decoder->getPlaybackPositionSeconds();
+            const AudioDecoder::TimelineMode timelineMode = decoder->getTimelineMode();
+
+            if (timelineMode == AudioDecoder::TimelineMode::Discontinuous) {
+                if (!timelineSmootherInitialized) {
+                    timelineSmoothedSeconds = (calculatedPosition >= 0.0 && sharedAbsoluteInputPosition > 0)
+                            ? calculatedPosition
+                            : outputClockSeconds;
+                    timelineSmootherInitialized = true;
+                }
+                double nextPosition = timelineSmoothedSeconds;
+                if (!reachedEnd && callbackDeltaSeconds > 0.0) {
+                    nextPosition += callbackDeltaSeconds;
+                }
+                if (decoderPosition >= 0.0) {
+                    const double correction = decoderPosition - nextPosition;
+                    nextPosition += std::clamp(correction * 0.12, -0.25, 0.25);
+                } else if (calculatedPosition >= 0.0) {
+                    const double correction = calculatedPosition - nextPosition;
+                    nextPosition += correction * 0.10;
+                }
+                const double durationNow = decoder->getDuration();
+                if (durationNow > 0.0 && repeatMode.load() != 2) {
+                    nextPosition = std::clamp(nextPosition, 0.0, durationNow);
+                } else if (nextPosition < 0.0) {
+                    nextPosition = 0.0;
+                }
+                timelineSmoothedSeconds = nextPosition;
+                positionSeconds.store(nextPosition);
+            } else if (calculatedPosition >= 0.0 && sharedAbsoluteInputPosition > 0) {
+                positionSeconds.store(calculatedPosition);
+            } else if (decoderPosition >= 0.0) {
+                positionSeconds.store(decoderPosition);
+            } else if (!reachedEnd && callbackDeltaSeconds > 0.0) {
+                positionSeconds.fetch_add(callbackDeltaSeconds);
+            }
+
+            const double gainTimelinePosition = positionSeconds.load();
+            const float endFadeGain = computeEndFadeGainLocked(gainTimelinePosition);
+            applyGain(localBuffer.data(), chunkFrames, channels, endFadeGain);
+            applyMonoDownmix(localBuffer.data(), chunkFrames, channels);
+            if (shouldUpdateVisualization()) {
+                updateVisualizationDataLocked(localBuffer.data(), chunkFrames, channels);
+            }
+
+            const int mode = repeatMode.load();
+            if (reachedEnd && mode != 1 && mode != 3) {
+                const double durationAtEnd = decoder->getDuration();
+                if (durationAtEnd > 0.0) {
+                    positionSeconds.store(durationAtEnd);
+                }
+                if (mode == 0) {
+                    naturalEndPending.store(true);
+                }
+                isPlaying.store(false);
+                renderTerminalStopPending.store(true);
+            }
+        }
+
+        if (!isPlaying.load() && renderTerminalStopPending.load()) {
+            renderWorkerCv.notify_all();
+            continue;
+        }
+
+        appendRenderQueue(localBuffer.data(), chunkFrames, channels);
+    }
+}
+
 aaudio_data_callback_result_t AudioEngine::dataCallback(
         AAudioStream *stream,
         void *userData,
         void *audioData,
         int32_t numFrames) {
+    (void)stream;
     auto *engine = static_cast<AudioEngine *>(userData);
     auto *outputData = static_cast<float *>(audioData);
     if (engine->seekInProgress.load()) {
         memset(outputData, 0, static_cast<size_t>(numFrames) * 2 * sizeof(float));
         return AAUDIO_CALLBACK_RESULT_CONTINUE;
     }
-
-    std::lock_guard<std::mutex> lock(engine->decoderMutex);
-    if (engine->decoder) {
-        const int channels = engine->decoder->getChannelCount();
-        const int outputSampleRate = AAudioStream_getSampleRate(stream) > 0
-                ? AAudioStream_getSampleRate(stream)
-                : engine->streamSampleRate;
-        bool reachedEnd = false;
-        engine->renderResampledLocked(outputData, numFrames, channels, outputSampleRate, reachedEnd);
-
-        const double callbackDeltaSeconds = (outputSampleRate > 0 && numFrames > 0)
-                ? static_cast<double>(numFrames) / outputSampleRate
-                : 0.0;
-        if (!reachedEnd && callbackDeltaSeconds > 0.0) {
-            engine->outputClockSeconds += callbackDeltaSeconds;
+    engine->renderQueueCallbackCount.fetch_add(1, std::memory_order_relaxed);
+    const int framesCopied = engine->popRenderQueue(outputData, numFrames, 2);
+    if (framesCopied < numFrames) {
+        const uint64_t missingFrames = static_cast<uint64_t>(numFrames - framesCopied);
+        engine->renderQueueUnderrunCount.fetch_add(1, std::memory_order_relaxed);
+        engine->renderQueueUnderrunFrames.fetch_add(missingFrames, std::memory_order_relaxed);
+#ifndef NDEBUG
+        const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()
+        ).count();
+        const int64_t previousLogNs = engine->renderQueueLastUnderrunLogNs.load(std::memory_order_relaxed);
+        if (nowNs - previousLogNs > 1000000000LL) {
+            const uint64_t underruns = engine->renderQueueUnderrunCount.load(std::memory_order_relaxed);
+            const uint64_t underrunFrames = engine->renderQueueUnderrunFrames.load(std::memory_order_relaxed);
+            const uint64_t callbacks = engine->renderQueueCallbackCount.load(std::memory_order_relaxed);
+            LOGD(
+                    "Render queue underrun: missing=%llu callbacks=%llu underruns=%llu totalMissingFrames=%llu bufferedFrames=%d",
+                    static_cast<unsigned long long>(missingFrames),
+                    static_cast<unsigned long long>(callbacks),
+                    static_cast<unsigned long long>(underruns),
+                    static_cast<unsigned long long>(underrunFrames),
+                    engine->renderQueueFrames()
+            );
+            engine->renderQueueLastUnderrunLogNs.store(nowNs, std::memory_order_relaxed);
         }
-
-        // Compensate timeline by SoX internal delay so UI follows audible output.
-        double soxDelaySeconds = 0.0;
-        if (engine->outputResamplerPreference == 2 &&
-            engine->outputSoxrContext != nullptr &&
-            engine->decoderRenderSampleRate > 0 &&
-            engine->decoderRenderSampleRate != outputSampleRate) {
-            const int64_t soxDelayFrames = swr_get_delay(engine->outputSoxrContext, engine->decoderRenderSampleRate);
-            if (soxDelayFrames > 0) {
-                soxDelaySeconds = static_cast<double>(soxDelayFrames) / engine->decoderRenderSampleRate;
-            }
-        }
-
-        // Calculate position based on frames consumed by resampler at decoder rate
-        double calculatedPosition = -1.0;
-        if (engine->decoderRenderSampleRate > 0) {
-            calculatedPosition =
-                    engine->sharedAbsoluteInputPositionBaseSeconds +
-                    (static_cast<double>(engine->sharedAbsoluteInputPosition) / engine->decoderRenderSampleRate);
-            if (soxDelaySeconds > 0.0) {
-                calculatedPosition -= soxDelaySeconds;
-            }
-            if (calculatedPosition < 0.0) {
-                calculatedPosition = 0.0;
-            }
-        }
-        double decoderPosition = engine->decoder->getPlaybackPositionSeconds();
-        if (decoderPosition >= 0.0 && soxDelaySeconds > 0.0) {
-            decoderPosition -= soxDelaySeconds;
-            if (decoderPosition < 0.0) {
-                decoderPosition = 0.0;
-            }
-        }
-        const AudioDecoder::TimelineMode timelineMode = engine->decoder->getTimelineMode();
-
-        if (timelineMode == AudioDecoder::TimelineMode::Discontinuous) {
-            auto clearPendingBackwardJump = [&]() {
-                engine->pendingBackwardTimelineTargetSeconds = -1.0;
-                engine->pendingBackwardTimelineConfirmations = 0;
-            };
-            if (!engine->timelineSmootherInitialized) {
-                if (calculatedPosition >= 0.0 && engine->sharedAbsoluteInputPosition > 0) {
-                    engine->timelineSmoothedSeconds = calculatedPosition;
-                } else {
-                    engine->timelineSmoothedSeconds = engine->outputClockSeconds;
-                }
-                if (decoderPosition >= 0.0) {
-                    const double initDiff = std::fabs(decoderPosition - engine->timelineSmoothedSeconds);
-                    if (initDiff <= 0.30) {
-                        engine->timelineSmoothedSeconds = decoderPosition;
-                    }
-                }
-                engine->timelineSmootherInitialized = true;
-            }
-
-            double nextPosition = engine->timelineSmoothedSeconds;
-            if (!reachedEnd && callbackDeltaSeconds > 0.0) {
-                nextPosition += callbackDeltaSeconds;
-            }
-
-            bool usedDecoderReference = false;
-            if (decoderPosition >= 0.0) {
-                usedDecoderReference = true;
-                const double correction = decoderPosition - nextPosition;
-                if (correction >= 0.0) {
-                    clearPendingBackwardJump();
-                    constexpr double forwardBlendRatio = 0.12;
-                    const double maxForwardStep = std::max(callbackDeltaSeconds * 2.5, 0.03);
-                    nextPosition += std::min(correction * forwardBlendRatio, maxForwardStep);
-                } else {
-                    constexpr double backwardConfirmToleranceSeconds = 0.15;
-                    const double backwardSnapFloorSeconds = std::max(callbackDeltaSeconds * 2.0, 0.03);
-                    int requiredConfirmations = 1;
-                    if (soxDelaySeconds > 0.0 && callbackDeltaSeconds > 0.0) {
-                        requiredConfirmations = std::max(
-                                static_cast<int>(std::ceil((soxDelaySeconds + 0.02) / callbackDeltaSeconds)),
-                                1
-                        );
-                    }
-                    requiredConfirmations = std::clamp(requiredConfirmations, 1, 64);
-
-                    const bool sameTarget =
-                            engine->pendingBackwardTimelineTargetSeconds >= 0.0 &&
-                            std::fabs(engine->pendingBackwardTimelineTargetSeconds - decoderPosition) <=
-                                    backwardConfirmToleranceSeconds;
-                    if (sameTarget) {
-                        engine->pendingBackwardTimelineConfirmations += 1;
-                    } else {
-                        engine->pendingBackwardTimelineTargetSeconds = decoderPosition;
-                        engine->pendingBackwardTimelineConfirmations = 1;
-                    }
-
-                    const bool allowSnapNow =
-                            (-correction >= backwardSnapFloorSeconds) &&
-                            (engine->pendingBackwardTimelineConfirmations >= requiredConfirmations);
-                    if (allowSnapNow) {
-                        nextPosition = decoderPosition;
-                        clearPendingBackwardJump();
-                    } else {
-                        // Avoid pre-loop "drift backwards"; only snap once target is stable.
-                        // Tiny backward corrections are still blended to avoid visible stiction.
-                        if (-correction <= std::max(callbackDeltaSeconds * 0.5, 0.01)) {
-                            nextPosition += correction * 0.10;
-                        }
-                    }
-                }
-            } else if (calculatedPosition >= 0.0 && engine->sharedAbsoluteInputPosition > 0) {
-                clearPendingBackwardJump();
-                const double correction = calculatedPosition - nextPosition;
-                constexpr double fallbackBlendRatio = 0.10;
-                if (std::fabs(correction) >= 0.75) {
-                    nextPosition = calculatedPosition;
-                } else {
-                    nextPosition += correction * fallbackBlendRatio;
-                }
-            } else {
-                clearPendingBackwardJump();
-            }
-
-            const double durationNow = engine->decoder->getDuration();
-            if (durationNow > 0.0) {
-                if (engine->repeatMode.load() != 2) {
-                    nextPosition = std::clamp(nextPosition, 0.0, durationNow);
-                } else if (!usedDecoderReference && nextPosition > durationNow) {
-                    // Fallback wrap only when decoder timeline is unavailable.
-                    nextPosition = std::fmod(nextPosition, durationNow);
-                }
-            } else if (nextPosition < 0.0) {
-                nextPosition = 0.0;
-            }
-
-            engine->timelineSmoothedSeconds = nextPosition;
-            engine->positionSeconds.store(nextPosition);
-        } else if (calculatedPosition >= 0.0 && engine->sharedAbsoluteInputPosition > 0) {
-            // Continuous timelines generally track consumed input frames directly.
-            // With SoX this can become "chunky" due internal buffering, so smooth toward it.
-            if (engine->outputResamplerPreference == 2 &&
-                engine->outputSoxrContext != nullptr &&
-                callbackDeltaSeconds > 0.0) {
-                double nextPosition = engine->positionSeconds.load();
-                if (!reachedEnd) {
-                    nextPosition += callbackDeltaSeconds;
-                }
-                const double correction = calculatedPosition - nextPosition;
-                const double maxStep = std::max(callbackDeltaSeconds * 3.0, 0.04);
-                const double blendedStep = std::clamp(correction * 0.20, -maxStep, maxStep);
-                nextPosition += blendedStep;
-                const double durationNow = engine->decoder->getDuration();
-                if (durationNow > 0.0) {
-                    if (engine->repeatMode.load() != 2) {
-                        nextPosition = std::clamp(nextPosition, 0.0, durationNow);
-                    } else if (nextPosition > durationNow) {
-                        nextPosition = std::fmod(nextPosition, durationNow);
-                    }
-                } else if (nextPosition < 0.0) {
-                    nextPosition = 0.0;
-                }
-                engine->positionSeconds.store(nextPosition);
-            } else {
-                engine->positionSeconds.store(calculatedPosition);
-            }
-        } else if (decoderPosition >= 0.0) {
-            engine->positionSeconds.store(decoderPosition);
-        } else if (!reachedEnd && callbackDeltaSeconds > 0.0) {
-            engine->positionSeconds.fetch_add(callbackDeltaSeconds);
-        }
-
-        const double gainTimelinePosition = engine->positionSeconds.load();
-        const float endFadeGain = engine->computeEndFadeGainLocked(gainTimelinePosition);
-        engine->applyGain(outputData, numFrames, channels, endFadeGain);
-        engine->applyMonoDownmix(outputData, numFrames, channels);
-        if (engine->shouldUpdateVisualization()) {
-            engine->updateVisualizationDataLocked(outputData, numFrames, channels);
-        }
-
-        const int mode = engine->repeatMode.load();
-        if (reachedEnd && mode != 1 && mode != 3) {
-            const double durationAtEnd = engine->decoder->getDuration();
-            if (durationAtEnd > 0.0) {
-                engine->positionSeconds.store(durationAtEnd);
-            }
-            if (mode == 0) {
-                engine->naturalEndPending.store(true);
-            }
-            engine->isPlaying.store(false);
-            return AAUDIO_CALLBACK_RESULT_STOP;
-        }
-    } else {
-        // Output silence
-        memset(outputData, 0, numFrames * 2 * sizeof(float));
+#endif
+        std::memset(
+                outputData + (static_cast<size_t>(framesCopied) * 2u),
+                0,
+                static_cast<size_t>(numFrames - framesCopied) * 2u * sizeof(float)
+        );
     }
+
+    if (engine->renderTerminalStopPending.load() && engine->renderQueueFrames() <= 0) {
+        engine->renderTerminalStopPending.store(false);
+        return AAUDIO_CALLBACK_RESULT_STOP;
+    }
+
+    engine->renderWorkerCv.notify_one();
 
     return AAUDIO_CALLBACK_RESULT_CONTINUE;
 }
@@ -1009,6 +1078,8 @@ bool AudioEngine::start() {
         }
         isPlaying = true;
         naturalEndPending.store(false);
+        clearRenderQueue();
+        renderWorkerCv.notify_one();
         return true;
     }
     return false;
@@ -1027,6 +1098,8 @@ void AudioEngine::stop() {
         seekWorkerCv.notify_one();
         isPlaying.store(false);
         naturalEndPending.store(false);
+        clearRenderQueue();
+        renderWorkerCv.notify_all();
         return;
     }
 
@@ -1035,6 +1108,8 @@ void AudioEngine::stop() {
         AAudioStream_requestStop(stream);
         isPlaying = false;
         naturalEndPending.store(false);
+        clearRenderQueue();
+        renderWorkerCv.notify_all();
     }
 }
 
@@ -1060,6 +1135,7 @@ void AudioEngine::setUrl(const char* url) {
     }
 
     decoderSerial.fetch_add(1);
+    clearRenderQueue();
 
     // Drop any previously loaded decoder first. If opening the new source fails,
     // playback should not continue from stale decoder state.
@@ -1123,6 +1199,7 @@ void AudioEngine::setUrl(const char* url) {
         timelineSmoothedSeconds = 0.0;
         timelineSmootherInitialized = false;
         naturalEndPending.store(false);
+        renderWorkerCv.notify_one();
     } else {
         LOGE("Failed to create decoder for file: %s", url);
     }
@@ -1164,6 +1241,7 @@ void AudioEngine::seekToSeconds(double seconds) {
     const uint64_t targetDecoderSerial = decoderSerial.load();
     const double normalizedTarget = std::max(0.0, seconds);
     bool handledDirectSeek = false;
+    clearRenderQueue();
 
     // Cancel any pending async-seek request first so a stale worker cycle
     // cannot overwrite a direct-seek result.
@@ -1202,6 +1280,7 @@ void AudioEngine::seekToSeconds(double seconds) {
         seekAbortRequested.store(false);
         seekInProgress.store(false);
         stopStreamAfterSeek.store(false);
+        renderWorkerCv.notify_one();
         return;
     }
 
@@ -1216,6 +1295,7 @@ void AudioEngine::seekToSeconds(double seconds) {
         seekInProgress.store(true);
     }
     seekWorkerCv.notify_one();
+    renderWorkerCv.notify_one();
 }
 
 double AudioEngine::runAsyncSeekLocked(double targetSeconds) {
@@ -1325,6 +1405,7 @@ void AudioEngine::seekWorkerLoop() {
                 seekAbortRequested.store(false);
             }
         }
+        renderWorkerCv.notify_one();
     }
 }
 
@@ -1532,6 +1613,7 @@ void AudioEngine::setAudioPipelineConfig(
     outputResamplerPreference = normalizedResampler;
     outputAllowFallback = allowFallback;
     outputSoxrUnavailable = false;
+    updateRenderQueueTuning();
     LOGD(
             "Audio pipeline config: backend=%d perf=%d buffer=%d resampler=%s(%d) allowFallback=%d changed=%d",
             outputBackendPreference,

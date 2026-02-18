@@ -15,6 +15,7 @@ public:
     static constexpr int PLAYBACK_CAP_CUSTOM_SAMPLE_RATE = 1 << 3;
     static constexpr int PLAYBACK_CAP_LIVE_SAMPLE_RATE_CHANGE = 1 << 4;
     static constexpr int PLAYBACK_CAP_FIXED_SAMPLE_RATE = 1 << 5;
+    static constexpr int PLAYBACK_CAP_DIRECT_SEEK = 1 << 6;
     static constexpr int OPTION_APPLY_LIVE = 0;
     static constexpr int OPTION_APPLY_REQUIRES_PLAYBACK_RESTART = 1;
     enum class TimelineMode {

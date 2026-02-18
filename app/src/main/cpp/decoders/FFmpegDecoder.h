@@ -45,7 +45,8 @@ public:
                PLAYBACK_CAP_RELIABLE_DURATION |
                PLAYBACK_CAP_LIVE_REPEAT_MODE |
                PLAYBACK_CAP_CUSTOM_SAMPLE_RATE |
-               PLAYBACK_CAP_LIVE_SAMPLE_RATE_CHANGE;
+               PLAYBACK_CAP_LIVE_SAMPLE_RATE_CHANGE |
+               PLAYBACK_CAP_DIRECT_SEEK;
     }
     double getPlaybackPositionSeconds() override;
     TimelineMode getTimelineMode() const override { return TimelineMode::ContinuousLinear; }

@@ -1166,6 +1166,14 @@ double AudioEngine::runAsyncSeekLocked(double targetSeconds) {
     }
     const double clampedTarget = std::max(0.0, targetSeconds);
 
+    // Prefer direct/random-access seek when a decoder can do it reliably.
+    // We still execute it on the async seek worker to keep UI interactions non-blocking.
+    if ((capabilities & AudioDecoder::PLAYBACK_CAP_DIRECT_SEEK) != 0) {
+        decoder->seek(clampedTarget);
+        const double decoderPosition = decoder->getPlaybackPositionSeconds();
+        return decoderPosition >= 0.0 ? decoderPosition : clampedTarget;
+    }
+
     decoder->seek(0.0);
     const int channels = std::max(1, decoder->getChannelCount());
     int decoderRate = decoderRenderSampleRate > 0 ? decoderRenderSampleRate : decoder->getSampleRate();

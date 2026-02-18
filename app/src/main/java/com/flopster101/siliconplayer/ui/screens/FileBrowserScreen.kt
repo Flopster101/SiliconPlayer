@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -317,7 +318,10 @@ fun FileBrowserScreen(
                 if (showPrimaryTopBar) {
                     TopAppBar(
                         title = {
-                            Text(text = "Silicon Player")
+                            Text(
+                                text = "Silicon Player",
+                                fontWeight = FontWeight.Bold
+                            )
                         },
                         actions = {
                             onExitBrowser?.let { exitBrowser ->

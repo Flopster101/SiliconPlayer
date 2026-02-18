@@ -1137,12 +1137,32 @@ bool AudioEngine::start() {
             }
         }
 
+        // Prime render queue before starting callback-driven playback.
+        // This avoids audible startup gaps for decoders that need a short warmup
+        // (notably SID cores) and reduces first-second underruns.
+        clearRenderQueue();
+        isPlaying = true;
+        naturalEndPending.store(false);
+        const int startupChunkFrames = std::max(256, renderWorkerChunkFrames.load(std::memory_order_relaxed));
+        const int startupTargetFrames = std::max(
+                startupChunkFrames * 2,
+                std::min(renderWorkerTargetFrames.load(std::memory_order_relaxed), 4096)
+        );
+        renderWorkerCv.notify_one();
+        const auto prefillDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(140);
+        while (renderQueueFrames() < startupTargetFrames &&
+               std::chrono::steady_clock::now() < prefillDeadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            renderWorkerCv.notify_one();
+        }
+
         aaudio_result_t result = AAudioStream_requestStart(stream);
         if (result != AAUDIO_OK) {
             LOGE("Failed to start stream: %s", AAudio_convertResultToText(result));
             closeStream();
             createStream();
             if (stream == nullptr) {
+                isPlaying = false;
                 return false;
             }
             result = AAudioStream_requestStart(stream);
@@ -1152,10 +1172,7 @@ bool AudioEngine::start() {
                 return false;
             }
         }
-        isPlaying = true;
-        naturalEndPending.store(false);
-        clearRenderQueue();
-        renderWorkerCv.notify_one();
+        renderWorkerCv.notify_all();
         return true;
     }
     return false;

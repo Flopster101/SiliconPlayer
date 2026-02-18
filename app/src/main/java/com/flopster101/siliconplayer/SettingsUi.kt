@@ -7,6 +7,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,7 +15,9 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -1079,20 +1082,37 @@ private fun SettingsScaffoldShell(
     onBack: () -> Unit,
     content: @Composable (androidx.compose.foundation.layout.PaddingValues) -> Unit
 ) {
+    val topBarVisibleState = remember {
+        MutableTransitionState(false).apply {
+            targetState = true
+        }
+    }
     androidx.compose.material3.Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            androidx.compose.material3.TopAppBar(
-                title = { Text("Settings") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
+            AnimatedVisibility(
+                visibleState = topBarVisibleState,
+                enter = fadeIn(animationSpec = tween(160)) + slideInVertically(
+                    initialOffsetY = { fullHeight -> -fullHeight / 3 },
+                    animationSpec = tween(220, easing = LinearOutSlowInEasing)
+                ),
+                exit = fadeOut(animationSpec = tween(120)) + slideOutVertically(
+                    targetOffsetY = { fullHeight -> -fullHeight / 4 },
+                    animationSpec = tween(150, easing = FastOutLinearInEasing)
+                )
+            ) {
+                androidx.compose.material3.TopAppBar(
+                    title = { Text("Settings") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
                     }
-                }
-            )
+                )
+            }
         },
         content = content
     )

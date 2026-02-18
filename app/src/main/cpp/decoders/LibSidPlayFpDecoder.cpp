@@ -3,10 +3,14 @@
 #include <android/log.h>
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <cerrno>
 #include <cstdint>
 #include <cstring>
 #include <sstream>
 #include <vector>
+#include <sys/resource.h>
+#include <unistd.h>
 
 #include <sidplayfp/sidplayfp.h>
 #include <sidplayfp/SidConfig.h>
@@ -18,14 +22,17 @@
 #include "sid/ReSidBuilder.h"
 
 #define LOG_TAG "LibSidPlayFpDecoder"
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 namespace {
 constexpr unsigned int kRenderCyclesMin = 2000;
-constexpr unsigned int kRenderCyclesMax = 20000;
+constexpr unsigned int kRenderCyclesMax = 200000;
 constexpr unsigned int kEstimatedSidCyclesPerSecond = 1000000;
 constexpr int kTransientEmptyPlayRetries = 12;
 constexpr int kSidReadPrefillFrames = 1024;
+constexpr int kSidRenderChunkFrames = 8192;
+constexpr int kSidQueueTargetFrames = 32768;
 constexpr double kDefaultSidDurationSeconds = 180.0;
 constexpr int kSidLiteMinSampleRateHz = 8000;
 constexpr int kSidLiteMaxSampleRateHz = 48000;
@@ -410,6 +417,15 @@ void LibSidPlayFpDecoder::refreshMetadataLocked() {
         if (songInfoStrings > 0) subtuneTitles[i] = safeString(songInfo->infoString(0));
         if (songInfoStrings > 1) subtuneArtists[i] = safeString(songInfo->infoString(1));
     }
+    if (currentSubtuneIndex >= 0 &&
+        currentSubtuneIndex < static_cast<int>(subtuneDurationsSeconds.size())) {
+        currentSubtuneDurationSecondsAtomic.store(
+                subtuneDurationsSeconds[currentSubtuneIndex],
+                std::memory_order_relaxed
+        );
+    } else {
+        currentSubtuneDurationSecondsAtomic.store(fallbackDurationSeconds, std::memory_order_relaxed);
+    }
 }
 
 bool LibSidPlayFpDecoder::selectSubtuneLocked(int index) {
@@ -428,12 +444,150 @@ bool LibSidPlayFpDecoder::selectSubtuneLocked(int index) {
     const int runtimeSidChips = std::max(1, static_cast<int>(info.numberOfSIDs()));
     sidChipCount = runtimeSidChips;
     sidVoiceCount = std::max(1, runtimeSidChips * 3);
+    outputChannelsAtomic.store(outputChannels, std::memory_order_relaxed);
     sidSpeedName = safeString(info.speedString());
     applySidFilterOptionsLocked();
-    pendingMixedSamples.clear();
-    pendingMixedOffset = 0;
+    {
+        std::lock_guard<std::mutex> queueLock(queueMutex);
+        pendingMixedSamples.clear();
+        pendingMixedOffset = 0;
+    }
+    renderEnded.store(false, std::memory_order_relaxed);
+    playbackPositionSecondsAtomic.store(0.0, std::memory_order_relaxed);
+    if (currentSubtuneIndex >= 0 &&
+        currentSubtuneIndex < static_cast<int>(subtuneDurationsSeconds.size())) {
+        currentSubtuneDurationSecondsAtomic.store(
+                subtuneDurationsSeconds[currentSubtuneIndex],
+                std::memory_order_relaxed
+        );
+    } else {
+        currentSubtuneDurationSecondsAtomic.store(fallbackDurationSeconds, std::memory_order_relaxed);
+    }
+    queueCv.notify_all();
     currentSubtuneIndex = index;
     return true;
+}
+
+void LibSidPlayFpDecoder::startRenderThreadLocked() {
+    renderThreadStop = false;
+    renderEnded.store(false, std::memory_order_relaxed);
+    renderThread = std::thread([this]() { renderLoop(); });
+}
+
+void LibSidPlayFpDecoder::stopRenderThreadLocked() {
+    {
+        std::lock_guard<std::mutex> queueLock(queueMutex);
+        renderThreadStop = true;
+    }
+    renderEnded.store(true, std::memory_order_relaxed);
+    queueCv.notify_all();
+    if (renderThread.joinable()) {
+        renderThread.join();
+    }
+}
+
+void LibSidPlayFpDecoder::renderLoop() {
+    // Keep SID rendering resilient against UI/system scheduling spikes.
+    // Ignore failures on devices that disallow this priority bump.
+    errno = 0;
+    const int prioResult = setpriority(PRIO_PROCESS, static_cast<id_t>(gettid()), -16);
+    if (prioResult == 0) {
+        LOGD("SID render thread priority raised (nice=-16)");
+    } else {
+        LOGD("SID render thread priority bump denied (errno=%d, %s)", errno, std::strerror(errno));
+    }
+
+    int emptyPlayRetries = 0;
+    for (;;) {
+        {
+            std::unique_lock<std::mutex> queueLock(queueMutex);
+            queueCv.wait(queueLock, [this]() {
+                if (renderThreadStop) return true;
+                const int channels = std::max(1, outputChannelsAtomic.load(std::memory_order_relaxed));
+                const size_t availableSamples =
+                        pendingMixedSamples.size() > pendingMixedOffset
+                                ? (pendingMixedSamples.size() - pendingMixedOffset)
+                                : 0u;
+                const int queuedFrames = static_cast<int>(availableSamples / static_cast<size_t>(channels));
+                return queuedFrames < kSidQueueTargetFrames;
+            });
+            if (renderThreadStop) {
+                return;
+            }
+        }
+
+        std::vector<int16_t> localMixed;
+        int channels = 2;
+        {
+            std::lock_guard<std::mutex> lock(decodeMutex);
+            if (!player) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                continue;
+            }
+            channels = std::clamp(outputChannels, 1, 2);
+            const unsigned int renderCycles = computeRenderCyclesForFrames(kSidRenderChunkFrames, activeSampleRate);
+            const int produced = player->play(renderCycles);
+            if (produced <= 0) {
+                emptyPlayRetries += 1;
+                if (emptyPlayRetries >= kTransientEmptyPlayRetries) {
+                    if (repeatMode.load() == 2) {
+                        if (selectSubtuneLocked(currentSubtuneIndex)) {
+                            emptyPlayRetries = 0;
+                            continue;
+                        }
+                    }
+                    renderEnded.store(true, std::memory_order_relaxed);
+                    queueCv.notify_all();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                }
+                continue;
+            }
+            emptyPlayRetries = 0;
+
+            const size_t requiredMixedSamples = static_cast<size_t>(produced) * static_cast<size_t>(channels);
+            if (mixedScratchSamples.size() < requiredMixedSamples) {
+                mixedScratchSamples.resize(requiredMixedSamples);
+            }
+            const unsigned int mixedSamples = player->mix(
+                    mixedScratchSamples.data(),
+                    static_cast<unsigned int>(produced)
+            );
+            if (mixedSamples < static_cast<unsigned int>(channels)) {
+                continue;
+            }
+            localMixed.assign(
+                    mixedScratchSamples.begin(),
+                    mixedScratchSamples.begin() + static_cast<std::ptrdiff_t>(mixedSamples)
+            );
+            playbackPositionSecondsAtomic.store(
+                    static_cast<double>(player->timeMs()) / 1000.0,
+                    std::memory_order_relaxed
+            );
+        }
+
+        if (!localMixed.empty()) {
+            std::lock_guard<std::mutex> queueLock(queueMutex);
+            if (pendingMixedOffset > 0 && pendingMixedOffset >= pendingMixedSamples.size()) {
+                pendingMixedSamples.clear();
+                pendingMixedOffset = 0;
+            } else if (pendingMixedOffset > 4096u) {
+                const size_t remainingSamples = pendingMixedSamples.size() - pendingMixedOffset;
+                std::memmove(
+                        pendingMixedSamples.data(),
+                        pendingMixedSamples.data() + pendingMixedOffset,
+                        remainingSamples * sizeof(int16_t)
+                );
+                pendingMixedSamples.resize(remainingSamples);
+                pendingMixedOffset = 0;
+            }
+            pendingMixedSamples.insert(
+                    pendingMixedSamples.end(),
+                    localMixed.begin(),
+                    localMixed.end()
+            );
+            queueCv.notify_all();
+        }
+    }
 }
 
 bool LibSidPlayFpDecoder::openInternalLocked(const char* path) {
@@ -461,6 +615,8 @@ bool LibSidPlayFpDecoder::openInternalLocked(const char* path) {
     if (!(fallbackDurationSeconds > 0.0)) {
         fallbackDurationSeconds = kDefaultSidDurationSeconds;
     }
+    currentSubtuneDurationSecondsAtomic.store(fallbackDurationSeconds, std::memory_order_relaxed);
+    playbackPositionSecondsAtomic.store(0.0, std::memory_order_relaxed);
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
     pendingMixedSamples.reserve(static_cast<size_t>(kSidReadPrefillFrames) * 4u);
@@ -471,11 +627,14 @@ bool LibSidPlayFpDecoder::openInternalLocked(const char* path) {
         return false;
     }
     refreshMetadataLocked();
+    startRenderThreadLocked();
 
     return true;
 }
 
 bool LibSidPlayFpDecoder::open(const char* path) {
+    stopRenderThreadLocked();
+    renderEnded.store(false, std::memory_order_relaxed);
     std::lock_guard<std::mutex> lock(decodeMutex);
     tune.reset();
     sidBuilder.reset();
@@ -501,6 +660,8 @@ bool LibSidPlayFpDecoder::open(const char* path) {
     sidCurrentModelSummary.clear();
     sidBaseAddressSummary.clear();
     sidCommentSummary.clear();
+    playbackPositionSecondsAtomic.store(0.0, std::memory_order_relaxed);
+    currentSubtuneDurationSecondsAtomic.store(fallbackDurationSeconds, std::memory_order_relaxed);
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
     mixedScratchSamples.clear();
@@ -508,6 +669,8 @@ bool LibSidPlayFpDecoder::open(const char* path) {
 }
 
 void LibSidPlayFpDecoder::close() {
+    stopRenderThreadLocked();
+    renderEnded.store(true, std::memory_order_relaxed);
     std::lock_guard<std::mutex> lock(decodeMutex);
     tune.reset();
     sidBuilder.reset();
@@ -533,100 +696,45 @@ void LibSidPlayFpDecoder::close() {
     sidCurrentModelSummary.clear();
     sidBaseAddressSummary.clear();
     sidCommentSummary.clear();
+    playbackPositionSecondsAtomic.store(0.0, std::memory_order_relaxed);
+    currentSubtuneDurationSecondsAtomic.store(fallbackDurationSeconds, std::memory_order_relaxed);
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
     mixedScratchSamples.clear();
 }
 
 int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
-    std::lock_guard<std::mutex> lock(decodeMutex);
-    if (!player || !buffer || numFrames <= 0) return 0;
-    const int channels = std::clamp(outputChannels, 1, 2);
+    if (!buffer || numFrames <= 0) return 0;
+    const int channels = std::max(1, outputChannelsAtomic.load(std::memory_order_relaxed));
 
     int framesWritten = 0;
-    int emptyPlayRetries = 0;
     while (framesWritten < numFrames) {
+        std::unique_lock<std::mutex> queueLock(queueMutex);
         const size_t pendingAvailableSamples =
                 pendingMixedSamples.size() > pendingMixedOffset
                         ? (pendingMixedSamples.size() - pendingMixedOffset)
                         : 0u;
         const int pendingFrames = static_cast<int>(pendingAvailableSamples / static_cast<size_t>(channels));
-        if (pendingFrames > 0) {
-            const int framesToCopy = std::min(numFrames - framesWritten, pendingFrames);
-            const int samplesToCopy = framesToCopy * channels;
-            for (int i = 0; i < samplesToCopy; ++i) {
-                buffer[(framesWritten * channels) + i] =
-                        static_cast<float>(pendingMixedSamples[pendingMixedOffset + static_cast<size_t>(i)]) / 32768.0f;
-            }
-            framesWritten += framesToCopy;
-            pendingMixedOffset += static_cast<size_t>(samplesToCopy);
-
-            if (pendingMixedOffset >= pendingMixedSamples.size()) {
-                pendingMixedSamples.clear();
-                pendingMixedOffset = 0;
-            } else if (pendingMixedOffset > 4096u) {
-                const size_t remainingSamples = pendingMixedSamples.size() - pendingMixedOffset;
-                std::memmove(
-                        pendingMixedSamples.data(),
-                        pendingMixedSamples.data() + pendingMixedOffset,
-                        remainingSamples * sizeof(int16_t)
-                );
-                pendingMixedSamples.resize(remainingSamples);
-                pendingMixedOffset = 0;
-            }
-            continue;
-        }
-
-        const int framesRemaining = numFrames - framesWritten;
-        const int renderTargetFrames = std::max(framesRemaining, kSidReadPrefillFrames);
-        const unsigned int renderCycles = computeRenderCyclesForFrames(renderTargetFrames, activeSampleRate);
-        const int produced = player->play(renderCycles);
-        if (produced < 0) {
-            LOGE("sidplayfp play failed: %s", player->error());
-            break;
-        }
-        if (produced == 0) {
-            emptyPlayRetries += 1;
-            if (emptyPlayRetries >= kTransientEmptyPlayRetries) {
-                if (repeatMode.load() == 2) {
-                    if (selectSubtuneLocked(currentSubtuneIndex)) {
-                        emptyPlayRetries = 0;
-                        continue;
-                    }
-                }
+        if (pendingFrames <= 0) {
+            if (renderEnded.load(std::memory_order_relaxed)) {
                 break;
             }
+            queueCv.wait_for(queueLock, std::chrono::milliseconds(2));
             continue;
         }
-        emptyPlayRetries = 0;
-
-        const size_t requiredMixedSamples = static_cast<size_t>(produced) * static_cast<size_t>(channels);
-        if (mixedScratchSamples.size() < requiredMixedSamples) {
-            mixedScratchSamples.resize(requiredMixedSamples);
+        const int framesToCopy = std::min(numFrames - framesWritten, pendingFrames);
+        const int samplesToCopy = framesToCopy * channels;
+        for (int i = 0; i < samplesToCopy; ++i) {
+            buffer[(framesWritten * channels) + i] =
+                    static_cast<float>(pendingMixedSamples[pendingMixedOffset + static_cast<size_t>(i)]) / 32768.0f;
         }
-        const unsigned int mixedSamples = player->mix(
-                mixedScratchSamples.data(),
-                static_cast<unsigned int>(produced)
-        );
-        if (mixedSamples < static_cast<unsigned int>(channels)) {
-            emptyPlayRetries += 1;
-            if (emptyPlayRetries >= kTransientEmptyPlayRetries) {
-                if (repeatMode.load() == 2) {
-                    if (selectSubtuneLocked(currentSubtuneIndex)) {
-                        emptyPlayRetries = 0;
-                        continue;
-                    }
-                }
-                break;
-            }
-            continue;
+        framesWritten += framesToCopy;
+        pendingMixedOffset += static_cast<size_t>(samplesToCopy);
+        if (pendingMixedOffset >= pendingMixedSamples.size()) {
+            pendingMixedSamples.clear();
+            pendingMixedOffset = 0;
         }
-        emptyPlayRetries = 0;
-        pendingMixedSamples.insert(
-                pendingMixedSamples.end(),
-                mixedScratchSamples.begin(),
-                mixedScratchSamples.begin() + static_cast<std::ptrdiff_t>(mixedSamples)
-        );
+        queueCv.notify_all();
     }
 
     return framesWritten;
@@ -637,28 +745,33 @@ void LibSidPlayFpDecoder::seek(double seconds) {
     if (!player || !tune) return;
     if (seconds <= 0.0) {
         selectSubtuneLocked(currentSubtuneIndex);
+        playbackPositionSecondsAtomic.store(0.0, std::memory_order_relaxed);
         return;
     }
 
     // Basic seek fallback: restart subtune then fast-forward in chunks.
     if (!selectSubtuneLocked(currentSubtuneIndex)) return;
-    pendingMixedSamples.clear();
-    pendingMixedOffset = 0;
+    {
+        std::lock_guard<std::mutex> queueLock(queueMutex);
+        pendingMixedSamples.clear();
+        pendingMixedOffset = 0;
+    }
+    renderEnded.store(false, std::memory_order_relaxed);
     const uint32_t targetMs = static_cast<uint32_t>(seconds * 1000.0);
     while (player->timeMs() < targetMs) {
         const unsigned int renderCycles = computeRenderCyclesForFrames(1024, activeSampleRate);
         const int produced = player->play(renderCycles);
         if (produced <= 0) break;
     }
+    playbackPositionSecondsAtomic.store(
+            static_cast<double>(player->timeMs()) / 1000.0,
+            std::memory_order_relaxed
+    );
+    queueCv.notify_all();
 }
 
 double LibSidPlayFpDecoder::getDuration() {
-    std::lock_guard<std::mutex> lock(decodeMutex);
-    if (currentSubtuneIndex >= 0 &&
-        currentSubtuneIndex < static_cast<int>(subtuneDurationsSeconds.size())) {
-        return subtuneDurationsSeconds[currentSubtuneIndex];
-    }
-    return fallbackDurationSeconds;
+    return currentSubtuneDurationSecondsAtomic.load(std::memory_order_relaxed);
 }
 
 int LibSidPlayFpDecoder::getSampleRate() {
@@ -977,7 +1090,5 @@ int LibSidPlayFpDecoder::getRepeatModeCapabilities() const {
 }
 
 double LibSidPlayFpDecoder::getPlaybackPositionSeconds() {
-    std::lock_guard<std::mutex> lock(decodeMutex);
-    if (!player) return -1.0;
-    return static_cast<double>(player->timeMs()) / 1000.0;
+    return playbackPositionSecondsAtomic.load(std::memory_order_relaxed);
 }

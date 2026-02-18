@@ -98,7 +98,7 @@ object SidPlayFpDefaults {
     const val filterCurve6581Percent = 50
     const val filterRange6581Percent = 50
     const val filterCurve8580Percent = 50
-    const val reSidFpFastSampling = true
+    const val reSidFpFastSampling = false
     const val reSidFpCombinedWaveformsStrength = 0 // 0 Average, 1 Weak, 2 Strong
 }
 

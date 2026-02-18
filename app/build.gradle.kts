@@ -24,6 +24,7 @@ android {
     namespace = "com.flopster101.siliconplayer"
     compileSdk = 34
     buildToolsVersion = "36.1.0"
+    ndkVersion = "29.0.14206865"
 
     defaultConfig {
         applicationId = "com.flopster101.siliconplayer"
@@ -32,8 +33,6 @@ android {
         versionCode = 1000
         versionName = "0.1.0"
         buildConfigField("String", "GIT_SHA", "\"${gitShortSha()}\"")
-        ndkVersion = "29.0.14206865"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true

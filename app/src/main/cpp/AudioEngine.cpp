@@ -1138,7 +1138,11 @@ double AudioEngine::getDurationSeconds() {
     if (seekInProgress.load()) {
         return cachedDurationSeconds.load();
     }
-    std::lock_guard<std::mutex> lock(decoderMutex);
+    std::unique_lock<std::mutex> lock(decoderMutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        // Avoid blocking real-time audio callback. Return last known value.
+        return cachedDurationSeconds.load();
+    }
     if (!decoder) {
         return 0.0;
     }

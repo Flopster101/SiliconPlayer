@@ -85,6 +85,7 @@ class PlaybackService : Service() {
     private var durationSeconds: Double = 0.0
     private var positionSeconds: Double = 0.0
     private var isPlaying: Boolean = false
+    private var durationRefreshCountdown = 0
 
     private val handler = Handler(Looper.getMainLooper())
     private val ticker = object : Runnable {
@@ -93,7 +94,12 @@ class PlaybackService : Service() {
                 val seekInProgress = NativeBridge.isSeekInProgress()
                 if (!seekInProgress) {
                     positionSeconds = NativeBridge.getPosition()
-                    durationSeconds = NativeBridge.getDuration()
+                    if (durationRefreshCountdown <= 0) {
+                        durationSeconds = NativeBridge.getDuration()
+                        durationRefreshCountdown = if (isPlaying) 5 else 2
+                    } else {
+                        durationRefreshCountdown -= 1
+                    }
                 }
                 isPlaying = NativeBridge.isEnginePlaying()
                 updateMediaSessionState()
@@ -168,6 +174,7 @@ class PlaybackService : Service() {
         currentArtist = intent.getStringExtra(EXTRA_ARTIST).orEmpty().ifBlank { "Unknown Artist" }
         durationSeconds = intent.getDoubleExtra(EXTRA_DURATION, 0.0)
         positionSeconds = intent.getDoubleExtra(EXTRA_POSITION, 0.0)
+        durationRefreshCountdown = 0
         val wasPlaying = isPlaying
         isPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, false)
 

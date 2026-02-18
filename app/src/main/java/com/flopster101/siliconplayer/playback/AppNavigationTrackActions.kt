@@ -1,0 +1,149 @@
+package com.flopster101.siliconplayer.playback
+
+import com.flopster101.siliconplayer.ManualSourceOpenOptions
+import com.flopster101.siliconplayer.NativeBridge
+import com.flopster101.siliconplayer.PreviousTrackAction
+import com.flopster101.siliconplayer.ResumeTarget
+import com.flopster101.siliconplayer.adjacentTrackForOffset
+import com.flopster101.siliconplayer.resolvePreviousTrackAction
+import com.flopster101.siliconplayer.resolveResumeTarget
+import java.io.File
+
+internal fun applyTrackSelectionAction(
+    file: File,
+    autoStart: Boolean,
+    expandOverride: Boolean?,
+    sourceIdOverride: String?,
+    locationIdOverride: String?,
+    useSongVolumeLookup: Boolean,
+    onResetPlayback: () -> Unit,
+    onSelectedFileChanged: (File) -> Unit,
+    onCurrentPlaybackSourceIdChanged: (String) -> Unit,
+    onPlayerSurfaceVisibleChanged: (Boolean) -> Unit,
+    loadSongVolumeForFile: (String) -> Unit,
+    onSongVolumeDbChanged: (Float) -> Unit,
+    onSongGainChanged: (Float) -> Unit,
+    applyNativeTrackSnapshot: () -> Unit,
+    refreshSubtuneState: () -> Unit,
+    onPositionChanged: (Double) -> Unit,
+    onArtworkBitmapCleared: () -> Unit,
+    refreshRepeatModeForTrack: () -> Unit,
+    onAddRecentPlayedTrack: (path: String, locationId: String?, title: String?, artist: String?) -> Unit,
+    metadataTitleProvider: () -> String,
+    metadataArtistProvider: () -> String,
+    onStartEngine: () -> Unit,
+    onIsPlayingChanged: (Boolean) -> Unit,
+    scheduleRecentTrackMetadataRefresh: (String, String?) -> Unit,
+    onPlayerExpandedChanged: (Boolean) -> Unit,
+    syncPlaybackService: () -> Unit
+) {
+    onResetPlayback()
+    val sourceId = sourceIdOverride ?: file.absolutePath
+    onSelectedFileChanged(file)
+    onCurrentPlaybackSourceIdChanged(sourceId)
+    onPlayerSurfaceVisibleChanged(true)
+    if (useSongVolumeLookup) {
+        loadSongVolumeForFile(file.absolutePath)
+    } else {
+        onSongVolumeDbChanged(0f)
+        onSongGainChanged(0f)
+    }
+    NativeBridge.loadAudio(file.absolutePath)
+    applyNativeTrackSnapshot()
+    refreshSubtuneState()
+    onPositionChanged(0.0)
+    onArtworkBitmapCleared()
+    refreshRepeatModeForTrack()
+    if (autoStart) {
+        onAddRecentPlayedTrack(sourceId, locationIdOverride, metadataTitleProvider(), metadataArtistProvider())
+        onStartEngine()
+        onIsPlayingChanged(true)
+        scheduleRecentTrackMetadataRefresh(sourceId, locationIdOverride)
+    }
+    expandOverride?.let { onPlayerExpandedChanged(it) }
+    syncPlaybackService()
+}
+
+internal fun resumeLastStoppedTrackAction(
+    lastStoppedFile: File?,
+    lastStoppedSourceId: String?,
+    autoStart: Boolean,
+    urlOrPathForceCaching: Boolean,
+    isPlayerExpanded: Boolean,
+    onApplyTrackSelection: (file: File, autoStart: Boolean, expandOverride: Boolean?) -> Unit,
+    onApplyManualInputSelection: (String, ManualSourceOpenOptions, Boolean?) -> Unit,
+    onClearLastStopped: () -> Unit
+): Boolean {
+    return when (val target = resolveResumeTarget(lastStoppedFile, lastStoppedSourceId)) {
+        is ResumeTarget.LocalFile -> {
+            onApplyTrackSelection(target.file, autoStart, null)
+            true
+        }
+
+        is ResumeTarget.SourceId -> {
+            onApplyManualInputSelection(
+                target.sourceId,
+                ManualSourceOpenOptions(forceCaching = urlOrPathForceCaching),
+                isPlayerExpanded
+            )
+            true
+        }
+
+        null -> {
+            onClearLastStopped()
+            false
+        }
+    }
+}
+
+internal fun playAdjacentTrackAction(
+    selectedFile: File?,
+    visiblePlayableFiles: List<File>,
+    offset: Int,
+    onApplyTrackSelection: (file: File, autoStart: Boolean, expandOverride: Boolean?) -> Unit
+): Boolean {
+    val target = adjacentTrackForOffset(
+        selectedFile = selectedFile,
+        visiblePlayableFiles = visiblePlayableFiles,
+        offset = offset
+    ) ?: return false
+    onApplyTrackSelection(target, true, null)
+    return true
+}
+
+internal fun handlePreviousTrackAction(
+    previousRestartsAfterThreshold: Boolean,
+    selectedFile: File?,
+    visiblePlayableFiles: List<File>,
+    positionSeconds: Double,
+    onRestartCurrent: () -> Unit,
+    onPlayAdjacentTrack: (Int) -> Boolean
+): Boolean {
+    val hasTrackLoaded = selectedFile != null
+    val hasPreviousTrack = adjacentTrackForOffset(
+        selectedFile = selectedFile,
+        visiblePlayableFiles = visiblePlayableFiles,
+        offset = -1
+    ) != null
+    return when (
+        resolvePreviousTrackAction(
+            previousRestartsAfterThreshold = previousRestartsAfterThreshold,
+            hasTrackLoaded = hasTrackLoaded,
+            positionSeconds = positionSeconds,
+            hasPreviousTrack = hasPreviousTrack
+        )
+    ) {
+        PreviousTrackAction.RestartCurrent -> {
+            onRestartCurrent()
+            true
+        }
+
+        PreviousTrackAction.PlayPreviousTrack -> {
+            onPlayAdjacentTrack(-1)
+        }
+
+        PreviousTrackAction.NoAction -> {
+            false
+        }
+    }
+}

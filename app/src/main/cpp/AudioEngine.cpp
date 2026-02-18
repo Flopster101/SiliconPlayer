@@ -853,6 +853,7 @@ void AudioEngine::renderWorkerLoop() {
                 renderWorkerChunkFrames.load(std::memory_order_relaxed) * 2,
                 renderWorkerTargetFrames.load(std::memory_order_relaxed)
         );
+        bool needsFill = false;
         {
             std::unique_lock<std::mutex> lock(renderQueueMutex);
             renderWorkerCv.wait_for(lock, std::chrono::milliseconds(8), [this, targetFrames]() {
@@ -867,9 +868,17 @@ void AudioEngine::renderWorkerLoop() {
             if (renderWorkerStop) {
                 break;
             }
+            if (!isPlaying.load() || seekInProgress.load()) {
+                continue;
+            }
+            const size_t availableSamples = renderQueueSamples.size() > renderQueueOffset
+                    ? (renderQueueSamples.size() - renderQueueOffset)
+                    : 0u;
+            const int bufferedFrames = static_cast<int>(availableSamples / 2u);
+            needsFill = bufferedFrames < targetFrames;
         }
 
-        if (!isPlaying.load() || seekInProgress.load()) {
+        if (!needsFill) {
             continue;
         }
 

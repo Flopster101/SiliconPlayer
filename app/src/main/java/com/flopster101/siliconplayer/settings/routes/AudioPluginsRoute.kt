@@ -29,14 +29,28 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 
+internal data class AudioPluginsRouteState(
+    val pluginPriorityEditMode: Boolean
+)
+
+internal data class AudioPluginsRouteActions(
+    val onPluginSelected: (String) -> Unit,
+    val onPluginEnabledChanged: (String, Boolean) -> Unit,
+    val onPluginPriorityOrderChanged: (List<String>) -> Unit,
+    val onRequestClearPluginSettings: () -> Unit
+)
+
 @Composable
 internal fun AudioPluginsRouteContent(
-    pluginPriorityEditMode: Boolean,
-    onPluginSelected: (String) -> Unit,
-    onPluginEnabledChanged: (String, Boolean) -> Unit,
-    onPluginPriorityOrderChanged: (List<String>) -> Unit,
-    onRequestClearPluginSettings: () -> Unit
+    state: AudioPluginsRouteState,
+    actions: AudioPluginsRouteActions
 ) {
+    val pluginPriorityEditMode = state.pluginPriorityEditMode
+    val onPluginSelected = actions.onPluginSelected
+    val onPluginEnabledChanged = actions.onPluginEnabledChanged
+    val onPluginPriorityOrderChanged = actions.onPluginPriorityOrderChanged
+    val onRequestClearPluginSettings = actions.onRequestClearPluginSettings
+
     val context = LocalContext.current
     SettingsSectionLabel("Registered plugins")
 

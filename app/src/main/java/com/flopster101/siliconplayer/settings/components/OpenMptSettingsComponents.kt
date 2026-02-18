@@ -9,29 +9,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import kotlin.math.roundToInt
 
 private val OpenMptCardShape = RoundedCornerShape(16.dp)
 
@@ -103,7 +91,6 @@ internal fun OpenMptDialogSliderCard(
     onValueChanged: (Int) -> Unit
 ) {
     val coercedValue = value.coerceIn(valueRange.first, valueRange.last)
-    val sliderSteps = ((valueRange.last - valueRange.first) / step).coerceAtLeast(1) - 1
     var dialogOpen by remember { mutableStateOf(false) }
     androidx.compose.material3.ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -137,84 +124,20 @@ internal fun OpenMptDialogSliderCard(
     }
 
     if (dialogOpen) {
-        var sliderValue by remember(value) { mutableIntStateOf(coercedValue) }
-        AlertDialog(
-            onDismissRequest = { dialogOpen = false },
-            title = { Text(title) },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = valueLabel(sliderValue),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    CompositionLocalProvider(
-                        androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement provides false
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (showNudgeButtons) {
-                                IconButton(
-                                    onClick = {
-                                        val snapped = sliderValue - nudgeStep
-                                        sliderValue = snapped.coerceIn(valueRange.first, valueRange.last)
-                                    },
-                                    enabled = sliderValue > valueRange.first,
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Remove,
-                                        contentDescription = "Decrease",
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                            Slider(
-                                value = sliderValue.toFloat(),
-                                onValueChange = { raw ->
-                                    val stepsFromStart = ((raw - valueRange.first.toFloat()) / step.toFloat()).roundToInt()
-                                    val snapped = valueRange.first + (stepsFromStart * step)
-                                    sliderValue = snapped.coerceIn(valueRange.first, valueRange.last)
-                                },
-                                valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
-                                steps = sliderSteps,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (showNudgeButtons) {
-                                IconButton(
-                                    onClick = {
-                                        val snapped = sliderValue + nudgeStep
-                                        sliderValue = snapped.coerceIn(valueRange.first, valueRange.last)
-                                    },
-                                    enabled = sliderValue < valueRange.last,
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Add,
-                                        contentDescription = "Increase",
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { dialogOpen = false }) {
-                    Text("Cancel")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onValueChanged(sliderValue)
-                    dialogOpen = false
-                }) {
-                    Text("Apply")
-                }
+        SteppedIntSliderDialog(
+            title = title,
+            unitLabel = "",
+            range = valueRange,
+            step = step,
+            currentValue = coercedValue,
+            showNudgeButtons = showNudgeButtons,
+            nudgeStep = nudgeStep,
+            valueLabelFormatter = valueLabel,
+            confirmLabel = "Apply",
+            onDismiss = { dialogOpen = false },
+            onConfirm = { value ->
+                onValueChanged(value)
+                dialogOpen = false
             }
         )
     }
@@ -264,60 +187,19 @@ internal fun OpenMptVolumeRampingCard(
     }
 
     if (dialogOpen) {
-        var autoState by remember(value) { mutableStateOf(value < 0) }
-        var sliderValue by remember(value) { mutableIntStateOf(value.coerceIn(0, 10)) }
-        AlertDialog(
-            onDismissRequest = { dialogOpen = false },
-            title = { Text(title) },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Auto",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Switch(
-                            checked = autoState,
-                            onCheckedChange = { enabled ->
-                                autoState = enabled
-                            }
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = if (autoState) "Current: Auto" else "Current: $sliderValue",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Slider(
-                        value = sliderValue.toFloat(),
-                        onValueChange = { raw ->
-                            sliderValue = raw.roundToInt().coerceIn(0, 10)
-                        },
-                        valueRange = 0f..10f,
-                        steps = 9,
-                        enabled = !autoState
-                    )
-                }
+        SettingsSwitchSliderDialog(
+            title = title,
+            switchLabel = "Auto",
+            switchChecked = autoEnabled,
+            currentValue = value.coerceIn(0, 10),
+            valueRange = 0..10,
+            currentValueLabel = { checked, slider -> if (checked) "Current: Auto" else "Current: $slider" },
+            onDismiss = { dialogOpen = false },
+            onConfirm = { checked, slider ->
+                onValueChanged(if (checked) -1 else slider)
+                dialogOpen = false
             },
-            dismissButton = {
-                TextButton(onClick = { dialogOpen = false }) {
-                    Text("Cancel")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onValueChanged(if (autoState) -1 else sliderValue)
-                    dialogOpen = false
-                }) {
-                    Text("Apply")
-                }
-            }
+            confirmLabel = "Apply"
         )
     }
 }

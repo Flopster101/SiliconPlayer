@@ -14,19 +14,50 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
+internal data class VisualizationBasicBarsRouteState(
+    val visualizationBarCount: Int,
+    val visualizationBarSmoothingPercent: Int,
+    val visualizationBarRoundnessDp: Int,
+    val visualizationBarOverlayArtwork: Boolean,
+    val visualizationBarUseThemeColor: Boolean
+)
+
+internal data class VisualizationBasicBarsRouteActions(
+    val onVisualizationBarCountChanged: (Int) -> Unit,
+    val onVisualizationBarSmoothingPercentChanged: (Int) -> Unit,
+    val onVisualizationBarRoundnessDpChanged: (Int) -> Unit,
+    val onVisualizationBarOverlayArtworkChanged: (Boolean) -> Unit,
+    val onVisualizationBarUseThemeColorChanged: (Boolean) -> Unit
+)
+
+internal data class VisualizationBasicVuMetersRouteState(
+    val visualizationVuAnchor: VisualizationVuAnchor,
+    val visualizationVuUseThemeColor: Boolean,
+    val visualizationVuSmoothingPercent: Int
+)
+
+internal data class VisualizationBasicVuMetersRouteActions(
+    val onVisualizationVuAnchorChanged: (VisualizationVuAnchor) -> Unit,
+    val onVisualizationVuUseThemeColorChanged: (Boolean) -> Unit,
+    val onVisualizationVuSmoothingPercentChanged: (Int) -> Unit
+)
+
 @Composable
 internal fun VisualizationBasicBarsRouteContent(
-    visualizationBarCount: Int,
-    onVisualizationBarCountChanged: (Int) -> Unit,
-    visualizationBarSmoothingPercent: Int,
-    onVisualizationBarSmoothingPercentChanged: (Int) -> Unit,
-    visualizationBarRoundnessDp: Int,
-    onVisualizationBarRoundnessDpChanged: (Int) -> Unit,
-    visualizationBarOverlayArtwork: Boolean,
-    onVisualizationBarOverlayArtworkChanged: (Boolean) -> Unit,
-    visualizationBarUseThemeColor: Boolean,
-    onVisualizationBarUseThemeColorChanged: (Boolean) -> Unit
+    state: VisualizationBasicBarsRouteState,
+    actions: VisualizationBasicBarsRouteActions
 ) {
+    val visualizationBarCount = state.visualizationBarCount
+    val onVisualizationBarCountChanged = actions.onVisualizationBarCountChanged
+    val visualizationBarSmoothingPercent = state.visualizationBarSmoothingPercent
+    val onVisualizationBarSmoothingPercentChanged = actions.onVisualizationBarSmoothingPercentChanged
+    val visualizationBarRoundnessDp = state.visualizationBarRoundnessDp
+    val onVisualizationBarRoundnessDpChanged = actions.onVisualizationBarRoundnessDpChanged
+    val visualizationBarOverlayArtwork = state.visualizationBarOverlayArtwork
+    val onVisualizationBarOverlayArtworkChanged = actions.onVisualizationBarOverlayArtworkChanged
+    val visualizationBarUseThemeColor = state.visualizationBarUseThemeColor
+    val onVisualizationBarUseThemeColorChanged = actions.onVisualizationBarUseThemeColorChanged
+
     val prefsName = "silicon_player_settings"
     val barColorModeNoArtworkKey = "visualization_bar_color_mode_no_artwork"
     val barColorModeWithArtworkKey = "visualization_bar_color_mode_with_artwork"
@@ -222,13 +253,16 @@ internal fun VisualizationBasicBarsRouteContent(
 
 @Composable
 internal fun VisualizationBasicVuMetersRouteContent(
-    visualizationVuAnchor: VisualizationVuAnchor,
-    onVisualizationVuAnchorChanged: (VisualizationVuAnchor) -> Unit,
-    visualizationVuUseThemeColor: Boolean,
-    onVisualizationVuUseThemeColorChanged: (Boolean) -> Unit,
-    visualizationVuSmoothingPercent: Int,
-    onVisualizationVuSmoothingPercentChanged: (Int) -> Unit
+    state: VisualizationBasicVuMetersRouteState,
+    actions: VisualizationBasicVuMetersRouteActions
 ) {
+    val visualizationVuAnchor = state.visualizationVuAnchor
+    val onVisualizationVuAnchorChanged = actions.onVisualizationVuAnchorChanged
+    val visualizationVuUseThemeColor = state.visualizationVuUseThemeColor
+    val onVisualizationVuUseThemeColorChanged = actions.onVisualizationVuUseThemeColorChanged
+    val visualizationVuSmoothingPercent = state.visualizationVuSmoothingPercent
+    val onVisualizationVuSmoothingPercentChanged = actions.onVisualizationVuSmoothingPercentChanged
+
     val prefsName = "silicon_player_settings"
     val vuColorModeNoArtworkKey = "visualization_vu_color_mode_no_artwork"
     val vuColorModeWithArtworkKey = "visualization_vu_color_mode_with_artwork"

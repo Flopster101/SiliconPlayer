@@ -16,13 +16,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -168,48 +166,15 @@ internal fun ClearAudioParametersCard(
     }
 
     if (showDialog) {
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            title = { Text("Clear saved parameters") },
-            text = {
-                Column {
-                    Text("Choose which audio parameters to reset:")
-                    Spacer(modifier = Modifier.size(16.dp))
-                    TextButton(
-                        onClick = {
-                            onClearAll()
-                            showDialog = false
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Clear all")
-                    }
-                    TextButton(
-                        onClick = {
-                            onClearPlugins()
-                            showDialog = false
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Clear plugin volumes")
-                    }
-                    TextButton(
-                        onClick = {
-                            onClearSongs()
-                            showDialog = false
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Clear song volumes")
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+        SettingsActionListDialog(
+            title = "Clear saved parameters",
+            message = "Choose which audio parameters to reset:",
+            actions = listOf(
+                SettingsActionDialogItem("Clear all", onClearAll),
+                SettingsActionDialogItem("Clear plugin volumes", onClearPlugins),
+                SettingsActionDialogItem("Clear song volumes", onClearSongs)
+            ),
+            onDismiss = { showDialog = false }
         )
     }
 }

@@ -14,11 +14,22 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
+internal data class VisualizationBasicOscilloscopeRouteState(
+    val visualizationOscStereo: Boolean
+)
+
+internal data class VisualizationBasicOscilloscopeRouteActions(
+    val onVisualizationOscStereoChanged: (Boolean) -> Unit
+)
+
 @Composable
 internal fun VisualizationBasicOscilloscopeRouteContent(
-    visualizationOscStereo: Boolean,
-    onVisualizationOscStereoChanged: (Boolean) -> Unit
+    state: VisualizationBasicOscilloscopeRouteState,
+    actions: VisualizationBasicOscilloscopeRouteActions
 ) {
+    val visualizationOscStereo = state.visualizationOscStereo
+    val onVisualizationOscStereoChanged = actions.onVisualizationOscStereoChanged
+
     val prefsName = "silicon_player_settings"
     val oscWindowKey = "visualization_osc_window_ms"
     val oscTriggerKey = "visualization_osc_trigger_mode"

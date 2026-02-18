@@ -3180,29 +3180,122 @@ private fun AppNavigation(
                     }
                     MainView.Settings -> Box(modifier = Modifier.padding(mainPadding)) {
                         val settingsContent: @Composable () -> Unit = {
-                            SettingsScreen(
-                        route = settingsRoute,
-                        bottomContentPadding = miniPlayerListInset,
-                        onBack = {
+                                                        SettingsScreen(
+                                route = settingsRoute,
+                                bottomContentPadding = miniPlayerListInset,
+                                state = SettingsScreenState(
+                                    selectedPluginName = selectedPluginName,
+                                    autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+                                    openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                                    autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
+                                    previousRestartsAfterThreshold = previousRestartsAfterThreshold,
+                                    respondHeadphoneMediaButtons = respondHeadphoneMediaButtons,
+                                    pauseOnHeadphoneDisconnect = pauseOnHeadphoneDisconnect,
+                                    audioFocusInterrupt = audioFocusInterrupt,
+                                    audioDucking = audioDucking,
+                                    audioBackendPreference = audioBackendPreference,
+                                    audioPerformanceMode = audioPerformanceMode,
+                                    audioBufferPreset = audioBufferPreset,
+                                    audioResamplerPreference = audioResamplerPreference,
+                                    audioAllowBackendFallback = audioAllowBackendFallback,
+                                    openPlayerFromNotification = openPlayerFromNotification,
+                                    persistRepeatMode = persistRepeatMode,
+                                    themeMode = themeMode,
+                                    rememberBrowserLocation = rememberBrowserLocation,
+                                    recentFoldersLimit = recentFoldersLimit,
+                                    recentFilesLimit = recentFilesLimit,
+                                    urlCacheClearOnLaunch = urlCacheClearOnLaunch,
+                                    urlCacheMaxTracks = urlCacheMaxTracks,
+                                    urlCacheMaxBytes = urlCacheMaxBytes,
+                                    cachedSourceFiles = cachedSourceFiles,
+                                    keepScreenOn = keepScreenOn,
+                                    playerArtworkCornerRadiusDp = playerArtworkCornerRadiusDp,
+                                    filenameDisplayMode = filenameDisplayMode,
+                                    filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
+                                    unknownTrackDurationSeconds = unknownTrackDurationSeconds,
+                                    endFadeApplyToAllTracks = endFadeApplyToAllTracks,
+                                    endFadeDurationMs = endFadeDurationMs,
+                                    endFadeCurve = endFadeCurve,
+                                    visualizationMode = visualizationMode,
+                                    enabledVisualizationModes = enabledVisualizationModes,
+                                    visualizationShowDebugInfo = visualizationShowDebugInfo,
+                                    visualizationBarCount = visualizationBarCount,
+                                    visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
+                                    visualizationBarRoundnessDp = visualizationBarRoundnessDp,
+                                    visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
+                                    visualizationBarUseThemeColor = visualizationBarUseThemeColor,
+                                    visualizationOscStereo = visualizationOscStereo,
+                                    visualizationVuAnchor = visualizationVuAnchor,
+                                    visualizationVuUseThemeColor = visualizationVuUseThemeColor,
+                                    visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
+                                    ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
+                                    ffmpegCapabilities = ffmpegCapabilities,
+                                    openMptSampleRateHz = openMptCoreSampleRateHz,
+                                    openMptCapabilities = openMptCapabilities,
+                                    vgmPlaySampleRateHz = vgmPlayCoreSampleRateHz,
+                                    vgmPlayCapabilities = vgmPlayCapabilities,
+                                    gmeSampleRateHz = gmeCoreSampleRateHz,
+                                    sidPlayFpSampleRateHz = sidPlayFpCoreSampleRateHz,
+                                    lazyUsf2SampleRateHz = lazyUsf2CoreSampleRateHz,
+                                    lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
+                                    sidPlayFpBackend = sidPlayFpBackend,
+                                    sidPlayFpClockMode = sidPlayFpClockMode,
+                                    sidPlayFpSidModelMode = sidPlayFpSidModelMode,
+                                    sidPlayFpFilter6581Enabled = sidPlayFpFilter6581Enabled,
+                                    sidPlayFpFilter8580Enabled = sidPlayFpFilter8580Enabled,
+                                    sidPlayFpDigiBoost8580 = sidPlayFpDigiBoost8580,
+                                    sidPlayFpFilterCurve6581Percent = sidPlayFpFilterCurve6581Percent,
+                                    sidPlayFpFilterRange6581Percent = sidPlayFpFilterRange6581Percent,
+                                    sidPlayFpFilterCurve8580Percent = sidPlayFpFilterCurve8580Percent,
+                                    sidPlayFpReSidFpFastSampling = sidPlayFpReSidFpFastSampling,
+                                    sidPlayFpReSidFpCombinedWaveformsStrength = sidPlayFpReSidFpCombinedWaveformsStrength,
+                                    gmeTempoPercent = gmeTempoPercent,
+                                    gmeStereoSeparationPercent = gmeStereoSeparationPercent,
+                                    gmeEchoEnabled = gmeEchoEnabled,
+                                    gmeAccuracyEnabled = gmeAccuracyEnabled,
+                                    gmeEqTrebleDecibel = gmeEqTrebleDecibel,
+                                    gmeEqBassHz = gmeEqBassHz,
+                                    gmeSpcUseBuiltInFade = gmeSpcUseBuiltInFade,
+                                    gmeSpcInterpolation = gmeSpcInterpolation,
+                                    gmeSpcUseNativeSampleRate = gmeSpcUseNativeSampleRate,
+                                    vgmPlayLoopCount = vgmPlayLoopCount,
+                                    vgmPlayAllowNonLoopingLoop = vgmPlayAllowNonLoopingLoop,
+                                    vgmPlayVsyncRate = vgmPlayVsyncRate,
+                                    vgmPlayResampleMode = vgmPlayResampleMode,
+                                    vgmPlayChipSampleMode = vgmPlayChipSampleMode,
+                                    vgmPlayChipSampleRate = vgmPlayChipSampleRate,
+                                    vgmPlayChipCoreSelections = vgmPlayChipCoreSelections,
+                                    openMptStereoSeparationPercent = openMptStereoSeparationPercent,
+                                    openMptStereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
+                                    openMptInterpolationFilterLength = openMptInterpolationFilterLength,
+                                    openMptAmigaResamplerMode = openMptAmigaResamplerMode,
+                                    openMptAmigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
+                                    openMptVolumeRampingStrength = openMptVolumeRampingStrength,
+                                    openMptFt2XmVolumeRamping = openMptFt2XmVolumeRamping,
+                                    openMptMasterGainMilliBel = openMptMasterGainMilliBel,
+                                    openMptSurroundEnabled = openMptSurroundEnabled,
+                                ),
+                                actions = SettingsScreenActions(
+                                    onBack = {
                             if (settingsLaunchedFromPlayer) {
                                 exitSettingsToReturnView()
-                                return@SettingsScreen
+                                return@SettingsScreenActions
                             }
                             if (!popSettingsRoute()) {
                                 exitSettingsToReturnView()
                             }
                         },
-                        onOpenAudioPlugins = { openSettingsRoute(SettingsRoute.AudioPlugins, false) },
-                        onOpenGeneralAudio = { openSettingsRoute(SettingsRoute.GeneralAudio, false) },
-                        onOpenHome = { openSettingsRoute(SettingsRoute.Home, false) },
-                        onOpenAudioEffects = {
+                                    onOpenAudioPlugins = { openSettingsRoute(SettingsRoute.AudioPlugins, false) },
+                                    onOpenGeneralAudio = { openSettingsRoute(SettingsRoute.GeneralAudio, false) },
+                                    onOpenHome = { openSettingsRoute(SettingsRoute.Home, false) },
+                                    onOpenAudioEffects = {
                             tempMasterVolumeDb = masterVolumeDb
                             tempPluginVolumeDb = pluginVolumeDb
                             tempSongVolumeDb = songVolumeDb
                             tempForceMono = forceMono
                             showAudioEffectsDialog = true
                         },
-                        onClearAllAudioParameters = {
+                                    onClearAllAudioParameters = {
                             // Clear all: master, plugin volumes and force mono from preferences, and all song volumes from database
                             prefs.edit().apply {
                                 remove(AppPreferenceKeys.AUDIO_MASTER_VOLUME_DB)
@@ -3222,106 +3315,96 @@ private fun AppNavigation(
                             NativeBridge.setForceMono(false)
                             Toast.makeText(context, "All audio parameters cleared", Toast.LENGTH_SHORT).show()
                         },
-                        onClearPluginAudioParameters = {
+                                    onClearPluginAudioParameters = {
                             // Clear plugin volume only
                             clearAllDecoderPluginVolumes(prefs)
                             pluginVolumeDb = 0f
                             NativeBridge.setPluginGain(0f)
                             Toast.makeText(context, "Plugin volume cleared", Toast.LENGTH_SHORT).show()
                         },
-                        onClearSongAudioParameters = {
+                                    onClearSongAudioParameters = {
                             // Clear all song volumes from database
                             volumeDatabase.resetAllSongVolumes()
                             songVolumeDb = 0f
                             NativeBridge.setSongGain(0f)
                             Toast.makeText(context, "All song volumes cleared", Toast.LENGTH_SHORT).show()
                         },
-                        onOpenPlayer = { openSettingsRoute(SettingsRoute.Player, false) },
-                        onOpenVisualization = { openSettingsRoute(SettingsRoute.Visualization, false) },
-                        onOpenVisualizationBasic = { openSettingsRoute(SettingsRoute.VisualizationBasic, false) },
-                        onOpenVisualizationBasicBars = { openSettingsRoute(SettingsRoute.VisualizationBasicBars, false) },
-                        onOpenVisualizationBasicOscilloscope = { openSettingsRoute(SettingsRoute.VisualizationBasicOscilloscope, false) },
-                        onOpenVisualizationBasicVuMeters = { openSettingsRoute(SettingsRoute.VisualizationBasicVuMeters, false) },
-                        onOpenVisualizationAdvanced = { openSettingsRoute(SettingsRoute.VisualizationAdvanced, false) },
-                        onOpenVisualizationAdvancedChannelScope = {
+                                    onOpenPlayer = { openSettingsRoute(SettingsRoute.Player, false) },
+                                    onOpenVisualization = { openSettingsRoute(SettingsRoute.Visualization, false) },
+                                    onOpenVisualizationBasic = { openSettingsRoute(SettingsRoute.VisualizationBasic, false) },
+                                    onOpenVisualizationBasicBars = { openSettingsRoute(SettingsRoute.VisualizationBasicBars, false) },
+                                    onOpenVisualizationBasicOscilloscope = { openSettingsRoute(SettingsRoute.VisualizationBasicOscilloscope, false) },
+                                    onOpenVisualizationBasicVuMeters = { openSettingsRoute(SettingsRoute.VisualizationBasicVuMeters, false) },
+                                    onOpenVisualizationAdvanced = { openSettingsRoute(SettingsRoute.VisualizationAdvanced, false) },
+                                    onOpenVisualizationAdvancedChannelScope = {
                             openSettingsRoute(SettingsRoute.VisualizationAdvancedChannelScope, false)
                         },
-                        onOpenMisc = { openSettingsRoute(SettingsRoute.Misc, false) },
-                        onOpenUrlCache = { openSettingsRoute(SettingsRoute.UrlCache, false) },
-                        onOpenCacheManager = {
+                                    onOpenMisc = { openSettingsRoute(SettingsRoute.Misc, false) },
+                                    onOpenUrlCache = { openSettingsRoute(SettingsRoute.UrlCache, false) },
+                                    onOpenCacheManager = {
                             refreshCachedSourceFiles()
                             openSettingsRoute(SettingsRoute.CacheManager, false)
                         },
-                        onOpenUi = { openSettingsRoute(SettingsRoute.Ui, false) },
-                        onOpenAbout = { openSettingsRoute(SettingsRoute.About, false) },
-                        onOpenVgmPlayChipSettings = { openSettingsRoute(SettingsRoute.PluginVgmPlayChipSettings, false) },
-                        selectedPluginName = selectedPluginName,
-                        onPluginSelected = { pluginName ->
+                                    onOpenUi = { openSettingsRoute(SettingsRoute.Ui, false) },
+                                    onOpenAbout = { openSettingsRoute(SettingsRoute.About, false) },
+                                    onOpenVgmPlayChipSettings = { openSettingsRoute(SettingsRoute.PluginVgmPlayChipSettings, false) },
+                                    onPluginSelected = { pluginName ->
                             selectedPluginName = pluginName
                             openSettingsRoute(SettingsRoute.PluginDetail, false)
                         },
-                        onPluginEnabledChanged = { pluginName, enabled ->
+                                    onPluginEnabledChanged = { pluginName, enabled ->
                             NativeBridge.setDecoderEnabled(pluginName, enabled)
                             savePluginConfiguration(prefs, pluginName)
                         },
-                        onPluginPriorityChanged = { pluginName, priority ->
+                                    onPluginPriorityChanged = { pluginName, priority ->
                             NativeBridge.setDecoderPriority(pluginName, priority)
                             normalizeDecoderPriorityValues()
                             persistAllPluginConfigurations(prefs)
                         },
-                        onPluginPriorityOrderChanged = { orderedPluginNames ->
+                                    onPluginPriorityOrderChanged = { orderedPluginNames ->
                             applyDecoderPriorityOrder(orderedPluginNames, prefs)
                         },
-                        onPluginExtensionsChanged = { pluginName, extensions ->
+                                    onPluginExtensionsChanged = { pluginName, extensions ->
                             NativeBridge.setDecoderEnabledExtensions(pluginName, extensions)
                             savePluginConfiguration(prefs, pluginName)
                         },
-                        autoPlayOnTrackSelect = autoPlayOnTrackSelect,
-                        onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
-                        openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                        onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
-                        autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
-                        onAutoPlayNextTrackOnEndChanged = { autoPlayNextTrackOnEnd = it },
-                        previousRestartsAfterThreshold = previousRestartsAfterThreshold,
-                        onPreviousRestartsAfterThresholdChanged = { previousRestartsAfterThreshold = it },
-                        respondHeadphoneMediaButtons = respondHeadphoneMediaButtons,
-                        onRespondHeadphoneMediaButtonsChanged = { respondHeadphoneMediaButtons = it },
-                        pauseOnHeadphoneDisconnect = pauseOnHeadphoneDisconnect,
-                        onPauseOnHeadphoneDisconnectChanged = { pauseOnHeadphoneDisconnect = it },
-                        audioBackendPreference = audioBackendPreference,
-                        onAudioBackendPreferenceChanged = { audioBackendPreference = it },
-                        audioPerformanceMode = audioPerformanceMode,
-                        onAudioPerformanceModeChanged = { audioPerformanceMode = it },
-                        audioBufferPreset = audioBufferPreset,
-                        onAudioBufferPresetChanged = { audioBufferPreset = it },
-                        audioResamplerPreference = audioResamplerPreference,
-                        onAudioResamplerPreferenceChanged = {
+                                    onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
+                                    onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
+                                    onAutoPlayNextTrackOnEndChanged = { autoPlayNextTrackOnEnd = it },
+                                    onPreviousRestartsAfterThresholdChanged = { previousRestartsAfterThreshold = it },
+                                    onRespondHeadphoneMediaButtonsChanged = { respondHeadphoneMediaButtons = it },
+                                    onPauseOnHeadphoneDisconnectChanged = { pauseOnHeadphoneDisconnect = it },
+                                    onAudioFocusInterruptChanged = {
+                            audioFocusInterrupt = it
+                            prefs.edit().putBoolean(AppPreferenceKeys.AUDIO_FOCUS_INTERRUPT, it).apply()
+                            com.flopster101.siliconplayer.PlaybackService.refreshSettings(context)
+                        },
+                                    onAudioDuckingChanged = {
+                            audioDucking = it
+                            prefs.edit().putBoolean(AppPreferenceKeys.AUDIO_DUCKING, it).apply()
+                            com.flopster101.siliconplayer.PlaybackService.refreshSettings(context)
+                        },
+                                    onAudioBackendPreferenceChanged = { audioBackendPreference = it },
+                                    onAudioPerformanceModeChanged = { audioPerformanceMode = it },
+                                    onAudioBufferPresetChanged = { audioBufferPreset = it },
+                                    onAudioResamplerPreferenceChanged = {
                             audioResamplerPreference = it
                             if (it == AudioResamplerPreference.Sox) {
                                 pendingSoxExperimentalDialog = true
                             }
                         },
-                        audioAllowBackendFallback = audioAllowBackendFallback,
-                        onAudioAllowBackendFallbackChanged = { audioAllowBackendFallback = it },
-                        openPlayerFromNotification = openPlayerFromNotification,
-                        onOpenPlayerFromNotificationChanged = { openPlayerFromNotification = it },
-                        persistRepeatMode = persistRepeatMode,
-                        onPersistRepeatModeChanged = { persistRepeatMode = it },
-                        themeMode = themeMode,
-                        onThemeModeChanged = onThemeModeChanged,
-                        rememberBrowserLocation = rememberBrowserLocation,
-                        onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
-                        recentFoldersLimit = recentFoldersLimit,
-                        onRecentFoldersLimitChanged = { recentFoldersLimit = it.coerceIn(1, RECENTS_LIMIT_MAX) },
-                        recentFilesLimit = recentFilesLimit,
-                        onRecentFilesLimitChanged = { recentFilesLimit = it.coerceIn(1, RECENTS_LIMIT_MAX) },
-                        urlCacheClearOnLaunch = urlCacheClearOnLaunch,
-                        onUrlCacheClearOnLaunchChanged = { enabled ->
+                                    onAudioAllowBackendFallbackChanged = { audioAllowBackendFallback = it },
+                                    onOpenPlayerFromNotificationChanged = { openPlayerFromNotification = it },
+                                    onPersistRepeatModeChanged = { persistRepeatMode = it },
+                                    onThemeModeChanged = onThemeModeChanged,
+                                    onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
+                                    onRecentFoldersLimitChanged = { recentFoldersLimit = it.coerceIn(1, RECENTS_LIMIT_MAX) },
+                                    onRecentFilesLimitChanged = { recentFilesLimit = it.coerceIn(1, RECENTS_LIMIT_MAX) },
+                                    onUrlCacheClearOnLaunchChanged = { enabled ->
                             urlCacheClearOnLaunch = enabled
                             prefs.edit().putBoolean(AppPreferenceKeys.URL_CACHE_CLEAR_ON_LAUNCH, enabled).apply()
                         },
-                        urlCacheMaxTracks = urlCacheMaxTracks,
-                        onUrlCacheMaxTracksChanged = { value ->
+                                    onUrlCacheMaxTracksChanged = { value ->
                             urlCacheMaxTracks = value.coerceAtLeast(1)
                             prefs.edit().putInt(AppPreferenceKeys.URL_CACHE_MAX_TRACKS, urlCacheMaxTracks).apply()
                             appScope.launch(Dispatchers.IO) {
@@ -3335,8 +3418,7 @@ private fun AppNavigation(
                                 }
                             }
                         },
-                        urlCacheMaxBytes = urlCacheMaxBytes,
-                        onUrlCacheMaxBytesChanged = { value ->
+                                    onUrlCacheMaxBytesChanged = { value ->
                             urlCacheMaxBytes = value.coerceAtLeast(1L)
                             prefs.edit().putLong(AppPreferenceKeys.URL_CACHE_MAX_BYTES, urlCacheMaxBytes).apply()
                             appScope.launch(Dispatchers.IO) {
@@ -3350,7 +3432,7 @@ private fun AppNavigation(
                                 }
                             }
                         },
-                        onClearUrlCacheNow = {
+                                    onClearUrlCacheNow = {
                             appScope.launch(Dispatchers.IO) {
                                 val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
                                 val sessionPath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null)
@@ -3377,9 +3459,8 @@ private fun AppNavigation(
                                 }
                             }
                         },
-                        cachedSourceFiles = cachedSourceFiles,
-                        onRefreshCachedSourceFiles = { refreshCachedSourceFiles() },
-                        onDeleteCachedSourceFiles = { paths ->
+                                    onRefreshCachedSourceFiles = { refreshCachedSourceFiles() },
+                                    onDeleteCachedSourceFiles = { paths ->
                             appScope.launch(Dispatchers.IO) {
                                 val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
                                 val sessionPath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null)
@@ -3407,7 +3488,7 @@ private fun AppNavigation(
                                 }
                             }
                         },
-                        onExportCachedSourceFiles = { paths ->
+                                    onExportCachedSourceFiles = { paths ->
                             if (paths.isEmpty()) {
                                 Toast.makeText(context, "No files selected", Toast.LENGTH_SHORT).show()
                             } else {
@@ -3415,87 +3496,67 @@ private fun AppNavigation(
                                 cacheExportDirectoryLauncher.launch(null)
                             }
                         },
-                        keepScreenOn = keepScreenOn,
-                        onKeepScreenOnChanged = { keepScreenOn = it },
-                        playerArtworkCornerRadiusDp = playerArtworkCornerRadiusDp,
-                        onPlayerArtworkCornerRadiusDpChanged = { value ->
+                                    onKeepScreenOnChanged = { keepScreenOn = it },
+                                    onPlayerArtworkCornerRadiusDpChanged = { value ->
                             playerArtworkCornerRadiusDp = value.coerceIn(0, 48)
                         },
-                        filenameDisplayMode = filenameDisplayMode,
-                        onFilenameDisplayModeChanged = { mode ->
+                                    onFilenameDisplayModeChanged = { mode ->
                             filenameDisplayMode = mode
                             prefs.edit().putString(AppPreferenceKeys.FILENAME_DISPLAY_MODE, mode.storageValue).apply()
                         },
-                        filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
-                        onFilenameOnlyWhenTitleMissingChanged = { enabled ->
+                                    onFilenameOnlyWhenTitleMissingChanged = { enabled ->
                             filenameOnlyWhenTitleMissing = enabled
                             prefs.edit().putBoolean(AppPreferenceKeys.FILENAME_ONLY_WHEN_TITLE_MISSING, enabled).apply()
                         },
-                        unknownTrackDurationSeconds = unknownTrackDurationSeconds,
-                        onUnknownTrackDurationSecondsChanged = { value ->
+                                    onUnknownTrackDurationSecondsChanged = { value ->
                             unknownTrackDurationSeconds = value
                         },
-                        endFadeApplyToAllTracks = endFadeApplyToAllTracks,
-                        onEndFadeApplyToAllTracksChanged = { enabled ->
+                                    onEndFadeApplyToAllTracksChanged = { enabled ->
                             endFadeApplyToAllTracks = enabled
                         },
-                        endFadeDurationMs = endFadeDurationMs,
-                        onEndFadeDurationMsChanged = { value ->
+                                    onEndFadeDurationMsChanged = { value ->
                             endFadeDurationMs = value
                         },
-                        endFadeCurve = endFadeCurve,
-                        onEndFadeCurveChanged = { curve ->
+                                    onEndFadeCurveChanged = { curve ->
                             endFadeCurve = curve
                         },
-                        visualizationMode = visualizationMode,
-                        onVisualizationModeChanged = { mode ->
+                                    onVisualizationModeChanged = { mode ->
                             setVisualizationMode(mode)
                         },
-                        enabledVisualizationModes = enabledVisualizationModes,
-                        onEnabledVisualizationModesChanged = { modes ->
+                                    onEnabledVisualizationModesChanged = { modes ->
                             setEnabledVisualizationModes(modes)
                         },
-                        visualizationShowDebugInfo = visualizationShowDebugInfo,
-                        onVisualizationShowDebugInfoChanged = { enabled ->
+                                    onVisualizationShowDebugInfoChanged = { enabled ->
                             visualizationShowDebugInfo = enabled
                         },
-                        visualizationBarCount = visualizationBarCount,
-                        onVisualizationBarCountChanged = { value ->
+                                    onVisualizationBarCountChanged = { value ->
                             visualizationBarCount = value
                         },
-                        visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
-                        onVisualizationBarSmoothingPercentChanged = { value ->
+                                    onVisualizationBarSmoothingPercentChanged = { value ->
                             visualizationBarSmoothingPercent = value
                         },
-                        visualizationBarRoundnessDp = visualizationBarRoundnessDp,
-                        onVisualizationBarRoundnessDpChanged = { value ->
+                                    onVisualizationBarRoundnessDpChanged = { value ->
                             visualizationBarRoundnessDp = value
                         },
-                        visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
-                        onVisualizationBarOverlayArtworkChanged = { enabled ->
+                                    onVisualizationBarOverlayArtworkChanged = { enabled ->
                             visualizationBarOverlayArtwork = enabled
                         },
-                        visualizationBarUseThemeColor = visualizationBarUseThemeColor,
-                        onVisualizationBarUseThemeColorChanged = { enabled ->
+                                    onVisualizationBarUseThemeColorChanged = { enabled ->
                             visualizationBarUseThemeColor = enabled
                         },
-                        visualizationOscStereo = visualizationOscStereo,
-                        onVisualizationOscStereoChanged = { enabled ->
+                                    onVisualizationOscStereoChanged = { enabled ->
                             visualizationOscStereo = enabled
                         },
-                        visualizationVuAnchor = visualizationVuAnchor,
-                        onVisualizationVuAnchorChanged = { anchor ->
+                                    onVisualizationVuAnchorChanged = { anchor ->
                             visualizationVuAnchor = anchor
                         },
-                        visualizationVuUseThemeColor = visualizationVuUseThemeColor,
-                        onVisualizationVuUseThemeColorChanged = { enabled ->
+                                    onVisualizationVuUseThemeColorChanged = { enabled ->
                             visualizationVuUseThemeColor = enabled
                         },
-                        visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
-                        onVisualizationVuSmoothingPercentChanged = { value ->
+                                    onVisualizationVuSmoothingPercentChanged = { value ->
                             visualizationVuSmoothingPercent = value
                         },
-                        onResetVisualizationBarsSettings = {
+                                    onResetVisualizationBarsSettings = {
                             visualizationBarCount = AppDefaults.Visualization.Bars.count
                             visualizationBarSmoothingPercent = AppDefaults.Visualization.Bars.smoothingPercent
                             visualizationBarRoundnessDp = AppDefaults.Visualization.Bars.roundnessDp
@@ -3516,7 +3577,7 @@ private fun AppNavigation(
                                 )
                                 .apply()
                         },
-                        onResetVisualizationOscilloscopeSettings = {
+                                    onResetVisualizationOscilloscopeSettings = {
                             visualizationOscStereo = AppDefaults.Visualization.Oscilloscope.stereo
                             prefs.edit()
                                 .putInt(
@@ -3573,7 +3634,7 @@ private fun AppNavigation(
                                 )
                                 .apply()
                         },
-                        onResetVisualizationVuSettings = {
+                                    onResetVisualizationVuSettings = {
                             visualizationVuAnchor = AppDefaults.Visualization.Vu.anchor
                             visualizationVuUseThemeColor = AppDefaults.Visualization.Vu.useThemeColor
                             visualizationVuSmoothingPercent = AppDefaults.Visualization.Vu.smoothingPercent
@@ -3592,7 +3653,7 @@ private fun AppNavigation(
                                 )
                                 .apply()
                         },
-                        onResetVisualizationChannelScopeSettings = {
+                                    onResetVisualizationChannelScopeSettings = {
                             prefs.edit()
                                 .putInt(
                                     AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_WINDOW_MS,
@@ -3752,112 +3813,54 @@ private fun AppNavigation(
                                 )
                                 .apply()
                         },
-                        audioFocusInterrupt = audioFocusInterrupt,
-                        onAudioFocusInterruptChanged = {
-                            audioFocusInterrupt = it
-                            prefs.edit().putBoolean(AppPreferenceKeys.AUDIO_FOCUS_INTERRUPT, it).apply()
-                            com.flopster101.siliconplayer.PlaybackService.refreshSettings(context)
-                        },
-                        audioDucking = audioDucking,
-                        onAudioDuckingChanged = {
-                            audioDucking = it
-                            prefs.edit().putBoolean(AppPreferenceKeys.AUDIO_DUCKING, it).apply()
-                            com.flopster101.siliconplayer.PlaybackService.refreshSettings(context)
-                        },
-                        ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
-                        ffmpegCapabilities = ffmpegCapabilities,
-                        onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
-                        openMptSampleRateHz = openMptCoreSampleRateHz,
-                        openMptCapabilities = openMptCapabilities,
-                        onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it },
-                        vgmPlaySampleRateHz = vgmPlayCoreSampleRateHz,
-                        vgmPlayCapabilities = vgmPlayCapabilities,
-                        onVgmPlaySampleRateChanged = { vgmPlayCoreSampleRateHz = it },
-                        gmeSampleRateHz = gmeCoreSampleRateHz,
-                        onGmeSampleRateChanged = { gmeCoreSampleRateHz = it },
-                        sidPlayFpSampleRateHz = sidPlayFpCoreSampleRateHz,
-                        onSidPlayFpSampleRateChanged = { sidPlayFpCoreSampleRateHz = it },
-                        lazyUsf2SampleRateHz = lazyUsf2CoreSampleRateHz,
-                        onLazyUsf2SampleRateChanged = { lazyUsf2CoreSampleRateHz = it },
-                        lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
-                        onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
-                        sidPlayFpBackend = sidPlayFpBackend,
-                        onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
-                        sidPlayFpClockMode = sidPlayFpClockMode,
-                        onSidPlayFpClockModeChanged = { sidPlayFpClockMode = it },
-                        sidPlayFpSidModelMode = sidPlayFpSidModelMode,
-                        onSidPlayFpSidModelModeChanged = { sidPlayFpSidModelMode = it },
-                        sidPlayFpFilter6581Enabled = sidPlayFpFilter6581Enabled,
-                        onSidPlayFpFilter6581EnabledChanged = { sidPlayFpFilter6581Enabled = it },
-                        sidPlayFpFilter8580Enabled = sidPlayFpFilter8580Enabled,
-                        onSidPlayFpFilter8580EnabledChanged = { sidPlayFpFilter8580Enabled = it },
-                        sidPlayFpDigiBoost8580 = sidPlayFpDigiBoost8580,
-                        onSidPlayFpDigiBoost8580Changed = { sidPlayFpDigiBoost8580 = it },
-                        sidPlayFpFilterCurve6581Percent = sidPlayFpFilterCurve6581Percent,
-                        onSidPlayFpFilterCurve6581PercentChanged = { sidPlayFpFilterCurve6581Percent = it },
-                        sidPlayFpFilterRange6581Percent = sidPlayFpFilterRange6581Percent,
-                        onSidPlayFpFilterRange6581PercentChanged = { sidPlayFpFilterRange6581Percent = it },
-                        sidPlayFpFilterCurve8580Percent = sidPlayFpFilterCurve8580Percent,
-                        onSidPlayFpFilterCurve8580PercentChanged = { sidPlayFpFilterCurve8580Percent = it },
-                        sidPlayFpReSidFpFastSampling = sidPlayFpReSidFpFastSampling,
-                        onSidPlayFpReSidFpFastSamplingChanged = { sidPlayFpReSidFpFastSampling = it },
-                        sidPlayFpReSidFpCombinedWaveformsStrength = sidPlayFpReSidFpCombinedWaveformsStrength,
-                        onSidPlayFpReSidFpCombinedWaveformsStrengthChanged = {
+                                    onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
+                                    onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it },
+                                    onVgmPlaySampleRateChanged = { vgmPlayCoreSampleRateHz = it },
+                                    onGmeSampleRateChanged = { gmeCoreSampleRateHz = it },
+                                    onSidPlayFpSampleRateChanged = { sidPlayFpCoreSampleRateHz = it },
+                                    onLazyUsf2SampleRateChanged = { lazyUsf2CoreSampleRateHz = it },
+                                    onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
+                                    onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
+                                    onSidPlayFpClockModeChanged = { sidPlayFpClockMode = it },
+                                    onSidPlayFpSidModelModeChanged = { sidPlayFpSidModelMode = it },
+                                    onSidPlayFpFilter6581EnabledChanged = { sidPlayFpFilter6581Enabled = it },
+                                    onSidPlayFpFilter8580EnabledChanged = { sidPlayFpFilter8580Enabled = it },
+                                    onSidPlayFpDigiBoost8580Changed = { sidPlayFpDigiBoost8580 = it },
+                                    onSidPlayFpFilterCurve6581PercentChanged = { sidPlayFpFilterCurve6581Percent = it },
+                                    onSidPlayFpFilterRange6581PercentChanged = { sidPlayFpFilterRange6581Percent = it },
+                                    onSidPlayFpFilterCurve8580PercentChanged = { sidPlayFpFilterCurve8580Percent = it },
+                                    onSidPlayFpReSidFpFastSamplingChanged = { sidPlayFpReSidFpFastSampling = it },
+                                    onSidPlayFpReSidFpCombinedWaveformsStrengthChanged = {
                             sidPlayFpReSidFpCombinedWaveformsStrength = it
                         },
-                        gmeTempoPercent = gmeTempoPercent,
-                        onGmeTempoPercentChanged = { gmeTempoPercent = it },
-                        gmeStereoSeparationPercent = gmeStereoSeparationPercent,
-                        onGmeStereoSeparationPercentChanged = { gmeStereoSeparationPercent = it },
-                        gmeEchoEnabled = gmeEchoEnabled,
-                        onGmeEchoEnabledChanged = { gmeEchoEnabled = it },
-                        gmeAccuracyEnabled = gmeAccuracyEnabled,
-                        onGmeAccuracyEnabledChanged = { gmeAccuracyEnabled = it },
-                        gmeEqTrebleDecibel = gmeEqTrebleDecibel,
-                        onGmeEqTrebleDecibelChanged = { gmeEqTrebleDecibel = it },
-                        gmeEqBassHz = gmeEqBassHz,
-                        onGmeEqBassHzChanged = { gmeEqBassHz = it },
-                        gmeSpcUseBuiltInFade = gmeSpcUseBuiltInFade,
-                        onGmeSpcUseBuiltInFadeChanged = { gmeSpcUseBuiltInFade = it },
-                        gmeSpcInterpolation = gmeSpcInterpolation,
-                        onGmeSpcInterpolationChanged = { gmeSpcInterpolation = it },
-                        gmeSpcUseNativeSampleRate = gmeSpcUseNativeSampleRate,
-                        onGmeSpcUseNativeSampleRateChanged = { gmeSpcUseNativeSampleRate = it },
-                        vgmPlayLoopCount = vgmPlayLoopCount,
-                        onVgmPlayLoopCountChanged = { vgmPlayLoopCount = it },
-                        vgmPlayAllowNonLoopingLoop = vgmPlayAllowNonLoopingLoop,
-                        onVgmPlayAllowNonLoopingLoopChanged = { vgmPlayAllowNonLoopingLoop = it },
-                        vgmPlayVsyncRate = vgmPlayVsyncRate,
-                        onVgmPlayVsyncRateChanged = { vgmPlayVsyncRate = it },
-                        vgmPlayResampleMode = vgmPlayResampleMode,
-                        onVgmPlayResampleModeChanged = { vgmPlayResampleMode = it },
-                        vgmPlayChipSampleMode = vgmPlayChipSampleMode,
-                        onVgmPlayChipSampleModeChanged = { vgmPlayChipSampleMode = it },
-                        vgmPlayChipSampleRate = vgmPlayChipSampleRate,
-                        onVgmPlayChipSampleRateChanged = { vgmPlayChipSampleRate = it },
-                        vgmPlayChipCoreSelections = vgmPlayChipCoreSelections,
-                        onVgmPlayChipCoreChanged = { chipKey, selectedValue ->
+                                    onGmeTempoPercentChanged = { gmeTempoPercent = it },
+                                    onGmeStereoSeparationPercentChanged = { gmeStereoSeparationPercent = it },
+                                    onGmeEchoEnabledChanged = { gmeEchoEnabled = it },
+                                    onGmeAccuracyEnabledChanged = { gmeAccuracyEnabled = it },
+                                    onGmeEqTrebleDecibelChanged = { gmeEqTrebleDecibel = it },
+                                    onGmeEqBassHzChanged = { gmeEqBassHz = it },
+                                    onGmeSpcUseBuiltInFadeChanged = { gmeSpcUseBuiltInFade = it },
+                                    onGmeSpcInterpolationChanged = { gmeSpcInterpolation = it },
+                                    onGmeSpcUseNativeSampleRateChanged = { gmeSpcUseNativeSampleRate = it },
+                                    onVgmPlayLoopCountChanged = { vgmPlayLoopCount = it },
+                                    onVgmPlayAllowNonLoopingLoopChanged = { vgmPlayAllowNonLoopingLoop = it },
+                                    onVgmPlayVsyncRateChanged = { vgmPlayVsyncRate = it },
+                                    onVgmPlayResampleModeChanged = { vgmPlayResampleMode = it },
+                                    onVgmPlayChipSampleModeChanged = { vgmPlayChipSampleMode = it },
+                                    onVgmPlayChipSampleRateChanged = { vgmPlayChipSampleRate = it },
+                                    onVgmPlayChipCoreChanged = { chipKey, selectedValue ->
                             vgmPlayChipCoreSelections = vgmPlayChipCoreSelections + (chipKey to selectedValue)
                         },
-                        openMptStereoSeparationPercent = openMptStereoSeparationPercent,
-                        onOpenMptStereoSeparationPercentChanged = { openMptStereoSeparationPercent = it },
-                        openMptStereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
-                        onOpenMptStereoSeparationAmigaPercentChanged = { openMptStereoSeparationAmigaPercent = it },
-                        openMptInterpolationFilterLength = openMptInterpolationFilterLength,
-                        onOpenMptInterpolationFilterLengthChanged = { openMptInterpolationFilterLength = it },
-                        openMptAmigaResamplerMode = openMptAmigaResamplerMode,
-                        onOpenMptAmigaResamplerModeChanged = { openMptAmigaResamplerMode = it },
-                        openMptAmigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
-                        onOpenMptAmigaResamplerApplyAllModulesChanged = { openMptAmigaResamplerApplyAllModules = it },
-                        openMptVolumeRampingStrength = openMptVolumeRampingStrength,
-                        onOpenMptVolumeRampingStrengthChanged = { openMptVolumeRampingStrength = it },
-                        openMptFt2XmVolumeRamping = openMptFt2XmVolumeRamping,
-                        onOpenMptFt2XmVolumeRampingChanged = { openMptFt2XmVolumeRamping = it },
-                        openMptMasterGainMilliBel = openMptMasterGainMilliBel,
-                        onOpenMptMasterGainMilliBelChanged = { openMptMasterGainMilliBel = it },
-                        openMptSurroundEnabled = openMptSurroundEnabled,
-                        onOpenMptSurroundEnabledChanged = { openMptSurroundEnabled = it },
-                        onClearRecentHistory = {
+                                    onOpenMptStereoSeparationPercentChanged = { openMptStereoSeparationPercent = it },
+                                    onOpenMptStereoSeparationAmigaPercentChanged = { openMptStereoSeparationAmigaPercent = it },
+                                    onOpenMptInterpolationFilterLengthChanged = { openMptInterpolationFilterLength = it },
+                                    onOpenMptAmigaResamplerModeChanged = { openMptAmigaResamplerMode = it },
+                                    onOpenMptAmigaResamplerApplyAllModulesChanged = { openMptAmigaResamplerApplyAllModules = it },
+                                    onOpenMptVolumeRampingStrengthChanged = { openMptVolumeRampingStrength = it },
+                                    onOpenMptFt2XmVolumeRampingChanged = { openMptFt2XmVolumeRamping = it },
+                                    onOpenMptMasterGainMilliBelChanged = { openMptMasterGainMilliBel = it },
+                                    onOpenMptSurroundEnabledChanged = { openMptSurroundEnabled = it },
+                                    onClearRecentHistory = {
                             recentFolders = emptyList()
                             recentPlayedFiles = emptyList()
                             prefs.edit()
@@ -3870,7 +3873,7 @@ private fun AppNavigation(
                                 Toast.LENGTH_SHORT
                             ).show()
                         },
-                        onClearAllSettings = {
+                                    onClearAllSettings = {
                             val pluginSnapshot = mapOf(
                                 CorePreferenceKeys.CORE_RATE_FFMPEG to ffmpegCoreSampleRateHz,
                                 CorePreferenceKeys.CORE_RATE_OPENMPT to openMptCoreSampleRateHz,
@@ -4223,7 +4226,7 @@ private fun AppNavigation(
                                 Toast.LENGTH_SHORT
                             ).show()
                         },
-                        onClearAllPluginSettings = {
+                                    onClearAllPluginSettings = {
                             ffmpegCoreSampleRateHz = 0
                             openMptCoreSampleRateHz = OpenMptDefaults.coreSampleRateHz
                             vgmPlayCoreSampleRateHz = VgmPlayDefaults.coreSampleRateHz
@@ -4323,7 +4326,7 @@ private fun AppNavigation(
                                 Toast.LENGTH_SHORT
                             ).show()
                         },
-                        onResetPluginSettings = { pluginName ->
+                                    onResetPluginSettings = { pluginName ->
                             val optionNamesForReset = when (pluginName) {
                                 "LibOpenMPT" -> listOf(
                                     "openmpt.stereo_separation_percent",
@@ -4504,7 +4507,8 @@ private fun AppNavigation(
                                 },
                                 Toast.LENGTH_SHORT
                             ).show()
-                        }
+                        },
+                                )
                             )
                         }
                         settingsContent()

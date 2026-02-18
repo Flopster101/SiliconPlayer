@@ -28,6 +28,79 @@ internal data class ChoiceDialogOption<T>(
     val label: String
 )
 
+internal data class SettingsActionDialogItem(
+    val label: String,
+    val onSelected: () -> Unit
+)
+
+@Composable
+internal fun SettingsConfirmDialog(
+    title: String,
+    message: String,
+    confirmLabel: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    dismissLabel: String = "Cancel"
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message) },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(dismissLabel)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onConfirm()
+                onDismiss()
+            }) {
+                Text(confirmLabel)
+            }
+        }
+    )
+}
+
+@Composable
+internal fun SettingsActionListDialog(
+    title: String,
+    actions: List<SettingsActionDialogItem>,
+    onDismiss: () -> Unit,
+    message: String? = null,
+    dismissLabel: String = "Cancel"
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                if (!message.isNullOrBlank()) {
+                    Text(message)
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                actions.forEach { action ->
+                    TextButton(
+                        onClick = {
+                            action.onSelected()
+                            onDismiss()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(action.label)
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(dismissLabel)
+            }
+        },
+        confirmButton = {}
+    )
+}
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 internal fun <T> SettingsSingleChoiceDialog(
@@ -36,6 +109,7 @@ internal fun <T> SettingsSingleChoiceDialog(
     options: List<ChoiceDialogOption<T>>,
     onSelected: (T) -> Unit,
     onDismiss: () -> Unit,
+    description: String? = null,
     showCancelButton: Boolean = true
 ) {
     val configuration = LocalConfiguration.current
@@ -53,6 +127,14 @@ internal fun <T> SettingsSingleChoiceDialog(
                         .heightIn(max = maxDialogListHeight)
                         .verticalScroll(rememberScrollState())
                 ) {
+                    if (!description.isNullOrBlank()) {
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                     options.forEach { option ->
                         Row(
                             modifier = Modifier

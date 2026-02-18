@@ -1,8 +1,5 @@
 package com.flopster101.siliconplayer
 
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 
 @Composable
@@ -33,23 +30,12 @@ internal fun SettingsResetDialogHost(
             }
         }
 
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(title) },
-            text = { Text(message) },
-            dismissButton = {
-                TextButton(onClick = onDismiss) {
-                    Text("Cancel")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onConfirm()
-                    onDismiss()
-                }) {
-                    Text(confirmText)
-                }
-            }
+        SettingsConfirmDialog(
+            title = title,
+            message = message,
+            confirmLabel = confirmText,
+            onDismiss = onDismiss,
+            onConfirm = onConfirm
         )
     }
 }
@@ -61,23 +47,12 @@ internal fun PluginResetDialogHost(
     onConfirmResetPluginSettings: (String) -> Unit
 ) {
     pendingPluginResetName?.let { pluginName ->
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("Reset $pluginName settings?") },
-            text = { Text("This resets only $pluginName plugin/core settings to defaults.") },
-            dismissButton = {
-                TextButton(onClick = onDismiss) {
-                    Text("Cancel")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onConfirmResetPluginSettings(pluginName)
-                    onDismiss()
-                }) {
-                    Text("Reset")
-                }
-            }
+        SettingsConfirmDialog(
+            title = "Reset $pluginName settings?",
+            message = "This resets only $pluginName plugin/core settings to defaults.",
+            confirmLabel = "Reset",
+            onDismiss = onDismiss,
+            onConfirm = { onConfirmResetPluginSettings(pluginName) }
         )
     }
 }

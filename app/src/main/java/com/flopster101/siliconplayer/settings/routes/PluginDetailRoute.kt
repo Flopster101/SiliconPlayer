@@ -15,109 +15,116 @@ import com.flopster101.siliconplayer.pluginsettings.SidPlayFpSettings
 import com.flopster101.siliconplayer.pluginsettings.VgmPlaySettings
 import java.util.Locale
 
+internal data class PluginDetailRouteState(
+    val selectedPluginName: String?,
+    val ffmpegSampleRateHz: Int,
+    val openMptSampleRateHz: Int,
+    val openMptCapabilities: Int,
+    val vgmPlaySampleRateHz: Int,
+    val vgmPlayCapabilities: Int,
+    val gmeSampleRateHz: Int,
+    val sidPlayFpSampleRateHz: Int,
+    val lazyUsf2SampleRateHz: Int,
+    val openMptStereoSeparationPercent: Int,
+    val openMptStereoSeparationAmigaPercent: Int,
+    val openMptInterpolationFilterLength: Int,
+    val openMptAmigaResamplerMode: Int,
+    val openMptAmigaResamplerApplyAllModules: Boolean,
+    val openMptVolumeRampingStrength: Int,
+    val openMptFt2XmVolumeRamping: Boolean,
+    val openMptMasterGainMilliBel: Int,
+    val openMptSurroundEnabled: Boolean,
+    val vgmPlayLoopCount: Int,
+    val vgmPlayAllowNonLoopingLoop: Boolean,
+    val vgmPlayVsyncRate: Int,
+    val vgmPlayResampleMode: Int,
+    val vgmPlayChipSampleMode: Int,
+    val vgmPlayChipSampleRate: Int,
+    val gmeTempoPercent: Int,
+    val gmeStereoSeparationPercent: Int,
+    val gmeEchoEnabled: Boolean,
+    val gmeAccuracyEnabled: Boolean,
+    val gmeEqTrebleDecibel: Int,
+    val gmeEqBassHz: Int,
+    val gmeSpcUseBuiltInFade: Boolean,
+    val gmeSpcInterpolation: Int,
+    val gmeSpcUseNativeSampleRate: Boolean,
+    val sidPlayFpBackend: Int,
+    val sidPlayFpClockMode: Int,
+    val sidPlayFpSidModelMode: Int,
+    val sidPlayFpFilter6581Enabled: Boolean,
+    val sidPlayFpFilter8580Enabled: Boolean,
+    val sidPlayFpDigiBoost8580: Boolean,
+    val sidPlayFpFilterCurve6581Percent: Int,
+    val sidPlayFpFilterRange6581Percent: Int,
+    val sidPlayFpFilterCurve8580Percent: Int,
+    val sidPlayFpReSidFpFastSampling: Boolean,
+    val sidPlayFpReSidFpCombinedWaveformsStrength: Int,
+    val lazyUsf2UseHleAudio: Boolean
+)
+
+internal data class PluginDetailRouteActions(
+    val onPluginPriorityChanged: (String, Int) -> Unit,
+    val onPluginExtensionsChanged: (String, Array<String>) -> Unit,
+    val onFfmpegSampleRateChanged: (Int) -> Unit,
+    val onOpenMptSampleRateChanged: (Int) -> Unit,
+    val onVgmPlaySampleRateChanged: (Int) -> Unit,
+    val onGmeSampleRateChanged: (Int) -> Unit,
+    val onSidPlayFpSampleRateChanged: (Int) -> Unit,
+    val onLazyUsf2SampleRateChanged: (Int) -> Unit,
+    val onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
+    val onOpenMptStereoSeparationAmigaPercentChanged: (Int) -> Unit,
+    val onOpenMptInterpolationFilterLengthChanged: (Int) -> Unit,
+    val onOpenMptAmigaResamplerModeChanged: (Int) -> Unit,
+    val onOpenMptAmigaResamplerApplyAllModulesChanged: (Boolean) -> Unit,
+    val onOpenMptVolumeRampingStrengthChanged: (Int) -> Unit,
+    val onOpenMptFt2XmVolumeRampingChanged: (Boolean) -> Unit,
+    val onOpenMptMasterGainMilliBelChanged: (Int) -> Unit,
+    val onOpenMptSurroundEnabledChanged: (Boolean) -> Unit,
+    val onVgmPlayLoopCountChanged: (Int) -> Unit,
+    val onVgmPlayAllowNonLoopingLoopChanged: (Boolean) -> Unit,
+    val onVgmPlayVsyncRateChanged: (Int) -> Unit,
+    val onVgmPlayResampleModeChanged: (Int) -> Unit,
+    val onVgmPlayChipSampleModeChanged: (Int) -> Unit,
+    val onVgmPlayChipSampleRateChanged: (Int) -> Unit,
+    val onOpenVgmPlayChipSettings: () -> Unit,
+    val onGmeTempoPercentChanged: (Int) -> Unit,
+    val onGmeStereoSeparationPercentChanged: (Int) -> Unit,
+    val onGmeEchoEnabledChanged: (Boolean) -> Unit,
+    val onGmeAccuracyEnabledChanged: (Boolean) -> Unit,
+    val onGmeEqTrebleDecibelChanged: (Int) -> Unit,
+    val onGmeEqBassHzChanged: (Int) -> Unit,
+    val onGmeSpcUseBuiltInFadeChanged: (Boolean) -> Unit,
+    val onGmeSpcInterpolationChanged: (Int) -> Unit,
+    val onGmeSpcUseNativeSampleRateChanged: (Boolean) -> Unit,
+    val onSidPlayFpBackendChanged: (Int) -> Unit,
+    val onSidPlayFpClockModeChanged: (Int) -> Unit,
+    val onSidPlayFpSidModelModeChanged: (Int) -> Unit,
+    val onSidPlayFpFilter6581EnabledChanged: (Boolean) -> Unit,
+    val onSidPlayFpFilter8580EnabledChanged: (Boolean) -> Unit,
+    val onSidPlayFpDigiBoost8580Changed: (Boolean) -> Unit,
+    val onSidPlayFpFilterCurve6581PercentChanged: (Int) -> Unit,
+    val onSidPlayFpFilterRange6581PercentChanged: (Int) -> Unit,
+    val onSidPlayFpFilterCurve8580PercentChanged: (Int) -> Unit,
+    val onSidPlayFpReSidFpFastSamplingChanged: (Boolean) -> Unit,
+    val onSidPlayFpReSidFpCombinedWaveformsStrengthChanged: (Int) -> Unit,
+    val onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit
+)
+
 @Composable
 internal fun PluginDetailRouteContent(
-    selectedPluginName: String?,
-    onPluginPriorityChanged: (String, Int) -> Unit,
-    onPluginExtensionsChanged: (String, Array<String>) -> Unit,
-    ffmpegSampleRateHz: Int,
-    onFfmpegSampleRateChanged: (Int) -> Unit,
-    ffmpegCapabilities: Int,
-    openMptSampleRateHz: Int,
-    onOpenMptSampleRateChanged: (Int) -> Unit,
-    openMptCapabilities: Int,
-    vgmPlaySampleRateHz: Int,
-    onVgmPlaySampleRateChanged: (Int) -> Unit,
-    vgmPlayCapabilities: Int,
-    gmeSampleRateHz: Int,
-    onGmeSampleRateChanged: (Int) -> Unit,
-    sidPlayFpSampleRateHz: Int,
-    onSidPlayFpSampleRateChanged: (Int) -> Unit,
-    lazyUsf2SampleRateHz: Int,
-    onLazyUsf2SampleRateChanged: (Int) -> Unit,
-    openMptStereoSeparationPercent: Int,
-    onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
-    openMptStereoSeparationAmigaPercent: Int,
-    onOpenMptStereoSeparationAmigaPercentChanged: (Int) -> Unit,
-    openMptInterpolationFilterLength: Int,
-    onOpenMptInterpolationFilterLengthChanged: (Int) -> Unit,
-    openMptAmigaResamplerMode: Int,
-    onOpenMptAmigaResamplerModeChanged: (Int) -> Unit,
-    openMptAmigaResamplerApplyAllModules: Boolean,
-    onOpenMptAmigaResamplerApplyAllModulesChanged: (Boolean) -> Unit,
-    openMptVolumeRampingStrength: Int,
-    onOpenMptVolumeRampingStrengthChanged: (Int) -> Unit,
-    openMptFt2XmVolumeRamping: Boolean,
-    onOpenMptFt2XmVolumeRampingChanged: (Boolean) -> Unit,
-    openMptMasterGainMilliBel: Int,
-    onOpenMptMasterGainMilliBelChanged: (Int) -> Unit,
-    openMptSurroundEnabled: Boolean,
-    onOpenMptSurroundEnabledChanged: (Boolean) -> Unit,
-    vgmPlayLoopCount: Int,
-    onVgmPlayLoopCountChanged: (Int) -> Unit,
-    vgmPlayAllowNonLoopingLoop: Boolean,
-    onVgmPlayAllowNonLoopingLoopChanged: (Boolean) -> Unit,
-    vgmPlayVsyncRate: Int,
-    onVgmPlayVsyncRateChanged: (Int) -> Unit,
-    vgmPlayResampleMode: Int,
-    onVgmPlayResampleModeChanged: (Int) -> Unit,
-    vgmPlayChipSampleMode: Int,
-    onVgmPlayChipSampleModeChanged: (Int) -> Unit,
-    vgmPlayChipSampleRate: Int,
-    onVgmPlayChipSampleRateChanged: (Int) -> Unit,
-    onOpenVgmPlayChipSettings: () -> Unit,
-    gmeTempoPercent: Int,
-    onGmeTempoPercentChanged: (Int) -> Unit,
-    gmeStereoSeparationPercent: Int,
-    onGmeStereoSeparationPercentChanged: (Int) -> Unit,
-    gmeEchoEnabled: Boolean,
-    onGmeEchoEnabledChanged: (Boolean) -> Unit,
-    gmeAccuracyEnabled: Boolean,
-    onGmeAccuracyEnabledChanged: (Boolean) -> Unit,
-    gmeEqTrebleDecibel: Int,
-    onGmeEqTrebleDecibelChanged: (Int) -> Unit,
-    gmeEqBassHz: Int,
-    onGmeEqBassHzChanged: (Int) -> Unit,
-    gmeSpcUseBuiltInFade: Boolean,
-    onGmeSpcUseBuiltInFadeChanged: (Boolean) -> Unit,
-    gmeSpcInterpolation: Int,
-    onGmeSpcInterpolationChanged: (Int) -> Unit,
-    gmeSpcUseNativeSampleRate: Boolean,
-    onGmeSpcUseNativeSampleRateChanged: (Boolean) -> Unit,
-    sidPlayFpBackend: Int,
-    onSidPlayFpBackendChanged: (Int) -> Unit,
-    sidPlayFpClockMode: Int,
-    onSidPlayFpClockModeChanged: (Int) -> Unit,
-    sidPlayFpSidModelMode: Int,
-    onSidPlayFpSidModelModeChanged: (Int) -> Unit,
-    sidPlayFpFilter6581Enabled: Boolean,
-    onSidPlayFpFilter6581EnabledChanged: (Boolean) -> Unit,
-    sidPlayFpFilter8580Enabled: Boolean,
-    onSidPlayFpFilter8580EnabledChanged: (Boolean) -> Unit,
-    sidPlayFpDigiBoost8580: Boolean,
-    onSidPlayFpDigiBoost8580Changed: (Boolean) -> Unit,
-    sidPlayFpFilterCurve6581Percent: Int,
-    onSidPlayFpFilterCurve6581PercentChanged: (Int) -> Unit,
-    sidPlayFpFilterRange6581Percent: Int,
-    onSidPlayFpFilterRange6581PercentChanged: (Int) -> Unit,
-    sidPlayFpFilterCurve8580Percent: Int,
-    onSidPlayFpFilterCurve8580PercentChanged: (Int) -> Unit,
-    sidPlayFpReSidFpFastSampling: Boolean,
-    onSidPlayFpReSidFpFastSamplingChanged: (Boolean) -> Unit,
-    sidPlayFpReSidFpCombinedWaveformsStrength: Int,
-    onSidPlayFpReSidFpCombinedWaveformsStrengthChanged: (Int) -> Unit,
-    lazyUsf2UseHleAudio: Boolean,
-    onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit
+    state: PluginDetailRouteState,
+    actions: PluginDetailRouteActions
 ) {
-    val pluginName = selectedPluginName ?: return
+    val pluginName = state.selectedPluginName ?: return
 
     PluginDetailScreen(
         pluginName = pluginName,
         onPriorityChanged = { priority ->
-            onPluginPriorityChanged(pluginName, priority)
+            actions.onPluginPriorityChanged(pluginName, priority)
         },
         onExtensionsChanged = { extensions ->
-            onPluginExtensionsChanged(pluginName, extensions)
+            actions.onPluginExtensionsChanged(pluginName, extensions)
         }
     )
 
@@ -131,21 +138,21 @@ internal fun PluginDetailRouteContent(
     val supportsLiveRateChange = supportsLiveSampleRateChange(selectedCoreCapabilities)
     val hasFixedRate = hasFixedSampleRate(selectedCoreCapabilities) && fixedSampleRateHz > 0
     val selectedRateHz = when (pluginName) {
-        "FFmpeg" -> ffmpegSampleRateHz
-        "LibOpenMPT" -> openMptSampleRateHz
-        "VGMPlay" -> vgmPlaySampleRateHz
-        "Game Music Emu" -> gmeSampleRateHz
-        "LibSIDPlayFP" -> sidPlayFpSampleRateHz
-        "LazyUSF2" -> lazyUsf2SampleRateHz
+        "FFmpeg" -> state.ffmpegSampleRateHz
+        "LibOpenMPT" -> state.openMptSampleRateHz
+        "VGMPlay" -> state.vgmPlaySampleRateHz
+        "Game Music Emu" -> state.gmeSampleRateHz
+        "LibSIDPlayFP" -> state.sidPlayFpSampleRateHz
+        "LazyUSF2" -> state.lazyUsf2SampleRateHz
         else -> fixedSampleRateHz
     }
     val onSampleRateSelected: ((Int) -> Unit)? = when (pluginName) {
-        "FFmpeg" -> onFfmpegSampleRateChanged
-        "LibOpenMPT" -> onOpenMptSampleRateChanged
-        "VGMPlay" -> onVgmPlaySampleRateChanged
-        "Game Music Emu" -> onGmeSampleRateChanged
-        "LibSIDPlayFP" -> onSidPlayFpSampleRateChanged
-        "LazyUSF2" -> onLazyUsf2SampleRateChanged
+        "FFmpeg" -> actions.onFfmpegSampleRateChanged
+        "LibOpenMPT" -> actions.onOpenMptSampleRateChanged
+        "VGMPlay" -> actions.onVgmPlaySampleRateChanged
+        "Game Music Emu" -> actions.onGmeSampleRateChanged
+        "LibSIDPlayFP" -> actions.onSidPlayFpSampleRateChanged
+        "LazyUSF2" -> actions.onLazyUsf2SampleRateChanged
         else -> null
     }
     val fixedRateLabel = if (fixedSampleRateHz > 0) {
@@ -170,99 +177,99 @@ internal fun PluginDetailRouteContent(
 
     val pluginSettings: PluginSettings? = when (pluginName) {
         "LibOpenMPT" -> OpenMptSettings(
-            sampleRateHz = openMptSampleRateHz,
-            capabilities = openMptCapabilities,
-            stereoSeparationPercent = openMptStereoSeparationPercent,
-            stereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
-            interpolationFilterLength = openMptInterpolationFilterLength,
-            amigaResamplerMode = openMptAmigaResamplerMode,
-            amigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
-            volumeRampingStrength = openMptVolumeRampingStrength,
-            ft2XmVolumeRamping = openMptFt2XmVolumeRamping,
-            masterGainMilliBel = openMptMasterGainMilliBel,
-            surroundEnabled = openMptSurroundEnabled,
-            onSampleRateChanged = onOpenMptSampleRateChanged,
-            onStereoSeparationPercentChanged = onOpenMptStereoSeparationPercentChanged,
-            onStereoSeparationAmigaPercentChanged = onOpenMptStereoSeparationAmigaPercentChanged,
-            onInterpolationFilterLengthChanged = onOpenMptInterpolationFilterLengthChanged,
-            onAmigaResamplerModeChanged = onOpenMptAmigaResamplerModeChanged,
-            onAmigaResamplerApplyAllModulesChanged = onOpenMptAmigaResamplerApplyAllModulesChanged,
-            onVolumeRampingStrengthChanged = onOpenMptVolumeRampingStrengthChanged,
-            onFt2XmVolumeRampingChanged = onOpenMptFt2XmVolumeRampingChanged,
-            onMasterGainMilliBelChanged = onOpenMptMasterGainMilliBelChanged,
-            onSurroundEnabledChanged = onOpenMptSurroundEnabledChanged,
+            sampleRateHz = state.openMptSampleRateHz,
+            capabilities = state.openMptCapabilities,
+            stereoSeparationPercent = state.openMptStereoSeparationPercent,
+            stereoSeparationAmigaPercent = state.openMptStereoSeparationAmigaPercent,
+            interpolationFilterLength = state.openMptInterpolationFilterLength,
+            amigaResamplerMode = state.openMptAmigaResamplerMode,
+            amigaResamplerApplyAllModules = state.openMptAmigaResamplerApplyAllModules,
+            volumeRampingStrength = state.openMptVolumeRampingStrength,
+            ft2XmVolumeRamping = state.openMptFt2XmVolumeRamping,
+            masterGainMilliBel = state.openMptMasterGainMilliBel,
+            surroundEnabled = state.openMptSurroundEnabled,
+            onSampleRateChanged = actions.onOpenMptSampleRateChanged,
+            onStereoSeparationPercentChanged = actions.onOpenMptStereoSeparationPercentChanged,
+            onStereoSeparationAmigaPercentChanged = actions.onOpenMptStereoSeparationAmigaPercentChanged,
+            onInterpolationFilterLengthChanged = actions.onOpenMptInterpolationFilterLengthChanged,
+            onAmigaResamplerModeChanged = actions.onOpenMptAmigaResamplerModeChanged,
+            onAmigaResamplerApplyAllModulesChanged = actions.onOpenMptAmigaResamplerApplyAllModulesChanged,
+            onVolumeRampingStrengthChanged = actions.onOpenMptVolumeRampingStrengthChanged,
+            onFt2XmVolumeRampingChanged = actions.onOpenMptFt2XmVolumeRampingChanged,
+            onMasterGainMilliBelChanged = actions.onOpenMptMasterGainMilliBelChanged,
+            onSurroundEnabledChanged = actions.onOpenMptSurroundEnabledChanged,
             includeSampleRateControl = false
         )
 
         "VGMPlay" -> VgmPlaySettings(
-            sampleRateHz = vgmPlaySampleRateHz,
-            capabilities = vgmPlayCapabilities,
-            loopCount = vgmPlayLoopCount,
-            allowNonLoopingLoop = vgmPlayAllowNonLoopingLoop,
-            vsyncRate = vgmPlayVsyncRate,
-            resampleMode = vgmPlayResampleMode,
-            chipSampleMode = vgmPlayChipSampleMode,
-            chipSampleRate = vgmPlayChipSampleRate,
-            onSampleRateChanged = onVgmPlaySampleRateChanged,
-            onLoopCountChanged = onVgmPlayLoopCountChanged,
-            onAllowNonLoopingLoopChanged = onVgmPlayAllowNonLoopingLoopChanged,
-            onVsyncRateChanged = onVgmPlayVsyncRateChanged,
-            onResampleModeChanged = onVgmPlayResampleModeChanged,
-            onChipSampleModeChanged = onVgmPlayChipSampleModeChanged,
-            onChipSampleRateChanged = onVgmPlayChipSampleRateChanged,
-            onOpenChipSettings = onOpenVgmPlayChipSettings,
+            sampleRateHz = state.vgmPlaySampleRateHz,
+            capabilities = state.vgmPlayCapabilities,
+            loopCount = state.vgmPlayLoopCount,
+            allowNonLoopingLoop = state.vgmPlayAllowNonLoopingLoop,
+            vsyncRate = state.vgmPlayVsyncRate,
+            resampleMode = state.vgmPlayResampleMode,
+            chipSampleMode = state.vgmPlayChipSampleMode,
+            chipSampleRate = state.vgmPlayChipSampleRate,
+            onSampleRateChanged = actions.onVgmPlaySampleRateChanged,
+            onLoopCountChanged = actions.onVgmPlayLoopCountChanged,
+            onAllowNonLoopingLoopChanged = actions.onVgmPlayAllowNonLoopingLoopChanged,
+            onVsyncRateChanged = actions.onVgmPlayVsyncRateChanged,
+            onResampleModeChanged = actions.onVgmPlayResampleModeChanged,
+            onChipSampleModeChanged = actions.onVgmPlayChipSampleModeChanged,
+            onChipSampleRateChanged = actions.onVgmPlayChipSampleRateChanged,
+            onOpenChipSettings = actions.onOpenVgmPlayChipSettings,
             includeSampleRateControl = false
         )
 
         "Game Music Emu" -> GmeSettings(
-            tempoPercent = gmeTempoPercent,
-            stereoSeparationPercent = gmeStereoSeparationPercent,
-            echoEnabled = gmeEchoEnabled,
-            accuracyEnabled = gmeAccuracyEnabled,
-            eqTrebleDecibel = gmeEqTrebleDecibel,
-            eqBassHz = gmeEqBassHz,
-            spcUseBuiltInFade = gmeSpcUseBuiltInFade,
-            spcInterpolation = gmeSpcInterpolation,
-            spcUseNativeSampleRate = gmeSpcUseNativeSampleRate,
-            onTempoPercentChanged = onGmeTempoPercentChanged,
-            onStereoSeparationPercentChanged = onGmeStereoSeparationPercentChanged,
-            onEchoEnabledChanged = onGmeEchoEnabledChanged,
-            onAccuracyEnabledChanged = onGmeAccuracyEnabledChanged,
-            onEqTrebleDecibelChanged = onGmeEqTrebleDecibelChanged,
-            onEqBassHzChanged = onGmeEqBassHzChanged,
-            onSpcUseBuiltInFadeChanged = onGmeSpcUseBuiltInFadeChanged,
-            onSpcInterpolationChanged = onGmeSpcInterpolationChanged,
-            onSpcUseNativeSampleRateChanged = onGmeSpcUseNativeSampleRateChanged
+            tempoPercent = state.gmeTempoPercent,
+            stereoSeparationPercent = state.gmeStereoSeparationPercent,
+            echoEnabled = state.gmeEchoEnabled,
+            accuracyEnabled = state.gmeAccuracyEnabled,
+            eqTrebleDecibel = state.gmeEqTrebleDecibel,
+            eqBassHz = state.gmeEqBassHz,
+            spcUseBuiltInFade = state.gmeSpcUseBuiltInFade,
+            spcInterpolation = state.gmeSpcInterpolation,
+            spcUseNativeSampleRate = state.gmeSpcUseNativeSampleRate,
+            onTempoPercentChanged = actions.onGmeTempoPercentChanged,
+            onStereoSeparationPercentChanged = actions.onGmeStereoSeparationPercentChanged,
+            onEchoEnabledChanged = actions.onGmeEchoEnabledChanged,
+            onAccuracyEnabledChanged = actions.onGmeAccuracyEnabledChanged,
+            onEqTrebleDecibelChanged = actions.onGmeEqTrebleDecibelChanged,
+            onEqBassHzChanged = actions.onGmeEqBassHzChanged,
+            onSpcUseBuiltInFadeChanged = actions.onGmeSpcUseBuiltInFadeChanged,
+            onSpcInterpolationChanged = actions.onGmeSpcInterpolationChanged,
+            onSpcUseNativeSampleRateChanged = actions.onGmeSpcUseNativeSampleRateChanged
         )
 
         "LibSIDPlayFP" -> SidPlayFpSettings(
-            backend = sidPlayFpBackend,
-            clockMode = sidPlayFpClockMode,
-            sidModelMode = sidPlayFpSidModelMode,
-            filter6581Enabled = sidPlayFpFilter6581Enabled,
-            filter8580Enabled = sidPlayFpFilter8580Enabled,
-            digiBoost8580 = sidPlayFpDigiBoost8580,
-            filterCurve6581Percent = sidPlayFpFilterCurve6581Percent,
-            filterRange6581Percent = sidPlayFpFilterRange6581Percent,
-            filterCurve8580Percent = sidPlayFpFilterCurve8580Percent,
-            reSidFpFastSampling = sidPlayFpReSidFpFastSampling,
-            reSidFpCombinedWaveformsStrength = sidPlayFpReSidFpCombinedWaveformsStrength,
-            onBackendChanged = onSidPlayFpBackendChanged,
-            onClockModeChanged = onSidPlayFpClockModeChanged,
-            onSidModelModeChanged = onSidPlayFpSidModelModeChanged,
-            onFilter6581EnabledChanged = onSidPlayFpFilter6581EnabledChanged,
-            onFilter8580EnabledChanged = onSidPlayFpFilter8580EnabledChanged,
-            onDigiBoost8580Changed = onSidPlayFpDigiBoost8580Changed,
-            onFilterCurve6581PercentChanged = onSidPlayFpFilterCurve6581PercentChanged,
-            onFilterRange6581PercentChanged = onSidPlayFpFilterRange6581PercentChanged,
-            onFilterCurve8580PercentChanged = onSidPlayFpFilterCurve8580PercentChanged,
-            onReSidFpFastSamplingChanged = onSidPlayFpReSidFpFastSamplingChanged,
-            onReSidFpCombinedWaveformsStrengthChanged = onSidPlayFpReSidFpCombinedWaveformsStrengthChanged
+            backend = state.sidPlayFpBackend,
+            clockMode = state.sidPlayFpClockMode,
+            sidModelMode = state.sidPlayFpSidModelMode,
+            filter6581Enabled = state.sidPlayFpFilter6581Enabled,
+            filter8580Enabled = state.sidPlayFpFilter8580Enabled,
+            digiBoost8580 = state.sidPlayFpDigiBoost8580,
+            filterCurve6581Percent = state.sidPlayFpFilterCurve6581Percent,
+            filterRange6581Percent = state.sidPlayFpFilterRange6581Percent,
+            filterCurve8580Percent = state.sidPlayFpFilterCurve8580Percent,
+            reSidFpFastSampling = state.sidPlayFpReSidFpFastSampling,
+            reSidFpCombinedWaveformsStrength = state.sidPlayFpReSidFpCombinedWaveformsStrength,
+            onBackendChanged = actions.onSidPlayFpBackendChanged,
+            onClockModeChanged = actions.onSidPlayFpClockModeChanged,
+            onSidModelModeChanged = actions.onSidPlayFpSidModelModeChanged,
+            onFilter6581EnabledChanged = actions.onSidPlayFpFilter6581EnabledChanged,
+            onFilter8580EnabledChanged = actions.onSidPlayFpFilter8580EnabledChanged,
+            onDigiBoost8580Changed = actions.onSidPlayFpDigiBoost8580Changed,
+            onFilterCurve6581PercentChanged = actions.onSidPlayFpFilterCurve6581PercentChanged,
+            onFilterRange6581PercentChanged = actions.onSidPlayFpFilterRange6581PercentChanged,
+            onFilterCurve8580PercentChanged = actions.onSidPlayFpFilterCurve8580PercentChanged,
+            onReSidFpFastSamplingChanged = actions.onSidPlayFpReSidFpFastSamplingChanged,
+            onReSidFpCombinedWaveformsStrengthChanged = actions.onSidPlayFpReSidFpCombinedWaveformsStrengthChanged
         )
 
         "LazyUSF2" -> LazyUsf2Settings(
-            useHleAudio = lazyUsf2UseHleAudio,
-            onUseHleAudioChanged = onLazyUsf2UseHleAudioChanged
+            useHleAudio = state.lazyUsf2UseHleAudio,
+            onUseHleAudioChanged = actions.onLazyUsf2UseHleAudioChanged
         )
 
         else -> null

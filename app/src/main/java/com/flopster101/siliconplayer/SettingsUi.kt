@@ -20,7 +20,6 @@ import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -109,226 +108,448 @@ import androidx.compose.foundation.shape.CircleShape
 
 private const val SETTINGS_PAGE_NAV_DURATION_MS = 300
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+internal data class SettingsScreenState(
+    val selectedPluginName: String?,
+    val autoPlayOnTrackSelect: Boolean,
+    val openPlayerOnTrackSelect: Boolean,
+    val autoPlayNextTrackOnEnd: Boolean,
+    val previousRestartsAfterThreshold: Boolean,
+    val respondHeadphoneMediaButtons: Boolean,
+    val pauseOnHeadphoneDisconnect: Boolean,
+    val audioFocusInterrupt: Boolean,
+    val audioDucking: Boolean,
+    val audioBackendPreference: AudioBackendPreference,
+    val audioPerformanceMode: AudioPerformanceMode,
+    val audioBufferPreset: AudioBufferPreset,
+    val audioResamplerPreference: AudioResamplerPreference,
+    val audioAllowBackendFallback: Boolean,
+    val openPlayerFromNotification: Boolean,
+    val persistRepeatMode: Boolean,
+    val themeMode: ThemeMode,
+    val rememberBrowserLocation: Boolean,
+    val recentFoldersLimit: Int,
+    val recentFilesLimit: Int,
+    val urlCacheClearOnLaunch: Boolean,
+    val urlCacheMaxTracks: Int,
+    val urlCacheMaxBytes: Long,
+    val cachedSourceFiles: List<CachedSourceFile>,
+    val keepScreenOn: Boolean,
+    val playerArtworkCornerRadiusDp: Int,
+    val filenameDisplayMode: FilenameDisplayMode,
+    val filenameOnlyWhenTitleMissing: Boolean,
+    val unknownTrackDurationSeconds: Int,
+    val endFadeApplyToAllTracks: Boolean,
+    val endFadeDurationMs: Int,
+    val endFadeCurve: EndFadeCurve,
+    val visualizationMode: VisualizationMode,
+    val enabledVisualizationModes: Set<VisualizationMode>,
+    val visualizationShowDebugInfo: Boolean,
+    val visualizationBarCount: Int,
+    val visualizationBarSmoothingPercent: Int,
+    val visualizationBarRoundnessDp: Int,
+    val visualizationBarOverlayArtwork: Boolean,
+    val visualizationBarUseThemeColor: Boolean,
+    val visualizationOscStereo: Boolean,
+    val visualizationVuAnchor: VisualizationVuAnchor,
+    val visualizationVuUseThemeColor: Boolean,
+    val visualizationVuSmoothingPercent: Int,
+    val ffmpegSampleRateHz: Int,
+    val ffmpegCapabilities: Int,
+    val openMptSampleRateHz: Int,
+    val openMptCapabilities: Int,
+    val vgmPlaySampleRateHz: Int,
+    val vgmPlayCapabilities: Int,
+    val gmeSampleRateHz: Int,
+    val sidPlayFpSampleRateHz: Int,
+    val lazyUsf2SampleRateHz: Int,
+    val lazyUsf2UseHleAudio: Boolean,
+    val sidPlayFpBackend: Int,
+    val sidPlayFpClockMode: Int,
+    val sidPlayFpSidModelMode: Int,
+    val sidPlayFpFilter6581Enabled: Boolean,
+    val sidPlayFpFilter8580Enabled: Boolean,
+    val sidPlayFpDigiBoost8580: Boolean,
+    val sidPlayFpFilterCurve6581Percent: Int,
+    val sidPlayFpFilterRange6581Percent: Int,
+    val sidPlayFpFilterCurve8580Percent: Int,
+    val sidPlayFpReSidFpFastSampling: Boolean,
+    val sidPlayFpReSidFpCombinedWaveformsStrength: Int,
+    val gmeTempoPercent: Int,
+    val gmeStereoSeparationPercent: Int,
+    val gmeEchoEnabled: Boolean,
+    val gmeAccuracyEnabled: Boolean,
+    val gmeEqTrebleDecibel: Int,
+    val gmeEqBassHz: Int,
+    val gmeSpcUseBuiltInFade: Boolean,
+    val gmeSpcInterpolation: Int,
+    val gmeSpcUseNativeSampleRate: Boolean,
+    val vgmPlayLoopCount: Int,
+    val vgmPlayAllowNonLoopingLoop: Boolean,
+    val vgmPlayVsyncRate: Int,
+    val vgmPlayResampleMode: Int,
+    val vgmPlayChipSampleMode: Int,
+    val vgmPlayChipSampleRate: Int,
+    val vgmPlayChipCoreSelections: Map<String, Int>,
+    val openMptStereoSeparationPercent: Int,
+    val openMptStereoSeparationAmigaPercent: Int,
+    val openMptInterpolationFilterLength: Int,
+    val openMptAmigaResamplerMode: Int,
+    val openMptAmigaResamplerApplyAllModules: Boolean,
+    val openMptVolumeRampingStrength: Int,
+    val openMptFt2XmVolumeRamping: Boolean,
+    val openMptMasterGainMilliBel: Int,
+    val openMptSurroundEnabled: Boolean
+)
+
+internal data class SettingsScreenActions(
+    val onBack: () -> Unit,
+    val onOpenAudioPlugins: () -> Unit,
+    val onOpenGeneralAudio: () -> Unit,
+    val onOpenHome: () -> Unit,
+    val onOpenAudioEffects: () -> Unit,
+    val onClearAllAudioParameters: () -> Unit,
+    val onClearPluginAudioParameters: () -> Unit,
+    val onClearSongAudioParameters: () -> Unit,
+    val onOpenPlayer: () -> Unit,
+    val onOpenVisualization: () -> Unit,
+    val onOpenVisualizationBasic: () -> Unit,
+    val onOpenVisualizationBasicBars: () -> Unit,
+    val onOpenVisualizationBasicOscilloscope: () -> Unit,
+    val onOpenVisualizationBasicVuMeters: () -> Unit,
+    val onOpenVisualizationAdvanced: () -> Unit,
+    val onOpenVisualizationAdvancedChannelScope: () -> Unit,
+    val onOpenMisc: () -> Unit,
+    val onOpenUrlCache: () -> Unit,
+    val onOpenCacheManager: () -> Unit,
+    val onOpenUi: () -> Unit,
+    val onOpenAbout: () -> Unit,
+    val onOpenVgmPlayChipSettings: () -> Unit,
+    val onPluginSelected: (String) -> Unit,
+    val onPluginEnabledChanged: (String, Boolean) -> Unit,
+    val onPluginPriorityChanged: (String, Int) -> Unit,
+    val onPluginPriorityOrderChanged: (List<String>) -> Unit,
+    val onPluginExtensionsChanged: (String, Array<String>) -> Unit,
+    val onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
+    val onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
+    val onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
+    val onPreviousRestartsAfterThresholdChanged: (Boolean) -> Unit,
+    val onRespondHeadphoneMediaButtonsChanged: (Boolean) -> Unit,
+    val onPauseOnHeadphoneDisconnectChanged: (Boolean) -> Unit,
+    val onAudioFocusInterruptChanged: (Boolean) -> Unit,
+    val onAudioDuckingChanged: (Boolean) -> Unit,
+    val onAudioBackendPreferenceChanged: (AudioBackendPreference) -> Unit,
+    val onAudioPerformanceModeChanged: (AudioPerformanceMode) -> Unit,
+    val onAudioBufferPresetChanged: (AudioBufferPreset) -> Unit,
+    val onAudioResamplerPreferenceChanged: (AudioResamplerPreference) -> Unit,
+    val onAudioAllowBackendFallbackChanged: (Boolean) -> Unit,
+    val onOpenPlayerFromNotificationChanged: (Boolean) -> Unit,
+    val onPersistRepeatModeChanged: (Boolean) -> Unit,
+    val onThemeModeChanged: (ThemeMode) -> Unit,
+    val onRememberBrowserLocationChanged: (Boolean) -> Unit,
+    val onRecentFoldersLimitChanged: (Int) -> Unit,
+    val onRecentFilesLimitChanged: (Int) -> Unit,
+    val onUrlCacheClearOnLaunchChanged: (Boolean) -> Unit,
+    val onUrlCacheMaxTracksChanged: (Int) -> Unit,
+    val onUrlCacheMaxBytesChanged: (Long) -> Unit,
+    val onClearUrlCacheNow: () -> Unit,
+    val onRefreshCachedSourceFiles: () -> Unit,
+    val onDeleteCachedSourceFiles: (List<String>) -> Unit,
+    val onExportCachedSourceFiles: (List<String>) -> Unit,
+    val onKeepScreenOnChanged: (Boolean) -> Unit,
+    val onPlayerArtworkCornerRadiusDpChanged: (Int) -> Unit,
+    val onFilenameDisplayModeChanged: (FilenameDisplayMode) -> Unit,
+    val onFilenameOnlyWhenTitleMissingChanged: (Boolean) -> Unit,
+    val onUnknownTrackDurationSecondsChanged: (Int) -> Unit,
+    val onEndFadeApplyToAllTracksChanged: (Boolean) -> Unit,
+    val onEndFadeDurationMsChanged: (Int) -> Unit,
+    val onEndFadeCurveChanged: (EndFadeCurve) -> Unit,
+    val onVisualizationModeChanged: (VisualizationMode) -> Unit,
+    val onEnabledVisualizationModesChanged: (Set<VisualizationMode>) -> Unit,
+    val onVisualizationShowDebugInfoChanged: (Boolean) -> Unit,
+    val onVisualizationBarCountChanged: (Int) -> Unit,
+    val onVisualizationBarSmoothingPercentChanged: (Int) -> Unit,
+    val onVisualizationBarRoundnessDpChanged: (Int) -> Unit,
+    val onVisualizationBarOverlayArtworkChanged: (Boolean) -> Unit,
+    val onVisualizationBarUseThemeColorChanged: (Boolean) -> Unit,
+    val onVisualizationOscStereoChanged: (Boolean) -> Unit,
+    val onVisualizationVuAnchorChanged: (VisualizationVuAnchor) -> Unit,
+    val onVisualizationVuUseThemeColorChanged: (Boolean) -> Unit,
+    val onVisualizationVuSmoothingPercentChanged: (Int) -> Unit,
+    val onResetVisualizationBarsSettings: () -> Unit,
+    val onResetVisualizationOscilloscopeSettings: () -> Unit,
+    val onResetVisualizationVuSettings: () -> Unit,
+    val onResetVisualizationChannelScopeSettings: () -> Unit,
+    val onFfmpegSampleRateChanged: (Int) -> Unit,
+    val onOpenMptSampleRateChanged: (Int) -> Unit,
+    val onVgmPlaySampleRateChanged: (Int) -> Unit,
+    val onGmeSampleRateChanged: (Int) -> Unit,
+    val onSidPlayFpSampleRateChanged: (Int) -> Unit,
+    val onLazyUsf2SampleRateChanged: (Int) -> Unit,
+    val onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
+    val onSidPlayFpBackendChanged: (Int) -> Unit,
+    val onSidPlayFpClockModeChanged: (Int) -> Unit,
+    val onSidPlayFpSidModelModeChanged: (Int) -> Unit,
+    val onSidPlayFpFilter6581EnabledChanged: (Boolean) -> Unit,
+    val onSidPlayFpFilter8580EnabledChanged: (Boolean) -> Unit,
+    val onSidPlayFpDigiBoost8580Changed: (Boolean) -> Unit,
+    val onSidPlayFpFilterCurve6581PercentChanged: (Int) -> Unit,
+    val onSidPlayFpFilterRange6581PercentChanged: (Int) -> Unit,
+    val onSidPlayFpFilterCurve8580PercentChanged: (Int) -> Unit,
+    val onSidPlayFpReSidFpFastSamplingChanged: (Boolean) -> Unit,
+    val onSidPlayFpReSidFpCombinedWaveformsStrengthChanged: (Int) -> Unit,
+    val onGmeTempoPercentChanged: (Int) -> Unit,
+    val onGmeStereoSeparationPercentChanged: (Int) -> Unit,
+    val onGmeEchoEnabledChanged: (Boolean) -> Unit,
+    val onGmeAccuracyEnabledChanged: (Boolean) -> Unit,
+    val onGmeEqTrebleDecibelChanged: (Int) -> Unit,
+    val onGmeEqBassHzChanged: (Int) -> Unit,
+    val onGmeSpcUseBuiltInFadeChanged: (Boolean) -> Unit,
+    val onGmeSpcInterpolationChanged: (Int) -> Unit,
+    val onGmeSpcUseNativeSampleRateChanged: (Boolean) -> Unit,
+    val onVgmPlayLoopCountChanged: (Int) -> Unit,
+    val onVgmPlayAllowNonLoopingLoopChanged: (Boolean) -> Unit,
+    val onVgmPlayVsyncRateChanged: (Int) -> Unit,
+    val onVgmPlayResampleModeChanged: (Int) -> Unit,
+    val onVgmPlayChipSampleModeChanged: (Int) -> Unit,
+    val onVgmPlayChipSampleRateChanged: (Int) -> Unit,
+    val onVgmPlayChipCoreChanged: (String, Int) -> Unit,
+    val onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
+    val onOpenMptStereoSeparationAmigaPercentChanged: (Int) -> Unit,
+    val onOpenMptInterpolationFilterLengthChanged: (Int) -> Unit,
+    val onOpenMptAmigaResamplerModeChanged: (Int) -> Unit,
+    val onOpenMptAmigaResamplerApplyAllModulesChanged: (Boolean) -> Unit,
+    val onOpenMptVolumeRampingStrengthChanged: (Int) -> Unit,
+    val onOpenMptFt2XmVolumeRampingChanged: (Boolean) -> Unit,
+    val onOpenMptMasterGainMilliBelChanged: (Int) -> Unit,
+    val onOpenMptSurroundEnabledChanged: (Boolean) -> Unit,
+    val onClearRecentHistory: () -> Unit,
+    val onClearAllSettings: () -> Unit,
+    val onClearAllPluginSettings: () -> Unit,
+    val onResetPluginSettings: (String) -> Unit
+)
+
 @Composable
 internal fun SettingsScreen(
     route: SettingsRoute,
     bottomContentPadding: Dp = 0.dp,
-    onBack: () -> Unit,
-    onOpenAudioPlugins: () -> Unit,
-    onOpenGeneralAudio: () -> Unit,
-    onOpenHome: () -> Unit,
-    onOpenAudioEffects: () -> Unit,
-    onClearAllAudioParameters: () -> Unit,
-    onClearPluginAudioParameters: () -> Unit,
-    onClearSongAudioParameters: () -> Unit,
-    onOpenPlayer: () -> Unit,
-    onOpenVisualization: () -> Unit,
-    onOpenVisualizationBasic: () -> Unit,
-    onOpenVisualizationBasicBars: () -> Unit,
-    onOpenVisualizationBasicOscilloscope: () -> Unit,
-    onOpenVisualizationBasicVuMeters: () -> Unit,
-    onOpenVisualizationAdvanced: () -> Unit,
-    onOpenVisualizationAdvancedChannelScope: () -> Unit,
-    onOpenMisc: () -> Unit,
-    onOpenUrlCache: () -> Unit,
-    onOpenCacheManager: () -> Unit,
-    onOpenUi: () -> Unit,
-    onOpenAbout: () -> Unit,
-    onOpenVgmPlayChipSettings: () -> Unit,
-    selectedPluginName: String?,
-    onPluginSelected: (String) -> Unit,
-    onPluginEnabledChanged: (String, Boolean) -> Unit,
-    onPluginPriorityChanged: (String, Int) -> Unit,
-    onPluginPriorityOrderChanged: (List<String>) -> Unit,
-    onPluginExtensionsChanged: (String, Array<String>) -> Unit,
-    autoPlayOnTrackSelect: Boolean,
-    onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
-    openPlayerOnTrackSelect: Boolean,
-    onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
-    autoPlayNextTrackOnEnd: Boolean,
-    onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
-    previousRestartsAfterThreshold: Boolean,
-    onPreviousRestartsAfterThresholdChanged: (Boolean) -> Unit,
-    respondHeadphoneMediaButtons: Boolean,
-    onRespondHeadphoneMediaButtonsChanged: (Boolean) -> Unit,
-    pauseOnHeadphoneDisconnect: Boolean,
-    onPauseOnHeadphoneDisconnectChanged: (Boolean) -> Unit,
-    audioFocusInterrupt: Boolean,
-    onAudioFocusInterruptChanged: (Boolean) -> Unit,
-    audioDucking: Boolean,
-    onAudioDuckingChanged: (Boolean) -> Unit,
-    audioBackendPreference: AudioBackendPreference,
-    onAudioBackendPreferenceChanged: (AudioBackendPreference) -> Unit,
-    audioPerformanceMode: AudioPerformanceMode,
-    onAudioPerformanceModeChanged: (AudioPerformanceMode) -> Unit,
-    audioBufferPreset: AudioBufferPreset,
-    onAudioBufferPresetChanged: (AudioBufferPreset) -> Unit,
-    audioResamplerPreference: AudioResamplerPreference,
-    onAudioResamplerPreferenceChanged: (AudioResamplerPreference) -> Unit,
-    audioAllowBackendFallback: Boolean,
-    onAudioAllowBackendFallbackChanged: (Boolean) -> Unit,
-    openPlayerFromNotification: Boolean,
-    onOpenPlayerFromNotificationChanged: (Boolean) -> Unit,
-    persistRepeatMode: Boolean,
-    onPersistRepeatModeChanged: (Boolean) -> Unit,
-    themeMode: ThemeMode,
-    onThemeModeChanged: (ThemeMode) -> Unit,
-    rememberBrowserLocation: Boolean,
-    onRememberBrowserLocationChanged: (Boolean) -> Unit,
-    recentFoldersLimit: Int,
-    onRecentFoldersLimitChanged: (Int) -> Unit,
-    recentFilesLimit: Int,
-    onRecentFilesLimitChanged: (Int) -> Unit,
-    urlCacheClearOnLaunch: Boolean,
-    onUrlCacheClearOnLaunchChanged: (Boolean) -> Unit,
-    urlCacheMaxTracks: Int,
-    onUrlCacheMaxTracksChanged: (Int) -> Unit,
-    urlCacheMaxBytes: Long,
-    onUrlCacheMaxBytesChanged: (Long) -> Unit,
-    onClearUrlCacheNow: () -> Unit,
-    cachedSourceFiles: List<CachedSourceFile>,
-    onRefreshCachedSourceFiles: () -> Unit,
-    onDeleteCachedSourceFiles: (List<String>) -> Unit,
-    onExportCachedSourceFiles: (List<String>) -> Unit,
-    keepScreenOn: Boolean,
-    onKeepScreenOnChanged: (Boolean) -> Unit,
-    playerArtworkCornerRadiusDp: Int,
-    onPlayerArtworkCornerRadiusDpChanged: (Int) -> Unit,
-    filenameDisplayMode: FilenameDisplayMode,
-    onFilenameDisplayModeChanged: (FilenameDisplayMode) -> Unit,
-    filenameOnlyWhenTitleMissing: Boolean,
-    onFilenameOnlyWhenTitleMissingChanged: (Boolean) -> Unit,
-    unknownTrackDurationSeconds: Int,
-    onUnknownTrackDurationSecondsChanged: (Int) -> Unit,
-    endFadeApplyToAllTracks: Boolean,
-    onEndFadeApplyToAllTracksChanged: (Boolean) -> Unit,
-    endFadeDurationMs: Int,
-    onEndFadeDurationMsChanged: (Int) -> Unit,
-    endFadeCurve: EndFadeCurve,
-    onEndFadeCurveChanged: (EndFadeCurve) -> Unit,
-    visualizationMode: VisualizationMode,
-    onVisualizationModeChanged: (VisualizationMode) -> Unit,
-    enabledVisualizationModes: Set<VisualizationMode>,
-    onEnabledVisualizationModesChanged: (Set<VisualizationMode>) -> Unit,
-    visualizationShowDebugInfo: Boolean,
-    onVisualizationShowDebugInfoChanged: (Boolean) -> Unit,
-    visualizationBarCount: Int,
-    onVisualizationBarCountChanged: (Int) -> Unit,
-    visualizationBarSmoothingPercent: Int,
-    onVisualizationBarSmoothingPercentChanged: (Int) -> Unit,
-    visualizationBarRoundnessDp: Int,
-    onVisualizationBarRoundnessDpChanged: (Int) -> Unit,
-    visualizationBarOverlayArtwork: Boolean,
-    onVisualizationBarOverlayArtworkChanged: (Boolean) -> Unit,
-    visualizationBarUseThemeColor: Boolean,
-    onVisualizationBarUseThemeColorChanged: (Boolean) -> Unit,
-    visualizationOscStereo: Boolean,
-    onVisualizationOscStereoChanged: (Boolean) -> Unit,
-    visualizationVuAnchor: VisualizationVuAnchor,
-    onVisualizationVuAnchorChanged: (VisualizationVuAnchor) -> Unit,
-    visualizationVuUseThemeColor: Boolean,
-    onVisualizationVuUseThemeColorChanged: (Boolean) -> Unit,
-    visualizationVuSmoothingPercent: Int,
-    onVisualizationVuSmoothingPercentChanged: (Int) -> Unit,
-    onResetVisualizationBarsSettings: () -> Unit,
-    onResetVisualizationOscilloscopeSettings: () -> Unit,
-    onResetVisualizationVuSettings: () -> Unit,
-    onResetVisualizationChannelScopeSettings: () -> Unit,
-    ffmpegSampleRateHz: Int,
-    ffmpegCapabilities: Int,
-    onFfmpegSampleRateChanged: (Int) -> Unit,
-    openMptSampleRateHz: Int,
-    openMptCapabilities: Int,
-    onOpenMptSampleRateChanged: (Int) -> Unit,
-    vgmPlaySampleRateHz: Int,
-    vgmPlayCapabilities: Int,
-    onVgmPlaySampleRateChanged: (Int) -> Unit,
-    gmeSampleRateHz: Int,
-    onGmeSampleRateChanged: (Int) -> Unit,
-    sidPlayFpSampleRateHz: Int,
-    onSidPlayFpSampleRateChanged: (Int) -> Unit,
-    lazyUsf2SampleRateHz: Int,
-    onLazyUsf2SampleRateChanged: (Int) -> Unit,
-    lazyUsf2UseHleAudio: Boolean,
-    onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
-    sidPlayFpBackend: Int,
-    onSidPlayFpBackendChanged: (Int) -> Unit,
-    sidPlayFpClockMode: Int,
-    onSidPlayFpClockModeChanged: (Int) -> Unit,
-    sidPlayFpSidModelMode: Int,
-    onSidPlayFpSidModelModeChanged: (Int) -> Unit,
-    sidPlayFpFilter6581Enabled: Boolean,
-    onSidPlayFpFilter6581EnabledChanged: (Boolean) -> Unit,
-    sidPlayFpFilter8580Enabled: Boolean,
-    onSidPlayFpFilter8580EnabledChanged: (Boolean) -> Unit,
-    sidPlayFpDigiBoost8580: Boolean,
-    onSidPlayFpDigiBoost8580Changed: (Boolean) -> Unit,
-    sidPlayFpFilterCurve6581Percent: Int,
-    onSidPlayFpFilterCurve6581PercentChanged: (Int) -> Unit,
-    sidPlayFpFilterRange6581Percent: Int,
-    onSidPlayFpFilterRange6581PercentChanged: (Int) -> Unit,
-    sidPlayFpFilterCurve8580Percent: Int,
-    onSidPlayFpFilterCurve8580PercentChanged: (Int) -> Unit,
-    sidPlayFpReSidFpFastSampling: Boolean,
-    onSidPlayFpReSidFpFastSamplingChanged: (Boolean) -> Unit,
-    sidPlayFpReSidFpCombinedWaveformsStrength: Int,
-    onSidPlayFpReSidFpCombinedWaveformsStrengthChanged: (Int) -> Unit,
-    gmeTempoPercent: Int,
-    onGmeTempoPercentChanged: (Int) -> Unit,
-    gmeStereoSeparationPercent: Int,
-    onGmeStereoSeparationPercentChanged: (Int) -> Unit,
-    gmeEchoEnabled: Boolean,
-    onGmeEchoEnabledChanged: (Boolean) -> Unit,
-    gmeAccuracyEnabled: Boolean,
-    onGmeAccuracyEnabledChanged: (Boolean) -> Unit,
-    gmeEqTrebleDecibel: Int,
-    onGmeEqTrebleDecibelChanged: (Int) -> Unit,
-    gmeEqBassHz: Int,
-    onGmeEqBassHzChanged: (Int) -> Unit,
-    gmeSpcUseBuiltInFade: Boolean,
-    onGmeSpcUseBuiltInFadeChanged: (Boolean) -> Unit,
-    gmeSpcInterpolation: Int,
-    onGmeSpcInterpolationChanged: (Int) -> Unit,
-    gmeSpcUseNativeSampleRate: Boolean,
-    onGmeSpcUseNativeSampleRateChanged: (Boolean) -> Unit,
-    vgmPlayLoopCount: Int,
-    onVgmPlayLoopCountChanged: (Int) -> Unit,
-    vgmPlayAllowNonLoopingLoop: Boolean,
-    onVgmPlayAllowNonLoopingLoopChanged: (Boolean) -> Unit,
-    vgmPlayVsyncRate: Int,
-    onVgmPlayVsyncRateChanged: (Int) -> Unit,
-    vgmPlayResampleMode: Int,
-    onVgmPlayResampleModeChanged: (Int) -> Unit,
-    vgmPlayChipSampleMode: Int,
-    onVgmPlayChipSampleModeChanged: (Int) -> Unit,
-    vgmPlayChipSampleRate: Int,
-    onVgmPlayChipSampleRateChanged: (Int) -> Unit,
-    vgmPlayChipCoreSelections: Map<String, Int>,
-    onVgmPlayChipCoreChanged: (String, Int) -> Unit,
-    openMptStereoSeparationPercent: Int,
-    onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
-    openMptStereoSeparationAmigaPercent: Int,
-    onOpenMptStereoSeparationAmigaPercentChanged: (Int) -> Unit,
-    openMptInterpolationFilterLength: Int,
-    onOpenMptInterpolationFilterLengthChanged: (Int) -> Unit,
-    openMptAmigaResamplerMode: Int,
-    onOpenMptAmigaResamplerModeChanged: (Int) -> Unit,
-    openMptAmigaResamplerApplyAllModules: Boolean,
-    onOpenMptAmigaResamplerApplyAllModulesChanged: (Boolean) -> Unit,
-    openMptVolumeRampingStrength: Int,
-    onOpenMptVolumeRampingStrengthChanged: (Int) -> Unit,
-    openMptFt2XmVolumeRamping: Boolean,
-    onOpenMptFt2XmVolumeRampingChanged: (Boolean) -> Unit,
-    openMptMasterGainMilliBel: Int,
-    onOpenMptMasterGainMilliBelChanged: (Int) -> Unit,
-    openMptSurroundEnabled: Boolean,
-    onOpenMptSurroundEnabledChanged: (Boolean) -> Unit,
-    onClearRecentHistory: () -> Unit,
-    onClearAllSettings: () -> Unit,
-    onClearAllPluginSettings: () -> Unit,
-    onResetPluginSettings: (String) -> Unit
+    state: SettingsScreenState,
+    actions: SettingsScreenActions
 ) {
+    val onBack = actions.onBack
+    val onOpenAudioPlugins = actions.onOpenAudioPlugins
+    val onOpenGeneralAudio = actions.onOpenGeneralAudio
+    val onOpenHome = actions.onOpenHome
+    val onOpenAudioEffects = actions.onOpenAudioEffects
+    val onClearAllAudioParameters = actions.onClearAllAudioParameters
+    val onClearPluginAudioParameters = actions.onClearPluginAudioParameters
+    val onClearSongAudioParameters = actions.onClearSongAudioParameters
+    val onOpenPlayer = actions.onOpenPlayer
+    val onOpenVisualization = actions.onOpenVisualization
+    val onOpenVisualizationBasic = actions.onOpenVisualizationBasic
+    val onOpenVisualizationBasicBars = actions.onOpenVisualizationBasicBars
+    val onOpenVisualizationBasicOscilloscope = actions.onOpenVisualizationBasicOscilloscope
+    val onOpenVisualizationBasicVuMeters = actions.onOpenVisualizationBasicVuMeters
+    val onOpenVisualizationAdvanced = actions.onOpenVisualizationAdvanced
+    val onOpenVisualizationAdvancedChannelScope = actions.onOpenVisualizationAdvancedChannelScope
+    val onOpenMisc = actions.onOpenMisc
+    val onOpenUrlCache = actions.onOpenUrlCache
+    val onOpenCacheManager = actions.onOpenCacheManager
+    val onOpenUi = actions.onOpenUi
+    val onOpenAbout = actions.onOpenAbout
+    val onOpenVgmPlayChipSettings = actions.onOpenVgmPlayChipSettings
+    val selectedPluginName = state.selectedPluginName
+    val onPluginSelected = actions.onPluginSelected
+    val onPluginEnabledChanged = actions.onPluginEnabledChanged
+    val onPluginPriorityChanged = actions.onPluginPriorityChanged
+    val onPluginPriorityOrderChanged = actions.onPluginPriorityOrderChanged
+    val onPluginExtensionsChanged = actions.onPluginExtensionsChanged
+    val autoPlayOnTrackSelect = state.autoPlayOnTrackSelect
+    val onAutoPlayOnTrackSelectChanged = actions.onAutoPlayOnTrackSelectChanged
+    val openPlayerOnTrackSelect = state.openPlayerOnTrackSelect
+    val onOpenPlayerOnTrackSelectChanged = actions.onOpenPlayerOnTrackSelectChanged
+    val autoPlayNextTrackOnEnd = state.autoPlayNextTrackOnEnd
+    val onAutoPlayNextTrackOnEndChanged = actions.onAutoPlayNextTrackOnEndChanged
+    val previousRestartsAfterThreshold = state.previousRestartsAfterThreshold
+    val onPreviousRestartsAfterThresholdChanged = actions.onPreviousRestartsAfterThresholdChanged
+    val respondHeadphoneMediaButtons = state.respondHeadphoneMediaButtons
+    val onRespondHeadphoneMediaButtonsChanged = actions.onRespondHeadphoneMediaButtonsChanged
+    val pauseOnHeadphoneDisconnect = state.pauseOnHeadphoneDisconnect
+    val onPauseOnHeadphoneDisconnectChanged = actions.onPauseOnHeadphoneDisconnectChanged
+    val audioFocusInterrupt = state.audioFocusInterrupt
+    val onAudioFocusInterruptChanged = actions.onAudioFocusInterruptChanged
+    val audioDucking = state.audioDucking
+    val onAudioDuckingChanged = actions.onAudioDuckingChanged
+    val audioBackendPreference = state.audioBackendPreference
+    val onAudioBackendPreferenceChanged = actions.onAudioBackendPreferenceChanged
+    val audioPerformanceMode = state.audioPerformanceMode
+    val onAudioPerformanceModeChanged = actions.onAudioPerformanceModeChanged
+    val audioBufferPreset = state.audioBufferPreset
+    val onAudioBufferPresetChanged = actions.onAudioBufferPresetChanged
+    val audioResamplerPreference = state.audioResamplerPreference
+    val onAudioResamplerPreferenceChanged = actions.onAudioResamplerPreferenceChanged
+    val audioAllowBackendFallback = state.audioAllowBackendFallback
+    val onAudioAllowBackendFallbackChanged = actions.onAudioAllowBackendFallbackChanged
+    val openPlayerFromNotification = state.openPlayerFromNotification
+    val onOpenPlayerFromNotificationChanged = actions.onOpenPlayerFromNotificationChanged
+    val persistRepeatMode = state.persistRepeatMode
+    val onPersistRepeatModeChanged = actions.onPersistRepeatModeChanged
+    val themeMode = state.themeMode
+    val onThemeModeChanged = actions.onThemeModeChanged
+    val rememberBrowserLocation = state.rememberBrowserLocation
+    val onRememberBrowserLocationChanged = actions.onRememberBrowserLocationChanged
+    val recentFoldersLimit = state.recentFoldersLimit
+    val onRecentFoldersLimitChanged = actions.onRecentFoldersLimitChanged
+    val recentFilesLimit = state.recentFilesLimit
+    val onRecentFilesLimitChanged = actions.onRecentFilesLimitChanged
+    val urlCacheClearOnLaunch = state.urlCacheClearOnLaunch
+    val onUrlCacheClearOnLaunchChanged = actions.onUrlCacheClearOnLaunchChanged
+    val urlCacheMaxTracks = state.urlCacheMaxTracks
+    val onUrlCacheMaxTracksChanged = actions.onUrlCacheMaxTracksChanged
+    val urlCacheMaxBytes = state.urlCacheMaxBytes
+    val onUrlCacheMaxBytesChanged = actions.onUrlCacheMaxBytesChanged
+    val onClearUrlCacheNow = actions.onClearUrlCacheNow
+    val cachedSourceFiles = state.cachedSourceFiles
+    val onRefreshCachedSourceFiles = actions.onRefreshCachedSourceFiles
+    val onDeleteCachedSourceFiles = actions.onDeleteCachedSourceFiles
+    val onExportCachedSourceFiles = actions.onExportCachedSourceFiles
+    val keepScreenOn = state.keepScreenOn
+    val onKeepScreenOnChanged = actions.onKeepScreenOnChanged
+    val playerArtworkCornerRadiusDp = state.playerArtworkCornerRadiusDp
+    val onPlayerArtworkCornerRadiusDpChanged = actions.onPlayerArtworkCornerRadiusDpChanged
+    val filenameDisplayMode = state.filenameDisplayMode
+    val onFilenameDisplayModeChanged = actions.onFilenameDisplayModeChanged
+    val filenameOnlyWhenTitleMissing = state.filenameOnlyWhenTitleMissing
+    val onFilenameOnlyWhenTitleMissingChanged = actions.onFilenameOnlyWhenTitleMissingChanged
+    val unknownTrackDurationSeconds = state.unknownTrackDurationSeconds
+    val onUnknownTrackDurationSecondsChanged = actions.onUnknownTrackDurationSecondsChanged
+    val endFadeApplyToAllTracks = state.endFadeApplyToAllTracks
+    val onEndFadeApplyToAllTracksChanged = actions.onEndFadeApplyToAllTracksChanged
+    val endFadeDurationMs = state.endFadeDurationMs
+    val onEndFadeDurationMsChanged = actions.onEndFadeDurationMsChanged
+    val endFadeCurve = state.endFadeCurve
+    val onEndFadeCurveChanged = actions.onEndFadeCurveChanged
+    val visualizationMode = state.visualizationMode
+    val onVisualizationModeChanged = actions.onVisualizationModeChanged
+    val enabledVisualizationModes = state.enabledVisualizationModes
+    val onEnabledVisualizationModesChanged = actions.onEnabledVisualizationModesChanged
+    val visualizationShowDebugInfo = state.visualizationShowDebugInfo
+    val onVisualizationShowDebugInfoChanged = actions.onVisualizationShowDebugInfoChanged
+    val visualizationBarCount = state.visualizationBarCount
+    val onVisualizationBarCountChanged = actions.onVisualizationBarCountChanged
+    val visualizationBarSmoothingPercent = state.visualizationBarSmoothingPercent
+    val onVisualizationBarSmoothingPercentChanged = actions.onVisualizationBarSmoothingPercentChanged
+    val visualizationBarRoundnessDp = state.visualizationBarRoundnessDp
+    val onVisualizationBarRoundnessDpChanged = actions.onVisualizationBarRoundnessDpChanged
+    val visualizationBarOverlayArtwork = state.visualizationBarOverlayArtwork
+    val onVisualizationBarOverlayArtworkChanged = actions.onVisualizationBarOverlayArtworkChanged
+    val visualizationBarUseThemeColor = state.visualizationBarUseThemeColor
+    val onVisualizationBarUseThemeColorChanged = actions.onVisualizationBarUseThemeColorChanged
+    val visualizationOscStereo = state.visualizationOscStereo
+    val onVisualizationOscStereoChanged = actions.onVisualizationOscStereoChanged
+    val visualizationVuAnchor = state.visualizationVuAnchor
+    val onVisualizationVuAnchorChanged = actions.onVisualizationVuAnchorChanged
+    val visualizationVuUseThemeColor = state.visualizationVuUseThemeColor
+    val onVisualizationVuUseThemeColorChanged = actions.onVisualizationVuUseThemeColorChanged
+    val visualizationVuSmoothingPercent = state.visualizationVuSmoothingPercent
+    val onVisualizationVuSmoothingPercentChanged = actions.onVisualizationVuSmoothingPercentChanged
+    val onResetVisualizationBarsSettings = actions.onResetVisualizationBarsSettings
+    val onResetVisualizationOscilloscopeSettings = actions.onResetVisualizationOscilloscopeSettings
+    val onResetVisualizationVuSettings = actions.onResetVisualizationVuSettings
+    val onResetVisualizationChannelScopeSettings = actions.onResetVisualizationChannelScopeSettings
+    val ffmpegSampleRateHz = state.ffmpegSampleRateHz
+    val ffmpegCapabilities = state.ffmpegCapabilities
+    val onFfmpegSampleRateChanged = actions.onFfmpegSampleRateChanged
+    val openMptSampleRateHz = state.openMptSampleRateHz
+    val openMptCapabilities = state.openMptCapabilities
+    val onOpenMptSampleRateChanged = actions.onOpenMptSampleRateChanged
+    val vgmPlaySampleRateHz = state.vgmPlaySampleRateHz
+    val vgmPlayCapabilities = state.vgmPlayCapabilities
+    val onVgmPlaySampleRateChanged = actions.onVgmPlaySampleRateChanged
+    val gmeSampleRateHz = state.gmeSampleRateHz
+    val onGmeSampleRateChanged = actions.onGmeSampleRateChanged
+    val sidPlayFpSampleRateHz = state.sidPlayFpSampleRateHz
+    val onSidPlayFpSampleRateChanged = actions.onSidPlayFpSampleRateChanged
+    val lazyUsf2SampleRateHz = state.lazyUsf2SampleRateHz
+    val onLazyUsf2SampleRateChanged = actions.onLazyUsf2SampleRateChanged
+    val lazyUsf2UseHleAudio = state.lazyUsf2UseHleAudio
+    val onLazyUsf2UseHleAudioChanged = actions.onLazyUsf2UseHleAudioChanged
+    val sidPlayFpBackend = state.sidPlayFpBackend
+    val onSidPlayFpBackendChanged = actions.onSidPlayFpBackendChanged
+    val sidPlayFpClockMode = state.sidPlayFpClockMode
+    val onSidPlayFpClockModeChanged = actions.onSidPlayFpClockModeChanged
+    val sidPlayFpSidModelMode = state.sidPlayFpSidModelMode
+    val onSidPlayFpSidModelModeChanged = actions.onSidPlayFpSidModelModeChanged
+    val sidPlayFpFilter6581Enabled = state.sidPlayFpFilter6581Enabled
+    val onSidPlayFpFilter6581EnabledChanged = actions.onSidPlayFpFilter6581EnabledChanged
+    val sidPlayFpFilter8580Enabled = state.sidPlayFpFilter8580Enabled
+    val onSidPlayFpFilter8580EnabledChanged = actions.onSidPlayFpFilter8580EnabledChanged
+    val sidPlayFpDigiBoost8580 = state.sidPlayFpDigiBoost8580
+    val onSidPlayFpDigiBoost8580Changed = actions.onSidPlayFpDigiBoost8580Changed
+    val sidPlayFpFilterCurve6581Percent = state.sidPlayFpFilterCurve6581Percent
+    val onSidPlayFpFilterCurve6581PercentChanged = actions.onSidPlayFpFilterCurve6581PercentChanged
+    val sidPlayFpFilterRange6581Percent = state.sidPlayFpFilterRange6581Percent
+    val onSidPlayFpFilterRange6581PercentChanged = actions.onSidPlayFpFilterRange6581PercentChanged
+    val sidPlayFpFilterCurve8580Percent = state.sidPlayFpFilterCurve8580Percent
+    val onSidPlayFpFilterCurve8580PercentChanged = actions.onSidPlayFpFilterCurve8580PercentChanged
+    val sidPlayFpReSidFpFastSampling = state.sidPlayFpReSidFpFastSampling
+    val onSidPlayFpReSidFpFastSamplingChanged = actions.onSidPlayFpReSidFpFastSamplingChanged
+    val sidPlayFpReSidFpCombinedWaveformsStrength = state.sidPlayFpReSidFpCombinedWaveformsStrength
+    val onSidPlayFpReSidFpCombinedWaveformsStrengthChanged = actions.onSidPlayFpReSidFpCombinedWaveformsStrengthChanged
+    val gmeTempoPercent = state.gmeTempoPercent
+    val onGmeTempoPercentChanged = actions.onGmeTempoPercentChanged
+    val gmeStereoSeparationPercent = state.gmeStereoSeparationPercent
+    val onGmeStereoSeparationPercentChanged = actions.onGmeStereoSeparationPercentChanged
+    val gmeEchoEnabled = state.gmeEchoEnabled
+    val onGmeEchoEnabledChanged = actions.onGmeEchoEnabledChanged
+    val gmeAccuracyEnabled = state.gmeAccuracyEnabled
+    val onGmeAccuracyEnabledChanged = actions.onGmeAccuracyEnabledChanged
+    val gmeEqTrebleDecibel = state.gmeEqTrebleDecibel
+    val onGmeEqTrebleDecibelChanged = actions.onGmeEqTrebleDecibelChanged
+    val gmeEqBassHz = state.gmeEqBassHz
+    val onGmeEqBassHzChanged = actions.onGmeEqBassHzChanged
+    val gmeSpcUseBuiltInFade = state.gmeSpcUseBuiltInFade
+    val onGmeSpcUseBuiltInFadeChanged = actions.onGmeSpcUseBuiltInFadeChanged
+    val gmeSpcInterpolation = state.gmeSpcInterpolation
+    val onGmeSpcInterpolationChanged = actions.onGmeSpcInterpolationChanged
+    val gmeSpcUseNativeSampleRate = state.gmeSpcUseNativeSampleRate
+    val onGmeSpcUseNativeSampleRateChanged = actions.onGmeSpcUseNativeSampleRateChanged
+    val vgmPlayLoopCount = state.vgmPlayLoopCount
+    val onVgmPlayLoopCountChanged = actions.onVgmPlayLoopCountChanged
+    val vgmPlayAllowNonLoopingLoop = state.vgmPlayAllowNonLoopingLoop
+    val onVgmPlayAllowNonLoopingLoopChanged = actions.onVgmPlayAllowNonLoopingLoopChanged
+    val vgmPlayVsyncRate = state.vgmPlayVsyncRate
+    val onVgmPlayVsyncRateChanged = actions.onVgmPlayVsyncRateChanged
+    val vgmPlayResampleMode = state.vgmPlayResampleMode
+    val onVgmPlayResampleModeChanged = actions.onVgmPlayResampleModeChanged
+    val vgmPlayChipSampleMode = state.vgmPlayChipSampleMode
+    val onVgmPlayChipSampleModeChanged = actions.onVgmPlayChipSampleModeChanged
+    val vgmPlayChipSampleRate = state.vgmPlayChipSampleRate
+    val onVgmPlayChipSampleRateChanged = actions.onVgmPlayChipSampleRateChanged
+    val vgmPlayChipCoreSelections = state.vgmPlayChipCoreSelections
+    val onVgmPlayChipCoreChanged = actions.onVgmPlayChipCoreChanged
+    val openMptStereoSeparationPercent = state.openMptStereoSeparationPercent
+    val onOpenMptStereoSeparationPercentChanged = actions.onOpenMptStereoSeparationPercentChanged
+    val openMptStereoSeparationAmigaPercent = state.openMptStereoSeparationAmigaPercent
+    val onOpenMptStereoSeparationAmigaPercentChanged = actions.onOpenMptStereoSeparationAmigaPercentChanged
+    val openMptInterpolationFilterLength = state.openMptInterpolationFilterLength
+    val onOpenMptInterpolationFilterLengthChanged = actions.onOpenMptInterpolationFilterLengthChanged
+    val openMptAmigaResamplerMode = state.openMptAmigaResamplerMode
+    val onOpenMptAmigaResamplerModeChanged = actions.onOpenMptAmigaResamplerModeChanged
+    val openMptAmigaResamplerApplyAllModules = state.openMptAmigaResamplerApplyAllModules
+    val onOpenMptAmigaResamplerApplyAllModulesChanged = actions.onOpenMptAmigaResamplerApplyAllModulesChanged
+    val openMptVolumeRampingStrength = state.openMptVolumeRampingStrength
+    val onOpenMptVolumeRampingStrengthChanged = actions.onOpenMptVolumeRampingStrengthChanged
+    val openMptFt2XmVolumeRamping = state.openMptFt2XmVolumeRamping
+    val onOpenMptFt2XmVolumeRampingChanged = actions.onOpenMptFt2XmVolumeRampingChanged
+    val openMptMasterGainMilliBel = state.openMptMasterGainMilliBel
+    val onOpenMptMasterGainMilliBelChanged = actions.onOpenMptMasterGainMilliBelChanged
+    val openMptSurroundEnabled = state.openMptSurroundEnabled
+    val onOpenMptSurroundEnabledChanged = actions.onOpenMptSurroundEnabledChanged
+    val onClearRecentHistory = actions.onClearRecentHistory
+    val onClearAllSettings = actions.onClearAllSettings
+    val onClearAllPluginSettings = actions.onClearAllPluginSettings
+    val onResetPluginSettings = actions.onResetPluginSettings
+
     var pendingResetAction by remember { mutableStateOf<SettingsResetAction?>(null) }
     var pendingPluginResetName by remember { mutableStateOf<String?>(null) }
     var pluginPriorityEditMode by remember { mutableStateOf(false) }
@@ -428,289 +649,346 @@ internal fun SettingsScreen(
                         when (it) {
                     SettingsRoute.Root -> {
                         RootRouteContent(
-                            onOpenAudioPlugins = onOpenAudioPlugins,
-                            onOpenGeneralAudio = onOpenGeneralAudio,
-                            onOpenPlayer = onOpenPlayer,
-                            onOpenHome = onOpenHome,
-                            onOpenVisualization = onOpenVisualization,
-                            onOpenUrlCache = onOpenUrlCache,
-                            onOpenMisc = onOpenMisc,
-                            onOpenUi = onOpenUi,
-                            onOpenAbout = onOpenAbout,
-                            onRequestClearAllSettings = {
-                                pendingResetAction = SettingsResetAction.ClearAllSettings
-                            }
+                            actions = RootRouteActions(
+                                onOpenAudioPlugins = onOpenAudioPlugins,
+                                onOpenGeneralAudio = onOpenGeneralAudio,
+                                onOpenPlayer = onOpenPlayer,
+                                onOpenHome = onOpenHome,
+                                onOpenVisualization = onOpenVisualization,
+                                onOpenUrlCache = onOpenUrlCache,
+                                onOpenMisc = onOpenMisc,
+                                onOpenUi = onOpenUi,
+                                onOpenAbout = onOpenAbout,
+                                onRequestClearAllSettings = {
+                                    pendingResetAction = SettingsResetAction.ClearAllSettings
+                                }
+                            )
                         )
                     }
                     SettingsRoute.AudioPlugins -> {
                         AudioPluginsRouteContent(
-                            pluginPriorityEditMode = pluginPriorityEditMode,
-                            onPluginSelected = onPluginSelected,
-                            onPluginEnabledChanged = onPluginEnabledChanged,
-                            onPluginPriorityOrderChanged = onPluginPriorityOrderChanged,
-                            onRequestClearPluginSettings = {
-                                pendingResetAction = SettingsResetAction.ClearPluginSettings
-                            }
+                            state = AudioPluginsRouteState(
+                                pluginPriorityEditMode = pluginPriorityEditMode
+                            ),
+                            actions = AudioPluginsRouteActions(
+                                onPluginSelected = onPluginSelected,
+                                onPluginEnabledChanged = onPluginEnabledChanged,
+                                onPluginPriorityOrderChanged = onPluginPriorityOrderChanged,
+                                onRequestClearPluginSettings = {
+                                    pendingResetAction = SettingsResetAction.ClearPluginSettings
+                                }
+                            )
                         )
                     }
                     SettingsRoute.PluginDetail -> {
                         PluginDetailRouteContent(
-                            selectedPluginName = selectedPluginName,
-                            onPluginPriorityChanged = onPluginPriorityChanged,
-                            onPluginExtensionsChanged = onPluginExtensionsChanged,
-                            ffmpegSampleRateHz = ffmpegSampleRateHz,
-                            onFfmpegSampleRateChanged = onFfmpegSampleRateChanged,
-                            ffmpegCapabilities = ffmpegCapabilities,
-                            openMptSampleRateHz = openMptSampleRateHz,
-                            onOpenMptSampleRateChanged = onOpenMptSampleRateChanged,
-                            openMptCapabilities = openMptCapabilities,
-                            vgmPlaySampleRateHz = vgmPlaySampleRateHz,
-                            onVgmPlaySampleRateChanged = onVgmPlaySampleRateChanged,
-                            vgmPlayCapabilities = vgmPlayCapabilities,
-                            gmeSampleRateHz = gmeSampleRateHz,
-                            onGmeSampleRateChanged = onGmeSampleRateChanged,
-                            sidPlayFpSampleRateHz = sidPlayFpSampleRateHz,
-                            onSidPlayFpSampleRateChanged = onSidPlayFpSampleRateChanged,
-                            lazyUsf2SampleRateHz = lazyUsf2SampleRateHz,
-                            onLazyUsf2SampleRateChanged = onLazyUsf2SampleRateChanged,
-                            openMptStereoSeparationPercent = openMptStereoSeparationPercent,
-                            onOpenMptStereoSeparationPercentChanged = onOpenMptStereoSeparationPercentChanged,
-                            openMptStereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
-                            onOpenMptStereoSeparationAmigaPercentChanged = onOpenMptStereoSeparationAmigaPercentChanged,
-                            openMptInterpolationFilterLength = openMptInterpolationFilterLength,
-                            onOpenMptInterpolationFilterLengthChanged = onOpenMptInterpolationFilterLengthChanged,
-                            openMptAmigaResamplerMode = openMptAmigaResamplerMode,
-                            onOpenMptAmigaResamplerModeChanged = onOpenMptAmigaResamplerModeChanged,
-                            openMptAmigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
-                            onOpenMptAmigaResamplerApplyAllModulesChanged = onOpenMptAmigaResamplerApplyAllModulesChanged,
-                            openMptVolumeRampingStrength = openMptVolumeRampingStrength,
-                            onOpenMptVolumeRampingStrengthChanged = onOpenMptVolumeRampingStrengthChanged,
-                            openMptFt2XmVolumeRamping = openMptFt2XmVolumeRamping,
-                            onOpenMptFt2XmVolumeRampingChanged = onOpenMptFt2XmVolumeRampingChanged,
-                            openMptMasterGainMilliBel = openMptMasterGainMilliBel,
-                            onOpenMptMasterGainMilliBelChanged = onOpenMptMasterGainMilliBelChanged,
-                            openMptSurroundEnabled = openMptSurroundEnabled,
-                            onOpenMptSurroundEnabledChanged = onOpenMptSurroundEnabledChanged,
-                            vgmPlayLoopCount = vgmPlayLoopCount,
-                            onVgmPlayLoopCountChanged = onVgmPlayLoopCountChanged,
-                            vgmPlayAllowNonLoopingLoop = vgmPlayAllowNonLoopingLoop,
-                            onVgmPlayAllowNonLoopingLoopChanged = onVgmPlayAllowNonLoopingLoopChanged,
-                            vgmPlayVsyncRate = vgmPlayVsyncRate,
-                            onVgmPlayVsyncRateChanged = onVgmPlayVsyncRateChanged,
-                            vgmPlayResampleMode = vgmPlayResampleMode,
-                            onVgmPlayResampleModeChanged = onVgmPlayResampleModeChanged,
-                            vgmPlayChipSampleMode = vgmPlayChipSampleMode,
-                            onVgmPlayChipSampleModeChanged = onVgmPlayChipSampleModeChanged,
-                            vgmPlayChipSampleRate = vgmPlayChipSampleRate,
-                            onVgmPlayChipSampleRateChanged = onVgmPlayChipSampleRateChanged,
-                            onOpenVgmPlayChipSettings = onOpenVgmPlayChipSettings,
-                            gmeTempoPercent = gmeTempoPercent,
-                            onGmeTempoPercentChanged = onGmeTempoPercentChanged,
-                            gmeStereoSeparationPercent = gmeStereoSeparationPercent,
-                            onGmeStereoSeparationPercentChanged = onGmeStereoSeparationPercentChanged,
-                            gmeEchoEnabled = gmeEchoEnabled,
-                            onGmeEchoEnabledChanged = onGmeEchoEnabledChanged,
-                            gmeAccuracyEnabled = gmeAccuracyEnabled,
-                            onGmeAccuracyEnabledChanged = onGmeAccuracyEnabledChanged,
-                            gmeEqTrebleDecibel = gmeEqTrebleDecibel,
-                            onGmeEqTrebleDecibelChanged = onGmeEqTrebleDecibelChanged,
-                            gmeEqBassHz = gmeEqBassHz,
-                            onGmeEqBassHzChanged = onGmeEqBassHzChanged,
-                            gmeSpcUseBuiltInFade = gmeSpcUseBuiltInFade,
-                            onGmeSpcUseBuiltInFadeChanged = onGmeSpcUseBuiltInFadeChanged,
-                            gmeSpcInterpolation = gmeSpcInterpolation,
-                            onGmeSpcInterpolationChanged = onGmeSpcInterpolationChanged,
-                            gmeSpcUseNativeSampleRate = gmeSpcUseNativeSampleRate,
-                            onGmeSpcUseNativeSampleRateChanged = onGmeSpcUseNativeSampleRateChanged,
-                            sidPlayFpBackend = sidPlayFpBackend,
-                            onSidPlayFpBackendChanged = onSidPlayFpBackendChanged,
-                            sidPlayFpClockMode = sidPlayFpClockMode,
-                            onSidPlayFpClockModeChanged = onSidPlayFpClockModeChanged,
-                            sidPlayFpSidModelMode = sidPlayFpSidModelMode,
-                            onSidPlayFpSidModelModeChanged = onSidPlayFpSidModelModeChanged,
-                            sidPlayFpFilter6581Enabled = sidPlayFpFilter6581Enabled,
-                            onSidPlayFpFilter6581EnabledChanged = onSidPlayFpFilter6581EnabledChanged,
-                            sidPlayFpFilter8580Enabled = sidPlayFpFilter8580Enabled,
-                            onSidPlayFpFilter8580EnabledChanged = onSidPlayFpFilter8580EnabledChanged,
-                            sidPlayFpDigiBoost8580 = sidPlayFpDigiBoost8580,
-                            onSidPlayFpDigiBoost8580Changed = onSidPlayFpDigiBoost8580Changed,
-                            sidPlayFpFilterCurve6581Percent = sidPlayFpFilterCurve6581Percent,
-                            onSidPlayFpFilterCurve6581PercentChanged = onSidPlayFpFilterCurve6581PercentChanged,
-                            sidPlayFpFilterRange6581Percent = sidPlayFpFilterRange6581Percent,
-                            onSidPlayFpFilterRange6581PercentChanged = onSidPlayFpFilterRange6581PercentChanged,
-                            sidPlayFpFilterCurve8580Percent = sidPlayFpFilterCurve8580Percent,
-                            onSidPlayFpFilterCurve8580PercentChanged = onSidPlayFpFilterCurve8580PercentChanged,
-                            sidPlayFpReSidFpFastSampling = sidPlayFpReSidFpFastSampling,
-                            onSidPlayFpReSidFpFastSamplingChanged = onSidPlayFpReSidFpFastSamplingChanged,
-                            sidPlayFpReSidFpCombinedWaveformsStrength = sidPlayFpReSidFpCombinedWaveformsStrength,
-                            onSidPlayFpReSidFpCombinedWaveformsStrengthChanged = onSidPlayFpReSidFpCombinedWaveformsStrengthChanged,
-                            lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
-                            onLazyUsf2UseHleAudioChanged = onLazyUsf2UseHleAudioChanged
+                            state = PluginDetailRouteState(
+                                selectedPluginName = selectedPluginName,
+                                ffmpegSampleRateHz = ffmpegSampleRateHz,
+                                openMptSampleRateHz = openMptSampleRateHz,
+                                openMptCapabilities = openMptCapabilities,
+                                vgmPlaySampleRateHz = vgmPlaySampleRateHz,
+                                vgmPlayCapabilities = vgmPlayCapabilities,
+                                gmeSampleRateHz = gmeSampleRateHz,
+                                sidPlayFpSampleRateHz = sidPlayFpSampleRateHz,
+                                lazyUsf2SampleRateHz = lazyUsf2SampleRateHz,
+                                openMptStereoSeparationPercent = openMptStereoSeparationPercent,
+                                openMptStereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
+                                openMptInterpolationFilterLength = openMptInterpolationFilterLength,
+                                openMptAmigaResamplerMode = openMptAmigaResamplerMode,
+                                openMptAmigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
+                                openMptVolumeRampingStrength = openMptVolumeRampingStrength,
+                                openMptFt2XmVolumeRamping = openMptFt2XmVolumeRamping,
+                                openMptMasterGainMilliBel = openMptMasterGainMilliBel,
+                                openMptSurroundEnabled = openMptSurroundEnabled,
+                                vgmPlayLoopCount = vgmPlayLoopCount,
+                                vgmPlayAllowNonLoopingLoop = vgmPlayAllowNonLoopingLoop,
+                                vgmPlayVsyncRate = vgmPlayVsyncRate,
+                                vgmPlayResampleMode = vgmPlayResampleMode,
+                                vgmPlayChipSampleMode = vgmPlayChipSampleMode,
+                                vgmPlayChipSampleRate = vgmPlayChipSampleRate,
+                                gmeTempoPercent = gmeTempoPercent,
+                                gmeStereoSeparationPercent = gmeStereoSeparationPercent,
+                                gmeEchoEnabled = gmeEchoEnabled,
+                                gmeAccuracyEnabled = gmeAccuracyEnabled,
+                                gmeEqTrebleDecibel = gmeEqTrebleDecibel,
+                                gmeEqBassHz = gmeEqBassHz,
+                                gmeSpcUseBuiltInFade = gmeSpcUseBuiltInFade,
+                                gmeSpcInterpolation = gmeSpcInterpolation,
+                                gmeSpcUseNativeSampleRate = gmeSpcUseNativeSampleRate,
+                                sidPlayFpBackend = sidPlayFpBackend,
+                                sidPlayFpClockMode = sidPlayFpClockMode,
+                                sidPlayFpSidModelMode = sidPlayFpSidModelMode,
+                                sidPlayFpFilter6581Enabled = sidPlayFpFilter6581Enabled,
+                                sidPlayFpFilter8580Enabled = sidPlayFpFilter8580Enabled,
+                                sidPlayFpDigiBoost8580 = sidPlayFpDigiBoost8580,
+                                sidPlayFpFilterCurve6581Percent = sidPlayFpFilterCurve6581Percent,
+                                sidPlayFpFilterRange6581Percent = sidPlayFpFilterRange6581Percent,
+                                sidPlayFpFilterCurve8580Percent = sidPlayFpFilterCurve8580Percent,
+                                sidPlayFpReSidFpFastSampling = sidPlayFpReSidFpFastSampling,
+                                sidPlayFpReSidFpCombinedWaveformsStrength = sidPlayFpReSidFpCombinedWaveformsStrength,
+                                lazyUsf2UseHleAudio = lazyUsf2UseHleAudio
+                            ),
+                            actions = PluginDetailRouteActions(
+                                onPluginPriorityChanged = onPluginPriorityChanged,
+                                onPluginExtensionsChanged = onPluginExtensionsChanged,
+                                onFfmpegSampleRateChanged = onFfmpegSampleRateChanged,
+                                onOpenMptSampleRateChanged = onOpenMptSampleRateChanged,
+                                onVgmPlaySampleRateChanged = onVgmPlaySampleRateChanged,
+                                onGmeSampleRateChanged = onGmeSampleRateChanged,
+                                onSidPlayFpSampleRateChanged = onSidPlayFpSampleRateChanged,
+                                onLazyUsf2SampleRateChanged = onLazyUsf2SampleRateChanged,
+                                onOpenMptStereoSeparationPercentChanged = onOpenMptStereoSeparationPercentChanged,
+                                onOpenMptStereoSeparationAmigaPercentChanged = onOpenMptStereoSeparationAmigaPercentChanged,
+                                onOpenMptInterpolationFilterLengthChanged = onOpenMptInterpolationFilterLengthChanged,
+                                onOpenMptAmigaResamplerModeChanged = onOpenMptAmigaResamplerModeChanged,
+                                onOpenMptAmigaResamplerApplyAllModulesChanged = onOpenMptAmigaResamplerApplyAllModulesChanged,
+                                onOpenMptVolumeRampingStrengthChanged = onOpenMptVolumeRampingStrengthChanged,
+                                onOpenMptFt2XmVolumeRampingChanged = onOpenMptFt2XmVolumeRampingChanged,
+                                onOpenMptMasterGainMilliBelChanged = onOpenMptMasterGainMilliBelChanged,
+                                onOpenMptSurroundEnabledChanged = onOpenMptSurroundEnabledChanged,
+                                onVgmPlayLoopCountChanged = onVgmPlayLoopCountChanged,
+                                onVgmPlayAllowNonLoopingLoopChanged = onVgmPlayAllowNonLoopingLoopChanged,
+                                onVgmPlayVsyncRateChanged = onVgmPlayVsyncRateChanged,
+                                onVgmPlayResampleModeChanged = onVgmPlayResampleModeChanged,
+                                onVgmPlayChipSampleModeChanged = onVgmPlayChipSampleModeChanged,
+                                onVgmPlayChipSampleRateChanged = onVgmPlayChipSampleRateChanged,
+                                onOpenVgmPlayChipSettings = onOpenVgmPlayChipSettings,
+                                onGmeTempoPercentChanged = onGmeTempoPercentChanged,
+                                onGmeStereoSeparationPercentChanged = onGmeStereoSeparationPercentChanged,
+                                onGmeEchoEnabledChanged = onGmeEchoEnabledChanged,
+                                onGmeAccuracyEnabledChanged = onGmeAccuracyEnabledChanged,
+                                onGmeEqTrebleDecibelChanged = onGmeEqTrebleDecibelChanged,
+                                onGmeEqBassHzChanged = onGmeEqBassHzChanged,
+                                onGmeSpcUseBuiltInFadeChanged = onGmeSpcUseBuiltInFadeChanged,
+                                onGmeSpcInterpolationChanged = onGmeSpcInterpolationChanged,
+                                onGmeSpcUseNativeSampleRateChanged = onGmeSpcUseNativeSampleRateChanged,
+                                onSidPlayFpBackendChanged = onSidPlayFpBackendChanged,
+                                onSidPlayFpClockModeChanged = onSidPlayFpClockModeChanged,
+                                onSidPlayFpSidModelModeChanged = onSidPlayFpSidModelModeChanged,
+                                onSidPlayFpFilter6581EnabledChanged = onSidPlayFpFilter6581EnabledChanged,
+                                onSidPlayFpFilter8580EnabledChanged = onSidPlayFpFilter8580EnabledChanged,
+                                onSidPlayFpDigiBoost8580Changed = onSidPlayFpDigiBoost8580Changed,
+                                onSidPlayFpFilterCurve6581PercentChanged = onSidPlayFpFilterCurve6581PercentChanged,
+                                onSidPlayFpFilterRange6581PercentChanged = onSidPlayFpFilterRange6581PercentChanged,
+                                onSidPlayFpFilterCurve8580PercentChanged = onSidPlayFpFilterCurve8580PercentChanged,
+                                onSidPlayFpReSidFpFastSamplingChanged = onSidPlayFpReSidFpFastSamplingChanged,
+                                onSidPlayFpReSidFpCombinedWaveformsStrengthChanged = onSidPlayFpReSidFpCombinedWaveformsStrengthChanged,
+                                onLazyUsf2UseHleAudioChanged = onLazyUsf2UseHleAudioChanged
+                            )
                         )
                     }
                     SettingsRoute.PluginVgmPlayChipSettings -> {
                         PluginVgmPlayChipSettingsRouteContent(
-                            vgmPlayChipCoreSelections = vgmPlayChipCoreSelections,
-                            onVgmPlayChipCoreChanged = onVgmPlayChipCoreChanged
+                            state = PluginVgmPlayChipSettingsRouteState(
+                                vgmPlayChipCoreSelections = vgmPlayChipCoreSelections
+                            ),
+                            actions = PluginVgmPlayChipSettingsRouteActions(
+                                onVgmPlayChipCoreChanged = onVgmPlayChipCoreChanged
+                            )
                         )
                     }
                     SettingsRoute.PluginFfmpeg -> PluginSampleRateRouteContent(
-                        title = "Render sample rate",
-                        description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
-                        selectedHz = ffmpegSampleRateHz,
-                        enabled = supportsCustomSampleRate(ffmpegCapabilities),
-                        onSelected = onFfmpegSampleRateChanged
+                        state = PluginSampleRateRouteState(
+                            title = "Render sample rate",
+                            description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
+                            selectedHz = ffmpegSampleRateHz,
+                            enabled = supportsCustomSampleRate(ffmpegCapabilities)
+                        ),
+                        actions = PluginSampleRateRouteActions(
+                            onSelected = onFfmpegSampleRateChanged
+                        )
                     )
                     SettingsRoute.PluginVgmPlay -> PluginSampleRateRouteContent(
-                        title = "Render sample rate",
-                        description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
-                        selectedHz = vgmPlaySampleRateHz,
-                        enabled = supportsCustomSampleRate(vgmPlayCapabilities),
-                        onSelected = onVgmPlaySampleRateChanged
+                        state = PluginSampleRateRouteState(
+                            title = "Render sample rate",
+                            description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
+                            selectedHz = vgmPlaySampleRateHz,
+                            enabled = supportsCustomSampleRate(vgmPlayCapabilities)
+                        ),
+                        actions = PluginSampleRateRouteActions(
+                            onSelected = onVgmPlaySampleRateChanged
+                        )
                     )
                     SettingsRoute.PluginOpenMpt -> {
                         PluginOpenMptRouteContent(
-                            openMptSampleRateHz = openMptSampleRateHz,
-                            openMptCapabilities = openMptCapabilities,
-                            openMptStereoSeparationPercent = openMptStereoSeparationPercent,
-                            onOpenMptStereoSeparationPercentChanged = onOpenMptStereoSeparationPercentChanged,
-                            openMptStereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
-                            onOpenMptStereoSeparationAmigaPercentChanged = onOpenMptStereoSeparationAmigaPercentChanged,
-                            openMptInterpolationFilterLength = openMptInterpolationFilterLength,
-                            onOpenMptInterpolationFilterLengthChanged = onOpenMptInterpolationFilterLengthChanged,
-                            openMptAmigaResamplerMode = openMptAmigaResamplerMode,
-                            onOpenMptAmigaResamplerModeChanged = onOpenMptAmigaResamplerModeChanged,
-                            openMptAmigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
-                            onOpenMptAmigaResamplerApplyAllModulesChanged = onOpenMptAmigaResamplerApplyAllModulesChanged,
-                            openMptVolumeRampingStrength = openMptVolumeRampingStrength,
-                            onOpenMptVolumeRampingStrengthChanged = onOpenMptVolumeRampingStrengthChanged,
-                            openMptFt2XmVolumeRamping = openMptFt2XmVolumeRamping,
-                            onOpenMptFt2XmVolumeRampingChanged = onOpenMptFt2XmVolumeRampingChanged,
-                            openMptMasterGainMilliBel = openMptMasterGainMilliBel,
-                            onOpenMptMasterGainMilliBelChanged = onOpenMptMasterGainMilliBelChanged,
-                            openMptSurroundEnabled = openMptSurroundEnabled,
-                            onOpenMptSurroundEnabledChanged = onOpenMptSurroundEnabledChanged,
-                            onOpenMptSampleRateChanged = onOpenMptSampleRateChanged
+                            state = PluginOpenMptRouteState(
+                                openMptSampleRateHz = openMptSampleRateHz,
+                                openMptCapabilities = openMptCapabilities,
+                                openMptStereoSeparationPercent = openMptStereoSeparationPercent,
+                                openMptStereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
+                                openMptInterpolationFilterLength = openMptInterpolationFilterLength,
+                                openMptAmigaResamplerMode = openMptAmigaResamplerMode,
+                                openMptAmigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
+                                openMptVolumeRampingStrength = openMptVolumeRampingStrength,
+                                openMptFt2XmVolumeRamping = openMptFt2XmVolumeRamping,
+                                openMptMasterGainMilliBel = openMptMasterGainMilliBel,
+                                openMptSurroundEnabled = openMptSurroundEnabled
+                            ),
+                            actions = PluginOpenMptRouteActions(
+                                onOpenMptStereoSeparationPercentChanged = onOpenMptStereoSeparationPercentChanged,
+                                onOpenMptStereoSeparationAmigaPercentChanged = onOpenMptStereoSeparationAmigaPercentChanged,
+                                onOpenMptInterpolationFilterLengthChanged = onOpenMptInterpolationFilterLengthChanged,
+                                onOpenMptAmigaResamplerModeChanged = onOpenMptAmigaResamplerModeChanged,
+                                onOpenMptAmigaResamplerApplyAllModulesChanged = onOpenMptAmigaResamplerApplyAllModulesChanged,
+                                onOpenMptVolumeRampingStrengthChanged = onOpenMptVolumeRampingStrengthChanged,
+                                onOpenMptFt2XmVolumeRampingChanged = onOpenMptFt2XmVolumeRampingChanged,
+                                onOpenMptMasterGainMilliBelChanged = onOpenMptMasterGainMilliBelChanged,
+                                onOpenMptSurroundEnabledChanged = onOpenMptSurroundEnabledChanged,
+                                onOpenMptSampleRateChanged = onOpenMptSampleRateChanged
+                            )
                         )
                     }
                     SettingsRoute.GeneralAudio -> {
                         GeneralAudioRouteContent(
-                            respondHeadphoneMediaButtons = respondHeadphoneMediaButtons,
-                            onRespondHeadphoneMediaButtonsChanged = onRespondHeadphoneMediaButtonsChanged,
-                            pauseOnHeadphoneDisconnect = pauseOnHeadphoneDisconnect,
-                            onPauseOnHeadphoneDisconnectChanged = onPauseOnHeadphoneDisconnectChanged,
-                            audioFocusInterrupt = audioFocusInterrupt,
-                            onAudioFocusInterruptChanged = onAudioFocusInterruptChanged,
-                            audioDucking = audioDucking,
-                            onAudioDuckingChanged = onAudioDuckingChanged,
-                            onOpenAudioEffects = onOpenAudioEffects,
-                            onClearAllAudioParameters = onClearAllAudioParameters,
-                            onClearPluginAudioParameters = onClearPluginAudioParameters,
-                            onClearSongAudioParameters = onClearSongAudioParameters,
-                            audioBackendPreference = audioBackendPreference,
-                            onAudioBackendPreferenceChanged = onAudioBackendPreferenceChanged,
-                            audioPerformanceMode = audioPerformanceMode,
-                            onAudioPerformanceModeChanged = onAudioPerformanceModeChanged,
-                            audioBufferPreset = audioBufferPreset,
-                            onAudioBufferPresetChanged = onAudioBufferPresetChanged,
-                            audioResamplerPreference = audioResamplerPreference,
-                            onAudioResamplerPreferenceChanged = onAudioResamplerPreferenceChanged,
-                            audioAllowBackendFallback = audioAllowBackendFallback,
-                            onAudioAllowBackendFallbackChanged = onAudioAllowBackendFallbackChanged
+                            state = GeneralAudioRouteState(
+                                respondHeadphoneMediaButtons = respondHeadphoneMediaButtons,
+                                pauseOnHeadphoneDisconnect = pauseOnHeadphoneDisconnect,
+                                audioFocusInterrupt = audioFocusInterrupt,
+                                audioDucking = audioDucking,
+                                audioBackendPreference = audioBackendPreference,
+                                audioPerformanceMode = audioPerformanceMode,
+                                audioBufferPreset = audioBufferPreset,
+                                audioResamplerPreference = audioResamplerPreference,
+                                audioAllowBackendFallback = audioAllowBackendFallback
+                            ),
+                            actions = GeneralAudioRouteActions(
+                                onRespondHeadphoneMediaButtonsChanged = onRespondHeadphoneMediaButtonsChanged,
+                                onPauseOnHeadphoneDisconnectChanged = onPauseOnHeadphoneDisconnectChanged,
+                                onAudioFocusInterruptChanged = onAudioFocusInterruptChanged,
+                                onAudioDuckingChanged = onAudioDuckingChanged,
+                                onOpenAudioEffects = onOpenAudioEffects,
+                                onClearAllAudioParameters = onClearAllAudioParameters,
+                                onClearPluginAudioParameters = onClearPluginAudioParameters,
+                                onClearSongAudioParameters = onClearSongAudioParameters,
+                                onAudioBackendPreferenceChanged = onAudioBackendPreferenceChanged,
+                                onAudioPerformanceModeChanged = onAudioPerformanceModeChanged,
+                                onAudioBufferPresetChanged = onAudioBufferPresetChanged,
+                                onAudioResamplerPreferenceChanged = onAudioResamplerPreferenceChanged,
+                                onAudioAllowBackendFallbackChanged = onAudioAllowBackendFallbackChanged
+                            )
                         )
                     }
                     SettingsRoute.Home -> {
                         HomeRouteContent(
-                            recentFoldersLimit = recentFoldersLimit,
-                            onRecentFoldersLimitChanged = onRecentFoldersLimitChanged,
-                            recentFilesLimit = recentFilesLimit,
-                            onRecentFilesLimitChanged = onRecentFilesLimitChanged
+                            state = HomeRouteState(
+                                recentFoldersLimit = recentFoldersLimit,
+                                recentFilesLimit = recentFilesLimit
+                            ),
+                            actions = HomeRouteActions(
+                                onRecentFoldersLimitChanged = onRecentFoldersLimitChanged,
+                                onRecentFilesLimitChanged = onRecentFilesLimitChanged
+                            )
                         )
                     }
                     SettingsRoute.Player -> {
                         PlayerRouteContent(
-                            unknownTrackDurationSeconds = unknownTrackDurationSeconds,
-                            onUnknownTrackDurationSecondsChanged = onUnknownTrackDurationSecondsChanged,
-                            endFadeDurationMs = endFadeDurationMs,
-                            onEndFadeDurationMsChanged = onEndFadeDurationMsChanged,
-                            endFadeCurve = endFadeCurve,
-                            onEndFadeCurveChanged = onEndFadeCurveChanged,
-                            endFadeApplyToAllTracks = endFadeApplyToAllTracks,
-                            onEndFadeApplyToAllTracksChanged = onEndFadeApplyToAllTracksChanged,
-                            autoPlayOnTrackSelect = autoPlayOnTrackSelect,
-                            onAutoPlayOnTrackSelectChanged = onAutoPlayOnTrackSelectChanged,
-                            openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                            onOpenPlayerOnTrackSelectChanged = onOpenPlayerOnTrackSelectChanged,
-                            autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
-                            onAutoPlayNextTrackOnEndChanged = onAutoPlayNextTrackOnEndChanged,
-                            previousRestartsAfterThreshold = previousRestartsAfterThreshold,
-                            onPreviousRestartsAfterThresholdChanged = onPreviousRestartsAfterThresholdChanged,
-                            openPlayerFromNotification = openPlayerFromNotification,
-                            onOpenPlayerFromNotificationChanged = onOpenPlayerFromNotificationChanged,
-                            persistRepeatMode = persistRepeatMode,
-                            onPersistRepeatModeChanged = onPersistRepeatModeChanged,
-                            keepScreenOn = keepScreenOn,
-                            onKeepScreenOnChanged = onKeepScreenOnChanged,
-                            playerArtworkCornerRadiusDp = playerArtworkCornerRadiusDp,
-                            onPlayerArtworkCornerRadiusDpChanged = onPlayerArtworkCornerRadiusDpChanged,
-                            filenameDisplayMode = filenameDisplayMode,
-                            onFilenameDisplayModeChanged = onFilenameDisplayModeChanged,
-                            filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
-                            onFilenameOnlyWhenTitleMissingChanged = onFilenameOnlyWhenTitleMissingChanged
+                            state = PlayerRouteState(
+                                unknownTrackDurationSeconds = unknownTrackDurationSeconds,
+                                endFadeDurationMs = endFadeDurationMs,
+                                endFadeCurve = endFadeCurve,
+                                endFadeApplyToAllTracks = endFadeApplyToAllTracks,
+                                autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+                                openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                                autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
+                                previousRestartsAfterThreshold = previousRestartsAfterThreshold,
+                                openPlayerFromNotification = openPlayerFromNotification,
+                                persistRepeatMode = persistRepeatMode,
+                                keepScreenOn = keepScreenOn,
+                                playerArtworkCornerRadiusDp = playerArtworkCornerRadiusDp,
+                                filenameDisplayMode = filenameDisplayMode,
+                                filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
+                            ),
+                            actions = PlayerRouteActions(
+                                onUnknownTrackDurationSecondsChanged = onUnknownTrackDurationSecondsChanged,
+                                onEndFadeDurationMsChanged = onEndFadeDurationMsChanged,
+                                onEndFadeCurveChanged = onEndFadeCurveChanged,
+                                onEndFadeApplyToAllTracksChanged = onEndFadeApplyToAllTracksChanged,
+                                onAutoPlayOnTrackSelectChanged = onAutoPlayOnTrackSelectChanged,
+                                onOpenPlayerOnTrackSelectChanged = onOpenPlayerOnTrackSelectChanged,
+                                onAutoPlayNextTrackOnEndChanged = onAutoPlayNextTrackOnEndChanged,
+                                onPreviousRestartsAfterThresholdChanged = onPreviousRestartsAfterThresholdChanged,
+                                onOpenPlayerFromNotificationChanged = onOpenPlayerFromNotificationChanged,
+                                onPersistRepeatModeChanged = onPersistRepeatModeChanged,
+                                onKeepScreenOnChanged = onKeepScreenOnChanged,
+                                onPlayerArtworkCornerRadiusDpChanged = onPlayerArtworkCornerRadiusDpChanged,
+                                onFilenameDisplayModeChanged = onFilenameDisplayModeChanged,
+                                onFilenameOnlyWhenTitleMissingChanged = onFilenameOnlyWhenTitleMissingChanged
+                            )
                         )
                     }
                     SettingsRoute.Visualization -> {
                         VisualizationRouteContent(
-                            visualizationMode = visualizationMode,
-                            onVisualizationModeChanged = onVisualizationModeChanged,
-                            enabledVisualizationModes = enabledVisualizationModes,
-                            onEnabledVisualizationModesChanged = onEnabledVisualizationModesChanged,
-                            visualizationShowDebugInfo = visualizationShowDebugInfo,
-                            onVisualizationShowDebugInfoChanged = onVisualizationShowDebugInfoChanged,
-                            onOpenVisualizationBasic = onOpenVisualizationBasic,
-                            onOpenVisualizationAdvanced = onOpenVisualizationAdvanced
+                            state = VisualizationRouteState(
+                                visualizationMode = visualizationMode,
+                                enabledVisualizationModes = enabledVisualizationModes,
+                                visualizationShowDebugInfo = visualizationShowDebugInfo
+                            ),
+                            actions = VisualizationRouteActions(
+                                onVisualizationModeChanged = onVisualizationModeChanged,
+                                onEnabledVisualizationModesChanged = onEnabledVisualizationModesChanged,
+                                onVisualizationShowDebugInfoChanged = onVisualizationShowDebugInfoChanged,
+                                onOpenVisualizationBasic = onOpenVisualizationBasic,
+                                onOpenVisualizationAdvanced = onOpenVisualizationAdvanced
+                            )
                         )
                     }
                     SettingsRoute.VisualizationBasic -> {
                         VisualizationBasicRouteContent(
-                            onOpenVisualizationBasicBars = onOpenVisualizationBasicBars,
-                            onOpenVisualizationBasicOscilloscope = onOpenVisualizationBasicOscilloscope,
-                            onOpenVisualizationBasicVuMeters = onOpenVisualizationBasicVuMeters
+                            actions = VisualizationBasicRouteActions(
+                                onOpenVisualizationBasicBars = onOpenVisualizationBasicBars,
+                                onOpenVisualizationBasicOscilloscope = onOpenVisualizationBasicOscilloscope,
+                                onOpenVisualizationBasicVuMeters = onOpenVisualizationBasicVuMeters
+                            )
                         )
                     }
                     SettingsRoute.VisualizationAdvanced -> {
                         VisualizationAdvancedRouteContent(
-                            onOpenVisualizationAdvancedChannelScope = onOpenVisualizationAdvancedChannelScope
+                            actions = VisualizationAdvancedRouteActions(
+                                onOpenVisualizationAdvancedChannelScope = onOpenVisualizationAdvancedChannelScope
+                            )
                         )
                     }
                     SettingsRoute.VisualizationBasicBars -> {
                         VisualizationBasicBarsRouteContent(
-                            visualizationBarCount = visualizationBarCount,
-                            onVisualizationBarCountChanged = onVisualizationBarCountChanged,
-                            visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
-                            onVisualizationBarSmoothingPercentChanged = onVisualizationBarSmoothingPercentChanged,
-                            visualizationBarRoundnessDp = visualizationBarRoundnessDp,
-                            onVisualizationBarRoundnessDpChanged = onVisualizationBarRoundnessDpChanged,
-                            visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
-                            onVisualizationBarOverlayArtworkChanged = onVisualizationBarOverlayArtworkChanged,
-                            visualizationBarUseThemeColor = visualizationBarUseThemeColor,
-                            onVisualizationBarUseThemeColorChanged = onVisualizationBarUseThemeColorChanged
+                            state = VisualizationBasicBarsRouteState(
+                                visualizationBarCount = visualizationBarCount,
+                                visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
+                                visualizationBarRoundnessDp = visualizationBarRoundnessDp,
+                                visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
+                                visualizationBarUseThemeColor = visualizationBarUseThemeColor
+                            ),
+                            actions = VisualizationBasicBarsRouteActions(
+                                onVisualizationBarCountChanged = onVisualizationBarCountChanged,
+                                onVisualizationBarSmoothingPercentChanged = onVisualizationBarSmoothingPercentChanged,
+                                onVisualizationBarRoundnessDpChanged = onVisualizationBarRoundnessDpChanged,
+                                onVisualizationBarOverlayArtworkChanged = onVisualizationBarOverlayArtworkChanged,
+                                onVisualizationBarUseThemeColorChanged = onVisualizationBarUseThemeColorChanged
+                            )
                         )
                     }
                     SettingsRoute.VisualizationBasicOscilloscope -> {
                         VisualizationBasicOscilloscopeRouteContent(
-                            visualizationOscStereo = visualizationOscStereo,
-                            onVisualizationOscStereoChanged = onVisualizationOscStereoChanged
+                            state = VisualizationBasicOscilloscopeRouteState(
+                                visualizationOscStereo = visualizationOscStereo
+                            ),
+                            actions = VisualizationBasicOscilloscopeRouteActions(
+                                onVisualizationOscStereoChanged = onVisualizationOscStereoChanged
+                            )
                         )
                     }
                     SettingsRoute.VisualizationBasicVuMeters -> {
                         VisualizationBasicVuMetersRouteContent(
-                            visualizationVuAnchor = visualizationVuAnchor,
-                            onVisualizationVuAnchorChanged = onVisualizationVuAnchorChanged,
-                            visualizationVuUseThemeColor = visualizationVuUseThemeColor,
-                            onVisualizationVuUseThemeColorChanged = onVisualizationVuUseThemeColorChanged,
-                            visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
-                            onVisualizationVuSmoothingPercentChanged = onVisualizationVuSmoothingPercentChanged
+                            state = VisualizationBasicVuMetersRouteState(
+                                visualizationVuAnchor = visualizationVuAnchor,
+                                visualizationVuUseThemeColor = visualizationVuUseThemeColor,
+                                visualizationVuSmoothingPercent = visualizationVuSmoothingPercent
+                            ),
+                            actions = VisualizationBasicVuMetersRouteActions(
+                                onVisualizationVuAnchorChanged = onVisualizationVuAnchorChanged,
+                                onVisualizationVuUseThemeColorChanged = onVisualizationVuUseThemeColorChanged,
+                                onVisualizationVuSmoothingPercentChanged = onVisualizationVuSmoothingPercentChanged
+                            )
                         )
                     }
                     SettingsRoute.VisualizationAdvancedChannelScope -> {
@@ -718,36 +996,48 @@ internal fun SettingsScreen(
                     }
                     SettingsRoute.Misc -> {
                         MiscRouteContent(
-                            rememberBrowserLocation = rememberBrowserLocation,
-                            onRememberBrowserLocationChanged = onRememberBrowserLocationChanged,
-                            onClearRecentHistory = onClearRecentHistory
+                            state = MiscRouteState(
+                                rememberBrowserLocation = rememberBrowserLocation
+                            ),
+                            actions = MiscRouteActions(
+                                onRememberBrowserLocationChanged = onRememberBrowserLocationChanged,
+                                onClearRecentHistory = onClearRecentHistory
+                            )
                         )
                     }
 
                     SettingsRoute.UrlCache -> {
                         UrlCacheRouteContent(
-                            urlCacheClearOnLaunch = urlCacheClearOnLaunch,
-                            onUrlCacheClearOnLaunchChanged = onUrlCacheClearOnLaunchChanged,
-                            urlCacheMaxTracks = urlCacheMaxTracks,
-                            onUrlCacheMaxTracksChanged = onUrlCacheMaxTracksChanged,
-                            urlCacheMaxBytes = urlCacheMaxBytes,
-                            onUrlCacheMaxBytesChanged = onUrlCacheMaxBytesChanged,
-                            onOpenCacheManager = onOpenCacheManager,
-                            onClearUrlCacheNow = onClearUrlCacheNow
+                            state = UrlCacheRouteState(
+                                urlCacheClearOnLaunch = urlCacheClearOnLaunch,
+                                urlCacheMaxTracks = urlCacheMaxTracks,
+                                urlCacheMaxBytes = urlCacheMaxBytes
+                            ),
+                            actions = UrlCacheRouteActions(
+                                onUrlCacheClearOnLaunchChanged = onUrlCacheClearOnLaunchChanged,
+                                onUrlCacheMaxTracksChanged = onUrlCacheMaxTracksChanged,
+                                onUrlCacheMaxBytesChanged = onUrlCacheMaxBytesChanged,
+                                onOpenCacheManager = onOpenCacheManager,
+                                onClearUrlCacheNow = onClearUrlCacheNow
+                            )
                         )
                     }
                     SettingsRoute.CacheManager -> {
                         CacheManagerSettingsRouteContent(
-                            route = route,
-                            cachedSourceFiles = cachedSourceFiles,
-                            onRefreshCachedSourceFiles = onRefreshCachedSourceFiles,
-                            onDeleteCachedSourceFiles = onDeleteCachedSourceFiles,
-                            onExportCachedSourceFiles = onExportCachedSourceFiles
+                            state = CacheManagerSettingsRouteState(
+                                route = route,
+                                cachedSourceFiles = cachedSourceFiles
+                            ),
+                            actions = CacheManagerSettingsRouteActions(
+                                onRefreshCachedSourceFiles = onRefreshCachedSourceFiles,
+                                onDeleteCachedSourceFiles = onDeleteCachedSourceFiles,
+                                onExportCachedSourceFiles = onExportCachedSourceFiles
+                            )
                         )
                     }
                     SettingsRoute.Ui -> UiRouteContent(
-                        themeMode = themeMode,
-                        onThemeModeChanged = onThemeModeChanged
+                        state = UiRouteState(themeMode = themeMode),
+                        actions = UiRouteActions(onThemeModeChanged = onThemeModeChanged)
                     )
                         SettingsRoute.About -> AboutSettingsBody()
                         }
@@ -772,6 +1062,7 @@ internal fun SettingsScreen(
         onDismiss = { pendingPluginResetName = null },
         onConfirmResetPluginSettings = onResetPluginSettings
     )
+
 }
 
 @Composable

@@ -18,13 +18,11 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,15 +32,29 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+internal data class CacheManagerSettingsRouteState(
+    val route: SettingsRoute,
+    val cachedSourceFiles: List<CachedSourceFile>
+)
+
+internal data class CacheManagerSettingsRouteActions(
+    val onRefreshCachedSourceFiles: () -> Unit,
+    val onDeleteCachedSourceFiles: (List<String>) -> Unit,
+    val onExportCachedSourceFiles: (List<String>) -> Unit
+)
+
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 internal fun CacheManagerSettingsRouteContent(
-    route: SettingsRoute,
-    cachedSourceFiles: List<CachedSourceFile>,
-    onRefreshCachedSourceFiles: () -> Unit,
-    onDeleteCachedSourceFiles: (List<String>) -> Unit,
-    onExportCachedSourceFiles: (List<String>) -> Unit
+    state: CacheManagerSettingsRouteState,
+    actions: CacheManagerSettingsRouteActions
 ) {
+    val route = state.route
+    val cachedSourceFiles = state.cachedSourceFiles
+    val onRefreshCachedSourceFiles = actions.onRefreshCachedSourceFiles
+    val onDeleteCachedSourceFiles = actions.onDeleteCachedSourceFiles
+    val onExportCachedSourceFiles = actions.onExportCachedSourceFiles
+
     var selectedPaths by remember { mutableStateOf(setOf<String>()) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
@@ -205,23 +217,14 @@ internal fun CacheManagerSettingsRouteContent(
     }
 
     if (showDeleteConfirmDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirmDialog = false },
-            title = { Text("Delete selected cached files?") },
-            text = { Text("This removes ${selectedPaths.size} selected cached file(s).") },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirmDialog = false }) {
-                    Text("Cancel")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onDeleteCachedSourceFiles(selectedPaths.toList())
-                    selectedPaths = emptySet()
-                    showDeleteConfirmDialog = false
-                }) {
-                    Text("Delete")
-                }
+        SettingsConfirmDialog(
+            title = "Delete selected cached files?",
+            message = "This removes ${selectedPaths.size} selected cached file(s).",
+            confirmLabel = "Delete",
+            onDismiss = { showDeleteConfirmDialog = false },
+            onConfirm = {
+                onDeleteCachedSourceFiles(selectedPaths.toList())
+                selectedPaths = emptySet()
             }
         )
     }

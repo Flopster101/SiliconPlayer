@@ -1,27 +1,17 @@
 package com.flopster101.siliconplayer
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,7 +19,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.util.Locale
@@ -78,37 +67,98 @@ private fun advancedVisualizationSettingsPages(): List<VisualizationSettingsPage
     )
 )
 
+internal data class PlayerRouteState(
+    val unknownTrackDurationSeconds: Int,
+    val endFadeDurationMs: Int,
+    val endFadeCurve: EndFadeCurve,
+    val endFadeApplyToAllTracks: Boolean,
+    val autoPlayOnTrackSelect: Boolean,
+    val openPlayerOnTrackSelect: Boolean,
+    val autoPlayNextTrackOnEnd: Boolean,
+    val previousRestartsAfterThreshold: Boolean,
+    val openPlayerFromNotification: Boolean,
+    val persistRepeatMode: Boolean,
+    val keepScreenOn: Boolean,
+    val playerArtworkCornerRadiusDp: Int,
+    val filenameDisplayMode: FilenameDisplayMode,
+    val filenameOnlyWhenTitleMissing: Boolean
+)
+
+internal data class PlayerRouteActions(
+    val onUnknownTrackDurationSecondsChanged: (Int) -> Unit,
+    val onEndFadeDurationMsChanged: (Int) -> Unit,
+    val onEndFadeCurveChanged: (EndFadeCurve) -> Unit,
+    val onEndFadeApplyToAllTracksChanged: (Boolean) -> Unit,
+    val onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
+    val onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
+    val onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
+    val onPreviousRestartsAfterThresholdChanged: (Boolean) -> Unit,
+    val onOpenPlayerFromNotificationChanged: (Boolean) -> Unit,
+    val onPersistRepeatModeChanged: (Boolean) -> Unit,
+    val onKeepScreenOnChanged: (Boolean) -> Unit,
+    val onPlayerArtworkCornerRadiusDpChanged: (Int) -> Unit,
+    val onFilenameDisplayModeChanged: (FilenameDisplayMode) -> Unit,
+    val onFilenameOnlyWhenTitleMissingChanged: (Boolean) -> Unit
+)
+
+internal data class VisualizationRouteState(
+    val visualizationMode: VisualizationMode,
+    val enabledVisualizationModes: Set<VisualizationMode>,
+    val visualizationShowDebugInfo: Boolean
+)
+
+internal data class VisualizationRouteActions(
+    val onVisualizationModeChanged: (VisualizationMode) -> Unit,
+    val onEnabledVisualizationModesChanged: (Set<VisualizationMode>) -> Unit,
+    val onVisualizationShowDebugInfoChanged: (Boolean) -> Unit,
+    val onOpenVisualizationBasic: () -> Unit,
+    val onOpenVisualizationAdvanced: () -> Unit
+)
+
+internal data class VisualizationBasicRouteActions(
+    val onOpenVisualizationBasicBars: () -> Unit,
+    val onOpenVisualizationBasicOscilloscope: () -> Unit,
+    val onOpenVisualizationBasicVuMeters: () -> Unit
+)
+
+internal data class VisualizationAdvancedRouteActions(
+    val onOpenVisualizationAdvancedChannelScope: () -> Unit
+)
+
 @Composable
 internal fun PlayerRouteContent(
-    unknownTrackDurationSeconds: Int,
-    onUnknownTrackDurationSecondsChanged: (Int) -> Unit,
-    endFadeDurationMs: Int,
-    onEndFadeDurationMsChanged: (Int) -> Unit,
-    endFadeCurve: EndFadeCurve,
-    onEndFadeCurveChanged: (EndFadeCurve) -> Unit,
-    endFadeApplyToAllTracks: Boolean,
-    onEndFadeApplyToAllTracksChanged: (Boolean) -> Unit,
-    autoPlayOnTrackSelect: Boolean,
-    onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
-    openPlayerOnTrackSelect: Boolean,
-    onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
-    autoPlayNextTrackOnEnd: Boolean,
-    onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
-    previousRestartsAfterThreshold: Boolean,
-    onPreviousRestartsAfterThresholdChanged: (Boolean) -> Unit,
-    openPlayerFromNotification: Boolean,
-    onOpenPlayerFromNotificationChanged: (Boolean) -> Unit,
-    persistRepeatMode: Boolean,
-    onPersistRepeatModeChanged: (Boolean) -> Unit,
-    keepScreenOn: Boolean,
-    onKeepScreenOnChanged: (Boolean) -> Unit,
-    playerArtworkCornerRadiusDp: Int,
-    onPlayerArtworkCornerRadiusDpChanged: (Int) -> Unit,
-    filenameDisplayMode: FilenameDisplayMode,
-    onFilenameDisplayModeChanged: (FilenameDisplayMode) -> Unit,
-    filenameOnlyWhenTitleMissing: Boolean,
-    onFilenameOnlyWhenTitleMissingChanged: (Boolean) -> Unit
+    state: PlayerRouteState,
+    actions: PlayerRouteActions
 ) {
+    val unknownTrackDurationSeconds = state.unknownTrackDurationSeconds
+    val onUnknownTrackDurationSecondsChanged = actions.onUnknownTrackDurationSecondsChanged
+    val endFadeDurationMs = state.endFadeDurationMs
+    val onEndFadeDurationMsChanged = actions.onEndFadeDurationMsChanged
+    val endFadeCurve = state.endFadeCurve
+    val onEndFadeCurveChanged = actions.onEndFadeCurveChanged
+    val endFadeApplyToAllTracks = state.endFadeApplyToAllTracks
+    val onEndFadeApplyToAllTracksChanged = actions.onEndFadeApplyToAllTracksChanged
+    val autoPlayOnTrackSelect = state.autoPlayOnTrackSelect
+    val onAutoPlayOnTrackSelectChanged = actions.onAutoPlayOnTrackSelectChanged
+    val openPlayerOnTrackSelect = state.openPlayerOnTrackSelect
+    val onOpenPlayerOnTrackSelectChanged = actions.onOpenPlayerOnTrackSelectChanged
+    val autoPlayNextTrackOnEnd = state.autoPlayNextTrackOnEnd
+    val onAutoPlayNextTrackOnEndChanged = actions.onAutoPlayNextTrackOnEndChanged
+    val previousRestartsAfterThreshold = state.previousRestartsAfterThreshold
+    val onPreviousRestartsAfterThresholdChanged = actions.onPreviousRestartsAfterThresholdChanged
+    val openPlayerFromNotification = state.openPlayerFromNotification
+    val onOpenPlayerFromNotificationChanged = actions.onOpenPlayerFromNotificationChanged
+    val persistRepeatMode = state.persistRepeatMode
+    val onPersistRepeatModeChanged = actions.onPersistRepeatModeChanged
+    val keepScreenOn = state.keepScreenOn
+    val onKeepScreenOnChanged = actions.onKeepScreenOnChanged
+    val playerArtworkCornerRadiusDp = state.playerArtworkCornerRadiusDp
+    val onPlayerArtworkCornerRadiusDpChanged = actions.onPlayerArtworkCornerRadiusDpChanged
+    val filenameDisplayMode = state.filenameDisplayMode
+    val onFilenameDisplayModeChanged = actions.onFilenameDisplayModeChanged
+    val filenameOnlyWhenTitleMissing = state.filenameOnlyWhenTitleMissing
+    val onFilenameOnlyWhenTitleMissingChanged = actions.onFilenameOnlyWhenTitleMissingChanged
+
     var showUnknownDurationDialog by remember { mutableStateOf(false) }
     var showEndFadeDurationDialog by remember { mutableStateOf(false) }
     var showEndFadeCurveDialog by remember { mutableStateOf(false) }
@@ -122,37 +172,21 @@ internal fun PlayerRouteContent(
         onClick = { showUnknownDurationDialog = true }
     )
     if (showUnknownDurationDialog) {
-        var input by remember { mutableStateOf(unknownTrackDurationSeconds.toString()) }
-        AlertDialog(
-            onDismissRequest = { showUnknownDurationDialog = false },
-            title = { Text("Unknown track duration") },
-            text = {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { value ->
-                        input = value.filter { it.isDigit() }.take(5)
-                    },
-                    singleLine = true,
-                    label = { Text("Seconds") },
-                    supportingText = { Text("Used when a track has no real tagged duration.") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    shape = MaterialTheme.shapes.extraLarge
-                )
-            },
-            dismissButton = {
-                TextButton(onClick = { showUnknownDurationDialog = false }) {
-                    Text("Cancel")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val parsed = input.trim().toIntOrNull()
-                    if (parsed != null && parsed in 1..86400) {
-                        onUnknownTrackDurationSecondsChanged(parsed)
-                        showUnknownDurationDialog = false
-                    }
-                }) {
-                    Text("Save")
+        SettingsTextInputDialog(
+            title = "Unknown track duration",
+            fieldLabel = "Seconds",
+            initialValue = unknownTrackDurationSeconds.toString(),
+            supportingText = "Used when a track has no real tagged duration.",
+            keyboardType = KeyboardType.Number,
+            sanitizer = { value -> value.filter { it.isDigit() }.take(5) },
+            onDismiss = { showUnknownDurationDialog = false },
+            onConfirm = { input ->
+                val parsed = input.trim().toIntOrNull()
+                if (parsed != null && parsed in 1..86400) {
+                    onUnknownTrackDurationSecondsChanged(parsed)
+                    true
+                } else {
+                    false
                 }
             }
         )
@@ -182,86 +216,40 @@ internal fun PlayerRouteContent(
     )
 
     if (showEndFadeDurationDialog) {
-        var input by remember {
-            mutableStateOf(
-                if (endFadeDurationMs % 1000 == 0) {
-                    (endFadeDurationMs / 1000).toString()
-                } else {
-                    String.format(Locale.US, "%.1f", endFadeDurationMs / 1000.0)
-                }
-            )
+        val initialFadeValue = if (endFadeDurationMs % 1000 == 0) {
+            (endFadeDurationMs / 1000).toString()
+        } else {
+            String.format(Locale.US, "%.1f", endFadeDurationMs / 1000.0)
         }
-        AlertDialog(
-            onDismissRequest = { showEndFadeDurationDialog = false },
-            title = { Text("Fade duration") },
-            text = {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = { value ->
-                        input = value.filter { it.isDigit() || it == '.' }.take(6)
-                    },
-                    singleLine = true,
-                    label = { Text("Seconds") },
-                    supportingText = { Text("0.1s to 120s (default 10.0s)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    shape = MaterialTheme.shapes.extraLarge
-                )
-            },
-            dismissButton = {
-                TextButton(onClick = { showEndFadeDurationDialog = false }) {
-                    Text("Cancel")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    val parsedSeconds = input.trim().toDoubleOrNull()
-                    if (parsedSeconds != null && parsedSeconds in 0.1..120.0) {
-                        onEndFadeDurationMsChanged((parsedSeconds * 1000.0).roundToInt())
-                        showEndFadeDurationDialog = false
-                    }
-                }) {
-                    Text("Save")
+        SettingsTextInputDialog(
+            title = "Fade duration",
+            fieldLabel = "Seconds",
+            initialValue = initialFadeValue,
+            supportingText = "0.1s to 120s (default 10.0s)",
+            keyboardType = KeyboardType.Decimal,
+            sanitizer = { value -> value.filter { it.isDigit() || it == '.' }.take(6) },
+            onDismiss = { showEndFadeDurationDialog = false },
+            onConfirm = { input ->
+                val parsedSeconds = input.trim().toDoubleOrNull()
+                if (parsedSeconds != null && parsedSeconds in 0.1..120.0) {
+                    onEndFadeDurationMsChanged((parsedSeconds * 1000.0).roundToInt())
+                    true
+                } else {
+                    false
                 }
             }
         )
     }
 
     if (showEndFadeCurveDialog) {
-        AlertDialog(
-            onDismissRequest = { showEndFadeCurveDialog = false },
-            title = { Text("Fade curve") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    EndFadeCurve.entries.forEach { curve ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(MaterialTheme.shapes.medium)
-                                .clickable {
-                                    onEndFadeCurveChanged(curve)
-                                    showEndFadeCurveDialog = false
-                                }
-                                .padding(horizontal = 4.dp, vertical = 1.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = curve == endFadeCurve,
-                                onClick = {
-                                    onEndFadeCurveChanged(curve)
-                                    showEndFadeCurveDialog = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(curve.label)
-                        }
-                    }
-                }
+        SettingsSingleChoiceDialog(
+            title = "Fade curve",
+            selectedValue = endFadeCurve,
+            options = EndFadeCurve.entries.map { curve ->
+                ChoiceDialogOption(value = curve, label = curve.label)
             },
-            confirmButton = {
-                TextButton(onClick = { showEndFadeCurveDialog = false }) {
-                    Text("Close")
-                }
-            }
+            onSelected = onEndFadeCurveChanged,
+            onDismiss = { showEndFadeCurveDialog = false }
         )
     }
 
@@ -370,15 +358,18 @@ internal fun PlayerRouteContent(
 
 @Composable
 internal fun VisualizationRouteContent(
-    visualizationMode: VisualizationMode,
-    onVisualizationModeChanged: (VisualizationMode) -> Unit,
-    enabledVisualizationModes: Set<VisualizationMode>,
-    onEnabledVisualizationModesChanged: (Set<VisualizationMode>) -> Unit,
-    visualizationShowDebugInfo: Boolean,
-    onVisualizationShowDebugInfoChanged: (Boolean) -> Unit,
-    onOpenVisualizationBasic: () -> Unit,
-    onOpenVisualizationAdvanced: () -> Unit
+    state: VisualizationRouteState,
+    actions: VisualizationRouteActions
 ) {
+    val visualizationMode = state.visualizationMode
+    val onVisualizationModeChanged = actions.onVisualizationModeChanged
+    val enabledVisualizationModes = state.enabledVisualizationModes
+    val onEnabledVisualizationModesChanged = actions.onEnabledVisualizationModesChanged
+    val visualizationShowDebugInfo = state.visualizationShowDebugInfo
+    val onVisualizationShowDebugInfoChanged = actions.onVisualizationShowDebugInfoChanged
+    val onOpenVisualizationBasic = actions.onOpenVisualizationBasic
+    val onOpenVisualizationAdvanced = actions.onOpenVisualizationAdvanced
+
     var showModeDialog by remember { mutableStateOf(false) }
     var showEnabledDialog by remember { mutableStateOf(false) }
     val basicPages = remember { basicVisualizationSettingsPages() }
@@ -439,133 +430,59 @@ internal fun VisualizationRouteContent(
         val availableModes = listOf(VisualizationMode.Off) + allPages
             .map { it.mode }
             .filter { enabledVisualizationModes.contains(it) }
-        AlertDialog(
-            onDismissRequest = { showModeDialog = false },
-            title = { Text("Visualization mode") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Available modes depend on enabled visualizations and current core/song.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    availableModes.forEach { mode ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onVisualizationModeChanged(mode)
-                                    showModeDialog = false
-                                }
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = mode == visualizationMode,
-                                onClick = {
-                                    onVisualizationModeChanged(mode)
-                                    showModeDialog = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(mode.label)
-                        }
-                    }
-                }
+        SettingsSingleChoiceDialog(
+            title = "Visualization mode",
+            selectedValue = visualizationMode,
+            options = availableModes.map { mode ->
+                ChoiceDialogOption(value = mode, label = mode.label)
             },
-            dismissButton = {
-                TextButton(onClick = { showModeDialog = false }) { Text("Close") }
-            },
-            confirmButton = {}
+            description = "Available modes depend on enabled visualizations and current core/song.",
+            onSelected = onVisualizationModeChanged,
+            onDismiss = { showModeDialog = false },
+            showCancelButton = false
         )
     }
 
     if (showEnabledDialog) {
-        var pendingEnabled by remember(showEnabledDialog) { mutableStateOf(enabledVisualizationModes) }
-        AlertDialog(
-            onDismissRequest = { showEnabledDialog = false },
-            title = { Text("Enabled visualizations") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedButton(onClick = {
-                            pendingEnabled = basicPages.map { it.mode }.toSet()
-                        }) {
-                            Text("All")
-                        }
-                        OutlinedButton(onClick = { pendingEnabled = emptySet() }) {
-                            Text("None")
-                        }
-                    }
-                    VisualizationTier.entries.forEach { tier ->
-                        Text(
-                            text = tier.label,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurface
+        SettingsGroupedToggleDialog(
+            title = "Enabled visualizations",
+            options = buildList {
+                basicPages.forEach { page ->
+                    add(
+                        SettingsGroupedToggleOption(
+                            groupLabel = VisualizationTier.Basic.label,
+                            value = page.mode,
+                            label = page.title
                         )
-                        val options = when (tier) {
-                            VisualizationTier.Basic -> basicPages.map { it.mode to it.title }
-                            VisualizationTier.Advanced -> advancedPages.map { it.mode to it.title }
-                            VisualizationTier.Specialized -> emptyList()
-                        }
-                        if (options.isEmpty()) {
-                            Text(
-                                text = "No options yet.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            options.forEach { (mode, label) ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            pendingEnabled = if (pendingEnabled.contains(mode)) {
-                                                pendingEnabled - mode
-                                            } else {
-                                                pendingEnabled + mode
-                                            }
-                                        }
-                                        .padding(vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Checkbox(
-                                        checked = pendingEnabled.contains(mode),
-                                        onCheckedChange = { checked ->
-                                            pendingEnabled = if (checked) {
-                                                pendingEnabled + mode
-                                            } else {
-                                                pendingEnabled - mode
-                                            }
-                                        }
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(label)
-                                }
-                            }
-                        }
-                    }
+                    )
+                }
+                advancedPages.forEach { page ->
+                    add(
+                        SettingsGroupedToggleOption(
+                            groupLabel = VisualizationTier.Advanced.label,
+                            value = page.mode,
+                            label = page.title
+                        )
+                    )
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showEnabledDialog = false }) { Text("Cancel") }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onEnabledVisualizationModesChanged(pendingEnabled)
-                    showEnabledDialog = false
-                }) { Text("Apply") }
-            }
+            selectedValues = enabledVisualizationModes,
+            onDismiss = { showEnabledDialog = false },
+            onApply = onEnabledVisualizationModesChanged,
+            emptyGroupLabels = listOf(VisualizationTier.Specialized.label),
+            selectAllValues = basicPages.map { it.mode }.toSet()
         )
     }
 }
 
 @Composable
 internal fun VisualizationBasicRouteContent(
-    onOpenVisualizationBasicBars: () -> Unit,
-    onOpenVisualizationBasicOscilloscope: () -> Unit,
-    onOpenVisualizationBasicVuMeters: () -> Unit
+    actions: VisualizationBasicRouteActions
 ) {
+    val onOpenVisualizationBasicBars = actions.onOpenVisualizationBasicBars
+    val onOpenVisualizationBasicOscilloscope = actions.onOpenVisualizationBasicOscilloscope
+    val onOpenVisualizationBasicVuMeters = actions.onOpenVisualizationBasicVuMeters
+
     val basicPages = remember { basicVisualizationSettingsPages() }
     SettingsSectionLabel("Basic visualizations")
     Text(
@@ -596,8 +513,10 @@ internal fun VisualizationBasicRouteContent(
 
 @Composable
 internal fun VisualizationAdvancedRouteContent(
-    onOpenVisualizationAdvancedChannelScope: () -> Unit
+    actions: VisualizationAdvancedRouteActions
 ) {
+    val onOpenVisualizationAdvancedChannelScope = actions.onOpenVisualizationAdvancedChannelScope
+
     val advancedPages = remember { advancedVisualizationSettingsPages() }
     SettingsSectionLabel("Advanced visualizations")
     Text(

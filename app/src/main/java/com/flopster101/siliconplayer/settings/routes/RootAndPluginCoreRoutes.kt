@@ -16,19 +16,80 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.pluginsettings.VgmPlayChipSettingsScreen
 
+internal data class RootRouteActions(
+    val onOpenAudioPlugins: () -> Unit,
+    val onOpenGeneralAudio: () -> Unit,
+    val onOpenPlayer: () -> Unit,
+    val onOpenHome: () -> Unit,
+    val onOpenVisualization: () -> Unit,
+    val onOpenUrlCache: () -> Unit,
+    val onOpenMisc: () -> Unit,
+    val onOpenUi: () -> Unit,
+    val onOpenAbout: () -> Unit,
+    val onRequestClearAllSettings: () -> Unit
+)
+
+internal data class PluginVgmPlayChipSettingsRouteState(
+    val vgmPlayChipCoreSelections: Map<String, Int>
+)
+
+internal data class PluginVgmPlayChipSettingsRouteActions(
+    val onVgmPlayChipCoreChanged: (String, Int) -> Unit
+)
+
+internal data class PluginSampleRateRouteState(
+    val title: String,
+    val description: String,
+    val selectedHz: Int,
+    val enabled: Boolean
+)
+
+internal data class PluginSampleRateRouteActions(
+    val onSelected: (Int) -> Unit
+)
+
+internal data class PluginOpenMptRouteState(
+    val openMptSampleRateHz: Int,
+    val openMptCapabilities: Int,
+    val openMptStereoSeparationPercent: Int,
+    val openMptStereoSeparationAmigaPercent: Int,
+    val openMptInterpolationFilterLength: Int,
+    val openMptAmigaResamplerMode: Int,
+    val openMptAmigaResamplerApplyAllModules: Boolean,
+    val openMptVolumeRampingStrength: Int,
+    val openMptFt2XmVolumeRamping: Boolean,
+    val openMptMasterGainMilliBel: Int,
+    val openMptSurroundEnabled: Boolean
+)
+
+internal data class PluginOpenMptRouteActions(
+    val onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
+    val onOpenMptStereoSeparationAmigaPercentChanged: (Int) -> Unit,
+    val onOpenMptInterpolationFilterLengthChanged: (Int) -> Unit,
+    val onOpenMptAmigaResamplerModeChanged: (Int) -> Unit,
+    val onOpenMptAmigaResamplerApplyAllModulesChanged: (Boolean) -> Unit,
+    val onOpenMptVolumeRampingStrengthChanged: (Int) -> Unit,
+    val onOpenMptFt2XmVolumeRampingChanged: (Boolean) -> Unit,
+    val onOpenMptMasterGainMilliBelChanged: (Int) -> Unit,
+    val onOpenMptSurroundEnabledChanged: (Boolean) -> Unit,
+    val onOpenMptSampleRateChanged: (Int) -> Unit
+)
+
 @Composable
 internal fun RootRouteContent(
-    onOpenAudioPlugins: () -> Unit,
-    onOpenGeneralAudio: () -> Unit,
-    onOpenPlayer: () -> Unit,
-    onOpenHome: () -> Unit,
-    onOpenVisualization: () -> Unit,
-    onOpenUrlCache: () -> Unit,
-    onOpenMisc: () -> Unit,
-    onOpenUi: () -> Unit,
-    onOpenAbout: () -> Unit,
-    onRequestClearAllSettings: () -> Unit
+    actions: RootRouteActions
 ) {
+    val onOpenAudioPlugins = actions.onOpenAudioPlugins
+    val onOpenGeneralAudio = actions.onOpenGeneralAudio
+    val onOpenPlayer = actions.onOpenPlayer
+    val onOpenHome = actions.onOpenHome
+    val onOpenVisualization = actions.onOpenVisualization
+    val onOpenUrlCache = actions.onOpenUrlCache
+    val onOpenMisc = actions.onOpenMisc
+    val onOpenUi = actions.onOpenUi
+    val onOpenAbout = actions.onOpenAbout
+    val onRequestClearAllSettings = actions.onRequestClearAllSettings
+
     SettingsSectionLabel("General")
     SettingsItemCard(
         title = "Audio plugins",
@@ -111,9 +172,12 @@ internal fun RootRouteContent(
 
 @Composable
 internal fun PluginVgmPlayChipSettingsRouteContent(
-    vgmPlayChipCoreSelections: Map<String, Int>,
-    onVgmPlayChipCoreChanged: (String, Int) -> Unit
+    state: PluginVgmPlayChipSettingsRouteState,
+    actions: PluginVgmPlayChipSettingsRouteActions
 ) {
+    val vgmPlayChipCoreSelections = state.vgmPlayChipCoreSelections
+    val onVgmPlayChipCoreChanged = actions.onVgmPlayChipCoreChanged
+
     SettingsSectionLabel("Chip settings")
     VgmPlayChipSettingsScreen(
         chipCoreSpecs = VgmPlayConfig.chipCoreSpecs,
@@ -124,12 +188,15 @@ internal fun PluginVgmPlayChipSettingsRouteContent(
 
 @Composable
 internal fun PluginSampleRateRouteContent(
-    title: String,
-    description: String,
-    selectedHz: Int,
-    enabled: Boolean,
-    onSelected: (Int) -> Unit
+    state: PluginSampleRateRouteState,
+    actions: PluginSampleRateRouteActions
 ) {
+    val title = state.title
+    val description = state.description
+    val selectedHz = state.selectedHz
+    val enabled = state.enabled
+    val onSelected = actions.onSelected
+
     SampleRateSelectorCard(
         title = title,
         description = description,
@@ -141,28 +208,31 @@ internal fun PluginSampleRateRouteContent(
 
 @Composable
 internal fun PluginOpenMptRouteContent(
-    openMptSampleRateHz: Int,
-    openMptCapabilities: Int,
-    openMptStereoSeparationPercent: Int,
-    onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
-    openMptStereoSeparationAmigaPercent: Int,
-    onOpenMptStereoSeparationAmigaPercentChanged: (Int) -> Unit,
-    openMptInterpolationFilterLength: Int,
-    onOpenMptInterpolationFilterLengthChanged: (Int) -> Unit,
-    openMptAmigaResamplerMode: Int,
-    onOpenMptAmigaResamplerModeChanged: (Int) -> Unit,
-    openMptAmigaResamplerApplyAllModules: Boolean,
-    onOpenMptAmigaResamplerApplyAllModulesChanged: (Boolean) -> Unit,
-    openMptVolumeRampingStrength: Int,
-    onOpenMptVolumeRampingStrengthChanged: (Int) -> Unit,
-    openMptFt2XmVolumeRamping: Boolean,
-    onOpenMptFt2XmVolumeRampingChanged: (Boolean) -> Unit,
-    openMptMasterGainMilliBel: Int,
-    onOpenMptMasterGainMilliBelChanged: (Int) -> Unit,
-    openMptSurroundEnabled: Boolean,
-    onOpenMptSurroundEnabledChanged: (Boolean) -> Unit,
-    onOpenMptSampleRateChanged: (Int) -> Unit
+    state: PluginOpenMptRouteState,
+    actions: PluginOpenMptRouteActions
 ) {
+    val openMptSampleRateHz = state.openMptSampleRateHz
+    val openMptCapabilities = state.openMptCapabilities
+    val openMptStereoSeparationPercent = state.openMptStereoSeparationPercent
+    val onOpenMptStereoSeparationPercentChanged = actions.onOpenMptStereoSeparationPercentChanged
+    val openMptStereoSeparationAmigaPercent = state.openMptStereoSeparationAmigaPercent
+    val onOpenMptStereoSeparationAmigaPercentChanged = actions.onOpenMptStereoSeparationAmigaPercentChanged
+    val openMptInterpolationFilterLength = state.openMptInterpolationFilterLength
+    val onOpenMptInterpolationFilterLengthChanged = actions.onOpenMptInterpolationFilterLengthChanged
+    val openMptAmigaResamplerMode = state.openMptAmigaResamplerMode
+    val onOpenMptAmigaResamplerModeChanged = actions.onOpenMptAmigaResamplerModeChanged
+    val openMptAmigaResamplerApplyAllModules = state.openMptAmigaResamplerApplyAllModules
+    val onOpenMptAmigaResamplerApplyAllModulesChanged = actions.onOpenMptAmigaResamplerApplyAllModulesChanged
+    val openMptVolumeRampingStrength = state.openMptVolumeRampingStrength
+    val onOpenMptVolumeRampingStrengthChanged = actions.onOpenMptVolumeRampingStrengthChanged
+    val openMptFt2XmVolumeRamping = state.openMptFt2XmVolumeRamping
+    val onOpenMptFt2XmVolumeRampingChanged = actions.onOpenMptFt2XmVolumeRampingChanged
+    val openMptMasterGainMilliBel = state.openMptMasterGainMilliBel
+    val onOpenMptMasterGainMilliBelChanged = actions.onOpenMptMasterGainMilliBelChanged
+    val openMptSurroundEnabled = state.openMptSurroundEnabled
+    val onOpenMptSurroundEnabledChanged = actions.onOpenMptSurroundEnabledChanged
+    val onOpenMptSampleRateChanged = actions.onOpenMptSampleRateChanged
+
     SettingsSectionLabel("Core options")
     OpenMptDialogSliderCard(
         title = "Stereo separation",

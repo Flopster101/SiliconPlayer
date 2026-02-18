@@ -934,7 +934,9 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         const float endFadeGain = engine->computeEndFadeGainLocked(gainTimelinePosition);
         engine->applyGain(outputData, numFrames, channels, endFadeGain);
         engine->applyMonoDownmix(outputData, numFrames, channels);
-        engine->updateVisualizationDataLocked(outputData, numFrames, channels);
+        if (engine->shouldUpdateVisualization()) {
+            engine->updateVisualizationDataLocked(outputData, numFrames, channels);
+        }
 
         const int mode = engine->repeatMode.load();
         if (reachedEnd && mode != 1 && mode != 3) {
@@ -2315,11 +2317,31 @@ void AudioEngine::updateVisualizationDataLocked(const float* buffer, int numFram
     visualizationChannelCount.store(std::clamp(channels, 1, 2));
 }
 
+void AudioEngine::markVisualizationRequested() const {
+    const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()
+    ).count();
+    visualizationLastRequestNs.store(nowNs, std::memory_order_relaxed);
+}
+
+bool AudioEngine::shouldUpdateVisualization() const {
+    const int64_t lastRequestNs = visualizationLastRequestNs.load(std::memory_order_relaxed);
+    if (lastRequestNs <= 0) {
+        return false;
+    }
+    const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()
+    ).count();
+    constexpr int64_t kVisualizationDemandWindowNs = 750'000'000; // 750 ms
+    return (nowNs - lastRequestNs) <= kVisualizationDemandWindowNs;
+}
+
 std::vector<float> AudioEngine::getVisualizationWaveformScope(
         int channelIndex,
         int windowMs,
         int triggerMode
 ) const {
+    markVisualizationRequested();
     std::lock_guard<std::mutex> lock(visualizationMutex);
     constexpr int kOutputSize = 256;
     const auto& history = channelIndex == 1 ? visualizationScopeHistoryRight : visualizationScopeHistoryLeft;
@@ -2436,16 +2458,19 @@ std::vector<float> AudioEngine::getVisualizationWaveformScope(
 }
 
 std::vector<float> AudioEngine::getVisualizationBars() const {
+    markVisualizationRequested();
     std::lock_guard<std::mutex> lock(visualizationMutex);
     return std::vector<float>(visualizationBars.begin(), visualizationBars.end());
 }
 
 std::vector<float> AudioEngine::getVisualizationVuLevels() const {
+    markVisualizationRequested();
     std::lock_guard<std::mutex> lock(visualizationMutex);
     return std::vector<float>(visualizationVuLevels.begin(), visualizationVuLevels.end());
 }
 
 int AudioEngine::getVisualizationChannelCount() const {
+    markVisualizationRequested();
     return visualizationChannelCount.load();
 }
 

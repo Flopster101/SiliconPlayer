@@ -10,6 +10,7 @@
 #include <vector>
 #include <unordered_map>
 #include <array>
+#include <chrono>
 #include "decoders/AudioDecoder.h"
 
 struct SwrContext;
@@ -194,6 +195,7 @@ private:
     std::array<float, 4096> visualizationMonoHistory {};
     int visualizationMonoWriteIndex = 0;
     int visualizationCallbacksSinceAnalysis = 0;
+    mutable std::atomic<int64_t> visualizationLastRequestNs { 0 };
 
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
     void reconfigureStream(bool resumePlayback);
@@ -215,6 +217,8 @@ private:
     void applyGain(float* buffer, int numFrames, int channels, float extraGain = 1.0f);
     void applyMonoDownmix(float* buffer, int numFrames, int channels);
     void updateVisualizationDataLocked(const float* buffer, int numFrames, int channels);
+    void markVisualizationRequested() const;
+    bool shouldUpdateVisualization() const;
 
     // Callback
     static aaudio_data_callback_result_t dataCallback(

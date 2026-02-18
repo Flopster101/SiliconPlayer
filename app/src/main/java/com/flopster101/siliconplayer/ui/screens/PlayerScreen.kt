@@ -1097,7 +1097,7 @@ private fun TrackInfoChips(
             if (bitrateOrSize != null) {
                 TrackInfoChip(
                     icon = if (decoderName.equals("FFmpeg", ignoreCase = true))
-                        Icons.Default.Speed else Icons.Default.Info,
+                        PlayerChipIcons.ReadinessScore else PlayerChipIcons.HardDrive,
                     text = bitrateOrSize,
                     compactLevel = compactLevel
                 )

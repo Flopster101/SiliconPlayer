@@ -677,26 +677,19 @@ private fun AppNavigation(
     var pendingFileToOpen by remember { mutableStateOf<File?>(initialFileToOpen) }
     var pendingFileFromExternalIntent by remember { mutableStateOf(initialFileFromExternalIntent) }
 
-    val loadSongVolumeForFile: (String) -> Unit = { filePath ->
-        loadSongVolumeForFileAction(
-            volumeDatabase = volumeDatabase,
-            filePath = filePath,
-            onSongVolumeDbChanged = { songVolumeDb = it },
-            onSongGainChanged = { NativeBridge.setSongGain(it) }
-        )
-    }
+    val loadSongVolumeForFile = buildLoadSongVolumeForFileDelegate(
+        volumeDatabase = volumeDatabase,
+        onSongVolumeDbChanged = { songVolumeDb = it },
+        onSongGainChanged = { NativeBridge.setSongGain(it) }
+    )
 
-    val isLocalPlayableFile: (File?) -> Boolean = { file ->
-        isLocalPlayableFileAction(file)
-    }
+    val isLocalPlayableFile = buildIsLocalPlayableFileDelegate()
 
-    val refreshCachedSourceFiles: () -> Unit = {
-        refreshCachedSourceFilesAction(
-            appScope = appScope,
-            cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
-            onCachedSourceFilesChanged = { cachedSourceFiles = it }
-        )
-    }
+    val refreshCachedSourceFiles = buildRefreshCachedSourceFilesDelegate(
+        appScope = appScope,
+        cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
+        onCachedSourceFilesChanged = { cachedSourceFiles = it }
+    )
 
     val cacheExportDirectoryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -870,6 +863,11 @@ private fun AppNavigation(
         syncPlaybackService = { runtimeDelegates.syncPlaybackService() }
     )
 
+    val playbackSessionCoordinator = buildPlaybackSessionCoordinator(
+        runtimeDelegates = runtimeDelegates,
+        trackLoadDelegates = trackLoadDelegates
+    )
+
     val manualOpenDelegates = AppNavigationManualOpenDelegates(
         context = context,
         appScope = appScope,
@@ -907,7 +905,7 @@ private fun AppNavigation(
             runtimeDelegates.scheduleRecentTrackMetadataRefresh(sourceId, locationId)
         },
         onPlayerExpandedChanged = { isPlayerExpanded = it },
-        syncPlaybackService = { runtimeDelegates.syncPlaybackService() },
+        syncPlaybackService = playbackSessionCoordinator.syncPlaybackService,
         onBrowserLaunchTargetChanged = { locationId, directoryPath ->
             browserLaunchLocationId = locationId
             browserLaunchDirectoryPath = directoryPath
@@ -940,7 +938,7 @@ private fun AppNavigation(
         previousRestartsAfterThresholdProvider = { previousRestartsAfterThreshold },
         positionSecondsProvider = { position },
         onPositionChanged = { position = it },
-        onSyncPlaybackService = { runtimeDelegates.syncPlaybackService() },
+        onSyncPlaybackService = playbackSessionCoordinator.syncPlaybackService,
         onApplyTrackSelection = { file, autoStart, expand ->
             trackLoadDelegates.applyTrackSelection(file = file, autoStart = autoStart, expandOverride = expand)
         },
@@ -1102,10 +1100,8 @@ private fun AppNavigation(
         metadataArtist = metadataArtist,
         duration = duration,
         notificationOpenSignal = notificationOpenSignal,
-        syncPlaybackService = { runtimeDelegates.syncPlaybackService() },
-        restorePlayerStateFromSessionAndNative = { openExpanded ->
-            trackLoadDelegates.restorePlayerStateFromSessionAndNative(openExpanded = openExpanded)
-        }
+        syncPlaybackService = playbackSessionCoordinator.syncPlaybackService,
+        restorePlayerStateFromSessionAndNative = playbackSessionCoordinator.restorePlayerStateFromSessionAndNative
     )
 
     if (!storagePermissionState.hasPermission) {
@@ -1124,12 +1120,10 @@ private fun AppNavigation(
     var collapseFromSwipe by remember { mutableStateOf(false) }
     val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val miniPreviewLiftPx = with(LocalDensity.current) { 28.dp.toPx() }
-    val stopAndEmptyTrack: () -> Unit = {
-        stopAndEmptyTrackAction(
-            context = context,
-            playbackStateDelegates = playbackStateDelegates
-        )
-    }
+    val stopAndEmptyTrack = buildStopAndEmptyTrackDelegate(
+        context = context,
+        playbackStateDelegates = playbackStateDelegates
+    )
     val activeCoreNameForUi = lastUsedCoreName
     val currentCorePluginName = pluginNameForCoreName(activeCoreNameForUi)
     val canOpenCurrentCoreSettings = currentCorePluginName != null
@@ -1180,13 +1174,11 @@ private fun AppNavigation(
         onCollapseFromSwipeChanged = { collapseFromSwipe = it }
     )
 
-    val hidePlayerSurface: () -> Unit = {
-        hidePlayerSurfaceAction(
-            onStopAndEmptyTrack = stopAndEmptyTrack,
-            onPlayerExpandedChanged = { isPlayerExpanded = it },
-            onPlayerSurfaceVisibleChanged = { isPlayerSurfaceVisible = it }
-        )
-    }
+    val hidePlayerSurface = buildHidePlayerSurfaceDelegate(
+        onStopAndEmptyTrack = stopAndEmptyTrack,
+        onPlayerExpandedChanged = { isPlayerExpanded = it },
+        onPlayerSurfaceVisibleChanged = { isPlayerSurfaceVisible = it }
+    )
     RegisterPlaybackBroadcastReceiver(
         context = context,
         onCleared = { playbackStateDelegates.resetAndOptionallyKeepLastTrack(keepLastTrack = true) },
@@ -1225,7 +1217,7 @@ private fun AppNavigation(
             scheduleRecentTrackMetadataRefresh = { sourceId, locationId ->
                 runtimeDelegates.scheduleRecentTrackMetadataRefresh(sourceId, locationId)
             },
-            syncPlaybackService = { runtimeDelegates.syncPlaybackService() },
+            syncPlaybackService = playbackSessionCoordinator.syncPlaybackService,
             resumeLastStoppedTrack = { autoStart ->
                 trackNavDelegates.resumeLastStoppedTrack(autoStart = autoStart)
             }
@@ -1306,7 +1298,7 @@ private fun AppNavigation(
                     },
                     onStopEngine = { NativeBridge.stopEngine() },
                     onPlayingStateChanged = { isPlaying = it },
-                    syncPlaybackService = { runtimeDelegates.syncPlaybackService() },
+                    syncPlaybackService = playbackSessionCoordinator.syncPlaybackService,
                     onStartOrResumePlayback = startPlaybackFromSurface
                 )
             },
@@ -1316,7 +1308,7 @@ private fun AppNavigation(
             onPause = {
                 NativeBridge.stopEngine()
                 isPlaying = false
-                runtimeDelegates.syncPlaybackService()
+                playbackSessionCoordinator.syncPlaybackService()
             },
             canPreviousTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) > 0,
             canNextTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) in 0 until (visiblePlayableFiles.size - 1),
@@ -1326,7 +1318,7 @@ private fun AppNavigation(
                     seekRequestedAtMs = SystemClock.elapsedRealtime()
                     seekUiBusy = false
                     position = seconds
-                    runtimeDelegates.syncPlaybackService()
+                    playbackSessionCoordinator.syncPlaybackService()
                 }
             },
             onPreviousSubtune = {
@@ -1397,157 +1389,24 @@ private fun AppNavigation(
         )
     }
 
-    @Composable
-    fun HomeRouteSection(mainPadding: androidx.compose.foundation.layout.PaddingValues) {
-        MainHomeRouteHost(
-            mainPadding = mainPadding,
-            currentTrackPath = currentPlaybackSourceId ?: selectedFile?.absolutePath,
-            currentTrackTitle = metadataTitle,
-            currentTrackArtist = metadataArtist,
-            recentFolders = recentFolders,
-            recentPlayedFiles = recentPlayedFiles,
-            storagePresentationForEntry = { entry ->
-                storagePresentationForEntry(context, entry, storageDescriptors)
-            },
-            bottomContentPadding = miniPlayerListInset,
-            onOpenLibrary = {
-                browserLaunchLocationId = null
-                browserLaunchDirectoryPath = null
-                currentView = MainView.Browser
-            },
-            onOpenUrlOrPath = {
-                urlOrPathInput = ""
-                showUrlOrPathDialog = true
-            },
-            onOpenRecentFolder = { entry ->
-                browserLaunchLocationId = entry.locationId
-                browserLaunchDirectoryPath = entry.path
-                currentView = MainView.Browser
-            },
-            onPlayRecentFile = { entry ->
-                playRecentFileEntryAction(
-                    context = context,
-                    cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
-                    entry = entry,
-                    openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                    onApplyTrackSelection = { file, autoStart, expandOverride, sourceIdOverride, locationIdOverride, useSongVolumeLookup ->
-                        trackLoadDelegates.applyTrackSelection(
-                            file = file,
-                            autoStart = autoStart,
-                            expandOverride = expandOverride,
-                            sourceIdOverride = sourceIdOverride,
-                            locationIdOverride = locationIdOverride,
-                            useSongVolumeLookup = useSongVolumeLookup
-                        )
-                    },
-                    onApplyManualInputSelection = { rawInput ->
-                        manualOpenDelegates.applyManualInputSelection(rawInput)
-                    }
-                )
-            },
-            onRecentFolderAction = { entry, action ->
-                applyRecentFolderAction(
-                    context = context,
-                    prefs = prefs,
-                    entry = entry,
-                    action = action,
-                    recentFolders = recentFolders,
-                    recentFoldersLimit = recentFoldersLimit,
-                    onRecentFoldersChanged = { recentFolders = it }
-                )
-            },
-            onRecentFileAction = { entry, action ->
-                applyRecentSourceAction(
-                    context = context,
-                    prefs = prefs,
-                    entry = entry,
-                    action = action,
-                    recentPlayedFiles = recentPlayedFiles,
-                    recentFilesLimit = recentFilesLimit,
-                    onRecentPlayedFilesChanged = { recentPlayedFiles = it },
-                    resolveShareableFileForRecent = { recent ->
-                        runtimeDelegates.resolveShareableFileForRecent(recent)
-                    }
-                )
-            },
-            canShareRecentFile = { entry ->
-                runtimeDelegates.resolveShareableFileForRecent(entry) != null
-            }
-        )
-    }
-
-    @Composable
-    fun BrowserRouteSection(mainPadding: androidx.compose.foundation.layout.PaddingValues) {
-        MainBrowserRouteHost(
-            mainPadding = mainPadding,
-            repository = repository,
-            initialLocationId = browserLaunchLocationId
-                ?: if (rememberBrowserLocation) lastBrowserLocationId else null,
-            initialDirectoryPath = browserLaunchDirectoryPath
-                ?: if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
-            bottomContentPadding = miniPlayerListInset,
-            backHandlingEnabled = !isPlayerExpanded,
-            playingFile = selectedFile,
-            onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
-            onExitBrowser = { currentView = MainView.Home },
-            onBrowserLocationChanged = { locationId, directoryPath ->
-                if (locationId != null && directoryPath != null) {
-                    runtimeDelegates.addRecentFolder(directoryPath, locationId)
-                }
-                if (browserLaunchLocationId != null || browserLaunchDirectoryPath != null) {
-                    browserLaunchLocationId = null
-                    browserLaunchDirectoryPath = null
-                }
-                if (!rememberBrowserLocation) return@MainBrowserRouteHost
-                lastBrowserLocationId = locationId
-                lastBrowserDirectoryPath = directoryPath
-                prefs.edit()
-                    .putString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, locationId)
-                    .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, directoryPath)
-                    .apply()
-            },
-            onFileSelected = { file ->
-                trackLoadDelegates.applyTrackSelection(
-                    file = file,
-                    autoStart = autoPlayOnTrackSelect,
-                    expandOverride = openPlayerOnTrackSelect
-                )
-            }
-        )
-    }
-
-    @Composable
-    fun SettingsRouteSection(mainPadding: androidx.compose.foundation.layout.PaddingValues) {
-        Box(modifier = Modifier.padding(mainPadding)) {
-                        val settingsContent: @Composable () -> Unit = {
-                                                        SettingsScreen(
+    val settingsRouteContent: @Composable (androidx.compose.foundation.layout.PaddingValues) -> Unit = { mainPadding ->
+        AppNavigationSettingsRouteSection(mainPadding = mainPadding) {
+            SettingsScreen(
                                 route = settingsRoute,
                                 bottomContentPadding = miniPlayerListInset,
-                                state = buildSettingsScreenState(
+                                state = buildSettingsScreenStateFromStateHolders(
                                     selectedPluginName = selectedPluginName,
                                     autoPlayOnTrackSelect = autoPlayOnTrackSelect,
                                     openPlayerOnTrackSelect = openPlayerOnTrackSelect,
                                     autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
                                     previousRestartsAfterThreshold = previousRestartsAfterThreshold,
-                                    respondHeadphoneMediaButtons = respondHeadphoneMediaButtons,
-                                    pauseOnHeadphoneDisconnect = pauseOnHeadphoneDisconnect,
                                     audioFocusInterrupt = audioFocusInterrupt,
                                     audioDucking = audioDucking,
-                                    audioBackendPreference = audioBackendPreference,
-                                    audioPerformanceMode = audioPerformanceMode,
-                                    audioBufferPreset = audioBufferPreset,
-                                    audioResamplerPreference = audioResamplerPreference,
-                                    audioAllowBackendFallback = audioAllowBackendFallback,
-                                    openPlayerFromNotification = openPlayerFromNotification,
                                     persistRepeatMode = persistRepeatMode,
                                     themeMode = themeMode,
                                     rememberBrowserLocation = rememberBrowserLocation,
                                     recentFoldersLimit = recentFoldersLimit,
                                     recentFilesLimit = recentFilesLimit,
-                                    urlCacheClearOnLaunch = urlCacheClearOnLaunch,
-                                    urlCacheMaxTracks = urlCacheMaxTracks,
-                                    urlCacheMaxBytes = urlCacheMaxBytes,
-                                    cachedSourceFiles = cachedSourceFiles,
                                     keepScreenOn = keepScreenOn,
                                     playerArtworkCornerRadiusDp = playerArtworkCornerRadiusDp,
                                     filenameDisplayMode = filenameDisplayMode,
@@ -1570,52 +1429,10 @@ private fun AppNavigation(
                                     visualizationVuUseThemeColor = visualizationVuUseThemeColor,
                                     visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
                                     visualizationVuRenderBackend = visualizationVuRenderBackend,
-                                    ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
                                     ffmpegCapabilities = ffmpegCapabilities,
-                                    openMptSampleRateHz = openMptCoreSampleRateHz,
                                     openMptCapabilities = openMptCapabilities,
-                                    vgmPlaySampleRateHz = vgmPlayCoreSampleRateHz,
                                     vgmPlayCapabilities = vgmPlayCapabilities,
-                                    gmeSampleRateHz = gmeCoreSampleRateHz,
-                                    sidPlayFpSampleRateHz = sidPlayFpCoreSampleRateHz,
-                                    lazyUsf2SampleRateHz = lazyUsf2CoreSampleRateHz,
-                                    lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
-                                    sidPlayFpBackend = sidPlayFpBackend,
-                                    sidPlayFpClockMode = sidPlayFpClockMode,
-                                    sidPlayFpSidModelMode = sidPlayFpSidModelMode,
-                                    sidPlayFpFilter6581Enabled = sidPlayFpFilter6581Enabled,
-                                    sidPlayFpFilter8580Enabled = sidPlayFpFilter8580Enabled,
-                                    sidPlayFpDigiBoost8580 = sidPlayFpDigiBoost8580,
-                                    sidPlayFpFilterCurve6581Percent = sidPlayFpFilterCurve6581Percent,
-                                    sidPlayFpFilterRange6581Percent = sidPlayFpFilterRange6581Percent,
-                                    sidPlayFpFilterCurve8580Percent = sidPlayFpFilterCurve8580Percent,
-                                    sidPlayFpReSidFpFastSampling = sidPlayFpReSidFpFastSampling,
-                                    sidPlayFpReSidFpCombinedWaveformsStrength = sidPlayFpReSidFpCombinedWaveformsStrength,
-                                    gmeTempoPercent = gmeTempoPercent,
-                                    gmeStereoSeparationPercent = gmeStereoSeparationPercent,
-                                    gmeEchoEnabled = gmeEchoEnabled,
-                                    gmeAccuracyEnabled = gmeAccuracyEnabled,
-                                    gmeEqTrebleDecibel = gmeEqTrebleDecibel,
-                                    gmeEqBassHz = gmeEqBassHz,
-                                    gmeSpcUseBuiltInFade = gmeSpcUseBuiltInFade,
-                                    gmeSpcInterpolation = gmeSpcInterpolation,
-                                    gmeSpcUseNativeSampleRate = gmeSpcUseNativeSampleRate,
-                                    vgmPlayLoopCount = vgmPlayLoopCount,
-                                    vgmPlayAllowNonLoopingLoop = vgmPlayAllowNonLoopingLoop,
-                                    vgmPlayVsyncRate = vgmPlayVsyncRate,
-                                    vgmPlayResampleMode = vgmPlayResampleMode,
-                                    vgmPlayChipSampleMode = vgmPlayChipSampleMode,
-                                    vgmPlayChipSampleRate = vgmPlayChipSampleRate,
-                                    vgmPlayChipCoreSelections = vgmPlayChipCoreSelections,
-                                    openMptStereoSeparationPercent = openMptStereoSeparationPercent,
-                                    openMptStereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
-                                    openMptInterpolationFilterLength = openMptInterpolationFilterLength,
-                                    openMptAmigaResamplerMode = openMptAmigaResamplerMode,
-                                    openMptAmigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
-                                    openMptVolumeRampingStrength = openMptVolumeRampingStrength,
-                                    openMptFt2XmVolumeRamping = openMptFt2XmVolumeRamping,
-                                    openMptMasterGainMilliBel = openMptMasterGainMilliBel,
-                                    openMptSurroundEnabled = openMptSurroundEnabled
+                                    settingsStates = settingsStates
                                 ),
                                 actions = SettingsScreenActions(
                                     onBack = {
@@ -1952,73 +1769,20 @@ private fun AppNavigation(
                             )
                         },
                                     onClearAllSettings = {
-                            clearAllSettingsFromMainAction(
+                            clearAllSettingsUsingStateHolders(
                                 context = context,
                                 prefs = prefs,
                                 defaultScopeTextSizeSp = defaultScopeTextSizeSp,
                                 selectableVisualizationModes = selectableVisualizationModes,
                                 onThemeModeChanged = onThemeModeChanged,
-                                ffmpegCoreSampleRateHz = ffmpegCoreSampleRateHz,
-                                openMptCoreSampleRateHz = openMptCoreSampleRateHz,
-                                vgmPlayCoreSampleRateHz = vgmPlayCoreSampleRateHz,
-                                gmeCoreSampleRateHz = gmeCoreSampleRateHz,
-                                sidPlayFpCoreSampleRateHz = sidPlayFpCoreSampleRateHz,
-                                lazyUsf2CoreSampleRateHz = lazyUsf2CoreSampleRateHz,
-                                vgmPlayLoopCount = vgmPlayLoopCount,
-                                vgmPlayVsyncRate = vgmPlayVsyncRate,
-                                vgmPlayResampleMode = vgmPlayResampleMode,
-                                vgmPlayChipSampleMode = vgmPlayChipSampleMode,
-                                vgmPlayChipSampleRate = vgmPlayChipSampleRate,
-                                gmeTempoPercent = gmeTempoPercent,
-                                gmeStereoSeparationPercent = gmeStereoSeparationPercent,
-                                gmeEqTrebleDecibel = gmeEqTrebleDecibel,
-                                gmeEqBassHz = gmeEqBassHz,
-                                gmeSpcInterpolation = gmeSpcInterpolation,
-                                sidPlayFpBackend = sidPlayFpBackend,
-                                sidPlayFpClockMode = sidPlayFpClockMode,
-                                sidPlayFpSidModelMode = sidPlayFpSidModelMode,
-                                sidPlayFpFilterCurve6581Percent = sidPlayFpFilterCurve6581Percent,
-                                sidPlayFpFilterRange6581Percent = sidPlayFpFilterRange6581Percent,
-                                sidPlayFpFilterCurve8580Percent = sidPlayFpFilterCurve8580Percent,
-                                sidPlayFpReSidFpCombinedWaveformsStrength = sidPlayFpReSidFpCombinedWaveformsStrength,
-                                openMptStereoSeparationPercent = openMptStereoSeparationPercent,
-                                openMptStereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
-                                openMptInterpolationFilterLength = openMptInterpolationFilterLength,
-                                openMptAmigaResamplerMode = openMptAmigaResamplerMode,
-                                openMptVolumeRampingStrength = openMptVolumeRampingStrength,
-                                openMptMasterGainMilliBel = openMptMasterGainMilliBel,
-                                vgmPlayAllowNonLoopingLoop = vgmPlayAllowNonLoopingLoop,
-                                gmeEchoEnabled = gmeEchoEnabled,
-                                gmeAccuracyEnabled = gmeAccuracyEnabled,
-                                gmeSpcUseBuiltInFade = gmeSpcUseBuiltInFade,
-                                gmeSpcUseNativeSampleRate = gmeSpcUseNativeSampleRate,
-                                lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
-                                sidPlayFpFilter6581Enabled = sidPlayFpFilter6581Enabled,
-                                sidPlayFpFilter8580Enabled = sidPlayFpFilter8580Enabled,
-                                sidPlayFpDigiBoost8580 = sidPlayFpDigiBoost8580,
-                                sidPlayFpReSidFpFastSampling = sidPlayFpReSidFpFastSampling,
-                                openMptAmigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
-                                openMptFt2XmVolumeRamping = openMptFt2XmVolumeRamping,
-                                openMptSurroundEnabled = openMptSurroundEnabled,
-                                vgmPlayChipCoreSelections = vgmPlayChipCoreSelections,
+                                settingsStates = settingsStates,
                                 onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
                                 onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
                                 onAutoPlayNextTrackOnEndChanged = { autoPlayNextTrackOnEnd = it },
                                 onPreviousRestartsAfterThresholdChanged = { previousRestartsAfterThreshold = it },
-                                onRespondHeadphoneMediaButtonsChanged = { respondHeadphoneMediaButtons = it },
-                                onPauseOnHeadphoneDisconnectChanged = { pauseOnHeadphoneDisconnect = it },
-                                onAudioBackendPreferenceChanged = { audioBackendPreference = it },
-                                onAudioPerformanceModeChanged = { audioPerformanceMode = it },
-                                onAudioBufferPresetChanged = { audioBufferPreset = it },
-                                onAudioResamplerPreferenceChanged = { audioResamplerPreference = it },
-                                onAudioAllowBackendFallbackChanged = { audioAllowBackendFallback = it },
-                                onOpenPlayerFromNotificationChanged = { openPlayerFromNotification = it },
                                 onPersistRepeatModeChanged = { persistRepeatMode = it },
                                 onPreferredRepeatModeChanged = { preferredRepeatMode = it },
                                 onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
-                                onUrlCacheClearOnLaunchChanged = { urlCacheClearOnLaunch = it },
-                                onUrlCacheMaxTracksChanged = { urlCacheMaxTracks = it },
-                                onUrlCacheMaxBytesChanged = { urlCacheMaxBytes = it },
                                 onLastBrowserLocationIdChanged = { lastBrowserLocationId = it },
                                 onLastBrowserDirectoryPathChanged = { lastBrowserDirectoryPath = it },
                                 onRecentFoldersLimitChanged = { recentFoldersLimit = it },
@@ -2050,115 +1814,27 @@ private fun AppNavigation(
                             )
                         },
                                     onClearAllPluginSettings = {
-                            clearAllPluginSettingsFromMainAction(
+                            clearAllPluginSettingsUsingStateHolders(
                                 context = context,
                                 prefs = prefs,
-                                onFfmpegCoreSampleRateHzChanged = { ffmpegCoreSampleRateHz = it },
-                                onOpenMptCoreSampleRateHzChanged = { openMptCoreSampleRateHz = it },
-                                onVgmPlayCoreSampleRateHzChanged = { vgmPlayCoreSampleRateHz = it },
-                                onGmeCoreSampleRateHzChanged = { gmeCoreSampleRateHz = it },
-                                onSidPlayFpCoreSampleRateHzChanged = { sidPlayFpCoreSampleRateHz = it },
-                                onLazyUsf2CoreSampleRateHzChanged = { lazyUsf2CoreSampleRateHz = it },
-                                onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
-                                onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
-                                onSidPlayFpClockModeChanged = { sidPlayFpClockMode = it },
-                                onSidPlayFpSidModelModeChanged = { sidPlayFpSidModelMode = it },
-                                onSidPlayFpFilter6581EnabledChanged = { sidPlayFpFilter6581Enabled = it },
-                                onSidPlayFpFilter8580EnabledChanged = { sidPlayFpFilter8580Enabled = it },
-                                onSidPlayFpDigiBoost8580Changed = { sidPlayFpDigiBoost8580 = it },
-                                onSidPlayFpFilterCurve6581PercentChanged = { sidPlayFpFilterCurve6581Percent = it },
-                                onSidPlayFpFilterRange6581PercentChanged = { sidPlayFpFilterRange6581Percent = it },
-                                onSidPlayFpFilterCurve8580PercentChanged = { sidPlayFpFilterCurve8580Percent = it },
-                                onSidPlayFpReSidFpFastSamplingChanged = { sidPlayFpReSidFpFastSampling = it },
-                                onSidPlayFpReSidFpCombinedWaveformsStrengthChanged = { sidPlayFpReSidFpCombinedWaveformsStrength = it },
-                                onGmeTempoPercentChanged = { gmeTempoPercent = it },
-                                onGmeStereoSeparationPercentChanged = { gmeStereoSeparationPercent = it },
-                                onGmeEchoEnabledChanged = { gmeEchoEnabled = it },
-                                onGmeAccuracyEnabledChanged = { gmeAccuracyEnabled = it },
-                                onGmeEqTrebleDecibelChanged = { gmeEqTrebleDecibel = it },
-                                onGmeEqBassHzChanged = { gmeEqBassHz = it },
-                                onGmeSpcUseBuiltInFadeChanged = { gmeSpcUseBuiltInFade = it },
-                                onGmeSpcInterpolationChanged = { gmeSpcInterpolation = it },
-                                onGmeSpcUseNativeSampleRateChanged = { gmeSpcUseNativeSampleRate = it },
-                                onVgmPlayLoopCountChanged = { vgmPlayLoopCount = it },
-                                onVgmPlayAllowNonLoopingLoopChanged = { vgmPlayAllowNonLoopingLoop = it },
-                                onVgmPlayVsyncRateChanged = { vgmPlayVsyncRate = it },
-                                onVgmPlayResampleModeChanged = { vgmPlayResampleMode = it },
-                                onVgmPlayChipSampleModeChanged = { vgmPlayChipSampleMode = it },
-                                onVgmPlayChipSampleRateChanged = { vgmPlayChipSampleRate = it },
-                                onVgmPlayChipCoreSelectionsChanged = { vgmPlayChipCoreSelections = it },
-                                onOpenMptStereoSeparationPercentChanged = { openMptStereoSeparationPercent = it },
-                                onOpenMptStereoSeparationAmigaPercentChanged = { openMptStereoSeparationAmigaPercent = it },
-                                onOpenMptInterpolationFilterLengthChanged = { openMptInterpolationFilterLength = it },
-                                onOpenMptAmigaResamplerModeChanged = { openMptAmigaResamplerMode = it },
-                                onOpenMptAmigaResamplerApplyAllModulesChanged = { openMptAmigaResamplerApplyAllModules = it },
-                                onOpenMptVolumeRampingStrengthChanged = { openMptVolumeRampingStrength = it },
-                                onOpenMptFt2XmVolumeRampingChanged = { openMptFt2XmVolumeRamping = it },
-                                onOpenMptMasterGainMilliBelChanged = { openMptMasterGainMilliBel = it },
-                                onOpenMptSurroundEnabledChanged = { openMptSurroundEnabled = it }
+                                settingsStates = settingsStates
                             )
                         },
                                     onResetPluginSettings = { pluginName ->
-                            resetPluginSettingsFromMainAction(
+                            resetPluginSettingsUsingStateHolders(
                                 context = context,
                                 prefs = prefs,
                                 pluginName = pluginName,
-                                onFfmpegCoreSampleRateHzChanged = { ffmpegCoreSampleRateHz = it },
-                                onOpenMptCoreSampleRateHzChanged = { openMptCoreSampleRateHz = it },
-                                onOpenMptStereoSeparationPercentChanged = { openMptStereoSeparationPercent = it },
-                                onOpenMptStereoSeparationAmigaPercentChanged = { openMptStereoSeparationAmigaPercent = it },
-                                onOpenMptInterpolationFilterLengthChanged = { openMptInterpolationFilterLength = it },
-                                onOpenMptAmigaResamplerModeChanged = { openMptAmigaResamplerMode = it },
-                                onOpenMptAmigaResamplerApplyAllModulesChanged = { openMptAmigaResamplerApplyAllModules = it },
-                                onOpenMptVolumeRampingStrengthChanged = { openMptVolumeRampingStrength = it },
-                                onOpenMptFt2XmVolumeRampingChanged = { openMptFt2XmVolumeRamping = it },
-                                onOpenMptMasterGainMilliBelChanged = { openMptMasterGainMilliBel = it },
-                                onOpenMptSurroundEnabledChanged = { openMptSurroundEnabled = it },
-                                onVgmPlayCoreSampleRateHzChanged = { vgmPlayCoreSampleRateHz = it },
-                                onVgmPlayLoopCountChanged = { vgmPlayLoopCount = it },
-                                onVgmPlayAllowNonLoopingLoopChanged = { vgmPlayAllowNonLoopingLoop = it },
-                                onVgmPlayVsyncRateChanged = { vgmPlayVsyncRate = it },
-                                onVgmPlayResampleModeChanged = { vgmPlayResampleMode = it },
-                                onVgmPlayChipSampleModeChanged = { vgmPlayChipSampleMode = it },
-                                onVgmPlayChipSampleRateChanged = { vgmPlayChipSampleRate = it },
-                                onVgmPlayChipCoreSelectionsChanged = { vgmPlayChipCoreSelections = it },
-                                onGmeCoreSampleRateHzChanged = { gmeCoreSampleRateHz = it },
-                                onGmeTempoPercentChanged = { gmeTempoPercent = it },
-                                onGmeStereoSeparationPercentChanged = { gmeStereoSeparationPercent = it },
-                                onGmeEchoEnabledChanged = { gmeEchoEnabled = it },
-                                onGmeAccuracyEnabledChanged = { gmeAccuracyEnabled = it },
-                                onGmeEqTrebleDecibelChanged = { gmeEqTrebleDecibel = it },
-                                onGmeEqBassHzChanged = { gmeEqBassHz = it },
-                                onGmeSpcUseBuiltInFadeChanged = { gmeSpcUseBuiltInFade = it },
-                                onGmeSpcInterpolationChanged = { gmeSpcInterpolation = it },
-                                onGmeSpcUseNativeSampleRateChanged = { gmeSpcUseNativeSampleRate = it },
-                                onLazyUsf2CoreSampleRateHzChanged = { lazyUsf2CoreSampleRateHz = it },
-                                onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
-                                onSidPlayFpCoreSampleRateHzChanged = { sidPlayFpCoreSampleRateHz = it },
-                                onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
-                                onSidPlayFpClockModeChanged = { sidPlayFpClockMode = it },
-                                onSidPlayFpSidModelModeChanged = { sidPlayFpSidModelMode = it },
-                                onSidPlayFpFilter6581EnabledChanged = { sidPlayFpFilter6581Enabled = it },
-                                onSidPlayFpFilter8580EnabledChanged = { sidPlayFpFilter8580Enabled = it },
-                                onSidPlayFpDigiBoost8580Changed = { sidPlayFpDigiBoost8580 = it },
-                                onSidPlayFpFilterCurve6581PercentChanged = { sidPlayFpFilterCurve6581Percent = it },
-                                onSidPlayFpFilterRange6581PercentChanged = { sidPlayFpFilterRange6581Percent = it },
-                                onSidPlayFpFilterCurve8580PercentChanged = { sidPlayFpFilterCurve8580Percent = it },
-                                onSidPlayFpReSidFpFastSamplingChanged = { sidPlayFpReSidFpFastSampling = it },
-                                onSidPlayFpReSidFpCombinedWaveformsStrengthChanged = { sidPlayFpReSidFpCombinedWaveformsStrength = it }
+                                settingsStates = settingsStates
                             )
                         },
                                 )
                             )
-                        }
-                        settingsContent()
-                    }
+        }
     }
 
-    @Composable
-    fun MainScaffoldSection() {
-        Box(modifier = Modifier.fillMaxSize()) {
-        MainNavigationScaffold(
+    Box(modifier = Modifier.fillMaxSize()) {
+        AppNavigationMainScaffoldSection(
             currentView = currentView,
             onOpenPlayerSurface = {
                 isPlayerSurfaceVisible = true
@@ -2172,19 +1848,124 @@ private fun AppNavigation(
                 settingsLaunchedFromPlayer = false
                 openSettingsRoute(SettingsRoute.Root, true)
                 currentView = MainView.Settings
-            }
-        ) { mainPadding, targetView ->
-                when (targetView) {
-                    MainView.Home -> HomeRouteSection(mainPadding)
-                    MainView.Browser -> BrowserRouteSection(mainPadding)
-                    MainView.Settings -> SettingsRouteSection(mainPadding)
-                }
-            }
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        MainScaffoldSection()
+            },
+            homeContent = { mainPadding ->
+                AppNavigationHomeRouteSection(
+                    mainPadding = mainPadding,
+                    currentTrackPath = currentPlaybackSourceId ?: selectedFile?.absolutePath,
+                    currentTrackTitle = metadataTitle,
+                    currentTrackArtist = metadataArtist,
+                    recentFolders = recentFolders,
+                    recentPlayedFiles = recentPlayedFiles,
+                    storagePresentationForEntry = { entry ->
+                        storagePresentationForEntry(context, entry, storageDescriptors)
+                    },
+                    bottomContentPadding = miniPlayerListInset,
+                    onOpenLibrary = {
+                        browserLaunchLocationId = null
+                        browserLaunchDirectoryPath = null
+                        currentView = MainView.Browser
+                    },
+                    onOpenUrlOrPath = {
+                        urlOrPathInput = ""
+                        showUrlOrPathDialog = true
+                    },
+                    onOpenRecentFolder = { entry ->
+                        browserLaunchLocationId = entry.locationId
+                        browserLaunchDirectoryPath = entry.path
+                        currentView = MainView.Browser
+                    },
+                    onPlayRecentFile = { entry ->
+                        playRecentFileEntryAction(
+                            context = context,
+                            cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
+                            entry = entry,
+                            openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                            onApplyTrackSelection = { file, autoStart, expandOverride, sourceIdOverride, locationIdOverride, useSongVolumeLookup ->
+                                trackLoadDelegates.applyTrackSelection(
+                                    file,
+                                    autoStart,
+                                    expandOverride,
+                                    sourceIdOverride,
+                                    locationIdOverride,
+                                    useSongVolumeLookup
+                                )
+                            },
+                            onApplyManualInputSelection = { rawInput ->
+                                manualOpenDelegates.applyManualInputSelection(rawInput)
+                            }
+                        )
+                    },
+                    onRecentFolderAction = { entry, action ->
+                        applyRecentFolderAction(
+                            context = context,
+                            prefs = prefs,
+                            entry = entry,
+                            action = action,
+                            recentFolders = recentFolders,
+                            recentFoldersLimit = recentFoldersLimit,
+                            onRecentFoldersChanged = { recentFolders = it }
+                        )
+                    },
+                    onRecentFileAction = { entry, action ->
+                        applyRecentSourceAction(
+                            context = context,
+                            prefs = prefs,
+                            entry = entry,
+                            action = action,
+                            recentPlayedFiles = recentPlayedFiles,
+                            recentFilesLimit = recentFilesLimit,
+                            onRecentPlayedFilesChanged = { recentPlayedFiles = it },
+                            resolveShareableFileForRecent = { recent ->
+                                runtimeDelegates.resolveShareableFileForRecent(recent)
+                            }
+                        )
+                    },
+                    canShareRecentFile = { entry ->
+                        runtimeDelegates.resolveShareableFileForRecent(entry) != null
+                    }
+                )
+            },
+            browserContent = { mainPadding ->
+                AppNavigationBrowserRouteSection(
+                    mainPadding = mainPadding,
+                    repository = repository,
+                    initialLocationId = browserLaunchLocationId
+                        ?: if (rememberBrowserLocation) lastBrowserLocationId else null,
+                    initialDirectoryPath = browserLaunchDirectoryPath
+                        ?: if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
+                    bottomContentPadding = miniPlayerListInset,
+                    backHandlingEnabled = !isPlayerExpanded,
+                    playingFile = selectedFile,
+                    onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
+                    onExitBrowser = { currentView = MainView.Home },
+                    onBrowserLocationChanged = { locationId, directoryPath ->
+                        if (locationId != null && directoryPath != null) {
+                            runtimeDelegates.addRecentFolder(directoryPath, locationId)
+                        }
+                        if (browserLaunchLocationId != null || browserLaunchDirectoryPath != null) {
+                            browserLaunchLocationId = null
+                            browserLaunchDirectoryPath = null
+                        }
+                        if (!rememberBrowserLocation) return@AppNavigationBrowserRouteSection
+                        lastBrowserLocationId = locationId
+                        lastBrowserDirectoryPath = directoryPath
+                        prefs.edit()
+                            .putString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, locationId)
+                            .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, directoryPath)
+                            .apply()
+                    },
+                    onFileSelected = { file ->
+                        trackLoadDelegates.applyTrackSelection(
+                            file = file,
+                            autoStart = autoPlayOnTrackSelect,
+                            expandOverride = openPlayerOnTrackSelect
+                        )
+                    }
+                )
+            },
+            settingsContent = settingsRouteContent
+        )
         PlayerOverlayAndDialogsSection()
     }
 }

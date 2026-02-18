@@ -29,7 +29,7 @@ object AppDefaults {
 
         object Oscilloscope {
             const val stereo = true
-            const val windowMs = 40
+            const val windowMs = 30
             val triggerMode = VisualizationOscTriggerMode.Rising
             val fpsMode = VisualizationOscFpsMode.Default
             val renderBackend = VisualizationRenderBackend.OpenGlTexture

@@ -57,6 +57,7 @@ internal object AppPreferenceKeys {
     const val VISUALIZATION_OSC_WINDOW_MS = "visualization_osc_window_ms"
     const val VISUALIZATION_OSC_TRIGGER_MODE = "visualization_osc_trigger_mode"
     const val VISUALIZATION_OSC_FPS_MODE = "visualization_osc_fps_mode"
+    const val VISUALIZATION_OSC_RENDER_BACKEND = "visualization_osc_render_backend"
     const val VISUALIZATION_OSC_LINE_WIDTH_DP = "visualization_osc_line_width_dp"
     const val VISUALIZATION_OSC_GRID_WIDTH_DP = "visualization_osc_grid_width_dp"
     const val VISUALIZATION_OSC_VERTICAL_GRID_ENABLED = "visualization_osc_vertical_grid_enabled"

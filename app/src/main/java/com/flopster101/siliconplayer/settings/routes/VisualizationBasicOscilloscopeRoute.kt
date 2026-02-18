@@ -14,26 +14,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
-internal data class VisualizationBasicOscilloscopeRouteState(
-    val visualizationOscStereo: Boolean
-)
-
-internal data class VisualizationBasicOscilloscopeRouteActions(
-    val onVisualizationOscStereoChanged: (Boolean) -> Unit
-)
-
 @Composable
 internal fun VisualizationBasicOscilloscopeRouteContent(
-    state: VisualizationBasicOscilloscopeRouteState,
-    actions: VisualizationBasicOscilloscopeRouteActions
+    visualizationOscStereo: Boolean,
+    onVisualizationOscStereoChanged: (Boolean) -> Unit
 ) {
-    val visualizationOscStereo = state.visualizationOscStereo
-    val onVisualizationOscStereoChanged = actions.onVisualizationOscStereoChanged
-
     val prefsName = "silicon_player_settings"
     val oscWindowKey = "visualization_osc_window_ms"
     val oscTriggerKey = "visualization_osc_trigger_mode"
     val oscFpsModeKey = "visualization_osc_fps_mode"
+    val oscRenderBackendKey = "visualization_osc_render_backend"
     val oscLineWidthKey = "visualization_osc_line_width_dp"
     val oscGridWidthKey = "visualization_osc_grid_width_dp"
     val oscVerticalGridEnabledKey = "visualization_osc_vertical_grid_enabled"
@@ -73,6 +63,17 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
                     oscFpsModeKey,
                     AppDefaults.Visualization.Oscilloscope.fpsMode.storageValue
                 )
+            )
+        )
+    }
+    var visualizationOscRenderBackend by remember {
+        mutableStateOf(
+            VisualizationRenderBackend.fromStorage(
+                prefs.getString(
+                    oscRenderBackendKey,
+                    AppDefaults.Visualization.Oscilloscope.renderBackend.storageValue
+                ),
+                AppDefaults.Visualization.Oscilloscope.renderBackend
             )
         )
     }
@@ -177,6 +178,7 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
     var showWindowDialog by remember { mutableStateOf(false) }
     var showTriggerDialog by remember { mutableStateOf(false) }
     var showFpsModeDialog by remember { mutableStateOf(false) }
+    var showRenderBackendDialog by remember { mutableStateOf(false) }
     var showLineWidthDialog by remember { mutableStateOf(false) }
     var showGridWidthDialog by remember { mutableStateOf(false) }
     var showLineNoArtworkColorModeDialog by remember { mutableStateOf(false) }
@@ -213,6 +215,13 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
         description = "Rendering rate for oscilloscope updates.",
         value = visualizationOscFpsMode.label,
         onClick = { showFpsModeDialog = true }
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    SettingsValuePickerCard(
+        title = "Renderer backend",
+        description = "Rendering backend used for oscilloscope drawing.",
+        value = visualizationOscRenderBackend.label,
+        onClick = { showRenderBackendDialog = true }
     )
     Spacer(modifier = Modifier.height(10.dp))
     SettingsValuePickerCard(
@@ -342,6 +351,25 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
                     .apply()
             },
             onDismiss = { showFpsModeDialog = false }
+        )
+    }
+    if (showRenderBackendDialog) {
+        SettingsSingleChoiceDialog(
+            title = "Oscilloscope renderer backend",
+            selectedValue = visualizationOscRenderBackend,
+            options = listOf(
+                VisualizationRenderBackend.Compose,
+                VisualizationRenderBackend.OpenGlTexture
+            ).map { backend ->
+                ChoiceDialogOption(value = backend, label = backend.label)
+            },
+            onSelected = { backend ->
+                visualizationOscRenderBackend = backend
+                prefs.edit()
+                    .putString(oscRenderBackendKey, backend.storageValue)
+                    .apply()
+            },
+            onDismiss = { showRenderBackendDialog = false }
         )
     }
     if (showLineWidthDialog) {

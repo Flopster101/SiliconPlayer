@@ -41,6 +41,7 @@ import com.flopster101.siliconplayer.ui.visualization.channel.ChannelScopeChanne
 import com.flopster101.siliconplayer.ui.visualization.advanced.ChannelScopeVisualization
 import com.flopster101.siliconplayer.ui.visualization.gl.ChannelScopeGlVisualization
 import com.flopster101.siliconplayer.ui.visualization.gl.ChannelScopeGlTextureVisualization
+import com.flopster101.siliconplayer.ui.visualization.gl.OscilloscopeGlTextureVisualization
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.ceil
@@ -70,6 +71,7 @@ fun BasicVisualizationOverlay(
     barColorModeWithArtwork: VisualizationOscColorMode,
     barCustomColorArgb: Int,
     oscStereo: Boolean,
+    oscRenderBackend: VisualizationRenderBackend,
     artwork: ImageBitmap?,
     oscLineWidthDp: Int,
     oscGridWidthDp: Int,
@@ -236,19 +238,39 @@ fun BasicVisualizationOverlay(
         }
 
         VisualizationMode.Oscilloscope -> {
-            OscilloscopeVisualization(
-                waveformLeft = waveformLeft,
-                waveformRight = waveformRight,
-                channelCount = channelCount,
-                oscStereo = oscStereo,
-                oscColor = oscColor,
-                gridColor = oscGridColor,
-                lineWidthPx = oscLineWidthDp.toFloat(),
-                gridWidthPx = oscGridWidthDp.toFloat(),
-                showVerticalGrid = oscVerticalGridEnabled,
-                showCenterLine = oscCenterLineEnabled,
-                modifier = modifier
-            )
+            when (oscRenderBackend) {
+                VisualizationRenderBackend.OpenGlTexture -> {
+                    OscilloscopeGlTextureVisualization(
+                        waveformLeft = waveformLeft,
+                        waveformRight = waveformRight,
+                        channelCount = channelCount,
+                        oscStereo = oscStereo,
+                        lineColor = oscColor,
+                        gridColor = oscGridColor,
+                        lineWidthPx = oscLineWidthDp.toFloat(),
+                        gridWidthPx = oscGridWidthDp.toFloat(),
+                        showVerticalGrid = oscVerticalGridEnabled,
+                        showCenterLine = oscCenterLineEnabled,
+                        onFrameStats = channelScopeOnFrameStats,
+                        modifier = modifier
+                    )
+                }
+                else -> {
+                    OscilloscopeVisualization(
+                        waveformLeft = waveformLeft,
+                        waveformRight = waveformRight,
+                        channelCount = channelCount,
+                        oscStereo = oscStereo,
+                        oscColor = oscColor,
+                        gridColor = oscGridColor,
+                        lineWidthPx = oscLineWidthDp.toFloat(),
+                        gridWidthPx = oscGridWidthDp.toFloat(),
+                        showVerticalGrid = oscVerticalGridEnabled,
+                        showCenterLine = oscCenterLineEnabled,
+                        modifier = modifier
+                    )
+                }
+            }
         }
 
         VisualizationMode.VuMeters -> {

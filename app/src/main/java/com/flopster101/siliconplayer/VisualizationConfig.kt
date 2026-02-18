@@ -40,10 +40,10 @@ enum class VisualizationRenderBackend(
 
 fun visualizationRenderBackendForMode(mode: VisualizationMode): VisualizationRenderBackend {
     return when (mode) {
+        VisualizationMode.Oscilloscope -> VisualizationRenderBackend.OpenGlTexture
         VisualizationMode.ChannelScope -> VisualizationRenderBackend.OpenGlTexture
         VisualizationMode.Off,
         VisualizationMode.Bars,
-        VisualizationMode.Oscilloscope,
         VisualizationMode.VuMeters -> VisualizationRenderBackend.Compose
     }
 }

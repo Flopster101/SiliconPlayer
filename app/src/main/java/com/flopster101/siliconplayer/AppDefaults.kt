@@ -31,6 +31,7 @@ object AppDefaults {
             const val windowMs = 40
             val triggerMode = VisualizationOscTriggerMode.Rising
             val fpsMode = VisualizationOscFpsMode.Default
+            val renderBackend = VisualizationRenderBackend.OpenGlTexture
             const val lineWidthDp = 3
             const val gridWidthDp = 2
             const val verticalGridEnabled = false

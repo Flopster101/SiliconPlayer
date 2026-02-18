@@ -88,11 +88,13 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import android.view.MotionEvent
+import com.flopster101.siliconplayer.AppDefaults
 import com.flopster101.siliconplayer.RepeatMode
 import com.flopster101.siliconplayer.VisualizationMode
 import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
 import com.flopster101.siliconplayer.VisualizationOscColorMode
 import com.flopster101.siliconplayer.VisualizationOscFpsMode
+import com.flopster101.siliconplayer.VisualizationRenderBackend
 import com.flopster101.siliconplayer.VisualizationVuAnchor
 import com.flopster101.siliconplayer.pluginNameForCoreName
 import com.flopster101.siliconplayer.ui.dialogs.VisualizationModePickerDialog
@@ -190,6 +192,7 @@ fun PlayerScreen(
     val oscLineWidthKey = "visualization_osc_line_width_dp"
     val oscGridWidthKey = "visualization_osc_grid_width_dp"
     val oscFpsModeKey = "visualization_osc_fps_mode"
+    val oscRenderBackendKey = "visualization_osc_render_backend"
     val oscVerticalGridEnabledKey = "visualization_osc_vertical_grid_enabled"
     val oscCenterLineEnabledKey = "visualization_osc_center_line_enabled"
     val oscLineNoArtworkColorModeKey = "visualization_osc_line_color_mode_no_artwork"
@@ -220,6 +223,17 @@ fun PlayerScreen(
         mutableStateOf(
             VisualizationOscFpsMode.fromStorage(
                 prefs.getString(oscFpsModeKey, VisualizationOscFpsMode.Default.storageValue)
+            )
+        )
+    }
+    var visualizationOscRenderBackend by remember {
+        mutableStateOf(
+            VisualizationRenderBackend.fromStorage(
+                prefs.getString(
+                    oscRenderBackendKey,
+                    AppDefaults.Visualization.Oscilloscope.renderBackend.storageValue
+                ),
+                AppDefaults.Visualization.Oscilloscope.renderBackend
             )
         )
     }
@@ -332,6 +346,15 @@ fun PlayerScreen(
                 oscFpsModeKey -> {
                     visualizationOscFpsMode = VisualizationOscFpsMode.fromStorage(
                         sharedPrefs.getString(oscFpsModeKey, VisualizationOscFpsMode.Default.storageValue)
+                    )
+                }
+                oscRenderBackendKey -> {
+                    visualizationOscRenderBackend = VisualizationRenderBackend.fromStorage(
+                        sharedPrefs.getString(
+                            oscRenderBackendKey,
+                            AppDefaults.Visualization.Oscilloscope.renderBackend.storageValue
+                        ),
+                        AppDefaults.Visualization.Oscilloscope.renderBackend
                     )
                 }
 
@@ -671,6 +694,7 @@ fun PlayerScreen(
                         visualizationOscWindowMs = visualizationOscWindowMs,
                         visualizationOscTriggerModeNative = visualizationOscTriggerModeNative,
                         visualizationOscFpsMode = visualizationOscFpsMode,
+                        visualizationOscRenderBackend = visualizationOscRenderBackend,
                         visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
                         visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
                         barCount = visualizationBarCount,
@@ -809,6 +833,7 @@ fun PlayerScreen(
                         visualizationOscWindowMs = visualizationOscWindowMs,
                         visualizationOscTriggerModeNative = visualizationOscTriggerModeNative,
                         visualizationOscFpsMode = visualizationOscFpsMode,
+                        visualizationOscRenderBackend = visualizationOscRenderBackend,
                         visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
                         visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
                         barCount = visualizationBarCount,

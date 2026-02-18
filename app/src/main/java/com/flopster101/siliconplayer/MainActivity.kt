@@ -3596,6 +3596,10 @@ private fun AppNavigation(
                                     AppPreferenceKeys.VISUALIZATION_OSC_FPS_MODE,
                                     AppDefaults.Visualization.Oscilloscope.fpsMode.storageValue
                                 )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_RENDER_BACKEND,
+                                    AppDefaults.Visualization.Oscilloscope.renderBackend.storageValue
+                                )
                                 .putInt(
                                     AppPreferenceKeys.VISUALIZATION_OSC_LINE_WIDTH_DP,
                                     AppDefaults.Visualization.Oscilloscope.lineWidthDp
@@ -4003,6 +4007,10 @@ private fun AppNavigation(
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_OSC_FPS_MODE,
                                     AppDefaults.Visualization.Oscilloscope.fpsMode.storageValue
+                                )
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_OSC_RENDER_BACKEND,
+                                    AppDefaults.Visualization.Oscilloscope.renderBackend.storageValue
                                 )
                                 .putInt(
                                     AppPreferenceKeys.VISUALIZATION_OSC_LINE_WIDTH_DP,

@@ -969,12 +969,8 @@ internal fun SettingsScreen(
                     }
                     SettingsRoute.VisualizationBasicOscilloscope -> {
                         VisualizationBasicOscilloscopeRouteContent(
-                            state = VisualizationBasicOscilloscopeRouteState(
-                                visualizationOscStereo = visualizationOscStereo
-                            ),
-                            actions = VisualizationBasicOscilloscopeRouteActions(
-                                onVisualizationOscStereoChanged = onVisualizationOscStereoChanged
-                            )
+                            visualizationOscStereo = visualizationOscStereo,
+                            onVisualizationOscStereoChanged = onVisualizationOscStereoChanged
                         )
                     }
                     SettingsRoute.VisualizationBasicVuMeters -> {

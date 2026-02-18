@@ -712,6 +712,7 @@ internal fun AlbumArtPlaceholder(
     visualizationOscWindowMs: Int,
     visualizationOscTriggerModeNative: Int,
     visualizationOscFpsMode: VisualizationOscFpsMode,
+    visualizationOscRenderBackend: VisualizationRenderBackend,
     visualizationBarSmoothingPercent: Int,
     visualizationVuSmoothingPercent: Int,
     barCount: Int,
@@ -766,6 +767,8 @@ internal fun AlbumArtPlaceholder(
         mutableStateOf(
             if (visualizationMode == VisualizationMode.ChannelScope) {
                 channelScopePrefs.renderBackend
+            } else if (visualizationMode == VisualizationMode.Oscilloscope) {
+                visualizationOscRenderBackend
             } else {
                 visualizationRenderBackendForMode(visualizationMode)
             }
@@ -819,10 +822,13 @@ internal fun AlbumArtPlaceholder(
     }
     LaunchedEffect(
         visualizationMode,
+        visualizationOscRenderBackend,
         channelScopePrefs.renderBackend
     ) {
         val nextBackend = if (visualizationMode == VisualizationMode.ChannelScope) {
             channelScopePrefs.renderBackend
+        } else if (visualizationMode == VisualizationMode.Oscilloscope) {
+            visualizationOscRenderBackend
         } else {
             visualizationRenderBackendForMode(visualizationMode)
         }
@@ -1164,6 +1170,8 @@ internal fun AlbumArtPlaceholder(
     }
     val activeRenderBackend = if (visualizationMode == VisualizationMode.ChannelScope) {
         channelScopePrefs.renderBackend
+    } else if (visualizationMode == VisualizationMode.Oscilloscope) {
+        visualizationOscRenderBackend
     } else {
         visualizationRenderBackendForMode(visualizationMode)
     }
@@ -1270,6 +1278,7 @@ internal fun AlbumArtPlaceholder(
                 barColorModeWithArtwork = barColorModeWithArtwork,
                 barCustomColorArgb = barCustomColorArgb,
                 oscStereo = oscStereo,
+                oscRenderBackend = visualizationOscRenderBackend,
                 artwork = artwork,
                 oscLineWidthDp = oscLineWidthDp,
                 oscGridWidthDp = oscGridWidthDp,

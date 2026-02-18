@@ -13,6 +13,7 @@ internal data class AppNavigationRuntimeDelegates(
     val addRecentFolder: (String, String?) -> Unit,
     val addRecentPlayedTrack: (String, String?, String?, String?) -> Unit,
     val scheduleRecentTrackMetadataRefresh: (String, String?) -> Unit,
+    val scheduleRecentPlayedMetadataBackfill: () -> Unit,
     val refreshRepeatModeForTrack: () -> Unit,
     val cycleRepeatMode: () -> Unit
 )
@@ -111,6 +112,15 @@ internal fun buildAppNavigationRuntimeDelegates(
                 selectedFileProvider = selectedFileProvider,
                 currentPlaybackSourceIdProvider = currentPlaybackSourceIdProvider,
                 onAddRecentPlayedTrack = addRecentPlayedTrack
+            )
+        },
+        scheduleRecentPlayedMetadataBackfill = {
+            scheduleRecentPlayedMetadataBackfillAction(
+                appScope = appScope,
+                recentPlayedProvider = recentPlayedFilesProvider,
+                recentFilesLimitProvider = recentFilesLimitProvider,
+                onRecentPlayedChanged = onRecentPlayedChanged,
+                prefs = prefs
             )
         },
         refreshRepeatModeForTrack = {

@@ -1,6 +1,5 @@
 package com.flopster101.siliconplayer
 
-import android.media.MediaMetadataRetriever
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeSpacing
 import androidx.compose.foundation.basicMarquee
@@ -34,7 +33,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,8 +43,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import java.io.File
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 private val HomeCardShape = RoundedCornerShape(16.dp)
 
@@ -417,54 +413,12 @@ internal fun RecentTrackSummaryText(
     extensionLabel: String
 ) {
     val fallback = file.nameWithoutExtension.ifBlank { file.name }
-    val display by produceState(
-        initialValue = RecentTrackDisplay(
-            primaryText = fallback,
-            includeFilenameInSubtitle = false
-        ),
-        key1 = file.absolutePath,
-        key2 = cachedTitle,
-        key3 = cachedArtist
-    ) {
-        value = withContext(Dispatchers.IO) {
-            val cachedTitleValue = cachedTitle?.trim().orEmpty()
-            val cachedArtistValue = cachedArtist?.trim().orEmpty()
-            try {
-                val result = if (cachedTitleValue.isNotBlank() || cachedArtistValue.isNotBlank()) {
-                    buildRecentTrackDisplay(
-                        title = cachedTitleValue,
-                        artist = cachedArtistValue,
-                        fallback = fallback
-                    )
-                } else {
-                    val retriever = MediaMetadataRetriever()
-                    try {
-                        retriever.setDataSource(file.absolutePath)
-                        val title = retriever
-                            .extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-                            ?.trim()
-                            .orEmpty()
-                        val artist = retriever
-                            .extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-                            ?.trim()
-                            .orEmpty()
-                        buildRecentTrackDisplay(
-                            title = title,
-                            artist = artist,
-                            fallback = fallback
-                        )
-                    } finally {
-                        retriever.release()
-                    }
-                }
-                result
-            } catch (_: Exception) {
-                RecentTrackDisplay(
-                    primaryText = fallback,
-                    includeFilenameInSubtitle = false
-                )
-            }
-        }
+    val display = remember(file.absolutePath, cachedTitle, cachedArtist) {
+        buildRecentTrackDisplay(
+            title = cachedTitle?.trim().orEmpty(),
+            artist = cachedArtist?.trim().orEmpty(),
+            fallback = fallback
+        )
     }
     val shouldMarquee = display.primaryText.length > 28
     if (shouldMarquee) {

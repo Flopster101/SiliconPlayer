@@ -8,6 +8,7 @@ import com.flopster101.siliconplayer.playback.resolveSubtuneUiState
 import com.flopster101.siliconplayer.playback.syncPlaybackServiceFromUiState
 import com.flopster101.siliconplayer.session.addRecentFolderEntry
 import com.flopster101.siliconplayer.session.addRecentPlayedTrackEntry
+import com.flopster101.siliconplayer.session.scheduleRecentPlayedMetadataBackfill as scheduleRecentPlayedMetadataBackfillInSession
 import com.flopster101.siliconplayer.session.scheduleRecentTrackMetadataRefresh as scheduleRecentTrackMetadataRefreshInSession
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
@@ -119,6 +120,24 @@ internal fun scheduleRecentTrackMetadataRefreshAction(
         selectedFileProvider = selectedFileProvider,
         currentPlaybackSourceIdProvider = currentPlaybackSourceIdProvider,
         onAddRecentPlayedTrack = onAddRecentPlayedTrack
+    )
+}
+
+internal fun scheduleRecentPlayedMetadataBackfillAction(
+    appScope: CoroutineScope,
+    recentPlayedProvider: () -> List<RecentPathEntry>,
+    recentFilesLimitProvider: () -> Int,
+    onRecentPlayedChanged: (List<RecentPathEntry>) -> Unit,
+    prefs: SharedPreferences
+) {
+    scheduleRecentPlayedMetadataBackfillInSession(
+        scope = appScope,
+        currentProvider = recentPlayedProvider,
+        limitProvider = recentFilesLimitProvider,
+        onRecentPlayedChanged = onRecentPlayedChanged,
+        writeRecentPlayed = { entries, max ->
+            writeRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, entries, max)
+        }
     )
 }
 

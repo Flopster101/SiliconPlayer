@@ -783,6 +783,10 @@ private fun AppNavigation(
         applyRepeatModeToNative = { mode -> applyRepeatModeToNative(mode) }
     )
 
+    LaunchedEffect(recentPlayedFiles, recentFilesLimit) {
+        runtimeDelegates.scheduleRecentPlayedMetadataBackfill()
+    }
+
     val playbackStateDelegates = AppNavigationPlaybackStateDelegates(
         context = context,
         prefs = prefs,

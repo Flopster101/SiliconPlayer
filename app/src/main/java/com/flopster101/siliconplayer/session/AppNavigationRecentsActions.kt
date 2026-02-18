@@ -1,14 +1,24 @@
 package com.flopster101.siliconplayer.session
 
+import android.media.MediaMetadataRetriever
+import android.net.Uri
 import com.flopster101.siliconplayer.RecentPathEntry
 import com.flopster101.siliconplayer.samePath
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.buildUpdatedRecentFolders
 import com.flopster101.siliconplayer.buildUpdatedRecentPlayedTracks
+import com.flopster101.siliconplayer.mergeRecentPlayedTrackMetadata
+import com.flopster101.siliconplayer.normalizeSourceIdentity
+import java.util.Locale
 import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+private var recentPlayedMetadataBackfillJob: Job? = null
 
 internal fun addRecentFolderEntry(
     current: List<RecentPathEntry>,
@@ -76,5 +86,76 @@ internal fun scheduleRecentTrackMetadataRefresh(
                 return@launch
             }
         }
+    }
+}
+
+internal fun scheduleRecentPlayedMetadataBackfill(
+    scope: CoroutineScope,
+    currentProvider: () -> List<RecentPathEntry>,
+    limitProvider: () -> Int,
+    onRecentPlayedChanged: (List<RecentPathEntry>) -> Unit,
+    writeRecentPlayed: (List<RecentPathEntry>, Int) -> Unit
+) {
+    recentPlayedMetadataBackfillJob?.cancel()
+    recentPlayedMetadataBackfillJob = scope.launch(Dispatchers.IO) {
+        delay(250L)
+        val limit = limitProvider().coerceAtLeast(1)
+        val snapshot = currentProvider().take(limit)
+        if (snapshot.isEmpty()) return@launch
+
+        var working = currentProvider()
+        var changed = false
+        snapshot.forEach { entry ->
+            if (!entry.title.isNullOrBlank() || !entry.artist.isNullOrBlank()) return@forEach
+            val metadata = readLocalTrackMetadata(entry.path) ?: return@forEach
+            val merged = mergeRecentPlayedTrackMetadata(
+                current = working,
+                path = entry.path,
+                title = metadata.first,
+                artist = metadata.second
+            )
+            if (merged != working) {
+                working = merged
+                changed = true
+            }
+        }
+
+        if (!changed) return@launch
+        withContext(Dispatchers.Main.immediate) {
+            onRecentPlayedChanged(working)
+        }
+        writeRecentPlayed(working, limit)
+    }
+}
+
+private fun readLocalTrackMetadata(sourceId: String): Pair<String, String>? {
+    val normalized = normalizeSourceIdentity(sourceId) ?: sourceId
+    val uri = Uri.parse(normalized)
+    val scheme = uri.scheme?.lowercase(Locale.ROOT)
+    val localPath = when (scheme) {
+        null -> normalized
+        "file" -> uri.path ?: return null
+        "http", "https" -> return null
+        else -> normalized
+    }
+    val file = File(localPath)
+    if (!file.exists() || !file.isFile) return null
+
+    val retriever = MediaMetadataRetriever()
+    return try {
+        retriever.setDataSource(file.absolutePath)
+        val title = retriever
+            .extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+            ?.trim()
+            .orEmpty()
+        val artist = retriever
+            .extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+            ?.trim()
+            .orEmpty()
+        if (title.isBlank() && artist.isBlank()) null else Pair(title, artist)
+    } catch (_: Throwable) {
+        null
+    } finally {
+        retriever.release()
     }
 }

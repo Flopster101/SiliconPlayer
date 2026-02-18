@@ -336,6 +336,31 @@ internal fun buildUpdatedRecentPlayedTracks(
     return updated.take(limit)
 }
 
+internal fun mergeRecentPlayedTrackMetadata(
+    current: List<RecentPathEntry>,
+    path: String,
+    title: String?,
+    artist: String?
+): List<RecentPathEntry> {
+    val normalized = normalizeSourceIdentity(path) ?: path
+    val normalizedTitle = title?.trim().takeUnless { it.isNullOrBlank() }
+    val normalizedArtist = artist?.trim().takeUnless { it.isNullOrBlank() }
+    if (normalizedTitle == null && normalizedArtist == null) return current
+    var changed = false
+    val updated = current.map { entry ->
+        if (!samePath(entry.path, normalized)) return@map entry
+        val resolvedTitle = normalizedTitle ?: entry.title
+        val resolvedArtist = normalizedArtist ?: entry.artist
+        if (resolvedTitle == entry.title && resolvedArtist == entry.artist) {
+            entry
+        } else {
+            changed = true
+            entry.copy(title = resolvedTitle, artist = resolvedArtist)
+        }
+    }
+    return if (changed) updated else current
+}
+
 internal fun resolveShareableFileForRecentEntry(
     context: Context,
     entry: RecentPathEntry

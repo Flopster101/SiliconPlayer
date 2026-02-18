@@ -106,11 +106,10 @@ internal fun isVisualizationModeSelectable(
     enabledModes: Set<VisualizationMode>,
     coreNameForUi: String?
 ): Boolean {
-    if (!isVisualizationModeSupported(mode, coreNameForUi)) return false
-    return when (mode) {
-        VisualizationMode.ChannelScope -> true
-        else -> enabledModes.contains(mode)
-    }
+    // Selection is the intersection of the user-enabled visualization pool and
+    // what the current core can actually render at runtime.
+    if (!enabledModes.contains(mode)) return false
+    return isVisualizationModeSupported(mode, coreNameForUi)
 }
 
 internal fun defaultChannelScopeTextSizeSp(context: Context): Int {

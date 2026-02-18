@@ -115,6 +115,7 @@ private:
     std::vector<int16_t> mixedScratchSamples;
     std::atomic<double> playbackPositionSecondsAtomic { 0.0 };
     std::atomic<double> currentSubtuneDurationSecondsAtomic { 180.0 };
+    std::atomic<bool> durationReliableAtomic { false };
     SidBackend selectedBackend = SidBackend::ReSIDfp;
     SidBackend activeBackend = SidBackend::ReSIDfp;
     SidClockMode sidClockMode = SidClockMode::Auto;

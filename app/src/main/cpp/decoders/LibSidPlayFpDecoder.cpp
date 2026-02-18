@@ -334,6 +334,7 @@ void LibSidPlayFpDecoder::refreshMetadataLocked() {
     subtuneTitles.assign(std::max(1, subtuneCount), "");
     subtuneArtists.assign(std::max(1, subtuneCount), "");
     subtuneDurationsSeconds.assign(std::max(1, subtuneCount), fallbackDurationSeconds);
+    durationReliableAtomic.store(false, std::memory_order_relaxed);
 
     if (!tune) return;
     const SidTuneInfo* info = tune->getInfo();
@@ -481,6 +482,7 @@ bool LibSidPlayFpDecoder::openInternalLocked(const char* path) {
         fallbackDurationSeconds = kDefaultSidDurationSeconds;
     }
     currentSubtuneDurationSecondsAtomic.store(fallbackDurationSeconds, std::memory_order_relaxed);
+    durationReliableAtomic.store(false, std::memory_order_relaxed);
     playbackPositionSecondsAtomic.store(0.0, std::memory_order_relaxed);
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
@@ -524,6 +526,7 @@ bool LibSidPlayFpDecoder::open(const char* path) {
     sidCommentSummary.clear();
     playbackPositionSecondsAtomic.store(0.0, std::memory_order_relaxed);
     currentSubtuneDurationSecondsAtomic.store(fallbackDurationSeconds, std::memory_order_relaxed);
+    durationReliableAtomic.store(false, std::memory_order_relaxed);
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
     mixedScratchSamples.clear();
@@ -995,10 +998,13 @@ void LibSidPlayFpDecoder::setRepeatMode(int mode) {
 }
 
 int LibSidPlayFpDecoder::getPlaybackCapabilities() const {
-    return PLAYBACK_CAP_SEEK |
-           PLAYBACK_CAP_RELIABLE_DURATION |
-           PLAYBACK_CAP_LIVE_REPEAT_MODE |
-           PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
+    int capabilities = PLAYBACK_CAP_SEEK |
+                       PLAYBACK_CAP_LIVE_REPEAT_MODE |
+                       PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
+    if (durationReliableAtomic.load(std::memory_order_relaxed)) {
+        capabilities |= PLAYBACK_CAP_RELIABLE_DURATION;
+    }
+    return capabilities;
 }
 
 int LibSidPlayFpDecoder::getRepeatModeCapabilities() const {

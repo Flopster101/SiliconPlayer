@@ -89,7 +89,7 @@ object GmeDefaults {
 
 object SidPlayFpDefaults {
     const val coreSampleRateHz = 0
-    const val backend = 2 // 0 ReSIDfp, 1 SIDLite, 2 ReSID
+    const val backend = 0 // 0 ReSIDfp, 1 SIDLite, 2 ReSID
     const val clockMode = 0 // 0 Auto, 1 PAL, 2 NTSC
     const val sidModelMode = 0 // 0 Auto, 1 MOS6581, 2 MOS8580
     const val filter6581Enabled = true

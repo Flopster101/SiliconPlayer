@@ -1059,11 +1059,13 @@ private fun TrackInfoChips(
     } else {
         "--kHz"
     }
+    val showBitDepth = decoderName.equals("FFmpeg", ignoreCase = true)
     val depthDisplay = bitDepthLabel.ifBlank { "Unknown" }
-    val channelsAndDepth = if (channelCount > 0) {
-        "${channelCount}ch/$depthDisplay"
-    } else {
-        depthDisplay
+    val channelsAndDepth = when {
+        channelCount > 0 && showBitDepth -> "${channelCount}ch/$depthDisplay"
+        channelCount > 0 -> "${channelCount}ch"
+        showBitDepth -> depthDisplay
+        else -> "--ch"
     }
 
     val screenWidthDp = LocalConfiguration.current.screenWidthDp

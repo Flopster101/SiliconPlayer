@@ -122,7 +122,7 @@ internal class VgmPlaySettings(
                 custom {
                     SampleRateSelectorCard(
                         title = "Render sample rate",
-                        description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
+                        description = "Preferred internal render sample rate for this core. Audio is resampled to the active output stream rate.",
                         selectedHz = sampleRateHz,
                         enabled = supportsCustomSampleRate(capabilities),
                         onSelected = onSampleRateChanged

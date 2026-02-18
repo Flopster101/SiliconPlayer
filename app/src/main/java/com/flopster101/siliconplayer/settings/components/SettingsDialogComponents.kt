@@ -109,8 +109,8 @@ internal fun SettingsTextInputDialog(
 
 @Composable
 internal fun SettingsPriorityPickerDialog(
-    title: String = "Set plugin priority",
-    description: String = "Priorities are order indexes: 0 is first. Values stay sequential to match the plugin list.",
+    title: String = "Set core priority",
+    description: String = "Priorities are order indexes: 0 is first. Values stay sequential to match the core list.",
     currentValue: Int,
     maxValue: Int,
     onDismiss: () -> Unit,

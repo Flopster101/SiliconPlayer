@@ -92,8 +92,8 @@ internal fun RootRouteContent(
 
     SettingsSectionLabel("General")
     SettingsItemCard(
-        title = "Audio plugins",
-        description = "Configure each playback core/plugin.",
+        title = "Audio cores",
+        description = "Configure each playback core.",
         icon = Icons.Default.GraphicEq,
         onClick = onOpenAudioPlugins
     )
@@ -164,7 +164,7 @@ internal fun RootRouteContent(
     SettingsSectionLabel("Danger zone")
     SettingsItemCard(
         title = "Clear all app settings",
-        description = "Reset app settings to defaults. Plugin/core settings are kept.",
+        description = "Reset app settings to defaults. Core settings are kept.",
         icon = Icons.Default.MoreHoriz,
         onClick = onRequestClearAllSettings
     )
@@ -322,7 +322,7 @@ internal fun PluginOpenMptRouteContent(
     SettingsSectionLabel("Generic output options")
     SampleRateSelectorCard(
         title = "Render sample rate",
-        description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
+        description = "Preferred internal render sample rate for this core. Audio is resampled to the active output stream rate.",
         selectedHz = openMptSampleRateHz,
         enabled = supportsCustomSampleRate(openMptCapabilities),
         onSelected = onOpenMptSampleRateChanged

@@ -560,12 +560,12 @@ internal fun SettingsScreen(
     }
     val secondaryTitle = when (route) {
         SettingsRoute.Root -> null
-        SettingsRoute.AudioPlugins -> "Audio plugins"
-        SettingsRoute.PluginDetail -> selectedPluginName?.let { "$it plugin settings" } ?: "Plugin settings"
+        SettingsRoute.AudioPlugins -> "Audio cores"
+        SettingsRoute.PluginDetail -> selectedPluginName?.let { "$it core settings" } ?: "Core settings"
         SettingsRoute.PluginVgmPlayChipSettings -> "VGMPlay chip settings"
-        SettingsRoute.PluginFfmpeg -> "FFmpeg plugin settings"
-        SettingsRoute.PluginOpenMpt -> "OpenMPT plugin settings"
-        SettingsRoute.PluginVgmPlay -> "VGMPlay plugin settings"
+        SettingsRoute.PluginFfmpeg -> "FFmpeg core settings"
+        SettingsRoute.PluginOpenMpt -> "OpenMPT core settings"
+        SettingsRoute.PluginVgmPlay -> "VGMPlay core settings"
         SettingsRoute.UrlCache -> "Cache settings"
         SettingsRoute.CacheManager -> "Manage cached files"
         SettingsRoute.GeneralAudio -> "General audio"
@@ -791,7 +791,7 @@ internal fun SettingsScreen(
                     SettingsRoute.PluginFfmpeg -> PluginSampleRateRouteContent(
                         state = PluginSampleRateRouteState(
                             title = "Render sample rate",
-                            description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
+                            description = "Preferred internal render sample rate for this core. Audio is resampled to the active output stream rate.",
                             selectedHz = ffmpegSampleRateHz,
                             enabled = supportsCustomSampleRate(ffmpegCapabilities)
                         ),
@@ -802,7 +802,7 @@ internal fun SettingsScreen(
                     SettingsRoute.PluginVgmPlay -> PluginSampleRateRouteContent(
                         state = PluginSampleRateRouteState(
                             title = "Render sample rate",
-                            description = "Preferred internal render sample rate for this plugin. Audio is resampled to the active output stream rate.",
+                            description = "Preferred internal render sample rate for this core. Audio is resampled to the active output stream rate.",
                             selectedHz = vgmPlaySampleRateHz,
                             enabled = supportsCustomSampleRate(vgmPlayCapabilities)
                         ),
@@ -1143,7 +1143,7 @@ private fun SettingsSecondaryHeader(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.SwapVert,
-                                    contentDescription = if (pluginPriorityEditMode) "Finish reorder mode" else "Edit plugin order",
+                                    contentDescription = if (pluginPriorityEditMode) "Finish reorder mode" else "Edit core order",
                                     tint = if (pluginPriorityEditMode) {
                                         MaterialTheme.colorScheme.onPrimaryContainer
                                     } else {
@@ -1164,7 +1164,7 @@ private fun SettingsSecondaryHeader(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Restore,
-                                    contentDescription = "Reset plugin settings",
+                                    contentDescription = "Reset core settings",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(18.dp)
                                 )

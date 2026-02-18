@@ -17,15 +17,15 @@ internal fun SettingsResetDialogHost(
         when (action) {
             SettingsResetAction.ClearAllSettings -> {
                 title = "Clear all app settings?"
-                message = "This resets app settings to defaults and keeps plugin settings unchanged."
+                message = "This resets app settings to defaults and keeps core settings unchanged."
                 confirmText = "Clear app settings"
                 onConfirm = onConfirmClearAllSettings
             }
 
             SettingsResetAction.ClearPluginSettings -> {
-                title = "Clear all plugin settings?"
-                message = "This resets all plugin/core settings to defaults and keeps app settings unchanged."
-                confirmText = "Clear plugin settings"
+                title = "Clear all core settings?"
+                message = "This resets all core settings to defaults and keeps app settings unchanged."
+                confirmText = "Clear core settings"
                 onConfirm = onConfirmClearAllPluginSettings
             }
         }
@@ -48,8 +48,8 @@ internal fun PluginResetDialogHost(
 ) {
     pendingPluginResetName?.let { pluginName ->
         SettingsConfirmDialog(
-            title = "Reset $pluginName settings?",
-            message = "This resets only $pluginName plugin/core settings to defaults.",
+            title = "Reset $pluginName core settings?",
+            message = "This resets only $pluginName core settings to defaults.",
             confirmLabel = "Reset",
             onDismiss = onDismiss,
             onConfirm = { onConfirmResetPluginSettings(pluginName) }

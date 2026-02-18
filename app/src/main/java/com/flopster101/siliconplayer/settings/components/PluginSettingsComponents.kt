@@ -188,10 +188,10 @@ internal fun PluginDetailScreen(
     var showExtensionsDialog by remember { mutableStateOf(false) }
 
     Column {
-        SettingsSectionLabel("Plugin status")
+        SettingsSectionLabel("Core status")
         PlayerSettingToggleCard(
-            title = "Enable plugin",
-            description = "When disabled, this plugin will not be used for any files.",
+            title = "Enable core",
+            description = "When disabled, this core will not be used for any files.",
             checked = isEnabled,
             onCheckedChange = { enabled ->
                 isEnabled = enabled
@@ -203,8 +203,8 @@ internal fun PluginDetailScreen(
 
         SettingsSectionLabel("Priority")
         SettingsItemCard(
-            title = "Plugin order index: $priority",
-            description = "Priority values are kept sequential and match the plugin list order. 0 is first.",
+            title = "Core order index: $priority",
+            description = "Priority values are kept sequential and match the core list order. 0 is first.",
             icon = Icons.Default.Tune,
             onClick = { showPriorityDialog = true }
         )
@@ -216,7 +216,7 @@ internal fun PluginDetailScreen(
         val totalCount = supportedExtensions.size
         SettingsItemCard(
             title = "$enabledCount of $totalCount extensions enabled",
-            description = "Select which file extensions this plugin should handle.",
+            description = "Select which file extensions this core should handle.",
             icon = Icons.Default.MusicNote,
             onClick = { showExtensionsDialog = true }
         )

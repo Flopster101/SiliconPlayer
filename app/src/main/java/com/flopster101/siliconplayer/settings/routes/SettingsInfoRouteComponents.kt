@@ -152,7 +152,7 @@ internal fun ClearAudioParametersCard(
                 )
                 Spacer(modifier = Modifier.size(4.dp))
                 Text(
-                    text = "Reset volume settings for all, plugins, or songs",
+                    text = "Reset volume settings for all, cores, or songs",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -171,7 +171,7 @@ internal fun ClearAudioParametersCard(
             message = "Choose which audio parameters to reset:",
             actions = listOf(
                 SettingsActionDialogItem("Clear all", onClearAll),
-                SettingsActionDialogItem("Clear plugin volumes", onClearPlugins),
+                SettingsActionDialogItem("Clear core volumes", onClearPlugins),
                 SettingsActionDialogItem("Clear song volumes", onClearSongs)
             ),
             onDismiss = { showDialog = false }

@@ -52,7 +52,7 @@ internal fun AudioPluginsRouteContent(
     val onRequestClearPluginSettings = actions.onRequestClearPluginSettings
 
     val context = LocalContext.current
-    SettingsSectionLabel("Registered plugins")
+    SettingsSectionLabel("Registered cores")
 
     val registeredPluginNames = remember { NativeBridge.getRegisteredDecoderNames().toList() }
     val defaultPluginOrder = remember(registeredPluginNames) {
@@ -121,7 +121,7 @@ internal fun AudioPluginsRouteContent(
 
     if (pluginPriorityEditMode) {
         Text(
-            text = "Drag plugins to set priority order. Top item has highest priority.",
+            text = "Drag cores to set priority order. Top item has highest priority.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -251,15 +251,15 @@ internal fun AudioPluginsRouteContent(
     Spacer(modifier = Modifier.height(16.dp))
     SettingsSectionLabel("Danger zone")
     SettingsItemCard(
-        title = "Clear all plugin settings",
-        description = "Reset all plugin/core settings to defaults without changing app settings.",
+        title = "Clear all core settings",
+        description = "Reset all core settings to defaults without changing app settings.",
         icon = Icons.Default.MoreHoriz,
         onClick = onRequestClearPluginSettings
     )
     Spacer(modifier = Modifier.height(10.dp))
     SettingsItemCard(
-        title = "Reset plugin priority order",
-        description = "Restore plugin order to built-in defaults and renumber priorities sequentially.",
+        title = "Reset core priority order",
+        description = "Restore core order to built-in defaults and renumber priorities sequentially.",
         icon = Icons.Default.Tune,
         onClick = {
             orderedPluginNames = defaultPluginOrder
@@ -269,7 +269,7 @@ internal fun AudioPluginsRouteContent(
             dragSwapRemainderPx = 0f
             dragStartIndex = -1
             orderDirty = false
-            Toast.makeText(context, "Plugin priority order reset", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Core priority order reset", Toast.LENGTH_SHORT).show()
         }
     )
 }

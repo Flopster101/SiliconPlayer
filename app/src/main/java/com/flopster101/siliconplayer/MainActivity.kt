@@ -113,8 +113,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.vectorResource
 import com.flopster101.siliconplayer.playback.loadPlayableSiblingFilesForExternalIntent
 import com.flopster101.siliconplayer.session.exportCachedFilesToTree
-import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import com.flopster101.siliconplayer.ui.dialogs.AudioEffectsDialog
+import com.flopster101.siliconplayer.ui.dialogs.RemoteLoadProgressDialog
+import com.flopster101.siliconplayer.ui.dialogs.SoxExperimentalDialog
+import com.flopster101.siliconplayer.ui.dialogs.SubtuneSelectorDialog
+import com.flopster101.siliconplayer.ui.dialogs.UrlOrPathDialog
+import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -3320,7 +3324,7 @@ private fun AppNavigation(
                             clearAllDecoderPluginVolumes(prefs)
                             pluginVolumeDb = 0f
                             NativeBridge.setPluginGain(0f)
-                            Toast.makeText(context, "Plugin volume cleared", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Core volume cleared", Toast.LENGTH_SHORT).show()
                         },
                                     onClearSongAudioParameters = {
                             // Clear all song volumes from database
@@ -4322,7 +4326,7 @@ private fun AppNavigation(
 
                             Toast.makeText(
                                 context,
-                                "Plugin settings cleared",
+                                "Core settings cleared",
                                 Toast.LENGTH_SHORT
                             ).show()
                         },
@@ -4503,7 +4507,7 @@ private fun AppNavigation(
                                 if (requiresPlaybackRestart) {
                                     "Settings reset. Playback restart needed for some changes."
                                 } else {
-                                    "$pluginName settings reset"
+                                    "$pluginName core settings reset"
                                 },
                                 Toast.LENGTH_SHORT
                             ).show()
@@ -4863,223 +4867,51 @@ private fun AppNavigation(
             }
 
             if (showUrlOrPathDialog) {
-                AlertDialog(
-                    onDismissRequest = { showUrlOrPathDialog = false },
-                    title = { Text("Open URL or path") },
-                    text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(
-                                "Supported: /unix/path, file:///path/to/file, http(s)://example/file"
-                            )
-                            OutlinedTextField(
-                                value = urlOrPathInput,
-                                onValueChange = { urlOrPathInput = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                label = { Text("Path or URL") },
-                                shape = MaterialTheme.shapes.extraLarge,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-                                )
-                            )
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        val next = !urlOrPathForceCaching
-                                        urlOrPathForceCaching = next
-                                        prefs.edit()
-                                            .putBoolean(AppPreferenceKeys.URL_PATH_FORCE_CACHING, next)
-                                            .apply()
-                                    },
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = urlOrPathForceCaching,
-                                    onCheckedChange = { checked ->
-                                        urlOrPathForceCaching = checked
-                                        prefs.edit()
-                                            .putBoolean(AppPreferenceKeys.URL_PATH_FORCE_CACHING, checked)
-                                            .apply()
-                                    }
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Force caching",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
+                UrlOrPathDialog(
+                    input = urlOrPathInput,
+                    forceCaching = urlOrPathForceCaching,
+                    onInputChange = { urlOrPathInput = it },
+                    onForceCachingChange = { checked ->
+                        urlOrPathForceCaching = checked
+                        prefs.edit()
+                            .putBoolean(AppPreferenceKeys.URL_PATH_FORCE_CACHING, checked)
+                            .apply()
                     },
-                    confirmButton = {
-                        TextButton(
-                            enabled = urlOrPathInput.isNotBlank(),
-                            onClick = {
-                                val input = urlOrPathInput
-                                val openOptions = ManualSourceOpenOptions(forceCaching = urlOrPathForceCaching)
-                                showUrlOrPathDialog = false
-                                applyManualInputSelection(input, openOptions)
-                            }
-                        ) {
-                            Text("Open")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showUrlOrPathDialog = false }) {
-                            Text("Cancel")
-                        }
+                    onDismiss = { showUrlOrPathDialog = false },
+                    onOpen = {
+                        val input = urlOrPathInput
+                        val openOptions = ManualSourceOpenOptions(forceCaching = urlOrPathForceCaching)
+                        showUrlOrPathDialog = false
+                        applyManualInputSelection(input, openOptions)
                     }
                 )
             }
 
             remoteLoadUiState?.let { loadState ->
-                AlertDialog(
-                    onDismissRequest = {},
-                    title = { Text("Opening remote source") },
-                    text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            val phaseText = when (loadState.phase) {
-                                RemoteLoadPhase.Connecting -> "Connecting..."
-                                RemoteLoadPhase.Downloading -> "Downloading..."
-                                RemoteLoadPhase.Opening -> "Opening..."
-                            }
-                            Text(phaseText)
-                            if (loadState.indeterminate) {
-                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                            } else {
-                                val progress = (loadState.percent ?: 0).coerceIn(0, 100) / 100f
-                                LinearProgressIndicator(
-                                    progress = { progress },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                            if (loadState.phase == RemoteLoadPhase.Downloading || loadState.phase == RemoteLoadPhase.Opening) {
-                                val downloadedLabel = formatByteCount(loadState.downloadedBytes)
-                                val sizeLabel = loadState.totalBytes?.let { total ->
-                                    "$downloadedLabel / ${formatByteCount(total)}"
-                                } ?: downloadedLabel
-                                Text(
-                                    text = sizeLabel,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                loadState.percent?.let { percent ->
-                                    Text(
-                                        text = "$percent%",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                                loadState.bytesPerSecond?.takeIf { it > 0L }?.let { speed ->
-                                    Text(
-                                        text = "${formatByteCount(speed)}/s",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            remoteLoadJob?.cancel()
-                            remoteLoadUiState = null
-                        }) {
-                            Text("Cancel")
-                        }
+                RemoteLoadProgressDialog(
+                    loadState = loadState,
+                    onCancel = {
+                        remoteLoadJob?.cancel()
+                        remoteLoadUiState = null
                     }
                 )
             }
 
             if (showSoxExperimentalDialog) {
-                AlertDialog(
-                    onDismissRequest = { showSoxExperimentalDialog = false },
-                    title = { Text("SoX is experimental") },
-                    text = {
-                        Text(
-                            "SoX output resampling may cause unstable timeline behavior on some content. " +
-                                "For discontinuous timeline cores (like module pattern jumps/loop points), " +
-                                "the engine automatically falls back to Built-in for stability."
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showSoxExperimentalDialog = false }) {
-                            Text("OK")
-                        }
-                    }
+                SoxExperimentalDialog(
+                    onDismiss = { showSoxExperimentalDialog = false }
                 )
             }
 
             if (showSubtuneSelectorDialog) {
-                AlertDialog(
-                    onDismissRequest = { showSubtuneSelectorDialog = false },
-                    title = { Text("Subtunes") },
-                    text = {
-                        if (subtuneEntries.isEmpty()) {
-                            Text("No subtunes available.")
-                        } else {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = 360.dp)
-                                    .verticalScroll(rememberScrollState()),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                subtuneEntries.forEach { entry ->
-                                    val isCurrent = entry.index == currentSubtuneIndex
-                                    Surface(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(MaterialTheme.shapes.medium)
-                                            .clickable {
-                                                selectSubtune(entry.index)
-                                                showSubtuneSelectorDialog = false
-                                            },
-                                        shape = MaterialTheme.shapes.medium,
-                                        color = if (isCurrent) {
-                                            MaterialTheme.colorScheme.primaryContainer
-                                        } else {
-                                            MaterialTheme.colorScheme.surfaceContainerHigh
-                                        }
-                                    ) {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(horizontal = 12.dp, vertical = 10.dp)
-                                        ) {
-                                            Text(
-                                                text = "${entry.index + 1}. ${entry.title}",
-                                                style = MaterialTheme.typography.titleSmall,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            val details = buildString {
-                                                append(formatShortDuration(entry.durationSeconds))
-                                                if (entry.artist.isNotBlank()) {
-                                                    append(" • ")
-                                                    append(entry.artist)
-                                                }
-                                            }
-                                            Text(
-                                                text = details,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                SubtuneSelectorDialog(
+                    subtuneEntries = subtuneEntries,
+                    currentSubtuneIndex = currentSubtuneIndex,
+                    onSelectSubtune = { subtuneIndex ->
+                        selectSubtune(subtuneIndex)
+                        showSubtuneSelectorDialog = false
                     },
-                    confirmButton = {
-                        TextButton(onClick = { showSubtuneSelectorDialog = false }) {
-                            Text("Close")
-                        }
-                    }
+                    onDismiss = { showSubtuneSelectorDialog = false }
                 )
             }
 

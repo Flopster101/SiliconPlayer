@@ -11,6 +11,7 @@
 #include <cstring>
 #include <algorithm>
 #include <limits>
+#include <chrono>
 extern "C" {
 #include <libswresample/swresample.h>
 #include <libavutil/opt.h>
@@ -1041,6 +1042,21 @@ bool AudioEngine::isEnginePlaying() const {
 
 void AudioEngine::setUrl(const char* url) {
     LOGD("URL set to: %s", url);
+
+    // Ensure background seek work is fully quiesced before replacing decoder.
+    // This prevents worker-thread reads from racing decoder teardown.
+    if (seekInProgress.load()) {
+        {
+            std::lock_guard<std::mutex> lock(seekWorkerMutex);
+            seekAbortRequested.store(true);
+            seekRequestPending = false;
+        }
+        seekWorkerCv.notify_one();
+        while (seekInProgress.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }
+
     decoderSerial.fetch_add(1);
 
     // Drop any previously loaded decoder first. If opening the new source fails,
@@ -1268,18 +1284,18 @@ void AudioEngine::seekWorkerLoop() {
             seekRequestPending = false;
         }
 
-        {
-            std::lock_guard<std::mutex> lock(decoderMutex);
-            if (decoder && targetDecoderSerial == decoderSerial.load() && !seekAbortRequested.load()) {
-                double resolvedPosition = runAsyncSeekLocked(targetSeconds);
-                if (!seekAbortRequested.load()) {
-                    const double duration = decoder->getDuration();
-                    if (duration > 0.0 && repeatMode.load() != 2) {
-                        resolvedPosition = std::clamp(resolvedPosition, 0.0, duration);
-                    } else if (resolvedPosition < 0.0) {
-                        resolvedPosition = 0.0;
-                    }
-                    cachedDurationSeconds.store(duration);
+        if (decoder && targetDecoderSerial == decoderSerial.load() && !seekAbortRequested.load()) {
+            double resolvedPosition = runAsyncSeekLocked(targetSeconds);
+            if (!seekAbortRequested.load()) {
+                const double duration = decoder->getDuration();
+                if (duration > 0.0 && repeatMode.load() != 2) {
+                    resolvedPosition = std::clamp(resolvedPosition, 0.0, duration);
+                } else if (resolvedPosition < 0.0) {
+                    resolvedPosition = 0.0;
+                }
+                cachedDurationSeconds.store(duration);
+                {
+                    std::lock_guard<std::mutex> lock(decoderMutex);
                     resetResamplerStateLocked();
                     positionSeconds.store(resolvedPosition);
                     sharedAbsoluteInputPositionBaseSeconds = resolvedPosition;

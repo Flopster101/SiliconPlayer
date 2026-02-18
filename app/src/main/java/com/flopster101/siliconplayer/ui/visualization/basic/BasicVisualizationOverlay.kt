@@ -39,9 +39,11 @@ import com.flopster101.siliconplayer.VisualizationRenderBackend
 import com.flopster101.siliconplayer.VisualizationVuAnchor
 import com.flopster101.siliconplayer.ui.visualization.channel.ChannelScopeChannelTextState
 import com.flopster101.siliconplayer.ui.visualization.advanced.ChannelScopeVisualization
+import com.flopster101.siliconplayer.ui.visualization.gl.BarsGlTextureVisualization
 import com.flopster101.siliconplayer.ui.visualization.gl.ChannelScopeGlVisualization
 import com.flopster101.siliconplayer.ui.visualization.gl.ChannelScopeGlTextureVisualization
 import com.flopster101.siliconplayer.ui.visualization.gl.OscilloscopeGlTextureVisualization
+import com.flopster101.siliconplayer.ui.visualization.gl.VuMetersGlTextureVisualization
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.ceil
@@ -67,6 +69,7 @@ fun BasicVisualizationOverlay(
     barRoundnessDp: Int,
     barOverlayArtwork: Boolean,
     barUseThemeColor: Boolean,
+    barRenderBackend: VisualizationRenderBackend,
     barColorModeNoArtwork: VisualizationOscColorMode,
     barColorModeWithArtwork: VisualizationOscColorMode,
     barCustomColorArgb: Int,
@@ -85,6 +88,7 @@ fun BasicVisualizationOverlay(
     oscCustomGridColorArgb: Int,
     vuAnchor: VisualizationVuAnchor,
     vuUseThemeColor: Boolean,
+    vuRenderBackend: VisualizationRenderBackend,
     vuColorModeNoArtwork: VisualizationOscColorMode,
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
@@ -226,15 +230,31 @@ fun BasicVisualizationOverlay(
 
     when (mode) {
         VisualizationMode.Bars -> {
-            BarsVisualization(
-                bars = bars,
-                barCount = barCount,
-                barRoundnessDp = barRoundnessDp,
-                barOverlayArtwork = barOverlayArtwork,
-                barColor = barColor,
-                backgroundColor = barBackgroundColor,
-                modifier = modifier
-            )
+            when (barRenderBackend) {
+                VisualizationRenderBackend.OpenGlTexture -> {
+                    BarsGlTextureVisualization(
+                        bars = bars,
+                        barCount = barCount,
+                        barRoundnessDp = barRoundnessDp,
+                        barOverlayArtwork = barOverlayArtwork,
+                        barColor = barColor,
+                        backgroundColor = barBackgroundColor,
+                        onFrameStats = channelScopeOnFrameStats,
+                        modifier = modifier
+                    )
+                }
+                else -> {
+                    BarsVisualization(
+                        bars = bars,
+                        barCount = barCount,
+                        barRoundnessDp = barRoundnessDp,
+                        barOverlayArtwork = barOverlayArtwork,
+                        barColor = barColor,
+                        backgroundColor = barBackgroundColor,
+                        modifier = modifier
+                    )
+                }
+            }
         }
 
         VisualizationMode.Oscilloscope -> {
@@ -274,15 +294,31 @@ fun BasicVisualizationOverlay(
         }
 
         VisualizationMode.VuMeters -> {
-            VuMetersVisualization(
-                vuLevels = vuLevels,
-                channelCount = channelCount,
-                vuAnchor = vuAnchor,
-                vuColor = vuColor,
-                vuLabelColor = vuLabelColor,
-                vuBackgroundColor = vuBackgroundColor,
-                modifier = modifier
-            )
+            when (vuRenderBackend) {
+                VisualizationRenderBackend.OpenGlTexture -> {
+                    VuMetersGlTextureVisualization(
+                        vuLevels = vuLevels,
+                        channelCount = channelCount,
+                        vuAnchor = vuAnchor,
+                        vuColor = vuColor,
+                        vuLabelColor = vuLabelColor,
+                        vuBackgroundColor = vuBackgroundColor,
+                        onFrameStats = channelScopeOnFrameStats,
+                        modifier = modifier
+                    )
+                }
+                else -> {
+                    VuMetersVisualization(
+                        vuLevels = vuLevels,
+                        channelCount = channelCount,
+                        vuAnchor = vuAnchor,
+                        vuColor = vuColor,
+                        vuLabelColor = vuLabelColor,
+                        vuBackgroundColor = vuBackgroundColor,
+                        modifier = modifier
+                    )
+                }
+            }
         }
 
         VisualizationMode.ChannelScope -> {

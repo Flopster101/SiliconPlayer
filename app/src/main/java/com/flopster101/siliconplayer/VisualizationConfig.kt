@@ -40,11 +40,11 @@ enum class VisualizationRenderBackend(
 
 fun visualizationRenderBackendForMode(mode: VisualizationMode): VisualizationRenderBackend {
     return when (mode) {
+        VisualizationMode.Bars -> VisualizationRenderBackend.OpenGlTexture
         VisualizationMode.Oscilloscope -> VisualizationRenderBackend.OpenGlTexture
+        VisualizationMode.VuMeters -> VisualizationRenderBackend.OpenGlTexture
         VisualizationMode.ChannelScope -> VisualizationRenderBackend.OpenGlTexture
-        VisualizationMode.Off,
-        VisualizationMode.Bars,
-        VisualizationMode.VuMeters -> VisualizationRenderBackend.Compose
+        VisualizationMode.Off -> VisualizationRenderBackend.Compose
     }
 }
 

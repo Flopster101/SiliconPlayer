@@ -18,6 +18,7 @@ object AppDefaults {
             const val roundnessDp = 6
             const val overlayArtwork = true
             const val useThemeColor = true
+            val renderBackend = VisualizationRenderBackend.OpenGlTexture
             const val customColorArgb = 0xFF6BD8FF.toInt()
             val colorModeNoArtwork = VisualizationOscColorMode.Monet
             val colorModeWithArtwork = VisualizationOscColorMode.Artwork
@@ -51,6 +52,7 @@ object AppDefaults {
             val anchor = VisualizationVuAnchor.Bottom
             const val useThemeColor = true
             const val smoothingPercent = 40
+            val renderBackend = VisualizationRenderBackend.OpenGlTexture
             val colorModeNoArtwork = VisualizationOscColorMode.Monet
             val colorModeWithArtwork = VisualizationOscColorMode.Artwork
             const val customColorArgb = 0xFF6BD8FF.toInt()

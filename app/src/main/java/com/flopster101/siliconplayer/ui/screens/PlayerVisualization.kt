@@ -719,6 +719,7 @@ internal fun AlbumArtPlaceholder(
     barRoundnessDp: Int,
     barOverlayArtwork: Boolean,
     barUseThemeColor: Boolean,
+    barRenderBackend: VisualizationRenderBackend,
     barColorModeNoArtwork: VisualizationOscColorMode,
     barColorModeWithArtwork: VisualizationOscColorMode,
     barCustomColorArgb: Int,
@@ -735,6 +736,7 @@ internal fun AlbumArtPlaceholder(
     oscCustomGridColorArgb: Int,
     vuAnchor: VisualizationVuAnchor,
     vuUseThemeColor: Boolean,
+    vuRenderBackend: VisualizationRenderBackend,
     vuColorModeNoArtwork: VisualizationOscColorMode,
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
@@ -769,6 +771,10 @@ internal fun AlbumArtPlaceholder(
                 channelScopePrefs.renderBackend
             } else if (visualizationMode == VisualizationMode.Oscilloscope) {
                 visualizationOscRenderBackend
+            } else if (visualizationMode == VisualizationMode.Bars) {
+                barRenderBackend
+            } else if (visualizationMode == VisualizationMode.VuMeters) {
+                vuRenderBackend
             } else {
                 visualizationRenderBackendForMode(visualizationMode)
             }
@@ -823,12 +829,18 @@ internal fun AlbumArtPlaceholder(
     LaunchedEffect(
         visualizationMode,
         visualizationOscRenderBackend,
+        barRenderBackend,
+        vuRenderBackend,
         channelScopePrefs.renderBackend
     ) {
         val nextBackend = if (visualizationMode == VisualizationMode.ChannelScope) {
             channelScopePrefs.renderBackend
         } else if (visualizationMode == VisualizationMode.Oscilloscope) {
             visualizationOscRenderBackend
+        } else if (visualizationMode == VisualizationMode.Bars) {
+            barRenderBackend
+        } else if (visualizationMode == VisualizationMode.VuMeters) {
+            vuRenderBackend
         } else {
             visualizationRenderBackendForMode(visualizationMode)
         }
@@ -1172,6 +1184,10 @@ internal fun AlbumArtPlaceholder(
         channelScopePrefs.renderBackend
     } else if (visualizationMode == VisualizationMode.Oscilloscope) {
         visualizationOscRenderBackend
+    } else if (visualizationMode == VisualizationMode.Bars) {
+        barRenderBackend
+    } else if (visualizationMode == VisualizationMode.VuMeters) {
+        vuRenderBackend
     } else {
         visualizationRenderBackendForMode(visualizationMode)
     }
@@ -1274,6 +1290,7 @@ internal fun AlbumArtPlaceholder(
                 barRoundnessDp = barRoundnessDp,
                 barOverlayArtwork = barOverlayArtwork,
                 barUseThemeColor = barUseThemeColor,
+                barRenderBackend = barRenderBackend,
                 barColorModeNoArtwork = barColorModeNoArtwork,
                 barColorModeWithArtwork = barColorModeWithArtwork,
                 barCustomColorArgb = barCustomColorArgb,
@@ -1292,6 +1309,7 @@ internal fun AlbumArtPlaceholder(
                 oscCustomGridColorArgb = oscCustomGridColorArgb,
                 vuAnchor = vuAnchor,
                 vuUseThemeColor = vuUseThemeColor,
+                vuRenderBackend = vuRenderBackend,
                 vuColorModeNoArtwork = vuColorModeNoArtwork,
                 vuColorModeWithArtwork = vuColorModeWithArtwork,
                 vuCustomColorArgb = vuCustomColorArgb,

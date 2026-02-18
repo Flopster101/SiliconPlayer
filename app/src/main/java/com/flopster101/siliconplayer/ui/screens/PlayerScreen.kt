@@ -163,10 +163,12 @@ fun PlayerScreen(
     visualizationBarRoundnessDp: Int,
     visualizationBarOverlayArtwork: Boolean,
     visualizationBarUseThemeColor: Boolean,
+    visualizationBarRenderBackend: VisualizationRenderBackend,
     visualizationOscStereo: Boolean,
     visualizationVuAnchor: VisualizationVuAnchor,
     visualizationVuUseThemeColor: Boolean,
     visualizationVuSmoothingPercent: Int,
+    visualizationVuRenderBackend: VisualizationRenderBackend,
     visualizationShowDebugInfo: Boolean = false,
     artworkCornerRadiusDp: Int = 3,
     onOpenAudioEffects: () -> Unit,
@@ -201,9 +203,11 @@ fun PlayerScreen(
     val oscGridArtworkColorModeKey = "visualization_osc_grid_color_mode_with_artwork"
     val oscCustomLineColorKey = "visualization_osc_custom_line_color_argb"
     val oscCustomGridColorKey = "visualization_osc_custom_grid_color_argb"
+    val barRenderBackendKey = "visualization_bar_render_backend"
     val barColorModeNoArtworkKey = "visualization_bar_color_mode_no_artwork"
     val barColorModeWithArtworkKey = "visualization_bar_color_mode_with_artwork"
     val barCustomColorKey = "visualization_bar_custom_color_argb"
+    val vuRenderBackendKey = "visualization_vu_render_backend"
     val vuColorModeNoArtworkKey = "visualization_vu_color_mode_no_artwork"
     val vuColorModeWithArtworkKey = "visualization_vu_color_mode_with_artwork"
     val vuCustomColorKey = "visualization_vu_custom_color_argb"
@@ -306,6 +310,14 @@ fun PlayerScreen(
     var visualizationBarCustomColorArgb by remember {
         mutableIntStateOf(prefs.getInt(barCustomColorKey, 0xFF6BD8FF.toInt()))
     }
+    var visualizationBarRuntimeRenderBackend by remember {
+        mutableStateOf(
+            VisualizationRenderBackend.fromStorage(
+                prefs.getString(barRenderBackendKey, visualizationBarRenderBackend.storageValue),
+                visualizationBarRenderBackend
+            )
+        )
+    }
     var visualizationVuColorModeNoArtwork by remember {
         mutableStateOf(
             VisualizationOscColorMode.fromStorage(
@@ -324,6 +336,14 @@ fun PlayerScreen(
     }
     var visualizationVuCustomColorArgb by remember {
         mutableIntStateOf(prefs.getInt(vuCustomColorKey, 0xFF6BD8FF.toInt()))
+    }
+    var visualizationVuRuntimeRenderBackend by remember {
+        mutableStateOf(
+            VisualizationRenderBackend.fromStorage(
+                prefs.getString(vuRenderBackendKey, visualizationVuRenderBackend.storageValue),
+                visualizationVuRenderBackend
+            )
+        )
     }
     val channelScopePrefs = rememberChannelScopePrefs(prefs)
     DisposableEffect(prefs) {
@@ -451,6 +471,12 @@ fun PlayerScreen(
                     visualizationBarCustomColorArgb =
                         sharedPrefs.getInt(barCustomColorKey, 0xFF6BD8FF.toInt())
                 }
+                barRenderBackendKey -> {
+                    visualizationBarRuntimeRenderBackend = VisualizationRenderBackend.fromStorage(
+                        sharedPrefs.getString(barRenderBackendKey, visualizationBarRenderBackend.storageValue),
+                        visualizationBarRenderBackend
+                    )
+                }
 
                 vuColorModeNoArtworkKey -> {
                     visualizationVuColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
@@ -475,6 +501,12 @@ fun PlayerScreen(
                 vuCustomColorKey -> {
                     visualizationVuCustomColorArgb =
                         sharedPrefs.getInt(vuCustomColorKey, 0xFF6BD8FF.toInt())
+                }
+                vuRenderBackendKey -> {
+                    visualizationVuRuntimeRenderBackend = VisualizationRenderBackend.fromStorage(
+                        sharedPrefs.getString(vuRenderBackendKey, visualizationVuRenderBackend.storageValue),
+                        visualizationVuRenderBackend
+                    )
                 }
 
             }
@@ -701,6 +733,7 @@ fun PlayerScreen(
                         barRoundnessDp = visualizationBarRoundnessDp,
                         barOverlayArtwork = visualizationBarOverlayArtwork,
                         barUseThemeColor = visualizationBarUseThemeColor,
+                        barRenderBackend = visualizationBarRuntimeRenderBackend,
                         barColorModeNoArtwork = visualizationBarColorModeNoArtwork,
                         barColorModeWithArtwork = visualizationBarColorModeWithArtwork,
                         barCustomColorArgb = visualizationBarCustomColorArgb,
@@ -717,6 +750,7 @@ fun PlayerScreen(
                         oscCustomGridColorArgb = visualizationOscCustomGridColorArgb,
                         vuAnchor = visualizationVuAnchor,
                         vuUseThemeColor = visualizationVuUseThemeColor,
+                        vuRenderBackend = visualizationVuRuntimeRenderBackend,
                         vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
                         vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
                         vuCustomColorArgb = visualizationVuCustomColorArgb,
@@ -840,6 +874,7 @@ fun PlayerScreen(
                         barRoundnessDp = visualizationBarRoundnessDp,
                         barOverlayArtwork = visualizationBarOverlayArtwork,
                         barUseThemeColor = visualizationBarUseThemeColor,
+                        barRenderBackend = visualizationBarRuntimeRenderBackend,
                         barColorModeNoArtwork = visualizationBarColorModeNoArtwork,
                         barColorModeWithArtwork = visualizationBarColorModeWithArtwork,
                         barCustomColorArgb = visualizationBarCustomColorArgb,
@@ -856,6 +891,7 @@ fun PlayerScreen(
                         oscCustomGridColorArgb = visualizationOscCustomGridColorArgb,
                         vuAnchor = visualizationVuAnchor,
                         vuUseThemeColor = visualizationVuUseThemeColor,
+                        vuRenderBackend = visualizationVuRuntimeRenderBackend,
                         vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
                         vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
                         vuCustomColorArgb = visualizationVuCustomColorArgb,

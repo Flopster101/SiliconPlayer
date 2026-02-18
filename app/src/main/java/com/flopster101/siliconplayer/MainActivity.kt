@@ -567,6 +567,17 @@ private fun AppNavigation(
             )
         )
     }
+    var visualizationBarRenderBackend by remember {
+        mutableStateOf(
+            VisualizationRenderBackend.fromStorage(
+                prefs.getString(
+                    AppPreferenceKeys.VISUALIZATION_BAR_RENDER_BACKEND,
+                    AppDefaults.Visualization.Bars.renderBackend.storageValue
+                ),
+                AppDefaults.Visualization.Bars.renderBackend
+            )
+        )
+    }
     var visualizationOscStereo by remember {
         mutableStateOf(
             prefs.getBoolean(
@@ -601,6 +612,17 @@ private fun AppNavigation(
             ).coerceIn(
                 AppDefaults.Visualization.Vu.smoothingRange.first,
                 AppDefaults.Visualization.Vu.smoothingRange.last
+            )
+        )
+    }
+    var visualizationVuRenderBackend by remember {
+        mutableStateOf(
+            VisualizationRenderBackend.fromStorage(
+                prefs.getString(
+                    AppPreferenceKeys.VISUALIZATION_VU_RENDER_BACKEND,
+                    AppDefaults.Visualization.Vu.renderBackend.storageValue
+                ),
+                AppDefaults.Visualization.Vu.renderBackend
             )
         )
     }
@@ -2282,6 +2304,15 @@ private fun AppNavigation(
             .apply()
     }
 
+    LaunchedEffect(visualizationBarRenderBackend) {
+        prefs.edit()
+            .putString(
+                AppPreferenceKeys.VISUALIZATION_BAR_RENDER_BACKEND,
+                visualizationBarRenderBackend.storageValue
+            )
+            .apply()
+    }
+
     LaunchedEffect(visualizationOscStereo) {
         prefs.edit()
             .putBoolean(AppPreferenceKeys.VISUALIZATION_OSC_STEREO, visualizationOscStereo)
@@ -2311,6 +2342,15 @@ private fun AppNavigation(
         }
         prefs.edit()
             .putInt(AppPreferenceKeys.VISUALIZATION_VU_SMOOTHING_PERCENT, normalized)
+            .apply()
+    }
+
+    LaunchedEffect(visualizationVuRenderBackend) {
+        prefs.edit()
+            .putString(
+                AppPreferenceKeys.VISUALIZATION_VU_RENDER_BACKEND,
+                visualizationVuRenderBackend.storageValue
+            )
             .apply()
     }
 
@@ -3228,10 +3268,12 @@ private fun AppNavigation(
                                     visualizationBarRoundnessDp = visualizationBarRoundnessDp,
                                     visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
                                     visualizationBarUseThemeColor = visualizationBarUseThemeColor,
+                                    visualizationBarRenderBackend = visualizationBarRenderBackend,
                                     visualizationOscStereo = visualizationOscStereo,
                                     visualizationVuAnchor = visualizationVuAnchor,
                                     visualizationVuUseThemeColor = visualizationVuUseThemeColor,
                                     visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
+                                    visualizationVuRenderBackend = visualizationVuRenderBackend,
                                     ffmpegSampleRateHz = ffmpegCoreSampleRateHz,
                                     ffmpegCapabilities = ffmpegCapabilities,
                                     openMptSampleRateHz = openMptCoreSampleRateHz,
@@ -3548,6 +3590,9 @@ private fun AppNavigation(
                                     onVisualizationBarUseThemeColorChanged = { enabled ->
                             visualizationBarUseThemeColor = enabled
                         },
+                                    onVisualizationBarRenderBackendChanged = { backend ->
+                            visualizationBarRenderBackend = backend
+                        },
                                     onVisualizationOscStereoChanged = { enabled ->
                             visualizationOscStereo = enabled
                         },
@@ -3560,13 +3605,21 @@ private fun AppNavigation(
                                     onVisualizationVuSmoothingPercentChanged = { value ->
                             visualizationVuSmoothingPercent = value
                         },
+                                    onVisualizationVuRenderBackendChanged = { backend ->
+                            visualizationVuRenderBackend = backend
+                        },
                                     onResetVisualizationBarsSettings = {
                             visualizationBarCount = AppDefaults.Visualization.Bars.count
                             visualizationBarSmoothingPercent = AppDefaults.Visualization.Bars.smoothingPercent
                             visualizationBarRoundnessDp = AppDefaults.Visualization.Bars.roundnessDp
                             visualizationBarOverlayArtwork = AppDefaults.Visualization.Bars.overlayArtwork
                             visualizationBarUseThemeColor = AppDefaults.Visualization.Bars.useThemeColor
+                            visualizationBarRenderBackend = AppDefaults.Visualization.Bars.renderBackend
                             prefs.edit()
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_BAR_RENDER_BACKEND,
+                                    AppDefaults.Visualization.Bars.renderBackend.storageValue
+                                )
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_BAR_COLOR_MODE_NO_ARTWORK,
                                     AppDefaults.Visualization.Bars.colorModeNoArtwork.storageValue
@@ -3646,7 +3699,12 @@ private fun AppNavigation(
                             visualizationVuAnchor = AppDefaults.Visualization.Vu.anchor
                             visualizationVuUseThemeColor = AppDefaults.Visualization.Vu.useThemeColor
                             visualizationVuSmoothingPercent = AppDefaults.Visualization.Vu.smoothingPercent
+                            visualizationVuRenderBackend = AppDefaults.Visualization.Vu.renderBackend
                             prefs.edit()
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_VU_RENDER_BACKEND,
+                                    AppDefaults.Visualization.Vu.renderBackend.storageValue
+                                )
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_VU_COLOR_MODE_NO_ARTWORK,
                                     AppDefaults.Visualization.Vu.colorModeNoArtwork.storageValue
@@ -3980,7 +4038,12 @@ private fun AppNavigation(
                             visualizationBarRoundnessDp = AppDefaults.Visualization.Bars.roundnessDp
                             visualizationBarOverlayArtwork = AppDefaults.Visualization.Bars.overlayArtwork
                             visualizationBarUseThemeColor = AppDefaults.Visualization.Bars.useThemeColor
+                            visualizationBarRenderBackend = AppDefaults.Visualization.Bars.renderBackend
                             prefs.edit()
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_BAR_RENDER_BACKEND,
+                                    AppDefaults.Visualization.Bars.renderBackend.storageValue
+                                )
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_BAR_COLOR_MODE_NO_ARTWORK,
                                     AppDefaults.Visualization.Bars.colorModeNoArtwork.storageValue
@@ -4056,7 +4119,12 @@ private fun AppNavigation(
                             visualizationVuAnchor = AppDefaults.Visualization.Vu.anchor
                             visualizationVuUseThemeColor = AppDefaults.Visualization.Vu.useThemeColor
                             visualizationVuSmoothingPercent = AppDefaults.Visualization.Vu.smoothingPercent
+                            visualizationVuRenderBackend = AppDefaults.Visualization.Vu.renderBackend
                             prefs.edit()
+                                .putString(
+                                    AppPreferenceKeys.VISUALIZATION_VU_RENDER_BACKEND,
+                                    AppDefaults.Visualization.Vu.renderBackend.storageValue
+                                )
                                 .putString(
                                     AppPreferenceKeys.VISUALIZATION_VU_COLOR_MODE_NO_ARTWORK,
                                     AppDefaults.Visualization.Vu.colorModeNoArtwork.storageValue
@@ -4594,10 +4662,12 @@ private fun AppNavigation(
                         visualizationBarRoundnessDp = visualizationBarRoundnessDp,
                         visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
                         visualizationBarUseThemeColor = visualizationBarUseThemeColor,
+                        visualizationBarRenderBackend = visualizationBarRenderBackend,
                         visualizationOscStereo = visualizationOscStereo,
                         visualizationVuAnchor = visualizationVuAnchor,
                         visualizationVuUseThemeColor = visualizationVuUseThemeColor,
                         visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
+                        visualizationVuRenderBackend = visualizationVuRenderBackend,
                         onOpenAudioEffects = {
                             tempMasterVolumeDb = masterVolumeDb
                             tempPluginVolumeDb = pluginVolumeDb
@@ -4856,10 +4926,12 @@ private fun AppNavigation(
                     visualizationBarRoundnessDp = visualizationBarRoundnessDp,
                     visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
                     visualizationBarUseThemeColor = visualizationBarUseThemeColor,
+                    visualizationBarRenderBackend = visualizationBarRenderBackend,
                     visualizationOscStereo = visualizationOscStereo,
                     visualizationVuAnchor = visualizationVuAnchor,
                     visualizationVuUseThemeColor = visualizationVuUseThemeColor,
                     visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
+                    visualizationVuRenderBackend = visualizationVuRenderBackend,
                     visualizationShowDebugInfo = visualizationShowDebugInfo,
                     artworkCornerRadiusDp = playerArtworkCornerRadiusDp,
                     onOpenAudioEffects = {

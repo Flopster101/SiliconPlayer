@@ -19,7 +19,8 @@ internal data class VisualizationBasicBarsRouteState(
     val visualizationBarSmoothingPercent: Int,
     val visualizationBarRoundnessDp: Int,
     val visualizationBarOverlayArtwork: Boolean,
-    val visualizationBarUseThemeColor: Boolean
+    val visualizationBarUseThemeColor: Boolean,
+    val visualizationBarRenderBackend: VisualizationRenderBackend
 )
 
 internal data class VisualizationBasicBarsRouteActions(
@@ -27,19 +28,22 @@ internal data class VisualizationBasicBarsRouteActions(
     val onVisualizationBarSmoothingPercentChanged: (Int) -> Unit,
     val onVisualizationBarRoundnessDpChanged: (Int) -> Unit,
     val onVisualizationBarOverlayArtworkChanged: (Boolean) -> Unit,
-    val onVisualizationBarUseThemeColorChanged: (Boolean) -> Unit
+    val onVisualizationBarUseThemeColorChanged: (Boolean) -> Unit,
+    val onVisualizationBarRenderBackendChanged: (VisualizationRenderBackend) -> Unit
 )
 
 internal data class VisualizationBasicVuMetersRouteState(
     val visualizationVuAnchor: VisualizationVuAnchor,
     val visualizationVuUseThemeColor: Boolean,
-    val visualizationVuSmoothingPercent: Int
+    val visualizationVuSmoothingPercent: Int,
+    val visualizationVuRenderBackend: VisualizationRenderBackend
 )
 
 internal data class VisualizationBasicVuMetersRouteActions(
     val onVisualizationVuAnchorChanged: (VisualizationVuAnchor) -> Unit,
     val onVisualizationVuUseThemeColorChanged: (Boolean) -> Unit,
-    val onVisualizationVuSmoothingPercentChanged: (Int) -> Unit
+    val onVisualizationVuSmoothingPercentChanged: (Int) -> Unit,
+    val onVisualizationVuRenderBackendChanged: (VisualizationRenderBackend) -> Unit
 )
 
 @Composable
@@ -57,6 +61,8 @@ internal fun VisualizationBasicBarsRouteContent(
     val onVisualizationBarOverlayArtworkChanged = actions.onVisualizationBarOverlayArtworkChanged
     val visualizationBarUseThemeColor = state.visualizationBarUseThemeColor
     val onVisualizationBarUseThemeColorChanged = actions.onVisualizationBarUseThemeColorChanged
+    val visualizationBarRenderBackend = state.visualizationBarRenderBackend
+    val onVisualizationBarRenderBackendChanged = actions.onVisualizationBarRenderBackendChanged
 
     val prefsName = "silicon_player_settings"
     val barColorModeNoArtworkKey = "visualization_bar_color_mode_no_artwork"
@@ -96,11 +102,19 @@ internal fun VisualizationBasicBarsRouteContent(
     var showBarCountDialog by remember { mutableStateOf(false) }
     var showBarSmoothingDialog by remember { mutableStateOf(false) }
     var showBarRoundnessDialog by remember { mutableStateOf(false) }
+    var showBarRenderBackendDialog by remember { mutableStateOf(false) }
     var showBarColorModeNoArtworkDialog by remember { mutableStateOf(false) }
     var showBarColorModeWithArtworkDialog by remember { mutableStateOf(false) }
     var showBarCustomColorDialog by remember { mutableStateOf(false) }
 
     SettingsSectionLabel("Bars")
+    SettingsValuePickerCard(
+        title = "Renderer backend",
+        description = "Choose Compose or OpenGL ES (TextureView) renderer.",
+        value = visualizationBarRenderBackend.label,
+        onClick = { showBarRenderBackendDialog = true }
+    )
+    Spacer(modifier = Modifier.height(10.dp))
     SettingsValuePickerCard(
         title = "Bar count",
         description = "Number of frequency bars shown in the spectrum.",
@@ -202,6 +216,24 @@ internal fun VisualizationBasicBarsRouteContent(
             }
         )
     }
+    if (showBarRenderBackendDialog) {
+        SettingsSingleChoiceDialog(
+            title = "Bars renderer backend",
+            selectedValue = visualizationBarRenderBackend,
+            options = listOf(
+                ChoiceDialogOption(
+                    value = VisualizationRenderBackend.Compose,
+                    label = VisualizationRenderBackend.Compose.label
+                ),
+                ChoiceDialogOption(
+                    value = VisualizationRenderBackend.OpenGlTexture,
+                    label = VisualizationRenderBackend.OpenGlTexture.label
+                )
+            ),
+            onSelected = onVisualizationBarRenderBackendChanged,
+            onDismiss = { showBarRenderBackendDialog = false }
+        )
+    }
     if (showBarColorModeNoArtworkDialog) {
         VisualizationOscColorModeDialog(
             title = "Bar color (no artwork)",
@@ -262,6 +294,8 @@ internal fun VisualizationBasicVuMetersRouteContent(
     val onVisualizationVuUseThemeColorChanged = actions.onVisualizationVuUseThemeColorChanged
     val visualizationVuSmoothingPercent = state.visualizationVuSmoothingPercent
     val onVisualizationVuSmoothingPercentChanged = actions.onVisualizationVuSmoothingPercentChanged
+    val visualizationVuRenderBackend = state.visualizationVuRenderBackend
+    val onVisualizationVuRenderBackendChanged = actions.onVisualizationVuRenderBackendChanged
 
     val prefsName = "silicon_player_settings"
     val vuColorModeNoArtworkKey = "visualization_vu_color_mode_no_artwork"
@@ -299,12 +333,20 @@ internal fun VisualizationBasicVuMetersRouteContent(
         )
     }
     var showVuAnchorDialog by remember { mutableStateOf(false) }
+    var showVuRenderBackendDialog by remember { mutableStateOf(false) }
     var showVuSmoothingDialog by remember { mutableStateOf(false) }
     var showVuColorModeNoArtworkDialog by remember { mutableStateOf(false) }
     var showVuColorModeWithArtworkDialog by remember { mutableStateOf(false) }
     var showVuCustomColorDialog by remember { mutableStateOf(false) }
 
     SettingsSectionLabel("VU meters")
+    SettingsValuePickerCard(
+        title = "Renderer backend",
+        description = "Choose Compose or OpenGL ES (TextureView) renderer.",
+        value = visualizationVuRenderBackend.label,
+        onClick = { showVuRenderBackendDialog = true }
+    )
+    Spacer(modifier = Modifier.height(10.dp))
     SettingsValuePickerCard(
         title = "Anchor position",
         description = "Where VU meter rows are aligned in the artwork area.",
@@ -349,6 +391,25 @@ internal fun VisualizationBasicVuMetersRouteContent(
         value = String.format(Locale.US, "#%06X", vuCustomColorArgb and 0xFFFFFF),
         onClick = { showVuCustomColorDialog = true }
     )
+
+    if (showVuRenderBackendDialog) {
+        SettingsSingleChoiceDialog(
+            title = "VU renderer backend",
+            selectedValue = visualizationVuRenderBackend,
+            options = listOf(
+                ChoiceDialogOption(
+                    value = VisualizationRenderBackend.Compose,
+                    label = VisualizationRenderBackend.Compose.label
+                ),
+                ChoiceDialogOption(
+                    value = VisualizationRenderBackend.OpenGlTexture,
+                    label = VisualizationRenderBackend.OpenGlTexture.label
+                )
+            ),
+            onSelected = onVisualizationVuRenderBackendChanged,
+            onDismiss = { showVuRenderBackendDialog = false }
+        )
+    }
 
     if (showVuSmoothingDialog) {
         SteppedIntSliderDialog(

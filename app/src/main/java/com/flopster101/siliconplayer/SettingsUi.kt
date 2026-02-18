@@ -149,10 +149,12 @@ internal data class SettingsScreenState(
     val visualizationBarRoundnessDp: Int,
     val visualizationBarOverlayArtwork: Boolean,
     val visualizationBarUseThemeColor: Boolean,
+    val visualizationBarRenderBackend: VisualizationRenderBackend,
     val visualizationOscStereo: Boolean,
     val visualizationVuAnchor: VisualizationVuAnchor,
     val visualizationVuUseThemeColor: Boolean,
     val visualizationVuSmoothingPercent: Int,
+    val visualizationVuRenderBackend: VisualizationRenderBackend,
     val ffmpegSampleRateHz: Int,
     val ffmpegCapabilities: Int,
     val openMptSampleRateHz: Int,
@@ -271,10 +273,12 @@ internal data class SettingsScreenActions(
     val onVisualizationBarRoundnessDpChanged: (Int) -> Unit,
     val onVisualizationBarOverlayArtworkChanged: (Boolean) -> Unit,
     val onVisualizationBarUseThemeColorChanged: (Boolean) -> Unit,
+    val onVisualizationBarRenderBackendChanged: (VisualizationRenderBackend) -> Unit,
     val onVisualizationOscStereoChanged: (Boolean) -> Unit,
     val onVisualizationVuAnchorChanged: (VisualizationVuAnchor) -> Unit,
     val onVisualizationVuUseThemeColorChanged: (Boolean) -> Unit,
     val onVisualizationVuSmoothingPercentChanged: (Int) -> Unit,
+    val onVisualizationVuRenderBackendChanged: (VisualizationRenderBackend) -> Unit,
     val onResetVisualizationBarsSettings: () -> Unit,
     val onResetVisualizationOscilloscopeSettings: () -> Unit,
     val onResetVisualizationVuSettings: () -> Unit,
@@ -444,6 +448,8 @@ internal fun SettingsScreen(
     val onVisualizationBarOverlayArtworkChanged = actions.onVisualizationBarOverlayArtworkChanged
     val visualizationBarUseThemeColor = state.visualizationBarUseThemeColor
     val onVisualizationBarUseThemeColorChanged = actions.onVisualizationBarUseThemeColorChanged
+    val visualizationBarRenderBackend = state.visualizationBarRenderBackend
+    val onVisualizationBarRenderBackendChanged = actions.onVisualizationBarRenderBackendChanged
     val visualizationOscStereo = state.visualizationOscStereo
     val onVisualizationOscStereoChanged = actions.onVisualizationOscStereoChanged
     val visualizationVuAnchor = state.visualizationVuAnchor
@@ -452,6 +458,8 @@ internal fun SettingsScreen(
     val onVisualizationVuUseThemeColorChanged = actions.onVisualizationVuUseThemeColorChanged
     val visualizationVuSmoothingPercent = state.visualizationVuSmoothingPercent
     val onVisualizationVuSmoothingPercentChanged = actions.onVisualizationVuSmoothingPercentChanged
+    val visualizationVuRenderBackend = state.visualizationVuRenderBackend
+    val onVisualizationVuRenderBackendChanged = actions.onVisualizationVuRenderBackendChanged
     val onResetVisualizationBarsSettings = actions.onResetVisualizationBarsSettings
     val onResetVisualizationOscilloscopeSettings = actions.onResetVisualizationOscilloscopeSettings
     val onResetVisualizationVuSettings = actions.onResetVisualizationVuSettings
@@ -956,14 +964,16 @@ internal fun SettingsScreen(
                                 visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
                                 visualizationBarRoundnessDp = visualizationBarRoundnessDp,
                                 visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
-                                visualizationBarUseThemeColor = visualizationBarUseThemeColor
+                                visualizationBarUseThemeColor = visualizationBarUseThemeColor,
+                                visualizationBarRenderBackend = visualizationBarRenderBackend
                             ),
                             actions = VisualizationBasicBarsRouteActions(
                                 onVisualizationBarCountChanged = onVisualizationBarCountChanged,
                                 onVisualizationBarSmoothingPercentChanged = onVisualizationBarSmoothingPercentChanged,
                                 onVisualizationBarRoundnessDpChanged = onVisualizationBarRoundnessDpChanged,
                                 onVisualizationBarOverlayArtworkChanged = onVisualizationBarOverlayArtworkChanged,
-                                onVisualizationBarUseThemeColorChanged = onVisualizationBarUseThemeColorChanged
+                                onVisualizationBarUseThemeColorChanged = onVisualizationBarUseThemeColorChanged,
+                                onVisualizationBarRenderBackendChanged = onVisualizationBarRenderBackendChanged
                             )
                         )
                     }
@@ -978,12 +988,14 @@ internal fun SettingsScreen(
                             state = VisualizationBasicVuMetersRouteState(
                                 visualizationVuAnchor = visualizationVuAnchor,
                                 visualizationVuUseThemeColor = visualizationVuUseThemeColor,
-                                visualizationVuSmoothingPercent = visualizationVuSmoothingPercent
+                                visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
+                                visualizationVuRenderBackend = visualizationVuRenderBackend
                             ),
                             actions = VisualizationBasicVuMetersRouteActions(
                                 onVisualizationVuAnchorChanged = onVisualizationVuAnchorChanged,
                                 onVisualizationVuUseThemeColorChanged = onVisualizationVuUseThemeColorChanged,
-                                onVisualizationVuSmoothingPercentChanged = onVisualizationVuSmoothingPercentChanged
+                                onVisualizationVuSmoothingPercentChanged = onVisualizationVuSmoothingPercentChanged,
+                                onVisualizationVuRenderBackendChanged = onVisualizationVuRenderBackendChanged
                             )
                         )
                     }

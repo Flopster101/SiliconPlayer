@@ -34,3 +34,6 @@
 [submodule "external/2sf/vio2sf"]
 	path = external/2sf/vio2sf
 	url = https://bitbucket.org/kode54/vio2sf
+[submodule "external/psflib"]
+	path = external/psflib
+	url = https://github.com/kode54/psflib

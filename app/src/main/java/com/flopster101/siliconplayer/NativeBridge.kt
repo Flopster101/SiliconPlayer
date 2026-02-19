@@ -85,6 +85,12 @@ object NativeBridge {
     external fun getLazyUsf2FadeTag(): String
     external fun getLazyUsf2EnableCompare(): Boolean
     external fun getLazyUsf2EnableFifoFull(): Boolean
+    external fun getVio2sfGameName(): String
+    external fun getVio2sfCopyright(): String
+    external fun getVio2sfYear(): String
+    external fun getVio2sfComment(): String
+    external fun getVio2sfLengthTag(): String
+    external fun getVio2sfFadeTag(): String
     external fun getSidFormatName(): String
     external fun getSidClockName(): String
     external fun getSidSpeedName(): String

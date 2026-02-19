@@ -108,6 +108,12 @@ public:
     std::string getLazyUsf2FadeTag();
     bool getLazyUsf2EnableCompare();
     bool getLazyUsf2EnableFifoFull();
+    std::string getVio2sfGameName();
+    std::string getVio2sfCopyright();
+    std::string getVio2sfYear();
+    std::string getVio2sfComment();
+    std::string getVio2sfLengthTag();
+    std::string getVio2sfFadeTag();
     std::string getSidFormatName();
     std::string getSidClockName();
     std::string getSidSpeedName();

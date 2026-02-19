@@ -30,6 +30,12 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    std::string getGameName();
+    std::string getCopyright();
+    std::string getYear();
+    std::string getComment();
+    std::string getLengthTag();
+    std::string getFadeTag();
     std::vector<std::string> getToggleChannelNames() override;
     std::vector<uint8_t> getToggleChannelAvailability() override;
     void setToggleChannelMuted(int channelIndex, bool enabled) override;
@@ -100,6 +106,12 @@ private:
     std::string artist;
     std::string composer;
     std::string genre;
+    std::string gameName;
+    std::string copyrightText;
+    std::string year;
+    std::string comment;
+    std::string lengthTag;
+    std::string fadeTag;
 
     void closeInternalLocked();
     bool resetCoreLocked();

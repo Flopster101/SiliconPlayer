@@ -1195,6 +1195,12 @@ private fun TrackInfoDetailsDialog(
     var lazyUsf2FadeTag by remember { mutableStateOf("") }
     var lazyUsf2EnableCompare by remember { mutableStateOf(false) }
     var lazyUsf2EnableFifoFull by remember { mutableStateOf(false) }
+    var vio2sfGameName by remember { mutableStateOf("") }
+    var vio2sfCopyright by remember { mutableStateOf("") }
+    var vio2sfYear by remember { mutableStateOf("") }
+    var vio2sfComment by remember { mutableStateOf("") }
+    var vio2sfLengthTag by remember { mutableStateOf("") }
+    var vio2sfFadeTag by remember { mutableStateOf("") }
     var sidFormatName by remember { mutableStateOf("") }
     var sidClockName by remember { mutableStateOf("") }
     var sidSpeedName by remember { mutableStateOf("") }
@@ -1312,6 +1318,21 @@ private fun TrackInfoDetailsDialog(
                 lazyUsf2FadeTag = ""
                 lazyUsf2EnableCompare = false
                 lazyUsf2EnableFifoFull = false
+            }
+            if (decoderName.equals("Vio2SF", ignoreCase = true)) {
+                vio2sfGameName = NativeBridge.getVio2sfGameName()
+                vio2sfCopyright = NativeBridge.getVio2sfCopyright()
+                vio2sfYear = NativeBridge.getVio2sfYear()
+                vio2sfComment = NativeBridge.getVio2sfComment()
+                vio2sfLengthTag = NativeBridge.getVio2sfLengthTag()
+                vio2sfFadeTag = NativeBridge.getVio2sfFadeTag()
+            } else {
+                vio2sfGameName = ""
+                vio2sfCopyright = ""
+                vio2sfYear = ""
+                vio2sfComment = ""
+                vio2sfLengthTag = ""
+                vio2sfFadeTag = ""
             }
             if (decoderName.equals("LibSIDPlayFP", ignoreCase = true)) {
                 sidFormatName = NativeBridge.getSidFormatName()
@@ -1437,6 +1458,15 @@ private fun TrackInfoDetailsDialog(
             if (lazyUsf2FadeTag.isNotBlank()) row("Tagged fade", lazyUsf2FadeTag)
             row("Compare hack", if (lazyUsf2EnableCompare) "Enabled" else "Disabled")
             row("FIFO full hack", if (lazyUsf2EnableFifoFull) "Enabled" else "Disabled")
+        }
+        if (decoderName.equals("Vio2SF", ignoreCase = true)) {
+            append('\n').append("[Vio2SF]").append('\n')
+            if (vio2sfGameName.isNotBlank()) row("Game", vio2sfGameName)
+            if (vio2sfYear.isNotBlank()) row("Year", vio2sfYear)
+            if (vio2sfCopyright.isNotBlank()) row("Copyright", vio2sfCopyright)
+            if (vio2sfLengthTag.isNotBlank()) row("Tagged length", vio2sfLengthTag)
+            if (vio2sfFadeTag.isNotBlank()) row("Tagged fade", vio2sfFadeTag)
+            if (vio2sfComment.isNotBlank()) row("Comment", vio2sfComment)
         }
         if (decoderName.equals("LibSIDPlayFP", ignoreCase = true)) {
             append('\n').append("[LibSIDPlayFP]").append('\n')
@@ -1642,6 +1672,32 @@ private fun TrackInfoDetailsDialog(
                                 }
                                 TrackInfoDetailsRow("Compare hack", if (lazyUsf2EnableCompare) "Enabled" else "Disabled")
                                 TrackInfoDetailsRow("FIFO full hack", if (lazyUsf2EnableFifoFull) "Enabled" else "Disabled")
+                            }
+                            if (decoderName.equals("Vio2SF", ignoreCase = true)) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "Vio2SF",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (vio2sfGameName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Game", vio2sfGameName)
+                                }
+                                if (vio2sfYear.isNotBlank()) {
+                                    TrackInfoDetailsRow("Year", vio2sfYear)
+                                }
+                                if (vio2sfCopyright.isNotBlank()) {
+                                    TrackInfoDetailsRow("Copyright", vio2sfCopyright)
+                                }
+                                if (vio2sfLengthTag.isNotBlank()) {
+                                    TrackInfoDetailsRow("Tagged length", vio2sfLengthTag)
+                                }
+                                if (vio2sfFadeTag.isNotBlank()) {
+                                    TrackInfoDetailsRow("Tagged fade", vio2sfFadeTag)
+                                }
+                                if (vio2sfComment.isNotBlank()) {
+                                    TrackInfoDetailsRow("Comment", vio2sfComment)
+                                }
                             }
                             if (decoderName.equals("LibSIDPlayFP", ignoreCase = true)) {
                                 Spacer(modifier = Modifier.height(6.dp))

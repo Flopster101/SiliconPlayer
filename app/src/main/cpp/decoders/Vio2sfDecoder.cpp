@@ -469,6 +469,12 @@ bool Vio2sfDecoder::open(const char* path) {
     artist = metadata.artist;
     composer = metadata.composer;
     genre = metadata.genre;
+    gameName = metadata.game;
+    copyrightText = metadata.copyright;
+    year = metadata.year;
+    comment = metadata.comment;
+    lengthTag = metadata.lengthTag;
+    fadeTag = metadata.fadeTag;
     if (artist.empty()) {
         artist = metadata.game;
     }
@@ -526,6 +532,12 @@ void Vio2sfDecoder::closeInternalLocked() {
     artist.clear();
     composer.clear();
     genre.clear();
+    gameName.clear();
+    copyrightText.clear();
+    year.clear();
+    comment.clear();
+    lengthTag.clear();
+    fadeTag.clear();
 }
 
 bool Vio2sfDecoder::resetCoreLocked() {
@@ -664,6 +676,36 @@ std::string Vio2sfDecoder::getComposer() {
 std::string Vio2sfDecoder::getGenre() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return genre;
+}
+
+std::string Vio2sfDecoder::getGameName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return gameName;
+}
+
+std::string Vio2sfDecoder::getCopyright() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return copyrightText;
+}
+
+std::string Vio2sfDecoder::getYear() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return year;
+}
+
+std::string Vio2sfDecoder::getComment() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return comment;
+}
+
+std::string Vio2sfDecoder::getLengthTag() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return lengthTag;
+}
+
+std::string Vio2sfDecoder::getFadeTag() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return fadeTag;
 }
 
 void Vio2sfDecoder::ensureToggleChannelsLocked() {

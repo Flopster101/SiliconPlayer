@@ -2210,6 +2210,48 @@ bool AudioEngine::getLazyUsf2EnableFifoFull() {
     return lazyUsf2Decoder ? lazyUsf2Decoder->getEnableFifoFull() : false;
 }
 
+std::string AudioEngine::getVio2sfGameName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* vio2sfDecoder = dynamic_cast<Vio2sfDecoder*>(decoder.get());
+    return vio2sfDecoder ? vio2sfDecoder->getGameName() : "";
+}
+
+std::string AudioEngine::getVio2sfCopyright() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* vio2sfDecoder = dynamic_cast<Vio2sfDecoder*>(decoder.get());
+    return vio2sfDecoder ? vio2sfDecoder->getCopyright() : "";
+}
+
+std::string AudioEngine::getVio2sfYear() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* vio2sfDecoder = dynamic_cast<Vio2sfDecoder*>(decoder.get());
+    return vio2sfDecoder ? vio2sfDecoder->getYear() : "";
+}
+
+std::string AudioEngine::getVio2sfComment() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* vio2sfDecoder = dynamic_cast<Vio2sfDecoder*>(decoder.get());
+    return vio2sfDecoder ? vio2sfDecoder->getComment() : "";
+}
+
+std::string AudioEngine::getVio2sfLengthTag() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* vio2sfDecoder = dynamic_cast<Vio2sfDecoder*>(decoder.get());
+    return vio2sfDecoder ? vio2sfDecoder->getLengthTag() : "";
+}
+
+std::string AudioEngine::getVio2sfFadeTag() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* vio2sfDecoder = dynamic_cast<Vio2sfDecoder*>(decoder.get());
+    return vio2sfDecoder ? vio2sfDecoder->getFadeTag() : "";
+}
+
 std::string AudioEngine::getSidFormatName() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";

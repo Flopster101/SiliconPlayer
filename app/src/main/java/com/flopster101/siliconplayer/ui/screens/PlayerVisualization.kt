@@ -68,6 +68,7 @@ import java.io.File
 import kotlin.coroutines.coroutineContext
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -844,13 +845,23 @@ internal fun AlbumArtPlaceholder(
         } else {
             visualizationRenderBackendForMode(visualizationMode)
         }
-        if (nextBackend != lastVisualizationBackend) {
-            backendTransitionBlackAlpha.snapTo(0f)
-            backendTransitionBlackAlpha.animateTo(1f, animationSpec = tween(85))
+        try {
+            if (nextBackend != lastVisualizationBackend) {
+                backendTransitionBlackAlpha.snapTo(0f)
+                backendTransitionBlackAlpha.animateTo(1f, animationSpec = tween(85))
+                backendTransitionBlackAlpha.animateTo(0f, animationSpec = tween(145))
+            } else if (backendTransitionBlackAlpha.value > 0f) {
+                backendTransitionBlackAlpha.snapTo(0f)
+            }
             lastVisualizationBackend = nextBackend
-            backendTransitionBlackAlpha.animateTo(0f, animationSpec = tween(145))
-        } else {
-            lastVisualizationBackend = nextBackend
+        } finally {
+            // Rapid switches can cancel this effect mid-transition.
+            // Ensure the blackout overlay never remains latched.
+            withContext(NonCancellable) {
+                if (backendTransitionBlackAlpha.value > 0f) {
+                    backendTransitionBlackAlpha.snapTo(0f)
+                }
+            }
         }
     }
     LaunchedEffect(

@@ -13,6 +13,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -49,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,8 +72,8 @@ import androidx.compose.runtime.withFrameNanos
 import kotlin.math.min
 
 private const val BROWSER_PAGE_DURATION_MS = 280
-private const val DIRECTORY_CHUNK_SIZE = 48
 private const val MIN_LOADING_SPINNER_MS = 220L
+private const val FILE_ENTRY_ANIM_DURATION_MS = 280
 
 private enum class BrowserNavDirection {
     Forward,
@@ -113,6 +116,7 @@ fun FileBrowserScreen(
     val coroutineScope = rememberCoroutineScope()
     var directoryLoadJob by remember { mutableStateOf<Job?>(null) }
     var isPullRefreshing by remember { mutableStateOf(false) }
+    var directoryAnimationEpoch by remember { mutableIntStateOf(0) }
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val selectorIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
@@ -130,6 +134,7 @@ fun FileBrowserScreen(
     fun loadDirectoryAsync(directory: File) {
         directoryLoadJob?.cancel()
         isLoadingDirectory = true
+        directoryAnimationEpoch += 1
         fileList.clear()
 
         val targetPath = directory.absolutePath
@@ -152,19 +157,24 @@ fun FileBrowserScreen(
                 val stillOnSameDirectory = currentDirectory?.absolutePath == targetPath &&
                     selectedLocationId != null
                 if (stillOnSameDirectory) {
-                    // Publish results progressively so large folders don't freeze frames.
+                    // Publish results progressively at a paced rate so rows appear while loading.
                     fileList.clear()
+                    val publishBatchSize = directoryPublishBatchSize(loadedFiles.size)
+                    val publishDelayMs = directoryPublishDelayMs(loadedFiles.size)
                     var index = 0
                     while (index < loadedFiles.size) {
                         ensureActive()
                         if (currentDirectory?.absolutePath != targetPath || selectedLocationId == null) break
 
-                        val end = min(index + DIRECTORY_CHUNK_SIZE, loadedFiles.size)
+                        val end = min(index + publishBatchSize, loadedFiles.size)
                         val chunk = loadedFiles.subList(index, end)
                         fileList.addAll(chunk)
                         index = end
-                        // Yield a frame between chunks to keep UI responsive/animated.
+                        // Yield a frame between batches to keep UI responsive/animated.
                         withFrameNanos { }
+                        if (index < loadedFiles.size) {
+                            delay(publishDelayMs)
+                        }
                     }
                 }
             } catch (_: CancellationException) {
@@ -587,19 +597,25 @@ fun FileBrowserScreen(
                     ) {
                         items(
                             items = fileList,
-                            key = { it.file.absolutePath }
+                            key = { item -> item.file.absolutePath }
                         ) { item ->
-                            FileItemRow(
-                                item = item,
-                                isPlaying = item.file == playingFile,
-                                onClick = {
-                                    if (item.isDirectory) {
-                                        navigateTo(item.file)
-                                    } else {
-                                        onFileSelected(item.file)
+                            AnimatedFileBrowserEntry(
+                                itemKey = item.file.absolutePath,
+                                animationEpoch = directoryAnimationEpoch,
+                                animateOnFirstComposition = isLoadingDirectory
+                            ) {
+                                FileItemRow(
+                                    item = item,
+                                    isPlaying = item.file == playingFile,
+                                    onClick = {
+                                        if (item.isDirectory) {
+                                            navigateTo(item.file)
+                                        } else {
+                                            onFileSelected(item.file)
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
@@ -613,6 +629,65 @@ fun FileBrowserScreen(
             )
         }
     }
+}
+
+@Composable
+private fun AnimatedFileBrowserEntry(
+    itemKey: String,
+    animationEpoch: Int,
+    animateOnFirstComposition: Boolean,
+    content: @Composable () -> Unit
+) {
+    var visible by remember(itemKey, animationEpoch) {
+        mutableStateOf(!animateOnFirstComposition)
+    }
+    LaunchedEffect(itemKey, animationEpoch, animateOnFirstComposition) {
+        if (!animateOnFirstComposition) {
+            visible = true
+            return@LaunchedEffect
+        }
+        withFrameNanos { }
+        visible = true
+    }
+
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = FILE_ENTRY_ANIM_DURATION_MS,
+            easing = LinearOutSlowInEasing
+        ),
+        label = "fileEntryAlpha"
+    )
+    val offsetY by animateDpAsState(
+        targetValue = if (visible) 0.dp else 10.dp,
+        animationSpec = tween(
+            durationMillis = FILE_ENTRY_ANIM_DURATION_MS,
+            easing = LinearOutSlowInEasing
+        ),
+        label = "fileEntryOffset"
+    )
+
+    Box(
+        modifier = Modifier
+            .offset(y = offsetY)
+            .alpha(alpha)
+    ) {
+        content()
+    }
+}
+
+private fun directoryPublishBatchSize(totalItems: Int): Int = when {
+    totalItems <= 36 -> 1
+    totalItems <= 120 -> 2
+    totalItems <= 260 -> 4
+    else -> 8
+}
+
+private fun directoryPublishDelayMs(totalItems: Int): Long = when {
+    totalItems <= 36 -> 24L
+    totalItems <= 120 -> 18L
+    totalItems <= 260 -> 12L
+    else -> 8L
 }
 
 private data class StorageLocation(

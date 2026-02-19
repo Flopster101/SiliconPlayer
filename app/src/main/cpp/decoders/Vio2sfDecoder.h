@@ -24,6 +24,7 @@ public:
     int getSampleRate() override;
     int getBitDepth() override;
     std::string getBitDepthLabel() override;
+    int getDisplayChannelCount() override;
     int getChannelCount() override;
     std::string getTitle() override;
     std::string getArtist() override;

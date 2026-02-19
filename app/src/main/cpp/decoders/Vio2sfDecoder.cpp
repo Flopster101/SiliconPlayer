@@ -638,6 +638,10 @@ std::string Vio2sfDecoder::getBitDepthLabel() {
     return "16-bit PCM";
 }
 
+int Vio2sfDecoder::getDisplayChannelCount() {
+    return kNdsVoices;
+}
+
 int Vio2sfDecoder::getChannelCount() {
     return channels;
 }

@@ -287,7 +287,7 @@ build_openssl() {
         return 1
     fi
 
-    if [ -f "$INSTALL_DIR/lib/libssl.a" ] && [ -f "$INSTALL_DIR/lib/libcrypto.a" ] && [ -f "$INSTALL_DIR/include/openssl/ssl.h" ] && [ -f "$OPENSSL_STAMP_FILE" ]; then
+    if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libssl.a" ] && [ -f "$INSTALL_DIR/lib/libcrypto.a" ] && [ -f "$INSTALL_DIR/include/openssl/ssl.h" ] && [ -f "$OPENSSL_STAMP_FILE" ]; then
         if [ "$(cat "$OPENSSL_STAMP_FILE")" = "$OPENSSL_BUILD_SIGNATURE" ]; then
             echo "OpenSSL already built for $ABI -> skipping"
             return 0
@@ -932,7 +932,7 @@ build_libresid() {
         return 0
     fi
 
-    if [ -f "$INSTALL_DIR/lib/libresid.a" ] && \
+    if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libresid.a" ] && \
        [ -f "$INSTALL_DIR/include/resid/sid.h" ] && \
        [ -f "$INSTALL_DIR/include/resid/siddefs.h" ]; then
         echo "libresid already built for $ABI -> skipping"
@@ -1020,7 +1020,7 @@ build_libresidfp() {
         return 0
     fi
 
-    if [ -f "$INSTALL_DIR/lib/libresidfp.a" ] && \
+    if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libresidfp.a" ] && \
        [ -f "$INSTALL_DIR/include/residfp/residfp.h" ] && \
        [ -f "$INSTALL_DIR/lib/pkgconfig/libresidfp.pc" ]; then
         echo "libresidfp already built for $ABI -> skipping"
@@ -1243,9 +1243,10 @@ build_libsidplayfp() {
 # Argument Parsing
 # -----------------------------------------------------------------------------
 usage() {
-    echo "Usage: $0 <abi|all> <lib|all[,lib2,...]>"
+    echo "Usage: $0 <abi|all> <lib|all[,lib2,...]> [clean]"
     echo "  ABI: all, arm64-v8a, armeabi-v7a, x86_64, x86"
     echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth"
+    echo "  clean (optional): force rebuild (bypass already-built skip checks)"
     echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth"
 }
 
@@ -1255,7 +1256,7 @@ if [ "$#" -eq 1 ]; then
     exit 1
 fi
 
-if [ "$#" -gt 2 ]; then
+if [ "$#" -gt 3 ]; then
     echo "Error: too many arguments."
     usage
     exit 1
@@ -1263,6 +1264,20 @@ fi
 
 TARGET_ABI=${1:-all}
 TARGET_LIB=${2:-all}
+FORCE_CLEAN=0
+
+if [ "$#" -eq 3 ]; then
+    case "$3" in
+        clean|--clean)
+            FORCE_CLEAN=1
+            ;;
+        *)
+            echo "Error: invalid third argument '$3'. Expected 'clean'."
+            usage
+            exit 1
+            ;;
+    esac
+fi
 
 normalize_lib_name() {
     local lib="$1"
@@ -1364,6 +1379,10 @@ if [ "$TARGET_LIB" != "all" ]; then
             exit 1
         fi
     done
+fi
+
+if [ "$FORCE_CLEAN" -eq 1 ]; then
+    echo "Clean mode enabled: forcing rebuilds (skip checks disabled)."
 fi
 
 # -----------------------------------------------------------------------------

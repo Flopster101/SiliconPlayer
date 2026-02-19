@@ -87,9 +87,14 @@ jobs:
           clone_repo() {
             local url="$1"
             local path="$2"
+            local ref="${3:-}"
             mkdir -p "$(dirname "$path")"
             if [ ! -d "$path/.git" ]; then
               git clone --depth 1 "$url" "$path"
+            fi
+            if [ -n "$ref" ]; then
+              git -C "$path" fetch --depth 1 origin "$ref" || git -C "$path" fetch origin "$ref"
+              git -C "$path" checkout --detach FETCH_HEAD
             fi
           }
 
@@ -100,7 +105,7 @@ jobs:
           clone_repo "https://github.com/libgme/game-music-emu.git" "external/libgme"
           clone_repo "https://github.com/OpenMPT/openmpt.git" "external/libopenmpt"
           clone_repo "https://github.com/libsidplayfp/libresidfp" "external/libresidfp"
-          clone_repo "https://github.com/libsidplayfp/libsidplayfp" "external/libsidplayfp"
+          clone_repo "https://github.com/libsidplayfp/libsidplayfp" "external/libsidplayfp" "4737938f1e27f88c0c31f196b3745944d1c7d394"
           clone_repo "https://git.code.sf.net/p/soxr/code" "external/libsoxr"
           clone_repo "https://github.com/ValleyBell/libvgm.git" "external/libvgm"
           clone_repo "https://github.com/openssl/openssl" "external/openssl"
@@ -109,10 +114,11 @@ jobs:
 
           # Initialize nested submodules for any externals that use them.
           for repo_dir in external/* external/2sf/*; do
-            if [ -d "$repo_dir/.git" ] && [ -f "$repo_dir/.gitmodules" ]; then
+            if [ -e "$repo_dir/.git" ] && [ -f "$repo_dir/.gitmodules" ]; then
               git -C "$repo_dir" submodule update --init --recursive
             fi
           done
+          git -C external/libsidplayfp submodule update --init --recursive
 
       - name: Verify debug signing key
         run: test -f debug.keystore

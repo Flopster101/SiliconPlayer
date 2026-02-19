@@ -1093,12 +1093,42 @@ build_libsidplayfp() {
         fi
 
         # libsidplayfp autotools expects these submodules to exist.
-        # Do not create placeholders; fail hard if missing.
+        # Auto-initialize them when available instead of failing immediately.
         if [ ! -d "$PROJECT_PATH/src/builders/exsid-builder/driver/m4" ] || \
            [ ! -d "$PROJECT_PATH/src/builders/usbsid-builder/driver/m4" ]; then
-            echo "Error: libsidplayfp submodules are missing."
+            echo "libsidplayfp submodules missing; attempting init/update..."
+            git -C "$PROJECT_PATH" submodule update --init --recursive || true
+        fi
+
+        if [ ! -d "$PROJECT_PATH/src/builders/exsid-builder/driver/m4" ] || \
+           [ ! -d "$PROJECT_PATH/src/builders/usbsid-builder/driver/m4" ]; then
+            echo "libsidplayfp submodules still missing; attempting direct fallback clones..."
+            if command -v git >/dev/null 2>&1; then
+                local EXSID_DIR="$PROJECT_PATH/src/builders/exsid-builder/driver"
+                local USBSID_DIR="$PROJECT_PATH/src/builders/usbsid-builder/driver"
+
+                if [ ! -d "$EXSID_DIR/m4" ]; then
+                    rm -rf "$EXSID_DIR"
+                    mkdir -p "$(dirname "$EXSID_DIR")"
+                    git clone --depth 1 https://github.com/libsidplayfp/exsid-driver.git "$EXSID_DIR" || true
+                fi
+
+                if [ ! -d "$USBSID_DIR/m4" ]; then
+                    rm -rf "$USBSID_DIR"
+                    mkdir -p "$(dirname "$USBSID_DIR")"
+                    git clone --depth 1 https://github.com/LouDnl/USBSID-Pico-driver.git "$USBSID_DIR" || true
+                fi
+            fi
+        fi
+
+        if [ ! -d "$PROJECT_PATH/src/builders/exsid-builder/driver/m4" ] || \
+           [ ! -d "$PROJECT_PATH/src/builders/usbsid-builder/driver/m4" ]; then
+            echo "Error: libsidplayfp submodule/fallback dependencies are still missing."
             echo "Run:"
             echo "  git -C \"$PROJECT_PATH\" submodule update --init --recursive"
+            echo "or clone:"
+            echo "  https://github.com/libsidplayfp/exsid-driver.git"
+            echo "  https://github.com/LouDnl/USBSID-Pico-driver.git"
             return 1
         fi
 

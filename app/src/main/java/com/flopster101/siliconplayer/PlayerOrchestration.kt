@@ -140,6 +140,7 @@ internal fun pluginNameForCoreName(coreName: String?): String? {
         "game music emu", "libgme", "gme" -> "Game Music Emu"
         "libsidplayfp", "sidplayfp", "sid" -> "LibSIDPlayFP"
         "lazyusf2", "lazyusf", "usf" -> "LazyUSF2"
+        "vio2sf", "2sf", "mini2sf" -> "Vio2SF"
         else -> null
     }
 }

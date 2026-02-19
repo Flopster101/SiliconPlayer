@@ -267,6 +267,8 @@ build_openssl() {
     local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
     local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
     local OPENSSL_TARGET=""
+    local OPENSSL_CROSS_PREFIX=""
+    local OPENSSL_CLANG_BIN=""
     local OPENSSL_BUILD_SIGNATURE="openssl-android-static-pic-noasm-v1"
     local OPENSSL_STAMP_FILE="$INSTALL_DIR/lib/.openssl_build_signature"
 
@@ -286,15 +288,23 @@ build_openssl() {
     case "$ABI" in
         "arm64-v8a")
             OPENSSL_TARGET="android-arm64"
+            OPENSSL_CROSS_PREFIX="aarch64-linux-android-"
+            OPENSSL_CLANG_BIN="$TOOLCHAIN/bin/aarch64-linux-android${ANDROID_API}-clang"
             ;;
         "armeabi-v7a")
             OPENSSL_TARGET="android-arm"
+            OPENSSL_CROSS_PREFIX="arm-linux-androideabi-"
+            OPENSSL_CLANG_BIN="$TOOLCHAIN/bin/armv7a-linux-androideabi${ANDROID_API}-clang"
             ;;
         "x86_64")
             OPENSSL_TARGET="android-x86_64"
+            OPENSSL_CROSS_PREFIX="x86_64-linux-android-"
+            OPENSSL_CLANG_BIN="$TOOLCHAIN/bin/x86_64-linux-android${ANDROID_API}-clang"
             ;;
         "x86")
             OPENSSL_TARGET="android-x86"
+            OPENSSL_CROSS_PREFIX="i686-linux-android-"
+            OPENSSL_CLANG_BIN="$TOOLCHAIN/bin/i686-linux-android${ANDROID_API}-clang"
             ;;
         *)
             echo "Unsupported ABI for OpenSSL: $ABI"
@@ -303,6 +313,10 @@ build_openssl() {
     esac
 
     echo "Building OpenSSL for $ABI ($OPENSSL_TARGET)..."
+    if [ ! -x "$OPENSSL_CLANG_BIN" ]; then
+        echo "Error: expected clang not found for OpenSSL: $OPENSSL_CLANG_BIN"
+        return 1
+    fi
 
     mkdir -p "$INSTALL_DIR"
     rm -rf "$BUILD_DIR"
@@ -313,10 +327,31 @@ build_openssl() {
     make clean >/dev/null 2>&1 || true
     rm -f configdata.pm
 
+    # OpenSSL Android Configure probing is sensitive to env vars and legacy tool names.
+    # Export canonical Android vars and provide compat wrappers in an ABI-local PATH prefix.
+    local OPENSSL_COMPAT_BIN="$BUILD_DIR/ndk-compat-bin"
+    mkdir -p "$OPENSSL_COMPAT_BIN"
+
+    cat > "$OPENSSL_COMPAT_BIN/${OPENSSL_CROSS_PREFIX}gcc" <<EOF
+#!/usr/bin/env bash
+exec "$OPENSSL_CLANG_BIN" "\$@"
+EOF
+    cat > "$OPENSSL_COMPAT_BIN/${OPENSSL_CROSS_PREFIX}clang" <<EOF
+#!/usr/bin/env bash
+exec "$OPENSSL_CLANG_BIN" "\$@"
+EOF
+    chmod +x "$OPENSSL_COMPAT_BIN/${OPENSSL_CROSS_PREFIX}gcc" "$OPENSSL_COMPAT_BIN/${OPENSSL_CROSS_PREFIX}clang"
+
+    export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+    export ANDROID_NDK="$ANDROID_NDK_HOME"
+    export ANDROID_API="$ANDROID_API"
+    export PATH="$OPENSSL_COMPAT_BIN:$TOOLCHAIN/bin:$PATH"
+
     export CFLAGS="-fPIC"
     export CXXFLAGS="-fPIC"
 
     perl ./Configure "$OPENSSL_TARGET" \
+        --cross-compile-prefix="$OPENSSL_CROSS_PREFIX" \
         no-tests \
         no-asm \
         no-shared \

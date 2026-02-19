@@ -54,6 +54,32 @@ jobs:
           git config --global user.name "Flopster101 CI"
           git config --global user.email "nahuelgomez329@gmail.com"
 
+      - name: Add NDK gcc compatibility wrappers for OpenSSL configure
+        run: |
+          set -euo pipefail
+          WRAPPER_DIR="/tmp/ndk-gcc-compat"
+          mkdir -p "${WRAPPER_DIR}"
+
+          cat > "${WRAPPER_DIR}/aarch64-linux-android-gcc" <<'EOF'
+          #!/usr/bin/env bash
+          exec "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang" "$@"
+          EOF
+          cat > "${WRAPPER_DIR}/arm-linux-androideabi-gcc" <<'EOF'
+          #!/usr/bin/env bash
+          exec "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi26-clang" "$@"
+          EOF
+          cat > "${WRAPPER_DIR}/x86_64-linux-android-gcc" <<'EOF'
+          #!/usr/bin/env bash
+          exec "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android26-clang" "$@"
+          EOF
+          cat > "${WRAPPER_DIR}/i686-linux-android-gcc" <<'EOF'
+          #!/usr/bin/env bash
+          exec "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android26-clang" "$@"
+          EOF
+
+          chmod +x "${WRAPPER_DIR}"/*-linux-android-gcc
+          echo "${WRAPPER_DIR}" >> "${GITHUB_PATH}"
+
       - name: Bootstrap external repositories
         run: |
           set -euo pipefail

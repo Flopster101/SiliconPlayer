@@ -686,7 +686,7 @@ fun PlayerScreen(
         Scaffold(
             topBar = {
                 CenterAlignedTopAppBar(
-                    title = { Text("Now Playing") },
+                    title = { },
                     navigationIcon = {
                         IconButton(onClick = onBack, enabled = enableCollapseGesture) {
                             Icon(

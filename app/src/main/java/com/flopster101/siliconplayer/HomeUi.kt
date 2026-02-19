@@ -1,5 +1,10 @@
 package com.flopster101.siliconplayer
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeSpacing
 import androidx.compose.foundation.basicMarquee
@@ -32,9 +37,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +53,11 @@ import androidx.compose.ui.unit.dp
 import java.io.File
 
 private val HomeCardShape = RoundedCornerShape(16.dp)
+private const val HOME_RECENTS_INSERT_ANIM_DURATION_MS = 260
+private data class RecentAnimationState(
+    val insertedKeys: Set<String>,
+    val promotedTopKey: String?
+)
 
 internal data class RecentTrackDisplay(
     val primaryText: String,
@@ -115,6 +128,19 @@ internal fun HomeScreen(
 ) {
     var folderActionTargetEntry by remember { mutableStateOf<RecentPathEntry?>(null) }
     var fileActionTargetEntry by remember { mutableStateOf<RecentPathEntry?>(null) }
+
+    val recentFolderKeys = remember(recentFolders) {
+        recentFolders.map { entry ->
+            "${entry.locationId.orEmpty()}|${entry.path}"
+        }
+    }
+    val recentPlayedKeys = remember(recentPlayedFiles) {
+        recentPlayedFiles.map { entry ->
+            "${entry.locationId.orEmpty()}|${entry.path}|${entry.title.orEmpty()}|${entry.artist.orEmpty()}"
+        }
+    }
+    val recentFolderAnimationState = rememberRecentAnimationState(recentFolderKeys)
+    val recentPlayedAnimationState = rememberRecentAnimationState(recentPlayedKeys)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -227,78 +253,87 @@ internal fun HomeScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             recentFolders.forEach { entry ->
-                val folderFile = File(entry.path)
-                val storagePresentation = storagePresentationForEntry(entry)
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    ElevatedCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(HomeCardShape)
-                            .combinedClickable(
-                                onClick = { onOpenRecentFolder(entry) },
-                                onLongClick = {
-                                    fileActionTargetEntry = null
-                                    folderActionTargetEntry = entry
-                                }
-                            ),
-                        shape = HomeCardShape
+                val itemKey = "${entry.locationId.orEmpty()}|${entry.path}"
+                key(itemKey) {
+                    AnimatedRecentCardInsertion(
+                        itemKey = itemKey,
+                        animate = itemKey in recentFolderAnimationState.insertedKeys ||
+                            itemKey == recentFolderAnimationState.promotedTopKey
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Folder,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = folderFile.name.ifBlank { entry.path },
-                                    style = MaterialTheme.typography.titleSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                        val folderFile = File(entry.path)
+                        val storagePresentation = storagePresentationForEntry(entry)
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            ElevatedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(HomeCardShape)
+                                    .combinedClickable(
+                                        onClick = { onOpenRecentFolder(entry) },
+                                        onLongClick = {
+                                            fileActionTargetEntry = null
+                                            folderActionTargetEntry = entry
+                                        }
+                                    ),
+                                shape = HomeCardShape
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Icon(
-                                        imageVector = storagePresentation.icon,
+                                        imageVector = Icons.Default.Folder,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(14.dp)
+                                        tint = MaterialTheme.colorScheme.primary
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = storagePresentation.label,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = folderFile.name.ifBlank { entry.path },
+                                            style = MaterialTheme.typography.titleSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = storagePresentation.icon,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = storagePresentation.label,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
                                 }
+                            }
+                            DropdownMenu(
+                                expanded = folderActionTargetEntry == entry,
+                                onDismissRequest = { folderActionTargetEntry = null }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Delete from recents") },
+                                    onClick = {
+                                        onRecentFolderAction(entry, FolderEntryAction.DeleteFromRecents)
+                                        folderActionTargetEntry = null
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Copy path") },
+                                    onClick = {
+                                        onRecentFolderAction(entry, FolderEntryAction.CopyPath)
+                                        folderActionTargetEntry = null
+                                    }
+                                )
                             }
                         }
-                    }
-                    DropdownMenu(
-                        expanded = folderActionTargetEntry == entry,
-                        onDismissRequest = { folderActionTargetEntry = null }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Delete from recents") },
-                            onClick = {
-                                onRecentFolderAction(entry, FolderEntryAction.DeleteFromRecents)
-                                folderActionTargetEntry = null
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Copy path") },
-                            onClick = {
-                                onRecentFolderAction(entry, FolderEntryAction.CopyPath)
-                                folderActionTargetEntry = null
-                            }
-                        )
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -318,82 +353,92 @@ internal fun HomeScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
             recentPlayedFiles.forEach { entry ->
-                val trackFile = File(entry.path)
-                val storagePresentation = storagePresentationForEntry(entry)
-                val extensionLabel = trackFile.extension.uppercase().ifBlank { "UNKNOWN" }
-                val useLiveMetadata = samePath(currentTrackPath, entry.path)
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    ElevatedCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(HomeCardShape)
-                            .combinedClickable(
-                                onClick = { onPlayRecentFile(entry) },
-                                onLongClick = {
-                                    folderActionTargetEntry = null
-                                    fileActionTargetEntry = entry
-                                }
-                            ),
-                        shape = HomeCardShape
+                val itemKey =
+                    "${entry.locationId.orEmpty()}|${entry.path}|${entry.title.orEmpty()}|${entry.artist.orEmpty()}"
+                key(itemKey) {
+                    AnimatedRecentCardInsertion(
+                        itemKey = itemKey,
+                        animate = itemKey in recentPlayedAnimationState.insertedKeys ||
+                            itemKey == recentPlayedAnimationState.promotedTopKey
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                RecentTrackSummaryText(
-                                    file = trackFile,
-                                    cachedTitle = if (useLiveMetadata) currentTrackTitle else entry.title,
-                                    cachedArtist = if (useLiveMetadata) currentTrackArtist else entry.artist,
-                                    storagePresentation = storagePresentation,
-                                    extensionLabel = extensionLabel
-                                )
+                        val trackFile = File(entry.path)
+                        val storagePresentation = storagePresentationForEntry(entry)
+                        val extensionLabel = trackFile.extension.uppercase().ifBlank { "UNKNOWN" }
+                        val useLiveMetadata = samePath(currentTrackPath, entry.path)
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            ElevatedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(HomeCardShape)
+                                    .combinedClickable(
+                                        onClick = { onPlayRecentFile(entry) },
+                                        onLongClick = {
+                                            folderActionTargetEntry = null
+                                            fileActionTargetEntry = entry
+                                        }
+                                    ),
+                                shape = HomeCardShape
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MusicNote,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        RecentTrackSummaryText(
+                                            file = trackFile,
+                                            cachedTitle = if (useLiveMetadata) currentTrackTitle else entry.title,
+                                            cachedArtist = if (useLiveMetadata) currentTrackArtist else entry.artist,
+                                            storagePresentation = storagePresentation,
+                                            extensionLabel = extensionLabel
+                                        )
+                                    }
+                                    if (useLiveMetadata) {
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = "Playing",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
                             }
-                            if (useLiveMetadata) {
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = "Playing",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
+                            DropdownMenu(
+                                expanded = fileActionTargetEntry == entry,
+                                onDismissRequest = { fileActionTargetEntry = null }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Delete from recents") },
+                                    onClick = {
+                                        onRecentFileAction(entry, SourceEntryAction.DeleteFromRecents)
+                                        fileActionTargetEntry = null
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share file") },
+                                    onClick = {
+                                        onRecentFileAction(entry, SourceEntryAction.ShareFile)
+                                        fileActionTargetEntry = null
+                                    },
+                                    enabled = canShareRecentFile(entry)
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Copy URL/path") },
+                                    onClick = {
+                                        onRecentFileAction(entry, SourceEntryAction.CopySource)
+                                        fileActionTargetEntry = null
+                                    }
                                 )
                             }
                         }
-                    }
-                    DropdownMenu(
-                        expanded = fileActionTargetEntry == entry,
-                        onDismissRequest = { fileActionTargetEntry = null }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Delete from recents") },
-                            onClick = {
-                                onRecentFileAction(entry, SourceEntryAction.DeleteFromRecents)
-                                fileActionTargetEntry = null
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Share file") },
-                            onClick = {
-                                onRecentFileAction(entry, SourceEntryAction.ShareFile)
-                                fileActionTargetEntry = null
-                            },
-                            enabled = canShareRecentFile(entry)
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Copy URL/path") },
-                            onClick = {
-                                onRecentFileAction(entry, SourceEntryAction.CopySource)
-                                fileActionTargetEntry = null
-                            }
-                        )
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
@@ -401,6 +446,76 @@ internal fun HomeScreen(
         }
     }
 
+}
+
+@Composable
+private fun rememberRecentAnimationState(currentKeys: List<String>): RecentAnimationState {
+    var previousKeys by remember { mutableStateOf<List<String>>(emptyList()) }
+    var initialized by remember { mutableStateOf(false) }
+    val currentSet = remember(currentKeys) { currentKeys.toSet() }
+    val previousSet = remember(previousKeys) { previousKeys.toSet() }
+    val previousTopKey = previousKeys.firstOrNull()
+    val currentTopKey = currentKeys.firstOrNull()
+
+    val inserted = remember(currentSet, previousSet, initialized) {
+        if (!initialized) emptySet() else (currentSet - previousSet)
+    }
+    val promotedTopKey = remember(currentTopKey, previousTopKey, initialized) {
+        if (!initialized) null
+        else if (currentTopKey != null && currentTopKey != previousTopKey) currentTopKey
+        else null
+    }
+
+    LaunchedEffect(currentKeys) {
+        if (!initialized) {
+            previousKeys = currentKeys
+            initialized = true
+            return@LaunchedEffect
+        }
+        // Keep the change-derived animation flags for at least one frame.
+        withFrameNanos { }
+        previousKeys = currentKeys
+    }
+
+    return RecentAnimationState(
+        insertedKeys = inserted,
+        promotedTopKey = promotedTopKey
+    )
+}
+
+@Composable
+private fun AnimatedRecentCardInsertion(
+    itemKey: String,
+    animate: Boolean,
+    content: @Composable () -> Unit
+) {
+    var visible by remember(itemKey, animate) { mutableStateOf(!animate) }
+    LaunchedEffect(itemKey, animate) {
+        if (!animate) {
+            visible = true
+            return@LaunchedEffect
+        }
+        withFrameNanos { }
+        visible = true
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        enter = expandVertically(
+            expandFrom = Alignment.Top,
+            animationSpec = tween(
+                durationMillis = HOME_RECENTS_INSERT_ANIM_DURATION_MS,
+                easing = FastOutSlowInEasing
+            )
+        ) + fadeIn(
+            animationSpec = tween(
+                durationMillis = HOME_RECENTS_INSERT_ANIM_DURATION_MS,
+                easing = FastOutSlowInEasing
+            )
+        )
+    ) {
+        content()
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

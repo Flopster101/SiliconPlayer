@@ -740,7 +740,7 @@ void Vio2sfDecoder::setRepeatMode(int mode) {
 }
 
 int Vio2sfDecoder::getRepeatModeCapabilities() const {
-    return REPEAT_CAP_TRACK;
+    return REPEAT_CAP_TRACK | REPEAT_CAP_LOOP_POINT;
 }
 
 int Vio2sfDecoder::getPlaybackCapabilities() const {

@@ -1095,13 +1095,13 @@ build_libsidplayfp() {
         # libsidplayfp autotools expects these submodules to exist.
         # Auto-initialize them when available instead of failing immediately.
         if [ ! -d "$PROJECT_PATH/src/builders/exsid-builder/driver/m4" ] || \
-           [ ! -d "$PROJECT_PATH/src/builders/usbsid-builder/driver/m4" ]; then
+           [ ! -f "$PROJECT_PATH/src/builders/usbsid-builder/driver/src/USBSID.cpp" ]; then
             echo "libsidplayfp submodules missing; attempting init/update..."
             git -C "$PROJECT_PATH" submodule update --init --recursive || true
         fi
 
         if [ ! -d "$PROJECT_PATH/src/builders/exsid-builder/driver/m4" ] || \
-           [ ! -d "$PROJECT_PATH/src/builders/usbsid-builder/driver/m4" ]; then
+           [ ! -f "$PROJECT_PATH/src/builders/usbsid-builder/driver/src/USBSID.cpp" ]; then
             echo "libsidplayfp submodules still missing; attempting direct fallback clones..."
             if command -v git >/dev/null 2>&1; then
                 local EXSID_DIR="$PROJECT_PATH/src/builders/exsid-builder/driver"
@@ -1113,7 +1113,7 @@ build_libsidplayfp() {
                     git clone --depth 1 https://github.com/libsidplayfp/exsid-driver.git "$EXSID_DIR" || true
                 fi
 
-                if [ ! -d "$USBSID_DIR/m4" ]; then
+                if [ ! -f "$USBSID_DIR/src/USBSID.cpp" ]; then
                     rm -rf "$USBSID_DIR"
                     mkdir -p "$(dirname "$USBSID_DIR")"
                     git clone --depth 1 https://github.com/LouDnl/USBSID-Pico-driver.git "$USBSID_DIR" || true
@@ -1122,7 +1122,7 @@ build_libsidplayfp() {
         fi
 
         if [ ! -d "$PROJECT_PATH/src/builders/exsid-builder/driver/m4" ] || \
-           [ ! -d "$PROJECT_PATH/src/builders/usbsid-builder/driver/m4" ]; then
+           [ ! -f "$PROJECT_PATH/src/builders/usbsid-builder/driver/src/USBSID.cpp" ]; then
             echo "Error: libsidplayfp submodule/fallback dependencies are still missing."
             echo "Run:"
             echo "  git -C \"$PROJECT_PATH\" submodule update --init --recursive"

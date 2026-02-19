@@ -2272,6 +2272,25 @@ private data class ChannelControlItem(
     val muted: Boolean
 )
 
+private fun sortChannelControlsForDisplay(
+    items: List<ChannelControlItem>
+): List<ChannelControlItem> {
+    val paulaRegex = Regex("^Paula ([LR])(\\d+)$")
+    if (items.isEmpty() || items.any { !paulaRegex.matches(it.name) }) {
+        return items
+    }
+    return items.sortedWith(
+        compareBy<ChannelControlItem> { item ->
+            val match = paulaRegex.matchEntire(item.name)
+            match?.groupValues?.get(2)?.toIntOrNull() ?: Int.MAX_VALUE
+        }.thenBy { item ->
+            val match = paulaRegex.matchEntire(item.name)
+            val side = match?.groupValues?.get(1)
+            if (side == "L") 0 else 1
+        }
+    )
+}
+
 @Composable
 private fun ChannelControlDialog(
     onDismiss: () -> Unit
@@ -2294,13 +2313,14 @@ private fun ChannelControlDialog(
 
     fun loadDecoderState() {
         val names = NativeBridge.getDecoderToggleChannelNames().toList()
-        decoderChannels = names.mapIndexed { index, name ->
+        val rawItems = names.mapIndexed { index, name ->
             ChannelControlItem(
                 name = name,
                 channelIndex = index,
                 muted = NativeBridge.getDecoderToggleChannelMuted(index)
             )
         }
+        decoderChannels = sortChannelControlsForDisplay(rawItems)
     }
 
     fun clearMasterSoloFlags() {

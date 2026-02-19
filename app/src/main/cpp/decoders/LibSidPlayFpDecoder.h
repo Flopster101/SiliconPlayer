@@ -67,6 +67,10 @@ public:
     std::string getSidCurrentModelSummary();
     std::string getSidBaseAddressSummary();
     std::string getSidCommentSummary();
+    std::vector<std::string> getToggleChannelNames() override;
+    void setToggleChannelMuted(int channelIndex, bool enabled) override;
+    bool getToggleChannelMuted(int channelIndex) const override;
+    void clearToggleChannelMutes() override;
     void setOutputSampleRate(int sampleRateHz) override;
     void setOption(const char* name, const char* value) override;
     int getOptionApplyPolicy(const char* name) const override;
@@ -113,6 +117,8 @@ private:
     std::vector<int16_t> pendingMixedSamples;
     size_t pendingMixedOffset = 0;
     std::vector<int16_t> mixedScratchSamples;
+    std::vector<std::string> toggleChannelNames;
+    std::vector<bool> toggleChannelMuted;
     std::atomic<double> playbackPositionSecondsAtomic { 0.0 };
     std::atomic<double> currentSubtuneDurationSecondsAtomic { 180.0 };
     std::atomic<bool> durationReliableAtomic { false };
@@ -134,6 +140,8 @@ private:
     bool selectSubtuneLocked(int index);
     void applySidBackendOptionsLocked();
     void applySidFilterOptionsLocked();
+    void rebuildToggleChannelsLocked();
+    void applyToggleChannelMutesLocked();
     void refreshMetadataLocked();
 };
 

@@ -32,6 +32,8 @@ constexpr int kSidLiteMinSampleRateHz = 8000;
 constexpr int kSidLiteMaxSampleRateHz = 48000;
 constexpr int kSidGlobalMinSampleRateHz = 8000;
 constexpr int kSidGlobalMaxSampleRateHz = 192000;
+constexpr int kSidToggleChannelsPerChip = 4;
+constexpr int kSidMaxToggleChipCount = 3;
 
 std::string safeString(const char* value) {
     return value ? std::string(value) : "";
@@ -421,6 +423,8 @@ void LibSidPlayFpDecoder::refreshMetadataLocked() {
     } else {
         currentSubtuneDurationSecondsAtomic.store(fallbackDurationSeconds, std::memory_order_relaxed);
     }
+    rebuildToggleChannelsLocked();
+    applyToggleChannelMutesLocked();
 }
 
 bool LibSidPlayFpDecoder::selectSubtuneLocked(int index) {
@@ -441,6 +445,8 @@ bool LibSidPlayFpDecoder::selectSubtuneLocked(int index) {
     sidVoiceCount = std::max(1, runtimeSidChips * 3);
     sidSpeedName = safeString(info.speedString());
     applySidFilterOptionsLocked();
+    rebuildToggleChannelsLocked();
+    applyToggleChannelMutesLocked();
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
     playbackPositionSecondsAtomic.store(0.0, std::memory_order_relaxed);
@@ -530,6 +536,8 @@ bool LibSidPlayFpDecoder::open(const char* path) {
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
     mixedScratchSamples.clear();
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
     return openInternalLocked(path);
 }
 
@@ -564,6 +572,8 @@ void LibSidPlayFpDecoder::close() {
     pendingMixedSamples.clear();
     pendingMixedOffset = 0;
     mixedScratchSamples.clear();
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
 }
 
 int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
@@ -882,6 +892,37 @@ int LibSidPlayFpDecoder::getChannelCount() {
     return outputChannels;
 }
 
+std::vector<std::string> LibSidPlayFpDecoder::getToggleChannelNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return toggleChannelNames;
+}
+
+void LibSidPlayFpDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player) return;
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+    toggleChannelMuted[static_cast<size_t>(channelIndex)] = enabled;
+    applyToggleChannelMutesLocked();
+}
+
+bool LibSidPlayFpDecoder::getToggleChannelMuted(int channelIndex) const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player) return false;
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return false;
+    }
+    return toggleChannelMuted[static_cast<size_t>(channelIndex)];
+}
+
+void LibSidPlayFpDecoder::clearToggleChannelMutes() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player) return;
+    std::fill(toggleChannelMuted.begin(), toggleChannelMuted.end(), false);
+    applyToggleChannelMutesLocked();
+}
+
 int LibSidPlayFpDecoder::getSubtuneCount() const {
     return subtuneCount;
 }
@@ -1013,4 +1054,49 @@ int LibSidPlayFpDecoder::getRepeatModeCapabilities() const {
 
 double LibSidPlayFpDecoder::getPlaybackPositionSeconds() {
     return playbackPositionSecondsAtomic.load(std::memory_order_relaxed);
+}
+
+void LibSidPlayFpDecoder::rebuildToggleChannelsLocked() {
+    const int chipCount = std::clamp(sidChipCount, 1, kSidMaxToggleChipCount);
+    const int totalChannels = chipCount * kSidToggleChannelsPerChip;
+
+    const std::vector<bool> previousMuted = toggleChannelMuted;
+    toggleChannelNames.clear();
+    toggleChannelNames.reserve(static_cast<size_t>(totalChannels));
+
+    const bool includeChipPrefix = chipCount > 1;
+    for (int chip = 0; chip < chipCount; ++chip) {
+        const std::string chipPrefix = includeChipPrefix
+                ? ("SID " + std::to_string(chip + 1) + " ")
+                : "";
+        toggleChannelNames.push_back(chipPrefix + "Voice 1");
+        toggleChannelNames.push_back(chipPrefix + "Voice 2");
+        toggleChannelNames.push_back(chipPrefix + "Voice 3");
+        toggleChannelNames.push_back(chipPrefix + "Sample");
+    }
+
+    toggleChannelMuted.assign(static_cast<size_t>(totalChannels), false);
+    const size_t preserved = std::min(previousMuted.size(), toggleChannelMuted.size());
+    for (size_t i = 0; i < preserved; ++i) {
+        toggleChannelMuted[i] = previousMuted[i];
+    }
+}
+
+void LibSidPlayFpDecoder::applyToggleChannelMutesLocked() {
+    if (!player) return;
+    const int chipCount = std::clamp(sidChipCount, 1, kSidMaxToggleChipCount);
+    for (int chip = 0; chip < chipCount; ++chip) {
+        for (int voice = 0; voice < kSidToggleChannelsPerChip; ++voice) {
+            const int channelIndex = (chip * kSidToggleChannelsPerChip) + voice;
+            const bool muted =
+                    channelIndex >= 0 &&
+                    channelIndex < static_cast<int>(toggleChannelMuted.size()) &&
+                    toggleChannelMuted[static_cast<size_t>(channelIndex)];
+            player->mute(
+                    static_cast<unsigned int>(chip),
+                    static_cast<unsigned int>(voice),
+                    muted
+            );
+        }
+    }
 }

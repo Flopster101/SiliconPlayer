@@ -3,6 +3,7 @@
 
 #include "AudioDecoder.h"
 #include <libopenmpt/libopenmpt.hpp>
+#include <libopenmpt/libopenmpt_ext.hpp>
 #include <memory>
 #include <vector>
 #include <mutex>
@@ -47,6 +48,10 @@ public:
     std::vector<float> getCurrentChannelVuLevels();
     std::vector<float> getCurrentChannelScopeSamples(int samplesPerChannel);
     std::vector<int32_t> getChannelScopeTextState(int maxChannels) override;
+    std::vector<std::string> getToggleChannelNames() override;
+    void setToggleChannelMuted(int channelIndex, bool enabled) override;
+    bool getToggleChannelMuted(int channelIndex) const override;
+    void clearToggleChannelMutes() override;
     void setOutputSampleRate(int sampleRate) override;
     int getPlaybackCapabilities() const override {
         return PLAYBACK_CAP_SEEK |
@@ -68,7 +73,7 @@ public:
     static std::vector<std::string> getSupportedExtensions();
 
 private:
-    std::unique_ptr<openmpt::module> module;
+    std::unique_ptr<openmpt::module_ext> module;
     mutable std::mutex decodeMutex;
 
     // Buffer to hold file data in memory
@@ -107,8 +112,12 @@ private:
     std::vector<std::uint8_t> channelScopeFrozenFrameCount;
     int lastChannelScopeChannels = 0;
     int lastChannelScopeSamplesPerChannel = 0;
+    std::vector<std::string> toggleChannelNames;
+    std::vector<bool> toggleChannelMuted;
 
     void applyRenderSettingsLocked();
+    void rebuildToggleChannelsLocked();
+    void applyToggleChannelMutesLocked();
 };
 
 #endif //SILICONPLAYER_LIBOPENMPTDECODER_H

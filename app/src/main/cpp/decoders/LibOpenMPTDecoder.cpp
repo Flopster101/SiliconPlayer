@@ -106,6 +106,11 @@ bool detectXmModule(const std::string& path, openmpt::module* module) {
            typeLong.find("fasttracker") != std::string::npos;
 }
 
+bool isAmigaStyleLeftChannel(int channel) {
+    const int mod4 = channel & 3;
+    return mod4 == 0 || mod4 == 3;
+}
+
 std::string joinNamedEntries(const std::vector<std::string>& names) {
     if (names.empty()) return "";
     std::ostringstream out;
@@ -151,7 +156,7 @@ bool LibOpenMPTDecoder::open(const char* path) {
         }
 
         // Create module from memory buffer
-        module = std::make_unique<openmpt::module>(fileBuffer);
+        module = std::make_unique<openmpt::module_ext>(fileBuffer);
         isAmigaModule = detectAmigaModule(path ? path : "", module.get());
         isXmModule = detectXmModule(path ? path : "", module.get());
         applyRenderSettingsLocked();
@@ -205,6 +210,8 @@ bool LibOpenMPTDecoder::open(const char* path) {
         songMessage = getFirstNonEmptyMetadata(module.get(), {"message_raw", "message"});
         instrumentNames = joinNamedEntries(module->get_instrument_names());
         sampleNames = joinNamedEntries(module->get_sample_names());
+        rebuildToggleChannelsLocked();
+        applyToggleChannelMutesLocked();
         LOGD("Opened module: %s, duration: %.2f", path, duration);
         return true;
     } catch (const openmpt::exception& e) {
@@ -239,6 +246,8 @@ void LibOpenMPTDecoder::close() {
     channelScopeFrozenFrameCount.clear();
     lastChannelScopeChannels = 0;
     lastChannelScopeSamplesPerChannel = 0;
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
 }
 
 int LibOpenMPTDecoder::read(float* buffer, int numFrames) {
@@ -360,6 +369,7 @@ bool LibOpenMPTDecoder::selectSubtune(int index) {
         if (index >= 0 && index < static_cast<int>(subtuneDurationsSeconds.size())) {
             subtuneDurationsSeconds[index] = duration;
         }
+        applyToggleChannelMutesLocked();
         return true;
     } catch (const openmpt::exception& e) {
         LOGE("OpenMPT select_subsong failed: %s", e.what());
@@ -641,6 +651,33 @@ std::vector<std::string> LibOpenMPTDecoder::getSupportedExtensions() {
     return openmpt::get_supported_extensions();
 }
 
+std::vector<std::string> LibOpenMPTDecoder::getToggleChannelNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return toggleChannelNames;
+}
+
+void LibOpenMPTDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!module) return;
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) return;
+    toggleChannelMuted[static_cast<size_t>(channelIndex)] = enabled;
+    applyToggleChannelMutesLocked();
+}
+
+bool LibOpenMPTDecoder::getToggleChannelMuted(int channelIndex) const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!module) return false;
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) return false;
+    return toggleChannelMuted[static_cast<size_t>(channelIndex)];
+}
+
+void LibOpenMPTDecoder::clearToggleChannelMutes() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!module) return;
+    std::fill(toggleChannelMuted.begin(), toggleChannelMuted.end(), false);
+    applyToggleChannelMutesLocked();
+}
+
 void LibOpenMPTDecoder::setOption(const char* name, const char* value) {
     if (!name || !value) return;
     std::lock_guard<std::mutex> lock(decodeMutex);
@@ -735,5 +772,60 @@ void LibOpenMPTDecoder::applyRenderSettingsLocked() {
         LOGE("Failed to apply render settings: %s", e.what());
     } catch (...) {
         LOGE("Failed to apply render settings: unknown error");
+    }
+}
+
+void LibOpenMPTDecoder::rebuildToggleChannelsLocked() {
+    const int totalChannels = std::clamp(
+            moduleChannels > 0 ? moduleChannels : (module ? static_cast<int>(module->get_num_channels()) : 0),
+            0,
+            64
+    );
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
+    if (totalChannels <= 0) {
+        return;
+    }
+
+    toggleChannelNames.reserve(static_cast<size_t>(totalChannels));
+    toggleChannelMuted.assign(static_cast<size_t>(totalChannels), false);
+
+    if (isAmigaModule) {
+        int leftIndex = 0;
+        int rightIndex = 0;
+        for (int channel = 0; channel < totalChannels; ++channel) {
+            if (isAmigaStyleLeftChannel(channel)) {
+                leftIndex++;
+                toggleChannelNames.push_back("Paula L" + std::to_string(leftIndex));
+            } else {
+                rightIndex++;
+                toggleChannelNames.push_back("Paula R" + std::to_string(rightIndex));
+            }
+        }
+        return;
+    }
+
+    for (int channel = 0; channel < totalChannels; ++channel) {
+        toggleChannelNames.push_back("Ch " + std::to_string(channel + 1));
+    }
+}
+
+void LibOpenMPTDecoder::applyToggleChannelMutesLocked() {
+    if (!module) return;
+    auto* interactive = static_cast<openmpt::ext::interactive*>(
+            module->get_interface(openmpt::ext::interactive_id)
+    );
+    if (!interactive) {
+        return;
+    }
+    const int totalChannels = std::min(
+            static_cast<int>(toggleChannelMuted.size()),
+            std::max(0, static_cast<int>(module->get_num_channels()))
+    );
+    for (int channel = 0; channel < totalChannels; ++channel) {
+        interactive->set_channel_mute_status(
+                channel,
+                toggleChannelMuted[static_cast<size_t>(channel)]
+        );
     }
 }

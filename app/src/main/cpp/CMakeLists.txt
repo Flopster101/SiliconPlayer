@@ -43,6 +43,8 @@ if (ANDROID)
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
+# Expose full libopenmpt headers (including libopenmpt_ext.hpp) from the submodule tree.
+include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libopenmpt)
 # ReSID backend implementation requires libsidplayfp internal SID emulation headers.
 include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
 

@@ -2284,10 +2284,22 @@ private fun ChannelControlDialog(
             )
         )
     }
+    var decoderChannels by remember { mutableStateOf(emptyList<ChannelControlItem>()) }
 
     fun loadMasterState() {
         masterChannels = masterChannels.map { channel ->
             channel.copy(muted = NativeBridge.getMasterChannelMute(channel.channelIndex))
+        }
+    }
+
+    fun loadDecoderState() {
+        val names = NativeBridge.getDecoderToggleChannelNames().toList()
+        decoderChannels = names.mapIndexed { index, name ->
+            ChannelControlItem(
+                name = name,
+                channelIndex = index,
+                muted = NativeBridge.getDecoderToggleChannelMuted(index)
+            )
         }
     }
 
@@ -2299,6 +2311,7 @@ private fun ChannelControlDialog(
 
     LaunchedEffect(Unit) {
         loadMasterState()
+        loadDecoderState()
     }
 
     AlertDialog(
@@ -2346,6 +2359,40 @@ private fun ChannelControlDialog(
                         }
                     }
                 )
+                if (decoderChannels.isNotEmpty()) {
+                    HorizontalDivider()
+                    Text(
+                        text = "Core channels",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    ChannelControlGrid(
+                        items = decoderChannels,
+                        onToggleMute = { item ->
+                            NativeBridge.setDecoderToggleChannelMuted(
+                                item.channelIndex,
+                                !item.muted
+                            )
+                            decoderChannels = decoderChannels.map { existing ->
+                                if (existing.channelIndex == item.channelIndex) {
+                                    existing.copy(muted = !existing.muted)
+                                } else {
+                                    existing
+                                }
+                            }
+                        },
+                        onSoloHold = { item ->
+                            decoderChannels.forEach { channel ->
+                                NativeBridge.setDecoderToggleChannelMuted(
+                                    channel.channelIndex,
+                                    channel.channelIndex != item.channelIndex
+                                )
+                            }
+                            decoderChannels = decoderChannels.map { channel ->
+                                channel.copy(muted = channel.channelIndex != item.channelIndex)
+                            }
+                        }
+                    )
+                }
                 HorizontalDivider()
                 Text(
                     text = "Tap: mute/unmute. Long press: solo this channel (mutes others).",
@@ -2364,6 +2411,8 @@ private fun ChannelControlDialog(
                             NativeBridge.setMasterChannelMute(channel.channelIndex, false)
                         }
                         masterChannels = masterChannels.map { it.copy(muted = false) }
+                        NativeBridge.clearDecoderToggleChannelMutes()
+                        decoderChannels = decoderChannels.map { it.copy(muted = false) }
                     },
                     modifier = Modifier.align(Alignment.Start),
                     contentPadding = PaddingValues(0.dp)

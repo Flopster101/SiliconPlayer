@@ -52,12 +52,12 @@ object OpenMptDefaults {
     const val stereoSeparationPercent = 100
     const val stereoSeparationAmigaPercent = 100
     const val interpolationFilterLength = 0
-    const val amigaResamplerMode = 2
+    const val amigaResamplerMode = 3
     const val amigaResamplerApplyAllModules = false
     const val volumeRampingStrength = 1
     const val ft2XmVolumeRamping = false
     const val masterGainMilliBel = 0
-    const val surroundEnabled = false
+    const val surroundEnabled = true
 }
 
 object FfmpegDefaults {

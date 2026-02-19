@@ -76,6 +76,8 @@ internal fun BoxScope.AppNavigationPlayerOverlaysSection(
     canPreviousSubtune: Boolean,
     canNextSubtune: Boolean,
     canOpenSubtuneSelector: Boolean,
+    currentSubtuneIndex: Int,
+    subtuneCount: Int,
     onCycleRepeatMode: () -> Unit
 ) {
     MiniPlayerOverlayHost(
@@ -176,6 +178,8 @@ internal fun BoxScope.AppNavigationPlayerOverlaysSection(
         canPreviousSubtune = canPreviousSubtune,
         canNextSubtune = canNextSubtune,
         canOpenSubtuneSelector = canOpenSubtuneSelector,
+        currentSubtuneIndex = currentSubtuneIndex,
+        subtuneCount = subtuneCount,
         onCycleRepeatMode = onCycleRepeatMode,
         canOpenCoreSettings = canOpenCurrentCoreSettings,
         onOpenCoreSettings = openCurrentCoreSettings,

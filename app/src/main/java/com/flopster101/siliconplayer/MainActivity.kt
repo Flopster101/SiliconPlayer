@@ -1366,6 +1366,8 @@ private fun AppNavigation(
             canPreviousSubtune = subtuneCount > 1 && currentSubtuneIndex > 0,
             canNextSubtune = subtuneCount > 1 && currentSubtuneIndex < (subtuneCount - 1),
             canOpenSubtuneSelector = subtuneCount > 1,
+            currentSubtuneIndex = currentSubtuneIndex,
+            subtuneCount = subtuneCount,
             onCycleRepeatMode = { runtimeDelegates.cycleRepeatMode() }
         )
         AppNavigationPlaybackDialogsSection(

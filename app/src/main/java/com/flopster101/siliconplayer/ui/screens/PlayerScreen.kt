@@ -154,6 +154,8 @@ fun PlayerScreen(
     canPreviousSubtune: Boolean,
     canNextSubtune: Boolean,
     canOpenSubtuneSelector: Boolean,
+    currentSubtuneIndex: Int = 0,
+    subtuneCount: Int = 0,
     onCycleRepeatMode: () -> Unit,
     canOpenCoreSettings: Boolean,
     onOpenCoreSettings: () -> Unit,
@@ -792,7 +794,9 @@ fun PlayerScreen(
                             filenameDisplayMode = filenameDisplayMode,
                             decoderName = decoderName,
                             filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
-                            centerSupportingMetadata = isTabletLike && isLandscape
+                            centerSupportingMetadata = isTabletLike && isLandscape,
+                            currentSubtuneIndex = currentSubtuneIndex,
+                            subtuneCount = subtuneCount
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         TimelineSection(
@@ -928,7 +932,9 @@ fun PlayerScreen(
                         filename = displayFilename,
                         filenameDisplayMode = filenameDisplayMode,
                         decoderName = decoderName,
-                        filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
+                        filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
+                        currentSubtuneIndex = currentSubtuneIndex,
+                        subtuneCount = subtuneCount
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     TimelineSection(
@@ -1899,7 +1905,9 @@ private fun TrackMetadataBlock(
     filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode,
     decoderName: String?,
     filenameOnlyWhenTitleMissing: Boolean,
-    centerSupportingMetadata: Boolean = false
+    centerSupportingMetadata: Boolean = false,
+    currentSubtuneIndex: Int = 0,
+    subtuneCount: Int = 0
 ) {
     val shouldShowFilename = remember(filenameDisplayMode, decoderName, title, filenameOnlyWhenTitleMissing) {
         when (filenameDisplayMode) {
@@ -1925,16 +1933,25 @@ private fun TrackMetadataBlock(
         }
     }
 
+    val subtuneBadge = remember(currentSubtuneIndex, subtuneCount) {
+        if (subtuneCount > 1) {
+            val shownIndex = (currentSubtuneIndex + 1).coerceIn(1, subtuneCount)
+            "[$shownIndex/$subtuneCount]"
+        } else {
+            null
+        }
+    }
+
     AnimatedContent(
-        targetState = title,
+        targetState = title to subtuneBadge,
         transitionSpec = {
             fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 40)) togetherWith
                 fadeOut(animationSpec = tween(durationMillis = 120))
         },
         label = "trackTitleSwap"
-    ) { animatedTitle ->
+    ) { (animatedTitle, animatedSubtuneBadge) ->
         val shouldMarquee = animatedTitle.length > 30
-        if (shouldMarquee) {
+        if (shouldMarquee && animatedSubtuneBadge == null) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1954,14 +1971,28 @@ private fun TrackMetadataBlock(
                 )
             }
         } else {
-            Text(
-                text = animatedTitle,
-                style = MaterialTheme.typography.headlineSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Clip,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = animatedTitle,
+                    style = MaterialTheme.typography.headlineSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+                if (animatedSubtuneBadge != null) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = animatedSubtuneBadge,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                        maxLines = 1
+                    )
+                }
+            }
         }
     }
     Spacer(modifier = Modifier.height(8.dp))

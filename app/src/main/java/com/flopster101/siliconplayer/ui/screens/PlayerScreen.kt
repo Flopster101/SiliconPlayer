@@ -2371,14 +2371,23 @@ private fun ChannelControlDialog(
                     },
                     onSoloHold = { item ->
                         clearMasterSoloFlags()
-                        masterChannels.forEach { channel ->
-                            NativeBridge.setMasterChannelMute(
-                                channel.channelIndex,
-                                channel.channelIndex != item.channelIndex
-                            )
-                        }
-                        masterChannels = masterChannels.map { channel ->
-                            channel.copy(muted = channel.channelIndex != item.channelIndex)
+                        val activeCount = masterChannels.count { !it.muted }
+                        val isOnlyActive = !item.muted && activeCount == 1
+                        if (isOnlyActive) {
+                            masterChannels.forEach { channel ->
+                                NativeBridge.setMasterChannelMute(channel.channelIndex, false)
+                            }
+                            masterChannels = masterChannels.map { it.copy(muted = false) }
+                        } else {
+                            masterChannels.forEach { channel ->
+                                NativeBridge.setMasterChannelMute(
+                                    channel.channelIndex,
+                                    channel.channelIndex != item.channelIndex
+                                )
+                            }
+                            masterChannels = masterChannels.map { channel ->
+                                channel.copy(muted = channel.channelIndex != item.channelIndex)
+                            }
                         }
                     }
                 )
@@ -2405,14 +2414,26 @@ private fun ChannelControlDialog(
                             }
                         },
                         onSoloHold = { item ->
-                            decoderChannels.forEach { channel ->
-                                NativeBridge.setDecoderToggleChannelMuted(
-                                    channel.channelIndex,
-                                    channel.channelIndex != item.channelIndex
-                                )
-                            }
-                            decoderChannels = decoderChannels.map { channel ->
-                                channel.copy(muted = channel.channelIndex != item.channelIndex)
+                            val activeCount = decoderChannels.count { !it.muted }
+                            val isOnlyActive = !item.muted && activeCount == 1
+                            if (isOnlyActive) {
+                                decoderChannels.forEach { channel ->
+                                    NativeBridge.setDecoderToggleChannelMuted(
+                                        channel.channelIndex,
+                                        false
+                                    )
+                                }
+                                decoderChannels = decoderChannels.map { it.copy(muted = false) }
+                            } else {
+                                decoderChannels.forEach { channel ->
+                                    NativeBridge.setDecoderToggleChannelMuted(
+                                        channel.channelIndex,
+                                        channel.channelIndex != item.channelIndex
+                                    )
+                                }
+                                decoderChannels = decoderChannels.map { channel ->
+                                    channel.copy(muted = channel.channelIndex != item.channelIndex)
+                                }
                             }
                         }
                     )
@@ -2454,6 +2475,7 @@ private fun ChannelControlDialog(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun ChannelControlGrid(
     items: List<ChannelControlItem>,
     showScrollbar: Boolean = false,
@@ -2505,24 +2527,40 @@ private fun ChannelControlGrid(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     rowItems.forEach { item ->
-                        FilterChip(
-                            selected = !item.muted,
-                            onClick = { onToggleMute(item) },
-                            label = {
-                                AutoSizeChipLabel(item.name)
-                            },
+                        Surface(
                             modifier = Modifier
                                 .weight(1f)
-                                .pointerInput(item.channelIndex) {
-                                    detectTapGestures(
-                                        onLongPress = { onSoloHold(item) }
+                                .clip(MaterialTheme.shapes.large)
+                                .combinedClickable(
+                                    onClick = { onToggleMute(item) },
+                                    onLongClick = { onSoloHold(item) }
+                                ),
+                            shape = MaterialTheme.shapes.large,
+                            color = if (item.muted) {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CompositionLocalProvider(
+                                    LocalTextStyle provides MaterialTheme.typography.labelLarge.copy(
+                                        color = if (item.muted) {
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        } else {
+                                            MaterialTheme.colorScheme.onPrimary
+                                        }
                                     )
-                                },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                            )
-                        )
+                                ) {
+                                    AutoSizeChipLabel(item.name)
+                                }
+                            }
+                        }
                     }
                 }
             }

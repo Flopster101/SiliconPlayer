@@ -2,8 +2,13 @@ package com.flopster101.siliconplayer
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.pluginsettings.GmeSettings
@@ -120,6 +125,8 @@ internal fun PluginDetailRouteContent(
     actions: PluginDetailRouteActions
 ) {
     val pluginName = state.selectedPluginName ?: return
+    val coreAboutEntry = remember(pluginName) { AboutCatalog.resolveCoreForPlugin(pluginName) }
+    var selectedAboutEntry by remember(pluginName) { mutableStateOf<AboutEntity?>(null) }
 
     PluginDetailScreen(
         pluginName = pluginName,
@@ -300,4 +307,22 @@ internal fun PluginDetailRouteContent(
         enabled = supportsConfigurableRate && onSampleRateSelected != null,
         onSelected = { hz -> onSampleRateSelected?.invoke(hz) }
     )
+
+    if (coreAboutEntry != null) {
+        Spacer(modifier = Modifier.height(16.dp))
+        SettingsSectionLabel("Info")
+        SettingsItemCard(
+            title = "About this core",
+            description = "Credits, license info, upstream links, and integration notes.",
+            icon = Icons.Default.Info,
+            onClick = { selectedAboutEntry = coreAboutEntry }
+        )
+    }
+
+    selectedAboutEntry?.let { entity ->
+        AboutEntityDialog(
+            entity = entity,
+            onDismiss = { selectedAboutEntry = null }
+        )
+    }
 }

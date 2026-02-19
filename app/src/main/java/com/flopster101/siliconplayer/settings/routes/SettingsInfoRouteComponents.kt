@@ -2,7 +2,6 @@ package com.flopster101.siliconplayer
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,6 +14,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -35,9 +36,11 @@ import androidx.compose.ui.unit.dp
 internal fun AboutSettingsBody() {
     val context = LocalContext.current
     val versionLabel = "v${BuildConfig.VERSION_NAME}-${BuildConfig.GIT_SHA}"
+    val coreEntries = remember { AboutCatalog.cores }
+    val libraryEntries = remember { AboutCatalog.libraries }
+    var selectedAboutEntry by remember { mutableStateOf<AboutEntity?>(null) }
     Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier.fillMaxWidth()
     ) {
         androidx.compose.material3.ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
@@ -76,6 +79,7 @@ internal fun AboutSettingsBody() {
                 }
             }
         }
+        Spacer(modifier = Modifier.size(8.dp))
 
         androidx.compose.material3.ElevatedCard(
             modifier = Modifier.fillMaxWidth(),
@@ -119,7 +123,64 @@ internal fun AboutSettingsBody() {
                 }
             }
         }
+        Spacer(modifier = Modifier.size(8.dp))
+
+        Text(
+            text = "Audio cores",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.size(4.dp))
+        coreEntries.forEachIndexed { index, entry ->
+            AboutEntityListItemCard(
+                entity = entry,
+                icon = Icons.Default.GraphicEq,
+                onClick = { selectedAboutEntry = entry }
+            )
+            if (index != coreEntries.lastIndex) {
+                Spacer(modifier = Modifier.size(7.dp))
+            }
+        }
+        Spacer(modifier = Modifier.size(8.dp))
+
+        Text(
+            text = "Libraries",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.size(4.dp))
+        libraryEntries.forEachIndexed { index, entry ->
+            AboutEntityListItemCard(
+                entity = entry,
+                icon = Icons.Default.Link,
+                onClick = { selectedAboutEntry = entry }
+            )
+            if (index != libraryEntries.lastIndex) {
+                Spacer(modifier = Modifier.size(7.dp))
+            }
+        }
     }
+
+    selectedAboutEntry?.let { entity ->
+        AboutEntityDialog(
+            entity = entity,
+            onDismiss = { selectedAboutEntry = null }
+        )
+    }
+}
+
+@Composable
+private fun AboutEntityListItemCard(
+    entity: AboutEntity,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    SettingsItemCard(
+        title = entity.name,
+        description = "${entity.description}\nAuthor: ${entity.author}\nLicense: ${entity.license}",
+        icon = icon,
+        onClick = onClick
+    )
 }
 
 @Composable

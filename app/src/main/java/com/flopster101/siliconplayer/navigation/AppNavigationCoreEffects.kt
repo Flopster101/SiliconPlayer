@@ -15,6 +15,7 @@ internal fun AppNavigationCoreEffects(
     sidPlayFpCoreSampleRateHz: Int,
     lazyUsf2CoreSampleRateHz: Int,
     lazyUsf2UseHleAudio: Boolean,
+    vio2sfInterpolationQuality: Int,
     sidPlayFpBackend: Int,
     sidPlayFpClockMode: Int,
     sidPlayFpSidModelMode: Int,
@@ -110,6 +111,18 @@ internal fun AppNavigationCoreEffects(
             optionValue = lazyUsf2UseHleAudio.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
             optionLabel = "Use HLE audio"
+        )
+    }
+
+    LaunchedEffect(vio2sfInterpolationQuality) {
+        val normalized = vio2sfInterpolationQuality.coerceIn(0, 4)
+        prefs.edit().putInt(CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Vio2SF",
+            optionName = Vio2sfOptionKeys.INTERPOLATION_QUALITY,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Interpolation quality"
         )
     }
 

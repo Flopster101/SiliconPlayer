@@ -7,6 +7,7 @@ object CorePreferenceKeys {
     const val CORE_RATE_GME = "core_rate_gme"
     const val CORE_RATE_SIDPLAYFP = "core_rate_sidplayfp"
     const val CORE_RATE_LAZYUSF2 = "core_rate_lazyusf2"
+    const val VIO2SF_INTERPOLATION_QUALITY = "vio2sf_interpolation_quality"
     const val OPENMPT_STEREO_SEPARATION_PERCENT = "openmpt_stereo_separation_percent"
     const val OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT = "openmpt_stereo_separation_amiga_percent"
     const val OPENMPT_INTERPOLATION_FILTER_LENGTH = "openmpt_interpolation_filter_length"
@@ -105,4 +106,8 @@ object SidPlayFpDefaults {
 object LazyUsf2Defaults {
     const val coreSampleRateHz = 0
     const val useHleAudio = true
+}
+
+object Vio2sfDefaults {
+    const val interpolationQuality = 4
 }

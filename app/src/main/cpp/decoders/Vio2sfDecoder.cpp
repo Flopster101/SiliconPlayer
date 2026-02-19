@@ -776,6 +776,26 @@ void Vio2sfDecoder::setOutputSampleRate(int sampleRateHz) {
     (void)sampleRateHz;
 }
 
+void Vio2sfDecoder::setOption(const char* name, const char* value) {
+    if (!name || !value) return;
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (equalsIgnoreCase(name, "vio2sf.interpolation_quality")) {
+        const int parsed = static_cast<int>(std::strtol(value, nullptr, 10));
+        interpolationQuality = std::clamp(parsed, 0, 4);
+        if (emu) {
+            emu->dwInterpolation = static_cast<unsigned long>(interpolationQuality);
+        }
+    }
+}
+
+int Vio2sfDecoder::getOptionApplyPolicy(const char* name) const {
+    if (!name) return OPTION_APPLY_LIVE;
+    if (equalsIgnoreCase(name, "vio2sf.interpolation_quality")) {
+        return OPTION_APPLY_LIVE;
+    }
+    return OPTION_APPLY_LIVE;
+}
+
 void Vio2sfDecoder::setRepeatMode(int mode) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     repeatMode = (mode >= 0 && mode <= 3) ? mode : 0;

@@ -168,6 +168,7 @@ internal data class SettingsScreenState(
     val sidPlayFpSampleRateHz: Int,
     val lazyUsf2SampleRateHz: Int,
     val lazyUsf2UseHleAudio: Boolean,
+    val vio2sfInterpolationQuality: Int,
     val sidPlayFpBackend: Int,
     val sidPlayFpClockMode: Int,
     val sidPlayFpSidModelMode: Int,
@@ -293,6 +294,7 @@ internal data class SettingsScreenActions(
     val onSidPlayFpSampleRateChanged: (Int) -> Unit,
     val onLazyUsf2SampleRateChanged: (Int) -> Unit,
     val onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
+    val onVio2sfInterpolationQualityChanged: (Int) -> Unit,
     val onSidPlayFpBackendChanged: (Int) -> Unit,
     val onSidPlayFpClockModeChanged: (Int) -> Unit,
     val onSidPlayFpSidModelModeChanged: (Int) -> Unit,
@@ -484,6 +486,8 @@ internal fun SettingsScreen(
     val onLazyUsf2SampleRateChanged = actions.onLazyUsf2SampleRateChanged
     val lazyUsf2UseHleAudio = state.lazyUsf2UseHleAudio
     val onLazyUsf2UseHleAudioChanged = actions.onLazyUsf2UseHleAudioChanged
+    val vio2sfInterpolationQuality = state.vio2sfInterpolationQuality
+    val onVio2sfInterpolationQualityChanged = actions.onVio2sfInterpolationQualityChanged
     val sidPlayFpBackend = state.sidPlayFpBackend
     val onSidPlayFpBackendChanged = actions.onSidPlayFpBackendChanged
     val sidPlayFpClockMode = state.sidPlayFpClockMode
@@ -738,7 +742,8 @@ internal fun SettingsScreen(
                                 sidPlayFpFilterCurve8580Percent = sidPlayFpFilterCurve8580Percent,
                                 sidPlayFpReSidFpFastSampling = sidPlayFpReSidFpFastSampling,
                                 sidPlayFpReSidFpCombinedWaveformsStrength = sidPlayFpReSidFpCombinedWaveformsStrength,
-                                lazyUsf2UseHleAudio = lazyUsf2UseHleAudio
+                                lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
+                                vio2sfInterpolationQuality = vio2sfInterpolationQuality
                             ),
                             actions = PluginDetailRouteActions(
                                 onPluginPriorityChanged = onPluginPriorityChanged,
@@ -785,7 +790,8 @@ internal fun SettingsScreen(
                                 onSidPlayFpFilterCurve8580PercentChanged = onSidPlayFpFilterCurve8580PercentChanged,
                                 onSidPlayFpReSidFpFastSamplingChanged = onSidPlayFpReSidFpFastSamplingChanged,
                                 onSidPlayFpReSidFpCombinedWaveformsStrengthChanged = onSidPlayFpReSidFpCombinedWaveformsStrengthChanged,
-                                onLazyUsf2UseHleAudioChanged = onLazyUsf2UseHleAudioChanged
+                                onLazyUsf2UseHleAudioChanged = onLazyUsf2UseHleAudioChanged,
+                                onVio2sfInterpolationQualityChanged = onVio2sfInterpolationQualityChanged
                             )
                         )
                     }

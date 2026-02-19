@@ -12,6 +12,7 @@ import com.flopster101.siliconplayer.pluginsettings.OpenMptSettings
 import com.flopster101.siliconplayer.pluginsettings.PluginSettings
 import com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings
 import com.flopster101.siliconplayer.pluginsettings.SidPlayFpSettings
+import com.flopster101.siliconplayer.pluginsettings.Vio2sfSettings
 import com.flopster101.siliconplayer.pluginsettings.VgmPlaySettings
 import java.util.Locale
 
@@ -60,7 +61,8 @@ internal data class PluginDetailRouteState(
     val sidPlayFpFilterCurve8580Percent: Int,
     val sidPlayFpReSidFpFastSampling: Boolean,
     val sidPlayFpReSidFpCombinedWaveformsStrength: Int,
-    val lazyUsf2UseHleAudio: Boolean
+    val lazyUsf2UseHleAudio: Boolean,
+    val vio2sfInterpolationQuality: Int
 )
 
 internal data class PluginDetailRouteActions(
@@ -108,7 +110,8 @@ internal data class PluginDetailRouteActions(
     val onSidPlayFpFilterCurve8580PercentChanged: (Int) -> Unit,
     val onSidPlayFpReSidFpFastSamplingChanged: (Boolean) -> Unit,
     val onSidPlayFpReSidFpCombinedWaveformsStrengthChanged: (Int) -> Unit,
-    val onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit
+    val onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
+    val onVio2sfInterpolationQualityChanged: (Int) -> Unit
 )
 
 @Composable
@@ -270,6 +273,11 @@ internal fun PluginDetailRouteContent(
         "LazyUSF2" -> LazyUsf2Settings(
             useHleAudio = state.lazyUsf2UseHleAudio,
             onUseHleAudioChanged = actions.onLazyUsf2UseHleAudioChanged
+        )
+
+        "Vio2SF" -> Vio2sfSettings(
+            interpolationQuality = state.vio2sfInterpolationQuality,
+            onInterpolationQualityChanged = actions.onVio2sfInterpolationQualityChanged
         )
 
         else -> null

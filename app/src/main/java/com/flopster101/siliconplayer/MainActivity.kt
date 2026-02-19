@@ -606,6 +606,7 @@ private fun AppNavigation(
     var sidPlayFpCoreSampleRateHz by settingsStates.sidPlayFpCoreSampleRateHz
     var lazyUsf2CoreSampleRateHz by settingsStates.lazyUsf2CoreSampleRateHz
     var lazyUsf2UseHleAudio by settingsStates.lazyUsf2UseHleAudio
+    var vio2sfInterpolationQuality by settingsStates.vio2sfInterpolationQuality
     var sidPlayFpBackend by settingsStates.sidPlayFpBackend
     var sidPlayFpClockMode by settingsStates.sidPlayFpClockMode
     var sidPlayFpSidModelMode by settingsStates.sidPlayFpSidModelMode
@@ -1046,6 +1047,7 @@ private fun AppNavigation(
         sidPlayFpCoreSampleRateHz = sidPlayFpCoreSampleRateHz,
         lazyUsf2CoreSampleRateHz = lazyUsf2CoreSampleRateHz,
         lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
+        vio2sfInterpolationQuality = vio2sfInterpolationQuality,
         sidPlayFpBackend = sidPlayFpBackend,
         sidPlayFpClockMode = sidPlayFpClockMode,
         sidPlayFpSidModelMode = sidPlayFpSidModelMode,
@@ -1739,6 +1741,7 @@ private fun AppNavigation(
                                     onSidPlayFpSampleRateChanged = { sidPlayFpCoreSampleRateHz = it },
                                     onLazyUsf2SampleRateChanged = { lazyUsf2CoreSampleRateHz = it },
                                     onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
+                                    onVio2sfInterpolationQualityChanged = { vio2sfInterpolationQuality = it },
                                     onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
                                     onSidPlayFpClockModeChanged = { sidPlayFpClockMode = it },
                                     onSidPlayFpSidModelModeChanged = { sidPlayFpSidModelMode = it },

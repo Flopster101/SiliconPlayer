@@ -543,6 +543,7 @@ internal fun clearAllSettingsAction(
     gmeCoreSampleRateHz: Int,
     sidPlayFpCoreSampleRateHz: Int,
     lazyUsf2CoreSampleRateHz: Int,
+    vio2sfInterpolationQuality: Int,
     vgmPlayLoopCount: Int,
     vgmPlayVsyncRate: Int,
     vgmPlayResampleMode: Int,
@@ -634,6 +635,7 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.CORE_RATE_GME to gmeCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_SIDPLAYFP to sidPlayFpCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_LAZYUSF2 to lazyUsf2CoreSampleRateHz,
+        CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY to vio2sfInterpolationQuality,
         CorePreferenceKeys.VGMPLAY_LOOP_COUNT to vgmPlayLoopCount,
         CorePreferenceKeys.VGMPLAY_VSYNC_RATE to vgmPlayVsyncRate,
         CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE to vgmPlayResampleMode,
@@ -760,6 +762,7 @@ internal fun clearAllPluginSettingsAction(
     onSidPlayFpCoreSampleRateHzChanged: (Int) -> Unit,
     onLazyUsf2CoreSampleRateHzChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
+    onVio2sfInterpolationQualityChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
     onSidPlayFpSidModelModeChanged: (Int) -> Unit,
@@ -804,6 +807,7 @@ internal fun clearAllPluginSettingsAction(
     onSidPlayFpCoreSampleRateHzChanged(SidPlayFpDefaults.coreSampleRateHz)
     onLazyUsf2CoreSampleRateHzChanged(LazyUsf2Defaults.coreSampleRateHz)
     onLazyUsf2UseHleAudioChanged(LazyUsf2Defaults.useHleAudio)
+    onVio2sfInterpolationQualityChanged(Vio2sfDefaults.interpolationQuality)
     onSidPlayFpBackendChanged(SidPlayFpDefaults.backend)
     onSidPlayFpClockModeChanged(SidPlayFpDefaults.clockMode)
     onSidPlayFpSidModelModeChanged(SidPlayFpDefaults.sidModelMode)
@@ -848,6 +852,7 @@ internal fun clearAllPluginSettingsAction(
         remove(CorePreferenceKeys.CORE_RATE_GME)
         remove(CorePreferenceKeys.CORE_RATE_SIDPLAYFP)
         remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2)
+        remove(CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY)
         remove(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO)
         remove(CorePreferenceKeys.SIDPLAYFP_BACKEND)
         remove(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE)
@@ -928,6 +933,7 @@ internal fun resetPluginSettingsAction(
     onGmeSpcUseNativeSampleRateChanged: (Boolean) -> Unit,
     onLazyUsf2CoreSampleRateHzChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
+    onVio2sfInterpolationQualityChanged: (Int) -> Unit,
     onSidPlayFpCoreSampleRateHzChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
@@ -990,6 +996,10 @@ internal fun resetPluginSettingsAction(
 
         "LazyUSF2" -> listOf(
             LazyUsf2OptionKeys.USE_HLE_AUDIO
+        )
+
+        "Vio2SF" -> listOf(
+            Vio2sfOptionKeys.INTERPOLATION_QUALITY
         )
 
         else -> emptyList()
@@ -1089,6 +1099,13 @@ internal fun resetPluginSettingsAction(
             prefs.edit()
                 .remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2)
                 .remove(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO)
+                .apply()
+        }
+
+        "Vio2SF" -> {
+            onVio2sfInterpolationQualityChanged(Vio2sfDefaults.interpolationQuality)
+            prefs.edit()
+                .remove(CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY)
                 .apply()
         }
 

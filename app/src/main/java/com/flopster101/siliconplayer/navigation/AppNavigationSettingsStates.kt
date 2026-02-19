@@ -19,6 +19,7 @@ internal data class AppNavigationSettingsStates(
     val sidPlayFpCoreSampleRateHz: MutableIntState,
     val lazyUsf2CoreSampleRateHz: MutableIntState,
     val lazyUsf2UseHleAudio: MutableState<Boolean>,
+    val vio2sfInterpolationQuality: MutableIntState,
     val sidPlayFpBackend: MutableIntState,
     val sidPlayFpClockMode: MutableIntState,
     val sidPlayFpSidModelMode: MutableIntState,
@@ -103,6 +104,14 @@ internal fun rememberAppNavigationSettingsStates(
     }
     val lazyUsf2UseHleAudio = remember {
         mutableStateOf(prefs.getBoolean(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO, LazyUsf2Defaults.useHleAudio))
+    }
+    val vio2sfInterpolationQuality = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY,
+                Vio2sfDefaults.interpolationQuality
+            )
+        )
     }
     val sidPlayFpBackend = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.SIDPLAYFP_BACKEND, SidPlayFpDefaults.backend))
@@ -337,6 +346,7 @@ internal fun rememberAppNavigationSettingsStates(
         sidPlayFpCoreSampleRateHz = sidPlayFpCoreSampleRateHz,
         lazyUsf2CoreSampleRateHz = lazyUsf2CoreSampleRateHz,
         lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
+        vio2sfInterpolationQuality = vio2sfInterpolationQuality,
         sidPlayFpBackend = sidPlayFpBackend,
         sidPlayFpClockMode = sidPlayFpClockMode,
         sidPlayFpSidModelMode = sidPlayFpSidModelMode,

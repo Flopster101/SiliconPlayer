@@ -11,7 +11,6 @@ import java.io.File
 import java.util.Locale
 
 internal fun playRecentFileEntryAction(
-    context: Context,
     cacheRoot: File,
     entry: RecentPathEntry,
     openPlayerOnTrackSelect: Boolean,

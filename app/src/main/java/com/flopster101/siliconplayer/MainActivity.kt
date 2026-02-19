@@ -1881,7 +1881,6 @@ private fun AppNavigation(
                     },
                     onPlayRecentFile = { entry ->
                         playRecentFileEntryAction(
-                            context = context,
                             cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
                             entry = entry,
                             openPlayerOnTrackSelect = openPlayerOnTrackSelect,

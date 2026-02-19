@@ -39,6 +39,10 @@ import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.TabletAndroid
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -78,7 +82,7 @@ private data class BrowserContentState(
     val currentDirectoryPath: String?
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 fun FileBrowserScreen(
     repository: FileRepository,
@@ -95,7 +99,8 @@ fun FileBrowserScreen(
     playingFile: File? = null
 ) {
     val context = LocalContext.current
-    val storageLocations = remember(context) { detectStorageLocations(context) }
+    var storageLocationsRefreshToken by remember { mutableIntStateOf(0) }
+    val storageLocations = remember(context, storageLocationsRefreshToken) { detectStorageLocations(context) }
     var selectedLocationId by remember { mutableStateOf<String?>(null) }
     var currentDirectory by remember { mutableStateOf<File?>(null) }
     val fileList = remember { mutableStateListOf<FileItem>() }
@@ -107,6 +112,7 @@ fun FileBrowserScreen(
     var launchAutoScrollTargetKey by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
     var directoryLoadJob by remember { mutableStateOf<Job?>(null) }
+    var isPullRefreshing by remember { mutableStateOf(false) }
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val selectorIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
@@ -454,119 +460,157 @@ fun FileBrowserScreen(
             }
         }
     ) { paddingValues ->
-        AnimatedContent(
-            targetState = browserContentState,
-            transitionSpec = {
-                if (isLoadingDirectory) {
-                    EnterTransition.None togetherWith ExitTransition.None
+        fun triggerPullRefresh() {
+            if (isPullRefreshing) return
+            coroutineScope.launch {
+                isPullRefreshing = true
+                if (selectedLocationId == null) {
+                    storageLocationsRefreshToken += 1
+                    delay(240)
                 } else {
-                val forward = browserNavDirection == BrowserNavDirection.Forward
-                val enter = slideInHorizontally(
-                    initialOffsetX = { width -> if (forward) width else -width / 4 },
-                    animationSpec = tween(
-                        durationMillis = BROWSER_PAGE_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                ) + fadeIn(
-                    animationSpec = tween(
-                        durationMillis = 190,
-                        delayMillis = 50,
-                        easing = LinearOutSlowInEasing
-                    )
-                )
-                val exit = slideOutHorizontally(
-                    targetOffsetX = { width -> if (forward) -width / 4 else width / 4 },
-                    animationSpec = tween(
-                        durationMillis = BROWSER_PAGE_DURATION_MS,
-                        easing = FastOutSlowInEasing
-                    )
-                ) + fadeOut(
-                    animationSpec = tween(
-                        durationMillis = 120,
-                        easing = FastOutLinearInEasing
-                    )
-                )
-                enter togetherWith exit
+                    val refreshDir = currentDirectory ?: selectedLocation?.directory
+                    if (refreshDir != null) {
+                        loadDirectoryAsync(refreshDir)
+                    }
+                    val waitDeadline = System.currentTimeMillis() + 2200L
+                    while (isLoadingDirectory && System.currentTimeMillis() < waitDeadline) {
+                        delay(24)
+                    }
                 }
-            },
-            label = "browserContentTransition",
+                isPullRefreshing = false
+            }
+        }
+
+        val pullRefreshState = rememberPullRefreshState(
+            refreshing = isPullRefreshing,
+            onRefresh = { triggerPullRefresh() }
+        )
+
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-        ) { state ->
-            if (state.selectedLocationId == null) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        top = 16.dp,
-                        bottom = bottomContentPadding + 16.dp
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    item {
-                        Text(
-                            text = "Storage locations",
-                            style = MaterialTheme.typography.titleMedium
+                .pullRefresh(pullRefreshState)
+        ) {
+            AnimatedContent(
+                targetState = browserContentState,
+                transitionSpec = {
+                    if (isLoadingDirectory) {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    } else {
+                    val forward = browserNavDirection == BrowserNavDirection.Forward
+                    val enter = slideInHorizontally(
+                        initialOffsetX = { width -> if (forward) width else -width / 4 },
+                        animationSpec = tween(
+                            durationMillis = BROWSER_PAGE_DURATION_MS,
+                            easing = FastOutSlowInEasing
                         )
+                    ) + fadeIn(
+                        animationSpec = tween(
+                            durationMillis = 190,
+                            delayMillis = 50,
+                            easing = LinearOutSlowInEasing
+                        )
+                    )
+                    val exit = slideOutHorizontally(
+                        targetOffsetX = { width -> if (forward) -width / 4 else width / 4 },
+                        animationSpec = tween(
+                            durationMillis = BROWSER_PAGE_DURATION_MS,
+                            easing = FastOutSlowInEasing
+                        )
+                    ) + fadeOut(
+                        animationSpec = tween(
+                            durationMillis = 120,
+                            easing = FastOutLinearInEasing
+                        )
+                    )
+                    enter togetherWith exit
                     }
-                    items(storageLocations) { location ->
-                        ElevatedCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = { openLocation(location) }
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 12.dp, horizontal = 16.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                },
+                label = "browserContentTransition",
+                modifier = Modifier.fillMaxSize()
+            ) { state ->
+                if (state.selectedLocationId == null) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 16.dp,
+                            bottom = bottomContentPadding + 16.dp
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        item {
+                            Text(
+                                text = "Storage locations",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                        items(storageLocations) { location ->
+                            ElevatedCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = { openLocation(location) }
                             ) {
-                                Icon(
-                                    imageVector = iconForStorageKind(location.kind, context),
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = location.typeLabel,
-                                        style = MaterialTheme.typography.titleSmall
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 12.dp, horizontal = 16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = iconForStorageKind(location.kind, context),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
                                     )
-                                    Text(
-                                        text = location.name,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = location.typeLabel,
+                                            style = MaterialTheme.typography.titleSmall
+                                        )
+                                        Text(
+                                            text = location.name,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    state = directoryListState,
-                    contentPadding = PaddingValues(bottom = bottomContentPadding)
-                ) {
-                    items(
-                        items = fileList,
-                        key = { it.file.absolutePath }
-                    ) { item ->
-                        FileItemRow(
-                            item = item,
-                            isPlaying = item.file == playingFile,
-                            onClick = {
-                                if (item.isDirectory) {
-                                    navigateTo(item.file)
-                                } else {
-                                    onFileSelected(item.file)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        state = directoryListState,
+                        contentPadding = PaddingValues(bottom = bottomContentPadding)
+                    ) {
+                        items(
+                            items = fileList,
+                            key = { it.file.absolutePath }
+                        ) { item ->
+                            FileItemRow(
+                                item = item,
+                                isPlaying = item.file == playingFile,
+                                onClick = {
+                                    if (item.isDirectory) {
+                                        navigateTo(item.file)
+                                    } else {
+                                        onFileSelected(item.file)
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }
+            PullRefreshIndicator(
+                refreshing = isPullRefreshing,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter),
+                backgroundColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }

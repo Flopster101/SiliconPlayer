@@ -2322,7 +2322,7 @@ private fun ChannelControlDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 420.dp)
+                    .heightIn(max = 520.dp)
                     .verticalScroll(channelDialogScrollState),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -2367,6 +2367,7 @@ private fun ChannelControlDialog(
                     )
                     ChannelControlGrid(
                         items = decoderChannels,
+                        showScrollbar = true,
                         onToggleMute = { item ->
                             NativeBridge.setDecoderToggleChannelMuted(
                                 item.channelIndex,
@@ -2432,38 +2433,93 @@ private fun ChannelControlDialog(
 @Composable
 private fun ChannelControlGrid(
     items: List<ChannelControlItem>,
+    showScrollbar: Boolean = false,
     onToggleMute: (ChannelControlItem) -> Unit,
     onSoloHold: (ChannelControlItem) -> Unit
 ) {
-    val rows = items.chunked(5)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        rows.forEach { rowItems ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                rowItems.forEach { item ->
-                    FilterChip(
-                        selected = !item.muted,
-                        onClick = { onToggleMute(item) },
-                        label = {
-                            Text(
-                                item.name,
-                                maxLines = 1
+    val isPaulaSet = items.isNotEmpty() && items.all { it.name.startsWith("Paula ") }
+    val columns = when {
+        isPaulaSet && items.size == 4 -> 2
+        items.size <= 2 -> items.size.coerceAtLeast(1)
+        else -> 3
+    }
+    val rows = items.chunked(columns)
+    val gridScrollState = rememberScrollState()
+    var gridViewportHeightPx by remember { mutableIntStateOf(0) }
+    var scrollbarVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(gridScrollState.isScrollInProgress, gridScrollState.maxValue) {
+        if (!showScrollbar || gridScrollState.maxValue <= 0) {
+            scrollbarVisible = false
+            return@LaunchedEffect
+        }
+        if (gridScrollState.isScrollInProgress) {
+            scrollbarVisible = true
+        } else {
+            delay(800)
+            scrollbarVisible = false
+        }
+    }
+
+    val scrollbarAlpha by animateFloatAsState(
+        targetValue = if (showScrollbar && scrollbarVisible && gridScrollState.maxValue > 0) 1f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "channelGridScrollbarAlpha"
+    )
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 176.dp)
+                .verticalScroll(gridScrollState)
+                .onSizeChanged { gridViewportHeightPx = it.height },
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            rows.forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rowItems.forEach { item ->
+                        FilterChip(
+                            selected = !item.muted,
+                            onClick = { onToggleMute(item) },
+                            label = {
+                                Text(
+                                    text = item.name,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .pointerInput(item.channelIndex) {
+                                    detectTapGestures(
+                                        onLongPress = { onSoloHold(item) }
+                                    )
+                                },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                             )
-                        },
-                        modifier = Modifier.pointerInput(item.channelIndex) {
-                            detectTapGestures(
-                                onLongPress = { onSoloHold(item) }
-                            )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                         )
-                    )
+                    }
                 }
             }
+        }
+
+        if (showScrollbar && gridViewportHeightPx > 0 && gridScrollState.maxValue > 0) {
+            TrackInfoDetailsScrollbar(
+                scrollState = gridScrollState,
+                viewportHeightPx = gridViewportHeightPx,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(vertical = 2.dp)
+                    .width(4.dp)
+                    .fillMaxHeight()
+                    .graphicsLayer(alpha = scrollbarAlpha)
+            )
         }
     }
 }

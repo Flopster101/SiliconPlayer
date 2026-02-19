@@ -26,6 +26,15 @@ android {
     buildToolsVersion = "36.1.0"
     ndkVersion = "29.0.14206865"
 
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.flopster101.siliconplayer"
         minSdk = 26
@@ -192,7 +201,7 @@ fun register16kAlignTaskForVariant(variantName: String) {
                 )
             }
 
-            val debugKeystore = File(System.getProperty("user.home"), ".android/debug.keystore")
+            val debugKeystore = rootProject.file("debug.keystore")
             require(debugKeystore.exists()) { "Debug keystore not found at ${debugKeystore.absolutePath}" }
 
             exec {

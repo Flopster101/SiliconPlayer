@@ -1,5 +1,7 @@
 #include "FFmpegDecoder.h"
 #include <android/log.h>
+#include <algorithm>
+#include <cctype>
 #include <sstream>
 #include <vector>
 #include <mutex>
@@ -57,6 +59,13 @@ std::string getFirstMetadataValue(AVDictionary* metadata, const std::initializer
         }
     }
     return "";
+}
+
+std::string toLowerAscii(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return value;
 }
 }
 
@@ -129,21 +138,13 @@ bool FFmpegDecoder::open(const char* path) {
         return false;
     }
 
-    if (!initResampler()) {
-        LOGE("Failed to initialize resampler");
-        return false;
-    }
-
-    if (formatContext->duration != AV_NOPTS_VALUE) {
-        duration = (double)formatContext->duration / AV_TIME_BASE;
-    } else {
-        duration = 0.0;
-    }
-
     sourceSampleRate = codecParams->sample_rate > 0 ? codecParams->sample_rate : codecContext->sample_rate;
-    sourceChannelCount = codecParams->ch_layout.nb_channels > 0
-            ? codecParams->ch_layout.nb_channels
-            : codecContext->ch_layout.nb_channels;
+    sourceChannelCount = codecContext->ch_layout.nb_channels > 0
+            ? codecContext->ch_layout.nb_channels
+            : codecParams->ch_layout.nb_channels;
+    if (sourceChannelCount <= 0) {
+        sourceChannelCount = outputChannelCount;
+    }
     sourceBitDepth = codecParams->bits_per_raw_sample;
     if (sourceBitDepth <= 0) {
         sourceBitDepth = codecParams->bits_per_coded_sample;
@@ -168,6 +169,18 @@ bool FFmpegDecoder::open(const char* path) {
         channelLayoutName = chLayoutBuf;
     } else {
         channelLayoutName.clear();
+    }
+    rebuildToggleChannelsLocked();
+
+    if (!initResampler()) {
+        LOGE("Failed to initialize resampler");
+        return false;
+    }
+
+    if (formatContext->duration != AV_NOPTS_VALUE) {
+        duration = (double)formatContext->duration / AV_TIME_BASE;
+    } else {
+        duration = 0.0;
     }
 
     title = getFirstMetadataValue(formatContext->metadata, {"title"});
@@ -238,25 +251,28 @@ void FFmpegDecoder::close() {
     encoderName.clear();
     bitrate = 0;
     vbr = false;
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
 }
 
 bool FFmpegDecoder::initResampler() {
-    if (swrContext) swr_free(&swrContext);
+    // Build and initialize a new resampler first. Only swap it in on success.
+    SwrContext* newSwrContext = nullptr;
 
-    // Calculate channel layout from channel count logic since layout might be 0 for some files
-    AVChannelLayout out_ch_layout;
+    // Calculate channel layout from channel count logic since layout might be 0 for some files.
+    AVChannelLayout out_ch_layout{};
     av_channel_layout_default(&out_ch_layout, outputChannelCount);
 
-    AVChannelLayout in_ch_layout;
+    AVChannelLayout in_ch_layout{};
     // Use ch_layout (new FFmpeg standard) if available, otherwise fallback to default
     if (codecContext->ch_layout.nb_channels > 0) {
         av_channel_layout_copy(&in_ch_layout, &codecContext->ch_layout);
     } else {
-         av_channel_layout_default(&in_ch_layout, 2);
+         av_channel_layout_default(&in_ch_layout, std::max(1, sourceChannelCount));
     }
 
     int result = swr_alloc_set_opts2(
-        &swrContext,
+        &newSwrContext,
         &out_ch_layout,
         AV_SAMPLE_FMT_FLT, // Output format: Float Interleaved (Packed)
         outputSampleRate,
@@ -266,13 +282,92 @@ bool FFmpegDecoder::initResampler() {
         0, nullptr
     );
 
+    if (result < 0) {
+         av_channel_layout_uninit(&out_ch_layout);
+         av_channel_layout_uninit(&in_ch_layout);
+         if (newSwrContext) {
+             swr_free(&newSwrContext);
+         }
+         LOGE("swr_alloc_set_opts2 failed");
+         return false;
+    }
+
+    const int inChannelCount = std::max(0, in_ch_layout.nb_channels);
+    const int outChannelCount = std::max(0, out_ch_layout.nb_channels);
+
+    const bool hasMutedSourceChannels = std::any_of(
+            toggleChannelMuted.begin(),
+            toggleChannelMuted.end(),
+            [](bool muted) { return muted; }
+    );
+    if (hasMutedSourceChannels && inChannelCount > 0 && outChannelCount > 0) {
+        std::vector<double> matrix(
+                static_cast<size_t>(inChannelCount) * static_cast<size_t>(outChannelCount),
+                0.0
+        );
+        const int stride = inChannelCount;
+        result = swr_build_matrix2(
+                &in_ch_layout,
+                &out_ch_layout,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                matrix.data(),
+                stride,
+                AV_MATRIX_ENCODING_NONE,
+                nullptr
+        );
+        if (result < 0) {
+            // Fallback for layouts where FFmpeg cannot build a default matrix (for example
+            // some unspecified/discrete multi-channel inputs). Distribute channels by index.
+            std::vector<int> outputLoad(static_cast<size_t>(outChannelCount), 0);
+            for (int inputChannel = 0; inputChannel < inChannelCount; ++inputChannel) {
+                const int mappedOutput = outChannelCount > 0
+                        ? (inputChannel % outChannelCount)
+                        : 0;
+                outputLoad[static_cast<size_t>(mappedOutput)]++;
+            }
+            for (int inputChannel = 0; inputChannel < inChannelCount; ++inputChannel) {
+                const int mappedOutput = outChannelCount > 0
+                        ? (inputChannel % outChannelCount)
+                        : 0;
+                const int load = outputLoad[static_cast<size_t>(mappedOutput)];
+                const double gain = load > 0 ? (1.0 / static_cast<double>(load)) : 0.0;
+                matrix[inputChannel + stride * mappedOutput] = gain;
+            }
+            LOGD("swr_build_matrix2 failed; using index-mapped fallback matrix");
+            result = 0;
+        }
+        if (result >= 0) {
+            for (int inputChannel = 0; inputChannel < inChannelCount; ++inputChannel) {
+                if (inputChannel >= static_cast<int>(toggleChannelMuted.size()) ||
+                    !toggleChannelMuted[static_cast<size_t>(inputChannel)]) {
+                    continue;
+                }
+                for (int outputChannel = 0; outputChannel < outChannelCount; ++outputChannel) {
+                    matrix[inputChannel + stride * outputChannel] = 0.0;
+                }
+            }
+            result = swr_set_matrix(newSwrContext, matrix.data(), stride);
+        }
+    }
+
     av_channel_layout_uninit(&out_ch_layout);
     av_channel_layout_uninit(&in_ch_layout);
 
-    if (result < 0 || swr_init(swrContext) < 0) {
+    if (result < 0 || swr_init(newSwrContext) < 0) {
+         if (newSwrContext) {
+             swr_free(&newSwrContext);
+         }
          LOGE("swr_init failed");
          return false;
     }
+    if (swrContext) {
+        swr_free(&swrContext);
+    }
+    swrContext = newSwrContext;
     return true;
 }
 
@@ -325,6 +420,10 @@ int FFmpegDecoder::read(float* buffer, int numFrames) {
 }
 
 int FFmpegDecoder::decodeFrame() {
+    if (!swrContext || outputChannelCount <= 0) {
+        return -1;
+    }
+
     int ret;
     while (true) {
         // Try receive frame first
@@ -333,6 +432,9 @@ int FFmpegDecoder::decodeFrame() {
              // Frame received, proceed to resample
              int dst_nb_samples = av_rescale_rnd(swr_get_delay(swrContext, codecContext->sample_rate) +
                                     frame->nb_samples, outputSampleRate, codecContext->sample_rate, AV_ROUND_UP);
+             if (dst_nb_samples <= 0) {
+                 continue;
+             }
 
              // We need a temporary buffer for the resampler output
              // swr_convert requires pointers to pointers for planar data, but for packed float (AV_SAMPLE_FMT_FLT)
@@ -344,6 +446,10 @@ int FFmpegDecoder::decodeFrame() {
              uint8_t* out_data[1] = { (uint8_t*)resampledLocal.data() };
 
              int converted_samples = swr_convert(swrContext, out_data, dst_nb_samples, (const uint8_t**)frame->data, frame->nb_samples);
+             if (converted_samples < 0) {
+                 LOGE("swr_convert failed: fferr=%d msg=%s", converted_samples, ffErrString(converted_samples).c_str());
+                 return -1;
+             }
 
              if (converted_samples > 0) {
                   // Append to main buffer
@@ -449,6 +555,53 @@ int FFmpegDecoder::getDisplayChannelCount() {
     return sourceChannelCount > 0 ? sourceChannelCount : outputChannelCount;
 }
 
+std::vector<std::string> FFmpegDecoder::getToggleChannelNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return toggleChannelNames;
+}
+
+void FFmpegDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!codecContext) return;
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+    const size_t target = static_cast<size_t>(channelIndex);
+    const bool previous = toggleChannelMuted[target];
+    if (previous == enabled) {
+        return;
+    }
+    toggleChannelMuted[target] = enabled;
+    if (!initResampler()) {
+        toggleChannelMuted[target] = previous;
+        return;
+    }
+    sampleBuffer.clear();
+    sampleBufferCursor = 0;
+}
+
+bool FFmpegDecoder::getToggleChannelMuted(int channelIndex) const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!codecContext) return false;
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return false;
+    }
+    return toggleChannelMuted[static_cast<size_t>(channelIndex)];
+}
+
+void FFmpegDecoder::clearToggleChannelMutes() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!codecContext) return;
+    const std::vector<bool> previous = toggleChannelMuted;
+    std::fill(toggleChannelMuted.begin(), toggleChannelMuted.end(), false);
+    if (!initResampler()) {
+        toggleChannelMuted = previous;
+        return;
+    }
+    sampleBuffer.clear();
+    sampleBufferCursor = 0;
+}
+
 std::string FFmpegDecoder::getTitle() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return title;
@@ -534,4 +687,38 @@ std::string FFmpegDecoder::getChannelLayoutName() const {
 
 std::string FFmpegDecoder::getEncoderName() const {
     return encoderName;
+}
+
+void FFmpegDecoder::rebuildToggleChannelsLocked() {
+    const int totalChannels = std::clamp(sourceChannelCount, 0, 64);
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
+    if (totalChannels <= 0) {
+        return;
+    }
+    toggleChannelNames.reserve(static_cast<size_t>(totalChannels));
+    toggleChannelMuted.assign(static_cast<size_t>(totalChannels), false);
+
+    const std::string layoutLower = toLowerAscii(channelLayoutName);
+    const bool stereoPairLabels =
+            (totalChannels % 2 == 0) &&
+            (
+                    totalChannels == 2 ||
+                    layoutLower.find("stereo") != std::string::npos
+            );
+
+    if (stereoPairLabels) {
+        for (int channel = 0; channel < totalChannels; ++channel) {
+            const int pairIndex = (channel / 2) + 1;
+            const bool left = (channel % 2) == 0;
+            toggleChannelNames.push_back(
+                    std::string(left ? "Left " : "Right ") + std::to_string(pairIndex)
+            );
+        }
+        return;
+    }
+
+    for (int channel = 0; channel < totalChannels; ++channel) {
+        toggleChannelNames.push_back("Ch " + std::to_string(channel + 1));
+    }
 }

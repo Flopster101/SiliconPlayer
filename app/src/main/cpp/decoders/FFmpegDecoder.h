@@ -39,6 +39,10 @@ public:
     std::string getSampleFormatName() const;
     std::string getChannelLayoutName() const;
     std::string getEncoderName() const;
+    std::vector<std::string> getToggleChannelNames() override;
+    void setToggleChannelMuted(int channelIndex, bool enabled) override;
+    bool getToggleChannelMuted(int channelIndex) const override;
+    void clearToggleChannelMutes() override;
     void setOutputSampleRate(int sampleRate) override;
     int getPlaybackCapabilities() const override {
         return PLAYBACK_CAP_SEEK |
@@ -91,11 +95,14 @@ private:
     size_t sampleBufferCursor = 0; // Current read position in buffer
     bool decoderDrainStarted = false;
     int64_t totalFramesOutput = 0; // Total frames output for position tracking
+    std::vector<std::string> toggleChannelNames;
+    std::vector<bool> toggleChannelMuted;
 
-    std::mutex decodeMutex;
+    mutable std::mutex decodeMutex;
 
     bool initResampler();
     void freeResampler();
+    void rebuildToggleChannelsLocked();
     int decodeFrame(); // Decodes one frame and appends to sampleBuffer. Returns 0 on success, <0 on error/EOF
 };
 

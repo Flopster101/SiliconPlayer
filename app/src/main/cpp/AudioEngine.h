@@ -123,6 +123,8 @@ public:
     void setPluginGain(float gainDb);
     void setSongGain(float gainDb);
     void setForceMono(bool enabled);
+    void setMasterChannelMute(int channelIndex, bool enabled);
+    void setMasterChannelSolo(int channelIndex, bool enabled);
     void setEndFadeApplyToAllTracks(bool enabled);
     void setEndFadeDurationMs(int durationMs);
     void setEndFadeCurve(int curve);
@@ -134,6 +136,8 @@ public:
     float getPluginGain() const;
     float getSongGain() const;
     bool getForceMono() const;
+    bool getMasterChannelMute(int channelIndex) const;
+    bool getMasterChannelSolo(int channelIndex) const;
 
 private:
     AAudioStream *stream = nullptr;
@@ -180,6 +184,10 @@ private:
     std::atomic<float> pluginGainDb { 0.0f };
     std::atomic<float> songGainDb { 0.0f };
     std::atomic<bool> forceMono { false };
+    std::atomic<bool> masterMuteLeft { false };
+    std::atomic<bool> masterMuteRight { false };
+    std::atomic<bool> masterSoloLeft { false };
+    std::atomic<bool> masterSoloRight { false };
     std::atomic<bool> endFadeApplyToAllTracks { false };
     std::atomic<int> endFadeDurationMs { 10000 };
     std::atomic<int> endFadeCurve { 0 }; // 0 linear, 1 ease-in, 2 ease-out
@@ -222,6 +230,7 @@ private:
     static float dbToGain(float db);
     float computeEndFadeGainLocked(double playbackPositionSeconds) const;
     void applyGain(float* buffer, int numFrames, int channels, float extraGain = 1.0f);
+    void applyMasterChannelRouting(float* buffer, int numFrames, int channels);
     void applyMonoDownmix(float* buffer, int numFrames, int channels);
     void updateVisualizationDataLocked(const float* buffer, int numFrames, int channels);
     void markVisualizationRequested() const;

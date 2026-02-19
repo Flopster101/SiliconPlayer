@@ -1014,6 +1014,7 @@ void AudioEngine::renderWorkerLoop() {
             const double gainTimelinePosition = positionSeconds.load();
             const float endFadeGain = computeEndFadeGainLocked(gainTimelinePosition);
             applyGain(localBuffer.data(), chunkFrames, channels, endFadeGain);
+            applyMasterChannelRouting(localBuffer.data(), chunkFrames, channels);
             applyMonoDownmix(localBuffer.data(), chunkFrames, channels);
             if (shouldUpdateVisualization()) {
                 updateVisualizationDataLocked(localBuffer.data(), chunkFrames, channels);
@@ -2261,6 +2262,22 @@ void AudioEngine::setForceMono(bool enabled) {
     forceMono.store(enabled);
 }
 
+void AudioEngine::setMasterChannelMute(int channelIndex, bool enabled) {
+    if (channelIndex == 0) {
+        masterMuteLeft.store(enabled);
+    } else if (channelIndex == 1) {
+        masterMuteRight.store(enabled);
+    }
+}
+
+void AudioEngine::setMasterChannelSolo(int channelIndex, bool enabled) {
+    if (channelIndex == 0) {
+        masterSoloLeft.store(enabled);
+    } else if (channelIndex == 1) {
+        masterSoloRight.store(enabled);
+    }
+}
+
 void AudioEngine::setEndFadeApplyToAllTracks(bool enabled) {
     endFadeApplyToAllTracks.store(enabled);
 }
@@ -2289,6 +2306,18 @@ float AudioEngine::getSongGain() const {
 
 bool AudioEngine::getForceMono() const {
     return forceMono.load();
+}
+
+bool AudioEngine::getMasterChannelMute(int channelIndex) const {
+    if (channelIndex == 0) return masterMuteLeft.load();
+    if (channelIndex == 1) return masterMuteRight.load();
+    return false;
+}
+
+bool AudioEngine::getMasterChannelSolo(int channelIndex) const {
+    if (channelIndex == 0) return masterSoloLeft.load();
+    if (channelIndex == 1) return masterSoloRight.load();
+    return false;
 }
 
 // Convert dB to linear gain
@@ -2370,6 +2399,35 @@ void AudioEngine::applyGain(float* buffer, int numFrames, int channels, float ex
         const int totalSamples = numFrames * channels;
         for (int i = 0; i < totalSamples; i++) {
             buffer[i] *= totalGain;
+        }
+    }
+}
+
+void AudioEngine::applyMasterChannelRouting(float* buffer, int numFrames, int channels) {
+    if (!buffer || numFrames <= 0 || channels < 2) {
+        return;
+    }
+
+    const bool muteLeft = masterMuteLeft.load();
+    const bool muteRight = masterMuteRight.load();
+    const bool soloLeft = masterSoloLeft.load();
+    const bool soloRight = masterSoloRight.load();
+    const bool anySolo = soloLeft || soloRight;
+
+    const bool leftEnabled = anySolo ? soloLeft : !muteLeft;
+    const bool rightEnabled = anySolo ? soloRight : !muteRight;
+
+    if (leftEnabled && rightEnabled) {
+        return;
+    }
+
+    for (int i = 0; i < numFrames; ++i) {
+        const int base = i * channels;
+        if (!leftEnabled) {
+            buffer[base] = 0.0f;
+        }
+        if (!rightEnabled) {
+            buffer[base + 1] = 0.0f;
         }
     }
 }

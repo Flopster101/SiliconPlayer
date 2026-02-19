@@ -126,6 +126,10 @@ object NativeBridge {
     external fun getPluginGain(): Float
     external fun getSongGain(): Float
     external fun getForceMono(): Boolean
+    external fun setMasterChannelMute(channelIndex: Int, enabled: Boolean)
+    external fun setMasterChannelSolo(channelIndex: Int, enabled: Boolean)
+    external fun getMasterChannelMute(channelIndex: Int): Boolean
+    external fun getMasterChannelSolo(channelIndex: Int): Boolean
 
     // Decoder Registry management methods
     external fun getRegisteredDecoderNames(): Array<String>

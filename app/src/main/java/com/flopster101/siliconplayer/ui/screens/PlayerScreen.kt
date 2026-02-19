@@ -23,6 +23,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -47,7 +48,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
@@ -69,6 +69,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInteropFilter
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -89,6 +90,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import android.view.MotionEvent
 import com.flopster101.siliconplayer.AppDefaults
+import com.flopster101.siliconplayer.R
 import com.flopster101.siliconplayer.RepeatMode
 import com.flopster101.siliconplayer.VisualizationMode
 import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
@@ -184,6 +186,7 @@ fun PlayerScreen(
     var isDraggingDown by remember { mutableStateOf(false) }
     var showTrackInfoDialog by remember { mutableStateOf(false) }
     var showVisualizationPickerDialog by remember { mutableStateOf(false) }
+    var showChannelControlDialog by remember { mutableStateOf(false) }
     var showVisualizationModeBadge by remember { mutableStateOf(false) }
     var visualizationModeBadgeText by remember { mutableStateOf(visualizationMode.label) }
     var lastVisualizationModeForBadge by remember { mutableStateOf<VisualizationMode?>(null) }
@@ -841,7 +844,8 @@ fun PlayerScreen(
                             onOpenCoreSettings = onOpenCoreSettings,
                             onCycleVisualizationMode = onCycleVisualizationMode,
                             onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
-                            onOpenAudioEffects = onOpenAudioEffects
+                            onOpenAudioEffects = onOpenAudioEffects,
+                            onOpenChannelControls = { showChannelControlDialog = true }
                         )
                     }
                 }
@@ -977,7 +981,8 @@ fun PlayerScreen(
                         onOpenCoreSettings = onOpenCoreSettings,
                         onCycleVisualizationMode = onCycleVisualizationMode,
                         onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
-                        onOpenAudioEffects = onOpenAudioEffects
+                        onOpenAudioEffects = onOpenAudioEffects,
+                        onOpenChannelControls = { showChannelControlDialog = true }
                     )
                 }
             }
@@ -1007,6 +1012,11 @@ fun PlayerScreen(
             onOpenSelectedVisualizationSettings = onOpenSelectedVisualizationSettings,
             onOpenVisualizationSettings = onOpenVisualizationSettings,
             onDismiss = { showVisualizationPickerDialog = false }
+        )
+    }
+    if (showChannelControlDialog) {
+        ChannelControlDialog(
+            onDismiss = { showChannelControlDialog = false }
         )
     }
 }
@@ -2202,7 +2212,8 @@ private fun FutureActionStrip(
     onOpenCoreSettings: () -> Unit,
     onCycleVisualizationMode: () -> Unit,
     onOpenVisualizationPicker: () -> Unit,
-    onOpenAudioEffects: () -> Unit
+    onOpenAudioEffects: () -> Unit,
+    onOpenChannelControls: () -> Unit
 ) {
     Surface(
         modifier = modifier,
@@ -2245,11 +2256,164 @@ private fun FutureActionStrip(
                     contentDescription = "Audio effects"
                 )
             }
-            IconButton(onClick = {}, enabled = false) {
+            IconButton(onClick = onOpenChannelControls, enabled = true) {
                 Icon(
-                    imageVector = Icons.Default.Speed,
-                    contentDescription = "Playback speed (future)"
+                    painter = painterResource(id = R.drawable.ic_airwave),
+                    contentDescription = "Channel controls"
                 )
+            }
+        }
+    }
+}
+
+private data class ChannelControlItem(
+    val name: String,
+    val channelIndex: Int,
+    val muted: Boolean
+)
+
+@Composable
+private fun ChannelControlDialog(
+    onDismiss: () -> Unit
+) {
+    var masterChannels by remember {
+        mutableStateOf(
+            listOf(
+                ChannelControlItem(name = "Left", channelIndex = 0, muted = false),
+                ChannelControlItem(name = "Right", channelIndex = 1, muted = false)
+            )
+        )
+    }
+
+    fun loadMasterState() {
+        masterChannels = masterChannels.map { channel ->
+            channel.copy(muted = NativeBridge.getMasterChannelMute(channel.channelIndex))
+        }
+    }
+
+    fun clearMasterSoloFlags() {
+        masterChannels.forEach { channel ->
+            NativeBridge.setMasterChannelSolo(channel.channelIndex, false)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        loadMasterState()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Channel controls") },
+        text = {
+            val channelDialogScrollState = rememberScrollState()
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(channelDialogScrollState),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Master channels",
+                    style = MaterialTheme.typography.titleSmall
+                )
+                ChannelControlGrid(
+                    items = masterChannels,
+                    onToggleMute = { item ->
+                        clearMasterSoloFlags()
+                        NativeBridge.setMasterChannelMute(
+                            item.channelIndex,
+                            !item.muted
+                        )
+                        masterChannels = masterChannels.map { existing ->
+                            if (existing.channelIndex == item.channelIndex) {
+                                existing.copy(muted = !existing.muted)
+                            } else {
+                                existing
+                            }
+                        }
+                    },
+                    onSoloHold = { item ->
+                        clearMasterSoloFlags()
+                        masterChannels.forEach { channel ->
+                            NativeBridge.setMasterChannelMute(
+                                channel.channelIndex,
+                                channel.channelIndex != item.channelIndex
+                            )
+                        }
+                        masterChannels = masterChannels.map { channel ->
+                            channel.copy(muted = channel.channelIndex != item.channelIndex)
+                        }
+                    }
+                )
+                HorizontalDivider()
+                Text(
+                    text = "Tap: mute/unmute. Long press: solo this channel (mutes others).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Core-specific channel groups will be added per decoder.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(
+                    onClick = {
+                        clearMasterSoloFlags()
+                        masterChannels.forEach { channel ->
+                            NativeBridge.setMasterChannelMute(channel.channelIndex, false)
+                        }
+                        masterChannels = masterChannels.map { it.copy(muted = false) }
+                    },
+                    modifier = Modifier.align(Alignment.Start),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text("Unmute all")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+private fun ChannelControlGrid(
+    items: List<ChannelControlItem>,
+    onToggleMute: (ChannelControlItem) -> Unit,
+    onSoloHold: (ChannelControlItem) -> Unit
+) {
+    val rows = items.chunked(5)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        rows.forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rowItems.forEach { item ->
+                    FilterChip(
+                        selected = !item.muted,
+                        onClick = { onToggleMute(item) },
+                        label = {
+                            Text(
+                                item.name,
+                                maxLines = 1
+                            )
+                        },
+                        modifier = Modifier.pointerInput(item.channelIndex) {
+                            detectTapGestures(
+                                onLongPress = { onSoloHold(item) }
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    )
+                }
             }
         }
     }

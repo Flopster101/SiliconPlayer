@@ -1244,6 +1244,38 @@ Java_com_flopster101_siliconplayer_NativeBridge_getForceMono(
     return audioEngine->getForceMono() ? JNI_TRUE : JNI_FALSE;
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setMasterChannelMute(
+        JNIEnv*, jobject, jint channelIndex, jboolean enabled) {
+    ensureEngine();
+    audioEngine->setMasterChannelMute(static_cast<int>(channelIndex), enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setMasterChannelSolo(
+        JNIEnv*, jobject, jint channelIndex, jboolean enabled) {
+    ensureEngine();
+    audioEngine->setMasterChannelSolo(static_cast<int>(channelIndex), enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getMasterChannelMute(
+        JNIEnv*, jobject, jint channelIndex) {
+    if (audioEngine == nullptr) {
+        return JNI_FALSE;
+    }
+    return audioEngine->getMasterChannelMute(static_cast<int>(channelIndex)) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getMasterChannelSolo(
+        JNIEnv*, jobject, jint channelIndex) {
+    if (audioEngine == nullptr) {
+        return JNI_FALSE;
+    }
+    return audioEngine->getMasterChannelSolo(static_cast<int>(channelIndex)) ? JNI_TRUE : JNI_FALSE;
+}
+
 // ============================================================================
 // Decoder Registry Management JNI Methods
 // ============================================================================

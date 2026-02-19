@@ -13,7 +13,19 @@
 
 extern "C" {
 #include <lazyusf2/usf/usf.h>
+
+// Forward declarations for newer lazyusf2 voice APIs. These remain compatible
+// with older headers as long as the linked library provides the symbols.
+uint32_t usf_get_hle_voice_mask(void* state);
+uint32_t usf_get_hle_active_voice_mask(void* state);
+uint32_t usf_get_hle_voice_count(void* state);
+int usf_is_hle_voice_active(void* state);
+void usf_set_hle_voice_mask(void* state, uint32_t voice_mask);
 }
+
+#ifndef USF_MUSYX_MAX_VOICES
+#define USF_MUSYX_MAX_VOICES 32
+#endif
 
 #define LOG_TAG "LazyUsf2Decoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -24,6 +36,31 @@ constexpr int kMaxSampleRate = 192000;
 constexpr int kRenderChunkFrames = 2048;
 constexpr unsigned long kInvalidPsfTime = 0xC0CAC01A;
 constexpr double kFallbackDurationSeconds = 180.0;
+constexpr uint32_t kLazyUsf2AllVoicesMask = 0xFFFFFFFFu;
+
+enum class UsfVoiceControlMode {
+    None,
+    Musyx,
+    Hle
+};
+
+bool hasVoiceApi() {
+    return true;
+}
+
+uint32_t clampMusyxVoiceCount(uint32_t count) {
+    return std::min<uint32_t>(count, static_cast<uint32_t>(USF_MUSYX_MAX_VOICES));
+}
+
+UsfVoiceControlMode detectVoiceControlMode(void* state) {
+    if (usf_is_musyx_active(state) != 0) {
+        return UsfVoiceControlMode::Musyx;
+    }
+    if (usf_is_hle_voice_active(state) != 0) {
+        return UsfVoiceControlMode::Hle;
+    }
+    return UsfVoiceControlMode::None;
+}
 }
 
 LazyUsf2Decoder::LazyUsf2Decoder() {
@@ -61,6 +98,7 @@ bool LazyUsf2Decoder::open(const char* path) {
     usfBy.clear();
     lengthTag.clear();
     fadeTag.clear();
+    clearToggleChannelsLocked();
 
     if (!loadPsfTree(sourcePath)) {
         closeInternal();
@@ -94,6 +132,8 @@ bool LazyUsf2Decoder::open(const char* path) {
     }
 
     isOpen = true;
+    rebuildToggleChannelsLocked();
+    applyToggleChannelMutesLocked();
     return true;
 }
 
@@ -124,6 +164,7 @@ void LazyUsf2Decoder::closeInternal() {
     lengthTag.clear();
     fadeTag.clear();
     sourcePath.clear();
+    clearToggleChannelsLocked();
 }
 
 int LazyUsf2Decoder::read(float* buffer, int numFrames) {
@@ -196,6 +237,7 @@ void LazyUsf2Decoder::seekInternalLocked(double seconds) {
     usf_set_compare(state, enableCompare ? 1 : 0);
     usf_set_fifo_full(state, enableFifoFull ? 1 : 0);
     usf_set_hle_audio(state, useHleAudio ? 1 : 0);
+    applyToggleChannelMutesLocked();
     renderedFrames = 0;
 
     if (clamped <= 0.0) {
@@ -296,6 +338,45 @@ bool LazyUsf2Decoder::getEnableCompare() {
 bool LazyUsf2Decoder::getEnableFifoFull() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return enableFifoFull;
+}
+
+std::vector<std::string> LazyUsf2Decoder::getToggleChannelNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    rebuildToggleChannelsLocked();
+    return toggleChannelNames;
+}
+
+std::vector<uint8_t> LazyUsf2Decoder::getToggleChannelAvailability() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    rebuildToggleChannelsLocked();
+    return toggleChannelAvailability;
+}
+
+void LazyUsf2Decoder::setToggleChannelMuted(int channelIndex, bool enabled) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    rebuildToggleChannelsLocked();
+    if (!isOpen || channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+    toggleChannelMuted[static_cast<size_t>(channelIndex)] = enabled;
+    applyToggleChannelMutesLocked();
+}
+
+bool LazyUsf2Decoder::getToggleChannelMuted(int channelIndex) const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!isOpen || channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return false;
+    }
+    return toggleChannelMuted[static_cast<size_t>(channelIndex)];
+}
+
+void LazyUsf2Decoder::clearToggleChannelMutes() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!isOpen || toggleChannelMuted.empty()) {
+        return;
+    }
+    std::fill(toggleChannelMuted.begin(), toggleChannelMuted.end(), false);
+    applyToggleChannelMutesLocked();
 }
 
 void LazyUsf2Decoder::setOutputSampleRate(int sampleRate) {
@@ -589,6 +670,91 @@ void LazyUsf2Decoder::applyCoreTags(const std::unordered_map<std::string, std::s
     }
     if (parseBoolTag(getTag("_enablefifofull"))) {
         enableFifoFull = true;
+    }
+}
+
+void LazyUsf2Decoder::rebuildToggleChannelsLocked() {
+    if (!isOpen || !state || !hasVoiceApi()) {
+        clearToggleChannelsLocked();
+        return;
+    }
+
+    constexpr uint32_t kUiVoiceSlots = USF_MUSYX_MAX_VOICES;
+    const UsfVoiceControlMode mode = detectVoiceControlMode(state);
+    uint32_t voiceCount = kUiVoiceSlots;
+    uint32_t activeMask = 0;
+    uint32_t currentMask = 0;
+    uint32_t fallbackActiveMask = 0;
+    uint32_t fallbackMask = 0;
+
+    if (mode == UsfVoiceControlMode::Musyx) {
+        activeMask = usf_get_musyx_active_voice_mask(state);
+        currentMask = usf_get_musyx_voice_mask(state);
+    } else if (mode == UsfVoiceControlMode::Hle) {
+        activeMask = usf_get_hle_active_voice_mask(state);
+        currentMask = usf_get_hle_voice_mask(state);
+    } else {
+        fallbackActiveMask = usf_get_musyx_active_voice_mask(state) | usf_get_hle_active_voice_mask(state);
+        fallbackMask = usf_get_musyx_voice_mask(state) & usf_get_hle_voice_mask(state);
+        activeMask = fallbackActiveMask;
+        currentMask = fallbackMask;
+    }
+
+    const std::vector<bool> previousMuted = toggleChannelMuted;
+    const std::vector<uint8_t> previousAvailability = toggleChannelAvailability;
+    toggleChannelNames.clear();
+    toggleChannelNames.reserve(static_cast<size_t>(voiceCount));
+    toggleChannelAvailability.assign(static_cast<size_t>(voiceCount), 0);
+    toggleChannelMuted.assign(static_cast<size_t>(voiceCount), false);
+
+    for (uint32_t i = 0; i < voiceCount; ++i) {
+        toggleChannelNames.push_back("Voice " + std::to_string(i + 1));
+        const bool currentlyActive = ((activeMask >> i) & 0x1u) != 0;
+        const bool wasAvailable =
+                i < previousAvailability.size() &&
+                previousAvailability[static_cast<size_t>(i)] != 0;
+        toggleChannelAvailability[static_cast<size_t>(i)] =
+                (currentlyActive || wasAvailable) ? 1 : 0;
+        if (mode == UsfVoiceControlMode::None) {
+            if (i < previousMuted.size()) {
+                toggleChannelMuted[static_cast<size_t>(i)] = previousMuted[static_cast<size_t>(i)];
+            }
+        } else {
+            toggleChannelMuted[static_cast<size_t>(i)] = ((currentMask >> i) & 0x1u) == 0;
+        }
+    }
+}
+
+void LazyUsf2Decoder::applyToggleChannelMutesLocked() {
+    if (!isOpen || !state || !hasVoiceApi() || toggleChannelMuted.empty()) {
+        return;
+    }
+    uint32_t voiceMask = kLazyUsf2AllVoicesMask;
+    const uint32_t voiceCount = clampMusyxVoiceCount(static_cast<uint32_t>(toggleChannelMuted.size()));
+    for (uint32_t i = 0; i < voiceCount; ++i) {
+        if (toggleChannelMuted[static_cast<size_t>(i)]) {
+            voiceMask &= ~(1u << i);
+        }
+    }
+    const UsfVoiceControlMode mode = detectVoiceControlMode(state);
+    if (mode == UsfVoiceControlMode::Musyx) {
+        usf_set_musyx_voice_mask(state, voiceMask);
+    } else if (mode == UsfVoiceControlMode::Hle) {
+        usf_set_hle_voice_mask(state, voiceMask);
+    } else {
+        // Keep both masks in sync so a future active mode picks up user intent.
+        usf_set_musyx_voice_mask(state, voiceMask);
+        usf_set_hle_voice_mask(state, voiceMask);
+    }
+}
+
+void LazyUsf2Decoder::clearToggleChannelsLocked() {
+    toggleChannelNames.clear();
+    toggleChannelAvailability.clear();
+    toggleChannelMuted.clear();
+    if (state && hasVoiceApi()) {
+        usf_set_musyx_voice_mask(state, kLazyUsf2AllVoicesMask);
+        usf_set_hle_voice_mask(state, kLazyUsf2AllVoicesMask);
     }
 }
 

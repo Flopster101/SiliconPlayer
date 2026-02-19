@@ -36,6 +36,11 @@ public:
     std::string getFadeTag();
     bool getEnableCompare();
     bool getEnableFifoFull();
+    std::vector<std::string> getToggleChannelNames() override;
+    std::vector<uint8_t> getToggleChannelAvailability() override;
+    void setToggleChannelMuted(int channelIndex, bool enabled) override;
+    bool getToggleChannelMuted(int channelIndex) const override;
+    void clearToggleChannelMutes() override;
     void setOutputSampleRate(int sampleRate) override;
     void setOption(const char* name, const char* value) override;
     int getOptionApplyPolicy(const char* name) const override;
@@ -83,6 +88,9 @@ private:
     std::string lengthTag;
     std::string fadeTag;
     std::string sourcePath;
+    std::vector<std::string> toggleChannelNames;
+    std::vector<uint8_t> toggleChannelAvailability;
+    std::vector<bool> toggleChannelMuted;
 
     void closeInternal();
     bool loadPsfTree(const std::string& path);
@@ -96,6 +104,9 @@ private:
     bool applyMetadataFromTags(const std::unordered_map<std::string, std::string>& tags);
     void applyCoreTags(const std::unordered_map<std::string, std::string>& tags);
     void seekInternalLocked(double seconds);
+    void rebuildToggleChannelsLocked();
+    void applyToggleChannelMutesLocked();
+    void clearToggleChannelsLocked();
 
     static std::string toLowerAscii(std::string value);
     static std::string trimAscii(std::string value);

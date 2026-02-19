@@ -39,6 +39,7 @@ ABSOLUTE_PATH="$SCRIPT_DIR"
 PATCHES_DIR="$ABSOLUTE_PATH/patches/libopenmpt"
 PATCHES_DIR_LIBGME="$ABSOLUTE_PATH/patches/libgme"
 PATCHES_DIR_LAZYUSF2="$ABSOLUTE_PATH/patches/lazyusf2"
+PATCHES_DIR_VIO2SF="$ABSOLUTE_PATH/patches/vio2sf"
 OPENSSL_DIR="$ABSOLUTE_PATH/openssl"
 
 # -----------------------------------------------------------------------------
@@ -177,6 +178,34 @@ apply_lazyusf2_patches() {
         # patch series is generated with normalized diff lines. Allow
         # whitespace-insensitive matching so git am can apply cleanly.
         git -C "$PROJECT_PATH" am --ignore-whitespace "$patch_file" || {
+            echo "Error applying patch $patch_name"
+            git -C "$PROJECT_PATH" am --abort
+            exit 1
+        }
+    done
+}
+
+# -----------------------------------------------------------------------------
+# Function: Apply vio2sf patches (idempotent)
+# -----------------------------------------------------------------------------
+apply_vio2sf_patches() {
+    local PROJECT_PATH="$ABSOLUTE_PATH/2sf/vio2sf"
+    if [ ! -d "$PATCHES_DIR_VIO2SF" ]; then
+        return
+    fi
+
+    for patch_file in "$PATCHES_DIR_VIO2SF"/*.patch; do
+        [ -e "$patch_file" ] || continue
+        local patch_name
+        patch_name="$(basename "$patch_file")"
+
+        if git -C "$PROJECT_PATH" apply --check --reverse "$patch_file" >/dev/null 2>&1; then
+            echo "vio2sf patch already applied: $patch_name"
+            continue
+        fi
+
+        echo "Applying vio2sf patch: $patch_name"
+        git -C "$PROJECT_PATH" am "$patch_file" || {
             echo "Error applying patch $patch_name"
             git -C "$PROJECT_PATH" am --abort
             exit 1
@@ -647,6 +676,86 @@ build_lazyusf2() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build psflib
+# -----------------------------------------------------------------------------
+build_psflib() {
+    local ABI=$1
+    echo "Building psflib for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/psflib"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "psflib source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    mkdir -p "$INSTALL_DIR/lib" "$INSTALL_DIR/include/psflib"
+
+    (
+        cd "$PROJECT_PATH"
+        make clean >/dev/null 2>&1 || true
+        make -j$(nproc) libpsflib.a \
+            CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
+            AR="$TOOLCHAIN/bin/llvm-ar" \
+            CFLAGS="-c -fPIC"
+    )
+
+    if [ ! -f "$PROJECT_PATH/libpsflib.a" ]; then
+        echo "Error: psflib static library not found after build."
+        return 1
+    fi
+
+    cp "$PROJECT_PATH/libpsflib.a" "$INSTALL_DIR/lib/libpsflib.a"
+    cp "$PROJECT_PATH/psflib.h" "$INSTALL_DIR/include/"
+    cp "$PROJECT_PATH/psf2fs.h" "$INSTALL_DIR/include/"
+    cp "$PROJECT_PATH/psflib.h" "$INSTALL_DIR/include/psflib/"
+    cp "$PROJECT_PATH/psf2fs.h" "$INSTALL_DIR/include/psflib/"
+}
+
+# -----------------------------------------------------------------------------
+# Function: Build vio2sf
+# -----------------------------------------------------------------------------
+build_vio2sf() {
+    local ABI=$1
+    echo "Building vio2sf for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/2sf/vio2sf/src/vio2sf"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "vio2sf source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    # libvio2sf is typically used together with psflib, so ensure psflib exists.
+    if [ ! -f "$INSTALL_DIR/lib/libpsflib.a" ]; then
+        build_psflib "$ABI"
+    fi
+
+    mkdir -p "$INSTALL_DIR/lib" "$INSTALL_DIR/include/vio2sf/desmume"
+
+    (
+        cd "$PROJECT_PATH"
+        make clean >/dev/null 2>&1 || true
+        make -j$(nproc) libvio2sf.a \
+            CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
+            AR="$TOOLCHAIN/bin/llvm-ar" \
+            CFLAGS="-c -fPIC" \
+            CXXFLAGS="-c -fPIC" \
+            OPTS="-O3 -I. -DBARRAY_DECORATE=TWOSF -DRESAMPLER_DECORATE=TWOSF"
+    )
+
+    if [ ! -f "$PROJECT_PATH/libvio2sf.a" ]; then
+        echo "Error: vio2sf static library not found after build."
+        return 1
+    fi
+
+    cp "$PROJECT_PATH/libvio2sf.a" "$INSTALL_DIR/lib/libvio2sf.a"
+    cp "$PROJECT_PATH/desmume/"*.h "$INSTALL_DIR/include/vio2sf/desmume/"
+}
+
+# -----------------------------------------------------------------------------
 # Function: Build FluidSynth
 # -----------------------------------------------------------------------------
 build_fluidsynth() {
@@ -1018,8 +1127,8 @@ build_libsidplayfp() {
 usage() {
     echo "Usage: $0 <abi|all> <lib|all[,lib2,...]>"
     echo "  ABI: all, arm64-v8a, armeabi-v7a, x86_64, x86"
-    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, fluidsynth"
-    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, fluid/libfluidsynth"
+    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth"
+    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth"
 }
 
 if [ "$#" -eq 1 ]; then
@@ -1060,6 +1169,12 @@ normalize_lib_name() {
             ;;
         usf|lazyusf|lazyusf2)
             echo "lazyusf2"
+            ;;
+        psf|psflib)
+            echo "psflib"
+            ;;
+        2sf|twosf|vio2sf)
+            echo "vio2sf"
             ;;
         fluid|fluidsynth|libfluidsynth)
             echo "fluidsynth"
@@ -1105,7 +1220,7 @@ is_valid_abi() {
 is_valid_lib() {
     local lib="$1"
     case "$lib" in
-        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|fluidsynth)
+        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth)
             return 0
             ;;
         *)
@@ -1150,6 +1265,10 @@ fi
 
 if target_has_lib "lazyusf2"; then
     apply_lazyusf2_patches
+fi
+
+if target_has_lib "vio2sf"; then
+    apply_vio2sf_patches
 fi
 
 # -----------------------------------------------------------------------------
@@ -1236,6 +1355,14 @@ for ABI in "${ABIS[@]}"; do
 
     if target_has_lib "lazyusf2"; then
         build_lazyusf2 "$ABI"
+    fi
+
+    if target_has_lib "psflib"; then
+        build_psflib "$ABI"
+    fi
+
+    if target_has_lib "vio2sf"; then
+        build_vio2sf "$ABI"
     fi
 
     if target_has_lib "fluidsynth"; then

@@ -35,6 +35,7 @@ export PATH="$TOOLCHAIN/bin:$PATH"
 # Build log/noise controls for external dependencies.
 NPROC="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)"
 DEP_WARN_FLAGS="-w"
+DEP_OPT_FLAGS="$DEP_WARN_FLAGS -Ofast"
 
 # Architecture independent variables
 ABIS=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
@@ -242,8 +243,10 @@ build_libsoxr() {
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DANDROID_ABI="$ABI" \
         -DANDROID_PLATFORM="android-$ANDROID_API" \
-        -DCMAKE_C_FLAGS="$DEP_WARN_FLAGS" \
-        -DCMAKE_CXX_FLAGS="$DEP_WARN_FLAGS" \
+        -DCMAKE_C_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_C_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
+        -DCMAKE_CXX_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=OFF \
         -DBUILD_TESTS=OFF \
@@ -353,8 +356,8 @@ EOF
     export ANDROID_API="$ANDROID_API"
     export PATH="$OPENSSL_COMPAT_BIN:$TOOLCHAIN/bin:$PATH"
 
-    export CFLAGS="-fPIC $DEP_WARN_FLAGS"
-    export CXXFLAGS="-fPIC $DEP_WARN_FLAGS"
+    export CFLAGS="-fPIC $DEP_OPT_FLAGS"
+    export CXXFLAGS="-fPIC $DEP_OPT_FLAGS"
 
     perl ./Configure "$OPENSSL_TARGET" \
         --cross-compile-prefix="$OPENSSL_CROSS_PREFIX" \
@@ -397,7 +400,7 @@ build_ffmpeg() {
     local OPENSSL_LDFLAGS=""
     local OPENSSL_EXTRA_LIBS=""
     local OPENSSL_ENABLE_FLAG=""
-    local FFMPEG_EXTRA_CFLAGS="-fPIC $DEP_WARN_FLAGS"
+    local FFMPEG_EXTRA_CFLAGS="-fPIC $DEP_OPT_FLAGS"
 
     mkdir -p "$BUILD_DIR"
 
@@ -519,8 +522,8 @@ build_libopenmpt() {
         APP_BUILD_SCRIPT="$PROJECT_PATH/Android.mk" \
         APP_ABI="$ABI" \
         APP_PLATFORM="android-$ANDROID_API" \
-        APP_CFLAGS="$DEP_WARN_FLAGS" \
-        APP_CPPFLAGS="$DEP_WARN_FLAGS" \
+        APP_CFLAGS="$DEP_OPT_FLAGS" \
+        APP_CPPFLAGS="$DEP_OPT_FLAGS" \
         NDK_LIBS_OUT="$INSTALL_DIR/lib" \
         NDK_OUT="$PROJECT_PATH/obj/$ABI" \
         MPT_WITH_MINIMP3=1 \
@@ -572,8 +575,10 @@ build_libvgm() {
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DANDROID_ABI="$ABI" \
         -DANDROID_PLATFORM="android-$ANDROID_API" \
-        -DCMAKE_C_FLAGS="$DEP_WARN_FLAGS" \
-        -DCMAKE_CXX_FLAGS="$DEP_WARN_FLAGS" \
+        -DCMAKE_C_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_C_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
+        -DCMAKE_CXX_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
         -DCMAKE_BUILD_TYPE=Release \
         -DLIBRARY_TYPE=STATIC \
         -DBUILD_LIBAUDIO=OFF \
@@ -624,8 +629,10 @@ build_libgme() {
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DANDROID_ABI="$ABI" \
         -DANDROID_PLATFORM="android-$ANDROID_API" \
-        -DCMAKE_C_FLAGS="$DEP_WARN_FLAGS" \
-        -DCMAKE_CXX_FLAGS="$DEP_WARN_FLAGS" \
+        -DCMAKE_C_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_C_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
+        -DCMAKE_CXX_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=OFF \
         -DGME_BUILD_SHARED=OFF \
@@ -669,7 +676,7 @@ build_lazyusf2() {
                     AR="$TOOLCHAIN/bin/llvm-ar" \
                     CPU="AArch64" \
                     ARCH="64" \
-                    OPTFLAGS="-Os $DEP_WARN_FLAGS" \
+                    OPTFLAGS="$DEP_OPT_FLAGS" \
                     OBJS_RECOMPILER_64="" \
                     OPTS_AArch64="" \
                     ROPTS_AArch64="-DARCH_MIN_ARM_NEON"
@@ -680,7 +687,7 @@ build_lazyusf2() {
                     AR="$TOOLCHAIN/bin/llvm-ar" \
                     CPU="arm" \
                     ARCH="32" \
-                    OPTFLAGS="-Os $DEP_WARN_FLAGS" \
+                    OPTFLAGS="$DEP_OPT_FLAGS" \
                     FLAGS_32="-fPIC" \
                     OBJS_RECOMPILER_32="" \
                     OPTS_arm="" \
@@ -692,7 +699,7 @@ build_lazyusf2() {
                     AR="$TOOLCHAIN/bin/llvm-ar" \
                     CPU="x86" \
                     ARCH="32" \
-                    OPTFLAGS="-Os $DEP_WARN_FLAGS" \
+                    OPTFLAGS="$DEP_OPT_FLAGS" \
                     FLAGS_32="-fPIC -msse -mmmx -msse2" \
                     OBJS_RECOMPILER_32="" \
                     OPTS_x86="" \
@@ -704,7 +711,7 @@ build_lazyusf2() {
                     AR="$TOOLCHAIN/bin/llvm-ar" \
                     CPU="x86_64" \
                     ARCH="64" \
-                    OPTFLAGS="-Os $DEP_WARN_FLAGS" \
+                    OPTFLAGS="$DEP_OPT_FLAGS" \
                     FLAGS_64="-fPIC" \
                     OBJS_RECOMPILER_64="" \
                     OPTS_x86_64="" \
@@ -757,7 +764,7 @@ build_psflib() {
         make -s -j"$NPROC" libpsflib.a \
             CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
             AR="$TOOLCHAIN/bin/llvm-ar" \
-            CFLAGS="-c -fPIC $DEP_WARN_FLAGS"
+            CFLAGS="-c -fPIC $DEP_OPT_FLAGS"
     )
 
     if [ ! -f "$PROJECT_PATH/libpsflib.a" ]; then
@@ -800,9 +807,9 @@ build_vio2sf() {
         make -s -j"$NPROC" libvio2sf.a \
             CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
             AR="$TOOLCHAIN/bin/llvm-ar" \
-            CFLAGS="-c -fPIC $DEP_WARN_FLAGS" \
-            CXXFLAGS="-c -fPIC $DEP_WARN_FLAGS" \
-            OPTS="-O3 -I. -DBARRAY_DECORATE=TWOSF -DRESAMPLER_DECORATE=TWOSF $DEP_WARN_FLAGS"
+            CFLAGS="-c -fPIC $DEP_OPT_FLAGS" \
+            CXXFLAGS="-c -fPIC $DEP_OPT_FLAGS" \
+            OPTS="-O3 -I. -DBARRAY_DECORATE=TWOSF -DRESAMPLER_DECORATE=TWOSF $DEP_OPT_FLAGS"
     )
 
     if [ ! -f "$PROJECT_PATH/libvio2sf.a" ]; then
@@ -840,8 +847,10 @@ build_fluidsynth() {
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DANDROID_ABI="$ABI" \
         -DANDROID_PLATFORM="android-$ANDROID_API" \
-        -DCMAKE_C_FLAGS="$DEP_WARN_FLAGS" \
-        -DCMAKE_CXX_FLAGS="$DEP_WARN_FLAGS" \
+        -DCMAKE_C_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_C_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
+        -DCMAKE_CXX_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=OFF \
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
@@ -961,8 +970,8 @@ build_libresid() {
             AR="$TOOLCHAIN/bin/llvm-ar" \
             RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
             STRIP="$TOOLCHAIN/bin/llvm-strip" \
-            CFLAGS="-fPIC $DEP_WARN_FLAGS" \
-            CXXFLAGS="-fPIC $DEP_WARN_FLAGS"
+            CFLAGS="-fPIC $DEP_OPT_FLAGS" \
+            CXXFLAGS="-fPIC $DEP_OPT_FLAGS"
 
         make --no-print-directory V=0 -j"$NPROC"
     )
@@ -1051,8 +1060,8 @@ build_libresidfp() {
             AR="$TOOLCHAIN/bin/llvm-ar" \
             RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
             STRIP="$TOOLCHAIN/bin/llvm-strip" \
-            CFLAGS="-fPIC $DEP_WARN_FLAGS" \
-            CXXFLAGS="-fPIC $DEP_WARN_FLAGS"
+            CFLAGS="-fPIC $DEP_OPT_FLAGS" \
+            CXXFLAGS="-fPIC $DEP_OPT_FLAGS"
 
         make --no-print-directory V=0 -j"$NPROC"
         make --no-print-directory V=0 install
@@ -1194,8 +1203,8 @@ build_libsidplayfp() {
             AR="$TOOLCHAIN/bin/llvm-ar" \
             RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
             STRIP="$TOOLCHAIN/bin/llvm-strip" \
-            CFLAGS="-fPIC $DEP_WARN_FLAGS" \
-            CXXFLAGS="-fPIC $DEP_WARN_FLAGS"
+            CFLAGS="-fPIC $DEP_OPT_FLAGS" \
+            CXXFLAGS="-fPIC $DEP_OPT_FLAGS"
 
         make --no-print-directory V=0 -j"$NPROC"
         make --no-print-directory V=0 install
@@ -1401,8 +1410,11 @@ for ABI in "${ABIS[@]}"; do
             ;;
     esac
 
-    export CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang -fPIC"
-    export CXX="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang++ -fPIC"
+    CC_BIN="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang"
+    CXX_BIN="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang++"
+
+    export CC="$CC_BIN -fPIC"
+    export CXX="$CXX_BIN -fPIC"
     export AR="$TOOLCHAIN/bin/llvm-ar"
     export LD="$TOOLCHAIN/bin/ld"
     export RANLIB="$TOOLCHAIN/bin/llvm-ranlib"
@@ -1410,6 +1422,7 @@ for ABI in "${ABIS[@]}"; do
     export NM="$TOOLCHAIN/bin/llvm-nm"
 
     echo "CC is set to: $CC"
+    echo "Dependency flags: $DEP_OPT_FLAGS"
 
     if target_has_lib "libsoxr"; then
         build_libsoxr "$ABI"

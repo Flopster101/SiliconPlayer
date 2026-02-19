@@ -578,6 +578,14 @@ build_libvgm() {
 
     cmake --build "$BUILD_DIR" -j$(nproc)
     cmake --install "$BUILD_DIR"
+
+    # Some libvgm revisions do not install all headers consistently.
+    # Ensure required public headers exist in prebuilt include tree.
+    mkdir -p "$INSTALL_DIR/include/vgm/player" "$INSTALL_DIR/include/vgm/utils" "$INSTALL_DIR/include/vgm/emu"
+    cp "$PROJECT_PATH/player/"*.h "$INSTALL_DIR/include/vgm/player/" 2>/dev/null || true
+    cp "$PROJECT_PATH/player/"*.hpp "$INSTALL_DIR/include/vgm/player/" 2>/dev/null || true
+    cp "$PROJECT_PATH/utils/"*.h "$INSTALL_DIR/include/vgm/utils/" 2>/dev/null || true
+    cp "$PROJECT_PATH/emu/"*.h "$INSTALL_DIR/include/vgm/emu/" 2>/dev/null || true
 }
 
 # -----------------------------------------------------------------------------

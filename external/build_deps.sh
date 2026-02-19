@@ -401,6 +401,10 @@ build_ffmpeg() {
     local OPENSSL_EXTRA_LIBS=""
     local OPENSSL_ENABLE_FLAG=""
     local FFMPEG_EXTRA_CFLAGS="-fPIC $DEP_OPT_FLAGS"
+    local FFMPEG_AUDIO_DECODERS=""
+    local FFMPEG_AUDIO_DEMUXERS=""
+    local FFMPEG_AUDIO_PARSERS=""
+    local FFMPEG_PROTOCOLS=""
 
     mkdir -p "$BUILD_DIR"
 
@@ -420,6 +424,13 @@ build_ffmpeg() {
         # in tx_float_neon.S when linking static lib into shared lib.
         EXTRA_FLAGS="--disable-asm"
     fi
+
+    # Keep this list intentionally broad for audio playback, including
+    # demuxers for common video containers that can carry audio-only tracks.
+    FFMPEG_AUDIO_DECODERS="aac,aac_fixed,aac_latm,ac3,ac3_fixed,alac,als,amrnb,amrwb,ape,atrac1,atrac3,atrac3p,atrac9,cook,dca,eac3,flac,gsm,gsm_ms,mp1,mp1float,mp2,mp2float,mp3,mp3float,mp3on4,mp3on4float,opus,qdm2,qoa,ralf,shorten,tak,truehd,tta,vorbis,wavpack,wmalossless,wmapro,wmav1,wmav2,pcm_alaw,pcm_mulaw,pcm_s8,pcm_s16be,pcm_s16le,pcm_s24be,pcm_s24le,pcm_s32be,pcm_s32le,pcm_u8,pcm_u16be,pcm_u16le,pcm_f32be,pcm_f32le,pcm_f64be,pcm_f64le"
+    FFMPEG_AUDIO_DEMUXERS="aac,ac3,aiff,amr,ape,asf,avi,caf,concat,flac,flv,hls,matroska,mov,mp3,mpegps,mpegts,mpegvideo,ogg,wav,wv,tta,voc,w64"
+    FFMPEG_AUDIO_PARSERS="aac,aac_latm,ac3,adx,amr,ape,atrac3,cook,dca,flac,gsm,mpegaudio,opus,tak,vorbis,wavpack"
+    FFMPEG_PROTOCOLS="android_content,cache,concat,crypto,data,fd,file,http,https,httpproxy,pipe,subfile,tcp,tls,udp,udplite,unix"
 
     export ASFLAGS="-fPIC"
 
@@ -465,23 +476,27 @@ build_ffmpeg() {
         --disable-avdevice \
         --disable-swscale \
         --disable-avfilter \
+        --disable-filters \
         --enable-network \
+        --disable-indevs \
+        --disable-outdevs \
         --disable-hwaccels \
+        --disable-bsfs \
+        --disable-decoders \
+        --disable-demuxers \
+        --disable-parsers \
+        --disable-protocols \
+        --disable-everything \
         --disable-encoders \
         --disable-muxers \
-        --disable-decoder=h264 \
-        --disable-decoder=hevc \
-        --disable-decoder=vp8 \
-        --disable-decoder=vp9 \
-        --disable-decoder=av1 \
-        --disable-decoder=mpeg4 \
-        --disable-decoder=mpeg1video \
-        --disable-decoder=mpeg2video \
+        --enable-decoder="$FFMPEG_AUDIO_DECODERS" \
+        --enable-demuxer="$FFMPEG_AUDIO_DEMUXERS" \
+        --enable-parser="$FFMPEG_AUDIO_PARSERS" \
+        --enable-protocol="$FFMPEG_PROTOCOLS" \
         --enable-swresample \
         $SOXR_ENABLE_FLAG \
         $OPENSSL_ENABLE_FLAG \
         --enable-jni \
-        --enable-mediacodec \
         --extra-cflags="$FFMPEG_EXTRA_CFLAGS" \
         --extra-ldflags="$SOXR_LDFLAGS $OPENSSL_LDFLAGS" \
         --extra-libs="$SOXR_EXTRA_LIBS $OPENSSL_EXTRA_LIBS" \

@@ -69,14 +69,29 @@ internal val selectableVisualizationModes: List<VisualizationMode> = listOf(
     VisualizationMode.ChannelScope
 )
 
+private val visualizationModeStorageAliases: Map<String, VisualizationMode> = buildMap {
+    selectableVisualizationModes.forEach { mode ->
+        val normalizedStorage = mode.storageValue.lowercase(Locale.ROOT)
+        put(normalizedStorage, mode)
+        put(mode.name.lowercase(Locale.ROOT), mode)
+        put(mode.label.lowercase(Locale.ROOT), mode)
+        put(normalizedStorage.replace("_", ""), mode)
+    }
+    put("vumeters", VisualizationMode.VuMeters)
+    put("vu", VisualizationMode.VuMeters)
+    put("channelscope", VisualizationMode.ChannelScope)
+}
+private val visualizationModeAliasStripPattern = Regex("[^a-z0-9_]")
+
 internal fun parseEnabledVisualizationModes(raw: String?): Set<VisualizationMode> {
     if (raw.isNullOrBlank()) return selectableVisualizationModes.toSet()
     val parsed = raw
         .split(',')
-        .map { it.trim() }
+        .map { it.trim().lowercase(Locale.ROOT) }
         .filter { it.isNotBlank() }
         .mapNotNull { value ->
-            selectableVisualizationModes.firstOrNull { it.storageValue == value }
+            visualizationModeStorageAliases[value]
+                ?: visualizationModeStorageAliases[value.replace(visualizationModeAliasStripPattern, "")]
         }
         .toSet()
     if (parsed.isEmpty()) return selectableVisualizationModes.toSet()

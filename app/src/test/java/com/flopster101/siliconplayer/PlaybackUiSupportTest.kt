@@ -28,6 +28,19 @@ class PlaybackUiSupportTest {
     }
 
     @Test
+    fun parseEnabledVisualizationModes_acceptsLegacyAliases() {
+        val parsed = parseEnabledVisualizationModes("Bars,ChannelScope,VUMeters")
+        assertEquals(
+            setOf(
+                VisualizationMode.Bars,
+                VisualizationMode.ChannelScope,
+                VisualizationMode.VuMeters
+            ),
+            parsed
+        )
+    }
+
+    @Test
     fun parseEnabledVisualizationModes_onlyUnknownValues_returnsDefaults() {
         val defaults = selectableVisualizationModes.toSet()
         assertEquals(defaults, parseEnabledVisualizationModes("nope,unknown,???"))

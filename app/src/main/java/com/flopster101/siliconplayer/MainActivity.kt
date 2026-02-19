@@ -783,6 +783,21 @@ private fun AppNavigation(
         applyRepeatModeToNative = { mode -> applyRepeatModeToNative(mode) }
     )
 
+    LaunchedEffect(visualizationMode) {
+        prefs.edit()
+            .putString(AppPreferenceKeys.VISUALIZATION_MODE, visualizationMode.storageValue)
+            .apply()
+    }
+
+    LaunchedEffect(enabledVisualizationModes) {
+        prefs.edit()
+            .putString(
+                AppPreferenceKeys.VISUALIZATION_ENABLED_MODES,
+                serializeEnabledVisualizationModes(enabledVisualizationModes)
+            )
+            .apply()
+    }
+
     LaunchedEffect(recentPlayedFiles, recentFilesLimit) {
         runtimeDelegates.scheduleRecentPlayedMetadataBackfill()
     }

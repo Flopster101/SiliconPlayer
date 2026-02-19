@@ -32,6 +32,10 @@ TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$HOST_TAG"
 SYSROOT="$TOOLCHAIN/sysroot"
 export PATH="$TOOLCHAIN/bin:$PATH"
 
+# Build log/noise controls for external dependencies.
+NPROC="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)"
+DEP_WARN_FLAGS="-w"
+
 # Architecture independent variables
 ABIS=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
@@ -231,13 +235,15 @@ build_libsoxr() {
     rm -rf "$BUILD_DIR"
     mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
 
-    cmake \
+    cmake -Wno-dev -Wno-deprecated \
         -S "$PROJECT_PATH" \
         -B "$BUILD_DIR" \
         -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DANDROID_ABI="$ABI" \
         -DANDROID_PLATFORM="android-$ANDROID_API" \
+        -DCMAKE_C_FLAGS="$DEP_WARN_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$DEP_WARN_FLAGS" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=OFF \
         -DBUILD_TESTS=OFF \
@@ -245,7 +251,7 @@ build_libsoxr() {
         -DWITH_OPENMP=OFF \
         -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"
 
-    cmake --build "$BUILD_DIR" -j$(nproc)
+    cmake --build "$BUILD_DIR" -j"$NPROC"
     cmake --install "$BUILD_DIR"
 
     if [ ! -f "$INSTALL_DIR/lib/libsoxr.a" ]; then
@@ -347,8 +353,8 @@ EOF
     export ANDROID_API="$ANDROID_API"
     export PATH="$OPENSSL_COMPAT_BIN:$TOOLCHAIN/bin:$PATH"
 
-    export CFLAGS="-fPIC"
-    export CXXFLAGS="-fPIC"
+    export CFLAGS="-fPIC $DEP_WARN_FLAGS"
+    export CXXFLAGS="-fPIC $DEP_WARN_FLAGS"
 
     perl ./Configure "$OPENSSL_TARGET" \
         --cross-compile-prefix="$OPENSSL_CROSS_PREFIX" \
@@ -367,8 +373,8 @@ EOF
             exit 1
         }
 
-    make -j$(nproc)
-    make install_sw
+    make -s -j"$NPROC"
+    make -s install_sw
     mkdir -p "$INSTALL_DIR/lib"
     echo "$OPENSSL_BUILD_SIGNATURE" > "$OPENSSL_STAMP_FILE"
 
@@ -391,7 +397,7 @@ build_ffmpeg() {
     local OPENSSL_LDFLAGS=""
     local OPENSSL_EXTRA_LIBS=""
     local OPENSSL_ENABLE_FLAG=""
-    local FFMPEG_EXTRA_CFLAGS="-fPIC"
+    local FFMPEG_EXTRA_CFLAGS="-fPIC $DEP_WARN_FLAGS"
 
     mkdir -p "$BUILD_DIR"
 
@@ -478,8 +484,8 @@ build_ffmpeg() {
         --extra-libs="$SOXR_EXTRA_LIBS $OPENSSL_EXTRA_LIBS" \
         $EXTRA_FLAGS || { echo "Error: FFmpeg configure failed!"; exit 1; }
 
-    make -j$(nproc)
-    make install
+    make -s -j"$NPROC"
+    make -s install
 
     cd ..
 }
@@ -513,11 +519,13 @@ build_libopenmpt() {
         APP_BUILD_SCRIPT="$PROJECT_PATH/Android.mk" \
         APP_ABI="$ABI" \
         APP_PLATFORM="android-$ANDROID_API" \
+        APP_CFLAGS="$DEP_WARN_FLAGS" \
+        APP_CPPFLAGS="$DEP_WARN_FLAGS" \
         NDK_LIBS_OUT="$INSTALL_DIR/lib" \
         NDK_OUT="$PROJECT_PATH/obj/$ABI" \
         MPT_WITH_MINIMP3=1 \
         MPT_WITH_STBVORBIS=1 \
-        -j$(nproc)
+        -j"$NPROC"
 
     # Copy static library manually
     # ndk-build puts static libs in obj/local/$ABI/libopenmpt.a (relative to NDK_OUT)
@@ -557,13 +565,15 @@ build_libvgm() {
     rm -rf "$BUILD_DIR"
     mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
 
-    cmake \
+    cmake -Wno-dev -Wno-deprecated \
         -S "$PROJECT_PATH" \
         -B "$BUILD_DIR" \
         -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DANDROID_ABI="$ABI" \
         -DANDROID_PLATFORM="android-$ANDROID_API" \
+        -DCMAKE_C_FLAGS="$DEP_WARN_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$DEP_WARN_FLAGS" \
         -DCMAKE_BUILD_TYPE=Release \
         -DLIBRARY_TYPE=STATIC \
         -DBUILD_LIBAUDIO=OFF \
@@ -576,7 +586,7 @@ build_libvgm() {
         -DUTIL_CHARSET_CONV=OFF \
         -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"
 
-    cmake --build "$BUILD_DIR" -j$(nproc)
+    cmake --build "$BUILD_DIR" -j"$NPROC"
     cmake --install "$BUILD_DIR"
 
     # Some libvgm revisions do not install all headers consistently.
@@ -607,13 +617,15 @@ build_libgme() {
     rm -rf "$BUILD_DIR"
     mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
 
-    cmake \
+    cmake -Wno-dev -Wno-deprecated \
         -S "$PROJECT_PATH" \
         -B "$BUILD_DIR" \
         -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DANDROID_ABI="$ABI" \
         -DANDROID_PLATFORM="android-$ANDROID_API" \
+        -DCMAKE_C_FLAGS="$DEP_WARN_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$DEP_WARN_FLAGS" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=OFF \
         -DGME_BUILD_SHARED=OFF \
@@ -623,7 +635,7 @@ build_libgme() {
         -DGME_ZLIB=ON \
         -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"
 
-    cmake --build "$BUILD_DIR" -j$(nproc)
+    cmake --build "$BUILD_DIR" -j"$NPROC"
     cmake --install "$BUILD_DIR"
 }
 
@@ -652,43 +664,47 @@ build_lazyusf2() {
 
         case "$ABI" in
             "arm64-v8a")
-                make -j$(nproc) liblazyusf.a \
+                make -s -j"$NPROC" liblazyusf.a \
                     CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
                     AR="$TOOLCHAIN/bin/llvm-ar" \
                     CPU="AArch64" \
                     ARCH="64" \
+                    OPTFLAGS="-Os $DEP_WARN_FLAGS" \
                     OBJS_RECOMPILER_64="" \
                     OPTS_AArch64="" \
                     ROPTS_AArch64="-DARCH_MIN_ARM_NEON"
                 ;;
             "armeabi-v7a")
-                make -j$(nproc) liblazyusf.a \
+                make -s -j"$NPROC" liblazyusf.a \
                     CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
                     AR="$TOOLCHAIN/bin/llvm-ar" \
                     CPU="arm" \
                     ARCH="32" \
+                    OPTFLAGS="-Os $DEP_WARN_FLAGS" \
                     FLAGS_32="-fPIC" \
                     OBJS_RECOMPILER_32="" \
                     OPTS_arm="" \
                     ROPTS_arm=""
                 ;;
             "x86")
-                make -j$(nproc) liblazyusf.a \
+                make -s -j"$NPROC" liblazyusf.a \
                     CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
                     AR="$TOOLCHAIN/bin/llvm-ar" \
                     CPU="x86" \
                     ARCH="32" \
+                    OPTFLAGS="-Os $DEP_WARN_FLAGS" \
                     FLAGS_32="-fPIC -msse -mmmx -msse2" \
                     OBJS_RECOMPILER_32="" \
                     OPTS_x86="" \
                     ROPTS_x86="-DARCH_MIN_SSE2"
                 ;;
             "x86_64")
-                make -j$(nproc) liblazyusf.a \
+                make -s -j"$NPROC" liblazyusf.a \
                     CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
                     AR="$TOOLCHAIN/bin/llvm-ar" \
                     CPU="x86_64" \
                     ARCH="64" \
+                    OPTFLAGS="-Os $DEP_WARN_FLAGS" \
                     FLAGS_64="-fPIC" \
                     OBJS_RECOMPILER_64="" \
                     OPTS_x86_64="" \
@@ -738,10 +754,10 @@ build_psflib() {
     (
         cd "$PROJECT_PATH"
         make clean >/dev/null 2>&1 || true
-        make -j$(nproc) libpsflib.a \
+        make -s -j"$NPROC" libpsflib.a \
             CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
             AR="$TOOLCHAIN/bin/llvm-ar" \
-            CFLAGS="-c -fPIC"
+            CFLAGS="-c -fPIC $DEP_WARN_FLAGS"
     )
 
     if [ ! -f "$PROJECT_PATH/libpsflib.a" ]; then
@@ -781,12 +797,12 @@ build_vio2sf() {
     (
         cd "$PROJECT_PATH"
         make clean >/dev/null 2>&1 || true
-        make -j$(nproc) libvio2sf.a \
+        make -s -j"$NPROC" libvio2sf.a \
             CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
             AR="$TOOLCHAIN/bin/llvm-ar" \
-            CFLAGS="-c -fPIC" \
-            CXXFLAGS="-c -fPIC" \
-            OPTS="-O3 -I. -DBARRAY_DECORATE=TWOSF -DRESAMPLER_DECORATE=TWOSF"
+            CFLAGS="-c -fPIC $DEP_WARN_FLAGS" \
+            CXXFLAGS="-c -fPIC $DEP_WARN_FLAGS" \
+            OPTS="-O3 -I. -DBARRAY_DECORATE=TWOSF -DRESAMPLER_DECORATE=TWOSF $DEP_WARN_FLAGS"
     )
 
     if [ ! -f "$PROJECT_PATH/libvio2sf.a" ]; then
@@ -817,13 +833,15 @@ build_fluidsynth() {
     rm -rf "$BUILD_DIR"
     mkdir -p "$BUILD_DIR" "$INSTALL_DIR/lib" "$INSTALL_DIR/include"
 
-    cmake \
+    cmake -Wno-dev -Wno-deprecated \
         -S "$PROJECT_PATH" \
         -B "$BUILD_DIR" \
         -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DANDROID_ABI="$ABI" \
         -DANDROID_PLATFORM="android-$ANDROID_API" \
+        -DCMAKE_C_FLAGS="$DEP_WARN_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$DEP_WARN_FLAGS" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_SHARED_LIBS=OFF \
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
@@ -853,7 +871,7 @@ build_fluidsynth() {
         -Denable-limiter=OFF \
         -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"
 
-    cmake --build "$BUILD_DIR" --target libfluidsynth -j$(nproc)
+    cmake --build "$BUILD_DIR" --target libfluidsynth -j"$NPROC"
 
     if [ -f "$BUILD_DIR/src/libfluidsynth.a" ]; then
         cp "$BUILD_DIR/src/libfluidsynth.a" "$INSTALL_DIR/lib/"
@@ -937,15 +955,16 @@ build_libresid() {
         "$PROJECT_PATH/configure" \
             --host="$CONFIGURE_HOST" \
             --disable-arch \
+            --enable-silent-rules \
             CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
             CXX="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang++" \
             AR="$TOOLCHAIN/bin/llvm-ar" \
             RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
             STRIP="$TOOLCHAIN/bin/llvm-strip" \
-            CFLAGS="-fPIC" \
-            CXXFLAGS="-fPIC"
+            CFLAGS="-fPIC $DEP_WARN_FLAGS" \
+            CXXFLAGS="-fPIC $DEP_WARN_FLAGS"
 
-        make -j$(nproc)
+        make --no-print-directory V=0 -j"$NPROC"
     )
 
     local built_lib
@@ -1026,16 +1045,17 @@ build_libresidfp() {
             --prefix="$INSTALL_DIR" \
             --disable-shared \
             --enable-static \
+            --enable-silent-rules \
             CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
             CXX="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang++" \
             AR="$TOOLCHAIN/bin/llvm-ar" \
             RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
             STRIP="$TOOLCHAIN/bin/llvm-strip" \
-            CFLAGS="-fPIC" \
-            CXXFLAGS="-fPIC"
+            CFLAGS="-fPIC $DEP_WARN_FLAGS" \
+            CXXFLAGS="-fPIC $DEP_WARN_FLAGS"
 
-        make -j$(nproc)
-        make install
+        make --no-print-directory V=0 -j"$NPROC"
+        make --no-print-directory V=0 install
     )
 
     if [ ! -f "$INSTALL_DIR/lib/libresidfp.a" ]; then
@@ -1166,6 +1186,7 @@ build_libsidplayfp() {
             --disable-tests \
             --enable-tests=no \
             --enable-testsuite=no \
+            --enable-silent-rules \
             --with-usbsid=no \
             --with-exsid=no \
             CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
@@ -1173,11 +1194,11 @@ build_libsidplayfp() {
             AR="$TOOLCHAIN/bin/llvm-ar" \
             RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
             STRIP="$TOOLCHAIN/bin/llvm-strip" \
-            CFLAGS="-fPIC" \
-            CXXFLAGS="-fPIC"
+            CFLAGS="-fPIC $DEP_WARN_FLAGS" \
+            CXXFLAGS="-fPIC $DEP_WARN_FLAGS"
 
-        make -j$(nproc)
-        make install
+        make --no-print-directory V=0 -j"$NPROC"
+        make --no-print-directory V=0 install
     )
 
     if [ -f "$INSTALL_DIR/lib/libsidplayfp.a" ]; then

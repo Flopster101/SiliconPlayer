@@ -53,6 +53,10 @@ public:
     int getRepeatModeCapabilities() const override;
     double getPlaybackPositionSeconds() override;
     TimelineMode getTimelineMode() const override;
+    std::vector<std::string> getToggleChannelNames() override;
+    void setToggleChannelMuted(int channelIndex, bool enabled) override;
+    bool getToggleChannelMuted(int channelIndex) const override;
+    void clearToggleChannelMutes() override;
     void setOption(const char* name, const char* value) override;
     int getOptionApplyPolicy(const char* name) const override;
 
@@ -62,7 +66,7 @@ public:
 
 private:
     std::unique_ptr<PlayerA> player;
-    std::mutex decodeMutex;
+    mutable std::mutex decodeMutex;
 
     // File data buffer
     std::vector<uint8_t> fileData;
@@ -99,6 +103,14 @@ private:
     uint8_t chipResampleMode = 0; // high quality
     uint32_t chipSampleRateHz = 48000;
     std::unordered_map<uint8_t, uint32_t> chipCoreOverrideByType;
+    struct ToggleChipEntry {
+        uint32_t deviceId = 0;
+        uint32_t muteTargetId = 0;
+        uint8_t channelBit = 0;
+        std::string name;
+        bool muted = false;
+    };
+    std::vector<ToggleChipEntry> toggleChipEntries;
 
     // Internal close method that doesn't acquire mutex (for use within locked methods)
     void closeInternal();
@@ -107,6 +119,8 @@ private:
     void ensurePlayerStarted();
     void applyPlayerOptionsLocked();
     void applyDeviceOptionsLocked(VGMPlayer* vgmPlayer);
+    void rebuildToggleChannelsLocked(VGMPlayer* vgmPlayer);
+    void applyToggleChannelMutesLocked(VGMPlayer* vgmPlayer);
     uint32_t resolveChipCoreForOption(uint8_t deviceType, int optionValue) const;
 };
 

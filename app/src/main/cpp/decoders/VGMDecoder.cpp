@@ -8,6 +8,7 @@
 #include <vector>
 #include <sstream>
 #include <iomanip>
+#include <unordered_map>
 
 // libvgm includes
 #include <vgm/emu/EmuCores.h>
@@ -234,6 +235,8 @@ bool VGMDecoder::open(const char* path) {
 
     applyPlayerOptionsLocked();
     applyDeviceOptionsLocked(vgmPlayer);
+    rebuildToggleChannelsLocked(vgmPlayer);
+    applyToggleChannelMutesLocked(vgmPlayer);
     return true;
 }
 
@@ -269,6 +272,7 @@ void VGMDecoder::closeInternal() {
     pendingTerminalEnd = false;
     playbackTimeOffsetSeconds = 0.0;
     songHasLoopPoint = false;
+    toggleChipEntries.clear();
 }
 
 void VGMDecoder::close() {
@@ -543,6 +547,47 @@ AudioDecoder::TimelineMode VGMDecoder::getTimelineMode() const {
             : TimelineMode::ContinuousLinear;
 }
 
+std::vector<std::string> VGMDecoder::getToggleChannelNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    std::vector<std::string> names;
+    names.reserve(toggleChipEntries.size());
+    for (const auto& entry : toggleChipEntries) {
+        names.push_back(entry.name);
+    }
+    return names;
+}
+
+void VGMDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChipEntries.size())) {
+        return;
+    }
+    toggleChipEntries[static_cast<size_t>(channelIndex)].muted = enabled;
+    PlayerBase* playerBase = player ? player->GetPlayer() : nullptr;
+    if (auto* vgmPlayer = dynamic_cast<VGMPlayer*>(playerBase)) {
+        applyToggleChannelMutesLocked(vgmPlayer);
+    }
+}
+
+bool VGMDecoder::getToggleChannelMuted(int channelIndex) const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChipEntries.size())) {
+        return false;
+    }
+    return toggleChipEntries[static_cast<size_t>(channelIndex)].muted;
+}
+
+void VGMDecoder::clearToggleChannelMutes() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    for (auto& entry : toggleChipEntries) {
+        entry.muted = false;
+    }
+    PlayerBase* playerBase = player ? player->GetPlayer() : nullptr;
+    if (auto* vgmPlayer = dynamic_cast<VGMPlayer*>(playerBase)) {
+        applyToggleChannelMutesLocked(vgmPlayer);
+    }
+}
+
 void VGMDecoder::setOption(const char* name, const char* value) {
     if (!name || !value) return;
     std::lock_guard<std::mutex> lock(decodeMutex);
@@ -667,6 +712,89 @@ void VGMDecoder::applyDeviceOptionsLocked(VGMPlayer* vgmPlayer) {
         }
 
         vgmPlayer->SetDeviceOptions(deviceInfo.id, deviceOptions);
+    }
+}
+
+void VGMDecoder::rebuildToggleChannelsLocked(VGMPlayer* vgmPlayer) {
+    toggleChipEntries.clear();
+    if (!vgmPlayer) {
+        return;
+    }
+
+    std::vector<PLR_DEV_INFO> deviceInfos;
+    if (vgmPlayer->GetSongDeviceInfo(deviceInfos) != 0x00) {
+        return;
+    }
+
+    for (const auto& deviceInfo : deviceInfos) {
+        if (deviceInfo.parentIdx != std::numeric_limits<uint32_t>::max()) {
+            continue; // Skip linked devices; expose only top-level chips in UI.
+        }
+        const char* declName = (deviceInfo.devDecl && deviceInfo.devDecl->name)
+                ? deviceInfo.devDecl->name(deviceInfo.devCfg)
+                : nullptr;
+        const std::string chipName = (declName && declName[0] != '\0')
+                ? std::string(declName)
+                : fallbackChipName(deviceInfo.type);
+        const int channelCount = std::clamp(
+                static_cast<int>(
+                        (deviceInfo.devDecl && deviceInfo.devDecl->channelCount)
+                        ? deviceInfo.devDecl->channelCount(deviceInfo.devCfg)
+                        : 0
+                ),
+                0,
+                64
+        );
+        for (int channel = 0; channel < channelCount; ++channel) {
+            ToggleChipEntry entry;
+            entry.deviceId = deviceInfo.id;
+            if (deviceInfo.instance != 0xFFFF && deviceInfo.instance <= 0xFF) {
+                entry.muteTargetId = PLR_DEV_ID(deviceInfo.type, deviceInfo.instance);
+            } else {
+                entry.muteTargetId = deviceInfo.id;
+            }
+            entry.channelBit = static_cast<uint8_t>(channel);
+            entry.name = chipName + " #" + std::to_string(channel + 1);
+            entry.muted = false;
+            toggleChipEntries.push_back(std::move(entry));
+        }
+    }
+}
+
+void VGMDecoder::applyToggleChannelMutesLocked(VGMPlayer* vgmPlayer) {
+    if (!vgmPlayer) {
+        return;
+    }
+    std::unordered_map<uint32_t, PLR_MUTE_OPTS> muteByDeviceId;
+    for (const auto& entry : toggleChipEntries) {
+        auto it = muteByDeviceId.find(entry.muteTargetId);
+        if (it == muteByDeviceId.end()) {
+            PLR_MUTE_OPTS baseMute{};
+            if (vgmPlayer->GetDeviceMuting(entry.muteTargetId, baseMute) != 0x00) {
+                // Fallback path for engines that prefer raw runtime device index.
+                if (vgmPlayer->GetDeviceMuting(entry.deviceId, baseMute) != 0x00) {
+                    baseMute = {};
+                }
+            }
+            it = muteByDeviceId.emplace(entry.muteTargetId, baseMute).first;
+            it->second.disable = 0x00;
+            it->second.chnMute[0] = 0x00000000u;
+            it->second.chnMute[1] = 0x00000000u;
+        }
+        const uint8_t channel = entry.channelBit;
+        if (!entry.muted) {
+            continue;
+        }
+        if (channel < 32) {
+            it->second.chnMute[0] |= (1u << channel);
+        } else {
+            it->second.chnMute[1] |= (1u << (channel - 32));
+        }
+    }
+    for (const auto& [deviceId, muteOptions] : muteByDeviceId) {
+        if (vgmPlayer->SetDeviceMuting(deviceId, muteOptions) != 0x00) {
+            // Ignore failure: some targets may not support this id form.
+        }
     }
 }
 

@@ -48,6 +48,82 @@ PATCHES_DIR_VIO2SF="$ABSOLUTE_PATH/patches/vio2sf"
 OPENSSL_DIR="$ABSOLUTE_PATH/openssl"
 
 # -----------------------------------------------------------------------------
+# Functions: Generic system dependency installation helpers
+# -----------------------------------------------------------------------------
+detect_linux_family() {
+    if [ ! -r /etc/os-release ]; then
+        echo "unknown"
+        return
+    fi
+
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    local id="${ID:-}"
+    local id_like="${ID_LIKE:-}"
+
+    case "$id" in
+        ubuntu|debian)
+            echo "debian"
+            ;;
+        arch|manjaro|endeavouros)
+            echo "arch"
+            ;;
+        *)
+            if [[ "$id_like" == *debian* ]]; then
+                echo "debian"
+            elif [[ "$id_like" == *arch* ]]; then
+                echo "arch"
+            else
+                echo "unknown"
+            fi
+            ;;
+    esac
+}
+
+install_dependency_if_missing() {
+    local dep_name="$1"
+    local binary_check="$2"
+    local debian_pkg="$3"
+    local arch_pkg="$4"
+    local linux_family="$5"
+
+    if command -v "$binary_check" >/dev/null 2>&1; then
+        echo "$dep_name already installed."
+        return 0
+    fi
+
+    case "$linux_family" in
+        debian)
+            if [ -n "$debian_pkg" ]; then
+                echo "$dep_name not found. Installing $debian_pkg (Debian/Ubuntu)..."
+                sudo apt-get install -y "$debian_pkg"
+            else
+                echo "Warning: no Debian package mapping for $dep_name. Skipping."
+            fi
+            ;;
+        arch)
+            if [ -n "$arch_pkg" ]; then
+                echo "$dep_name not found. Installing $arch_pkg (Arch)..."
+                sudo pacman -S --noconfirm "$arch_pkg"
+            else
+                echo "Warning: no Arch package mapping for $dep_name. Skipping."
+            fi
+            ;;
+        *)
+            echo "Warning: unsupported distro. Cannot auto-install $dep_name."
+            ;;
+    esac
+}
+
+ensure_system_dependencies() {
+    local linux_family
+    linux_family="$(detect_linux_family)"
+
+    # XA assembler: package names differ by distro, but both provide `xa65`.
+    install_dependency_if_missing "XA assembler" "xa65" "xa65" "xa" "$linux_family"
+}
+
+# -----------------------------------------------------------------------------
 # Function: Apply libopenmpt patches (idempotent)
 # -----------------------------------------------------------------------------
 apply_libopenmpt_patches() {
@@ -1388,6 +1464,8 @@ fi
 # -----------------------------------------------------------------------------
 # Pre-build setup (Apply patches once)
 # -----------------------------------------------------------------------------
+ensure_system_dependencies
+
 if target_has_lib "libopenmpt"; then
     apply_libopenmpt_patches
 fi

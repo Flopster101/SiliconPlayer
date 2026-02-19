@@ -306,39 +306,51 @@ bool FFmpegDecoder::initResampler() {
                 0.0
         );
         const int stride = inChannelCount;
-        result = swr_build_matrix2(
-                &in_ch_layout,
-                &out_ch_layout,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                matrix.data(),
-                stride,
-                AV_MATRIX_ENCODING_NONE,
-                nullptr
-        );
-        if (result < 0) {
-            // Fallback for layouts where FFmpeg cannot build a default matrix (for example
-            // some unspecified/discrete multi-channel inputs). Distribute channels by index.
+        const bool useDeterministicMultichannelMuteMatrix = inChannelCount > outChannelCount;
+        if (useDeterministicMultichannelMuteMatrix) {
+            // For multichannel->fewer-channel output with per-channel mutes enabled, use a
+            // stable index-mapped matrix so muting one input does not rebalance unrelated inputs.
             std::vector<int> outputLoad(static_cast<size_t>(outChannelCount), 0);
             for (int inputChannel = 0; inputChannel < inChannelCount; ++inputChannel) {
-                const int mappedOutput = outChannelCount > 0
-                        ? (inputChannel % outChannelCount)
-                        : 0;
+                const int mappedOutput = inputChannel % outChannelCount;
                 outputLoad[static_cast<size_t>(mappedOutput)]++;
             }
             for (int inputChannel = 0; inputChannel < inChannelCount; ++inputChannel) {
-                const int mappedOutput = outChannelCount > 0
-                        ? (inputChannel % outChannelCount)
-                        : 0;
+                const int mappedOutput = inputChannel % outChannelCount;
                 const int load = outputLoad[static_cast<size_t>(mappedOutput)];
                 const double gain = load > 0 ? (1.0 / static_cast<double>(load)) : 0.0;
                 matrix[inputChannel + stride * mappedOutput] = gain;
             }
-            LOGD("swr_build_matrix2 failed; using index-mapped fallback matrix");
             result = 0;
+        } else {
+            result = swr_build_matrix2(
+                    &in_ch_layout,
+                    &out_ch_layout,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                    matrix.data(),
+                    stride,
+                    AV_MATRIX_ENCODING_NONE,
+                    nullptr
+            );
+            if (result < 0) {
+                LOGD("swr_build_matrix2 failed; using index-mapped fallback matrix");
+                std::vector<int> outputLoad(static_cast<size_t>(outChannelCount), 0);
+                for (int inputChannel = 0; inputChannel < inChannelCount; ++inputChannel) {
+                    const int mappedOutput = inputChannel % outChannelCount;
+                    outputLoad[static_cast<size_t>(mappedOutput)]++;
+                }
+                for (int inputChannel = 0; inputChannel < inChannelCount; ++inputChannel) {
+                    const int mappedOutput = inputChannel % outChannelCount;
+                    const int load = outputLoad[static_cast<size_t>(mappedOutput)];
+                    const double gain = load > 0 ? (1.0 / static_cast<double>(load)) : 0.0;
+                    matrix[inputChannel + stride * mappedOutput] = gain;
+                }
+                result = 0;
+            }
         }
         if (result >= 0) {
             for (int inputChannel = 0; inputChannel < inChannelCount; ++inputChannel) {

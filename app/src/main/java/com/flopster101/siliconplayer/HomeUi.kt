@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeSpacing
@@ -41,19 +42,26 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import java.io.File
+import kotlinx.coroutines.delay
 
 private val HomeCardShape = RoundedCornerShape(16.dp)
 private const val HOME_RECENTS_INSERT_ANIM_DURATION_MS = 260
+private const val HOME_INTRO_BASE_DELAY_MS = 0L
+private const val HOME_INTRO_STAGGER_MS = 34L
+private const val HOME_INTRO_ANIM_DURATION_MS = 240
 private data class RecentAnimationState(
     val insertedKeys: Set<String>,
     val promotedTopKey: String?
@@ -141,6 +149,20 @@ internal fun HomeScreen(
     }
     val recentFolderAnimationState = rememberRecentAnimationState(recentFolderKeys)
     val recentPlayedAnimationState = rememberRecentAnimationState(recentPlayedKeys)
+    var runHomeIntroAnimation by rememberSaveable { mutableStateOf(true) }
+    val introAnimatedItemCount = remember(recentFolders.size, recentPlayedFiles.size) {
+        2 + recentFolders.size + recentPlayedFiles.size
+    }
+
+    LaunchedEffect(runHomeIntroAnimation, introAnimatedItemCount) {
+        if (!runHomeIntroAnimation) return@LaunchedEffect
+        val totalIntroMs = HOME_INTRO_BASE_DELAY_MS +
+            (HOME_INTRO_STAGGER_MS * introAnimatedItemCount.coerceAtLeast(1)) +
+            HOME_INTRO_ANIM_DURATION_MS
+        delay(totalIntroMs)
+        runHomeIntroAnimation = false
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -163,84 +185,104 @@ internal fun HomeScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            ElevatedCard(
+            Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(96.dp),
-                onClick = onOpenLibrary
+                    .height(96.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                AnimatedHomeIntroItem(
+                    itemKey = "home_intro_files_button",
+                    order = 0,
+                    enabled = runHomeIntroAnimation
                 ) {
-                    Surface(
-                        modifier = Modifier.size(38.dp),
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.primaryContainer
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxSize(),
+                        onClick = onOpenLibrary
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Folder,
-                                contentDescription = null
-                            )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(38.dp),
+                                shape = MaterialTheme.shapes.medium,
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Folder,
+                                        contentDescription = null
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Files",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    text = "Browse local folders",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            }
                         }
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Files",
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1
-                        )
-                        Text(
-                            text = "Browse local folders",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
-                        )
                     }
                 }
             }
-            ElevatedCard(
+            Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(96.dp),
-                onClick = onOpenUrlOrPath
+                    .height(96.dp)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                AnimatedHomeIntroItem(
+                    itemKey = "home_intro_url_button",
+                    order = 1,
+                    enabled = runHomeIntroAnimation
                 ) {
-                    Surface(
-                        modifier = Modifier.size(38.dp),
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxSize(),
+                        onClick = onOpenUrlOrPath
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Link,
-                                contentDescription = null
-                            )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(38.dp),
+                                shape = MaterialTheme.shapes.medium,
+                                color = MaterialTheme.colorScheme.secondaryContainer
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Link,
+                                        contentDescription = null
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "URL or path",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    text = "Open links or direct paths",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "URL or path",
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 1
-                        )
-                        Text(
-                            text = "Open links or direct paths",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
                     }
                 }
             }
@@ -252,86 +294,92 @@ internal fun HomeScreen(
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(8.dp))
-            recentFolders.forEach { entry ->
+            recentFolders.forEachIndexed { index, entry ->
                 val itemKey = "${entry.locationId.orEmpty()}|${entry.path}"
                 key(itemKey) {
-                    AnimatedRecentCardInsertion(
-                        itemKey = itemKey,
-                        animate = itemKey in recentFolderAnimationState.insertedKeys ||
-                            itemKey == recentFolderAnimationState.promotedTopKey
+                    AnimatedHomeIntroItem(
+                        itemKey = "home_intro_folder_$itemKey",
+                        order = 2 + index,
+                        enabled = runHomeIntroAnimation
                     ) {
-                        val folderFile = File(entry.path)
-                        val storagePresentation = storagePresentationForEntry(entry)
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            ElevatedCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(HomeCardShape)
-                                    .combinedClickable(
-                                        onClick = { onOpenRecentFolder(entry) },
-                                        onLongClick = {
-                                            fileActionTargetEntry = null
-                                            folderActionTargetEntry = entry
-                                        }
-                                    ),
-                                shape = HomeCardShape
-                            ) {
-                                Row(
+                        AnimatedRecentCardInsertion(
+                            itemKey = itemKey,
+                            animate = itemKey in recentFolderAnimationState.insertedKeys ||
+                                itemKey == recentFolderAnimationState.promotedTopKey
+                        ) {
+                            val folderFile = File(entry.path)
+                            val storagePresentation = storagePresentationForEntry(entry)
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                ElevatedCard(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .clip(HomeCardShape)
+                                        .combinedClickable(
+                                            onClick = { onOpenRecentFolder(entry) },
+                                            onLongClick = {
+                                                fileActionTargetEntry = null
+                                                folderActionTargetEntry = entry
+                                            }
+                                        ),
+                                    shape = HomeCardShape
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Folder,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = folderFile.name.ifBlank { entry.path },
-                                            style = MaterialTheme.typography.titleSmall,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Folder,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
                                         )
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = storagePresentation.icon,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = storagePresentation.label,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                text = folderFile.name.ifBlank { entry.path },
+                                                style = MaterialTheme.typography.titleSmall,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = storagePresentation.icon,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = storagePresentation.label,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            DropdownMenu(
-                                expanded = folderActionTargetEntry == entry,
-                                onDismissRequest = { folderActionTargetEntry = null }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Delete from recents") },
-                                    onClick = {
-                                        onRecentFolderAction(entry, FolderEntryAction.DeleteFromRecents)
-                                        folderActionTargetEntry = null
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Copy path") },
-                                    onClick = {
-                                        onRecentFolderAction(entry, FolderEntryAction.CopyPath)
-                                        folderActionTargetEntry = null
-                                    }
-                                )
+                                DropdownMenu(
+                                    expanded = folderActionTargetEntry == entry,
+                                    onDismissRequest = { folderActionTargetEntry = null }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Delete from recents") },
+                                        onClick = {
+                                            onRecentFolderAction(entry, FolderEntryAction.DeleteFromRecents)
+                                            folderActionTargetEntry = null
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Copy path") },
+                                        onClick = {
+                                            onRecentFolderAction(entry, FolderEntryAction.CopyPath)
+                                            folderActionTargetEntry = null
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -352,91 +400,97 @@ internal fun HomeScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
-            recentPlayedFiles.forEach { entry ->
+            recentPlayedFiles.forEachIndexed { index, entry ->
                 val itemKey =
                     "${entry.locationId.orEmpty()}|${entry.path}|${entry.title.orEmpty()}|${entry.artist.orEmpty()}"
                 key(itemKey) {
-                    AnimatedRecentCardInsertion(
-                        itemKey = itemKey,
-                        animate = itemKey in recentPlayedAnimationState.insertedKeys ||
-                            itemKey == recentPlayedAnimationState.promotedTopKey
+                    AnimatedHomeIntroItem(
+                        itemKey = "home_intro_played_$itemKey",
+                        order = 2 + recentFolders.size + index,
+                        enabled = runHomeIntroAnimation
                     ) {
-                        val trackFile = File(entry.path)
-                        val storagePresentation = storagePresentationForEntry(entry)
-                        val extensionLabel = trackFile.extension.uppercase().ifBlank { "UNKNOWN" }
-                        val useLiveMetadata = samePath(currentTrackPath, entry.path)
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            ElevatedCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(HomeCardShape)
-                                    .combinedClickable(
-                                        onClick = { onPlayRecentFile(entry) },
-                                        onLongClick = {
-                                            folderActionTargetEntry = null
-                                            fileActionTargetEntry = entry
-                                        }
-                                    ),
-                                shape = HomeCardShape
-                            ) {
-                                Row(
+                        AnimatedRecentCardInsertion(
+                            itemKey = itemKey,
+                            animate = itemKey in recentPlayedAnimationState.insertedKeys ||
+                                itemKey == recentPlayedAnimationState.promotedTopKey
+                        ) {
+                            val trackFile = File(entry.path)
+                            val storagePresentation = storagePresentationForEntry(entry)
+                            val extensionLabel = trackFile.extension.uppercase().ifBlank { "UNKNOWN" }
+                            val useLiveMetadata = samePath(currentTrackPath, entry.path)
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                ElevatedCard(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .clip(HomeCardShape)
+                                        .combinedClickable(
+                                            onClick = { onPlayRecentFile(entry) },
+                                            onLongClick = {
+                                                folderActionTargetEntry = null
+                                                fileActionTargetEntry = entry
+                                            }
+                                        ),
+                                    shape = HomeCardShape
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.MusicNote,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        RecentTrackSummaryText(
-                                            file = trackFile,
-                                            cachedTitle = if (useLiveMetadata) currentTrackTitle else entry.title,
-                                            cachedArtist = if (useLiveMetadata) currentTrackArtist else entry.artist,
-                                            storagePresentation = storagePresentation,
-                                            extensionLabel = extensionLabel
-                                        )
-                                    }
-                                    if (useLiveMetadata) {
-                                        Spacer(modifier = Modifier.width(12.dp))
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
                                         Icon(
-                                            imageVector = Icons.Default.PlayArrow,
-                                            contentDescription = "Playing",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp)
+                                            imageVector = Icons.Default.MusicNote,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
                                         )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            RecentTrackSummaryText(
+                                                file = trackFile,
+                                                cachedTitle = if (useLiveMetadata) currentTrackTitle else entry.title,
+                                                cachedArtist = if (useLiveMetadata) currentTrackArtist else entry.artist,
+                                                storagePresentation = storagePresentation,
+                                                extensionLabel = extensionLabel
+                                            )
+                                        }
+                                        if (useLiveMetadata) {
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Icon(
+                                                imageVector = Icons.Default.PlayArrow,
+                                                contentDescription = "Playing",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
                                     }
                                 }
-                            }
-                            DropdownMenu(
-                                expanded = fileActionTargetEntry == entry,
-                                onDismissRequest = { fileActionTargetEntry = null }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Delete from recents") },
-                                    onClick = {
-                                        onRecentFileAction(entry, SourceEntryAction.DeleteFromRecents)
-                                        fileActionTargetEntry = null
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Share file") },
-                                    onClick = {
-                                        onRecentFileAction(entry, SourceEntryAction.ShareFile)
-                                        fileActionTargetEntry = null
-                                    },
-                                    enabled = canShareRecentFile(entry)
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Copy URL/path") },
-                                    onClick = {
-                                        onRecentFileAction(entry, SourceEntryAction.CopySource)
-                                        fileActionTargetEntry = null
-                                    }
-                                )
+                                DropdownMenu(
+                                    expanded = fileActionTargetEntry == entry,
+                                    onDismissRequest = { fileActionTargetEntry = null }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Delete from recents") },
+                                        onClick = {
+                                            onRecentFileAction(entry, SourceEntryAction.DeleteFromRecents)
+                                            fileActionTargetEntry = null
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Share file") },
+                                        onClick = {
+                                            onRecentFileAction(entry, SourceEntryAction.ShareFile)
+                                            fileActionTargetEntry = null
+                                        },
+                                        enabled = canShareRecentFile(entry)
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Copy URL/path") },
+                                        onClick = {
+                                            onRecentFileAction(entry, SourceEntryAction.CopySource)
+                                            fileActionTargetEntry = null
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -446,6 +500,50 @@ internal fun HomeScreen(
         }
     }
 
+}
+
+@Composable
+private fun AnimatedHomeIntroItem(
+    itemKey: String,
+    order: Int,
+    enabled: Boolean,
+    content: @Composable () -> Unit
+) {
+    val hiddenAlpha = if (order <= 1) 0.52f else 0f
+    val hiddenOffsetPx = with(LocalDensity.current) { 12.dp.toPx() }
+    var targetProgress by remember(itemKey, order, enabled) {
+        mutableStateOf(if (enabled) 0f else 1f)
+    }
+    LaunchedEffect(itemKey, order, enabled) {
+        if (!enabled) {
+            targetProgress = 1f
+            return@LaunchedEffect
+        }
+        targetProgress = 0f
+        val clampedOrder = order.coerceAtLeast(0)
+        if (clampedOrder > 0) {
+            delay(HOME_INTRO_BASE_DELAY_MS + (HOME_INTRO_STAGGER_MS * clampedOrder))
+        }
+        targetProgress = 1f
+    }
+
+    val progress by animateFloatAsState(
+        targetValue = targetProgress,
+        animationSpec = tween(
+            durationMillis = HOME_INTRO_ANIM_DURATION_MS.toInt(),
+            easing = FastOutSlowInEasing
+        ),
+        label = "homeIntroProgress"
+    )
+
+    Box(
+        modifier = Modifier.graphicsLayer {
+            alpha = hiddenAlpha + ((1f - hiddenAlpha) * progress)
+            translationY = (1f - progress) * hiddenOffsetPx
+        }
+    ) {
+        content()
+    }
 }
 
 @Composable

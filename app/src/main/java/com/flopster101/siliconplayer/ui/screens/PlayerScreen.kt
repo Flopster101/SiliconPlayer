@@ -2272,7 +2272,8 @@ private fun FutureActionStrip(
 private data class ChannelControlItem(
     val name: String,
     val channelIndex: Int,
-    val muted: Boolean
+    val muted: Boolean,
+    val available: Boolean = true
 )
 
 private fun sortChannelControlsForDisplay(
@@ -2301,8 +2302,8 @@ private fun ChannelControlDialog(
     var masterChannels by remember {
         mutableStateOf(
             listOf(
-                ChannelControlItem(name = "Left", channelIndex = 0, muted = false),
-                ChannelControlItem(name = "Right", channelIndex = 1, muted = false)
+                ChannelControlItem(name = "Left", channelIndex = 0, muted = false, available = true),
+                ChannelControlItem(name = "Right", channelIndex = 1, muted = false, available = true)
             )
         )
     }
@@ -2316,11 +2317,13 @@ private fun ChannelControlDialog(
 
     fun loadDecoderState() {
         val names = NativeBridge.getDecoderToggleChannelNames().toList()
+        val availability = NativeBridge.getDecoderToggleChannelAvailability()
         val rawItems = names.mapIndexed { index, name ->
             ChannelControlItem(
                 name = name,
                 channelIndex = index,
-                muted = NativeBridge.getDecoderToggleChannelMuted(index)
+                muted = NativeBridge.getDecoderToggleChannelMuted(index),
+                available = availability.getOrElse(index) { true }
             )
         }
         decoderChannels = sortChannelControlsForDisplay(rawItems)
@@ -2334,19 +2337,20 @@ private fun ChannelControlDialog(
 
     LaunchedEffect(Unit) {
         loadMasterState()
-        loadDecoderState()
+        while (true) {
+            coroutineContext.ensureActive()
+            loadDecoderState()
+            delay(500)
+        }
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Channel controls") },
         text = {
-            val channelDialogScrollState = rememberScrollState()
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 520.dp)
-                    .verticalScroll(channelDialogScrollState),
+                    .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
@@ -2401,6 +2405,9 @@ private fun ChannelControlDialog(
                         items = decoderChannels,
                         showScrollbar = true,
                         onToggleMute = { item ->
+                            if (!item.available) {
+                                return@ChannelControlGrid
+                            }
                             NativeBridge.setDecoderToggleChannelMuted(
                                 item.channelIndex,
                                 !item.muted
@@ -2414,25 +2421,39 @@ private fun ChannelControlDialog(
                             }
                         },
                         onSoloHold = { item ->
-                            val activeCount = decoderChannels.count { !it.muted }
+                            if (!item.available) {
+                                return@ChannelControlGrid
+                            }
+                            val availableChannels = decoderChannels.filter { it.available }
+                            val activeCount = availableChannels.count { !it.muted }
                             val isOnlyActive = !item.muted && activeCount == 1
                             if (isOnlyActive) {
-                                decoderChannels.forEach { channel ->
+                                availableChannels.forEach { channel ->
                                     NativeBridge.setDecoderToggleChannelMuted(
                                         channel.channelIndex,
                                         false
                                     )
                                 }
-                                decoderChannels = decoderChannels.map { it.copy(muted = false) }
+                                decoderChannels = decoderChannels.map { channel ->
+                                    if (channel.available) {
+                                        channel.copy(muted = false)
+                                    } else {
+                                        channel
+                                    }
+                                }
                             } else {
-                                decoderChannels.forEach { channel ->
+                                availableChannels.forEach { channel ->
                                     NativeBridge.setDecoderToggleChannelMuted(
                                         channel.channelIndex,
                                         channel.channelIndex != item.channelIndex
                                     )
                                 }
                                 decoderChannels = decoderChannels.map { channel ->
-                                    channel.copy(muted = channel.channelIndex != item.channelIndex)
+                                    if (channel.available) {
+                                        channel.copy(muted = channel.channelIndex != item.channelIndex)
+                                    } else {
+                                        channel
+                                    }
                                 }
                             }
                         }
@@ -2441,6 +2462,11 @@ private fun ChannelControlDialog(
                 HorizontalDivider()
                 Text(
                     text = "Tap: mute/unmute. Long press: solo this channel (mutes others).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Unavailable channels are greyed out and update while this dialog is open.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2492,6 +2518,8 @@ private fun ChannelControlGrid(
     val gridScrollState = rememberScrollState()
     var gridViewportHeightPx by remember { mutableIntStateOf(0) }
     var scrollbarVisible by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
+    val gridViewportHeightDp = with(density) { gridViewportHeightPx.toDp() }
 
     LaunchedEffect(gridScrollState.isScrollInProgress, gridScrollState.maxValue) {
         if (!showScrollbar || gridScrollState.maxValue <= 0) {
@@ -2512,13 +2540,16 @@ private fun ChannelControlGrid(
         label = "channelGridScrollbarAlpha"
     )
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 176.dp)
+            .onSizeChanged { gridViewportHeightPx = it.height }
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 176.dp)
-                .verticalScroll(gridScrollState)
-                .onSizeChanged { gridViewportHeightPx = it.height },
+                .verticalScroll(gridScrollState),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             rows.forEach { rowItems ->
@@ -2527,20 +2558,27 @@ private fun ChannelControlGrid(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     rowItems.forEach { item ->
+                        val backgroundColor = when {
+                            !item.available -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            item.muted -> MaterialTheme.colorScheme.surfaceVariant
+                            else -> MaterialTheme.colorScheme.primary
+                        }
+                        val contentColor = when {
+                            !item.available -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            item.muted -> MaterialTheme.colorScheme.onSurfaceVariant
+                            else -> MaterialTheme.colorScheme.onPrimary
+                        }
                         Surface(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(MaterialTheme.shapes.large)
                                 .combinedClickable(
+                                    enabled = item.available,
                                     onClick = { onToggleMute(item) },
                                     onLongClick = { onSoloHold(item) }
                                 ),
                             shape = MaterialTheme.shapes.large,
-                            color = if (item.muted) {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            } else {
-                                MaterialTheme.colorScheme.primary
-                            }
+                            color = backgroundColor
                         ) {
                             Box(
                                 modifier = Modifier
@@ -2550,11 +2588,7 @@ private fun ChannelControlGrid(
                             ) {
                                 CompositionLocalProvider(
                                     LocalTextStyle provides MaterialTheme.typography.labelLarge.copy(
-                                        color = if (item.muted) {
-                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                        } else {
-                                            MaterialTheme.colorScheme.onPrimary
-                                        }
+                                        color = contentColor
                                     )
                                 ) {
                                     AutoSizeChipLabel(item.name)
@@ -2571,10 +2605,10 @@ private fun ChannelControlGrid(
                 scrollState = gridScrollState,
                 viewportHeightPx = gridViewportHeightPx,
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
+                    .align(Alignment.TopEnd)
                     .padding(vertical = 2.dp)
                     .width(4.dp)
-                    .fillMaxHeight()
+                    .height(gridViewportHeightDp)
                     .graphicsLayer(alpha = scrollbarAlpha)
             )
         }

@@ -70,6 +70,9 @@ public:
     virtual std::vector<int32_t> getChannelScopeTextState(int /*maxChannels*/) { return {}; }
     // Decoder-specific toggleable channels (names may vary by loaded song/system).
     virtual std::vector<std::string> getToggleChannelNames() { return {}; }
+    // Optional per-channel availability bitmap aligned with getToggleChannelNames().
+    // 1 = channel currently available/active, 0 = unavailable/disabled placeholder.
+    virtual std::vector<uint8_t> getToggleChannelAvailability() { return {}; }
     virtual void setToggleChannelMuted(int /*channelIndex*/, bool /*enabled*/) {}
     virtual bool getToggleChannelMuted(int /*channelIndex*/) const { return false; }
     virtual void clearToggleChannelMutes() {}

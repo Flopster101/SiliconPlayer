@@ -131,6 +131,7 @@ object NativeBridge {
     external fun getMasterChannelMute(channelIndex: Int): Boolean
     external fun getMasterChannelSolo(channelIndex: Int): Boolean
     external fun getDecoderToggleChannelNames(): Array<String>
+    external fun getDecoderToggleChannelAvailability(): BooleanArray
     external fun setDecoderToggleChannelMuted(channelIndex: Int, enabled: Boolean)
     external fun getDecoderToggleChannelMuted(channelIndex: Int): Boolean
     external fun clearDecoderToggleChannelMutes()

@@ -47,6 +47,24 @@ static jintArray toJIntArray(JNIEnv* env, const std::vector<int32_t>& values) {
     return array;
 }
 
+static jbooleanArray toJBooleanArray(JNIEnv* env, const std::vector<uint8_t>& values) {
+    jbooleanArray array = env->NewBooleanArray(static_cast<jsize>(values.size()));
+    if (array == nullptr || values.empty()) {
+        return array;
+    }
+    std::vector<jboolean> tmp(values.size(), JNI_FALSE);
+    for (size_t i = 0; i < values.size(); ++i) {
+        tmp[i] = values[i] != 0 ? JNI_TRUE : JNI_FALSE;
+    }
+    env->SetBooleanArrayRegion(
+            array,
+            0,
+            static_cast<jsize>(tmp.size()),
+            tmp.data()
+    );
+    return array;
+}
+
 static jobjectArray toJStringArray(JNIEnv* env, const std::vector<std::string>& values) {
     jclass stringClass = env->FindClass("java/lang/String");
     jobjectArray result = env->NewObjectArray(static_cast<jsize>(values.size()), stringClass, nullptr);
@@ -1295,6 +1313,15 @@ Java_com_flopster101_siliconplayer_NativeBridge_getDecoderToggleChannelNames(
         return env->NewObjectArray(0, env->FindClass("java/lang/String"), nullptr);
     }
     return toJStringArray(env, audioEngine->getDecoderToggleChannelNames());
+}
+
+extern "C" JNIEXPORT jbooleanArray JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDecoderToggleChannelAvailability(
+        JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewBooleanArray(0);
+    }
+    return toJBooleanArray(env, audioEngine->getDecoderToggleChannelAvailability());
 }
 
 extern "C" JNIEXPORT void JNICALL

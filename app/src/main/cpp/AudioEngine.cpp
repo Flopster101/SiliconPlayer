@@ -1957,6 +1957,12 @@ std::vector<std::string> AudioEngine::getDecoderToggleChannelNames() {
     return decoder->getToggleChannelNames();
 }
 
+std::vector<uint8_t> AudioEngine::getDecoderToggleChannelAvailability() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return {};
+    return decoder->getToggleChannelAvailability();
+}
+
 void AudioEngine::setDecoderToggleChannelMuted(int channelIndex, bool enabled) {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return;

@@ -72,6 +72,7 @@ public:
     std::vector<float> getChannelScopeSamples(int samplesPerChannel);
     std::vector<int32_t> getChannelScopeTextState(int maxChannels);
     std::vector<std::string> getDecoderToggleChannelNames();
+    std::vector<uint8_t> getDecoderToggleChannelAvailability();
     void setDecoderToggleChannelMuted(int channelIndex, bool enabled);
     bool getDecoderToggleChannelMuted(int channelIndex);
     void clearDecoderToggleChannelMutes();

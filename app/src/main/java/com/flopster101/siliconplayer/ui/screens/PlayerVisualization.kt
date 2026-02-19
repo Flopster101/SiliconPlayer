@@ -72,6 +72,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 
 private class VisualizationDebugAccumulator {
     var frameCount: Int = 0
@@ -133,6 +134,34 @@ private fun computeChannelScopeSampleCount(
     val requested = ((clampedWindowMs.toFloat() / 1000f) * effectiveSampleRate.toFloat()).roundToInt()
     // Bound to native ring-buffer budget while still scaling with the UI window setting.
     return requested.coerceIn(128, 8192)
+}
+
+private fun computeVisualizationPollIntervalNs(
+    isPlaying: Boolean,
+    visualizationMode: VisualizationMode,
+    visualizationOscFpsMode: VisualizationOscFpsMode,
+    channelScopeFpsMode: VisualizationOscFpsMode,
+    displayRefreshHz: Float
+): Long {
+    if (!isPlaying) return 90_000_000L
+    val fps = when (visualizationMode) {
+        VisualizationMode.Oscilloscope -> {
+            when (visualizationOscFpsMode) {
+                VisualizationOscFpsMode.Default -> 30f
+                VisualizationOscFpsMode.Fps60 -> 60f
+                VisualizationOscFpsMode.NativeRefresh -> displayRefreshHz.coerceAtLeast(30f)
+            }
+        }
+        VisualizationMode.ChannelScope -> {
+            when (channelScopeFpsMode) {
+                VisualizationOscFpsMode.Default -> 30f
+                VisualizationOscFpsMode.Fps60 -> 60f
+                VisualizationOscFpsMode.NativeRefresh -> displayRefreshHz.coerceAtLeast(30f)
+            }
+        }
+        else -> 30f
+    }.coerceAtLeast(1f)
+    return (1_000_000_000.0 / fps.toDouble()).roundToInt().toLong().coerceAtLeast(4_000_000L)
 }
 
 private fun normalizeChannelScopeChannel(
@@ -885,13 +914,15 @@ internal fun AlbumArtPlaceholder(
             val channelScopesFlat: FloatArray,
             val channelScopeTextRaw: IntArray?
         )
+        var nextFrameTickNs = 0L
+        var lastPollIntervalNs = 0L
         while (true) {
+            val frameStartNs = System.nanoTime()
             if (visualizationMode != VisualizationMode.Off && file != null && isPlaying) {
-                val nowNs = System.nanoTime()
                 val textPollIntervalNs = 120_000_000L
                 val shouldPollText =
                     visChannelScopeLastTextPollNs == 0L ||
-                        nowNs - visChannelScopeLastTextPollNs >= textPollIntervalNs
+                        frameStartNs - visChannelScopeLastTextPollNs >= textPollIntervalNs
                 val snapshot = withContext(Dispatchers.Default) {
                     if (NativeBridge.isSeekInProgress()) {
                         null
@@ -943,6 +974,8 @@ internal fun AlbumArtPlaceholder(
                 if (snapshot == null) {
                     val delayMs = 90L
                     delay(delayMs)
+                    nextFrameTickNs = 0L
+                    lastPollIntervalNs = 0L
                     continue
                 }
                 visWaveLeft = snapshot.waveLeft
@@ -958,54 +991,54 @@ internal fun AlbumArtPlaceholder(
                         visChannelScopeTextRawCache = rawText.copyOf()
                         visChannelScopeTextStates = parseChannelScopeTextStates(rawText)
                     }
-                    visChannelScopeLastTextPollNs = nowNs
+                    visChannelScopeLastTextPollNs = frameStartNs
                 }
+                val frameEndNs = System.nanoTime()
                 if (visDebugAccumulator.windowStartNs == 0L) {
-                    visDebugAccumulator.windowStartNs = nowNs
+                    visDebugAccumulator.windowStartNs = frameEndNs
                 }
                 if (visDebugAccumulator.lastFrameNs != 0L) {
                     visDebugAccumulator.latestFrameMs =
-                        ((nowNs - visDebugAccumulator.lastFrameNs) / 1_000_000L).toInt().coerceAtLeast(0)
+                        ((frameEndNs - visDebugAccumulator.lastFrameNs) / 1_000_000L).toInt().coerceAtLeast(0)
                 }
-                visDebugAccumulator.lastFrameNs = nowNs
+                visDebugAccumulator.lastFrameNs = frameEndNs
                 visDebugAccumulator.frameCount += 1
-                val elapsedNs = nowNs - visDebugAccumulator.windowStartNs
+                val elapsedNs = frameEndNs - visDebugAccumulator.windowStartNs
                 if (elapsedNs >= 1_000_000_000L) {
                     visDebugUpdateFps = ((visDebugAccumulator.frameCount.toDouble() * 1_000_000_000.0) / elapsedNs.toDouble())
                         .roundToInt()
                         .coerceAtLeast(0)
                     visDebugAccumulator.frameCount = 0
-                    visDebugAccumulator.windowStartNs = nowNs
+                    visDebugAccumulator.windowStartNs = frameEndNs
                 }
                 // Throttle HUD state updates to reduce recomposition overhead.
-                if (nowNs - visDebugAccumulator.lastUiPublishNs >= 350_000_000L) {
+                if (frameEndNs - visDebugAccumulator.lastUiPublishNs >= 350_000_000L) {
                     visDebugUpdateFrameMs = visDebugAccumulator.latestFrameMs
-                    visDebugAccumulator.lastUiPublishNs = nowNs
+                    visDebugAccumulator.lastUiPublishNs = frameEndNs
                 }
             }
-            val delayMs = if (!isPlaying) {
-                90L
-            } else if (
-                visualizationMode != VisualizationMode.Oscilloscope &&
-                visualizationMode != VisualizationMode.ChannelScope
-            ) {
-                33L
+            val pollIntervalNs = computeVisualizationPollIntervalNs(
+                isPlaying = isPlaying,
+                visualizationMode = visualizationMode,
+                visualizationOscFpsMode = visualizationOscFpsMode,
+                channelScopeFpsMode = channelScopePrefs.fpsMode,
+                displayRefreshHz = context.display?.refreshRate ?: 60f
+            )
+            val nowNs = System.nanoTime()
+            if (pollIntervalNs != lastPollIntervalNs || nextFrameTickNs == 0L) {
+                nextFrameTickNs = nowNs + pollIntervalNs
+                lastPollIntervalNs = pollIntervalNs
             } else {
-                val fpsMode = if (visualizationMode == VisualizationMode.ChannelScope) {
-                    channelScopePrefs.fpsMode
-                } else {
-                    visualizationOscFpsMode
-                }
-                when (fpsMode) {
-                    VisualizationOscFpsMode.Default -> 33L
-                    VisualizationOscFpsMode.Fps60 -> 16L
-                    VisualizationOscFpsMode.NativeRefresh -> {
-                        val refreshHz = (context.display?.refreshRate ?: 60f).coerceAtLeast(30f)
-                        (1000f / refreshHz).roundToInt().coerceAtLeast(4).toLong()
-                    }
+                while (nextFrameTickNs <= nowNs) {
+                    nextFrameTickNs += pollIntervalNs
                 }
             }
-            delay(delayMs)
+            val sleepNs = (nextFrameTickNs - nowNs).coerceAtLeast(0L)
+            if (sleepNs >= 1_000_000L) {
+                delay(sleepNs / 1_000_000L)
+            } else if (sleepNs > 0L) {
+                yield()
+            }
         }
     }
     LaunchedEffect(

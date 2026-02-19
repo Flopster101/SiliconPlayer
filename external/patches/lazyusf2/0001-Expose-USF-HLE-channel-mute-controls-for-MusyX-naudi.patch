@@ -1,0 +1,931 @@
+From aa6b17b1165d0d2f8c7e54e620865091ca27fce9 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Thu, 19 Feb 2026 00:30:27 -0300
+Subject: [PATCH 1/2] Expose USF HLE channel mute controls for MusyX, naudio
+ and nead
+
+---
+ rsp_hle/alist_naudio.c |  80 ++++++++++++++++++++++++++
+ rsp_hle/alist_nead.c   | 117 ++++++++++++++++++++++++++++++++++++++
+ rsp_hle/musyx.c        |  70 +++++++++++++++++++++--
+ rsp_hle/ucodes.h       |   9 ++-
+ usf/usf.c              | 125 +++++++++++++++++++++++++++++++++++++++++
+ usf/usf.h              |  24 ++++++++
+ usf/usf_internal.h     |  12 ++++
+ 7 files changed, 430 insertions(+), 7 deletions(-)
+
+diff --git a/rsp_hle/alist_naudio.c b/rsp_hle/alist_naudio.c
+index 1c66eab..c710cbd 100644
+--- a/rsp_hle/alist_naudio.c
++++ b/rsp_hle/alist_naudio.c
+@@ -23,6 +23,7 @@
+ 
+ #include <stdbool.h>
+ #include <stdint.h>
++#include <string.h>
+ 
+ #include "alist.h"
+ #include "common.h"
+@@ -30,6 +31,7 @@
+ #include "hle_internal.h"
+ #include "memory.h"
+ #include "ucodes.h"
++#include "usf/usf.h"
+ 
+ enum { NAUDIO_COUNT = 0x170 }; /* ie 184 samples */
+ enum {
+@@ -41,6 +43,43 @@ enum {
+     NAUDIO_WET_RIGHT = 0xe20
+ };
+ 
++static void naudio_prepare_voice_tracking(struct hle_t* hle)
++{
++    hle->alist_naudio.voice_index = 0;
++    hle->alist_naudio.voice_active_mask = 0;
++}
++
++static void naudio_finalize_voice_tracking(struct hle_t* hle)
++{
++    uint32_t voice_count = hle->alist_naudio.voice_index;
++    uint32_t active_mask = hle->alist_naudio.voice_active_mask;
++    uint32_t normalized_mask;
++
++    if (voice_count > USF_MUSYX_MAX_VOICES) {
++        voice_count = USF_MUSYX_MAX_VOICES;
++    }
++
++    if (voice_count >= 32) {
++        normalized_mask = active_mask;
++    } else if (voice_count == 0) {
++        normalized_mask = 0;
++    } else {
++        normalized_mask = active_mask & ((1u << voice_count) - 1u);
++    }
++
++    usf_set_hle_voice_count(hle->user_defined, voice_count);
++    usf_set_hle_active_voice_mask(hle->user_defined, normalized_mask);
++    usf_set_hle_voice_active(hle->user_defined, (voice_count > 0) ? 1 : 0);
++}
++
++static int naudio_is_voice_muted(struct hle_t* hle, uint32_t voice_index)
++{
++    if (voice_index >= USF_MUSYX_MAX_VOICES) {
++        return 0;
++    }
++    return ((usf_get_hle_voice_mask(hle->user_defined) >> voice_index) & 0x1u) == 0u;
++}
++
+ 
+ /* audio commands definition */
+ static void UNKNOWN(struct hle_t* hle, uint32_t w1, uint32_t w2)
+@@ -129,9 +168,40 @@ static void ENVMIXER(struct hle_t* hle, uint32_t w1, uint32_t w2)
+ {
+     uint8_t  flags   = (w1 >> 16);
+     uint32_t address = (w2 & 0xffffff);
++    uint32_t voice_index = hle->alist_naudio.voice_index++;
++
++    if (voice_index < 32) {
++        hle->alist_naudio.voice_active_mask |= (1u << voice_index);
++    }
+ 
+     hle->alist_naudio.vol[1] = w1;
+ 
++    if (naudio_is_voice_muted(hle, voice_index)) {
++        uint8_t main_snapshot[NAUDIO_COUNT];
++
++        memcpy(main_snapshot, hle->alist_buffer + NAUDIO_MAIN, NAUDIO_COUNT);
++        memset(hle->alist_buffer + NAUDIO_MAIN, 0, NAUDIO_COUNT);
++
++        alist_envmix_lin(
++                hle,
++                flags & A_INIT,
++                NAUDIO_DRY_LEFT,
++                NAUDIO_DRY_RIGHT,
++                NAUDIO_WET_LEFT,
++                NAUDIO_WET_RIGHT,
++                NAUDIO_MAIN,
++                NAUDIO_COUNT,
++                hle->alist_naudio.dry,
++                hle->alist_naudio.wet,
++                hle->alist_naudio.vol,
++                hle->alist_naudio.target,
++                hle->alist_naudio.rate,
++                address);
++
++        memcpy(hle->alist_buffer + NAUDIO_MAIN, main_snapshot, NAUDIO_COUNT);
++        return;
++    }
++
+     alist_envmix_lin(
+             hle,
+             flags & A_INIT,
+@@ -284,6 +354,7 @@ void alist_process_naudio(struct hle_t* hle)
+         MIXER,          INTERLEAVE,     NAUDIO_02B0,    SETLOOP
+     };
+ 
++    naudio_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x10] = {
+        "SPNOOP",       "ADPCM",        "CLEARBUFF",    "ENVMIXER",
+@@ -296,6 +367,7 @@ void alist_process_naudio(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x10);
+     #endif
++    naudio_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -309,6 +381,7 @@ void alist_process_naudio_bk(struct hle_t* hle)
+         MIXER,          INTERLEAVE,     NAUDIO_02B0,    SETLOOP
+     };
+ 
++    naudio_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x10] = {
+        "SPNOOP",       "ADPCM",        "CLEARBUFF",    "ENVMIXER",
+@@ -321,6 +394,7 @@ void alist_process_naudio_bk(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x10);
+     #endif
++    naudio_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -334,6 +408,7 @@ void alist_process_naudio_dk(struct hle_t* hle)
+         MIXER,          INTERLEAVE,     NAUDIO_02B0,    SETLOOP
+     };
+ 
++    naudio_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x10] = {
+        "SPNOOP",       "ADPCM",        "CLEARBUFF",    "ENVMIXER",
+@@ -346,6 +421,7 @@ void alist_process_naudio_dk(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x10);
+     #endif
++    naudio_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -358,6 +434,7 @@ void alist_process_naudio_mp3(struct hle_t* hle)
+         MIXER,          INTERLEAVE,     NAUDIO_14,      SETLOOP
+     };
+ 
++    naudio_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x10] = {
+        "OVERLOAD",     "ADPCM",        "CLEARBUFF",    "ENVMIXER",
+@@ -370,6 +447,7 @@ void alist_process_naudio_mp3(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x10);
+     #endif
++    naudio_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -383,6 +461,7 @@ void alist_process_naudio_cbfd(struct hle_t* hle)
+         MIXER,          INTERLEAVE,     NAUDIO_14,      SETLOOP
+     };
+ 
++    naudio_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x10] = {
+        "OVERLOAD",     "ADPCM",        "CLEARBUFF",    "ENVMIXER",
+@@ -395,5 +474,6 @@ void alist_process_naudio_cbfd(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x10);
+     #endif
++    naudio_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+diff --git a/rsp_hle/alist_nead.c b/rsp_hle/alist_nead.c
+index 3a8fed8..bd589d2 100644
+--- a/rsp_hle/alist_nead.c
++++ b/rsp_hle/alist_nead.c
+@@ -23,6 +23,7 @@
+ 
+ #include <stdbool.h>
+ #include <stdint.h>
++#include <string.h>
+ 
+ #include "alist.h"
+ #include "common.h"
+@@ -30,6 +31,7 @@
+ #include "hle_internal.h"
+ #include "memory.h"
+ #include "ucodes.h"
++#include "usf/usf.h"
+ 
+ /* remove windows define to 0x06 */
+ #ifdef DUPLICATE
+@@ -51,6 +53,43 @@ static void SPNOOP(struct hle_t* UNUSED(hle), uint32_t UNUSED(w1), uint32_t UNUS
+ {
+ }
+ 
++static void nead_prepare_voice_tracking(struct hle_t* hle)
++{
++    hle->alist_nead.voice_index = 0;
++    hle->alist_nead.voice_active_mask = 0;
++}
++
++static void nead_finalize_voice_tracking(struct hle_t* hle)
++{
++    uint32_t voice_count = hle->alist_nead.voice_index;
++    uint32_t active_mask = hle->alist_nead.voice_active_mask;
++    uint32_t normalized_mask;
++
++    if (voice_count > USF_MUSYX_MAX_VOICES) {
++        voice_count = USF_MUSYX_MAX_VOICES;
++    }
++
++    if (voice_count >= 32) {
++        normalized_mask = active_mask;
++    } else if (voice_count == 0) {
++        normalized_mask = 0;
++    } else {
++        normalized_mask = active_mask & ((1u << voice_count) - 1u);
++    }
++
++    usf_set_hle_voice_count(hle->user_defined, voice_count);
++    usf_set_hle_active_voice_mask(hle->user_defined, normalized_mask);
++    usf_set_hle_voice_active(hle->user_defined, (voice_count > 0) ? 1 : 0);
++}
++
++static int nead_is_voice_muted(struct hle_t* hle, uint32_t voice_index)
++{
++    if (voice_index >= USF_MUSYX_MAX_VOICES) {
++        return 0;
++    }
++    return ((usf_get_hle_voice_mask(hle->user_defined) >> voice_index) & 0x1u) == 0u;
++}
++
+ static void LOADADPCM(struct hle_t* hle, uint32_t w1, uint32_t w2)
+ {
+     uint16_t count   = w1;
+@@ -197,6 +236,7 @@ static void ENVSETUP2(struct hle_t* hle, uint32_t UNUSED(w1), uint32_t w2)
+ static void ENVMIXER_MK(struct hle_t* hle, uint32_t w1, uint32_t w2)
+ {
+     int16_t xors[4];
++    uint32_t voice_index = hle->alist_nead.voice_index++;
+ 
+     uint16_t dmemi = (w1 >> 12) & 0xff0;
+     uint8_t  count = (w1 >>  8) & 0xff;
+@@ -210,6 +250,33 @@ static void ENVMIXER_MK(struct hle_t* hle, uint32_t w1, uint32_t w2)
+     xors[0] = 0 - (int16_t)((w1 & 0x2) >> 1);
+     xors[1] = 0 - (int16_t)((w1 & 0x1)     );
+ 
++    if (voice_index < 32) {
++        hle->alist_nead.voice_active_mask |= (1u << voice_index);
++    }
++
++    if (nead_is_voice_muted(hle, voice_index)) {
++        uint8_t input_snapshot[0x100];
++        if (count != 0) {
++            memcpy(input_snapshot, hle->alist_buffer + dmemi, count);
++            memset(hle->alist_buffer + dmemi, 0, count);
++        }
++
++        alist_envmix_nead(
++                hle,
++                false,  /* unsupported by this ucode */
++                dmem_dl, dmem_dr,
++                dmem_wl, dmem_wr,
++                dmemi, count,
++                hle->alist_nead.env_values,
++                hle->alist_nead.env_steps,
++                xors);
++
++        if (count != 0) {
++            memcpy(hle->alist_buffer + dmemi, input_snapshot, count);
++        }
++        return;
++    }
++
+     alist_envmix_nead(
+             hle,
+             false,  /* unsupported by this ucode */
+@@ -224,6 +291,7 @@ static void ENVMIXER_MK(struct hle_t* hle, uint32_t w1, uint32_t w2)
+ static void ENVMIXER(struct hle_t* hle, uint32_t w1, uint32_t w2)
+ {
+     int16_t xors[4];
++    uint32_t voice_index = hle->alist_nead.voice_index++;
+ 
+     uint16_t dmemi = (w1 >> 12) & 0xff0;
+     uint8_t  count = (w1 >>  8) & 0xff;
+@@ -238,6 +306,33 @@ static void ENVMIXER(struct hle_t* hle, uint32_t w1, uint32_t w2)
+     xors[0] = 0 - (int16_t)((w1 & 0x2) >> 1);
+     xors[1] = 0 - (int16_t)((w1 & 0x1)     );
+ 
++    if (voice_index < 32) {
++        hle->alist_nead.voice_active_mask |= (1u << voice_index);
++    }
++
++    if (nead_is_voice_muted(hle, voice_index)) {
++        uint8_t input_snapshot[0x100];
++        if (count != 0) {
++            memcpy(input_snapshot, hle->alist_buffer + dmemi, count);
++            memset(hle->alist_buffer + dmemi, 0, count);
++        }
++
++        alist_envmix_nead(
++                hle,
++                swap_wet_LR,
++                dmem_dl, dmem_dr,
++                dmem_wl, dmem_wr,
++                dmemi, count,
++                hle->alist_nead.env_values,
++                hle->alist_nead.env_steps,
++                xors);
++
++        if (count != 0) {
++            memcpy(hle->alist_buffer + dmemi, input_snapshot, count);
++        }
++        return;
++    }
++
+     alist_envmix_nead(
+             hle,
+             swap_wet_LR,
+@@ -371,6 +466,7 @@ void alist_process_nead_mk(struct hle_t* hle)
+         SPNOOP,         SPNOOP,         SPNOOP,         SPNOOP
+     };
+ 
++    nead_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x20] = {
+         "SPNOOP",         "ADPCM",          "CLEARBUFF",      "SPNOOP",
+@@ -386,6 +482,7 @@ void alist_process_nead_mk(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x20);
+     #endif
++    nead_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -402,6 +499,7 @@ void alist_process_nead_sf(struct hle_t* hle)
+         SPNOOP,         SPNOOP,         SPNOOP,         SPNOOP
+     };
+ 
++    nead_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x20] = {
+         "SPNOOP",         "ADPCM",          "CLEARBUFF",      "SPNOOP",
+@@ -417,6 +515,7 @@ void alist_process_nead_sf(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x20);
+     #endif
++    nead_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -433,6 +532,7 @@ void alist_process_nead_sfj(struct hle_t* hle)
+         SPNOOP,         SPNOOP,         SPNOOP,         SPNOOP
+     };
+ 
++    nead_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x20] = {
+         "SPNOOP",         "ADPCM",          "CLEARBUFF",      "SPNOOP",
+@@ -448,6 +548,7 @@ void alist_process_nead_sfj(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x20);
+     #endif
++    nead_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -464,6 +565,7 @@ void alist_process_nead_fz(struct hle_t* hle)
+         SPNOOP,         SPNOOP,         SPNOOP,         SPNOOP
+     };
+ 
++    nead_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x20] = {
+         "UNKNOWN",        "ADPCM",          "CLEARBUFF",      "SPNOOP",
+@@ -479,6 +581,7 @@ void alist_process_nead_fz(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x20);
+     #endif
++    nead_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -495,6 +598,7 @@ void alist_process_nead_wrjb(struct hle_t* hle)
+         SPNOOP,         SPNOOP,         SPNOOP,         SPNOOP
+     };
+ 
++    nead_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x20] = {
+         "SPNOOP",         "ADPCM",          "CLEARBUFF",      "UNKNOWN",
+@@ -510,6 +614,7 @@ void alist_process_nead_wrjb(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x20);
+     #endif
++    nead_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -524,6 +629,7 @@ void alist_process_nead_ys(struct hle_t* hle)
+         LOADBUFF,       SAVEBUFF,       ENVSETUP2,      UNKNOWN
+     };
+ 
++    nead_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x18] = {
+         "UNKNOWN",        "ADPCM",          "CLEARBUFF",      "UNKNOWN",
+@@ -537,6 +643,7 @@ void alist_process_nead_ys(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x18);
+     #endif
++    nead_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -551,6 +658,7 @@ void alist_process_nead_1080(struct hle_t* hle)
+         LOADBUFF,       SAVEBUFF,       ENVSETUP2,      UNKNOWN
+     };
+ 
++    nead_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x18] = {
+         "UNKNOWN",        "ADPCM",          "CLEARBUFF",      "UNKNOWN",
+@@ -564,6 +672,7 @@ void alist_process_nead_1080(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x18);
+     #endif
++    nead_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -578,6 +687,7 @@ void alist_process_nead_oot(struct hle_t* hle)
+         LOADBUFF,       SAVEBUFF,       ENVSETUP2,      UNKNOWN
+     };
+ 
++    nead_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x18] = {
+         "UNKNOWN",        "ADPCM",          "CLEARBUFF",      "UNKNOWN",
+@@ -591,6 +701,7 @@ void alist_process_nead_oot(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x18);
+     #endif
++    nead_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -605,6 +716,7 @@ void alist_process_nead_mm(struct hle_t* hle)
+         LOADBUFF,       SAVEBUFF,       ENVSETUP2,      UNKNOWN
+     };
+ 
++    nead_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x18] = {
+         "UNKNOWN",        "ADPCM",          "CLEARBUFF",      "SPNOOP",
+@@ -618,6 +730,7 @@ void alist_process_nead_mm(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x18);
+     #endif
++    nead_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -632,6 +745,7 @@ void alist_process_nead_mmb(struct hle_t* hle)
+         LOADBUFF,       SAVEBUFF,       ENVSETUP2,      UNKNOWN
+     };
+ 
++    nead_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x18] = {
+         "SPNOOP",         "ADPCM",          "CLEARBUFF",      "SPNOOP",
+@@ -645,6 +759,7 @@ void alist_process_nead_mmb(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x18);
+     #endif
++    nead_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -659,6 +774,7 @@ void alist_process_nead_ac(struct hle_t* hle)
+         LOADBUFF,       SAVEBUFF,       ENVSETUP2,      UNKNOWN
+     };
+ 
++    nead_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     static const char * ABI_names[0x18] = {
+         "UNKNOWN",        "ADPCM",          "CLEARBUFF",      "SPNOOP",
+@@ -672,6 +788,7 @@ void alist_process_nead_ac(struct hle_t* hle)
+     #else
+     alist_process(hle, ABI, 0x18);
+     #endif
++    nead_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+diff --git a/rsp_hle/musyx.c b/rsp_hle/musyx.c
+index d5a630a..412ae68 100644
+--- a/rsp_hle/musyx.c
++++ b/rsp_hle/musyx.c
+@@ -30,6 +30,7 @@
+ #include "hle_external.h"
+ #include "hle_internal.h"
+ #include "memory.h"
++#include "usf/usf.h"
+ 
+ /* various constants */
+ enum { SUBFRAME_SIZE = 192 };
+@@ -142,7 +143,12 @@ static void init_subframes_v1(musyx_t *musyx);
+ static void init_subframes_v2(musyx_t *musyx);
+ 
+ static uint32_t voice_stage(struct hle_t* hle, musyx_t *musyx,
+-                            uint32_t voice_ptr, uint32_t last_sample_ptr);
++                            uint32_t voice_ptr, uint32_t last_sample_ptr,
++                            uint32_t voice_mask);
++
++static uint32_t clamp_voice_count(uint32_t voice_count);
++static uint32_t voice_count_to_mask(uint32_t voice_count);
++static uint32_t apply_voice_mask_override(struct hle_t* hle, uint32_t voice_mask, uint32_t voice_count);
+ 
+ static void dma_cat8(struct hle_t* hle, uint8_t *dst, uint32_t catsrc_ptr);
+ static void dma_cat16(struct hle_t* hle, uint16_t *dst, uint32_t catsrc_ptr);
+@@ -197,6 +203,44 @@ static int32_t dot4(const int16_t *x, const int16_t *y)
+     return accu;
+ }
+ 
++static uint32_t clamp_voice_count(uint32_t voice_count)
++{
++    if (voice_count > MAX_VOICES)
++        return MAX_VOICES;
++    return voice_count;
++}
++
++static uint32_t voice_count_to_mask(uint32_t voice_count)
++{
++    voice_count = clamp_voice_count(voice_count);
++    if (voice_count == 0)
++        return 0;
++    if (voice_count >= 32)
++        return 0xFFFFFFFFu;
++    return (1u << voice_count) - 1u;
++}
++
++static uint32_t apply_voice_mask_override(struct hle_t* hle, uint32_t voice_mask, uint32_t voice_count)
++{
++    uint32_t normalized_count = clamp_voice_count(voice_count);
++    uint32_t available_mask = voice_mask;
++    uint32_t known_count = clamp_voice_count(usf_get_musyx_voice_count(hle->user_defined));
++
++    if (normalized_count > 0) {
++        available_mask &= voice_count_to_mask(normalized_count);
++    } else if (known_count > 0) {
++        normalized_count = known_count;
++        available_mask &= voice_count_to_mask(normalized_count);
++    }
++
++    usf_set_musyx_active(hle->user_defined, 1);
++    usf_set_musyx_active_voice_mask(hle->user_defined, available_mask);
++    if (normalized_count > known_count)
++        usf_set_musyx_voice_count(hle->user_defined, normalized_count);
++
++    return available_mask & usf_get_musyx_voice_mask(hle->user_defined);
++}
++
+ /**************************************************************************
+  * MusyX v1 audio ucode
+  **************************************************************************/
+@@ -223,18 +267,21 @@ void musyx_v1_task(struct hle_t* hle)
+     for (;;) {
+         /* parse SFD structure */
+         uint16_t sfx_index   = *dram_u16(hle, sfd_ptr + SFD_SFX_INDEX);
++        uint16_t voice_count = *dram_u16(hle, sfd_ptr + SFD_VOICE_COUNT);
+         uint32_t voice_mask  = *dram_u32(hle, sfd_ptr + SFD_VOICE_BITMASK);
+         uint32_t sfx_ptr     = *dram_u32(hle, sfd_ptr + SFD_SFX_PTR);
+         uint32_t voice_ptr       = sfd_ptr + SFD_VOICES;
+         uint32_t last_sample_ptr = state_ptr + STATE_LAST_SAMPLE;
+         uint32_t output_ptr;
+ 
++        voice_mask = apply_voice_mask_override(hle, voice_mask, voice_count);
++
+         /* initialize internal subframes using updated base volumes */
+         update_base_vol(hle, musyx.base_vol, voice_mask, last_sample_ptr, 0, 0);
+         init_subframes_v1(&musyx);
+ 
+         /* active voices get mixed into L,R,cc0,e50 subframes (optional) */
+-        output_ptr = voice_stage(hle, &musyx, voice_ptr, last_sample_ptr);
++        output_ptr = voice_stage(hle, &musyx, voice_ptr, last_sample_ptr, voice_mask);
+ 
+         /* apply delay-based effects (optional) */
+         sfx_stage(hle, mix_sfx_with_main_subframes_v1,
+@@ -277,6 +324,7 @@ void musyx_v2_task(struct hle_t* hle)
+     for (;;) {
+         /* parse SFD structure */
+         uint16_t sfx_index       = *dram_u16(hle, sfd_ptr + SFD_SFX_INDEX);
++        uint16_t voice_count     = *dram_u16(hle, sfd_ptr + SFD_VOICE_COUNT);
+         uint32_t voice_mask      = *dram_u32(hle, sfd_ptr + SFD_VOICE_BITMASK);
+         uint32_t state_ptr       = *dram_u32(hle, sfd_ptr + SFD_STATE_PTR);
+         uint32_t sfx_ptr         = *dram_u32(hle, sfd_ptr + SFD_SFX_PTR);
+@@ -294,6 +342,8 @@ void musyx_v2_task(struct hle_t* hle)
+         uint32_t last_sample_ptr = state_ptr + STATE_LAST_SAMPLE;
+         uint32_t output_ptr;
+ 
++        voice_mask = apply_voice_mask_override(hle, voice_mask, voice_count);
++
+         /* load state */
+         load_base_vol(hle, musyx.base_vol, state_ptr + STATE_BASE_VOL);
+         dram_load_u16(hle, (uint16_t *)musyx.subframe_740_last4,
+@@ -311,7 +361,7 @@ void musyx_v2_task(struct hle_t* hle)
+         }
+ 
+         /* active voices get mixed into L,R,cc0,e50 subframes (optional) */
+-        output_ptr = voice_stage(hle, &musyx, voice_ptr, last_sample_ptr);
++        output_ptr = voice_stage(hle, &musyx, voice_ptr, last_sample_ptr, voice_mask);
+ 
+         /* apply delay-based effects (optional) */
+         sfx_stage(hle, mix_sfx_with_main_subframes_v2,
+@@ -457,10 +507,13 @@ static void init_subframes_v2(musyx_t *musyx)
+ 
+ /* Process voices, and returns interleaved subframe destination address */
+ static uint32_t voice_stage(struct hle_t* hle, musyx_t *musyx,
+-                            uint32_t voice_ptr, uint32_t last_sample_ptr)
++                            uint32_t voice_ptr, uint32_t last_sample_ptr,
++                            uint32_t voice_mask)
+ {
+     uint32_t output_ptr;
+     int i = 0;
++    musyx_t muted_voice_sink;
++    memset(&muted_voice_sink, 0, sizeof(muted_voice_sink));
+ 
+     /* voice stage can be skipped if first voice has no samples */
+     if (*dram_u16(hle, voice_ptr + VOICE_CATSRC_0 + CATSRC_SIZE1) == 0) {
+@@ -482,8 +535,13 @@ static uint32_t voice_stage(struct hle_t* hle, musyx_t *musyx,
+                 load_samples_ADPCM(hle, voice_ptr, samples, &segbase, &offset);
+ 
+             /* mix them with each internal subframes */
+-            mix_voice_samples(hle, musyx, voice_ptr, samples, segbase, offset,
+-                              last_sample_ptr + i * 8);
++            if (i < 32 && (voice_mask & (1u << i)) != 0) {
++                mix_voice_samples(hle, musyx, voice_ptr, samples, segbase, offset,
++                                  last_sample_ptr + i * 8);
++            } else {
++                mix_voice_samples(hle, &muted_voice_sink, voice_ptr, samples, segbase, offset,
++                                  last_sample_ptr + i * 8);
++            }
+ 
+             /* check break condition */
+             output_ptr = *dram_u32(hle, voice_ptr + VOICE_INTERLEAVED_PTR);
+diff --git a/rsp_hle/ucodes.h b/rsp_hle/ucodes.h
+index 8d12bfb..b4aed8a 100644
+--- a/rsp_hle/ucodes.h
++++ b/rsp_hle/ucodes.h
+@@ -99,6 +99,10 @@ struct alist_naudio_t {
+ 
+     /* storage for ADPCM table and polef coefficients */
+     int16_t table[16 * 8];
++
++    /* voice discovery/muting bookkeeping */
++    uint32_t voice_index;
++    uint32_t voice_active_mask;
+ };
+ 
+ void alist_process_naudio     (struct hle_t* hle);
+@@ -128,6 +132,10 @@ struct alist_nead_t {
+     /* filter audio command state */
+     uint16_t filter_count;
+     uint32_t filter_lut_address[2];
++
++    /* voice discovery/muting bookkeeping */
++    uint32_t voice_index;
++    uint32_t voice_active_mask;
+ };
+ 
+ void alist_process_nead_mk  (struct hle_t* hle);
+@@ -168,4 +176,3 @@ void hvqm2_decode_sp1_task(struct hle_t* hle);
+ void hvqm2_decode_sp2_task(struct hle_t* hle);
+ 
+ #endif
+-
+diff --git a/usf/usf.c b/usf/usf.c
+index 5685238..8a49629 100644
+--- a/usf/usf.c
++++ b/usf/usf.c
+@@ -18,6 +18,9 @@
+ 
+ #include "barray.h"
+ 
++static uint32_t usf_get_valid_musyx_mask(void);
++static uint32_t usf_get_valid_hle_mask(void);
++
+ size_t usf_get_state_size()
+ {
+     return sizeof(usf_state_t) + 8192;
+@@ -34,6 +37,14 @@ void usf_clear(void * state)
+     //USF_STATE->enableFIFOfull = 0;
+ 
+     //USF_STATE->enable_hle_audio = 0;
++    USF_STATE->musyx_voice_mask = usf_get_valid_musyx_mask();
++    USF_STATE->musyx_active_voice_mask = 0;
++    USF_STATE->musyx_voice_count = 0;
++    USF_STATE->musyx_active = 0;
++    USF_STATE->hle_voice_mask = usf_get_valid_hle_mask();
++    USF_STATE->hle_active_voice_mask = 0;
++    USF_STATE->hle_voice_count = 0;
++    USF_STATE->hle_voice_active = 0;
+ 
+     // Constants, never written to
+     USF_STATE->trunc_mode = 0xF3F;
+@@ -77,6 +88,114 @@ void usf_set_hle_audio(void * state, int enable)
+     USF_STATE->enable_hle_audio = enable;
+ }
+ 
++static uint32_t usf_get_valid_musyx_mask(void)
++{
++#if USF_MUSYX_MAX_VOICES >= 32
++    return 0xFFFFFFFFu;
++#else
++    return (1u << USF_MUSYX_MAX_VOICES) - 1u;
++#endif
++}
++
++static uint32_t usf_get_valid_hle_mask(void)
++{
++#if USF_MUSYX_MAX_VOICES >= 32
++    return 0xFFFFFFFFu;
++#else
++    return (1u << USF_MUSYX_MAX_VOICES) - 1u;
++#endif
++}
++
++void usf_set_musyx_voice_mask(void * state, uint32_t voice_mask)
++{
++    USF_STATE->musyx_voice_mask = voice_mask & usf_get_valid_musyx_mask();
++}
++
++uint32_t usf_get_musyx_voice_mask(void * state)
++{
++    return USF_STATE->musyx_voice_mask;
++}
++
++uint32_t usf_get_musyx_active_voice_mask(void * state)
++{
++    return USF_STATE->musyx_active_voice_mask;
++}
++
++uint32_t usf_get_musyx_voice_count(void * state)
++{
++    uint32_t count = USF_STATE->musyx_voice_count;
++    if (count > USF_MUSYX_MAX_VOICES)
++        count = USF_MUSYX_MAX_VOICES;
++    return count;
++}
++
++int usf_is_musyx_active(void * state)
++{
++    return USF_STATE->musyx_active ? 1 : 0;
++}
++
++void usf_set_musyx_active_voice_mask(void * state, uint32_t voice_mask)
++{
++    USF_STATE->musyx_active_voice_mask = voice_mask & usf_get_valid_musyx_mask();
++}
++
++void usf_set_musyx_voice_count(void * state, uint32_t voice_count)
++{
++    if (voice_count > USF_MUSYX_MAX_VOICES)
++        voice_count = USF_MUSYX_MAX_VOICES;
++    USF_STATE->musyx_voice_count = voice_count;
++}
++
++void usf_set_musyx_active(void * state, int active)
++{
++    USF_STATE->musyx_active = active ? 1u : 0u;
++}
++
++void usf_set_hle_voice_mask(void * state, uint32_t voice_mask)
++{
++    USF_STATE->hle_voice_mask = voice_mask & usf_get_valid_hle_mask();
++}
++
++uint32_t usf_get_hle_voice_mask(void * state)
++{
++    return USF_STATE->hle_voice_mask;
++}
++
++uint32_t usf_get_hle_active_voice_mask(void * state)
++{
++    return USF_STATE->hle_active_voice_mask;
++}
++
++uint32_t usf_get_hle_voice_count(void * state)
++{
++    uint32_t count = USF_STATE->hle_voice_count;
++    if (count > USF_MUSYX_MAX_VOICES)
++        count = USF_MUSYX_MAX_VOICES;
++    return count;
++}
++
++int usf_is_hle_voice_active(void * state)
++{
++    return USF_STATE->hle_voice_active ? 1 : 0;
++}
++
++void usf_set_hle_active_voice_mask(void * state, uint32_t voice_mask)
++{
++    USF_STATE->hle_active_voice_mask = voice_mask & usf_get_valid_hle_mask();
++}
++
++void usf_set_hle_voice_count(void * state, uint32_t voice_count)
++{
++    if (voice_count > USF_MUSYX_MAX_VOICES)
++        voice_count = USF_MUSYX_MAX_VOICES;
++    USF_STATE->hle_voice_count = voice_count;
++}
++
++void usf_set_hle_voice_active(void * state, int active)
++{
++    USF_STATE->hle_voice_active = active ? 1u : 0u;
++}
++
+ void usf_set_trimming_mode(void * state, int enable)
+ {
+     USF_STATE->enable_trimming_mode = enable;
+@@ -428,6 +547,12 @@ void usf_restart(void * state)
+ 
+     USF_STATE->samples_in_buffer = 0;
+     USF_STATE->samples_in_buffer_2 = 0;
++    USF_STATE->musyx_active_voice_mask = 0;
++    USF_STATE->musyx_voice_count = 0;
++    USF_STATE->musyx_active = 0;
++    USF_STATE->hle_active_voice_mask = 0;
++    USF_STATE->hle_voice_count = 0;
++    USF_STATE->hle_voice_active = 0;
+ 
+     resampler_clear(USF_STATE->resampler);
+ }
+diff --git a/usf/usf.h b/usf/usf.h
+index d938d78..721b8d9 100644
+--- a/usf/usf.h
++++ b/usf/usf.h
+@@ -12,6 +12,8 @@ typedef struct usf_state usf_state_t;
+ 
+ typedef struct usf_state_helper usf_state_helper_t;
+ 
++#define USF_MUSYX_MAX_VOICES 32
++
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+@@ -50,6 +52,28 @@ void * usf_get_ram_coverage_barray(void * state);
+    of accuracy, and potentially emulation bugs. */
+ void usf_set_hle_audio(void * state, int enable);
+ 
++/* MusyX voice controls (bit 0 = Voice 1, bit 31 = Voice 32).
++   Only used by tracks that execute MusyX audio ucodes. */
++void usf_set_musyx_voice_mask(void * state, uint32_t voice_mask);
++uint32_t usf_get_musyx_voice_mask(void * state);
++uint32_t usf_get_musyx_active_voice_mask(void * state);
++uint32_t usf_get_musyx_voice_count(void * state);
++int usf_is_musyx_active(void * state);
++void usf_set_musyx_active_voice_mask(void * state, uint32_t voice_mask);
++void usf_set_musyx_voice_count(void * state, uint32_t voice_count);
++void usf_set_musyx_active(void * state, int active);
++
++/* Generic HLE audio voice controls (currently naudio-family ucodes).
++   Bit 0 = Voice 1, bit 31 = Voice 32. */
++void usf_set_hle_voice_mask(void * state, uint32_t voice_mask);
++uint32_t usf_get_hle_voice_mask(void * state);
++uint32_t usf_get_hle_active_voice_mask(void * state);
++uint32_t usf_get_hle_voice_count(void * state);
++int usf_is_hle_voice_active(void * state);
++void usf_set_hle_active_voice_mask(void * state, uint32_t voice_mask);
++void usf_set_hle_voice_count(void * state, uint32_t voice_count);
++void usf_set_hle_voice_active(void * state, int active);
++
+ /* This processes and uploads the ROM and/or Project 64 save state data
+    present in the reserved section of each USF file. They should be
+    uploaded in the order in which psf_load processes them, or in priority
+diff --git a/usf/usf_internal.h b/usf/usf_internal.h
+index b5f51b4..314e31c 100644
+--- a/usf/usf_internal.h
++++ b/usf/usf_internal.h
+@@ -248,6 +248,18 @@ struct usf_state
+     
+     // options for decoding
+     uint32_t enable_hle_audio;
++
++    // MusyX voice toggle controls / discovery
++    uint32_t musyx_voice_mask;
++    uint32_t musyx_active_voice_mask;
++    uint32_t musyx_voice_count;
++    uint32_t musyx_active;
++
++    // Generic HLE voice toggle controls / discovery (naudio-family)
++    uint32_t hle_voice_mask;
++    uint32_t hle_active_voice_mask;
++    uint32_t hle_voice_count;
++    uint32_t hle_voice_active;
+     
+     // trimming helper
+     uint32_t enable_trimming_mode;
+-- 
+2.53.0
+

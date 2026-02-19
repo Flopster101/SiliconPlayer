@@ -1,0 +1,492 @@
+From f0429ae68819ca7358e8b562fbce96a37bbae54f Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Thu, 19 Feb 2026 00:36:53 -0300
+Subject: [PATCH 2/2] Refine HLE voice grouping and add ABI1 audio channel
+ hooks
+
+---
+ rsp_hle/alist_audio.c  | 131 ++++++++++++++++++++++++++++++++++++++
+ rsp_hle/alist_naudio.c |  23 ++++++-
+ rsp_hle/alist_nead.c   | 139 +++++++++++++++++++++++++++--------------
+ rsp_hle/ucodes.h       |  11 +++-
+ 4 files changed, 251 insertions(+), 53 deletions(-)
+
+diff --git a/rsp_hle/alist_audio.c b/rsp_hle/alist_audio.c
+index 903268e..f3b4f43 100644
+--- a/rsp_hle/alist_audio.c
++++ b/rsp_hle/alist_audio.c
+@@ -30,6 +30,7 @@
+ #include "hle_internal.h"
+ #include "memory.h"
+ #include "ucodes.h"
++#include "usf/usf.h"
+ 
+ enum { DMEM_BASE = 0x5c0 };
+ 
+@@ -49,6 +50,60 @@ static void clear_segments(struct hle_t* hle)
+     memset(hle->alist_audio.segments, 0, N_SEGMENTS*sizeof(hle->alist_audio.segments[0]));
+ }
+ 
++static void audio_prepare_voice_tracking(struct hle_t* hle)
++{
++    hle->alist_audio.voice_active_mask = 0;
++}
++
++static uint32_t audio_assign_voice_slot(struct hle_t* hle, uint32_t key)
++{
++    uint32_t i;
++    for (i = 0; i < hle->alist_audio.voice_key_count; ++i) {
++        if (hle->alist_audio.voice_keys[i] == key) {
++            return i;
++        }
++    }
++
++    if (hle->alist_audio.voice_key_count < 32) {
++        uint32_t slot = hle->alist_audio.voice_key_count++;
++        hle->alist_audio.voice_keys[slot] = key;
++        return slot;
++    }
++
++    return key & 0x1fu;
++}
++
++static void audio_finalize_voice_tracking(struct hle_t* hle)
++{
++    uint32_t voice_count = hle->alist_audio.voice_key_count;
++    uint32_t active_mask = hle->alist_audio.voice_active_mask;
++    uint32_t normalized_mask;
++
++    if (voice_count > USF_MUSYX_MAX_VOICES) {
++        voice_count = USF_MUSYX_MAX_VOICES;
++    }
++
++    if (voice_count >= 32) {
++        normalized_mask = active_mask;
++    } else if (voice_count == 0) {
++        normalized_mask = 0;
++    } else {
++        normalized_mask = active_mask & ((1u << voice_count) - 1u);
++    }
++
++    usf_set_hle_voice_count(hle->user_defined, voice_count);
++    usf_set_hle_active_voice_mask(hle->user_defined, normalized_mask);
++    usf_set_hle_voice_active(hle->user_defined, (voice_count > 0) ? 1 : 0);
++}
++
++static int audio_is_voice_muted(struct hle_t* hle, uint32_t voice_index)
++{
++    if (voice_index >= USF_MUSYX_MAX_VOICES) {
++        return 0;
++    }
++    return ((usf_get_hle_voice_mask(hle->user_defined) >> voice_index) & 0x1u) == 0u;
++}
++
+ /* audio commands definition */
+ static void SPNOOP(struct hle_t* UNUSED(hle), uint32_t UNUSED(w1), uint32_t UNUSED(w2))
+ {
+@@ -69,6 +124,41 @@ static void ENVMIXER(struct hle_t* hle, uint32_t w1, uint32_t w2)
+ {
+     uint8_t  flags   = (w1 >> 16);
+     uint32_t address = get_address(hle, w2);
++    uint32_t voice_index = audio_assign_voice_slot(hle, address);
++    uint16_t input_count = align(hle->alist_audio.count, 16);
++    if (input_count > 0x1000) {
++        input_count = 0x1000;
++    }
++
++    if (voice_index < 32) {
++        hle->alist_audio.voice_active_mask |= (1u << voice_index);
++    }
++
++    if (audio_is_voice_muted(hle, voice_index)) {
++        uint8_t input_snapshot[0x1000];
++        if (input_count != 0) {
++            memcpy(input_snapshot, hle->alist_buffer + hle->alist_audio.in, input_count);
++            memset(hle->alist_buffer + hle->alist_audio.in, 0, input_count);
++        }
++
++        alist_envmix_exp(
++                hle,
++                flags & A_INIT,
++                flags & A_AUX,
++                hle->alist_audio.out, hle->alist_audio.dry_right,
++                hle->alist_audio.wet_left, hle->alist_audio.wet_right,
++                hle->alist_audio.in, hle->alist_audio.count,
++                hle->alist_audio.dry, hle->alist_audio.wet,
++                hle->alist_audio.vol,
++                hle->alist_audio.target,
++                hle->alist_audio.rate,
++                address);
++
++        if (input_count != 0) {
++            memcpy(hle->alist_buffer + hle->alist_audio.in, input_snapshot, input_count);
++        }
++        return;
++    }
+ 
+     alist_envmix_exp(
+             hle,
+@@ -88,6 +178,41 @@ static void ENVMIXER_GE(struct hle_t* hle, uint32_t w1, uint32_t w2)
+ {
+     uint8_t  flags   = (w1 >> 16);
+     uint32_t address = get_address(hle, w2);
++    uint32_t voice_index = audio_assign_voice_slot(hle, address);
++    uint16_t input_count = align(hle->alist_audio.count, 16);
++    if (input_count > 0x1000) {
++        input_count = 0x1000;
++    }
++
++    if (voice_index < 32) {
++        hle->alist_audio.voice_active_mask |= (1u << voice_index);
++    }
++
++    if (audio_is_voice_muted(hle, voice_index)) {
++        uint8_t input_snapshot[0x1000];
++        if (input_count != 0) {
++            memcpy(input_snapshot, hle->alist_buffer + hle->alist_audio.in, input_count);
++            memset(hle->alist_buffer + hle->alist_audio.in, 0, input_count);
++        }
++
++        alist_envmix_ge(
++                hle,
++                flags & A_INIT,
++                flags & A_AUX,
++                hle->alist_audio.out, hle->alist_audio.dry_right,
++                hle->alist_audio.wet_left, hle->alist_audio.wet_right,
++                hle->alist_audio.in, hle->alist_audio.count,
++                hle->alist_audio.dry, hle->alist_audio.wet,
++                hle->alist_audio.vol,
++                hle->alist_audio.target,
++                hle->alist_audio.rate,
++                address);
++
++        if (input_count != 0) {
++            memcpy(hle->alist_buffer + hle->alist_audio.in, input_snapshot, input_count);
++        }
++        return;
++    }
+ 
+     alist_envmix_ge(
+             hle,
+@@ -286,11 +411,13 @@ void alist_process_audio(struct hle_t* hle)
+     #endif
+ 
+     clear_segments(hle);
++    audio_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     alist_process(hle, ABI, 0x10, ABI_names);
+     #else
+     alist_process(hle, ABI, 0x10);
+     #endif
++    audio_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -313,11 +440,13 @@ void alist_process_audio_ge(struct hle_t* hle)
+     #endif
+ 
+     clear_segments(hle);
++    audio_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     alist_process(hle, ABI, 0x10, ABI_names);
+     #else
+     alist_process(hle, ABI, 0x10);
+     #endif
++    audio_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+ 
+@@ -340,10 +469,12 @@ void alist_process_audio_bc(struct hle_t* hle)
+     #endif
+ 
+     clear_segments(hle);
++    audio_prepare_voice_tracking(hle);
+     #ifdef DEBUG_INFO
+     alist_process(hle, ABI, 0x10, ABI_names);
+     #else
+     alist_process(hle, ABI, 0x10);
+     #endif
++    audio_finalize_voice_tracking(hle);
+     rsp_break(hle, SP_STATUS_TASKDONE);
+ }
+diff --git a/rsp_hle/alist_naudio.c b/rsp_hle/alist_naudio.c
+index c710cbd..d0ceea9 100644
+--- a/rsp_hle/alist_naudio.c
++++ b/rsp_hle/alist_naudio.c
+@@ -45,13 +45,30 @@ enum {
+ 
+ static void naudio_prepare_voice_tracking(struct hle_t* hle)
+ {
+-    hle->alist_naudio.voice_index = 0;
+     hle->alist_naudio.voice_active_mask = 0;
+ }
+ 
++static uint32_t naudio_assign_voice_slot(struct hle_t* hle, uint32_t key)
++{
++    uint32_t i;
++    for (i = 0; i < hle->alist_naudio.voice_key_count; ++i) {
++        if (hle->alist_naudio.voice_keys[i] == key) {
++            return i;
++        }
++    }
++
++    if (hle->alist_naudio.voice_key_count < 32) {
++        uint32_t slot = hle->alist_naudio.voice_key_count++;
++        hle->alist_naudio.voice_keys[slot] = key;
++        return slot;
++    }
++
++    return key & 0x1fu;
++}
++
+ static void naudio_finalize_voice_tracking(struct hle_t* hle)
+ {
+-    uint32_t voice_count = hle->alist_naudio.voice_index;
++    uint32_t voice_count = hle->alist_naudio.voice_key_count;
+     uint32_t active_mask = hle->alist_naudio.voice_active_mask;
+     uint32_t normalized_mask;
+ 
+@@ -168,7 +185,7 @@ static void ENVMIXER(struct hle_t* hle, uint32_t w1, uint32_t w2)
+ {
+     uint8_t  flags   = (w1 >> 16);
+     uint32_t address = (w2 & 0xffffff);
+-    uint32_t voice_index = hle->alist_naudio.voice_index++;
++    uint32_t voice_index = naudio_assign_voice_slot(hle, address);
+ 
+     if (voice_index < 32) {
+         hle->alist_naudio.voice_active_mask |= (1u << voice_index);
+diff --git a/rsp_hle/alist_nead.c b/rsp_hle/alist_nead.c
+index bd589d2..e8eace7 100644
+--- a/rsp_hle/alist_nead.c
++++ b/rsp_hle/alist_nead.c
+@@ -55,13 +55,30 @@ static void SPNOOP(struct hle_t* UNUSED(hle), uint32_t UNUSED(w1), uint32_t UNUS
+ 
+ static void nead_prepare_voice_tracking(struct hle_t* hle)
+ {
+-    hle->alist_nead.voice_index = 0;
+     hle->alist_nead.voice_active_mask = 0;
+ }
+ 
++static uint32_t nead_assign_voice_slot(struct hle_t* hle, uint32_t key)
++{
++    uint32_t i;
++    for (i = 0; i < hle->alist_nead.voice_key_count; ++i) {
++        if (hle->alist_nead.voice_keys[i] == key) {
++            return i;
++        }
++    }
++
++    if (hle->alist_nead.voice_key_count < 32) {
++        uint32_t slot = hle->alist_nead.voice_key_count++;
++        hle->alist_nead.voice_keys[slot] = key;
++        return slot;
++    }
++
++    return key & 0x1fu;
++}
++
+ static void nead_finalize_voice_tracking(struct hle_t* hle)
+ {
+-    uint32_t voice_count = hle->alist_nead.voice_index;
++    uint32_t voice_count = hle->alist_nead.voice_key_count;
+     uint32_t active_mask = hle->alist_nead.voice_active_mask;
+     uint32_t normalized_mask;
+ 
+@@ -90,6 +107,24 @@ static int nead_is_voice_muted(struct hle_t* hle, uint32_t voice_index)
+     return ((usf_get_hle_voice_mask(hle->user_defined) >> voice_index) & 0x1u) == 0u;
+ }
+ 
++static uint32_t nead_make_voice_key(
++        uint16_t dmemi,
++        uint16_t dmem_dl,
++        uint16_t dmem_dr,
++        uint16_t dmem_wl,
++        uint16_t dmem_wr,
++        uint8_t mode_bits)
++{
++    uint32_t key = 2166136261u;
++    key = (key ^ dmemi) * 16777619u;
++    key = (key ^ dmem_dl) * 16777619u;
++    key = (key ^ dmem_dr) * 16777619u;
++    key = (key ^ dmem_wl) * 16777619u;
++    key = (key ^ dmem_wr) * 16777619u;
++    key = (key ^ mode_bits) * 16777619u;
++    return key;
++}
++
+ static void LOADADPCM(struct hle_t* hle, uint32_t w1, uint32_t w2)
+ {
+     uint16_t count   = w1;
+@@ -236,7 +271,6 @@ static void ENVSETUP2(struct hle_t* hle, uint32_t UNUSED(w1), uint32_t w2)
+ static void ENVMIXER_MK(struct hle_t* hle, uint32_t w1, uint32_t w2)
+ {
+     int16_t xors[4];
+-    uint32_t voice_index = hle->alist_nead.voice_index++;
+ 
+     uint16_t dmemi = (w1 >> 12) & 0xff0;
+     uint8_t  count = (w1 >>  8) & 0xff;
+@@ -250,31 +284,36 @@ static void ENVMIXER_MK(struct hle_t* hle, uint32_t w1, uint32_t w2)
+     xors[0] = 0 - (int16_t)((w1 & 0x2) >> 1);
+     xors[1] = 0 - (int16_t)((w1 & 0x1)     );
+ 
+-    if (voice_index < 32) {
+-        hle->alist_nead.voice_active_mask |= (1u << voice_index);
+-    }
+-
+-    if (nead_is_voice_muted(hle, voice_index)) {
+-        uint8_t input_snapshot[0x100];
+-        if (count != 0) {
+-            memcpy(input_snapshot, hle->alist_buffer + dmemi, count);
+-            memset(hle->alist_buffer + dmemi, 0, count);
++    {
++        uint8_t mode_bits = (uint8_t)(w1 & 0x3);
++        uint32_t key = nead_make_voice_key(dmemi, dmem_dl, dmem_dr, dmem_wl, dmem_wr, mode_bits);
++        uint32_t voice_index = nead_assign_voice_slot(hle, key);
++        if (voice_index < 32) {
++            hle->alist_nead.voice_active_mask |= (1u << voice_index);
+         }
+ 
+-        alist_envmix_nead(
+-                hle,
+-                false,  /* unsupported by this ucode */
+-                dmem_dl, dmem_dr,
+-                dmem_wl, dmem_wr,
+-                dmemi, count,
+-                hle->alist_nead.env_values,
+-                hle->alist_nead.env_steps,
+-                xors);
+-
+-        if (count != 0) {
+-            memcpy(hle->alist_buffer + dmemi, input_snapshot, count);
++        if (nead_is_voice_muted(hle, voice_index)) {
++            uint8_t input_snapshot[0x100];
++            if (count != 0) {
++                memcpy(input_snapshot, hle->alist_buffer + dmemi, count);
++                memset(hle->alist_buffer + dmemi, 0, count);
++            }
++
++            alist_envmix_nead(
++                    hle,
++                    false,  /* unsupported by this ucode */
++                    dmem_dl, dmem_dr,
++                    dmem_wl, dmem_wr,
++                    dmemi, count,
++                    hle->alist_nead.env_values,
++                    hle->alist_nead.env_steps,
++                    xors);
++
++            if (count != 0) {
++                memcpy(hle->alist_buffer + dmemi, input_snapshot, count);
++            }
++            return;
+         }
+-        return;
+     }
+ 
+     alist_envmix_nead(
+@@ -291,7 +330,6 @@ static void ENVMIXER_MK(struct hle_t* hle, uint32_t w1, uint32_t w2)
+ static void ENVMIXER(struct hle_t* hle, uint32_t w1, uint32_t w2)
+ {
+     int16_t xors[4];
+-    uint32_t voice_index = hle->alist_nead.voice_index++;
+ 
+     uint16_t dmemi = (w1 >> 12) & 0xff0;
+     uint8_t  count = (w1 >>  8) & 0xff;
+@@ -306,31 +344,36 @@ static void ENVMIXER(struct hle_t* hle, uint32_t w1, uint32_t w2)
+     xors[0] = 0 - (int16_t)((w1 & 0x2) >> 1);
+     xors[1] = 0 - (int16_t)((w1 & 0x1)     );
+ 
+-    if (voice_index < 32) {
+-        hle->alist_nead.voice_active_mask |= (1u << voice_index);
+-    }
+-
+-    if (nead_is_voice_muted(hle, voice_index)) {
+-        uint8_t input_snapshot[0x100];
+-        if (count != 0) {
+-            memcpy(input_snapshot, hle->alist_buffer + dmemi, count);
+-            memset(hle->alist_buffer + dmemi, 0, count);
++    {
++        uint8_t mode_bits = (uint8_t)((((swap_wet_LR ? 1u : 0u) << 4) | (w1 & 0xf)) & 0xffu);
++        uint32_t key = nead_make_voice_key(dmemi, dmem_dl, dmem_dr, dmem_wl, dmem_wr, mode_bits);
++        uint32_t voice_index = nead_assign_voice_slot(hle, key);
++        if (voice_index < 32) {
++            hle->alist_nead.voice_active_mask |= (1u << voice_index);
+         }
+ 
+-        alist_envmix_nead(
+-                hle,
+-                swap_wet_LR,
+-                dmem_dl, dmem_dr,
+-                dmem_wl, dmem_wr,
+-                dmemi, count,
+-                hle->alist_nead.env_values,
+-                hle->alist_nead.env_steps,
+-                xors);
+-
+-        if (count != 0) {
+-            memcpy(hle->alist_buffer + dmemi, input_snapshot, count);
++        if (nead_is_voice_muted(hle, voice_index)) {
++            uint8_t input_snapshot[0x100];
++            if (count != 0) {
++                memcpy(input_snapshot, hle->alist_buffer + dmemi, count);
++                memset(hle->alist_buffer + dmemi, 0, count);
++            }
++
++            alist_envmix_nead(
++                    hle,
++                    swap_wet_LR,
++                    dmem_dl, dmem_dr,
++                    dmem_wl, dmem_wr,
++                    dmemi, count,
++                    hle->alist_nead.env_values,
++                    hle->alist_nead.env_steps,
++                    xors);
++
++            if (count != 0) {
++                memcpy(hle->alist_buffer + dmemi, input_snapshot, count);
++            }
++            return;
+         }
+-        return;
+     }
+ 
+     alist_envmix_nead(
+diff --git a/rsp_hle/ucodes.h b/rsp_hle/ucodes.h
+index b4aed8a..3e69944 100644
+--- a/rsp_hle/ucodes.h
++++ b/rsp_hle/ucodes.h
+@@ -76,6 +76,11 @@ struct alist_audio_t {
+ 
+     /* storage for ADPCM table and polef coefficients */
+     int16_t table[16 * 8];
++
++    /* voice discovery/muting bookkeeping */
++    uint32_t voice_key_count;
++    uint32_t voice_keys[32];
++    uint32_t voice_active_mask;
+ };
+ 
+ void alist_process_audio   (struct hle_t* hle);
+@@ -101,7 +106,8 @@ struct alist_naudio_t {
+     int16_t table[16 * 8];
+ 
+     /* voice discovery/muting bookkeeping */
+-    uint32_t voice_index;
++    uint32_t voice_key_count;
++    uint32_t voice_keys[32];
+     uint32_t voice_active_mask;
+ };
+ 
+@@ -134,7 +140,8 @@ struct alist_nead_t {
+     uint32_t filter_lut_address[2];
+ 
+     /* voice discovery/muting bookkeeping */
+-    uint32_t voice_index;
++    uint32_t voice_key_count;
++    uint32_t voice_keys[32];
+     uint32_t voice_active_mask;
+ };
+ 
+-- 
+2.53.0
+

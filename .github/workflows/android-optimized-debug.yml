@@ -49,6 +49,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y autoconf automake libtool pkg-config cmake ninja-build perl
 
+      - name: Configure git identity for patch application
+        run: |
+          git config --global user.name "Flopster101 CI"
+          git config --global user.email "nahuelgomez329@gmail.com"
+
       - name: Bootstrap external repositories
         run: |
           set -euo pipefail

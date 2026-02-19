@@ -1951,6 +1951,30 @@ std::vector<int32_t> AudioEngine::getChannelScopeTextState(int maxChannels) {
     return openMptDecoder ? openMptDecoder->getChannelScopeTextState(maxChannels) : std::vector<int32_t>{};
 }
 
+std::vector<std::string> AudioEngine::getDecoderToggleChannelNames() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return {};
+    return decoder->getToggleChannelNames();
+}
+
+void AudioEngine::setDecoderToggleChannelMuted(int channelIndex, bool enabled) {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return;
+    decoder->setToggleChannelMuted(channelIndex, enabled);
+}
+
+bool AudioEngine::getDecoderToggleChannelMuted(int channelIndex) {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return false;
+    return decoder->getToggleChannelMuted(channelIndex);
+}
+
+void AudioEngine::clearDecoderToggleChannelMutes() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return;
+    decoder->clearToggleChannelMutes();
+}
+
 std::string AudioEngine::getVgmGameName() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";

@@ -10,6 +10,7 @@
 #include <mutex>
 static AudioEngine *audioEngine = nullptr;
 static std::mutex engineMutex;
+static jstring toJString(JNIEnv* env, std::string_view value);
 
 static void ensureEngine() {
     std::lock_guard<std::mutex> lock(engineMutex);
@@ -44,6 +45,17 @@ static jintArray toJIntArray(JNIEnv* env, const std::vector<int32_t>& values) {
             reinterpret_cast<const jint*>(values.data())
     );
     return array;
+}
+
+static jobjectArray toJStringArray(JNIEnv* env, const std::vector<std::string>& values) {
+    jclass stringClass = env->FindClass("java/lang/String");
+    jobjectArray result = env->NewObjectArray(static_cast<jsize>(values.size()), stringClass, nullptr);
+    for (size_t i = 0; i < values.size(); ++i) {
+        jstring value = toJString(env, values[i]);
+        env->SetObjectArrayElement(result, static_cast<jsize>(i), value);
+        env->DeleteLocalRef(value);
+    }
+    return result;
 }
 
 static bool isValidUtf8(std::string_view text) {
@@ -1274,6 +1286,44 @@ Java_com_flopster101_siliconplayer_NativeBridge_getMasterChannelSolo(
         return JNI_FALSE;
     }
     return audioEngine->getMasterChannelSolo(static_cast<int>(channelIndex)) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDecoderToggleChannelNames(
+        JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return env->NewObjectArray(0, env->FindClass("java/lang/String"), nullptr);
+    }
+    return toJStringArray(env, audioEngine->getDecoderToggleChannelNames());
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDecoderToggleChannelMuted(
+        JNIEnv*, jobject, jint channelIndex, jboolean enabled) {
+    if (audioEngine == nullptr) {
+        return;
+    }
+    audioEngine->setDecoderToggleChannelMuted(static_cast<int>(channelIndex), enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDecoderToggleChannelMuted(
+        JNIEnv*, jobject, jint channelIndex) {
+    if (audioEngine == nullptr) {
+        return JNI_FALSE;
+    }
+    return audioEngine->getDecoderToggleChannelMuted(static_cast<int>(channelIndex))
+           ? JNI_TRUE
+           : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_clearDecoderToggleChannelMutes(
+        JNIEnv*, jobject) {
+    if (audioEngine == nullptr) {
+        return;
+    }
+    audioEngine->clearDecoderToggleChannelMutes();
 }
 
 // ============================================================================

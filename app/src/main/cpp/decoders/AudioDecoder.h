@@ -68,6 +68,11 @@ public:
     // Flat per-channel state payload for channel-scope text overlays.
     // Stride/field semantics are defined on the app side.
     virtual std::vector<int32_t> getChannelScopeTextState(int /*maxChannels*/) { return {}; }
+    // Decoder-specific toggleable channels (names may vary by loaded song/system).
+    virtual std::vector<std::string> getToggleChannelNames() { return {}; }
+    virtual void setToggleChannelMuted(int /*channelIndex*/, bool /*enabled*/) {}
+    virtual bool getToggleChannelMuted(int /*channelIndex*/) const { return false; }
+    virtual void clearToggleChannelMutes() {}
     virtual const char* getName() const = 0; // Instance name
 };
 

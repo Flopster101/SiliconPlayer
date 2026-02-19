@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: recursive
+          submodules: false
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -48,6 +48,40 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y autoconf automake libtool pkg-config cmake ninja-build perl
+
+      - name: Bootstrap external repositories
+        run: |
+          set -euo pipefail
+
+          clone_repo() {
+            local url="$1"
+            local path="$2"
+            mkdir -p "$(dirname "$path")"
+            if [ ! -d "$path/.git" ]; then
+              git clone --depth 1 "$url" "$path"
+            fi
+          }
+
+          clone_repo "https://bitbucket.org/kode54/vio2sf" "external/2sf/vio2sf"
+          clone_repo "https://github.com/FFmpeg/FFmpeg.git" "external/ffmpeg"
+          clone_repo "https://github.com/FluidSynth/fluidsynth" "external/fluidsynth"
+          clone_repo "https://bitbucket.org/losnoco/lazyusf2/" "external/lazyusf2"
+          clone_repo "https://github.com/libgme/game-music-emu.git" "external/libgme"
+          clone_repo "https://github.com/OpenMPT/openmpt.git" "external/libopenmpt"
+          clone_repo "https://github.com/libsidplayfp/libresidfp" "external/libresidfp"
+          clone_repo "https://github.com/libsidplayfp/libsidplayfp" "external/libsidplayfp"
+          clone_repo "https://git.code.sf.net/p/soxr/code" "external/libsoxr"
+          clone_repo "https://github.com/ValleyBell/libvgm.git" "external/libvgm"
+          clone_repo "https://github.com/openssl/openssl" "external/openssl"
+          clone_repo "https://github.com/kode54/psflib" "external/psflib"
+          clone_repo "https://github.com/libsidplayfp/resid" "external/resid"
+
+          # Initialize nested submodules for any externals that use them.
+          for repo_dir in external/* external/2sf/*; do
+            if [ -d "$repo_dir/.git" ] && [ -f "$repo_dir/.gitmodules" ]; then
+              git -C "$repo_dir" submodule update --init --recursive
+            fi
+          done
 
       - name: Verify debug signing key
         run: test -f debug.keystore

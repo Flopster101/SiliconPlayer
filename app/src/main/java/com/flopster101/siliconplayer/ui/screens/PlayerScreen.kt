@@ -525,6 +525,7 @@ fun PlayerScreen(
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+    val isTabletLike = configuration.smallestScreenWidthDp >= 600
     val collapseThresholdPx = with(density) { 132.dp.toPx() }
 
     LaunchedEffect(positionSeconds, isSeeking) {
@@ -790,7 +791,8 @@ fun PlayerScreen(
                             filename = displayFilename,
                             filenameDisplayMode = filenameDisplayMode,
                             decoderName = decoderName,
-                            filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
+                            filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
+                            centerSupportingMetadata = isTabletLike && isLandscape
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         TimelineSection(
@@ -1896,7 +1898,8 @@ private fun TrackMetadataBlock(
     filename: String,
     filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode,
     decoderName: String?,
-    filenameOnlyWhenTitleMissing: Boolean
+    filenameOnlyWhenTitleMissing: Boolean,
+    centerSupportingMetadata: Boolean = false
 ) {
     val shouldShowFilename = remember(filenameDisplayMode, decoderName, title, filenameOnlyWhenTitleMissing) {
         when (filenameDisplayMode) {
@@ -1975,7 +1978,9 @@ private fun TrackMetadataBlock(
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            textAlign = if (centerSupportingMetadata) TextAlign.Center else TextAlign.Start,
+            modifier = if (centerSupportingMetadata) Modifier.fillMaxWidth() else Modifier
         )
     }
     if (shouldShowFilename) {
@@ -2007,7 +2012,9 @@ private fun TrackMetadataBlock(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                textAlign = if (centerSupportingMetadata) TextAlign.Center else TextAlign.Start,
+                modifier = if (centerSupportingMetadata) Modifier.fillMaxWidth() else Modifier
             )
         }
     }

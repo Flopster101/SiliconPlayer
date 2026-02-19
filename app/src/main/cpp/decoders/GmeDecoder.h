@@ -44,6 +44,10 @@ public:
     bool getHasLoopPointInfo();
     int getLoopStartMsInfo();
     int getLoopLengthMsInfo();
+    std::vector<std::string> getToggleChannelNames() override;
+    void setToggleChannelMuted(int channelIndex, bool enabled) override;
+    bool getToggleChannelMuted(int channelIndex) const override;
+    void clearToggleChannelMutes() override;
     void setOutputSampleRate(int sampleRate) override;
     void setOption(const char* name, const char* value) override;
     int getOptionApplyPolicy(const char* name) const override;
@@ -93,11 +97,15 @@ private:
     std::string commentText;
     std::string dumper;
     int voiceCount = 0;
+    std::vector<std::string> toggleChannelNames;
+    std::vector<bool> toggleChannelMuted;
 
     void closeInternal();
     bool applyTrackInfoLocked(int trackIndex);
     void applyRepeatBehaviorLocked();
     void applyCoreOptionsLocked();
+    void rebuildToggleChannelsLocked();
+    void applyToggleChannelMutesLocked();
     int resolveOpenSampleRateLocked(const char* path) const;
 
     int requestedSampleRate = 48000;

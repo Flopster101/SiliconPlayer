@@ -149,6 +149,8 @@ bool GmeDecoder::open(const char* path) {
 
     applyTrackInfoLocked(activeTrack);
     voiceCount = std::max(0, gme_voice_count(emu));
+    rebuildToggleChannelsLocked();
+    applyToggleChannelMutesLocked();
 
     if (isSpcTrack && spcUseNativeSampleRate && activeSampleRate != 32000) {
         gme_delete(emu);
@@ -170,6 +172,9 @@ bool GmeDecoder::open(const char* path) {
             return false;
         }
         applyTrackInfoLocked(activeTrack);
+        voiceCount = std::max(0, gme_voice_count(emu));
+        rebuildToggleChannelsLocked();
+        applyToggleChannelMutesLocked();
     }
 
     applyRepeatBehaviorLocked();
@@ -263,6 +268,8 @@ void GmeDecoder::closeInternal() {
     commentText.clear();
     dumper.clear();
     voiceCount = 0;
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
 }
 
 int GmeDecoder::getPlaybackCapabilities() const {
@@ -321,6 +328,7 @@ int GmeDecoder::read(float* buffer, int numFrames) {
                     break;
                 }
                 applyCoreOptionsLocked();
+                applyToggleChannelMutesLocked();
                 playbackPositionSeconds = 0.0;
                 lastTellMs = 0;
                 continue;
@@ -336,6 +344,7 @@ int GmeDecoder::read(float* buffer, int numFrames) {
                     break;
                 }
                 applyCoreOptionsLocked();
+                applyToggleChannelMutesLocked();
                 if (hasLoopPoint && loopStartMs >= 0) {
                     const gme_err_t loopSeekErr = gme_seek(emu, loopStartMs);
                     if (loopSeekErr != nullptr) {
@@ -456,6 +465,9 @@ bool GmeDecoder::selectSubtune(int index) {
     applyRepeatBehaviorLocked();
     applyCoreOptionsLocked();
     applyTrackInfoLocked(activeTrack);
+    voiceCount = std::max(0, gme_voice_count(emu));
+    rebuildToggleChannelsLocked();
+    applyToggleChannelMutesLocked();
     return true;
 }
 
@@ -572,6 +584,37 @@ int GmeDecoder::getLoopStartMsInfo() {
 int GmeDecoder::getLoopLengthMsInfo() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return loopLengthMs;
+}
+
+std::vector<std::string> GmeDecoder::getToggleChannelNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return toggleChannelNames;
+}
+
+void GmeDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!emu) return;
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+    toggleChannelMuted[static_cast<size_t>(channelIndex)] = enabled;
+    applyToggleChannelMutesLocked();
+}
+
+bool GmeDecoder::getToggleChannelMuted(int channelIndex) const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!emu) return false;
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return false;
+    }
+    return toggleChannelMuted[static_cast<size_t>(channelIndex)];
+}
+
+void GmeDecoder::clearToggleChannelMutes() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!emu) return;
+    std::fill(toggleChannelMuted.begin(), toggleChannelMuted.end(), false);
+    applyToggleChannelMutesLocked();
 }
 
 void GmeDecoder::setOutputSampleRate(int rate) {
@@ -724,6 +767,45 @@ void GmeDecoder::applyCoreOptionsLocked() {
 
     if (isSpcTrack) {
         gme_set_spc_interpolation(emu, spcInterpolation);
+    }
+}
+
+void GmeDecoder::rebuildToggleChannelsLocked() {
+    if (!emu) {
+        toggleChannelNames.clear();
+        toggleChannelMuted.clear();
+        return;
+    }
+    const int totalVoices = std::max(0, gme_voice_count(emu));
+    std::vector<bool> previous = toggleChannelMuted;
+    toggleChannelNames.clear();
+    toggleChannelMuted.assign(static_cast<size_t>(totalVoices), false);
+    toggleChannelNames.reserve(static_cast<size_t>(totalVoices));
+    for (int voice = 0; voice < totalVoices; ++voice) {
+        const char* rawName = gme_voice_name(emu, voice);
+        std::string name = safeString(rawName);
+        if (name.empty()) {
+            name = "Voice " + std::to_string(voice + 1);
+        }
+        toggleChannelNames.push_back(name);
+        if (voice < static_cast<int>(previous.size())) {
+            toggleChannelMuted[static_cast<size_t>(voice)] = previous[static_cast<size_t>(voice)];
+        }
+    }
+}
+
+void GmeDecoder::applyToggleChannelMutesLocked() {
+    if (!emu) return;
+    const int totalVoices = std::min(
+            std::max(0, gme_voice_count(emu)),
+            static_cast<int>(toggleChannelMuted.size())
+    );
+    for (int voice = 0; voice < totalVoices; ++voice) {
+        gme_mute_voice(
+                emu,
+                voice,
+                toggleChannelMuted[static_cast<size_t>(voice)] ? 1 : 0
+        );
     }
 }
 

@@ -83,8 +83,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -2506,11 +2509,7 @@ private fun ChannelControlGrid(
                             selected = !item.muted,
                             onClick = { onToggleMute(item) },
                             label = {
-                                Text(
-                                    text = item.name,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
+                                AutoSizeChipLabel(item.name)
                             },
                             modifier = Modifier
                                 .weight(1f)
@@ -2541,6 +2540,54 @@ private fun ChannelControlGrid(
                     .graphicsLayer(alpha = scrollbarAlpha)
             )
         }
+    }
+}
+
+@Composable
+private fun AutoSizeChipLabel(
+    text: String
+) {
+    val maxSize = 14.sp
+    val minSize = 9.sp
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val baseTextStyle = LocalTextStyle.current
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val maxWidthPx = with(density) { maxWidth.roundToPx() }
+        val safetyPaddingPx = with(density) { 2.dp.roundToPx() }
+        val availableWidthPx = (maxWidthPx - safetyPaddingPx).coerceAtLeast(1)
+        val resolvedFontSize = remember(text, availableWidthPx, baseTextStyle) {
+            var low = minSize.value
+            var high = maxSize.value
+            var best = minSize.value
+            repeat(7) {
+                val mid = (low + high) * 0.5f
+                val layoutResult = textMeasurer.measure(
+                    text = AnnotatedString(text),
+                    style = baseTextStyle.copy(fontSize = mid.sp),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip,
+                    constraints = Constraints(maxWidth = availableWidthPx)
+                )
+                if (layoutResult.hasVisualOverflow) {
+                    high = mid - 0.1f
+                } else {
+                    best = mid
+                    low = mid + 0.1f
+                }
+            }
+            best.sp
+        }
+        Text(
+            text = text,
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
+            fontSize = resolvedFontSize,
+            textAlign = TextAlign.Center
+        )
     }
 }
 

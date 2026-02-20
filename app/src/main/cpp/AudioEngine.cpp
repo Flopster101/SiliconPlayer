@@ -1039,12 +1039,12 @@ void AudioEngine::renderWorkerLoop() {
             }
         }
 
+        appendRenderQueue(localBuffer.data(), chunkFrames, channels);
+
         if (!isPlaying.load() && renderTerminalStopPending.load()) {
             renderWorkerCv.notify_all();
             continue;
         }
-
-        appendRenderQueue(localBuffer.data(), chunkFrames, channels);
     }
 }
 
@@ -1059,6 +1059,25 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
     if (engine->seekInProgress.load()) {
         memset(outputData, 0, static_cast<size_t>(numFrames) * 2 * sizeof(float));
         return AAUDIO_CALLBACK_RESULT_CONTINUE;
+    }
+    const int callbackRate = engine->streamSampleRate > 0
+            ? engine->streamSampleRate
+            : static_cast<int>(AAudioStream_getSampleRate(stream));
+    if (engine->pendingResumeFadeOnStart.exchange(false, std::memory_order_relaxed)) {
+        engine->beginPauseResumeFadeLocked(
+                true,
+                callbackRate > 0 ? callbackRate : 48000,
+                engine->pendingResumeFadeDurationMs.load(std::memory_order_relaxed),
+                engine->pendingResumeFadeAttenuationDb.load(std::memory_order_relaxed)
+        );
+    }
+    if (engine->pendingPauseFadeRequest.exchange(false, std::memory_order_relaxed)) {
+        engine->beginPauseResumeFadeLocked(
+                false,
+                callbackRate > 0 ? callbackRate : 48000,
+                engine->pendingPauseFadeDurationMs.load(std::memory_order_relaxed),
+                engine->pendingPauseFadeAttenuationDb.load(std::memory_order_relaxed)
+        );
     }
     engine->renderQueueCallbackCount.fetch_add(1, std::memory_order_relaxed);
     const int framesCopied = engine->popRenderQueue(outputData, numFrames, 2);
@@ -1097,6 +1116,21 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
                 0,
                 static_cast<size_t>(numFrames - framesCopied) * 2u * sizeof(float)
         );
+    }
+    for (int frame = 0; frame < numFrames; ++frame) {
+        const float fadeGain = engine->nextPauseResumeFadeGainLocked();
+        if (fadeGain == 1.0f) continue;
+        const size_t base = static_cast<size_t>(frame) * 2u;
+        outputData[base] *= fadeGain;
+        outputData[base + 1u] *= fadeGain;
+    }
+    if (engine->pauseResumeFadeOutStopPending) {
+        engine->pauseResumeFadeOutStopPending = false;
+        engine->isPlaying.store(false);
+        engine->naturalEndPending.store(false);
+        engine->clearRenderQueue();
+        engine->renderWorkerCv.notify_all();
+        return AAUDIO_CALLBACK_RESULT_STOP;
     }
 
     if (engine->renderTerminalStopPending.load() && engine->renderQueueFrames() <= 0) {
@@ -1144,6 +1178,11 @@ bool AudioEngine::start() {
                     sharedAbsoluteInputPositionBaseSeconds = 0.0;
                 }
             }
+            pauseResumeFadeTotalFrames = 0;
+            pauseResumeFadeProcessedFrames = 0;
+            pauseResumeFadeFromGain = 1.0f;
+            pauseResumeFadeToGain = 1.0f;
+            pauseResumeFadeOutStopPending = false;
         }
 
         // Prime render queue before starting callback-driven playback.
@@ -1188,6 +1227,8 @@ bool AudioEngine::start() {
 }
 
 void AudioEngine::stop() {
+    pendingPauseFadeRequest.store(false, std::memory_order_relaxed);
+    pendingResumeFadeOnStart.store(false, std::memory_order_relaxed);
     const bool wasSeeking = seekInProgress.load();
     if (wasSeeking) {
         decoderSerial.fetch_add(1);
@@ -1213,6 +1254,27 @@ void AudioEngine::stop() {
         clearRenderQueue();
         renderWorkerCv.notify_all();
     }
+}
+
+bool AudioEngine::startWithPauseResumeFade(int durationMs, float attenuationDb) {
+    if (isPlaying.load()) {
+        return true;
+    }
+    pendingResumeFadeDurationMs.store(durationMs, std::memory_order_relaxed);
+    pendingResumeFadeAttenuationDb.store(attenuationDb, std::memory_order_relaxed);
+    pendingResumeFadeOnStart.store(true, std::memory_order_relaxed);
+    return start();
+}
+
+void AudioEngine::stopWithPauseResumeFade(int durationMs, float attenuationDb) {
+    if (!isPlaying.load() || seekInProgress.load()) {
+        stop();
+        return;
+    }
+    pendingPauseFadeDurationMs.store(durationMs, std::memory_order_relaxed);
+    pendingPauseFadeAttenuationDb.store(attenuationDb, std::memory_order_relaxed);
+    pendingPauseFadeRequest.store(true, std::memory_order_relaxed);
+    renderWorkerCv.notify_all();
 }
 
 bool AudioEngine::isEnginePlaying() const {
@@ -2405,6 +2467,57 @@ float AudioEngine::dbToGain(float db) {
     return std::pow(10.0f, db / 20.0f);
 }
 
+void AudioEngine::beginPauseResumeFadeLocked(bool fadeIn, int streamRate, int durationMs, float attenuationDb) {
+    const int safeRate = std::max(1, streamRate);
+    const int safeDurationMs = std::clamp(durationMs, 1, 5000);
+    const float safeAttenuationDb = std::clamp(attenuationDb, 0.0f, 60.0f);
+    const int totalFrames = std::max(
+            1,
+            static_cast<int>((static_cast<int64_t>(safeRate) * safeDurationMs) / 1000)
+    );
+    const float floorGain = std::clamp(dbToGain(-safeAttenuationDb), 0.0f, 1.0f);
+
+    pauseResumeFadeTotalFrames = totalFrames;
+    pauseResumeFadeProcessedFrames = 0;
+    pauseResumeFadeFromGain = fadeIn ? floorGain : 1.0f;
+    pauseResumeFadeToGain = fadeIn ? 1.0f : floorGain;
+    pauseResumeFadeOutStopPending = false;
+}
+
+float AudioEngine::nextPauseResumeFadeGainLocked() {
+    if (pauseResumeFadeTotalFrames <= 0) {
+        return 1.0f;
+    }
+
+    if (pauseResumeFadeProcessedFrames < pauseResumeFadeTotalFrames) {
+        pauseResumeFadeProcessedFrames++;
+    }
+    const float t = std::clamp(
+            static_cast<float>(pauseResumeFadeProcessedFrames) /
+            static_cast<float>(pauseResumeFadeTotalFrames),
+            0.0f,
+            1.0f
+    );
+    const float curveT =
+            0.5f - 0.5f * std::cos(static_cast<float>(M_PI) * t);
+    const float gain = pauseResumeFadeFromGain + (pauseResumeFadeToGain - pauseResumeFadeFromGain) * curveT;
+
+    if (pauseResumeFadeProcessedFrames >= pauseResumeFadeTotalFrames) {
+        if (pauseResumeFadeToGain < 1.0f) {
+            // Fade-out reached floor: hold floor gain for remaining frames in this chunk
+            // until render loop flips the stream into terminal stop.
+            pauseResumeFadeOutStopPending = true;
+            pauseResumeFadeProcessedFrames = pauseResumeFadeTotalFrames;
+        } else {
+            pauseResumeFadeTotalFrames = 0;
+            pauseResumeFadeProcessedFrames = 0;
+            pauseResumeFadeFromGain = 1.0f;
+            pauseResumeFadeToGain = 1.0f;
+        }
+    }
+    return std::clamp(gain, 0.0f, 1.0f);
+}
+
 float AudioEngine::computeEndFadeGainLocked(double playbackPositionSeconds) const {
     if (!decoder) return 1.0f;
 
@@ -2472,13 +2585,15 @@ void AudioEngine::applyGain(float* buffer, int numFrames, int channels, float ex
     const float masterGain = dbToGain(masterDb);
     // Song volume overrides plugin volume when not at neutral (0dB)
     const float secondaryGain = (songDb != 0.0f) ? dbToGain(songDb) : dbToGain(pluginDb);
-    const float totalGain = masterGain * secondaryGain * std::clamp(extraGain, 0.0f, 1.0f);
+    const float baseGain = masterGain * secondaryGain * std::clamp(extraGain, 0.0f, 1.0f);
 
-    // Apply gain if not unity (1.0)
-    if (totalGain != 1.0f) {
-        const int totalSamples = numFrames * channels;
-        for (int i = 0; i < totalSamples; i++) {
-            buffer[i] *= totalGain;
+    if (baseGain == 1.0f) {
+        return;
+    }
+    for (int frame = 0; frame < numFrames; ++frame) {
+        const int baseIndex = frame * channels;
+        for (int channel = 0; channel < channels; ++channel) {
+            buffer[baseIndex + channel] *= baseGain;
         }
     }
 }

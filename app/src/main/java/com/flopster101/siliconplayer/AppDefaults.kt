@@ -3,6 +3,7 @@ package com.flopster101.siliconplayer
 object AppDefaults {
     object Player {
         const val keepScreenOn = false
+        const val fadePauseResume = true
         const val artworkCornerRadiusDp = 3
         const val endFadeApplyToAllTracks = false
         const val endFadeDurationMs = 10_000

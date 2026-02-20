@@ -18,6 +18,7 @@ internal object AppPreferenceKeys {
     const val AUDIO_ALLOW_BACKEND_FALLBACK = "audio_allow_backend_fallback"
     const val OPEN_PLAYER_FROM_NOTIFICATION = "open_player_from_notification"
     const val PERSIST_REPEAT_MODE = "persist_repeat_mode"
+    const val FADE_PAUSE_RESUME = "fade_pause_resume"
     const val PREFERRED_REPEAT_MODE = "preferred_repeat_mode"
     const val SESSION_CURRENT_PATH = "session_current_path"
     const val THEME_MODE = "theme_mode"

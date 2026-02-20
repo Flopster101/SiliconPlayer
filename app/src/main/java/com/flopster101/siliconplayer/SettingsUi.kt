@@ -117,6 +117,7 @@ internal data class SettingsScreenState(
     val openPlayerOnTrackSelect: Boolean,
     val autoPlayNextTrackOnEnd: Boolean,
     val previousRestartsAfterThreshold: Boolean,
+    val fadePauseResume: Boolean,
     val respondHeadphoneMediaButtons: Boolean,
     val pauseOnHeadphoneDisconnect: Boolean,
     val audioFocusInterrupt: Boolean,
@@ -240,6 +241,7 @@ internal data class SettingsScreenActions(
     val onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
     val onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
     val onPreviousRestartsAfterThresholdChanged: (Boolean) -> Unit,
+    val onFadePauseResumeChanged: (Boolean) -> Unit,
     val onRespondHeadphoneMediaButtonsChanged: (Boolean) -> Unit,
     val onPauseOnHeadphoneDisconnectChanged: (Boolean) -> Unit,
     val onAudioFocusInterruptChanged: (Boolean) -> Unit,
@@ -382,6 +384,8 @@ internal fun SettingsScreen(
     val onAutoPlayNextTrackOnEndChanged = actions.onAutoPlayNextTrackOnEndChanged
     val previousRestartsAfterThreshold = state.previousRestartsAfterThreshold
     val onPreviousRestartsAfterThresholdChanged = actions.onPreviousRestartsAfterThresholdChanged
+    val fadePauseResume = state.fadePauseResume
+    val onFadePauseResumeChanged = actions.onFadePauseResumeChanged
     val respondHeadphoneMediaButtons = state.respondHeadphoneMediaButtons
     val onRespondHeadphoneMediaButtonsChanged = actions.onRespondHeadphoneMediaButtonsChanged
     val pauseOnHeadphoneDisconnect = state.pauseOnHeadphoneDisconnect
@@ -915,6 +919,7 @@ internal fun SettingsScreen(
                                 openPlayerOnTrackSelect = openPlayerOnTrackSelect,
                                 autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
                                 previousRestartsAfterThreshold = previousRestartsAfterThreshold,
+                                fadePauseResume = fadePauseResume,
                                 openPlayerFromNotification = openPlayerFromNotification,
                                 persistRepeatMode = persistRepeatMode,
                                 keepScreenOn = keepScreenOn,
@@ -931,6 +936,7 @@ internal fun SettingsScreen(
                                 onOpenPlayerOnTrackSelectChanged = onOpenPlayerOnTrackSelectChanged,
                                 onAutoPlayNextTrackOnEndChanged = onAutoPlayNextTrackOnEndChanged,
                                 onPreviousRestartsAfterThresholdChanged = onPreviousRestartsAfterThresholdChanged,
+                                onFadePauseResumeChanged = onFadePauseResumeChanged,
                                 onOpenPlayerFromNotificationChanged = onOpenPlayerFromNotificationChanged,
                                 onPersistRepeatModeChanged = onPersistRepeatModeChanged,
                                 onKeepScreenOnChanged = onKeepScreenOnChanged,

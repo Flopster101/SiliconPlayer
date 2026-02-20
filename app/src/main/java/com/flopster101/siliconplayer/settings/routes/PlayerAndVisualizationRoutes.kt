@@ -76,6 +76,7 @@ internal data class PlayerRouteState(
     val openPlayerOnTrackSelect: Boolean,
     val autoPlayNextTrackOnEnd: Boolean,
     val previousRestartsAfterThreshold: Boolean,
+    val fadePauseResume: Boolean,
     val openPlayerFromNotification: Boolean,
     val persistRepeatMode: Boolean,
     val keepScreenOn: Boolean,
@@ -93,6 +94,7 @@ internal data class PlayerRouteActions(
     val onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
     val onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
     val onPreviousRestartsAfterThresholdChanged: (Boolean) -> Unit,
+    val onFadePauseResumeChanged: (Boolean) -> Unit,
     val onOpenPlayerFromNotificationChanged: (Boolean) -> Unit,
     val onPersistRepeatModeChanged: (Boolean) -> Unit,
     val onKeepScreenOnChanged: (Boolean) -> Unit,
@@ -146,6 +148,8 @@ internal fun PlayerRouteContent(
     val onAutoPlayNextTrackOnEndChanged = actions.onAutoPlayNextTrackOnEndChanged
     val previousRestartsAfterThreshold = state.previousRestartsAfterThreshold
     val onPreviousRestartsAfterThresholdChanged = actions.onPreviousRestartsAfterThresholdChanged
+    val fadePauseResume = state.fadePauseResume
+    val onFadePauseResumeChanged = actions.onFadePauseResumeChanged
     val openPlayerFromNotification = state.openPlayerFromNotification
     val onOpenPlayerFromNotificationChanged = actions.onOpenPlayerFromNotificationChanged
     val persistRepeatMode = state.persistRepeatMode
@@ -281,6 +285,13 @@ internal fun PlayerRouteContent(
         description = "If more than 3 seconds have elapsed, the Previous track button restarts the current track instead of moving to the previous track.",
         checked = previousRestartsAfterThreshold,
         onCheckedChange = onPreviousRestartsAfterThresholdChanged
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Fade on pause/resume",
+        description = "Apply a brief volume attenuation when pausing and resuming playback.",
+        checked = fadePauseResume,
+        onCheckedChange = onFadePauseResumeChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
     PlayerSettingToggleCard(

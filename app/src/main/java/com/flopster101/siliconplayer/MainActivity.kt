@@ -127,7 +127,6 @@ import android.os.Environment
 import android.webkit.MimeTypeMap
 import android.widget.Toast
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -386,6 +385,36 @@ private fun AppNavigation(
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.PREVIOUS_RESTART_AFTER_THRESHOLD, true)
         )
+    }
+    var fadePauseResume by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.FADE_PAUSE_RESUME, AppDefaults.Player.fadePauseResume)
+        )
+    }
+    val startEngineWithPauseResumeFade = remember(fadePauseResume) {
+        {
+            val currentPositionSeconds = NativeBridge.getPosition()
+            val shouldFade = fadePauseResume && currentPositionSeconds > 0.05
+            if (!shouldFade) {
+                NativeBridge.startEngine()
+            } else {
+                NativeBridge.startEngineWithPauseResumeFade()
+            }
+        }
+    }
+    val pauseEngineWithPauseResumeFade = remember(fadePauseResume) {
+        { onPaused: () -> Unit ->
+            val currentPositionSeconds = NativeBridge.getPosition()
+            val shouldFade = fadePauseResume && currentPositionSeconds > 0.05
+            if (!shouldFade) {
+                NativeBridge.stopEngine()
+                onPaused()
+            } else {
+                NativeBridge.stopEngineWithPauseResumeFade()
+                // Keep UI responsive and update state immediately; native fade completes asynchronously.
+                onPaused()
+            }
+        }
     }
     var rememberBrowserLocation by remember {
         mutableStateOf(
@@ -1026,6 +1055,7 @@ private fun AppNavigation(
         openPlayerOnTrackSelect = openPlayerOnTrackSelect,
         autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
         previousRestartsAfterThreshold = previousRestartsAfterThreshold,
+        fadePauseResume = fadePauseResume,
         rememberBrowserLocation = rememberBrowserLocation,
         onArtworkBitmapChanged = { artworkBitmap = it },
         refreshRepeatModeForTrack = { runtimeDelegates.refreshRepeatModeForTrack() },
@@ -1245,7 +1275,7 @@ private fun AppNavigation(
                 runtimeDelegates.addRecentPlayedTrack(path, locationId, title, artist)
             },
             applyRepeatModeToNative = { mode -> applyRepeatModeToNative(mode) },
-            startEngine = { NativeBridge.startEngine() },
+            startEngine = { startEngineWithPauseResumeFade() },
             onPlayingStateChanged = { isPlaying = it },
             scheduleRecentTrackMetadataRefresh = { sourceId, locationId ->
                 runtimeDelegates.scheduleRecentTrackMetadataRefresh(sourceId, locationId)
@@ -1324,25 +1354,25 @@ private fun AppNavigation(
             onPreviousTrack = { trackNavDelegates.handlePreviousTrackAction() },
             onNextTrack = { trackNavDelegates.playAdjacentTrack(1) },
             onPlayPause = {
-                handleMiniPlayerPlayPauseAction(
-                    selectedFile = selectedFile,
-                    isPlaying = isPlaying,
-                    onResumeLastStoppedTrack = {
-                        trackNavDelegates.resumeLastStoppedTrack(autoStart = true)
-                    },
-                    onStopEngine = { NativeBridge.stopEngine() },
-                    onPlayingStateChanged = { isPlaying = it },
-                    syncPlaybackService = playbackSessionCoordinator.syncPlaybackService,
-                    onStartOrResumePlayback = startPlaybackFromSurface
-                )
+                if (selectedFile == null) {
+                    trackNavDelegates.resumeLastStoppedTrack(autoStart = true)
+                } else if (isPlaying) {
+                    pauseEngineWithPauseResumeFade {
+                        isPlaying = false
+                        playbackSessionCoordinator.syncPlaybackService()
+                    }
+                } else {
+                    startPlaybackFromSurface()
+                }
             },
             onPlay = startPlaybackFromSurface,
             onStopAndClear = stopAndEmptyTrack,
             onOpenAudioEffects = openAudioEffectsDialog,
             onPause = {
-                NativeBridge.stopEngine()
-                isPlaying = false
-                playbackSessionCoordinator.syncPlaybackService()
+                pauseEngineWithPauseResumeFade {
+                    isPlaying = false
+                    playbackSessionCoordinator.syncPlaybackService()
+                }
             },
             canPreviousTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) > 0,
             canNextTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) in 0 until (visiblePlayableFiles.size - 1),
@@ -1436,6 +1466,7 @@ private fun AppNavigation(
                                     openPlayerOnTrackSelect = openPlayerOnTrackSelect,
                                     autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
                                     previousRestartsAfterThreshold = previousRestartsAfterThreshold,
+                                    fadePauseResume = fadePauseResume,
                                     audioFocusInterrupt = audioFocusInterrupt,
                                     audioDucking = audioDucking,
                                     persistRepeatMode = persistRepeatMode,
@@ -1558,6 +1589,7 @@ private fun AppNavigation(
                                     onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
                                     onAutoPlayNextTrackOnEndChanged = { autoPlayNextTrackOnEnd = it },
                                     onPreviousRestartsAfterThresholdChanged = { previousRestartsAfterThreshold = it },
+                                    onFadePauseResumeChanged = { fadePauseResume = it },
                                     onRespondHeadphoneMediaButtonsChanged = { respondHeadphoneMediaButtons = it },
                                     onPauseOnHeadphoneDisconnectChanged = { pauseOnHeadphoneDisconnect = it },
                                     onAudioFocusInterruptChanged = {
@@ -1818,6 +1850,7 @@ private fun AppNavigation(
                                 onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
                                 onAutoPlayNextTrackOnEndChanged = { autoPlayNextTrackOnEnd = it },
                                 onPreviousRestartsAfterThresholdChanged = { previousRestartsAfterThreshold = it },
+                                onFadePauseResumeChanged = { fadePauseResume = it },
                                 onPersistRepeatModeChanged = { persistRepeatMode = it },
                                 onPreferredRepeatModeChanged = { preferredRepeatMode = it },
                                 onRememberBrowserLocationChanged = { rememberBrowserLocation = it },

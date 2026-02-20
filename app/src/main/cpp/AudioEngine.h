@@ -22,7 +22,9 @@ public:
     ~AudioEngine();
 
     bool start();
+    bool startWithPauseResumeFade(int durationMs, float attenuationDb);
     void stop();
+    void stopWithPauseResumeFade(int durationMs, float attenuationDb);
     bool isEnginePlaying() const;
     void restart();
     void setUrl(const char* url);
@@ -240,6 +242,8 @@ private:
     // Gain processing helpers
     static float dbToGain(float db);
     float computeEndFadeGainLocked(double playbackPositionSeconds) const;
+    void beginPauseResumeFadeLocked(bool fadeIn, int streamRate, int durationMs, float attenuationDb);
+    float nextPauseResumeFadeGainLocked();
     void applyGain(float* buffer, int numFrames, int channels, float extraGain = 1.0f);
     void applyMasterChannelRouting(float* buffer, int numFrames, int channels);
     void applyMonoDownmix(float* buffer, int numFrames, int channels);
@@ -291,6 +295,17 @@ private:
 #endif
     bool renderWorkerStop = false;
     std::atomic<bool> renderTerminalStopPending { false };
+    std::atomic<bool> pendingResumeFadeOnStart { false };
+    std::atomic<int> pendingResumeFadeDurationMs { 100 };
+    std::atomic<float> pendingResumeFadeAttenuationDb { 16.0f };
+    std::atomic<bool> pendingPauseFadeRequest { false };
+    std::atomic<int> pendingPauseFadeDurationMs { 100 };
+    std::atomic<float> pendingPauseFadeAttenuationDb { 16.0f };
+    bool pauseResumeFadeOutStopPending = false;
+    int pauseResumeFadeTotalFrames = 0;
+    int pauseResumeFadeProcessedFrames = 0;
+    float pauseResumeFadeFromGain = 1.0f;
+    float pauseResumeFadeToGain = 1.0f;
 };
 
 #endif //SILICONPLAYER_AUDIOENGINE_H

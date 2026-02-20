@@ -956,8 +956,22 @@ Java_com_flopster101_siliconplayer_NativeBridge_startEngine(JNIEnv* env, jobject
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_startEngineWithPauseResumeFade(JNIEnv*, jobject) {
+    ensureEngine();
+    audioEngine->startWithPauseResumeFade(100, 16.0f);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_stopEngine(JNIEnv* env, jobject thiz) {
     Java_com_flopster101_siliconplayer_MainActivity_stopEngine(env, thiz);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_stopEngineWithPauseResumeFade(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) {
+        return;
+    }
+    audioEngine->stopWithPauseResumeFade(100, 16.0f);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

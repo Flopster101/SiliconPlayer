@@ -585,6 +585,7 @@ internal fun clearAllSettingsAction(
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
     onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
     onPreviousRestartsAfterThresholdChanged: (Boolean) -> Unit,
+    onFadePauseResumeChanged: (Boolean) -> Unit,
     onRespondHeadphoneMediaButtonsChanged: (Boolean) -> Unit,
     onPauseOnHeadphoneDisconnectChanged: (Boolean) -> Unit,
     onAudioBackendPreferenceChanged: (AudioBackendPreference) -> Unit,
@@ -691,6 +692,7 @@ internal fun clearAllSettingsAction(
     onOpenPlayerOnTrackSelectChanged(true)
     onAutoPlayNextTrackOnEndChanged(true)
     onPreviousRestartsAfterThresholdChanged(true)
+    onFadePauseResumeChanged(AppDefaults.Player.fadePauseResume)
     onRespondHeadphoneMediaButtonsChanged(true)
     onPauseOnHeadphoneDisconnectChanged(true)
     onAudioBackendPreferenceChanged(AudioBackendPreference.AAudio)

@@ -11,7 +11,9 @@ object NativeBridge {
     }
 
     external fun startEngine()
+    external fun startEngineWithPauseResumeFade()
     external fun stopEngine()
+    external fun stopEngineWithPauseResumeFade()
     external fun isEnginePlaying(): Boolean
     external fun loadAudio(path: String)
     external fun getSupportedExtensions(): Array<String>

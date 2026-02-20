@@ -203,7 +203,11 @@ class PlaybackService : Service() {
     private fun playPlayback() {
         if (currentPath == null) return
         requestAudioFocus()
-        NativeBridge.startEngine()
+        if (shouldApplyPauseResumeFade()) {
+            NativeBridge.startEngineWithPauseResumeFade()
+        } else {
+            NativeBridge.startEngine()
+        }
         isPlaying = true
         updateMediaSessionState()
         pushNotification()
@@ -214,10 +218,24 @@ class PlaybackService : Service() {
             abandonAudioFocus()
             resumeOnFocusGain = false
         }
-        NativeBridge.stopEngine()
+        if (!shouldApplyPauseResumeFade() || !NativeBridge.isEnginePlaying()) {
+            NativeBridge.stopEngine()
+            isPlaying = false
+            updateMediaSessionState()
+            pushNotification()
+            return
+        }
+        NativeBridge.stopEngineWithPauseResumeFade()
         isPlaying = false
         updateMediaSessionState()
         pushNotification()
+    }
+
+    private fun shouldApplyPauseResumeFade(): Boolean {
+        if (!prefs.getBoolean(PREF_FADE_PAUSE_RESUME, true)) return false
+        if (currentPath.isNullOrBlank()) return false
+        // Apply only for mid-song pause/resume, not fresh starts / track changes.
+        return positionSeconds > 0.05
     }
 
     private fun stopAndClear() {
@@ -582,10 +600,10 @@ class PlaybackService : Service() {
         private const val PREFS_NAME = "silicon_player_settings"
         private const val PREF_RESPOND_MEDIA_BUTTONS = "respond_headphone_media_buttons"
         private const val PREF_PAUSE_ON_DISCONNECT = "pause_on_headphone_disconnect"
+        private const val PREF_FADE_PAUSE_RESUME = "fade_pause_resume"
         private const val PREF_AUDIO_FOCUS_INTERRUPT = "audio_focus_interrupt"
         private const val PREF_AUDIO_DUCKING = "audio_ducking"
         private const val PREF_SESSION_CURRENT_PATH = "session_current_path"
-
         private const val EXTRA_PATH = "extra_path"
         private const val EXTRA_TITLE = "extra_title"
         private const val EXTRA_ARTIST = "extra_artist"

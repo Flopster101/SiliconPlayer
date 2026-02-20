@@ -20,6 +20,7 @@ internal fun AppNavigationTrackPreferenceEffects(
     openPlayerOnTrackSelect: Boolean,
     autoPlayNextTrackOnEnd: Boolean,
     previousRestartsAfterThreshold: Boolean,
+    fadePauseResume: Boolean,
     rememberBrowserLocation: Boolean,
     onArtworkBitmapChanged: (androidx.compose.ui.graphics.ImageBitmap?) -> Unit,
     refreshRepeatModeForTrack: () -> Unit,
@@ -76,6 +77,13 @@ internal fun AppNavigationTrackPreferenceEffects(
                 previousRestartsAfterThreshold
             )
             .apply()
+    }
+
+    LaunchedEffect(fadePauseResume) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.FADE_PAUSE_RESUME, fadePauseResume)
+            .apply()
+        PlaybackService.refreshSettings(context)
     }
 
     LaunchedEffect(rememberBrowserLocation) {

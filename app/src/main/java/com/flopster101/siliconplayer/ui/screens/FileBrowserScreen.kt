@@ -53,12 +53,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.R
 import com.flopster101.siliconplayer.data.FileItem
 import com.flopster101.siliconplayer.data.FileRepository
+import com.flopster101.siliconplayer.data.ensureArchiveMounted
 import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
@@ -117,6 +120,7 @@ fun FileBrowserScreen(
     var directoryLoadJob by remember { mutableStateOf<Job?>(null) }
     var isPullRefreshing by remember { mutableStateOf(false) }
     var directoryAnimationEpoch by remember { mutableIntStateOf(0) }
+    val archiveParentDirectories = remember { mutableStateMapOf<String, String>() }
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val selectorIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
@@ -240,10 +244,43 @@ fun FileBrowserScreen(
         onBrowserLocationChanged(selectedLocationId, directory.absolutePath)
     }
 
+    fun openArchive(item: FileItem) {
+        val archiveFile = item.file
+        if (!item.isArchive || currentDirectory == null) {
+            return
+        }
+        directoryLoadJob?.cancel()
+        isLoadingDirectory = true
+        directoryLoadJob = coroutineScope.launch {
+            try {
+                val mountDirectory = withContext(Dispatchers.IO) {
+                    ensureArchiveMounted(context, archiveFile)
+                }
+                archiveFile.parentFile?.absolutePath?.let { parentPath ->
+                    archiveParentDirectories[mountDirectory.absolutePath] = parentPath
+                }
+                navigateTo(mountDirectory)
+            } catch (_: CancellationException) {
+                // Archive open was superseded by another action.
+            } finally {
+                isLoadingDirectory = false
+            }
+        }
+    }
+
     fun navigateUpWithinLocation() {
         val location = selectedLocation ?: return openBrowserHome()
         val directory = currentDirectory ?: return openBrowserHome()
         val root = location.directory
+
+        archiveParentDirectories[directory.absolutePath]?.let { parentPath ->
+            val parentDirectory = File(parentPath)
+            if (parentDirectory.exists() && parentDirectory.isDirectory) {
+                browserNavDirection = BrowserNavDirection.Backward
+                navigateTo(parentDirectory)
+                return
+            }
+        }
 
         if (directory.absolutePath == root.absolutePath) {
             openBrowserHome()
@@ -608,7 +645,9 @@ fun FileBrowserScreen(
                                     item = item,
                                     isPlaying = item.file == playingFile,
                                     onClick = {
-                                        if (item.isDirectory) {
+                                        if (item.isArchive) {
+                                            openArchive(item)
+                                        } else if (item.isDirectory) {
                                             navigateTo(item.file)
                                         } else {
                                             onFileSelected(item.file)
@@ -791,16 +830,18 @@ private fun isWithinRoot(file: File, root: File): Boolean {
 @Composable
 fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
     val subtitle by produceState(
-        initialValue = if (item.isDirectory) "Loading..." else {
+        initialValue = if (item.isDirectory && !item.isArchive) "Loading..." else {
             val format = item.file.extension.uppercase().ifBlank { "UNKNOWN" }
             "$format • ${formatFileSizeHumanReadable(item.file.length())}"
         },
         key1 = item.file.absolutePath,
-        key2 = item.isDirectory,
+        key2 = item.kind,
         key3 = item.file.lastModified()
     ) {
         value = withContext(Dispatchers.IO) {
-            if (item.isDirectory) {
+            if (item.isArchive) {
+                "ZIP archive • ${formatFileSizeHumanReadable(item.file.length())}"
+            } else if (item.isDirectory) {
                 buildFolderSummary(item.file)
             } else {
                 val format = item.file.extension.uppercase().ifBlank { "UNKNOWN" }
@@ -830,11 +871,19 @@ fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Folder,
-                        contentDescription = "Directory",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                    if (item.isArchive) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_folder_zip),
+                            contentDescription = "ZIP archive",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = "Directory",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
             } else {
                 Icon(

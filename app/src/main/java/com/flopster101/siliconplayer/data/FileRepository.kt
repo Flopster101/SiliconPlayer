@@ -9,13 +9,25 @@ class FileRepository(
     fun getFiles(directory: File): List<FileItem> {
         val files = directory.listFiles() ?: return emptyList()
         return files
-            .filter { it.isDirectory || it.extension.lowercase() in supportedExtensions }
+            .filter {
+                it.isDirectory ||
+                    it.extension.lowercase() in supportedExtensions ||
+                    isSupportedArchive(it)
+            }
             .map { file ->
+                val isArchive = isSupportedArchive(file)
+                val isDirectory = file.isDirectory || isArchive
+                val kind = when {
+                    file.isDirectory -> FileItem.Kind.Directory
+                    isArchive -> FileItem.Kind.ArchiveZip
+                    else -> FileItem.Kind.AudioFile
+                }
                 FileItem(
                     file = file,
                     name = file.name,
-                    isDirectory = file.isDirectory,
-                    size = if (file.isDirectory) 0 else file.length()
+                    isDirectory = isDirectory,
+                    size = if (isDirectory) 0 else file.length(),
+                    kind = kind
                 )
             }.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
     }

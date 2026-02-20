@@ -149,9 +149,16 @@ static void ym2149_new_output_level(ym_t * const ym)
 
   u32 i;
   s16 output;
+  const u32 active_mask =
+    ((ym->voice_mute & 1u) ? 1u : 0u) |
+    ((ym->voice_mute & (1u << 5)) ? 2u : 0u) |
+    ((ym->voice_mute & (1u << 10)) ? 4u : 0u);
 
   u16 dacstate = 0;
   for (i = 0; i < 3; i ++) {
+    if ((active_mask & (1u << i)) == 0u) {
+      continue;
+    }
     u16 mask = blep->tonegen[i].tonemix | blep->tonegen[i].flip_flop;
     mask &= blep->tonegen[i].noisemix | blep->noise_output;
     dacstate |= mask &
@@ -324,6 +331,12 @@ static int run(ym_t * const ym, s32 * output, const cycle68_t ymcycles)
 
   u32 len = 0, voice;
   s32 newevent;
+
+  /*
+   * Channel mute can change between two runs without any YM register write.
+   * Recompute baseline level so mute/unmute takes effect immediately.
+   */
+  ym2149_new_output_level(ym);
 
   /* Walk  the static list of allocated events */
   cycle68_t currcycle = 0;

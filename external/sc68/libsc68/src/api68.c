@@ -45,6 +45,8 @@
 #include "emu68/excep68.h"
 #include "emu68/ioplug68.h"
 #include "io68/io68.h"
+#include "io68/mwemul.h"
+#include "io68/ym_io.h"
 
 /* file68 includes */
 #include <sc68/file68.h>
@@ -186,6 +188,8 @@ struct _sc68_s {
   unsigned int	 playaddr;    /**< Current play address in 68 memory.    */
   int		 seek_to;     /**< Seek to this time (-1:n/a)            */
   int		 remote;      /**< Allow remote access.                  */
+  int            force_ym_mask;/**< -1:auto, else forced YM active mask   */
+  int            force_ste_on; /**< -1:auto, 0:off, 1:on for STE path     */
 
   struct {
     int org_ms;
@@ -1171,6 +1175,8 @@ sc68_t * sc68_create(sc68_create_t * create)
   if (!sc68->time.def_ms) {
     sc68->time.def_ms = TIME_DEF * 1000;
   }
+  sc68->force_ym_mask = -1;
+  sc68->force_ste_on = -1;
 
   /* aSIDifier. */
   switch (config.asid) {
@@ -1991,10 +1997,13 @@ int sc68_process(sc68_t * sc68, void * buf16st, int * _n)
 	  mixer68_blend_LR(sc68->mix.buffer, sc68->mix.buffer, sc68->mix.buflen,
 			   sc68->mix.aga_blend, 0, 0);
 	} else {
-	  if (sc68->mus->hwflags & SC68_PSG) {
-	    int err =
-	      ymio_run(sc68->ymio, (s32*)sc68->mix.buffer,
-		       sc68->mix.cycleperpass);
+		  if (sc68->mus->hwflags & SC68_PSG) {
+		    if (sc68->force_ym_mask >= 0) {
+		      ymio_active_channels(sc68->ymio, 7, sc68->force_ym_mask & 7);
+		    }
+		    int err =
+		      ymio_run(sc68->ymio, (s32*)sc68->mix.buffer,
+			       sc68->mix.cycleperpass);
 	    if (err < 0) {
 	      ret = SC68_ERROR;
 	      sc68->mix.buflen = 0;
@@ -2005,13 +2014,19 @@ int sc68_process(sc68_t * sc68, void * buf16st, int * _n)
 	    mixer68_fill(sc68->mix.buffer, sc68->mix.buflen=sc68->mix.bufreq, 0);
 	  }
 
-	  if (sc68->mus->hwflags & (SC68_DMA|SC68_LMC))
-	    /* STE / MicroWire */
-	    mw_mix(sc68->mw, (s32 *)sc68->mix.buffer, sc68->mix.buflen);
-	  else
-	    /* Else simply process with left channel duplication. */
-	    mixer68_dup_L_to_R(sc68->mix.buffer, sc68->mix.buffer,
-			       sc68->mix.buflen, 0);
+		  if (sc68->mus->hwflags & (SC68_DMA|SC68_LMC)) {
+		    if (sc68->force_ste_on >= 0 && sc68->mw) {
+		      if (sc68->force_ste_on)
+		        sc68->mw->map[MW_ACTI] |= 1;
+		      else
+		        sc68->mw->map[MW_ACTI] &= ~1;
+		    }
+		    /* STE / MicroWire */
+		    mw_mix(sc68->mw, (s32 *)sc68->mix.buffer, sc68->mix.buflen);
+		  } else
+		    /* Else simply process with left channel duplication. */
+		    mixer68_dup_L_to_R(sc68->mix.buffer, sc68->mix.buffer,
+				       sc68->mix.buflen, 0);
 	}
 
 	/* Advance time */
@@ -2635,9 +2650,26 @@ int sc68_cntl(sc68_t * sc68, int fct, ...)
   } break;
 
   case SC68_SET_OPT_INT: {
-    option68_t * opt = option68_get(va_arg(list, const char *), opt68_ALWAYS);
-    res =
-      option68_iset(opt, va_arg(list, int), opt68_ALWAYS, opt68_APP);
+    const char * key = va_arg(list, const char *);
+    const int value = va_arg(list, int);
+    option68_t * opt = option68_get(key, opt68_ALWAYS);
+    res = option68_iset(opt, value, opt68_ALWAYS, opt68_APP);
+    if (sc68 && key && !strcmp(key, "ym-chans")) {
+      /* Apply channel mask directly to active YM runtime as well. */
+      sc68->force_ym_mask = value & 7;
+      ymio_active_channels(sc68->ymio, 7, value & 7);
+      res = 0;
+    } else if (sc68 && key && !strcmp(key, "ste-enable")) {
+      /* Runtime toggle for STE DMA/sample path. */
+      sc68->force_ste_on = !!value;
+      if (sc68->mw) {
+        if (value)
+          sc68->mw->map[MW_ACTI] |= 1;
+        else
+          sc68->mw->map[MW_ACTI] &= ~1;
+      }
+      res = 0;
+    }
   } break;
 
   case SC68_GET_PCM:

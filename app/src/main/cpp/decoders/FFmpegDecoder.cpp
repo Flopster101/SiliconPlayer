@@ -81,6 +81,17 @@ std::string trimAscii(std::string value) {
     return value;
 }
 
+bool parseBoolString(const std::string& value, bool fallback) {
+    const std::string normalized = toLowerAscii(trimAscii(value));
+    if (normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on") {
+        return true;
+    }
+    if (normalized == "0" || normalized == "false" || normalized == "no" || normalized == "off") {
+        return false;
+    }
+    return fallback;
+}
+
 std::optional<double> parseDoubleStrict(const std::string& raw) {
     if (raw.empty()) return std::nullopt;
     char* end = nullptr;
@@ -397,6 +408,7 @@ void FFmpegDecoder::close() {
     hasLoopPoint = false;
     loopStartSeconds = 0.0;
     loopEndSeconds = 0.0;
+    gaplessRepeatTrack = false;
     toggleChannelNames.clear();
     toggleChannelMuted.clear();
 }
@@ -567,14 +579,22 @@ int FFmpegDecoder::read(float* buffer, int numFrames) {
         if (framesRead < numFrames) {
             int ret = decodeFrame();
             if (ret < 0) {
-                 // EOF or error. In loop-point mode, wrap to tagged loop start.
-                 if (repeatMode == 2 && hasLoopPoint) {
-                     if (!seekInternalLocked(loopStartSeconds)) {
-                         break;
-                     }
-                     continue;
-                 }
-                 break;
+                // EOF or error. In loop-point mode, wrap to tagged loop start.
+                if (repeatMode == 2 && hasLoopPoint) {
+                    if (!seekInternalLocked(loopStartSeconds)) {
+                        break;
+                    }
+                    continue;
+                }
+                // For regular repeat-track mode, optionally seek internally and continue
+                // filling this request without returning an EOF boundary gap.
+                if (repeatMode == 1 && gaplessRepeatTrack) {
+                    if (!seekInternalLocked(0.0)) {
+                        break;
+                    }
+                    continue;
+                }
+                break;
             }
         }
     }
@@ -831,6 +851,28 @@ void FFmpegDecoder::setOutputSampleRate(int sampleRate) {
 void FFmpegDecoder::setRepeatMode(int mode) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     repeatMode = mode;
+}
+
+void FFmpegDecoder::setOption(const char* name, const char* value) {
+    if (!name || !value) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    const std::string optionName(name);
+    if (optionName == "ffmpeg.gapless_repeat_track") {
+        gaplessRepeatTrack = parseBoolString(value, gaplessRepeatTrack);
+    }
+}
+
+int FFmpegDecoder::getOptionApplyPolicy(const char* name) const {
+    if (!name) {
+        return OPTION_APPLY_LIVE;
+    }
+    const std::string optionName(name);
+    if (optionName == "ffmpeg.gapless_repeat_track") {
+        return OPTION_APPLY_LIVE;
+    }
+    return OPTION_APPLY_LIVE;
 }
 
 int FFmpegDecoder::getRepeatModeCapabilities() const {

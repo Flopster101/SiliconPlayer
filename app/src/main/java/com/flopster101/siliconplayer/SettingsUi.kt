@@ -159,6 +159,7 @@ internal data class SettingsScreenState(
     val visualizationVuSmoothingPercent: Int,
     val visualizationVuRenderBackend: VisualizationRenderBackend,
     val ffmpegSampleRateHz: Int,
+    val ffmpegGaplessRepeatTrack: Boolean,
     val ffmpegCapabilities: Int,
     val openMptSampleRateHz: Int,
     val openMptCapabilities: Int,
@@ -288,6 +289,7 @@ internal data class SettingsScreenActions(
     val onResetVisualizationVuSettings: () -> Unit,
     val onResetVisualizationChannelScopeSettings: () -> Unit,
     val onFfmpegSampleRateChanged: (Int) -> Unit,
+    val onFfmpegGaplessRepeatTrackChanged: (Boolean) -> Unit,
     val onOpenMptSampleRateChanged: (Int) -> Unit,
     val onVgmPlaySampleRateChanged: (Int) -> Unit,
     val onGmeSampleRateChanged: (Int) -> Unit,
@@ -470,8 +472,10 @@ internal fun SettingsScreen(
     val onResetVisualizationVuSettings = actions.onResetVisualizationVuSettings
     val onResetVisualizationChannelScopeSettings = actions.onResetVisualizationChannelScopeSettings
     val ffmpegSampleRateHz = state.ffmpegSampleRateHz
+    val ffmpegGaplessRepeatTrack = state.ffmpegGaplessRepeatTrack
     val ffmpegCapabilities = state.ffmpegCapabilities
     val onFfmpegSampleRateChanged = actions.onFfmpegSampleRateChanged
+    val onFfmpegGaplessRepeatTrackChanged = actions.onFfmpegGaplessRepeatTrackChanged
     val openMptSampleRateHz = state.openMptSampleRateHz
     val openMptCapabilities = state.openMptCapabilities
     val onOpenMptSampleRateChanged = actions.onOpenMptSampleRateChanged
@@ -700,6 +704,7 @@ internal fun SettingsScreen(
                             state = PluginDetailRouteState(
                                 selectedPluginName = selectedPluginName,
                                 ffmpegSampleRateHz = ffmpegSampleRateHz,
+                                ffmpegGaplessRepeatTrack = ffmpegGaplessRepeatTrack,
                                 openMptSampleRateHz = openMptSampleRateHz,
                                 openMptCapabilities = openMptCapabilities,
                                 vgmPlaySampleRateHz = vgmPlaySampleRateHz,
@@ -749,6 +754,7 @@ internal fun SettingsScreen(
                                 onPluginPriorityChanged = onPluginPriorityChanged,
                                 onPluginExtensionsChanged = onPluginExtensionsChanged,
                                 onFfmpegSampleRateChanged = onFfmpegSampleRateChanged,
+                                onFfmpegGaplessRepeatTrackChanged = onFfmpegGaplessRepeatTrackChanged,
                                 onOpenMptSampleRateChanged = onOpenMptSampleRateChanged,
                                 onVgmPlaySampleRateChanged = onVgmPlaySampleRateChanged,
                                 onGmeSampleRateChanged = onGmeSampleRateChanged,

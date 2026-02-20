@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 object CorePreferenceKeys {
     const val CORE_RATE_FFMPEG = "core_rate_ffmpeg"
+    const val FFMPEG_GAPLESS_REPEAT_TRACK = "ffmpeg_gapless_repeat_track"
     const val CORE_RATE_OPENMPT = "core_rate_openmpt"
     const val CORE_RATE_VGMPLAY = "core_rate_vgmplay"
     const val CORE_RATE_GME = "core_rate_gme"
@@ -62,6 +63,7 @@ object OpenMptDefaults {
 
 object FfmpegDefaults {
     const val coreSampleRateHz = 0
+    const val gaplessRepeatTrack = true
 }
 
 object VgmPlayDefaults {

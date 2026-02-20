@@ -756,6 +756,7 @@ internal fun clearAllPluginSettingsAction(
     context: Context,
     prefs: SharedPreferences,
     onFfmpegCoreSampleRateHzChanged: (Int) -> Unit,
+    onFfmpegGaplessRepeatTrackChanged: (Boolean) -> Unit,
     onOpenMptCoreSampleRateHzChanged: (Int) -> Unit,
     onVgmPlayCoreSampleRateHzChanged: (Int) -> Unit,
     onGmeCoreSampleRateHzChanged: (Int) -> Unit,
@@ -801,6 +802,7 @@ internal fun clearAllPluginSettingsAction(
     onOpenMptSurroundEnabledChanged: (Boolean) -> Unit
 ) {
     onFfmpegCoreSampleRateHzChanged(0)
+    onFfmpegGaplessRepeatTrackChanged(FfmpegDefaults.gaplessRepeatTrack)
     onOpenMptCoreSampleRateHzChanged(OpenMptDefaults.coreSampleRateHz)
     onVgmPlayCoreSampleRateHzChanged(VgmPlayDefaults.coreSampleRateHz)
     onGmeCoreSampleRateHzChanged(GmeDefaults.coreSampleRateHz)
@@ -847,6 +849,7 @@ internal fun clearAllPluginSettingsAction(
 
     prefs.edit().apply {
         remove(CorePreferenceKeys.CORE_RATE_FFMPEG)
+        remove(CorePreferenceKeys.FFMPEG_GAPLESS_REPEAT_TRACK)
         remove(CorePreferenceKeys.CORE_RATE_OPENMPT)
         remove(CorePreferenceKeys.CORE_RATE_VGMPLAY)
         remove(CorePreferenceKeys.CORE_RATE_GME)
@@ -903,6 +906,7 @@ internal fun resetPluginSettingsAction(
     prefs: SharedPreferences,
     pluginName: String,
     onFfmpegCoreSampleRateHzChanged: (Int) -> Unit,
+    onFfmpegGaplessRepeatTrackChanged: (Boolean) -> Unit,
     onOpenMptCoreSampleRateHzChanged: (Int) -> Unit,
     onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
     onOpenMptStereoSeparationAmigaPercentChanged: (Int) -> Unit,
@@ -948,6 +952,10 @@ internal fun resetPluginSettingsAction(
     onSidPlayFpReSidFpCombinedWaveformsStrengthChanged: (Int) -> Unit
 ) {
     val optionNamesForReset = when (pluginName) {
+        "FFmpeg" -> listOf(
+            FfmpegOptionKeys.GAPLESS_REPEAT_TRACK
+        )
+
         "LibOpenMPT" -> listOf(
             "openmpt.stereo_separation_percent",
             "openmpt.stereo_separation_amiga_percent",
@@ -1014,7 +1022,11 @@ internal fun resetPluginSettingsAction(
     when (pluginName) {
         "FFmpeg" -> {
             onFfmpegCoreSampleRateHzChanged(FfmpegDefaults.coreSampleRateHz)
-            prefs.edit().remove(CorePreferenceKeys.CORE_RATE_FFMPEG).apply()
+            onFfmpegGaplessRepeatTrackChanged(FfmpegDefaults.gaplessRepeatTrack)
+            prefs.edit()
+                .remove(CorePreferenceKeys.CORE_RATE_FFMPEG)
+                .remove(CorePreferenceKeys.FFMPEG_GAPLESS_REPEAT_TRACK)
+                .apply()
         }
 
         "LibOpenMPT" -> {

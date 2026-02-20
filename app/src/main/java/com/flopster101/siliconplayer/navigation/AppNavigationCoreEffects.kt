@@ -9,6 +9,7 @@ import java.util.Locale
 internal fun AppNavigationCoreEffects(
     prefs: SharedPreferences,
     ffmpegCoreSampleRateHz: Int,
+    ffmpegGaplessRepeatTrack: Boolean,
     openMptCoreSampleRateHz: Int,
     vgmPlayCoreSampleRateHz: Int,
     gmeCoreSampleRateHz: Int,
@@ -74,6 +75,17 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(ffmpegCoreSampleRateHz) {
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_FFMPEG, ffmpegCoreSampleRateHz).apply()
         NativeBridge.setCoreOutputSampleRate("FFmpeg", ffmpegCoreSampleRateHz)
+    }
+
+    LaunchedEffect(ffmpegGaplessRepeatTrack) {
+        prefs.edit().putBoolean(CorePreferenceKeys.FFMPEG_GAPLESS_REPEAT_TRACK, ffmpegGaplessRepeatTrack).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "FFmpeg",
+            optionName = FfmpegOptionKeys.GAPLESS_REPEAT_TRACK,
+            optionValue = ffmpegGaplessRepeatTrack.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Gapless repeat track"
+        )
     }
 
     LaunchedEffect(openMptCoreSampleRateHz) {

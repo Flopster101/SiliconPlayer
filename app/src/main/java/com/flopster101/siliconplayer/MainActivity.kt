@@ -601,6 +601,7 @@ private fun AppNavigation(
 
     val settingsStates = rememberAppNavigationSettingsStates(prefs)
     var ffmpegCoreSampleRateHz by settingsStates.ffmpegCoreSampleRateHz
+    var ffmpegGaplessRepeatTrack by settingsStates.ffmpegGaplessRepeatTrack
     var openMptCoreSampleRateHz by settingsStates.openMptCoreSampleRateHz
     var vgmPlayCoreSampleRateHz by settingsStates.vgmPlayCoreSampleRateHz
     var gmeCoreSampleRateHz by settingsStates.gmeCoreSampleRateHz
@@ -1044,6 +1045,7 @@ private fun AppNavigation(
     AppNavigationCoreEffects(
         prefs = prefs,
         ffmpegCoreSampleRateHz = ffmpegCoreSampleRateHz,
+        ffmpegGaplessRepeatTrack = ffmpegGaplessRepeatTrack,
         openMptCoreSampleRateHz = openMptCoreSampleRateHz,
         vgmPlayCoreSampleRateHz = vgmPlayCoreSampleRateHz,
         gmeCoreSampleRateHz = gmeCoreSampleRateHz,
@@ -1748,6 +1750,7 @@ private fun AppNavigation(
                             )
                         },
                                     onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
+                                    onFfmpegGaplessRepeatTrackChanged = { ffmpegGaplessRepeatTrack = it },
                                     onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it },
                                     onVgmPlaySampleRateChanged = { vgmPlayCoreSampleRateHz = it },
                                     onGmeSampleRateChanged = { gmeCoreSampleRateHz = it },

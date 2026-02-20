@@ -13,6 +13,7 @@ import kotlinx.coroutines.Job
 
 internal data class AppNavigationSettingsStates(
     val ffmpegCoreSampleRateHz: MutableIntState,
+    val ffmpegGaplessRepeatTrack: MutableState<Boolean>,
     val openMptCoreSampleRateHz: MutableIntState,
     val vgmPlayCoreSampleRateHz: MutableIntState,
     val gmeCoreSampleRateHz: MutableIntState,
@@ -86,6 +87,14 @@ internal fun rememberAppNavigationSettingsStates(
 ): AppNavigationSettingsStates {
     val ffmpegCoreSampleRateHz = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CORE_RATE_FFMPEG, FfmpegDefaults.coreSampleRateHz))
+    }
+    val ffmpegGaplessRepeatTrack = remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                CorePreferenceKeys.FFMPEG_GAPLESS_REPEAT_TRACK,
+                FfmpegDefaults.gaplessRepeatTrack
+            )
+        )
     }
     val openMptCoreSampleRateHz = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CORE_RATE_OPENMPT, OpenMptDefaults.coreSampleRateHz))
@@ -340,6 +349,7 @@ internal fun rememberAppNavigationSettingsStates(
 
     return AppNavigationSettingsStates(
         ffmpegCoreSampleRateHz = ffmpegCoreSampleRateHz,
+        ffmpegGaplessRepeatTrack = ffmpegGaplessRepeatTrack,
         openMptCoreSampleRateHz = openMptCoreSampleRateHz,
         vgmPlayCoreSampleRateHz = vgmPlayCoreSampleRateHz,
         gmeCoreSampleRateHz = gmeCoreSampleRateHz,

@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.pluginsettings.FfmpegSettings
 import com.flopster101.siliconplayer.pluginsettings.GmeSettings
 import com.flopster101.siliconplayer.pluginsettings.LazyUsf2Settings
 import com.flopster101.siliconplayer.pluginsettings.OpenMptSettings
@@ -24,6 +25,7 @@ import java.util.Locale
 internal data class PluginDetailRouteState(
     val selectedPluginName: String?,
     val ffmpegSampleRateHz: Int,
+    val ffmpegGaplessRepeatTrack: Boolean,
     val openMptSampleRateHz: Int,
     val openMptCapabilities: Int,
     val vgmPlaySampleRateHz: Int,
@@ -74,6 +76,7 @@ internal data class PluginDetailRouteActions(
     val onPluginPriorityChanged: (String, Int) -> Unit,
     val onPluginExtensionsChanged: (String, Array<String>) -> Unit,
     val onFfmpegSampleRateChanged: (Int) -> Unit,
+    val onFfmpegGaplessRepeatTrackChanged: (Boolean) -> Unit,
     val onOpenMptSampleRateChanged: (Int) -> Unit,
     val onVgmPlaySampleRateChanged: (Int) -> Unit,
     val onGmeSampleRateChanged: (Int) -> Unit,
@@ -186,6 +189,14 @@ internal fun PluginDetailRouteContent(
     }
 
     val pluginSettings: PluginSettings? = when (pluginName) {
+        "FFmpeg" -> FfmpegSettings(
+            sampleRateHz = state.ffmpegSampleRateHz,
+            capabilities = selectedCoreCapabilities,
+            gaplessRepeatTrack = state.ffmpegGaplessRepeatTrack,
+            onSampleRateChanged = actions.onFfmpegSampleRateChanged,
+            onGaplessRepeatTrackChanged = actions.onFfmpegGaplessRepeatTrackChanged
+        )
+
         "LibOpenMPT" -> OpenMptSettings(
             sampleRateHz = state.openMptSampleRateHz,
             capabilities = state.openMptCapabilities,

@@ -45,6 +45,8 @@ public:
     void clearToggleChannelMutes() override;
     void setOutputSampleRate(int sampleRate) override;
     void setRepeatMode(int mode) override;
+    void setOption(const char* name, const char* value) override;
+    int getOptionApplyPolicy(const char* name) const override;
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override {
         return PLAYBACK_CAP_SEEK |
@@ -103,6 +105,7 @@ private:
     bool hasLoopPoint = false;
     double loopStartSeconds = 0.0;
     double loopEndSeconds = 0.0;
+    bool gaplessRepeatTrack = false;
 
     mutable std::mutex decodeMutex;
 

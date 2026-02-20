@@ -35,6 +35,11 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    std::vector<std::string> getToggleChannelNames() override;
+    std::vector<uint8_t> getToggleChannelAvailability() override;
+    void setToggleChannelMuted(int channelIndex, bool enabled) override;
+    bool getToggleChannelMuted(int channelIndex) const override;
+    void clearToggleChannelMutes() override;
     void setOutputSampleRate(int sampleRate) override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
@@ -63,12 +68,23 @@ private:
     std::string artist;
     std::string composer;
     std::string genre;
+    bool trackHasYm = false;
+    bool trackHasSte = false;
+    bool trackHasAmiga = false;
+    bool trackUsesAgaPath = false;
+    double playbackPositionSeconds = 0.0;
+    int lastCorePositionMs = -1;
+    std::vector<std::string> toggleChannelNames;
+    std::vector<bool> toggleChannelMuted;
     std::atomic<int> repeatMode { 0 };
 
     void closeInternalLocked();
     bool refreshTrackStateLocked();
     void refreshMetadataLocked();
     void refreshDurationLocked();
+    void updatePlaybackPositionLocked(int producedFrames);
+    void rebuildToggleChannelsLocked();
+    void applyToggleChannelMutesLocked();
     bool setTrackLocked(int track1Based);
     int processIntoLocked(float* buffer, int numFrames);
 };

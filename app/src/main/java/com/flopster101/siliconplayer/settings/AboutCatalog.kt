@@ -129,6 +129,22 @@ internal object AboutCatalog {
                 "Integrated with DS voice channel controls and interpolation quality selection.",
                 "Behavior and compatibility were cross-checked against existing 2SF player implementations."
             )
+        ),
+        AboutEntity(
+            id = "core.sc68",
+            kind = AboutEntityKind.Core,
+            name = "SC68",
+            description = "Atari ST/Amiga music playback core for SC68 and SNDH tracks.",
+            author = "Benjamin Gerard and sc68 contributors",
+            license = "GPL-3.0-or-later",
+            links = listOf(
+                AboutEntityLink("Project", "https://sourceforge.net/p/sc68/"),
+                AboutEntityLink("Source", "https://sourceforge.net/p/sc68/code/HEAD/tree/")
+            ),
+            integrationNotes = listOf(
+                "Integrated as a native decoder using libsc68 + file68 + unice68.",
+                "Current baseline targets playback, seek, subtunes, and core metadata fields."
+            )
         )
     )
 
@@ -209,7 +225,8 @@ internal object AboutCatalog {
         "Game Music Emu" to "core.gme",
         "LibSIDPlayFP" to "core.libsidplayfp",
         "LazyUSF2" to "core.lazyusf2",
-        "Vio2SF" to "core.vio2sf"
+        "Vio2SF" to "core.vio2sf",
+        "SC68" to "core.sc68"
     )
 
     private val entityById: Map<String, AboutEntity> = (coreEntries + libraryEntries).associateBy { it.id }

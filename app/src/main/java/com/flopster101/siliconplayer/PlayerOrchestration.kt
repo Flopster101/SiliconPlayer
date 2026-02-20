@@ -141,6 +141,7 @@ internal fun pluginNameForCoreName(coreName: String?): String? {
         "libsidplayfp", "sidplayfp", "sid" -> "LibSIDPlayFP"
         "lazyusf2", "lazyusf", "usf" -> "LazyUSF2"
         "vio2sf", "2sf", "mini2sf" -> "Vio2SF"
+        "sc68", "sndh" -> "SC68"
         else -> null
     }
 }

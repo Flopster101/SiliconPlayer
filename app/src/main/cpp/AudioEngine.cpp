@@ -7,6 +7,7 @@
 #include "decoders/LibSidPlayFpDecoder.h"
 #include "decoders/LazyUsf2Decoder.h"
 #include "decoders/Vio2sfDecoder.h"
+#include "decoders/Sc68Decoder.h"
 #include <android/log.h>
 #include <cmath>
 #include <cstring>
@@ -173,6 +174,10 @@ namespace {
             DecoderRegistry::getInstance().registerDecoder("Vio2SF", Vio2sfDecoder::getSupportedExtensions(), []() {
                 return std::make_unique<Vio2sfDecoder>();
             }, 9);
+
+            DecoderRegistry::getInstance().registerDecoder("SC68", Sc68Decoder::getSupportedExtensions(), []() {
+                return std::make_unique<Sc68Decoder>();
+            }, 11);
         }
     };
     static DecoderRegistration registration;

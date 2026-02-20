@@ -30,6 +30,7 @@ add_library(
         decoders/LibSidPlayFpDecoder.cpp
         decoders/LazyUsf2Decoder.cpp
         decoders/Vio2sfDecoder.cpp
+        decoders/Sc68Decoder.cpp
         decoders/CPConvStub.c
 )
 
@@ -103,6 +104,16 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
     add_library(libvio2sf STATIC IMPORTED)
     set_target_properties(libvio2sf PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libvio2sf.a")
 
+    # Import sc68 stack (Static)
+    add_library(libsc68 STATIC IMPORTED)
+    set_target_properties(libsc68 PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libsc68.a")
+
+    add_library(libfile68 STATIC IMPORTED)
+    set_target_properties(libfile68 PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libfile68.a")
+
+    add_library(libunice68 STATIC IMPORTED)
+    set_target_properties(libunice68 PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libunice68.a")
+
     # Import libsidplayfp + libresidfp (Static)
     add_library(libsidplayfp STATIC IMPORTED)
     set_target_properties(libsidplayfp PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libsidplayfp.a")
@@ -143,6 +154,9 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
             liblazyusf2
             libvio2sf
             libpsflib
+            libsc68
+            libfile68
+            libunice68
             libsidplayfp
             libresidfp
             libresid

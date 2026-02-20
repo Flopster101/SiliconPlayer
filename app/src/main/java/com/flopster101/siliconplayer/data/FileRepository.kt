@@ -29,7 +29,12 @@ class FileRepository(
                     size = if (isDirectory) 0 else file.length(),
                     kind = kind
                 )
-            }.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
+            }.sortedWith(
+                compareBy<FileItem>(
+                    { if (it.kind == FileItem.Kind.Directory) 0 else 1 },
+                    { it.name.lowercase() }
+                )
+            )
     }
 
     fun getRootDirectory(): File {

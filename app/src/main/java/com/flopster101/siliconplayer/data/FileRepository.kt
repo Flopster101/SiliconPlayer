@@ -26,7 +26,11 @@ class FileRepository(
                     file = file,
                     name = file.name,
                     isDirectory = isDirectory,
-                    size = if (isDirectory) 0 else file.length(),
+                    size = when (kind) {
+                        FileItem.Kind.Directory -> 0L
+                        FileItem.Kind.ArchiveZip -> file.length()
+                        FileItem.Kind.AudioFile -> file.length()
+                    },
                     kind = kind
                 )
             }.sortedWith(

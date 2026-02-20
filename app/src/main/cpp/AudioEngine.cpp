@@ -1134,7 +1134,10 @@ bool AudioEngine::start() {
                 decoderRenderSampleRate = decoder->getSampleRate();
                 resetResamplerStateLocked();
                 const double durationNow = decoder->getDuration();
-                if (durationNow > 0.0 && positionSeconds.load() >= (durationNow - 0.01)) {
+                const bool loopPointRepeatMode = repeatMode.load() == 2;
+                if (durationNow > 0.0 &&
+                    !loopPointRepeatMode &&
+                    positionSeconds.load() >= (durationNow - 0.01)) {
                     decoder->seek(0.0);
                     positionSeconds.store(0.0);
                     resetResamplerStateLocked();

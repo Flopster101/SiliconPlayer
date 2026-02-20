@@ -45,8 +45,7 @@ internal class Sc68Settings(
                     selectedValue = ymEngine,
                     options = listOf(
                         IntChoice(0, "BLEP"),
-                        IntChoice(1, "Pulse"),
-                        IntChoice(2, "Dump")
+                        IntChoice(1, "Pulse")
                     ),
                     onSelected = onYmEngineChanged
                 )

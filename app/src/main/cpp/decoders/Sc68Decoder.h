@@ -121,6 +121,7 @@ private:
     void updatePlaybackPositionLocked(int producedFrames);
     void rebuildToggleChannelsLocked();
     void applyToggleChannelMutesLocked();
+    void applyCoreDefaultsLocked();
     void applyCoreOptionsLocked();
     bool setTrackLocked(int track1Based);
     int processIntoLocked(float* buffer, int numFrames);

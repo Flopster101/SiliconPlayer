@@ -177,7 +177,7 @@ internal fun AppNavigationCoreEffects(
     }
 
     LaunchedEffect(sc68YmEngine) {
-        val normalized = sc68YmEngine.coerceIn(0, 2)
+        val normalized = sc68YmEngine.coerceIn(0, 1)
         prefs.edit().putInt(CorePreferenceKeys.SC68_YM_ENGINE, normalized).apply()
         applyCoreOptionWithPolicy(
             coreName = "SC68",

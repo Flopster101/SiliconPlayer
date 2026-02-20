@@ -118,6 +118,16 @@ bool equalsIgnoreCase(const char* a, const char* b) {
     return *a == '\0' && *b == '\0';
 }
 
+int toSc68AsidMode(const int optionAsid) {
+    if (optionAsid == 1) {
+        return SC68_ASID_ON;
+    }
+    if (optionAsid >= 2) {
+        return SC68_ASID_FORCE;
+    }
+    return SC68_ASID_OFF;
+}
+
 int parseIntString(const char* value, int fallback) {
     if (!value || value[0] == '\0') return fallback;
     char* end = nullptr;
@@ -226,6 +236,10 @@ bool Sc68Decoder::open(const char* path) {
         LOGE("sc68_init failed");
         return false;
     }
+
+    // Some options (for example YM engine model) are consumed when SC68 creates
+    // chip/runtime state, so push defaults first.
+    applyCoreDefaultsLocked();
 
     sc68_create_t create{};
     create.sampling_rate = static_cast<unsigned>(requestedSampleRateHz > 0 ? requestedSampleRateHz : kDefaultSampleRateHz);
@@ -553,12 +567,7 @@ void Sc68Decoder::applyToggleChannelMutesLocked() {
 
 void Sc68Decoder::applyCoreOptionsLocked() {
     if (!handle) return;
-    int asidMode = SC68_ASID_OFF;
-    if (optionAsid == 1) {
-        asidMode = SC68_ASID_ON;
-    } else if (optionAsid >= 2) {
-        asidMode = SC68_ASID_FORCE;
-    }
+    const int asidMode = toSc68AsidMode(optionAsid);
     sc68_cntl(handle, SC68_SET_ASID, asidMode);
     sc68_cntl(handle, SC68_SET_OPT_INT, "default-time", optionDefaultTimeSeconds);
     sc68_cntl(handle, SC68_SET_OPT_INT, "ym-engine", optionYmEngine);
@@ -566,6 +575,17 @@ void Sc68Decoder::applyCoreOptionsLocked() {
     sc68_cntl(handle, SC68_SET_OPT_INT, "amiga-filter", optionAmigaFilter ? 1 : 0);
     sc68_cntl(handle, SC68_SET_OPT_INT, "amiga-blend", optionAmigaBlend);
     sc68_cntl(handle, SC68_SET_OPT_INT, "amiga-clock", optionAmigaClock);
+}
+
+void Sc68Decoder::applyCoreDefaultsLocked() {
+    const int asidMode = toSc68AsidMode(optionAsid);
+    sc68_cntl(nullptr, SC68_SET_ASID, asidMode);
+    sc68_cntl(nullptr, SC68_SET_OPT_INT, "default-time", optionDefaultTimeSeconds);
+    sc68_cntl(nullptr, SC68_SET_OPT_INT, "ym-engine", optionYmEngine);
+    sc68_cntl(nullptr, SC68_SET_OPT_INT, "ym-volmodel", optionYmVolModel);
+    sc68_cntl(nullptr, SC68_SET_OPT_INT, "amiga-filter", optionAmigaFilter ? 1 : 0);
+    sc68_cntl(nullptr, SC68_SET_OPT_INT, "amiga-blend", optionAmigaBlend);
+    sc68_cntl(nullptr, SC68_SET_OPT_INT, "amiga-clock", optionAmigaClock);
 }
 
 int Sc68Decoder::processIntoLocked(float* buffer, int numFrames) {
@@ -934,7 +954,7 @@ void Sc68Decoder::setOption(const char* name, const char* value) {
     } else if (optionName == "sc68.default_time_seconds") {
         optionDefaultTimeSeconds = std::clamp(parseIntString(value, optionDefaultTimeSeconds), 0, 24 * 60 * 60 - 1);
     } else if (optionName == "sc68.ym_engine") {
-        optionYmEngine = std::clamp(parseIntString(value, optionYmEngine), 0, 2);
+        optionYmEngine = std::clamp(parseIntString(value, optionYmEngine), 0, 1);
     } else if (optionName == "sc68.ym_volmodel") {
         optionYmVolModel = std::clamp(parseIntString(value, optionYmVolModel), 0, 1);
     } else if (optionName == "sc68.amiga_filter") {
@@ -947,7 +967,9 @@ void Sc68Decoder::setOption(const char* name, const char* value) {
         return;
     }
 
-    applyCoreOptionsLocked();
+    if (handle) {
+        applyCoreOptionsLocked();
+    }
     applyToggleChannelMutesLocked();
 }
 

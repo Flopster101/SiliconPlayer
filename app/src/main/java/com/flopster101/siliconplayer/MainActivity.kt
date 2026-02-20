@@ -141,6 +141,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        NativeBridge.installContext(applicationContext)
         applyRemoteSourceCachePolicyOnLaunch(this, cacheDir)
         applyArchiveMountCachePolicyOnLaunch(this, cacheDir)
         if (shouldOpenPlayerFromNotification(intent)) {

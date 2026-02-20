@@ -175,6 +175,69 @@ internal fun resolveArchiveSourceToMountedFile(
     return targetFile
 }
 
+internal fun resolveArchiveMountedCompanionPath(
+    basePath: String?,
+    requestedPath: String?
+): String? {
+    val base = basePath?.trim().orEmpty().takeIf { it.isNotBlank() } ?: return null
+    val requestedRaw = requestedPath?.trim().orEmpty().takeIf { it.isNotBlank() } ?: return null
+    val baseFile = File(base)
+    val mountRoot = findArchiveMountRoot(baseFile) ?: return null
+    val mountCanonical = mountRoot.canonicalPath
+    val mountCanonicalPrefix = "$mountCanonical${File.separator}"
+
+    val resolvedRequested = runCatching {
+        val normalizedRequested = requestedRaw.replace('\\', '/')
+        val requestedAsFile = File(normalizedRequested)
+        val candidate = if (requestedAsFile.isAbsolute) {
+            requestedAsFile
+        } else {
+            File(baseFile.parentFile ?: mountRoot, normalizedRequested)
+        }
+        candidate.canonicalFile
+    }.getOrNull() ?: return null
+
+    val requestedCanonical = resolvedRequested.canonicalPath
+    if (requestedCanonical != mountCanonical && !requestedCanonical.startsWith(mountCanonicalPrefix)) {
+        return null
+    }
+    if (resolvedRequested.isDirectory) {
+        return null
+    }
+
+    val readyMarker = File(mountRoot, ARCHIVE_READY_MARKER)
+    if (!readyMarker.exists() || !readyMarker.isFile) {
+        return null
+    }
+    val archivePath = parseArchivePathFromReadyMarker(readyMarker) ?: return null
+    val archiveFile = File(archivePath)
+    if (!isSupportedArchive(archiveFile) || !archiveFile.exists() || !archiveFile.isFile) {
+        return null
+    }
+
+    val relativeEntryPath = requestedCanonical
+        .removePrefix(mountCanonical)
+        .trimStart(File.separatorChar)
+        .replace('\\', '/')
+        .trimStart('/')
+    if (relativeEntryPath.isBlank()) {
+        return null
+    }
+
+    ensureArchiveEntryExtracted(
+        archiveFile = archiveFile,
+        mountDir = mountRoot,
+        entryPath = relativeEntryPath,
+        outputFile = resolvedRequested
+    )
+    touchArchiveMountMarker(readyMarker)
+    return if (resolvedRequested.exists() && resolvedRequested.isFile) {
+        resolvedRequested.absolutePath
+    } else {
+        null
+    }
+}
+
 internal fun parseArchiveLogicalPath(path: String?): Pair<String, String?>? {
     val raw = path?.trim().orEmpty()
     if (raw.isBlank()) return null
@@ -348,6 +411,28 @@ private fun sha1Hex(value: String): String {
             append((b.toInt() and 0xF).toString(16))
         }
     }
+}
+
+private fun findArchiveMountRoot(file: File): File? {
+    var current: File? = runCatching { file.canonicalFile }.getOrNull()
+    while (current != null) {
+        val marker = File(current, ARCHIVE_READY_MARKER)
+        if (marker.exists() && marker.isFile) {
+            return current
+        }
+        current = current.parentFile
+    }
+    return null
+}
+
+private fun parseArchivePathFromReadyMarker(marker: File): String? {
+    val stamp = runCatching { marker.readText() }.getOrNull()?.trim().orEmpty()
+    if (stamp.isBlank()) return null
+    val lastSep = stamp.lastIndexOf('|')
+    if (lastSep <= 0) return null
+    val secondLastSep = stamp.lastIndexOf('|', startIndex = lastSep - 1)
+    if (secondLastSep <= 0) return null
+    return stamp.substring(0, secondLastSep).trim().takeIf { it.isNotBlank() }
 }
 
 private fun ensureArchiveEntryExtracted(

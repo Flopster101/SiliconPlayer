@@ -1,5 +1,8 @@
 package com.flopster101.siliconplayer
 
+import android.content.Context
+import com.flopster101.siliconplayer.data.resolveArchiveMountedCompanionPath
+
 object NativeBridge {
     const val CHANNEL_SCOPE_TEXT_STATE_STRIDE = 8
     const val CHANNEL_SCOPE_TEXT_FLAG_ACTIVE = 1 shl 0
@@ -8,6 +11,22 @@ object NativeBridge {
 
     init {
         System.loadLibrary("siliconplayer")
+    }
+
+    @Volatile
+    private var appContext: Context? = null
+
+    fun installContext(context: Context) {
+        appContext = context.applicationContext
+    }
+
+    @JvmStatic
+    fun resolveArchiveCompanionPathForNative(basePath: String?, requestedPath: String?): String? {
+        if (appContext == null) return null
+        return resolveArchiveMountedCompanionPath(
+            basePath = basePath,
+            requestedPath = requestedPath
+        )
     }
 
     external fun startEngine()

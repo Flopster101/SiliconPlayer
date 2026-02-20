@@ -11,6 +11,84 @@
 static AudioEngine *audioEngine = nullptr;
 static std::mutex engineMutex;
 static jstring toJString(JNIEnv* env, std::string_view value);
+static JavaVM* gJavaVm = nullptr;
+static jclass gNativeBridgeClass = nullptr;
+static jmethodID gResolveArchiveCompanionMethod = nullptr;
+
+std::string resolveArchiveCompanionPathForNative(
+        const std::string& basePath,
+        const std::string& requestedPath
+) {
+    if (gJavaVm == nullptr || gNativeBridgeClass == nullptr || gResolveArchiveCompanionMethod == nullptr) {
+        return {};
+    }
+    JNIEnv* env = nullptr;
+    bool didAttach = false;
+    const jint getEnvResult = gJavaVm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6);
+    if (getEnvResult == JNI_EDETACHED) {
+        if (gJavaVm->AttachCurrentThread(&env, nullptr) != JNI_OK || env == nullptr) {
+            return {};
+        }
+        didAttach = true;
+    } else if (getEnvResult != JNI_OK || env == nullptr) {
+        return {};
+    }
+
+    std::string resolvedPath;
+    jstring jBasePath = env->NewStringUTF(basePath.c_str());
+    jstring jRequestedPath = env->NewStringUTF(requestedPath.c_str());
+    jobject jResolvedObj = env->CallStaticObjectMethod(
+            gNativeBridgeClass,
+            gResolveArchiveCompanionMethod,
+            jBasePath,
+            jRequestedPath
+    );
+    if (!env->ExceptionCheck() && jResolvedObj != nullptr) {
+        auto* jResolved = reinterpret_cast<jstring>(jResolvedObj);
+        const char* utf = env->GetStringUTFChars(jResolved, nullptr);
+        if (utf != nullptr) {
+            resolvedPath = utf;
+            env->ReleaseStringUTFChars(jResolved, utf);
+        }
+        env->DeleteLocalRef(jResolved);
+    } else if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+    env->DeleteLocalRef(jRequestedPath);
+    env->DeleteLocalRef(jBasePath);
+    if (didAttach) {
+        gJavaVm->DetachCurrentThread();
+    }
+    return resolvedPath;
+}
+
+extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
+    gJavaVm = vm;
+    JNIEnv* env = nullptr;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK || env == nullptr) {
+        return JNI_ERR;
+    }
+
+    jclass localNativeBridgeClass = env->FindClass("com/flopster101/siliconplayer/NativeBridge");
+    if (localNativeBridgeClass == nullptr) {
+        return JNI_ERR;
+    }
+    gNativeBridgeClass = reinterpret_cast<jclass>(env->NewGlobalRef(localNativeBridgeClass));
+    env->DeleteLocalRef(localNativeBridgeClass);
+    if (gNativeBridgeClass == nullptr) {
+        return JNI_ERR;
+    }
+
+    gResolveArchiveCompanionMethod = env->GetStaticMethodID(
+            gNativeBridgeClass,
+            "resolveArchiveCompanionPathForNative",
+            "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;"
+    );
+    if (gResolveArchiveCompanionMethod == nullptr) {
+        return JNI_ERR;
+    }
+    return JNI_VERSION_1_6;
+}
 
 static void ensureEngine() {
     std::lock_guard<std::mutex> lock(engineMutex);

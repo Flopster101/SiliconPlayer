@@ -22,6 +22,11 @@ extern "C" {
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
+extern std::string resolveArchiveCompanionPathForNative(
+        const std::string& basePath,
+        const std::string& requestedPath
+);
+
 namespace {
 constexpr int kNativeSampleRate = 44100;
 constexpr int kNativeChannels = 2;
@@ -34,8 +39,11 @@ struct PsfStatusContext {
     const char* stage = "?";
 };
 
+struct PsfOpenContext {
+    std::string sourcePath;
+};
+
 static void* stdioFopen(void* context, const char* path) {
-    (void)context;
     if (!path) return nullptr;
     std::string normalized(path);
     std::replace(normalized.begin(), normalized.end(), '\\', '/');
@@ -43,7 +51,40 @@ static void* stdioFopen(void* context, const char* path) {
     if (normalized.rfind(kFileScheme, 0) == 0) {
         normalized.erase(0, std::strlen(kFileScheme));
     }
-    return std::fopen(normalized.c_str(), "rb");
+
+    const auto* openContext = static_cast<const PsfOpenContext*>(context);
+    std::string candidatePath = normalized;
+    if (openContext != nullptr && !openContext->sourcePath.empty()) {
+        const std::string resolvedPath = resolveArchiveCompanionPathForNative(
+                openContext->sourcePath,
+                normalized
+        );
+        if (!resolvedPath.empty()) {
+            candidatePath = resolvedPath;
+        }
+    }
+
+    FILE* handle = std::fopen(candidatePath.c_str(), "rb");
+    if (handle == nullptr) {
+        return nullptr;
+    }
+
+    // If a placeholder file slipped through, force one more resolver pass and reopen.
+    std::error_code sizeError;
+    const auto candidateSize = std::filesystem::file_size(candidatePath, sizeError);
+    if (!sizeError && candidateSize == 0 && openContext != nullptr && !openContext->sourcePath.empty()) {
+        std::fclose(handle);
+        handle = nullptr;
+        const std::string resolvedPath = resolveArchiveCompanionPathForNative(
+                openContext->sourcePath,
+                normalized
+        );
+        if (resolvedPath.empty()) {
+            return nullptr;
+        }
+        handle = std::fopen(resolvedPath.c_str(), "rb");
+    }
+    return handle;
 }
 
 static size_t stdioFread(void* buffer, size_t size, size_t count, void* handle) {
@@ -65,16 +106,6 @@ static long stdioFtell(void* handle) {
     if (!handle) return -1;
     return std::ftell(static_cast<FILE*>(handle));
 }
-
-static const psf_file_callbacks kStdIoCallbacks = {
-        "\\/:",
-        nullptr,
-        stdioFopen,
-        stdioFread,
-        stdioFseek,
-        stdioFclose,
-        stdioFtell
-};
 
 static bool equalsIgnoreCase(const char* lhs, const char* rhs) {
     if (!lhs || !rhs) return false;
@@ -417,13 +448,25 @@ bool Vio2sfDecoder::open(const char* path) {
         return false;
     }
     sourcePath = path;
+    const PsfOpenContext openContext {
+        sourcePath
+    };
+    const psf_file_callbacks ioCallbacks = {
+            "\\/:",
+            const_cast<PsfOpenContext*>(&openContext),
+            stdioFopen,
+            stdioFread,
+            stdioFseek,
+            stdioFclose,
+            stdioFtell
+    };
     PsfStatusContext metadataStatusContext{"meta"};
     PsfStatusContext coreStatusContext{"core"};
 
     MetadataState metadata;
     const int metadataLoadResult = psf_load(
             path,
-            &kStdIoCallbacks,
+            &ioCallbacks,
             0x24,
             nullptr,
             nullptr,
@@ -440,7 +483,7 @@ bool Vio2sfDecoder::open(const char* path) {
 
     const int coreLoadResult = psf_load(
             path,
-            &kStdIoCallbacks,
+            &ioCallbacks,
             0x24,
             twosfLoader,
             &loaderState,

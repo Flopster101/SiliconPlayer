@@ -17,6 +17,7 @@ import com.flopster101.siliconplayer.pluginsettings.LazyUsf2Settings
 import com.flopster101.siliconplayer.pluginsettings.OpenMptSettings
 import com.flopster101.siliconplayer.pluginsettings.PluginSettings
 import com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings
+import com.flopster101.siliconplayer.pluginsettings.Sc68Settings
 import com.flopster101.siliconplayer.pluginsettings.SidPlayFpSettings
 import com.flopster101.siliconplayer.pluginsettings.Vio2sfSettings
 import com.flopster101.siliconplayer.pluginsettings.VgmPlaySettings
@@ -69,7 +70,15 @@ internal data class PluginDetailRouteState(
     val sidPlayFpReSidFpFastSampling: Boolean,
     val sidPlayFpReSidFpCombinedWaveformsStrength: Int,
     val lazyUsf2UseHleAudio: Boolean,
-    val vio2sfInterpolationQuality: Int
+    val vio2sfInterpolationQuality: Int,
+    val sc68SamplingRateHz: Int,
+    val sc68Asid: Int,
+    val sc68DefaultTimeSeconds: Int,
+    val sc68YmEngine: Int,
+    val sc68YmVolModel: Int,
+    val sc68AmigaFilter: Boolean,
+    val sc68AmigaBlend: Int,
+    val sc68AmigaClock: Int
 )
 
 internal data class PluginDetailRouteActions(
@@ -119,7 +128,15 @@ internal data class PluginDetailRouteActions(
     val onSidPlayFpReSidFpFastSamplingChanged: (Boolean) -> Unit,
     val onSidPlayFpReSidFpCombinedWaveformsStrengthChanged: (Int) -> Unit,
     val onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
-    val onVio2sfInterpolationQualityChanged: (Int) -> Unit
+    val onVio2sfInterpolationQualityChanged: (Int) -> Unit,
+    val onSc68SamplingRateHzChanged: (Int) -> Unit,
+    val onSc68AsidChanged: (Int) -> Unit,
+    val onSc68DefaultTimeSecondsChanged: (Int) -> Unit,
+    val onSc68YmEngineChanged: (Int) -> Unit,
+    val onSc68YmVolModelChanged: (Int) -> Unit,
+    val onSc68AmigaFilterChanged: (Boolean) -> Unit,
+    val onSc68AmigaBlendChanged: (Int) -> Unit,
+    val onSc68AmigaClockChanged: (Int) -> Unit
 )
 
 @Composable
@@ -157,6 +174,7 @@ internal fun PluginDetailRouteContent(
         "Game Music Emu" -> state.gmeSampleRateHz
         "LibSIDPlayFP" -> state.sidPlayFpSampleRateHz
         "LazyUSF2" -> state.lazyUsf2SampleRateHz
+        "SC68" -> state.sc68SamplingRateHz
         else -> fixedSampleRateHz
     }
     val onSampleRateSelected: ((Int) -> Unit)? = when (pluginName) {
@@ -166,6 +184,7 @@ internal fun PluginDetailRouteContent(
         "Game Music Emu" -> actions.onGmeSampleRateChanged
         "LibSIDPlayFP" -> actions.onSidPlayFpSampleRateChanged
         "LazyUSF2" -> actions.onLazyUsf2SampleRateChanged
+        "SC68" -> actions.onSc68SamplingRateHzChanged
         else -> null
     }
     val fixedRateLabel = if (fixedSampleRateHz > 0) {
@@ -296,6 +315,21 @@ internal fun PluginDetailRouteContent(
         "Vio2SF" -> Vio2sfSettings(
             interpolationQuality = state.vio2sfInterpolationQuality,
             onInterpolationQualityChanged = actions.onVio2sfInterpolationQualityChanged
+        )
+
+        "SC68" -> Sc68Settings(
+            asid = state.sc68Asid,
+            ymEngine = state.sc68YmEngine,
+            ymVolModel = state.sc68YmVolModel,
+            amigaFilter = state.sc68AmigaFilter,
+            amigaBlend = state.sc68AmigaBlend,
+            amigaClock = state.sc68AmigaClock,
+            onAsidChanged = actions.onSc68AsidChanged,
+            onYmEngineChanged = actions.onSc68YmEngineChanged,
+            onYmVolModelChanged = actions.onSc68YmVolModelChanged,
+            onAmigaFilterChanged = actions.onSc68AmigaFilterChanged,
+            onAmigaBlendChanged = actions.onSc68AmigaBlendChanged,
+            onAmigaClockChanged = actions.onSc68AmigaClockChanged
         )
 
         else -> null

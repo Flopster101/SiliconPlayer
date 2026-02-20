@@ -17,6 +17,14 @@ internal fun AppNavigationCoreEffects(
     lazyUsf2CoreSampleRateHz: Int,
     lazyUsf2UseHleAudio: Boolean,
     vio2sfInterpolationQuality: Int,
+    sc68SamplingRateHz: Int,
+    sc68Asid: Int,
+    sc68DefaultTimeSeconds: Int,
+    sc68YmEngine: Int,
+    sc68YmVolModel: Int,
+    sc68AmigaFilter: Boolean,
+    sc68AmigaBlend: Int,
+    sc68AmigaClock: Int,
     sidPlayFpBackend: Int,
     sidPlayFpClockMode: Int,
     sidPlayFpSidModelMode: Int,
@@ -135,6 +143,95 @@ internal fun AppNavigationCoreEffects(
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
             optionLabel = "Interpolation quality"
+        )
+    }
+
+    LaunchedEffect(sc68SamplingRateHz) {
+        val normalized = if (sc68SamplingRateHz <= 0) 0 else sc68SamplingRateHz.coerceIn(8000, 192000)
+        prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_SC68, normalized).apply()
+        NativeBridge.setCoreOutputSampleRate("SC68", normalized)
+    }
+
+    LaunchedEffect(sc68Asid) {
+        val normalized = sc68Asid.coerceIn(0, 2)
+        prefs.edit().putInt(CorePreferenceKeys.SC68_ASID, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "SC68",
+            optionName = Sc68OptionKeys.ASID,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "aSID filter"
+        )
+    }
+
+    LaunchedEffect(sc68DefaultTimeSeconds) {
+        val normalized = sc68DefaultTimeSeconds.coerceIn(0, 24 * 60 * 60 - 1)
+        prefs.edit().putInt(CorePreferenceKeys.SC68_DEFAULT_TIME_SECONDS, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "SC68",
+            optionName = Sc68OptionKeys.DEFAULT_TIME_SECONDS,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Default track time"
+        )
+    }
+
+    LaunchedEffect(sc68YmEngine) {
+        val normalized = sc68YmEngine.coerceIn(0, 2)
+        prefs.edit().putInt(CorePreferenceKeys.SC68_YM_ENGINE, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "SC68",
+            optionName = Sc68OptionKeys.YM_ENGINE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "YM engine"
+        )
+    }
+
+    LaunchedEffect(sc68YmVolModel) {
+        val normalized = sc68YmVolModel.coerceIn(0, 1)
+        prefs.edit().putInt(CorePreferenceKeys.SC68_YM_VOLMODEL, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "SC68",
+            optionName = Sc68OptionKeys.YM_VOLMODEL,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "YM volume model"
+        )
+    }
+
+    LaunchedEffect(sc68AmigaFilter) {
+        prefs.edit().putBoolean(CorePreferenceKeys.SC68_AMIGA_FILTER, sc68AmigaFilter).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "SC68",
+            optionName = Sc68OptionKeys.AMIGA_FILTER,
+            optionValue = sc68AmigaFilter.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Amiga filter"
+        )
+    }
+
+    LaunchedEffect(sc68AmigaBlend) {
+        val normalized = sc68AmigaBlend.coerceIn(0, 255)
+        prefs.edit().putInt(CorePreferenceKeys.SC68_AMIGA_BLEND, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "SC68",
+            optionName = Sc68OptionKeys.AMIGA_BLEND,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Amiga blend"
+        )
+    }
+
+    LaunchedEffect(sc68AmigaClock) {
+        val normalized = sc68AmigaClock.coerceIn(0, 1)
+        prefs.edit().putInt(CorePreferenceKeys.SC68_AMIGA_CLOCK, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "SC68",
+            optionName = Sc68OptionKeys.AMIGA_CLOCK,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Amiga clock"
         )
     }
 

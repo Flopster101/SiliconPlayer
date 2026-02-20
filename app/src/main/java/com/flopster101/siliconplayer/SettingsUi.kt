@@ -176,6 +176,14 @@ internal data class SettingsScreenState(
     val lazyUsf2SampleRateHz: Int,
     val lazyUsf2UseHleAudio: Boolean,
     val vio2sfInterpolationQuality: Int,
+    val sc68SamplingRateHz: Int,
+    val sc68Asid: Int,
+    val sc68DefaultTimeSeconds: Int,
+    val sc68YmEngine: Int,
+    val sc68YmVolModel: Int,
+    val sc68AmigaFilter: Boolean,
+    val sc68AmigaBlend: Int,
+    val sc68AmigaClock: Int,
     val sidPlayFpBackend: Int,
     val sidPlayFpClockMode: Int,
     val sidPlayFpSidModelMode: Int,
@@ -310,6 +318,14 @@ internal data class SettingsScreenActions(
     val onLazyUsf2SampleRateChanged: (Int) -> Unit,
     val onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
     val onVio2sfInterpolationQualityChanged: (Int) -> Unit,
+    val onSc68SamplingRateHzChanged: (Int) -> Unit,
+    val onSc68AsidChanged: (Int) -> Unit,
+    val onSc68DefaultTimeSecondsChanged: (Int) -> Unit,
+    val onSc68YmEngineChanged: (Int) -> Unit,
+    val onSc68YmVolModelChanged: (Int) -> Unit,
+    val onSc68AmigaFilterChanged: (Boolean) -> Unit,
+    val onSc68AmigaBlendChanged: (Int) -> Unit,
+    val onSc68AmigaClockChanged: (Int) -> Unit,
     val onSidPlayFpBackendChanged: (Int) -> Unit,
     val onSidPlayFpClockModeChanged: (Int) -> Unit,
     val onSidPlayFpSidModelModeChanged: (Int) -> Unit,
@@ -774,7 +790,15 @@ internal fun SettingsScreen(
                                 sidPlayFpReSidFpFastSampling = sidPlayFpReSidFpFastSampling,
                                 sidPlayFpReSidFpCombinedWaveformsStrength = sidPlayFpReSidFpCombinedWaveformsStrength,
                                 lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
-                                vio2sfInterpolationQuality = vio2sfInterpolationQuality
+                                vio2sfInterpolationQuality = vio2sfInterpolationQuality,
+                                sc68SamplingRateHz = state.sc68SamplingRateHz,
+                                sc68Asid = state.sc68Asid,
+                                sc68DefaultTimeSeconds = state.sc68DefaultTimeSeconds,
+                                sc68YmEngine = state.sc68YmEngine,
+                                sc68YmVolModel = state.sc68YmVolModel,
+                                sc68AmigaFilter = state.sc68AmigaFilter,
+                                sc68AmigaBlend = state.sc68AmigaBlend,
+                                sc68AmigaClock = state.sc68AmigaClock
                             ),
                             actions = PluginDetailRouteActions(
                                 onPluginPriorityChanged = onPluginPriorityChanged,
@@ -823,7 +847,15 @@ internal fun SettingsScreen(
                                 onSidPlayFpReSidFpFastSamplingChanged = onSidPlayFpReSidFpFastSamplingChanged,
                                 onSidPlayFpReSidFpCombinedWaveformsStrengthChanged = onSidPlayFpReSidFpCombinedWaveformsStrengthChanged,
                                 onLazyUsf2UseHleAudioChanged = onLazyUsf2UseHleAudioChanged,
-                                onVio2sfInterpolationQualityChanged = onVio2sfInterpolationQualityChanged
+                                onVio2sfInterpolationQualityChanged = onVio2sfInterpolationQualityChanged,
+                                onSc68SamplingRateHzChanged = actions.onSc68SamplingRateHzChanged,
+                                onSc68AsidChanged = actions.onSc68AsidChanged,
+                                onSc68DefaultTimeSecondsChanged = actions.onSc68DefaultTimeSecondsChanged,
+                                onSc68YmEngineChanged = actions.onSc68YmEngineChanged,
+                                onSc68YmVolModelChanged = actions.onSc68YmVolModelChanged,
+                                onSc68AmigaFilterChanged = actions.onSc68AmigaFilterChanged,
+                                onSc68AmigaBlendChanged = actions.onSc68AmigaBlendChanged,
+                                onSc68AmigaClockChanged = actions.onSc68AmigaClockChanged
                             )
                         )
                     }

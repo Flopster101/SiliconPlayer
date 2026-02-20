@@ -59,6 +59,8 @@ public:
     int getFixedSampleRateHz() const override;
     double getPlaybackPositionSeconds() override;
     TimelineMode getTimelineMode() const override { return TimelineMode::ContinuousLinear; }
+    void setOption(const char* name, const char* value) override;
+    int getOptionApplyPolicy(const char* name) const override;
 
     const char* getName() const override { return "SC68"; }
     static std::vector<std::string> getSupportedExtensions();
@@ -98,6 +100,13 @@ private:
     std::vector<std::string> toggleChannelNames;
     std::vector<bool> toggleChannelMuted;
     std::atomic<int> repeatMode { 0 };
+    int optionAsid = 1;
+    int optionDefaultTimeSeconds = 0;
+    int optionYmEngine = 0;
+    int optionYmVolModel = 0;
+    bool optionAmigaFilter = true;
+    int optionAmigaBlend = 0x50;
+    int optionAmigaClock = 0;
 
     void closeInternalLocked();
     bool refreshTrackStateLocked();
@@ -106,6 +115,7 @@ private:
     void updatePlaybackPositionLocked(int producedFrames);
     void rebuildToggleChannelsLocked();
     void applyToggleChannelMutesLocked();
+    void applyCoreOptionsLocked();
     bool setTrackLocked(int track1Based);
     int processIntoLocked(float* buffer, int numFrames);
 };

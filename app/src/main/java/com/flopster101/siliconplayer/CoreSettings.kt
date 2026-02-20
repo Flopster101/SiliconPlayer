@@ -8,6 +8,7 @@ object CorePreferenceKeys {
     const val CORE_RATE_GME = "core_rate_gme"
     const val CORE_RATE_SIDPLAYFP = "core_rate_sidplayfp"
     const val CORE_RATE_LAZYUSF2 = "core_rate_lazyusf2"
+    const val CORE_RATE_SC68 = "core_rate_sc68"
     const val VIO2SF_INTERPOLATION_QUALITY = "vio2sf_interpolation_quality"
     const val OPENMPT_STEREO_SEPARATION_PERCENT = "openmpt_stereo_separation_percent"
     const val OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT = "openmpt_stereo_separation_amiga_percent"
@@ -45,6 +46,13 @@ object CorePreferenceKeys {
     const val SIDPLAYFP_RESIDFP_FAST_SAMPLING = "sidplayfp_residfp_fast_sampling"
     const val SIDPLAYFP_RESIDFP_COMBINED_WAVEFORMS_STRENGTH = "sidplayfp_residfp_combined_waveforms_strength"
     const val LAZYUSF2_USE_HLE_AUDIO = "lazyusf2_use_hle_audio"
+    const val SC68_ASID = "sc68_asid"
+    const val SC68_DEFAULT_TIME_SECONDS = "sc68_default_time_seconds"
+    const val SC68_YM_ENGINE = "sc68_ym_engine"
+    const val SC68_YM_VOLMODEL = "sc68_ym_volmodel"
+    const val SC68_AMIGA_FILTER = "sc68_amiga_filter"
+    const val SC68_AMIGA_BLEND = "sc68_amiga_blend"
+    const val SC68_AMIGA_CLOCK = "sc68_amiga_clock"
     fun vgmPlayChipCoreKey(chipKey: String) = "vgmplay_chip_core_$chipKey"
 }
 
@@ -112,4 +120,15 @@ object LazyUsf2Defaults {
 
 object Vio2sfDefaults {
     const val interpolationQuality = 4
+}
+
+object Sc68Defaults {
+    const val coreSampleRateHz = 0
+    const val asid = 1
+    const val defaultTimeSeconds = 180
+    const val ymEngine = 0
+    const val ymVolModel = 0
+    const val amigaFilter = true
+    const val amigaBlend = 0x50
+    const val amigaClock = 0
 }

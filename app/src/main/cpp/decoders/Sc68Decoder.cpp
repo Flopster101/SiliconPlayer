@@ -85,6 +85,25 @@ bool containsIgnoreCase(const std::string& text, const std::string& needle) {
     return false;
 }
 
+int parseIntString(const char* value, int fallback) {
+    if (!value || value[0] == '\0') return fallback;
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value || (end && *end != '\0')) return fallback;
+    return static_cast<int>(parsed);
+}
+
+bool parseBoolString(const char* value, bool fallback) {
+    if (!value) return fallback;
+    std::string normalized;
+    for (const char* c = value; *c; ++c) {
+        normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(*c))));
+    }
+    if (normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on") return true;
+    if (normalized == "0" || normalized == "false" || normalized == "no" || normalized == "off") return false;
+    return fallback;
+}
+
 }
 
 Sc68Decoder::Sc68Decoder() = default;
@@ -117,6 +136,7 @@ bool Sc68Decoder::open(const char* path) {
     // S16 output is the most stable/publicly supported path in this snapshot.
     sc68_cntl(handle, SC68_SET_PCM, SC68_PCM_S16);
     sc68_cntl(handle, SC68_SET_SPR, requestedSampleRateHz > 0 ? requestedSampleRateHz : kDefaultSampleRateHz);
+    applyCoreOptionsLocked();
 
     if (sc68_load_uri(handle, path) != 0) {
         LOGE("sc68_load_uri failed for: %s", path);
@@ -387,6 +407,23 @@ void Sc68Decoder::applyToggleChannelMutesLocked() {
         sc68_cntl(handle, SC68_SET_OPT_INT, "ste-enable", digiEnabled);
         ++idx;
     }
+}
+
+void Sc68Decoder::applyCoreOptionsLocked() {
+    if (!handle) return;
+    int asidMode = SC68_ASID_OFF;
+    if (optionAsid == 1) {
+        asidMode = SC68_ASID_ON;
+    } else if (optionAsid >= 2) {
+        asidMode = SC68_ASID_FORCE;
+    }
+    sc68_cntl(handle, SC68_SET_ASID, asidMode);
+    sc68_cntl(handle, SC68_SET_OPT_INT, "default-time", optionDefaultTimeSeconds);
+    sc68_cntl(handle, SC68_SET_OPT_INT, "ym-engine", optionYmEngine);
+    sc68_cntl(handle, SC68_SET_OPT_INT, "ym-volmodel", optionYmVolModel);
+    sc68_cntl(handle, SC68_SET_OPT_INT, "amiga-filter", optionAmigaFilter ? 1 : 0);
+    sc68_cntl(handle, SC68_SET_OPT_INT, "amiga-blend", optionAmigaBlend);
+    sc68_cntl(handle, SC68_SET_OPT_INT, "amiga-clock", optionAmigaClock);
 }
 
 int Sc68Decoder::processIntoLocked(float* buffer, int numFrames) {
@@ -683,6 +720,10 @@ void Sc68Decoder::clearToggleChannelMutes() {
 
 void Sc68Decoder::setOutputSampleRate(int sampleRate) {
     std::lock_guard<std::mutex> lock(decodeMutex);
+    if (sampleRate <= 0) {
+        requestedSampleRateHz = kDefaultSampleRateHz;
+        return;
+    }
     requestedSampleRateHz = std::clamp(sampleRate, kMinSampleRateHz, kMaxSampleRateHz);
 }
 
@@ -698,7 +739,7 @@ int Sc68Decoder::getRepeatModeCapabilities() const {
 int Sc68Decoder::getPlaybackCapabilities() const {
     int caps = PLAYBACK_CAP_SEEK |
                PLAYBACK_CAP_LIVE_REPEAT_MODE |
-               PLAYBACK_CAP_FIXED_SAMPLE_RATE;
+               PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
     if (durationReliable.load()) {
         caps |= PLAYBACK_CAP_RELIABLE_DURATION;
     }
@@ -706,7 +747,7 @@ int Sc68Decoder::getPlaybackCapabilities() const {
 }
 
 int Sc68Decoder::getFixedSampleRateHz() const {
-    return kDefaultSampleRateHz;
+    return 0;
 }
 
 double Sc68Decoder::getPlaybackPositionSeconds() {
@@ -721,4 +762,46 @@ double Sc68Decoder::getPlaybackPositionSeconds() {
 
 std::vector<std::string> Sc68Decoder::getSupportedExtensions() {
     return { "sc68", "sndh" };
+}
+
+void Sc68Decoder::setOption(const char* name, const char* value) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!name) return;
+
+    const std::string optionName(name);
+    if (optionName == "sc68.asid") {
+        optionAsid = std::clamp(parseIntString(value, optionAsid), 0, 2);
+    } else if (optionName == "sc68.default_time_seconds") {
+        optionDefaultTimeSeconds = std::clamp(parseIntString(value, optionDefaultTimeSeconds), 0, 24 * 60 * 60 - 1);
+    } else if (optionName == "sc68.ym_engine") {
+        optionYmEngine = std::clamp(parseIntString(value, optionYmEngine), 0, 2);
+    } else if (optionName == "sc68.ym_volmodel") {
+        optionYmVolModel = std::clamp(parseIntString(value, optionYmVolModel), 0, 1);
+    } else if (optionName == "sc68.amiga_filter") {
+        optionAmigaFilter = parseBoolString(value, optionAmigaFilter);
+    } else if (optionName == "sc68.amiga_blend") {
+        optionAmigaBlend = std::clamp(parseIntString(value, optionAmigaBlend), 0, 0xFF);
+    } else if (optionName == "sc68.amiga_clock") {
+        optionAmigaClock = std::clamp(parseIntString(value, optionAmigaClock), 0, 1);
+    } else {
+        return;
+    }
+
+    applyCoreOptionsLocked();
+    applyToggleChannelMutesLocked();
+}
+
+int Sc68Decoder::getOptionApplyPolicy(const char* name) const {
+    if (!name) return OPTION_APPLY_LIVE;
+    const std::string optionName(name);
+    if (optionName == "sc68.asid" ||
+        optionName == "sc68.default_time_seconds" ||
+        optionName == "sc68.ym_engine" ||
+        optionName == "sc68.ym_volmodel" ||
+        optionName == "sc68.amiga_filter" ||
+        optionName == "sc68.amiga_blend" ||
+        optionName == "sc68.amiga_clock") {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    return OPTION_APPLY_LIVE;
 }

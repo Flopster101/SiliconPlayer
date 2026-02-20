@@ -645,6 +645,14 @@ private fun AppNavigation(
     var lazyUsf2CoreSampleRateHz by settingsStates.lazyUsf2CoreSampleRateHz
     var lazyUsf2UseHleAudio by settingsStates.lazyUsf2UseHleAudio
     var vio2sfInterpolationQuality by settingsStates.vio2sfInterpolationQuality
+    var sc68SamplingRateHz by settingsStates.sc68SamplingRateHz
+    var sc68Asid by settingsStates.sc68Asid
+    var sc68DefaultTimeSeconds by settingsStates.sc68DefaultTimeSeconds
+    var sc68YmEngine by settingsStates.sc68YmEngine
+    var sc68YmVolModel by settingsStates.sc68YmVolModel
+    var sc68AmigaFilter by settingsStates.sc68AmigaFilter
+    var sc68AmigaBlend by settingsStates.sc68AmigaBlend
+    var sc68AmigaClock by settingsStates.sc68AmigaClock
     var sidPlayFpBackend by settingsStates.sidPlayFpBackend
     var sidPlayFpClockMode by settingsStates.sidPlayFpClockMode
     var sidPlayFpSidModelMode by settingsStates.sidPlayFpSidModelMode
@@ -1100,6 +1108,14 @@ private fun AppNavigation(
         lazyUsf2CoreSampleRateHz = lazyUsf2CoreSampleRateHz,
         lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
         vio2sfInterpolationQuality = vio2sfInterpolationQuality,
+        sc68SamplingRateHz = sc68SamplingRateHz,
+        sc68Asid = sc68Asid,
+        sc68DefaultTimeSeconds = sc68DefaultTimeSeconds,
+        sc68YmEngine = sc68YmEngine,
+        sc68YmVolModel = sc68YmVolModel,
+        sc68AmigaFilter = sc68AmigaFilter,
+        sc68AmigaBlend = sc68AmigaBlend,
+        sc68AmigaClock = sc68AmigaClock,
         sidPlayFpBackend = sidPlayFpBackend,
         sidPlayFpClockMode = sidPlayFpClockMode,
         sidPlayFpSidModelMode = sidPlayFpSidModelMode,
@@ -1856,6 +1872,14 @@ private fun AppNavigation(
                                     onLazyUsf2SampleRateChanged = { lazyUsf2CoreSampleRateHz = it },
                                     onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
                                     onVio2sfInterpolationQualityChanged = { vio2sfInterpolationQuality = it },
+                                    onSc68SamplingRateHzChanged = { sc68SamplingRateHz = it },
+                                    onSc68AsidChanged = { sc68Asid = it },
+                                    onSc68DefaultTimeSecondsChanged = { sc68DefaultTimeSeconds = it },
+                                    onSc68YmEngineChanged = { sc68YmEngine = it },
+                                    onSc68YmVolModelChanged = { sc68YmVolModel = it },
+                                    onSc68AmigaFilterChanged = { sc68AmigaFilter = it },
+                                    onSc68AmigaBlendChanged = { sc68AmigaBlend = it },
+                                    onSc68AmigaClockChanged = { sc68AmigaClock = it },
                                     onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
                                     onSidPlayFpClockModeChanged = { sidPlayFpClockMode = it },
                                     onSidPlayFpSidModelModeChanged = { sidPlayFpSidModelMode = it },

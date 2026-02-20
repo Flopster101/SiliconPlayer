@@ -641,6 +641,11 @@ internal fun clearAllSettingsAction(
     sidPlayFpCoreSampleRateHz: Int,
     lazyUsf2CoreSampleRateHz: Int,
     vio2sfInterpolationQuality: Int,
+    sc68SamplingRateHz: Int,
+    sc68Asid: Int,
+    sc68DefaultTimeSeconds: Int,
+    sc68YmEngine: Int,
+    sc68YmVolModel: Int,
     vgmPlayLoopCount: Int,
     vgmPlayVsyncRate: Int,
     vgmPlayResampleMode: Int,
@@ -670,6 +675,7 @@ internal fun clearAllSettingsAction(
     gmeSpcUseBuiltInFade: Boolean,
     gmeSpcUseNativeSampleRate: Boolean,
     lazyUsf2UseHleAudio: Boolean,
+    sc68AmigaFilter: Boolean,
     sidPlayFpFilter6581Enabled: Boolean,
     sidPlayFpFilter8580Enabled: Boolean,
     sidPlayFpDigiBoost8580: Boolean,
@@ -677,6 +683,8 @@ internal fun clearAllSettingsAction(
     openMptAmigaResamplerApplyAllModules: Boolean,
     openMptFt2XmVolumeRamping: Boolean,
     openMptSurroundEnabled: Boolean,
+    sc68AmigaBlend: Int,
+    sc68AmigaClock: Int,
     vgmPlayChipCoreSelections: Map<String, Int>,
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
@@ -729,6 +737,14 @@ internal fun clearAllSettingsAction(
     onVisualizationVuUseThemeColorChanged: (Boolean) -> Unit,
     onVisualizationVuSmoothingPercentChanged: (Int) -> Unit,
     onVisualizationVuRenderBackendChanged: (VisualizationRenderBackend) -> Unit,
+    onSc68SamplingRateHzChanged: (Int) -> Unit,
+    onSc68AsidChanged: (Int) -> Unit,
+    onSc68DefaultTimeSecondsChanged: (Int) -> Unit,
+    onSc68YmEngineChanged: (Int) -> Unit,
+    onSc68YmVolModelChanged: (Int) -> Unit,
+    onSc68AmigaFilterChanged: (Boolean) -> Unit,
+    onSc68AmigaBlendChanged: (Int) -> Unit,
+    onSc68AmigaClockChanged: (Int) -> Unit,
 ) {
     val pluginSnapshot = mapOf(
         CorePreferenceKeys.CORE_RATE_FFMPEG to ffmpegCoreSampleRateHz,
@@ -738,6 +754,13 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.CORE_RATE_SIDPLAYFP to sidPlayFpCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_LAZYUSF2 to lazyUsf2CoreSampleRateHz,
         CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY to vio2sfInterpolationQuality,
+        CorePreferenceKeys.CORE_RATE_SC68 to sc68SamplingRateHz,
+        CorePreferenceKeys.SC68_ASID to sc68Asid,
+        CorePreferenceKeys.SC68_DEFAULT_TIME_SECONDS to sc68DefaultTimeSeconds,
+        CorePreferenceKeys.SC68_YM_ENGINE to sc68YmEngine,
+        CorePreferenceKeys.SC68_YM_VOLMODEL to sc68YmVolModel,
+        CorePreferenceKeys.SC68_AMIGA_BLEND to sc68AmigaBlend,
+        CorePreferenceKeys.SC68_AMIGA_CLOCK to sc68AmigaClock,
         CorePreferenceKeys.VGMPLAY_LOOP_COUNT to vgmPlayLoopCount,
         CorePreferenceKeys.VGMPLAY_VSYNC_RATE to vgmPlayVsyncRate,
         CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE to vgmPlayResampleMode,
@@ -769,6 +792,7 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.GME_SPC_USE_BUILTIN_FADE to gmeSpcUseBuiltInFade,
         CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE to gmeSpcUseNativeSampleRate,
         CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO to lazyUsf2UseHleAudio,
+        CorePreferenceKeys.SC68_AMIGA_FILTER to sc68AmigaFilter,
         CorePreferenceKeys.SIDPLAYFP_FILTER_6581_ENABLED to sidPlayFpFilter6581Enabled,
         CorePreferenceKeys.SIDPLAYFP_FILTER_8580_ENABLED to sidPlayFpFilter8580Enabled,
         CorePreferenceKeys.SIDPLAYFP_DIGI_BOOST_8580 to sidPlayFpDigiBoost8580,
@@ -823,6 +847,14 @@ internal fun clearAllSettingsAction(
     onFilenameDisplayModeChanged(FilenameDisplayMode.Always)
     onFilenameOnlyWhenTitleMissingChanged(false)
     onUnknownTrackDurationSecondsChanged(GmeDefaults.unknownDurationSeconds)
+    onSc68SamplingRateHzChanged(Sc68Defaults.coreSampleRateHz)
+    onSc68AsidChanged(Sc68Defaults.asid)
+    onSc68DefaultTimeSecondsChanged(Sc68Defaults.defaultTimeSeconds)
+    onSc68YmEngineChanged(Sc68Defaults.ymEngine)
+    onSc68YmVolModelChanged(Sc68Defaults.ymVolModel)
+    onSc68AmigaFilterChanged(Sc68Defaults.amigaFilter)
+    onSc68AmigaBlendChanged(Sc68Defaults.amigaBlend)
+    onSc68AmigaClockChanged(Sc68Defaults.amigaClock)
     onEndFadeApplyToAllTracksChanged(AppDefaults.Player.endFadeApplyToAllTracks)
     onEndFadeDurationMsChanged(AppDefaults.Player.endFadeDurationMs)
     onEndFadeCurveChanged(AppDefaults.Player.endFadeCurve)
@@ -871,6 +903,14 @@ internal fun clearAllPluginSettingsAction(
     onLazyUsf2CoreSampleRateHzChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
     onVio2sfInterpolationQualityChanged: (Int) -> Unit,
+    onSc68SamplingRateHzChanged: (Int) -> Unit,
+    onSc68AsidChanged: (Int) -> Unit,
+    onSc68DefaultTimeSecondsChanged: (Int) -> Unit,
+    onSc68YmEngineChanged: (Int) -> Unit,
+    onSc68YmVolModelChanged: (Int) -> Unit,
+    onSc68AmigaFilterChanged: (Boolean) -> Unit,
+    onSc68AmigaBlendChanged: (Int) -> Unit,
+    onSc68AmigaClockChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
     onSidPlayFpSidModelModeChanged: (Int) -> Unit,
@@ -917,6 +957,14 @@ internal fun clearAllPluginSettingsAction(
     onLazyUsf2CoreSampleRateHzChanged(LazyUsf2Defaults.coreSampleRateHz)
     onLazyUsf2UseHleAudioChanged(LazyUsf2Defaults.useHleAudio)
     onVio2sfInterpolationQualityChanged(Vio2sfDefaults.interpolationQuality)
+    onSc68SamplingRateHzChanged(Sc68Defaults.coreSampleRateHz)
+    onSc68AsidChanged(Sc68Defaults.asid)
+    onSc68DefaultTimeSecondsChanged(Sc68Defaults.defaultTimeSeconds)
+    onSc68YmEngineChanged(Sc68Defaults.ymEngine)
+    onSc68YmVolModelChanged(Sc68Defaults.ymVolModel)
+    onSc68AmigaFilterChanged(Sc68Defaults.amigaFilter)
+    onSc68AmigaBlendChanged(Sc68Defaults.amigaBlend)
+    onSc68AmigaClockChanged(Sc68Defaults.amigaClock)
     onSidPlayFpBackendChanged(SidPlayFpDefaults.backend)
     onSidPlayFpClockModeChanged(SidPlayFpDefaults.clockMode)
     onSidPlayFpSidModelModeChanged(SidPlayFpDefaults.sidModelMode)
@@ -964,6 +1012,14 @@ internal fun clearAllPluginSettingsAction(
         remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2)
         remove(CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY)
         remove(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO)
+        remove(CorePreferenceKeys.CORE_RATE_SC68)
+        remove(CorePreferenceKeys.SC68_ASID)
+        remove(CorePreferenceKeys.SC68_DEFAULT_TIME_SECONDS)
+        remove(CorePreferenceKeys.SC68_YM_ENGINE)
+        remove(CorePreferenceKeys.SC68_YM_VOLMODEL)
+        remove(CorePreferenceKeys.SC68_AMIGA_FILTER)
+        remove(CorePreferenceKeys.SC68_AMIGA_BLEND)
+        remove(CorePreferenceKeys.SC68_AMIGA_CLOCK)
         remove(CorePreferenceKeys.SIDPLAYFP_BACKEND)
         remove(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE)
         remove(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE)
@@ -1045,6 +1101,14 @@ internal fun resetPluginSettingsAction(
     onLazyUsf2CoreSampleRateHzChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
     onVio2sfInterpolationQualityChanged: (Int) -> Unit,
+    onSc68SamplingRateHzChanged: (Int) -> Unit,
+    onSc68AsidChanged: (Int) -> Unit,
+    onSc68DefaultTimeSecondsChanged: (Int) -> Unit,
+    onSc68YmEngineChanged: (Int) -> Unit,
+    onSc68YmVolModelChanged: (Int) -> Unit,
+    onSc68AmigaFilterChanged: (Boolean) -> Unit,
+    onSc68AmigaBlendChanged: (Int) -> Unit,
+    onSc68AmigaClockChanged: (Int) -> Unit,
     onSidPlayFpCoreSampleRateHzChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
@@ -1115,6 +1179,16 @@ internal fun resetPluginSettingsAction(
 
         "Vio2SF" -> listOf(
             Vio2sfOptionKeys.INTERPOLATION_QUALITY
+        )
+
+        "SC68" -> listOf(
+            Sc68OptionKeys.ASID,
+            Sc68OptionKeys.DEFAULT_TIME_SECONDS,
+            Sc68OptionKeys.YM_ENGINE,
+            Sc68OptionKeys.YM_VOLMODEL,
+            Sc68OptionKeys.AMIGA_FILTER,
+            Sc68OptionKeys.AMIGA_BLEND,
+            Sc68OptionKeys.AMIGA_CLOCK
         )
 
         else -> emptyList()
@@ -1226,6 +1300,28 @@ internal fun resetPluginSettingsAction(
             prefs.edit()
                 .remove(CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY)
                 .apply()
+        }
+
+        "SC68" -> {
+            onSc68SamplingRateHzChanged(Sc68Defaults.coreSampleRateHz)
+            onSc68AsidChanged(Sc68Defaults.asid)
+            onSc68DefaultTimeSecondsChanged(Sc68Defaults.defaultTimeSeconds)
+            onSc68YmEngineChanged(Sc68Defaults.ymEngine)
+            onSc68YmVolModelChanged(Sc68Defaults.ymVolModel)
+            onSc68AmigaFilterChanged(Sc68Defaults.amigaFilter)
+            onSc68AmigaBlendChanged(Sc68Defaults.amigaBlend)
+            onSc68AmigaClockChanged(Sc68Defaults.amigaClock)
+            prefs.edit().apply {
+                remove(CorePreferenceKeys.CORE_RATE_SC68)
+                remove(CorePreferenceKeys.SC68_ASID)
+                remove(CorePreferenceKeys.SC68_DEFAULT_TIME_SECONDS)
+                remove(CorePreferenceKeys.SC68_YM_ENGINE)
+                remove(CorePreferenceKeys.SC68_YM_VOLMODEL)
+                remove(CorePreferenceKeys.SC68_AMIGA_FILTER)
+                remove(CorePreferenceKeys.SC68_AMIGA_BLEND)
+                remove(CorePreferenceKeys.SC68_AMIGA_CLOCK)
+                apply()
+            }
         }
 
         "LibSIDPlayFP" -> {

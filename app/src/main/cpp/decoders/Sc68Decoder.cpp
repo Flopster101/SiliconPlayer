@@ -250,12 +250,17 @@ void Sc68Decoder::seek(double seconds) {
     if (!isOpen || !handle) return;
 
     const double clamped = std::max(0.0, seconds);
-    if (!setTrackLocked(currentTrack1Based)) {
+    const int targetMs = static_cast<int>(std::llround(clamped * 1000.0));
+
+    // Preferred path: patched libsc68 direct seek command.
+    const int directSeekPosMs = sc68_cntl(handle, SC68_SET_POS, targetMs);
+    if (directSeekPosMs >= 0) {
         return;
     }
-    if (clamped <= 0.0) {
-        return;
-    }
+
+    // Fallback for unpatched snapshots: restart + decode-discard.
+    if (!setTrackLocked(currentTrack1Based)) return;
+    if (clamped <= 0.0) return;
 
     int64_t framesToSkip = static_cast<int64_t>(std::llround(clamped * static_cast<double>(sampleRateHz)));
     std::vector<float> discard(static_cast<size_t>(kSeekDiscardChunkFrames) * 2u);

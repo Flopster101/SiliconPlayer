@@ -126,6 +126,18 @@ public:
     std::string getSidCurrentModelSummary();
     std::string getSidBaseAddressSummary();
     std::string getSidCommentSummary();
+    std::string getSc68FormatName();
+    std::string getSc68HardwareName();
+    std::string getSc68ReplayName();
+    int getSc68ReplayRateHz();
+    int getSc68TrackCount();
+    std::string getSc68AlbumName();
+    std::string getSc68Year();
+    std::string getSc68Ripper();
+    std::string getSc68Converter();
+    bool getSc68UsesYm();
+    bool getSc68UsesSte();
+    bool getSc68UsesAmiga();
 
     // Bitrate information
     int64_t getTrackBitrate();

@@ -2392,6 +2392,90 @@ std::string AudioEngine::getSidCommentSummary() {
     return sidDecoder ? sidDecoder->getSidCommentSummary() : "";
 }
 
+std::string AudioEngine::getSc68FormatName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getFormatName() : "";
+}
+
+std::string AudioEngine::getSc68HardwareName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getHardwareName() : "";
+}
+
+std::string AudioEngine::getSc68ReplayName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getReplayName() : "";
+}
+
+int AudioEngine::getSc68ReplayRateHz() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getReplayRateHz() : 0;
+}
+
+int AudioEngine::getSc68TrackCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getTrackCountInfo() : 0;
+}
+
+std::string AudioEngine::getSc68AlbumName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getAlbumName() : "";
+}
+
+std::string AudioEngine::getSc68Year() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getYearTag() : "";
+}
+
+std::string AudioEngine::getSc68Ripper() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getRipperTag() : "";
+}
+
+std::string AudioEngine::getSc68Converter() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getConverterTag() : "";
+}
+
+bool AudioEngine::getSc68UsesYm() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return false;
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getUsesYm() : false;
+}
+
+bool AudioEngine::getSc68UsesSte() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return false;
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getUsesSte() : false;
+}
+
+bool AudioEngine::getSc68UsesAmiga() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return false;
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getUsesAmiga() : false;
+}
+
 // Gain control implementation
 void AudioEngine::setMasterGain(float gainDb) {
     masterGainDb.store(gainDb);

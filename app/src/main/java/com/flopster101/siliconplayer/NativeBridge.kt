@@ -122,6 +122,18 @@ object NativeBridge {
     external fun getSidCurrentModelSummary(): String
     external fun getSidBaseAddressSummary(): String
     external fun getSidCommentSummary(): String
+    external fun getSc68FormatName(): String
+    external fun getSc68HardwareName(): String
+    external fun getSc68ReplayName(): String
+    external fun getSc68ReplayRateHz(): Int
+    external fun getSc68TrackCount(): Int
+    external fun getSc68AlbumName(): String
+    external fun getSc68Year(): String
+    external fun getSc68Ripper(): String
+    external fun getSc68Converter(): String
+    external fun getSc68UsesYm(): Boolean
+    external fun getSc68UsesSte(): Boolean
+    external fun getSc68UsesAmiga(): Boolean
     external fun getTrackBitrate(): Long
     external fun isTrackVBR(): Boolean
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)

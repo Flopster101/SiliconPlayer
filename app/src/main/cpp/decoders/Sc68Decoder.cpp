@@ -167,6 +167,15 @@ void Sc68Decoder::closeInternalLocked() {
     artist.clear();
     composer.clear();
     genre.clear();
+    formatName.clear();
+    hardwareName.clear();
+    replayName.clear();
+    replayRateHz = 0;
+    trackCountInfo = 0;
+    albumName.clear();
+    yearTag.clear();
+    ripperTag.clear();
+    converterTag.clear();
     trackHasYm = false;
     trackHasSte = false;
     trackHasAmiga = false;
@@ -211,6 +220,15 @@ void Sc68Decoder::refreshMetadataLocked() {
         artist.clear();
         composer.clear();
         genre.clear();
+        formatName.clear();
+        hardwareName.clear();
+        replayName.clear();
+        replayRateHz = 0;
+        trackCountInfo = 0;
+        albumName.clear();
+        yearTag.clear();
+        ripperTag.clear();
+        converterTag.clear();
         return;
     }
 
@@ -218,11 +236,20 @@ void Sc68Decoder::refreshMetadataLocked() {
     artist = normalizeText(safeString(info.artist));
     composer = artist;
     genre = normalizeText(safeString(info.genre));
+    formatName = normalizeText(safeString(info.format));
+    albumName = normalizeText(safeString(info.album));
+    replayName = normalizeText(safeString(info.replay));
+    replayRateHz = static_cast<int>(info.rate);
+    trackCountInfo = info.tracks;
+    yearTag = normalizeText(safeString(info.year));
+    ripperTag = normalizeText(safeString(info.ripper));
+    converterTag = normalizeText(safeString(info.converter));
     trackHasYm = info.trk.ym != 0;
     trackHasSte = info.trk.ste != 0;
     trackHasAmiga = info.trk.amiga != 0;
     trackUsesAgaPath = false;
     const std::string hw = normalizeText(safeString(info.trk.hw));
+    hardwareName = hw;
     if (!hw.empty()) {
         // libsc68 runtime mixer path keys off hardware flags. Prefer that over
         // occasionally sparse boolean flags in metadata.
@@ -238,7 +265,7 @@ void Sc68Decoder::refreshMetadataLocked() {
         }
     }
     if (title.empty()) {
-        title = normalizeText(safeString(info.album));
+        title = albumName;
     }
     if (title.empty() && !sourcePath.empty()) {
         title = std::filesystem::path(sourcePath).stem().string();
@@ -555,6 +582,66 @@ std::string Sc68Decoder::getComposer() {
 std::string Sc68Decoder::getGenre() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return genre;
+}
+
+std::string Sc68Decoder::getFormatName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return formatName;
+}
+
+std::string Sc68Decoder::getHardwareName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return hardwareName;
+}
+
+std::string Sc68Decoder::getReplayName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return replayName;
+}
+
+int Sc68Decoder::getReplayRateHz() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return replayRateHz;
+}
+
+int Sc68Decoder::getTrackCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return std::max(1, trackCountInfo);
+}
+
+std::string Sc68Decoder::getAlbumName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return albumName;
+}
+
+std::string Sc68Decoder::getYearTag() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return yearTag;
+}
+
+std::string Sc68Decoder::getRipperTag() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return ripperTag;
+}
+
+std::string Sc68Decoder::getConverterTag() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return converterTag;
+}
+
+bool Sc68Decoder::getUsesYm() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return trackHasYm;
+}
+
+bool Sc68Decoder::getUsesSte() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return trackHasSte;
+}
+
+bool Sc68Decoder::getUsesAmiga() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return trackHasAmiga;
 }
 
 std::vector<std::string> Sc68Decoder::getToggleChannelNames() {

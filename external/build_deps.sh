@@ -87,6 +87,16 @@ install_dependency_if_missing() {
     local arch_pkg="$4"
     local linux_family="$5"
 
+    local bin
+    IFS='|' read -r -a _bin_candidates <<< "$binary_check"
+    for bin in "${_bin_candidates[@]}"; do
+        if command -v "$bin" >/dev/null 2>&1; then
+            echo "$dep_name already installed."
+            return 0
+        fi
+    done
+
+    # Backward-compatible fallback for single name calls.
     if command -v "$binary_check" >/dev/null 2>&1; then
         echo "$dep_name already installed."
         return 0
@@ -119,8 +129,8 @@ ensure_system_dependencies() {
     local linux_family
     linux_family="$(detect_linux_family)"
 
-    # XA assembler: package names differ by distro, but both provide `xa65`.
-    install_dependency_if_missing "XA assembler" "xa65" "xa65" "xa" "$linux_family"
+    # XA assembler: executable name differs by distro/package (`xa` vs `xa65`).
+    install_dependency_if_missing "XA assembler" "xa|xa65" "xa65" "xa" "$linux_family"
 }
 
 # -----------------------------------------------------------------------------

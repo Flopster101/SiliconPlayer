@@ -80,6 +80,7 @@ import kotlin.math.min
 private const val BROWSER_PAGE_DURATION_MS = 280
 private const val MIN_LOADING_SPINNER_MS = 220L
 private const val FILE_ENTRY_ANIM_DURATION_MS = 280
+private const val DIRECTORY_DIRECT_PUBLISH_MAX_ITEMS = 3000
 
 private enum class BrowserNavDirection {
     Forward,
@@ -203,23 +204,26 @@ fun FileBrowserScreen(
                 val stillOnSameDirectory = currentDirectory?.absolutePath == targetPath &&
                     selectedLocationId != null
                 if (stillOnSameDirectory) {
-                    // Publish results progressively at a paced rate so rows appear while loading.
+                    // Publish all items at once for normal folders. For very large folders,
+                    // chunk without artificial delays to avoid blocking the main thread.
                     fileList.clear()
-                    val publishBatchSize = directoryPublishBatchSize(loadedFiles.size)
-                    val publishDelayMs = directoryPublishDelayMs(loadedFiles.size)
-                    var index = 0
-                    while (index < loadedFiles.size) {
-                        ensureActive()
-                        if (currentDirectory?.absolutePath != targetPath || selectedLocationId == null) break
+                    if (shouldPublishDirectoryAllAtOnce(loadedFiles.size)) {
+                        fileList.addAll(loadedFiles)
+                    } else {
+                        val publishBatchSize = directoryPublishBatchSize(loadedFiles.size)
+                        var index = 0
+                        while (index < loadedFiles.size) {
+                            ensureActive()
+                            if (currentDirectory?.absolutePath != targetPath || selectedLocationId == null) break
 
-                        val end = min(index + publishBatchSize, loadedFiles.size)
-                        val chunk = loadedFiles.subList(index, end)
-                        fileList.addAll(chunk)
-                        index = end
-                        // Yield a frame between batches to keep UI responsive/animated.
-                        withFrameNanos { }
-                        if (index < loadedFiles.size) {
-                            delay(publishDelayMs)
+                            val end = min(index + publishBatchSize, loadedFiles.size)
+                            val chunk = loadedFiles.subList(index, end)
+                            fileList.addAll(chunk)
+                            index = end
+                            if (index < loadedFiles.size) {
+                                // Yield once per chunk to avoid UI stalls for huge folders.
+                                withFrameNanos { }
+                            }
                         }
                     }
                 }
@@ -823,18 +827,14 @@ private fun AnimatedFileBrowserEntry(
     }
 }
 
-private fun directoryPublishBatchSize(totalItems: Int): Int = when {
-    totalItems <= 36 -> 1
-    totalItems <= 120 -> 2
-    totalItems <= 260 -> 4
-    else -> 8
+private fun shouldPublishDirectoryAllAtOnce(totalItems: Int): Boolean {
+    return totalItems <= DIRECTORY_DIRECT_PUBLISH_MAX_ITEMS
 }
 
-private fun directoryPublishDelayMs(totalItems: Int): Long = when {
-    totalItems <= 36 -> 24L
-    totalItems <= 120 -> 18L
-    totalItems <= 260 -> 12L
-    else -> 8L
+private fun directoryPublishBatchSize(totalItems: Int): Int = when {
+    totalItems <= 5000 -> 256
+    totalItems <= 10000 -> 512
+    else -> 1024
 }
 
 private data class StorageLocation(

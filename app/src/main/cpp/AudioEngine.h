@@ -128,6 +128,7 @@ public:
     std::string getSidCommentSummary();
     std::string getSc68FormatName();
     std::string getSc68HardwareName();
+    std::string getSc68PlatformName();
     std::string getSc68ReplayName();
     int getSc68ReplayRateHz();
     int getSc68TrackCount();
@@ -135,6 +136,8 @@ public:
     std::string getSc68Year();
     std::string getSc68Ripper();
     std::string getSc68Converter();
+    std::string getSc68Timer();
+    bool getSc68CanAsid();
     bool getSc68UsesYm();
     bool getSc68UsesSte();
     bool getSc68UsesAmiga();

@@ -2406,6 +2406,13 @@ std::string AudioEngine::getSc68HardwareName() {
     return sc68Decoder ? sc68Decoder->getHardwareName() : "";
 }
 
+std::string AudioEngine::getSc68PlatformName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getPlatformName() : "";
+}
+
 std::string AudioEngine::getSc68ReplayName() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";
@@ -2453,6 +2460,20 @@ std::string AudioEngine::getSc68Converter() {
     if (!decoder) return "";
     auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
     return sc68Decoder ? sc68Decoder->getConverterTag() : "";
+}
+
+std::string AudioEngine::getSc68Timer() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getTimerTag() : "";
+}
+
+bool AudioEngine::getSc68CanAsid() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return false;
+    auto* sc68Decoder = dynamic_cast<Sc68Decoder*>(decoder.get());
+    return sc68Decoder ? sc68Decoder->getCanAsid() : false;
 }
 
 bool AudioEngine::getSc68UsesYm() {

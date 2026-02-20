@@ -124,6 +124,7 @@ object NativeBridge {
     external fun getSidCommentSummary(): String
     external fun getSc68FormatName(): String
     external fun getSc68HardwareName(): String
+    external fun getSc68PlatformName(): String
     external fun getSc68ReplayName(): String
     external fun getSc68ReplayRateHz(): Int
     external fun getSc68TrackCount(): Int
@@ -131,6 +132,8 @@ object NativeBridge {
     external fun getSc68Year(): String
     external fun getSc68Ripper(): String
     external fun getSc68Converter(): String
+    external fun getSc68Timer(): String
+    external fun getSc68CanAsid(): Boolean
     external fun getSc68UsesYm(): Boolean
     external fun getSc68UsesSte(): Boolean
     external fun getSc68UsesAmiga(): Boolean

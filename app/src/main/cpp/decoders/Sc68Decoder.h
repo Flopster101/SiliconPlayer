@@ -37,6 +37,7 @@ public:
     std::string getGenre() override;
     std::string getFormatName();
     std::string getHardwareName();
+    std::string getPlatformName();
     std::string getReplayName();
     int getReplayRateHz();
     int getTrackCountInfo();
@@ -44,6 +45,8 @@ public:
     std::string getYearTag();
     std::string getRipperTag();
     std::string getConverterTag();
+    std::string getTimerTag();
+    bool getCanAsid() const;
     bool getUsesYm() const;
     bool getUsesSte() const;
     bool getUsesAmiga() const;
@@ -84,6 +87,7 @@ private:
     std::string genre;
     std::string formatName;
     std::string hardwareName;
+    std::string platformName;
     std::string replayName;
     int replayRateHz = 0;
     int trackCountInfo = 0;
@@ -91,6 +95,8 @@ private:
     std::string yearTag;
     std::string ripperTag;
     std::string converterTag;
+    std::string timerTag;
+    bool trackCanAsid = false;
     bool trackHasYm = false;
     bool trackHasSte = false;
     bool trackHasAmiga = false;

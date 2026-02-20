@@ -1224,6 +1224,7 @@ private fun TrackInfoDetailsDialog(
     var sidCommentSummary by remember { mutableStateOf("") }
     var sc68FormatName by remember { mutableStateOf("") }
     var sc68HardwareName by remember { mutableStateOf("") }
+    var sc68PlatformName by remember { mutableStateOf("") }
     var sc68ReplayName by remember { mutableStateOf("") }
     var sc68ReplayRateHz by remember { mutableIntStateOf(0) }
     var sc68TrackCount by remember { mutableIntStateOf(0) }
@@ -1231,6 +1232,8 @@ private fun TrackInfoDetailsDialog(
     var sc68Year by remember { mutableStateOf("") }
     var sc68Ripper by remember { mutableStateOf("") }
     var sc68Converter by remember { mutableStateOf("") }
+    var sc68Timer by remember { mutableStateOf("") }
+    var sc68CanAsid by remember { mutableStateOf(false) }
     var sc68UsesYm by remember { mutableStateOf(false) }
     var sc68UsesSte by remember { mutableStateOf(false) }
     var sc68UsesAmiga by remember { mutableStateOf(false) }
@@ -1383,6 +1386,7 @@ private fun TrackInfoDetailsDialog(
             if (decoderName.equals("SC68", ignoreCase = true)) {
                 sc68FormatName = NativeBridge.getSc68FormatName()
                 sc68HardwareName = NativeBridge.getSc68HardwareName()
+                sc68PlatformName = NativeBridge.getSc68PlatformName()
                 sc68ReplayName = NativeBridge.getSc68ReplayName()
                 sc68ReplayRateHz = NativeBridge.getSc68ReplayRateHz()
                 sc68TrackCount = NativeBridge.getSc68TrackCount()
@@ -1390,12 +1394,15 @@ private fun TrackInfoDetailsDialog(
                 sc68Year = NativeBridge.getSc68Year()
                 sc68Ripper = NativeBridge.getSc68Ripper()
                 sc68Converter = NativeBridge.getSc68Converter()
+                sc68Timer = NativeBridge.getSc68Timer()
+                sc68CanAsid = NativeBridge.getSc68CanAsid()
                 sc68UsesYm = NativeBridge.getSc68UsesYm()
                 sc68UsesSte = NativeBridge.getSc68UsesSte()
                 sc68UsesAmiga = NativeBridge.getSc68UsesAmiga()
             } else {
                 sc68FormatName = ""
                 sc68HardwareName = ""
+                sc68PlatformName = ""
                 sc68ReplayName = ""
                 sc68ReplayRateHz = 0
                 sc68TrackCount = 0
@@ -1403,6 +1410,8 @@ private fun TrackInfoDetailsDialog(
                 sc68Year = ""
                 sc68Ripper = ""
                 sc68Converter = ""
+                sc68Timer = ""
+                sc68CanAsid = false
                 sc68UsesYm = false
                 sc68UsesSte = false
                 sc68UsesAmiga = false
@@ -1535,13 +1544,17 @@ private fun TrackInfoDetailsDialog(
             append('\n').append("[SC68]").append('\n')
             if (sc68FormatName.isNotBlank()) row("Format name", sc68FormatName)
             if (sc68HardwareName.isNotBlank()) row("Hardware", sc68HardwareName)
+            if (sc68PlatformName.isNotBlank()) row("Platform", sc68PlatformName)
             if (sc68ReplayName.isNotBlank()) row("Replay", sc68ReplayName)
             if (sc68ReplayRateHz > 0) row("Replay rate", "${sc68ReplayRateHz} Hz")
+            if (sampleRateHz > 0) row("Frequency", "${sampleRateHz} Hz")
             if (sc68TrackCount > 0) row("Track count", sc68TrackCount.toString())
             if (sc68AlbumName.isNotBlank()) row("Album", sc68AlbumName)
             if (sc68Year.isNotBlank()) row("Year", sc68Year)
             if (sc68Ripper.isNotBlank()) row("Ripper", sc68Ripper)
             if (sc68Converter.isNotBlank()) row("Converter", sc68Converter)
+            if (sc68Timer.isNotBlank()) row("Timer", sc68Timer)
+            row("Can aSID", if (sc68CanAsid) "Yes" else "No")
             row("Uses YM-2149", if (sc68UsesYm) "Yes" else "No")
             row("Uses STE", if (sc68UsesSte) "Yes" else "No")
             row("Uses Amiga Paula", if (sc68UsesAmiga) "Yes" else "No")
@@ -1815,11 +1828,17 @@ private fun TrackInfoDetailsDialog(
                                 if (sc68HardwareName.isNotBlank()) {
                                     TrackInfoDetailsRow("Hardware", sc68HardwareName)
                                 }
+                                if (sc68PlatformName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Platform", sc68PlatformName)
+                                }
                                 if (sc68ReplayName.isNotBlank()) {
                                     TrackInfoDetailsRow("Replay", sc68ReplayName)
                                 }
                                 if (sc68ReplayRateHz > 0) {
                                     TrackInfoDetailsRow("Replay rate", "${sc68ReplayRateHz} Hz")
+                                }
+                                if (sampleRateHz > 0) {
+                                    TrackInfoDetailsRow("Frequency", "${sampleRateHz} Hz")
                                 }
                                 if (sc68TrackCount > 0) {
                                     TrackInfoDetailsRow("Track count", sc68TrackCount.toString())
@@ -1836,6 +1855,10 @@ private fun TrackInfoDetailsDialog(
                                 if (sc68Converter.isNotBlank()) {
                                     TrackInfoDetailsRow("Converter", sc68Converter)
                                 }
+                                if (sc68Timer.isNotBlank()) {
+                                    TrackInfoDetailsRow("Timer", sc68Timer)
+                                }
+                                TrackInfoDetailsRow("Can aSID", if (sc68CanAsid) "Yes" else "No")
                                 TrackInfoDetailsRow("Uses YM-2149", if (sc68UsesYm) "Yes" else "No")
                                 TrackInfoDetailsRow("Uses STE", if (sc68UsesSte) "Yes" else "No")
                                 TrackInfoDetailsRow("Uses Amiga Paula", if (sc68UsesAmiga) "Yes" else "No")

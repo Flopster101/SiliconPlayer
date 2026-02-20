@@ -1043,6 +1043,13 @@ Java_com_flopster101_siliconplayer_NativeBridge_getSc68HardwareName(JNIEnv* env,
 }
 
 extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSc68PlatformName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getSc68PlatformName();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getSc68ReplayName(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getSc68ReplayName();
@@ -1087,6 +1094,19 @@ Java_com_flopster101_siliconplayer_NativeBridge_getSc68Converter(JNIEnv* env, jo
     if (audioEngine == nullptr) return toJString(env, "");
     std::string value = audioEngine->getSc68Converter();
     return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSc68Timer(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    std::string value = audioEngine->getSc68Timer();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getSc68CanAsid(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return JNI_FALSE;
+    return audioEngine->getSc68CanAsid() ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL

@@ -5,14 +5,17 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <vector>
 
 extern "C" {
 #include <sc68/sc68.h>
+#include <unice68.h>
 }
 
 #define LOG_TAG "Sc68Decoder"
@@ -23,7 +26,7 @@ constexpr int kDefaultSampleRateHz = 44100;
 constexpr int kMinSampleRateHz = 8000;
 constexpr int kMaxSampleRateHz = 192000;
 constexpr int kSeekDiscardChunkFrames = 1024;
-constexpr int kInfoTrackCurrent = -1;
+constexpr int kInfoTrackCurrent = SC68_CUR_TRACK;
 constexpr int kTrackDiskInfo = 0;
 
 std::mutex gSc68ApiMutex;
@@ -67,6 +70,24 @@ std::string normalizeText(std::string value) {
     return value;
 }
 
+std::string deriveSc68PlatformName(bool ym, bool ste, bool amiga, const char* fallbackHw) {
+    static const char* kPlatformNames[8] = {
+            "?",
+            "ST",
+            "STE",
+            "YM+STE",
+            "Amiga",
+            "Amiga+ST",
+            "Amiga+STE",
+            "Amiga++"
+    };
+    const int idx = (ym ? 1 : 0) | (ste ? 2 : 0) | (amiga ? 4 : 0);
+    if (idx > 0) {
+        return kPlatformNames[idx];
+    }
+    return normalizeText(safeString(fallbackHw));
+}
+
 bool containsIgnoreCase(const std::string& text, const std::string& needle) {
     if (needle.empty()) return true;
     if (text.size() < needle.size()) return false;
@@ -83,6 +104,18 @@ bool containsIgnoreCase(const std::string& text, const std::string& needle) {
         if (match) return true;
     }
     return false;
+}
+
+bool equalsIgnoreCase(const char* a, const char* b) {
+    if (!a || !b) return false;
+    while (*a && *b) {
+        const char ca = static_cast<char>(std::tolower(static_cast<unsigned char>(*a)));
+        const char cb = static_cast<char>(std::tolower(static_cast<unsigned char>(*b)));
+        if (ca != cb) return false;
+        ++a;
+        ++b;
+    }
+    return *a == '\0' && *b == '\0';
 }
 
 int parseIntString(const char* value, int fallback) {
@@ -102,6 +135,76 @@ bool parseBoolString(const char* value, bool fallback) {
     if (normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on") return true;
     if (normalized == "0" || normalized == "false" || normalized == "no" || normalized == "off") return false;
     return fallback;
+}
+
+std::string detectSndhTimerTagFromFile(const std::string& path) {
+    if (path.empty()) return "";
+    std::string ext = std::filesystem::path(path).extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    if (ext != ".sndh") {
+        return "";
+    }
+
+    std::ifstream in(path, std::ios::binary | std::ios::ate);
+    if (!in) return "";
+    const std::streamsize fileSize = in.tellg();
+    if (fileSize <= 0) return "";
+    in.seekg(0, std::ios::beg);
+
+    std::vector<unsigned char> packed(static_cast<size_t>(fileSize));
+    in.read(reinterpret_cast<char*>(packed.data()), fileSize);
+    const size_t size = static_cast<size_t>(in.gcount());
+    if (size < 3) return "";
+    packed.resize(size);
+
+    const unsigned char* scanData = packed.data();
+    size_t scanSize = packed.size();
+    std::vector<unsigned char> unpacked;
+
+    // Match Droidsound-E behavior for ICE-packed SNDH payloads.
+    if (scanSize >= 4 && std::memcmp(scanData, "ICE!", 4) == 0) {
+        int compressedSize = static_cast<int>(scanSize);
+        const int depackedSize = unice68_depacked_size(scanData, &compressedSize);
+        if (depackedSize > 0) {
+            unpacked.resize(static_cast<size_t>(depackedSize));
+            if (unice68_depacker(unpacked.data(), scanData) == 0) {
+                scanData = unpacked.data();
+                scanSize = unpacked.size();
+            }
+        }
+    }
+
+    if (scanSize < 20 || std::memcmp(scanData + 12, "SNDH", 4) != 0) {
+        return "";
+    }
+
+    size_t hdnsOffset = scanSize;
+    for (size_t i = 0; i + 3 < scanSize; ++i) {
+        if (scanData[i] == 'H' &&
+            scanData[i + 1] == 'D' &&
+            scanData[i + 2] == 'N' &&
+            scanData[i + 3] == 'S') {
+            hdnsOffset = i;
+            break;
+        }
+    }
+
+    const size_t start = 16;
+    const size_t end = (hdnsOffset < scanSize && hdnsOffset > start) ? hdnsOffset : scanSize;
+    for (size_t i = start; i + 2 < end; ++i) {
+        const unsigned char a = scanData[i];
+        const unsigned char b = scanData[i + 1];
+        const unsigned char c = scanData[i + 2];
+        if (a == 'T' &&
+            (b == 'A' || b == 'B' || b == 'C' || b == 'D') &&
+            std::isdigit(c)) {
+            return std::string(1, static_cast<char>(b));
+        }
+    }
+
+    return "";
 }
 
 }
@@ -189,6 +292,7 @@ void Sc68Decoder::closeInternalLocked() {
     genre.clear();
     formatName.clear();
     hardwareName.clear();
+    platformName.clear();
     replayName.clear();
     replayRateHz = 0;
     trackCountInfo = 0;
@@ -196,6 +300,8 @@ void Sc68Decoder::closeInternalLocked() {
     yearTag.clear();
     ripperTag.clear();
     converterTag.clear();
+    timerTag.clear();
+    trackCanAsid = false;
     trackHasYm = false;
     trackHasSte = false;
     trackHasAmiga = false;
@@ -242,6 +348,7 @@ void Sc68Decoder::refreshMetadataLocked() {
         genre.clear();
         formatName.clear();
         hardwareName.clear();
+        platformName.clear();
         replayName.clear();
         replayRateHz = 0;
         trackCountInfo = 0;
@@ -249,6 +356,8 @@ void Sc68Decoder::refreshMetadataLocked() {
         yearTag.clear();
         ripperTag.clear();
         converterTag.clear();
+        timerTag.clear();
+        trackCanAsid = false;
         return;
     }
 
@@ -258,12 +367,45 @@ void Sc68Decoder::refreshMetadataLocked() {
     genre = normalizeText(safeString(info.genre));
     formatName = normalizeText(safeString(info.format));
     albumName = normalizeText(safeString(info.album));
+    platformName = deriveSc68PlatformName(
+            info.dsk.ym != 0,
+            info.dsk.ste != 0,
+            info.dsk.amiga != 0,
+            info.dsk.hw
+    );
     replayName = normalizeText(safeString(info.replay));
     replayRateHz = static_cast<int>(info.rate);
     trackCountInfo = info.tracks;
     yearTag = normalizeText(safeString(info.year));
     ripperTag = normalizeText(safeString(info.ripper));
     converterTag = normalizeText(safeString(info.converter));
+    trackCanAsid = info.trk.asid != 0;
+    timerTag.clear();
+    if (info.trk.tags > 0 && info.trk.tag) {
+        for (int i = 0; i < info.trk.tags; ++i) {
+            const sc68_tag_t& tag = info.trk.tag[i];
+            if (equalsIgnoreCase(tag.key, "TIMER")) {
+                timerTag = normalizeText(safeString(tag.val));
+                break;
+            }
+        }
+    }
+    if (timerTag.empty() && info.dsk.tags > 0 && info.dsk.tag) {
+        for (int i = 0; i < info.dsk.tags; ++i) {
+            const sc68_tag_t& tag = info.dsk.tag[i];
+            if (equalsIgnoreCase(tag.key, "TIMER")) {
+                timerTag = normalizeText(safeString(tag.val));
+                break;
+            }
+        }
+    }
+    if (timerTag.empty() && handle) {
+        const char* timerFromTag = sc68_tag(handle, "TIMER", SC68_CUR_TRACK, nullptr);
+        timerTag = normalizeText(safeString(timerFromTag));
+    }
+    if (timerTag.empty()) {
+        timerTag = detectSndhTimerTagFromFile(sourcePath);
+    }
     trackHasYm = info.trk.ym != 0;
     trackHasSte = info.trk.ste != 0;
     trackHasAmiga = info.trk.amiga != 0;
@@ -521,7 +663,10 @@ std::string Sc68Decoder::getBitDepthLabel() {
 }
 
 int Sc68Decoder::getDisplayChannelCount() {
-    return channels;
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    rebuildToggleChannelsLocked();
+    const int logicalChannels = static_cast<int>(toggleChannelNames.size());
+    return logicalChannels > 0 ? logicalChannels : channels;
 }
 
 int Sc68Decoder::getChannelCount() {
@@ -631,6 +776,11 @@ std::string Sc68Decoder::getHardwareName() {
     return hardwareName;
 }
 
+std::string Sc68Decoder::getPlatformName() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return platformName;
+}
+
 std::string Sc68Decoder::getReplayName() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return replayName;
@@ -664,6 +814,16 @@ std::string Sc68Decoder::getRipperTag() {
 std::string Sc68Decoder::getConverterTag() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return converterTag;
+}
+
+std::string Sc68Decoder::getTimerTag() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return timerTag;
+}
+
+bool Sc68Decoder::getCanAsid() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return trackCanAsid;
 }
 
 bool Sc68Decoder::getUsesYm() const {

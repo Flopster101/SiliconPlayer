@@ -11,6 +11,8 @@ import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.TabletAndroid
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.flopster101.siliconplayer.data.buildArchiveSourceId
+import com.flopster101.siliconplayer.data.parseArchiveSourceId
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -23,6 +25,15 @@ internal fun normalizeSourceIdentity(path: String?): String? {
     val scheme = uri.scheme?.lowercase(Locale.ROOT)
     return when (scheme) {
         "http", "https" -> uri.normalizeScheme().toString()
+        "archive" -> {
+            val parsedArchive = parseArchiveSourceId(trimmed) ?: return trimmed
+            val canonicalArchivePath = try {
+                File(parsedArchive.archivePath).canonicalFile.absolutePath
+            } catch (_: Exception) {
+                File(parsedArchive.archivePath).absoluteFile.normalize().path
+            }
+            buildArchiveSourceId(canonicalArchivePath, parsedArchive.entryPath)
+        }
         "file" -> {
             val localPath = uri.path?.takeIf { it.isNotBlank() } ?: return null
             try {
@@ -75,6 +86,7 @@ internal fun resolvePlaybackSourceLabel(
     val normalizedSource = normalizeSourceIdentity(sourceId ?: selectedFile.absolutePath) ?: return "Local"
     val scheme = Uri.parse(normalizedSource).scheme?.lowercase(Locale.ROOT)
     val isRemote = scheme == "http" || scheme == "https"
+    if (scheme == "archive") return "Archive"
     if (!isRemote) return "Local"
     return if (selectedFile.absolutePath.contains("/cache/remote_sources/")) {
         "Streamed (cached)"
@@ -225,6 +237,12 @@ internal fun storagePresentationForEntry(
             label = "$protocolLabel ($hostLabel)",
             icon = Icons.Default.Public,
             qualifier = qualifier
+        )
+    }
+    if (scheme == "archive") {
+        return StoragePresentation(
+            label = "Archive",
+            icon = Icons.Default.Folder
         )
     }
 

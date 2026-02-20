@@ -100,6 +100,7 @@ internal class AppNavigationTrackLoadDelegates(
 
     suspend fun restorePlayerStateFromSessionAndNative(openExpanded: Boolean) {
         restorePlayerStateFromSessionAndNativeAction(
+            context = context,
             openExpanded = openExpanded,
             prefs = prefs,
             cacheRoot = cacheRootProvider(),

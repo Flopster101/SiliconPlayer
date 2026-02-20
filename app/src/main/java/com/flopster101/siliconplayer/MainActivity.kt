@@ -142,6 +142,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         applyRemoteSourceCachePolicyOnLaunch(this, cacheDir)
+        applyArchiveMountCachePolicyOnLaunch(this, cacheDir)
         if (shouldOpenPlayerFromNotification(intent)) {
             notificationOpenPlayerSignal++
         }
@@ -690,6 +691,10 @@ private fun AppNavigation(
     var urlCacheClearOnLaunch by settingsStates.urlCacheClearOnLaunch
     var urlCacheMaxTracks by settingsStates.urlCacheMaxTracks
     var urlCacheMaxBytes by settingsStates.urlCacheMaxBytes
+    var archiveCacheClearOnLaunch by settingsStates.archiveCacheClearOnLaunch
+    var archiveCacheMaxMounts by settingsStates.archiveCacheMaxMounts
+    var archiveCacheMaxBytes by settingsStates.archiveCacheMaxBytes
+    var archiveCacheMaxAgeDays by settingsStates.archiveCacheMaxAgeDays
     var cachedSourceFiles by settingsStates.cachedSourceFiles
     var pendingCacheExportPaths by settingsStates.pendingCacheExportPaths
     var audioAllowBackendFallback by settingsStates.audioAllowBackendFallback
@@ -1653,6 +1658,46 @@ private fun AppNavigation(
                                 onRefreshCachedSourceFiles = refreshCachedSourceFiles
                             )
                         },
+                                    onArchiveCacheClearOnLaunchChanged = { enabled ->
+                            updateArchiveCacheClearOnLaunchAction(
+                                prefs = prefs,
+                                enabled = enabled,
+                                onArchiveCacheClearOnLaunchChanged = { archiveCacheClearOnLaunch = it }
+                            )
+                        },
+                                    onArchiveCacheMaxMountsChanged = { value ->
+                            updateArchiveCacheMaxMountsAction(
+                                value = value,
+                                prefs = prefs,
+                                appScope = appScope,
+                                cacheDir = context.cacheDir,
+                                archiveCacheMaxBytes = archiveCacheMaxBytes,
+                                archiveCacheMaxAgeDays = archiveCacheMaxAgeDays,
+                                onArchiveCacheMaxMountsChanged = { archiveCacheMaxMounts = it }
+                            )
+                        },
+                                    onArchiveCacheMaxBytesChanged = { value ->
+                            updateArchiveCacheMaxBytesAction(
+                                value = value,
+                                prefs = prefs,
+                                appScope = appScope,
+                                cacheDir = context.cacheDir,
+                                archiveCacheMaxMounts = archiveCacheMaxMounts,
+                                archiveCacheMaxAgeDays = archiveCacheMaxAgeDays,
+                                onArchiveCacheMaxBytesChanged = { archiveCacheMaxBytes = it }
+                            )
+                        },
+                                    onArchiveCacheMaxAgeDaysChanged = { value ->
+                            updateArchiveCacheMaxAgeDaysAction(
+                                value = value,
+                                prefs = prefs,
+                                appScope = appScope,
+                                cacheDir = context.cacheDir,
+                                archiveCacheMaxMounts = archiveCacheMaxMounts,
+                                archiveCacheMaxBytes = archiveCacheMaxBytes,
+                                onArchiveCacheMaxAgeDaysChanged = { archiveCacheMaxAgeDays = it }
+                            )
+                        },
                                     onClearUrlCacheNow = {
                             clearUrlCacheNowAction(
                                 context = context,
@@ -1661,6 +1706,13 @@ private fun AppNavigation(
                                 cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
                                 selectedFile = selectedFile,
                                 onRefreshCachedSourceFiles = refreshCachedSourceFiles
+                            )
+                        },
+                                    onClearArchiveCacheNow = {
+                            clearArchiveCacheNowAction(
+                                context = context,
+                                appScope = appScope,
+                                cacheDir = context.cacheDir
                             )
                         },
                                     onRefreshCachedSourceFiles = refreshCachedSourceFiles,
@@ -2025,11 +2077,12 @@ private fun AppNavigation(
                             .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, directoryPath)
                             .apply()
                     },
-                    onFileSelected = { file ->
+                    onFileSelected = { file, sourceIdOverride ->
                         trackLoadDelegates.applyTrackSelection(
                             file = file,
                             autoStart = autoPlayOnTrackSelect,
-                            expandOverride = openPlayerOnTrackSelect
+                            expandOverride = openPlayerOnTrackSelect,
+                            sourceIdOverride = sourceIdOverride
                         )
                     }
                 )

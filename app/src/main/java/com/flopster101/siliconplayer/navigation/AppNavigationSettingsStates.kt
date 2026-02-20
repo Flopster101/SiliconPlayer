@@ -9,6 +9,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import com.flopster101.siliconplayer.data.ARCHIVE_CACHE_MAX_AGE_DAYS_DEFAULT
+import com.flopster101.siliconplayer.data.ARCHIVE_CACHE_MAX_BYTES_DEFAULT
+import com.flopster101.siliconplayer.data.ARCHIVE_CACHE_MAX_MOUNTS_DEFAULT
 import kotlinx.coroutines.Job
 
 internal data class AppNavigationSettingsStates(
@@ -73,6 +76,10 @@ internal data class AppNavigationSettingsStates(
     val urlCacheClearOnLaunch: MutableState<Boolean>,
     val urlCacheMaxTracks: MutableIntState,
     val urlCacheMaxBytes: MutableLongState,
+    val archiveCacheClearOnLaunch: MutableState<Boolean>,
+    val archiveCacheMaxMounts: MutableIntState,
+    val archiveCacheMaxBytes: MutableLongState,
+    val archiveCacheMaxAgeDays: MutableIntState,
     val cachedSourceFiles: MutableState<List<CachedSourceFile>>,
     val pendingCacheExportPaths: MutableState<List<String>>,
     val audioAllowBackendFallback: MutableState<Boolean>,
@@ -336,6 +343,18 @@ internal fun rememberAppNavigationSettingsStates(
     val urlCacheMaxBytes = remember {
         mutableLongStateOf(prefs.getLong(AppPreferenceKeys.URL_CACHE_MAX_BYTES, SOURCE_CACHE_MAX_BYTES_DEFAULT))
     }
+    val archiveCacheClearOnLaunch = remember {
+        mutableStateOf(prefs.getBoolean(AppPreferenceKeys.ARCHIVE_CACHE_CLEAR_ON_LAUNCH, false))
+    }
+    val archiveCacheMaxMounts = remember {
+        mutableIntStateOf(prefs.getInt(AppPreferenceKeys.ARCHIVE_CACHE_MAX_MOUNTS, ARCHIVE_CACHE_MAX_MOUNTS_DEFAULT))
+    }
+    val archiveCacheMaxBytes = remember {
+        mutableLongStateOf(prefs.getLong(AppPreferenceKeys.ARCHIVE_CACHE_MAX_BYTES, ARCHIVE_CACHE_MAX_BYTES_DEFAULT))
+    }
+    val archiveCacheMaxAgeDays = remember {
+        mutableIntStateOf(prefs.getInt(AppPreferenceKeys.ARCHIVE_CACHE_MAX_AGE_DAYS, ARCHIVE_CACHE_MAX_AGE_DAYS_DEFAULT))
+    }
     val cachedSourceFiles = remember { mutableStateOf<List<CachedSourceFile>>(emptyList()) }
     val pendingCacheExportPaths = remember { mutableStateOf<List<String>>(emptyList()) }
     val audioAllowBackendFallback = remember {
@@ -409,6 +428,10 @@ internal fun rememberAppNavigationSettingsStates(
         urlCacheClearOnLaunch = urlCacheClearOnLaunch,
         urlCacheMaxTracks = urlCacheMaxTracks,
         urlCacheMaxBytes = urlCacheMaxBytes,
+        archiveCacheClearOnLaunch = archiveCacheClearOnLaunch,
+        archiveCacheMaxMounts = archiveCacheMaxMounts,
+        archiveCacheMaxBytes = archiveCacheMaxBytes,
+        archiveCacheMaxAgeDays = archiveCacheMaxAgeDays,
         cachedSourceFiles = cachedSourceFiles,
         pendingCacheExportPaths = pendingCacheExportPaths,
         audioAllowBackendFallback = audioAllowBackendFallback,

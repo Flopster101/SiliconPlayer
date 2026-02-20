@@ -1,6 +1,8 @@
 package com.flopster101.siliconplayer
 
+import android.content.Context
 import android.net.Uri
+import com.flopster101.siliconplayer.data.resolveArchiveSourceToMountedFile
 import java.io.File
 import java.util.Locale
 
@@ -10,6 +12,7 @@ internal data class SessionRestoreTarget(
 )
 
 internal fun resolveSessionRestoreTarget(
+    context: Context,
     rawSessionPath: String?,
     cacheRoot: File
 ): SessionRestoreTarget? {
@@ -41,12 +44,15 @@ internal fun resolveSessionRestoreTarget(
         findExistingCachedFileForSource(cacheRoot, normalizedSource)
             ?: File("/virtual/remote/${remoteFilenameHintFromUri(sourceUri) ?: "remote"}")
     } else {
-        val localPath = when (sourceScheme) {
-            "file" -> sourceUri.path
-            else -> normalizedSource
+        resolveArchiveSourceToMountedFile(context, normalizedSource)
+            ?: run {
+                val localPath = when (sourceScheme) {
+                    "file" -> sourceUri.path
+                    else -> normalizedSource
+                }
+                localPath?.let { File(it) } ?: File(normalizedSource)
+            }
         }
-        localPath?.let { File(it) } ?: File(normalizedSource)
-    }
 
     return SessionRestoreTarget(
         sourceId = normalizedSource,

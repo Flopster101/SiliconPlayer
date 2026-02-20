@@ -151,6 +151,7 @@ internal fun resetAndOptionallyKeepLastTrackAction(
 }
 
 internal suspend fun restorePlayerStateFromSessionAndNativeAction(
+    context: Context,
     openExpanded: Boolean,
     prefs: SharedPreferences,
     cacheRoot: File,
@@ -167,6 +168,7 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
     refreshRepeatModeForTrack: () -> Unit
 ) {
     val restoreTarget = resolveSessionRestoreTarget(
+        context = context,
         rawSessionPath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null),
         cacheRoot = cacheRoot
     ) ?: return

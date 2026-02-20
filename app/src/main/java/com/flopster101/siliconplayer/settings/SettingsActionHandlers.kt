@@ -3,6 +3,11 @@ package com.flopster101.siliconplayer
 import android.content.Context
 import android.content.SharedPreferences
 import android.widget.Toast
+import com.flopster101.siliconplayer.data.ARCHIVE_CACHE_MAX_AGE_DAYS_DEFAULT
+import com.flopster101.siliconplayer.data.ARCHIVE_CACHE_MAX_BYTES_DEFAULT
+import com.flopster101.siliconplayer.data.ARCHIVE_CACHE_MAX_MOUNTS_DEFAULT
+import com.flopster101.siliconplayer.data.clearArchiveMountCache
+import com.flopster101.siliconplayer.data.enforceArchiveMountCacheLimits
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -135,6 +140,98 @@ internal fun updateUrlCacheClearOnLaunchAction(
 ) {
     onUrlCacheClearOnLaunchChanged(enabled)
     prefs.edit().putBoolean(AppPreferenceKeys.URL_CACHE_CLEAR_ON_LAUNCH, enabled).apply()
+}
+
+internal fun updateArchiveCacheClearOnLaunchAction(
+    prefs: SharedPreferences,
+    enabled: Boolean,
+    onArchiveCacheClearOnLaunchChanged: (Boolean) -> Unit
+) {
+    onArchiveCacheClearOnLaunchChanged(enabled)
+    prefs.edit().putBoolean(AppPreferenceKeys.ARCHIVE_CACHE_CLEAR_ON_LAUNCH, enabled).apply()
+}
+
+internal fun updateArchiveCacheMaxMountsAction(
+    value: Int,
+    prefs: SharedPreferences,
+    appScope: CoroutineScope,
+    cacheDir: File,
+    archiveCacheMaxBytes: Long,
+    archiveCacheMaxAgeDays: Int,
+    onArchiveCacheMaxMountsChanged: (Int) -> Unit
+) {
+    val maxMounts = value.coerceAtLeast(1)
+    onArchiveCacheMaxMountsChanged(maxMounts)
+    prefs.edit().putInt(AppPreferenceKeys.ARCHIVE_CACHE_MAX_MOUNTS, maxMounts).apply()
+    appScope.launch(Dispatchers.IO) {
+        enforceArchiveMountCacheLimits(
+            cacheDir = cacheDir,
+            maxMounts = maxMounts,
+            maxBytes = archiveCacheMaxBytes,
+            maxAgeDays = archiveCacheMaxAgeDays
+        )
+    }
+}
+
+internal fun updateArchiveCacheMaxBytesAction(
+    value: Long,
+    prefs: SharedPreferences,
+    appScope: CoroutineScope,
+    cacheDir: File,
+    archiveCacheMaxMounts: Int,
+    archiveCacheMaxAgeDays: Int,
+    onArchiveCacheMaxBytesChanged: (Long) -> Unit
+) {
+    val maxBytes = value.coerceAtLeast(1L)
+    onArchiveCacheMaxBytesChanged(maxBytes)
+    prefs.edit().putLong(AppPreferenceKeys.ARCHIVE_CACHE_MAX_BYTES, maxBytes).apply()
+    appScope.launch(Dispatchers.IO) {
+        enforceArchiveMountCacheLimits(
+            cacheDir = cacheDir,
+            maxMounts = archiveCacheMaxMounts,
+            maxBytes = maxBytes,
+            maxAgeDays = archiveCacheMaxAgeDays
+        )
+    }
+}
+
+internal fun updateArchiveCacheMaxAgeDaysAction(
+    value: Int,
+    prefs: SharedPreferences,
+    appScope: CoroutineScope,
+    cacheDir: File,
+    archiveCacheMaxMounts: Int,
+    archiveCacheMaxBytes: Long,
+    onArchiveCacheMaxAgeDaysChanged: (Int) -> Unit
+) {
+    val maxAgeDays = value.coerceAtLeast(1)
+    onArchiveCacheMaxAgeDaysChanged(maxAgeDays)
+    prefs.edit().putInt(AppPreferenceKeys.ARCHIVE_CACHE_MAX_AGE_DAYS, maxAgeDays).apply()
+    appScope.launch(Dispatchers.IO) {
+        enforceArchiveMountCacheLimits(
+            cacheDir = cacheDir,
+            maxMounts = archiveCacheMaxMounts,
+            maxBytes = archiveCacheMaxBytes,
+            maxAgeDays = maxAgeDays
+        )
+    }
+}
+
+internal fun clearArchiveCacheNowAction(
+    context: Context,
+    appScope: CoroutineScope,
+    cacheDir: File
+) {
+    appScope.launch(Dispatchers.IO) {
+        val result = clearArchiveMountCache(cacheDir)
+        withContext(Dispatchers.Main.immediate) {
+            Toast.makeText(
+                context,
+                "Archive cache cleared (${result.deletedMounts} mounts)",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
 }
 
 internal fun clearUrlCacheNowAction(
@@ -600,6 +697,10 @@ internal fun clearAllSettingsAction(
     onUrlCacheClearOnLaunchChanged: (Boolean) -> Unit,
     onUrlCacheMaxTracksChanged: (Int) -> Unit,
     onUrlCacheMaxBytesChanged: (Long) -> Unit,
+    onArchiveCacheClearOnLaunchChanged: (Boolean) -> Unit,
+    onArchiveCacheMaxMountsChanged: (Int) -> Unit,
+    onArchiveCacheMaxBytesChanged: (Long) -> Unit,
+    onArchiveCacheMaxAgeDaysChanged: (Int) -> Unit,
     onLastBrowserLocationIdChanged: (String?) -> Unit,
     onLastBrowserDirectoryPathChanged: (String?) -> Unit,
     onRecentFoldersLimitChanged: (Int) -> Unit,
@@ -707,6 +808,10 @@ internal fun clearAllSettingsAction(
     onUrlCacheClearOnLaunchChanged(false)
     onUrlCacheMaxTracksChanged(SOURCE_CACHE_MAX_TRACKS_DEFAULT)
     onUrlCacheMaxBytesChanged(SOURCE_CACHE_MAX_BYTES_DEFAULT)
+    onArchiveCacheClearOnLaunchChanged(false)
+    onArchiveCacheMaxMountsChanged(ARCHIVE_CACHE_MAX_MOUNTS_DEFAULT)
+    onArchiveCacheMaxBytesChanged(ARCHIVE_CACHE_MAX_BYTES_DEFAULT)
+    onArchiveCacheMaxAgeDaysChanged(ARCHIVE_CACHE_MAX_AGE_DAYS_DEFAULT)
     onLastBrowserLocationIdChanged(null)
     onLastBrowserDirectoryPathChanged(null)
     onRecentFoldersLimitChanged(RECENT_FOLDERS_LIMIT_DEFAULT)

@@ -57,7 +57,7 @@ internal fun AppNavigationBrowserRouteSection(
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
     onExitBrowser: () -> Unit,
     onBrowserLocationChanged: (String?, String?) -> Unit,
-    onFileSelected: (File) -> Unit
+    onFileSelected: (File, String?) -> Unit
 ) {
     MainBrowserRouteHost(
         mainPadding = mainPadding,

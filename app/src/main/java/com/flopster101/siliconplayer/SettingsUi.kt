@@ -136,6 +136,10 @@ internal data class SettingsScreenState(
     val urlCacheClearOnLaunch: Boolean,
     val urlCacheMaxTracks: Int,
     val urlCacheMaxBytes: Long,
+    val archiveCacheClearOnLaunch: Boolean,
+    val archiveCacheMaxMounts: Int,
+    val archiveCacheMaxBytes: Long,
+    val archiveCacheMaxAgeDays: Int,
     val cachedSourceFiles: List<CachedSourceFile>,
     val keepScreenOn: Boolean,
     val playerArtworkCornerRadiusDp: Int,
@@ -260,7 +264,12 @@ internal data class SettingsScreenActions(
     val onUrlCacheClearOnLaunchChanged: (Boolean) -> Unit,
     val onUrlCacheMaxTracksChanged: (Int) -> Unit,
     val onUrlCacheMaxBytesChanged: (Long) -> Unit,
+    val onArchiveCacheClearOnLaunchChanged: (Boolean) -> Unit,
+    val onArchiveCacheMaxMountsChanged: (Int) -> Unit,
+    val onArchiveCacheMaxBytesChanged: (Long) -> Unit,
+    val onArchiveCacheMaxAgeDaysChanged: (Int) -> Unit,
     val onClearUrlCacheNow: () -> Unit,
+    val onClearArchiveCacheNow: () -> Unit,
     val onRefreshCachedSourceFiles: () -> Unit,
     val onDeleteCachedSourceFiles: (List<String>) -> Unit,
     val onExportCachedSourceFiles: (List<String>) -> Unit,
@@ -422,7 +431,16 @@ internal fun SettingsScreen(
     val onUrlCacheMaxTracksChanged = actions.onUrlCacheMaxTracksChanged
     val urlCacheMaxBytes = state.urlCacheMaxBytes
     val onUrlCacheMaxBytesChanged = actions.onUrlCacheMaxBytesChanged
+    val archiveCacheClearOnLaunch = state.archiveCacheClearOnLaunch
+    val onArchiveCacheClearOnLaunchChanged = actions.onArchiveCacheClearOnLaunchChanged
+    val archiveCacheMaxMounts = state.archiveCacheMaxMounts
+    val onArchiveCacheMaxMountsChanged = actions.onArchiveCacheMaxMountsChanged
+    val archiveCacheMaxBytes = state.archiveCacheMaxBytes
+    val onArchiveCacheMaxBytesChanged = actions.onArchiveCacheMaxBytesChanged
+    val archiveCacheMaxAgeDays = state.archiveCacheMaxAgeDays
+    val onArchiveCacheMaxAgeDaysChanged = actions.onArchiveCacheMaxAgeDaysChanged
     val onClearUrlCacheNow = actions.onClearUrlCacheNow
+    val onClearArchiveCacheNow = actions.onClearArchiveCacheNow
     val cachedSourceFiles = state.cachedSourceFiles
     val onRefreshCachedSourceFiles = actions.onRefreshCachedSourceFiles
     val onDeleteCachedSourceFiles = actions.onDeleteCachedSourceFiles
@@ -1040,14 +1058,23 @@ internal fun SettingsScreen(
                             state = UrlCacheRouteState(
                                 urlCacheClearOnLaunch = urlCacheClearOnLaunch,
                                 urlCacheMaxTracks = urlCacheMaxTracks,
-                                urlCacheMaxBytes = urlCacheMaxBytes
+                                urlCacheMaxBytes = urlCacheMaxBytes,
+                                archiveCacheClearOnLaunch = archiveCacheClearOnLaunch,
+                                archiveCacheMaxMounts = archiveCacheMaxMounts,
+                                archiveCacheMaxBytes = archiveCacheMaxBytes,
+                                archiveCacheMaxAgeDays = archiveCacheMaxAgeDays
                             ),
                             actions = UrlCacheRouteActions(
                                 onUrlCacheClearOnLaunchChanged = onUrlCacheClearOnLaunchChanged,
                                 onUrlCacheMaxTracksChanged = onUrlCacheMaxTracksChanged,
                                 onUrlCacheMaxBytesChanged = onUrlCacheMaxBytesChanged,
                                 onOpenCacheManager = onOpenCacheManager,
-                                onClearUrlCacheNow = onClearUrlCacheNow
+                                onArchiveCacheClearOnLaunchChanged = onArchiveCacheClearOnLaunchChanged,
+                                onArchiveCacheMaxMountsChanged = onArchiveCacheMaxMountsChanged,
+                                onArchiveCacheMaxBytesChanged = onArchiveCacheMaxBytesChanged,
+                                onArchiveCacheMaxAgeDaysChanged = onArchiveCacheMaxAgeDaysChanged,
+                                onClearUrlCacheNow = onClearUrlCacheNow,
+                                onClearArchiveCacheNow = onClearArchiveCacheNow
                             )
                         )
                     }

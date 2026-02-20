@@ -51,9 +51,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.data.isArchiveLogicalFolderPath
+import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
 import java.io.File
 import kotlinx.coroutines.delay
 
@@ -329,11 +332,19 @@ internal fun HomeScreen(
                                             .padding(horizontal = 14.dp, vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Folder,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
+                                        if (isArchiveLogicalFolderPath(entry.path)) {
+                                            Icon(
+                                                painter = painterResource(id = R.drawable.ic_folder_zip),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.Folder,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
                                         Spacer(modifier = Modifier.width(12.dp))
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(
@@ -350,8 +361,18 @@ internal fun HomeScreen(
                                                     modifier = Modifier.size(14.dp)
                                                 )
                                                 Spacer(modifier = Modifier.width(4.dp))
+                                                val archiveName = parseArchiveLogicalPath(entry.path)
+                                                    ?.takeIf { it.second != null }
+                                                    ?.first
+                                                    ?.let { File(it).name }
+                                                    ?.takeIf { it.isNotBlank() }
+                                                val storageSubtitle = if (archiveName != null) {
+                                                    "${storagePresentation.label} • $archiveName"
+                                                } else {
+                                                    storagePresentation.label
+                                                }
                                                 Text(
-                                                    text = storagePresentation.label,
+                                                    text = storageSubtitle,
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     maxLines = 1,

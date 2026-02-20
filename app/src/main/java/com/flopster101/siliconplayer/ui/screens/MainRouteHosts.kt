@@ -58,7 +58,7 @@ internal fun MainBrowserRouteHost(
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
     onExitBrowser: () -> Unit,
     onBrowserLocationChanged: (String?, String?) -> Unit,
-    onFileSelected: (File) -> Unit
+    onFileSelected: (File, String?) -> Unit
 ) {
     Box(modifier = Modifier.padding(mainPadding)) {
         FileBrowserScreen(

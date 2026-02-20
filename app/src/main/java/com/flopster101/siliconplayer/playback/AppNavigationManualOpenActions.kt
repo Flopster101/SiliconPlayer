@@ -3,6 +3,7 @@ package com.flopster101.siliconplayer
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import com.flopster101.siliconplayer.data.resolveArchiveSourceToMountedFile
 import com.flopster101.siliconplayer.data.FileRepository
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -171,6 +172,19 @@ internal fun applyManualInputSelectionAction(
     onApplyTrackSelection: (File, Boolean, Boolean?, String?) -> Unit,
     onLaunchManualRemoteSelection: (ManualSourceResolution, ManualSourceOpenOptions, Boolean?) -> Unit
 ) {
+    val archiveFile = resolveArchiveSourceToMountedFile(context, rawInput)
+    if (archiveFile != null) {
+        appScope.launch {
+            val contextualPlayableFiles = loadContextualPlayableFilesForManualSelection(
+                repository = repository,
+                localFile = archiveFile
+            )
+            onVisiblePlayableFilesChanged(contextualPlayableFiles)
+            onApplyTrackSelection(archiveFile, true, openPlayerOnTrackSelect, rawInput.trim())
+        }
+        return
+    }
+
     when (val action = resolveManualInputAction(rawInput, storageDescriptors)) {
         ManualInputAction.Invalid -> {
             Toast.makeText(context, MANUAL_INPUT_INVALID_MESSAGE, Toast.LENGTH_SHORT).show()

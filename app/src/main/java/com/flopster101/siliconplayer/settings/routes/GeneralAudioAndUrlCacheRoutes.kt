@@ -48,15 +48,24 @@ internal data class GeneralAudioRouteActions(
 internal data class UrlCacheRouteState(
     val urlCacheClearOnLaunch: Boolean,
     val urlCacheMaxTracks: Int,
-    val urlCacheMaxBytes: Long
+    val urlCacheMaxBytes: Long,
+    val archiveCacheClearOnLaunch: Boolean,
+    val archiveCacheMaxMounts: Int,
+    val archiveCacheMaxBytes: Long,
+    val archiveCacheMaxAgeDays: Int
 )
 
 internal data class UrlCacheRouteActions(
     val onUrlCacheClearOnLaunchChanged: (Boolean) -> Unit,
     val onUrlCacheMaxTracksChanged: (Int) -> Unit,
     val onUrlCacheMaxBytesChanged: (Long) -> Unit,
+    val onArchiveCacheClearOnLaunchChanged: (Boolean) -> Unit,
+    val onArchiveCacheMaxMountsChanged: (Int) -> Unit,
+    val onArchiveCacheMaxBytesChanged: (Long) -> Unit,
+    val onArchiveCacheMaxAgeDaysChanged: (Int) -> Unit,
     val onOpenCacheManager: () -> Unit,
-    val onClearUrlCacheNow: () -> Unit
+    val onClearUrlCacheNow: () -> Unit,
+    val onClearArchiveCacheNow: () -> Unit
 )
 
 @Composable
@@ -147,13 +156,26 @@ internal fun UrlCacheRouteContent(
     val onUrlCacheMaxTracksChanged = actions.onUrlCacheMaxTracksChanged
     val urlCacheMaxBytes = state.urlCacheMaxBytes
     val onUrlCacheMaxBytesChanged = actions.onUrlCacheMaxBytesChanged
+    val archiveCacheClearOnLaunch = state.archiveCacheClearOnLaunch
+    val onArchiveCacheClearOnLaunchChanged = actions.onArchiveCacheClearOnLaunchChanged
+    val archiveCacheMaxMounts = state.archiveCacheMaxMounts
+    val onArchiveCacheMaxMountsChanged = actions.onArchiveCacheMaxMountsChanged
+    val archiveCacheMaxBytes = state.archiveCacheMaxBytes
+    val onArchiveCacheMaxBytesChanged = actions.onArchiveCacheMaxBytesChanged
+    val archiveCacheMaxAgeDays = state.archiveCacheMaxAgeDays
+    val onArchiveCacheMaxAgeDaysChanged = actions.onArchiveCacheMaxAgeDaysChanged
     val onOpenCacheManager = actions.onOpenCacheManager
     val onClearUrlCacheNow = actions.onClearUrlCacheNow
+    val onClearArchiveCacheNow = actions.onClearArchiveCacheNow
 
     var showCacheTrackLimitDialog by remember { mutableStateOf(false) }
     var showCacheSizeLimitDialog by remember { mutableStateOf(false) }
+    var showArchiveMountLimitDialog by remember { mutableStateOf(false) }
+    var showArchiveSizeLimitDialog by remember { mutableStateOf(false) }
+    var showArchiveAgeLimitDialog by remember { mutableStateOf(false) }
     var showClearCacheConfirmDialog by remember { mutableStateOf(false) }
-    SettingsSectionLabel("Cache behavior")
+    var showClearArchiveCacheConfirmDialog by remember { mutableStateOf(false) }
+    SettingsSectionLabel("File cache")
     PlayerSettingToggleCard(
         title = "Clear cache on app launch",
         description = "Delete all cached files each time the app starts.",
@@ -161,7 +183,6 @@ internal fun UrlCacheRouteContent(
         onCheckedChange = onUrlCacheClearOnLaunchChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
-    SettingsSectionLabel("Limits")
     SettingsItemCard(
         title = "Cache song limit",
         description = "$urlCacheMaxTracks songs",
@@ -182,13 +203,48 @@ internal fun UrlCacheRouteContent(
         icon = Icons.Default.MoreHoriz,
         onClick = onOpenCacheManager
     )
-    Spacer(modifier = Modifier.height(16.dp))
-    SettingsSectionLabel("Danger zone")
+    Spacer(modifier = Modifier.height(10.dp))
     SettingsItemCard(
         title = "Clear cache now",
         description = "Delete all currently cached files immediately.",
         icon = Icons.Default.Delete,
         onClick = { showClearCacheConfirmDialog = true }
+    )
+    Spacer(modifier = Modifier.height(16.dp))
+    SettingsSectionLabel("Archive cache")
+    PlayerSettingToggleCard(
+        title = "Clear archive cache on app launch",
+        description = "Delete mounted ZIP extraction folders each time the app starts.",
+        checked = archiveCacheClearOnLaunch,
+        onCheckedChange = onArchiveCacheClearOnLaunchChanged
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    SettingsItemCard(
+        title = "Archive mount limit",
+        description = "$archiveCacheMaxMounts mounted archives",
+        icon = Icons.Default.MoreHoriz,
+        onClick = { showArchiveMountLimitDialog = true }
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    SettingsItemCard(
+        title = "Archive cache size limit",
+        description = String.format(Locale.US, "%.2f GB", archiveCacheMaxBytes / (1024.0 * 1024.0 * 1024.0)),
+        icon = Icons.Default.MoreHoriz,
+        onClick = { showArchiveSizeLimitDialog = true }
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    SettingsItemCard(
+        title = "Archive max age",
+        description = "$archiveCacheMaxAgeDays days",
+        icon = Icons.Default.MoreHoriz,
+        onClick = { showArchiveAgeLimitDialog = true }
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    SettingsItemCard(
+        title = "Clear archive cache now",
+        description = "Delete mounted ZIP extraction folders immediately.",
+        icon = Icons.Default.Delete,
+        onClick = { showClearArchiveCacheConfirmDialog = true }
     )
 
     if (showCacheTrackLimitDialog) {
@@ -220,6 +276,56 @@ internal fun UrlCacheRouteContent(
         )
     }
 
+    if (showArchiveMountLimitDialog) {
+        SettingsTextInputDialog(
+            title = "Archive mount limit",
+            fieldLabel = "Max mounted archives",
+            initialValue = archiveCacheMaxMounts.toString(),
+            placeholder = "24",
+            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+            sanitizer = { input -> input.filter { it.isDigit() }.take(6) },
+            onDismiss = { showArchiveMountLimitDialog = false },
+            onConfirm = { input ->
+                val parsed = input.trim().toIntOrNull()
+                if (parsed != null && parsed > 0) {
+                    onArchiveCacheMaxMountsChanged(parsed)
+                    true
+                } else {
+                    false
+                }
+            }
+        )
+    }
+
+    if (showArchiveSizeLimitDialog) {
+        CacheSizeLimitDialog(
+            initialBytes = archiveCacheMaxBytes,
+            onDismiss = { showArchiveSizeLimitDialog = false },
+            onConfirmBytes = onArchiveCacheMaxBytesChanged
+        )
+    }
+
+    if (showArchiveAgeLimitDialog) {
+        SettingsTextInputDialog(
+            title = "Archive max age",
+            fieldLabel = "Max age (days)",
+            initialValue = archiveCacheMaxAgeDays.toString(),
+            placeholder = "14",
+            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+            sanitizer = { input -> input.filter { it.isDigit() }.take(4) },
+            onDismiss = { showArchiveAgeLimitDialog = false },
+            onConfirm = { input ->
+                val parsed = input.trim().toIntOrNull()
+                if (parsed != null && parsed > 0) {
+                    onArchiveCacheMaxAgeDaysChanged(parsed)
+                    true
+                } else {
+                    false
+                }
+            }
+        )
+    }
+
     if (showClearCacheConfirmDialog) {
         SettingsConfirmDialog(
             title = "Clear cached files now?",
@@ -227,6 +333,16 @@ internal fun UrlCacheRouteContent(
             confirmLabel = "Clear cache",
             onDismiss = { showClearCacheConfirmDialog = false },
             onConfirm = onClearUrlCacheNow
+        )
+    }
+
+    if (showClearArchiveCacheConfirmDialog) {
+        SettingsConfirmDialog(
+            title = "Clear archive cache now?",
+            message = "This removes extracted archive mounts in app cache.",
+            confirmLabel = "Clear archive cache",
+            onDismiss = { showClearArchiveCacheConfirmDialog = false },
+            onConfirm = onClearArchiveCacheNow
         )
     }
 }

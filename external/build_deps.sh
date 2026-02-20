@@ -1316,14 +1316,169 @@ build_libsidplayfp() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build sc68 stack (unice68 + file68 + libsc68)
+# -----------------------------------------------------------------------------
+build_sc68() {
+    local ABI=$1
+    echo "Building sc68 for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/sc68"
+    local CONFIGURE_HOST=""
+    local AS68_TOOL="$PROJECT_PATH/as68/as68"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "sc68 source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libsc68.a" ] && \
+       [ -f "$INSTALL_DIR/lib/libfile68.a" ] && \
+       [ -f "$INSTALL_DIR/lib/libunice68.a" ] && \
+       [ -f "$INSTALL_DIR/include/sc68/sc68.h" ]; then
+        echo "sc68 already built for $ABI -> skipping"
+        return 0
+    fi
+
+    case "$ABI" in
+        "arm64-v8a")
+            CONFIGURE_HOST="aarch64-linux-android"
+            ;;
+        "armeabi-v7a")
+            CONFIGURE_HOST="arm-linux-androideabi"
+            ;;
+        "x86_64")
+            CONFIGURE_HOST="x86_64-linux-android"
+            ;;
+        "x86")
+            CONFIGURE_HOST="i686-linux-android"
+            ;;
+        *)
+            echo "Unsupported ABI for sc68: $ABI"
+            return 1
+            ;;
+    esac
+
+    if ! command -v autoreconf >/dev/null 2>&1; then
+        echo "Error: sc68 build needs autotools bootstrap, but 'autoreconf' is missing."
+        return 1
+    fi
+    if ! command -v hexdump >/dev/null 2>&1; then
+        echo "Error: sc68 build needs 'hexdump' to generate trap68.h."
+        return 1
+    fi
+
+    mkdir -p "$PROJECT_PATH/unice68/m4" "$PROJECT_PATH/file68/m4" "$PROJECT_PATH/libsc68/m4"
+    ln -sfn ../vcversion.sh "$PROJECT_PATH/unice68/vcversion.sh"
+    ln -sfn ../vcversion.sh "$PROJECT_PATH/file68/vcversion.sh"
+    ln -sfn ../vcversion.sh "$PROJECT_PATH/libsc68/vcversion.sh"
+    mkdir -p "$INSTALL_DIR/lib" "$INSTALL_DIR/include"
+
+    (
+        cd "$PROJECT_PATH/as68"
+        cc -std=gnu89 -O2 \
+            -DPACKAGE_VERSION='"build-deps"' \
+            -DPACKAGE_URL='"https://sourceforge.net/p/sc68"' \
+            -o as68 as68.c error.c expression.c opcode.c word.c
+    )
+
+    (
+        cd "$PROJECT_PATH/unice68"
+        make distclean >/dev/null 2>&1 || true
+        rm -rf autom4te.cache
+        mkdir -p autom4te.cache
+        autoreconf -vfi -I "$PROJECT_PATH/aclocal68"
+        ./configure \
+            --host="$CONFIGURE_HOST" \
+            --prefix="$INSTALL_DIR" \
+            --disable-shared \
+            --enable-static \
+            --disable-unice68-cli \
+            CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
+            CXX="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang++" \
+            AR="$TOOLCHAIN/bin/llvm-ar" \
+            RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
+            STRIP="$TOOLCHAIN/bin/llvm-strip" \
+            CFLAGS="-fPIC $DEP_OPT_FLAGS" \
+            CXXFLAGS="-fPIC $DEP_OPT_FLAGS"
+        make -s -j"$NPROC"
+        make -s install
+    )
+
+    (
+        cd "$PROJECT_PATH/file68"
+        make distclean >/dev/null 2>&1 || true
+        rm -rf autom4te.cache
+        mkdir -p autom4te.cache
+        autoreconf -vfi -I "$PROJECT_PATH/aclocal68"
+        PKG_CONFIG_PATH="$INSTALL_DIR/lib/pkgconfig" \
+        PKG_CONFIG_LIBDIR="$INSTALL_DIR/lib/pkgconfig" \
+        ./configure \
+            --host="$CONFIGURE_HOST" \
+            --prefix="$INSTALL_DIR" \
+            --disable-shared \
+            --enable-static \
+            --enable-replay-rom=yes \
+            --enable-file68-data=no \
+            --enable-file=yes \
+            --enable-fd=yes \
+            --enable-mem=yes \
+            --enable-registry=no \
+            CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
+            CXX="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang++" \
+            AR="$TOOLCHAIN/bin/llvm-ar" \
+            RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
+            STRIP="$TOOLCHAIN/bin/llvm-strip" \
+            CFLAGS="-fPIC $DEP_OPT_FLAGS" \
+            CXXFLAGS="-fPIC $DEP_OPT_FLAGS"
+        make -s -j"$NPROC"
+        make -s install
+    )
+
+    (
+        cd "$PROJECT_PATH/libsc68"
+        make distclean >/dev/null 2>&1 || true
+        rm -rf autom4te.cache
+        mkdir -p autom4te.cache
+        autoreconf -vfi -I "$PROJECT_PATH/aclocal68"
+        PKG_CONFIG_PATH="$INSTALL_DIR/lib/pkgconfig" \
+        PKG_CONFIG_LIBDIR="$INSTALL_DIR/lib/pkgconfig" \
+        ./configure \
+            --host="$CONFIGURE_HOST" \
+            --prefix="$INSTALL_DIR" \
+            --disable-shared \
+            --enable-static \
+            --enable-dialog=no \
+            CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
+            CXX="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang++" \
+            AR="$TOOLCHAIN/bin/llvm-ar" \
+            RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
+            STRIP="$TOOLCHAIN/bin/llvm-strip" \
+            CFLAGS="-fPIC $DEP_OPT_FLAGS" \
+            CXXFLAGS="-fPIC $DEP_OPT_FLAGS"
+
+        if grep -Eq '^TWEAK:[[:space:]]*=[[:space:]]*$' asm/version.s; then
+            sed -i 's/^TWEAK:[[:space:]]*=.*/TWEAK:\t= 0/' asm/version.s
+        fi
+
+        "$AS68_TOOL" asm/trapfunc.s -o trapfunc.bin >/dev/null
+        hexdump -ve '1/1 "%d,\n"' trapfunc.bin > sc68/trap68.h
+        rm -f trapfunc.bin
+
+        make -s -j"$NPROC"
+        make -s install
+    )
+}
+
+# -----------------------------------------------------------------------------
 # Argument Parsing
 # -----------------------------------------------------------------------------
 usage() {
     echo "Usage: $0 <abi|all> <lib|all[,lib2,...]> [clean]"
     echo "  ABI: all, arm64-v8a, armeabi-v7a, x86_64, x86"
-    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth"
+    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68"
     echo "  clean (optional): force rebuild (bypass already-built skip checks)"
-    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth"
+    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68"
 }
 
 if [ "$#" -eq 1 ]; then
@@ -1388,6 +1543,9 @@ normalize_lib_name() {
         fluid|fluidsynth|libfluidsynth)
             echo "fluidsynth"
             ;;
+        sc68|libsc68)
+            echo "sc68"
+            ;;
         *)
             echo "$lib"
             ;;
@@ -1429,7 +1587,7 @@ is_valid_abi() {
 is_valid_lib() {
     local lib="$1"
     case "$lib" in
-        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth)
+        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth|sc68)
             return 0
             ;;
         *)
@@ -1464,7 +1622,9 @@ fi
 # -----------------------------------------------------------------------------
 # Pre-build setup (Apply patches once)
 # -----------------------------------------------------------------------------
-ensure_system_dependencies
+if target_has_lib "libsidplayfp"; then
+    ensure_system_dependencies
+fi
 
 if target_has_lib "libopenmpt"; then
     apply_libopenmpt_patches
@@ -1586,6 +1746,10 @@ for ABI in "${ABIS[@]}"; do
 
     if target_has_lib "fluidsynth"; then
         build_fluidsynth "$ABI"
+    fi
+
+    if target_has_lib "sc68"; then
+        build_sc68 "$ABI"
     fi
 done
 

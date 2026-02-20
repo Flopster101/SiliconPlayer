@@ -1,0 +1,48 @@
+# Generated host tool / generated headers
+/as68/as68
+/libsc68/sc68/trap68.h
+/libsc68/asm/version.s
+
+# Autotools / libtool / configure outputs
+**/autom4te.cache/
+**/.deps/
+**/.libs/
+**/.dirstamp
+**/Makefile
+**/Makefile.in
+**/aclocal.m4
+**/compile
+**/config.guess
+**/config.h.in
+**/config.log
+**/config.status
+**/config.sub
+**/configure
+**/config.h
+**/depcomp
+**/install-sh
+**/ltmain.sh
+**/m4/
+**/missing
+**/stamp-h1
+**/stamp-h2
+**/libtool
+**/*.pc
+**/*.la
+**/*.lo
+**/*.o
+**/*_features.h
+**/*~
+
+# Generated helper symlinks used by build_deps.sh
+/unice68/vcversion.sh
+/file68/vcversion.sh
+/libsc68/vcversion.sh
+
+# aclocal68 macro copies produced during bootstrap
+/aclocal68/libtool.m4
+/aclocal68/ltoptions.m4
+/aclocal68/ltsugar.m4
+/aclocal68/ltversion.m4
+/aclocal68/lt~obsolete.m4
+/aclocal68/pkg.m4

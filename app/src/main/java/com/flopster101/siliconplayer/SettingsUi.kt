@@ -131,6 +131,7 @@ internal data class SettingsScreenState(
     val persistRepeatMode: Boolean,
     val themeMode: ThemeMode,
     val rememberBrowserLocation: Boolean,
+    val sortArchivesBeforeFiles: Boolean,
     val recentFoldersLimit: Int,
     val recentFilesLimit: Int,
     val urlCacheClearOnLaunch: Boolean,
@@ -259,6 +260,7 @@ internal data class SettingsScreenActions(
     val onPersistRepeatModeChanged: (Boolean) -> Unit,
     val onThemeModeChanged: (ThemeMode) -> Unit,
     val onRememberBrowserLocationChanged: (Boolean) -> Unit,
+    val onSortArchivesBeforeFilesChanged: (Boolean) -> Unit,
     val onRecentFoldersLimitChanged: (Int) -> Unit,
     val onRecentFilesLimitChanged: (Int) -> Unit,
     val onUrlCacheClearOnLaunchChanged: (Boolean) -> Unit,
@@ -420,7 +422,9 @@ internal fun SettingsScreen(
     val themeMode = state.themeMode
     val onThemeModeChanged = actions.onThemeModeChanged
     val rememberBrowserLocation = state.rememberBrowserLocation
+    val sortArchivesBeforeFiles = state.sortArchivesBeforeFiles
     val onRememberBrowserLocationChanged = actions.onRememberBrowserLocationChanged
+    val onSortArchivesBeforeFilesChanged = actions.onSortArchivesBeforeFilesChanged
     val recentFoldersLimit = state.recentFoldersLimit
     val onRecentFoldersLimitChanged = actions.onRecentFoldersLimitChanged
     val recentFilesLimit = state.recentFilesLimit
@@ -1044,10 +1048,12 @@ internal fun SettingsScreen(
                     SettingsRoute.Misc -> {
                         MiscRouteContent(
                             state = MiscRouteState(
-                                rememberBrowserLocation = rememberBrowserLocation
+                                rememberBrowserLocation = rememberBrowserLocation,
+                                sortArchivesBeforeFiles = sortArchivesBeforeFiles
                             ),
                             actions = MiscRouteActions(
                                 onRememberBrowserLocationChanged = onRememberBrowserLocationChanged,
+                                onSortArchivesBeforeFilesChanged = onSortArchivesBeforeFilesChanged,
                                 onClearRecentHistory = onClearRecentHistory
                             )
                         )

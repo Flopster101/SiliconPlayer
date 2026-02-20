@@ -26,11 +26,13 @@ internal data class HomeRouteActions(
 )
 
 internal data class MiscRouteState(
-    val rememberBrowserLocation: Boolean
+    val rememberBrowserLocation: Boolean,
+    val sortArchivesBeforeFiles: Boolean
 )
 
 internal data class MiscRouteActions(
     val onRememberBrowserLocationChanged: (Boolean) -> Unit,
+    val onSortArchivesBeforeFilesChanged: (Boolean) -> Unit,
     val onClearRecentHistory: () -> Unit
 )
 
@@ -119,6 +121,13 @@ internal fun MiscRouteContent(
         description = "Restore last storage and folder when reopening the library browser.",
         checked = state.rememberBrowserLocation,
         onCheckedChange = actions.onRememberBrowserLocationChanged
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Sort ZIP archives before files",
+        description = "List ZIP archives after folders but before regular files.",
+        checked = state.sortArchivesBeforeFiles,
+        onCheckedChange = actions.onSortArchivesBeforeFilesChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
     SettingsItemCard(

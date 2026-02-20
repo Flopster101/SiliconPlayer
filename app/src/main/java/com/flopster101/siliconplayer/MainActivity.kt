@@ -423,6 +423,11 @@ private fun AppNavigation(
             prefs.getBoolean(AppPreferenceKeys.REMEMBER_BROWSER_LOCATION, true)
         )
     }
+    var sortArchivesBeforeFiles by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.BROWSER_SORT_ARCHIVES_BEFORE_FILES, false)
+        )
+    }
     var lastBrowserLocationId by remember {
         mutableStateOf(
             prefs.getString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, null)
@@ -709,7 +714,12 @@ private fun AppNavigation(
 
     // Get supported extensions from JNI
     val supportedExtensions = remember { NativeBridge.getSupportedExtensions().toSet() }
-    val repository = remember { com.flopster101.siliconplayer.data.FileRepository(supportedExtensions) }
+    val repository = remember(supportedExtensions, sortArchivesBeforeFiles) {
+        com.flopster101.siliconplayer.data.FileRepository(
+            supportedExtensions = supportedExtensions,
+            sortArchivesBeforeFiles = sortArchivesBeforeFiles
+        )
+    }
 
     // Handle pending file from intent
     var pendingFileToOpen by remember { mutableStateOf<File?>(initialFileToOpen) }
@@ -1063,6 +1073,7 @@ private fun AppNavigation(
         previousRestartsAfterThreshold = previousRestartsAfterThreshold,
         fadePauseResume = fadePauseResume,
         rememberBrowserLocation = rememberBrowserLocation,
+        sortArchivesBeforeFiles = sortArchivesBeforeFiles,
         onArtworkBitmapChanged = { artworkBitmap = it },
         refreshRepeatModeForTrack = { runtimeDelegates.refreshRepeatModeForTrack() },
         refreshSubtuneState = { runtimeDelegates.refreshSubtuneState() },
@@ -1478,6 +1489,7 @@ private fun AppNavigation(
                                     persistRepeatMode = persistRepeatMode,
                                     themeMode = themeMode,
                                     rememberBrowserLocation = rememberBrowserLocation,
+                                    sortArchivesBeforeFiles = sortArchivesBeforeFiles,
                                     recentFoldersLimit = recentFoldersLimit,
                                     recentFilesLimit = recentFilesLimit,
                                     keepScreenOn = keepScreenOn,
@@ -1628,6 +1640,7 @@ private fun AppNavigation(
                                     onPersistRepeatModeChanged = { persistRepeatMode = it },
                                     onThemeModeChanged = onThemeModeChanged,
                                     onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
+                                    onSortArchivesBeforeFilesChanged = { sortArchivesBeforeFiles = it },
                                     onRecentFoldersLimitChanged = { recentFoldersLimit = it.coerceIn(1, RECENTS_LIMIT_MAX) },
                                     onRecentFilesLimitChanged = { recentFilesLimit = it.coerceIn(1, RECENTS_LIMIT_MAX) },
                                     onUrlCacheClearOnLaunchChanged = { enabled ->

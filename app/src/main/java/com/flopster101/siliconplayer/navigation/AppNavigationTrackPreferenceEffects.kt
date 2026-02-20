@@ -22,6 +22,7 @@ internal fun AppNavigationTrackPreferenceEffects(
     previousRestartsAfterThreshold: Boolean,
     fadePauseResume: Boolean,
     rememberBrowserLocation: Boolean,
+    sortArchivesBeforeFiles: Boolean,
     onArtworkBitmapChanged: (androidx.compose.ui.graphics.ImageBitmap?) -> Unit,
     refreshRepeatModeForTrack: () -> Unit,
     refreshSubtuneState: () -> Unit,
@@ -96,5 +97,11 @@ internal fun AppNavigationTrackPreferenceEffects(
                 .remove(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH)
         }
         editor.apply()
+    }
+
+    LaunchedEffect(sortArchivesBeforeFiles) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.BROWSER_SORT_ARCHIVES_BEFORE_FILES, sortArchivesBeforeFiles)
+            .apply()
     }
 }

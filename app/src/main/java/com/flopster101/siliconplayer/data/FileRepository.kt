@@ -3,7 +3,8 @@ package com.flopster101.siliconplayer.data
 import java.io.File
 
 class FileRepository(
-    private val supportedExtensions: Set<String>
+    private val supportedExtensions: Set<String>,
+    private val sortArchivesBeforeFiles: Boolean
 ) {
 
     fun getFiles(directory: File): List<FileItem> {
@@ -35,10 +36,19 @@ class FileRepository(
                 )
             }.sortedWith(
                 compareBy<FileItem>(
-                    { if (it.kind == FileItem.Kind.Directory) 0 else 1 },
+                    { sortRank(it.kind) },
                     { it.name.lowercase() }
                 )
             )
+    }
+
+    private fun sortRank(kind: FileItem.Kind): Int {
+        return when {
+            kind == FileItem.Kind.Directory -> 0
+            sortArchivesBeforeFiles && kind == FileItem.Kind.ArchiveZip -> 1
+            sortArchivesBeforeFiles && kind == FileItem.Kind.AudioFile -> 2
+            else -> 1
+        }
     }
 
     fun getRootDirectory(): File {

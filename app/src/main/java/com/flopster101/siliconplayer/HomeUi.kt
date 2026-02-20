@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer
 
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -57,6 +58,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.data.isArchiveLogicalFolderPath
 import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
+import com.flopster101.siliconplayer.data.parseArchiveSourceId
 import java.io.File
 import kotlinx.coroutines.delay
 
@@ -435,7 +437,17 @@ internal fun HomeScreen(
                             animate = itemKey in recentPlayedAnimationState.insertedKeys ||
                                 itemKey == recentPlayedAnimationState.promotedTopKey
                         ) {
-                            val trackFile = File(entry.path)
+                            val archiveSource = parseArchiveSourceId(entry.path)
+                            val trackFile = if (archiveSource != null) {
+                                File(archiveSource.entryPath)
+                            } else {
+                                val parsedSource = Uri.parse(entry.path)
+                                if (parsedSource.scheme.equals("file", ignoreCase = true)) {
+                                    File(parsedSource.path ?: entry.path)
+                                } else {
+                                    File(entry.path)
+                                }
+                            }
                             val storagePresentation = storagePresentationForEntry(entry)
                             val extensionLabel = trackFile.extension.uppercase().ifBlank { "UNKNOWN" }
                             val useLiveMetadata = samePath(currentTrackPath, entry.path)
@@ -471,7 +483,8 @@ internal fun HomeScreen(
                                                 cachedTitle = if (useLiveMetadata) currentTrackTitle else entry.title,
                                                 cachedArtist = if (useLiveMetadata) currentTrackArtist else entry.artist,
                                                 storagePresentation = storagePresentation,
-                                                extensionLabel = extensionLabel
+                                                extensionLabel = extensionLabel,
+                                                isArchiveSource = archiveSource != null
                                             )
                                         }
                                         if (useLiveMetadata) {
@@ -644,7 +657,8 @@ internal fun RecentTrackSummaryText(
     cachedTitle: String?,
     cachedArtist: String?,
     storagePresentation: StoragePresentation,
-    extensionLabel: String
+    extensionLabel: String,
+    isArchiveSource: Boolean
 ) {
     val fallback = file.nameWithoutExtension.ifBlank { file.name }
     val display = remember(file.absolutePath, cachedTitle, cachedArtist) {
@@ -696,12 +710,21 @@ internal fun RecentTrackSummaryText(
     }
     val shouldMarqueeSubtitle = subtitleText.length > 44
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            imageVector = storagePresentation.icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(14.dp)
-        )
+        if (isArchiveSource) {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_folder_zip),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp)
+            )
+        } else {
+            Icon(
+                imageVector = storagePresentation.icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp)
+            )
+        }
         Spacer(modifier = Modifier.width(4.dp))
         Box(
             modifier = Modifier

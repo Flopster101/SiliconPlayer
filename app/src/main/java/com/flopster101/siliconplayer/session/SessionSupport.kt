@@ -240,8 +240,12 @@ internal fun storagePresentationForEntry(
         )
     }
     if (scheme == "archive") {
+        val archiveName = parseArchiveSourceId(entry.path)
+            ?.archivePath
+            ?.let { File(it).name.ifBlank { it } }
+            ?: "Archive"
         return StoragePresentation(
-            label = "Archive",
+            label = archiveName,
             icon = Icons.Default.Folder
         )
     }

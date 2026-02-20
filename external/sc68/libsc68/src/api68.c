@@ -2249,6 +2249,55 @@ static int get_pos(sc68_t * sc68, int origin)
   return pos;
 }
 
+/* Track-position seek helper.
+ * libsc68 snapshot does not expose random-access seek in control API, so we
+ * seek by restarting current track and fast-forwarding internally.
+ */
+static int set_pos(sc68_t * sc68, int ms)
+{
+  int cur_track;
+  int ret;
+  int seek_target_ms;
+  int guard = 0;
+  uint32_t scratch[1024];
+
+  if (!is_sc68(sc68) || !has_disk(sc68))
+    return -1;
+
+  cur_track = sc68->track;
+  if (cur_track <= 0 || !in_range(sc68->disk, cur_track))
+    return -1;
+
+  if (ms < 0)
+    ms = 0;
+
+  seek_target_ms = ms;
+  if (sc68->tinfo[cur_track].len_ms > 0 && seek_target_ms > sc68->tinfo[cur_track].len_ms)
+    seek_target_ms = sc68->tinfo[cur_track].len_ms;
+
+  if (change_track(sc68, cur_track) != SC68_OK)
+    return -1;
+
+  if (!seek_target_ms)
+    return 0;
+
+  while (get_pos(sc68, SC68_POS_TRACK) < seek_target_ms) {
+    int n = sizeof(scratch) / sizeof(scratch[0]);
+    ret = sc68_process(sc68, scratch, &n);
+    if (ret == SC68_ERROR)
+      return -1;
+    if ((ret & (SC68_END | SC68_CHANGE)) || n <= 0)
+      break;
+    if (++guard > 100000)
+      break;
+  }
+
+  /* Flush pending buffered PCM so the next read starts at seek target. */
+  sc68->mix.buflen = 0;
+  sc68->mix.bufpos = 0;
+  return get_pos(sc68, SC68_POS_TRACK);
+}
+
 static unsigned int calc_track_len(const disk68_t * d, int track, int loop)
 {
   const music68_t * m;
@@ -2716,6 +2765,8 @@ int sc68_cntl(sc68_t * sc68, int fct, ...)
       break;
 
     case SC68_SET_POS:
+      res = set_pos(sc68, va_arg(list, int));
+      break;
     default:
       res = error_addx(sc68,
 		       "libsc68: %s (%d)\n",

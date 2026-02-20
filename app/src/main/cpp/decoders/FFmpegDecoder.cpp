@@ -5,6 +5,8 @@
 #include <sstream>
 #include <vector>
 #include <mutex>
+#include <optional>
+#include <cstdlib>
 #include <libavutil/error.h>
 
 #define LOG_TAG "FFmpegDecoder"
@@ -66,6 +68,96 @@ std::string toLowerAscii(std::string value) {
         return static_cast<char>(std::tolower(c));
     });
     return value;
+}
+
+std::string trimAscii(std::string value) {
+    auto isSpace = [](unsigned char c) { return std::isspace(c) != 0; };
+    value.erase(value.begin(), std::find_if(value.begin(), value.end(), [&](char c) {
+        return !isSpace(static_cast<unsigned char>(c));
+    }));
+    value.erase(std::find_if(value.rbegin(), value.rend(), [&](char c) {
+        return !isSpace(static_cast<unsigned char>(c));
+    }).base(), value.end());
+    return value;
+}
+
+std::optional<double> parseDoubleStrict(const std::string& raw) {
+    if (raw.empty()) return std::nullopt;
+    char* end = nullptr;
+    const double value = std::strtod(raw.c_str(), &end);
+    if (end == raw.c_str() || (end != nullptr && *end != '\0') || !std::isfinite(value)) {
+        return std::nullopt;
+    }
+    return value;
+}
+
+std::optional<double> parseLoopValueSeconds(
+        const std::string& rawValue,
+        int sampleRate,
+        double durationSeconds) {
+    std::string value = trimAscii(rawValue);
+    if (value.empty()) {
+        return std::nullopt;
+    }
+
+    std::string lower = toLowerAscii(value);
+    bool explicitMilliseconds = false;
+    bool explicitSeconds = false;
+    if (lower.size() > 2 && lower.rfind("ms") == (lower.size() - 2)) {
+        explicitMilliseconds = true;
+        lower.resize(lower.size() - 2);
+    } else if (!lower.empty() && lower.back() == 's') {
+        explicitSeconds = true;
+        lower.pop_back();
+    }
+    lower = trimAscii(lower);
+
+    const auto parsed = parseDoubleStrict(lower);
+    if (!parsed.has_value()) {
+        return std::nullopt;
+    }
+    const double numeric = parsed.value();
+    if (numeric < 0.0) {
+        return std::nullopt;
+    }
+
+    if (explicitMilliseconds) {
+        return numeric / 1000.0;
+    }
+    if (explicitSeconds) {
+        return numeric;
+    }
+
+    // Bare numeric loop tags are commonly sample positions.
+    if (sampleRate > 0) {
+        if (durationSeconds > 0.0) {
+            if (numeric > durationSeconds * 2.0) {
+                return numeric / static_cast<double>(sampleRate);
+            }
+            return numeric;
+        }
+        if (numeric > static_cast<double>(sampleRate) * 2.0) {
+            return numeric / static_cast<double>(sampleRate);
+        }
+    }
+    return numeric;
+}
+
+std::string getMetadataValueLoopAware(
+        AVDictionary* metadata,
+        const std::initializer_list<const char*>& keys) {
+    if (!metadata) return "";
+    AVDictionaryEntry* entry = nullptr;
+    while ((entry = av_dict_get(metadata, "", entry, AV_DICT_IGNORE_SUFFIX)) != nullptr) {
+        if (!entry->key || !entry->value) continue;
+        const std::string loweredKey = toLowerAscii(entry->key);
+        for (const char* wanted : keys) {
+            if (loweredKey == wanted) {
+                return entry->value;
+            }
+        }
+    }
+    return "";
 }
 }
 
@@ -207,6 +299,56 @@ bool FFmpegDecoder::open(const char* path) {
         }
     }
 
+    // Loop point metadata for sampled formats (LOOPSTART/LOOPEND/LOOPLENGTH style tags).
+    auto readLoopTag = [&](const std::initializer_list<const char*>& keys) -> std::string {
+        std::string value = getMetadataValueLoopAware(formatContext->metadata, keys);
+        if (!value.empty()) return value;
+        if (audioStreamIndex >= 0 && audioStreamIndex < static_cast<int>(formatContext->nb_streams)) {
+            return getMetadataValueLoopAware(formatContext->streams[audioStreamIndex]->metadata, keys);
+        }
+        return "";
+    };
+    const auto parsedLoopStart = parseLoopValueSeconds(
+            readLoopTag({"loopstart", "loop_start", "loop-start", "loop start"}),
+            sourceSampleRate,
+            duration
+    );
+    const auto parsedLoopEnd = parseLoopValueSeconds(
+            readLoopTag({"loopend", "loop_end", "loop-end", "loop end"}),
+            sourceSampleRate,
+            duration
+    );
+    const auto parsedLoopLength = parseLoopValueSeconds(
+            readLoopTag({"looplength", "loop_length", "loop-length", "loop length", "looplen"}),
+            sourceSampleRate,
+            duration
+    );
+    hasLoopPoint = false;
+    loopStartSeconds = 0.0;
+    loopEndSeconds = 0.0;
+    if (parsedLoopStart.has_value() || parsedLoopEnd.has_value() || parsedLoopLength.has_value()) {
+        double start = parsedLoopStart.value_or(0.0);
+        double end = parsedLoopEnd.value_or(-1.0);
+        if (end <= start && parsedLoopLength.has_value()) {
+            end = start + parsedLoopLength.value();
+        }
+        if (duration > 0.0) {
+            start = std::clamp(start, 0.0, duration);
+            end = std::clamp(end, 0.0, duration);
+        }
+        if (end > start + 0.01) {
+            hasLoopPoint = true;
+            loopStartSeconds = start;
+            loopEndSeconds = end;
+            LOGD(
+                    "FFmpeg loop point detected: start=%.3f end=%.3f duration=%.3f",
+                    loopStartSeconds,
+                    loopEndSeconds,
+                    duration
+            );
+        }
+    }
+
     // Extract bitrate information
     bitrate = codecParams->bit_rate;
     if (bitrate <= 0 && formatContext->bit_rate > 0) {
@@ -251,6 +393,10 @@ void FFmpegDecoder::close() {
     encoderName.clear();
     bitrate = 0;
     vbr = false;
+    repeatMode = 0;
+    hasLoopPoint = false;
+    loopStartSeconds = 0.0;
+    loopEndSeconds = 0.0;
     toggleChannelNames.clear();
     toggleChannelMuted.clear();
 }
@@ -421,7 +567,13 @@ int FFmpegDecoder::read(float* buffer, int numFrames) {
         if (framesRead < numFrames) {
             int ret = decodeFrame();
             if (ret < 0) {
-                 // EOF or Error
+                 // EOF or error. In loop-point mode, wrap to tagged loop start.
+                 if (repeatMode == 2 && hasLoopPoint) {
+                     if (!seekInternalLocked(loopStartSeconds)) {
+                         break;
+                     }
+                     continue;
+                 }
                  break;
             }
         }
@@ -520,22 +672,44 @@ int FFmpegDecoder::decodeFrame() {
     }
 }
 
-void FFmpegDecoder::seek(double seconds) {
-    std::lock_guard<std::mutex> lock(decodeMutex);
-    if (!formatContext) return;
+bool FFmpegDecoder::seekInternalLocked(double seconds) {
+    if (!formatContext || !codecContext) return false;
 
-    int64_t targetTimestamp = (int64_t)(seconds * AV_TIME_BASE);
-    av_seek_frame(formatContext, -1, targetTimestamp, AVSEEK_FLAG_BACKWARD);
+    const double clamped = std::max(0.0, seconds);
+    const int64_t targetTimestamp = static_cast<int64_t>(clamped * AV_TIME_BASE);
+    int seekResult = av_seek_frame(formatContext, -1, targetTimestamp, AVSEEK_FLAG_BACKWARD);
+    if (seekResult < 0 && audioStreamIndex >= 0 && audioStreamIndex < static_cast<int>(formatContext->nb_streams)) {
+        AVStream* stream = formatContext->streams[audioStreamIndex];
+        if (stream) {
+            const int64_t streamTimestamp = av_rescale_q(
+                    static_cast<int64_t>(clamped * AV_TIME_BASE),
+                    AV_TIME_BASE_Q,
+                    stream->time_base
+            );
+            seekResult = av_seek_frame(formatContext, audioStreamIndex, streamTimestamp, AVSEEK_FLAG_BACKWARD);
+        }
+    }
+    if (seekResult < 0) {
+        LOGE("FFmpeg seek failed: fferr=%d msg=%s", seekResult, ffErrString(seekResult).c_str());
+        return false;
+    }
+
     avcodec_flush_buffers(codecContext);
     sampleBuffer.clear();
     sampleBufferCursor = 0;
     decoderDrainStarted = false;
-    // Reset frame counter to match seek position
+    // Reset frame counter to match seek position.
     if (outputSampleRate > 0) {
-        totalFramesOutput = static_cast<int64_t>(seconds * outputSampleRate);
+        totalFramesOutput = static_cast<int64_t>(clamped * outputSampleRate);
     } else {
         totalFramesOutput = 0;
     }
+    return true;
+}
+
+void FFmpegDecoder::seek(double seconds) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    seekInternalLocked(seconds);
 }
 
 double FFmpegDecoder::getDuration() {
@@ -652,6 +826,20 @@ void FFmpegDecoder::setOutputSampleRate(int sampleRate) {
         sampleBuffer.clear();
         sampleBufferCursor = 0;
     }
+}
+
+void FFmpegDecoder::setRepeatMode(int mode) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    repeatMode = mode;
+}
+
+int FFmpegDecoder::getRepeatModeCapabilities() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    int capabilities = REPEAT_CAP_TRACK;
+    if (hasLoopPoint) {
+        capabilities |= REPEAT_CAP_LOOP_POINT;
+    }
+    return capabilities;
 }
 
 double FFmpegDecoder::getPlaybackPositionSeconds() {

@@ -44,6 +44,8 @@ public:
     bool getToggleChannelMuted(int channelIndex) const override;
     void clearToggleChannelMutes() override;
     void setOutputSampleRate(int sampleRate) override;
+    void setRepeatMode(int mode) override;
+    int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override {
         return PLAYBACK_CAP_SEEK |
                PLAYBACK_CAP_RELIABLE_DURATION |
@@ -97,11 +99,16 @@ private:
     int64_t totalFramesOutput = 0; // Total frames output for position tracking
     std::vector<std::string> toggleChannelNames;
     std::vector<bool> toggleChannelMuted;
+    int repeatMode = 0;
+    bool hasLoopPoint = false;
+    double loopStartSeconds = 0.0;
+    double loopEndSeconds = 0.0;
 
     mutable std::mutex decodeMutex;
 
     bool initResampler();
     void freeResampler();
+    bool seekInternalLocked(double seconds);
     void rebuildToggleChannelsLocked();
     int decodeFrame(); // Decodes one frame and appends to sampleBuffer. Returns 0 on success, <0 on error/EOF
 };

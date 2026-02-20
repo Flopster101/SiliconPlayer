@@ -56,6 +56,7 @@ internal class AppNavigationTrackLoadDelegates(
         currentTrackSelectionJob = appScope.launch {
             try {
                 applyTrackSelectionAction(
+                    context = context,
                     file = file,
                     autoStart = autoStart,
                     expandOverride = expandOverride,

@@ -66,6 +66,7 @@ import com.flopster101.siliconplayer.data.ensureArchiveMounted
 import com.flopster101.siliconplayer.data.resolveArchiveLogicalDirectory
 import java.io.File
 import java.util.Locale
+import java.util.zip.ZipFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -156,7 +157,41 @@ fun FileBrowserScreen(
                 withFrameNanos { }
                 delay(16)
                 val loadedFiles = withContext(Dispatchers.IO) {
-                    repository.getFiles(directory)
+                    val baseFiles = repository.getFiles(directory)
+                    val mounted = archiveMountRoots.entries
+                        .asSequence()
+                        .filter { (mountRoot, _) ->
+                            targetPath == mountRoot || targetPath.startsWith("$mountRoot/")
+                        }
+                        .maxByOrNull { (mountRoot, _) -> mountRoot.length }
+                    if (mounted == null) {
+                        baseFiles
+                    } else {
+                        val mountRoot = mounted.key
+                        val mountInfo = mounted.value
+                        val relativeDirectory = if (targetPath == mountRoot) {
+                            ""
+                        } else {
+                            targetPath.removePrefix("$mountRoot/").replace('\\', '/').trim('/')
+                        }
+                        val zipSizes = readZipEntrySizesForDirectory(
+                            archivePath = mountInfo.archivePath,
+                            relativeDirectory = relativeDirectory
+                        )
+                        if (zipSizes.isEmpty()) {
+                            baseFiles
+                        } else {
+                            baseFiles.map { item ->
+                                if (!item.isDirectory) {
+                                    zipSizes[item.name]?.let { resolvedSize ->
+                                        item.copy(size = resolvedSize)
+                                    } ?: item
+                                } else {
+                                    item
+                                }
+                            }
+                        }
+                    }
                 }
                 onVisiblePlayableFilesChanged(
                     loadedFiles
@@ -905,20 +940,20 @@ fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
     val subtitle by produceState(
         initialValue = if (item.isDirectory && !item.isArchive) "Loading..." else {
             val format = item.file.extension.uppercase().ifBlank { "UNKNOWN" }
-            "$format • ${formatFileSizeHumanReadable(item.file.length())}"
+            "$format • ${formatFileSizeHumanReadable(item.size)}"
         },
         key1 = item.file.absolutePath,
         key2 = item.kind,
-        key3 = item.file.lastModified()
+        key3 = item.size
     ) {
         value = withContext(Dispatchers.IO) {
             if (item.isArchive) {
-                "ZIP archive • ${formatFileSizeHumanReadable(item.file.length())}"
+                "ZIP archive • ${formatFileSizeHumanReadable(item.size)}"
             } else if (item.isDirectory) {
                 buildFolderSummary(item.file)
             } else {
                 val format = item.file.extension.uppercase().ifBlank { "UNKNOWN" }
-                "$format • ${formatFileSizeHumanReadable(item.file.length())}"
+                "$format • ${formatFileSizeHumanReadable(item.size)}"
             }
         }
     }
@@ -1029,6 +1064,33 @@ private fun formatFileSizeHumanReadable(bytes: Long): String {
         String.format(Locale.US, "%.0f %s", size, units[unitIndex])
     } else {
         String.format(Locale.US, "%.1f %s", size, units[unitIndex])
+    }
+}
+
+private fun readZipEntrySizesForDirectory(
+    archivePath: String,
+    relativeDirectory: String
+): Map<String, Long> {
+    val normalizedDirectory = relativeDirectory.replace('\\', '/').trim('/')
+    return try {
+        ZipFile(File(archivePath)).use { zip ->
+            val sizes = LinkedHashMap<String, Long>()
+            val entries = zip.entries()
+            while (entries.hasMoreElements()) {
+                val entry = entries.nextElement()
+                if (entry.isDirectory || entry.size < 0L) continue
+                val normalizedName = entry.name.replace('\\', '/').trimStart('/')
+                if (normalizedName.isBlank()) continue
+                val parent = normalizedName.substringBeforeLast('/', "")
+                if (parent != normalizedDirectory) continue
+                val leaf = normalizedName.substringAfterLast('/')
+                if (leaf.isBlank()) continue
+                sizes[leaf] = entry.size
+            }
+            sizes
+        }
+    } catch (_: Exception) {
+        emptyMap()
     }
 }
 

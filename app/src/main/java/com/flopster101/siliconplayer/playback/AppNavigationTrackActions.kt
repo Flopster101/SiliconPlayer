@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer.playback
 
+import android.content.Context
 import com.flopster101.siliconplayer.ManualSourceOpenOptions
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.PreviousTrackAction
@@ -7,6 +8,7 @@ import com.flopster101.siliconplayer.ResumeTarget
 import com.flopster101.siliconplayer.adjacentTrackForOffset
 import com.flopster101.siliconplayer.resolvePreviousTrackAction
 import com.flopster101.siliconplayer.resolveResumeTarget
+import com.flopster101.siliconplayer.data.resolveArchiveSourceToMountedFile
 import java.io.File
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +20,7 @@ import kotlinx.coroutines.sync.withLock
 private val trackSelectionLoadMutex = Mutex()
 
 internal suspend fun applyTrackSelectionAction(
+    context: Context,
     file: File,
     autoStart: Boolean,
     expandOverride: Boolean?,
@@ -47,18 +50,19 @@ internal suspend fun applyTrackSelectionAction(
 ) {
     onResetPlayback()
     val sourceId = sourceIdOverride ?: file.absolutePath
-    onSelectedFileChanged(file)
+    val loadFile = resolveArchiveSourceToMountedFile(context, sourceId) ?: file
+    onSelectedFileChanged(loadFile)
     onCurrentPlaybackSourceIdChanged(sourceId)
     onPlayerSurfaceVisibleChanged(true)
     if (useSongVolumeLookup) {
-        loadSongVolumeForFile(file.absolutePath)
+        loadSongVolumeForFile(loadFile.absolutePath)
     } else {
         onSongVolumeDbChanged(0f)
         onSongGainChanged(0f)
     }
     withContext(Dispatchers.IO) {
         trackSelectionLoadMutex.withLock {
-            NativeBridge.loadAudio(file.absolutePath)
+            NativeBridge.loadAudio(loadFile.absolutePath)
         }
     }
     coroutineContext.ensureActive()

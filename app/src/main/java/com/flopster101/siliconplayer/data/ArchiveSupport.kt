@@ -76,8 +76,8 @@ internal fun ensureArchiveMounted(context: Context, archiveFile: File): File {
         error("Failed to create archive mount directory: ${mountDir.absolutePath}")
     }
 
-    val mountCanonicalPrefix = mountDir.canonicalPath + File.separator
-    var totalUncompressedBytes = 0L
+    val mountCanonical = mountDir.canonicalPath
+    val mountCanonicalPrefix = mountCanonical + File.separator
     var entriesSeen = 0
 
     try {
@@ -106,29 +106,8 @@ internal fun ensureArchiveMounted(context: Context, archiveFile: File): File {
                 }
 
                 outputFile.parentFile?.mkdirs()
-                val declaredSize = entry.size
-                if (declaredSize > MAX_ARCHIVE_ENTRY_UNCOMPRESSED_BYTES) {
-                    error("Archive entry too large: $normalizedName")
-                }
-
-                zip.getInputStream(entry).use { input ->
-                    FileOutputStream(outputFile).use { output ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        var entryBytes = 0L
-                        while (true) {
-                            val read = input.read(buffer)
-                            if (read <= 0) break
-                            output.write(buffer, 0, read)
-                            entryBytes += read
-                            if (entryBytes > MAX_ARCHIVE_ENTRY_UNCOMPRESSED_BYTES) {
-                                error("Archive entry exceeded size limit: $normalizedName")
-                            }
-                            totalUncompressedBytes += read
-                            if (totalUncompressedBytes > MAX_ARCHIVE_TOTAL_UNCOMPRESSED_BYTES) {
-                                error("Archive exceeded total size limit")
-                            }
-                        }
-                    }
+                if (!outputFile.exists()) {
+                    outputFile.createNewFile()
                 }
             }
         }
@@ -187,6 +166,12 @@ internal fun resolveArchiveSourceToMountedFile(
         return null
     }
     if (!targetFile.exists() || !targetFile.isFile) return null
+    ensureArchiveEntryExtracted(
+        archiveFile = archiveFile,
+        mountDir = mountDir,
+        entryPath = parsed.entryPath,
+        outputFile = targetFile
+    )
     return targetFile
 }
 
@@ -361,6 +346,61 @@ private fun sha1Hex(value: String): String {
         for (b in digest) {
             append(((b.toInt() ushr 4) and 0xF).toString(16))
             append((b.toInt() and 0xF).toString(16))
+        }
+    }
+}
+
+private fun ensureArchiveEntryExtracted(
+    archiveFile: File,
+    mountDir: File,
+    entryPath: String,
+    outputFile: File
+) {
+    // Placeholder files are zero-byte. Non-empty files are already extracted.
+    if (outputFile.length() > 0L) return
+
+    val normalizedEntryPath = entryPath.replace('\\', '/').trimStart('/')
+    val mountCanonical = mountDir.canonicalPath
+    val mountCanonicalPrefix = mountCanonical + File.separator
+    val outputCanonical = outputFile.canonicalPath
+    if (outputCanonical != mountCanonical && !outputCanonical.startsWith(mountCanonicalPrefix)) {
+        error("Archive entry escapes mount root: $normalizedEntryPath")
+    }
+
+    ZipFile(archiveFile).use { zip ->
+        val zipEntry = zip.getEntry(normalizedEntryPath)
+            ?: error("Missing archive entry: $normalizedEntryPath")
+        if (zipEntry.isDirectory) {
+            error("Archive entry is a directory: $normalizedEntryPath")
+        }
+        val declaredSize = zipEntry.size
+        if (declaredSize > MAX_ARCHIVE_ENTRY_UNCOMPRESSED_BYTES) {
+            error("Archive entry too large: $normalizedEntryPath")
+        }
+
+        outputFile.parentFile?.mkdirs()
+        val tempFile = File(outputFile.parentFile, "${outputFile.name}.extracting")
+        zip.getInputStream(zipEntry).use { input ->
+            FileOutputStream(tempFile).use { output ->
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                var entryBytes = 0L
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read <= 0) break
+                    output.write(buffer, 0, read)
+                    entryBytes += read
+                    if (entryBytes > MAX_ARCHIVE_ENTRY_UNCOMPRESSED_BYTES) {
+                        error("Archive entry exceeded size limit: $normalizedEntryPath")
+                    }
+                }
+            }
+        }
+        if (outputFile.exists()) {
+            outputFile.delete()
+        }
+        if (!tempFile.renameTo(outputFile)) {
+            tempFile.delete()
+            error("Failed to finalize extracted entry: $normalizedEntryPath")
         }
     }
 }

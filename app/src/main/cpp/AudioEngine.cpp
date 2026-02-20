@@ -2779,7 +2779,7 @@ std::vector<float> AudioEngine::getVisualizationWaveformScope(
 ) const {
     markVisualizationRequested();
     std::lock_guard<std::mutex> lock(visualizationMutex);
-    constexpr int kOutputSize = 256;
+    constexpr int kOutputSize = 1024;
     const auto& history = channelIndex == 1 ? visualizationScopeHistoryRight : visualizationScopeHistoryLeft;
     const int historySize = static_cast<int>(history.size());
     if (historySize <= 0) {
@@ -2789,7 +2789,9 @@ std::vector<float> AudioEngine::getVisualizationWaveformScope(
     const int sampleRate = std::max(streamSampleRate, 8000);
     const int clampedWindowMs = std::clamp(windowMs, 5, 200);
     int windowFrames = (sampleRate * clampedWindowMs) / 1000;
-    windowFrames = std::clamp(windowFrames, kOutputSize, historySize - 1);
+    // Allow smaller windows than output size; linear interpolation below will
+    // upsample without collapsing to blocky nearest-neighbor segments.
+    windowFrames = std::clamp(windowFrames, 128, historySize - 1);
 
     const int writeIndex = visualizationScopeWriteIndex;
     int startIndex = (writeIndex - windowFrames + historySize) % historySize;
@@ -2886,9 +2888,15 @@ std::vector<float> AudioEngine::getVisualizationWaveformScope(
     std::vector<float> output(kOutputSize, 0.0f);
     const double scale = static_cast<double>(windowFrames - 1) / static_cast<double>(kOutputSize - 1);
     for (int i = 0; i < kOutputSize; ++i) {
-        const int frameOffset = static_cast<int>(std::round(i * scale));
-        const int idx = (startIndex + frameOffset) % historySize;
-        output[i] = std::clamp(history[idx], -1.0f, 1.0f);
+        const double frameOffset = static_cast<double>(i) * scale;
+        const int frameFloor = static_cast<int>(std::floor(frameOffset));
+        const float frac = static_cast<float>(frameOffset - static_cast<double>(frameFloor));
+        const int idx0 = (startIndex + frameFloor) % historySize;
+        const int idx1 = (idx0 + 1) % historySize;
+        const float sample0 = history[idx0];
+        const float sample1 = history[idx1];
+        const float sample = sample0 + ((sample1 - sample0) * frac);
+        output[i] = std::clamp(sample, -1.0f, 1.0f);
     }
     return output;
 }

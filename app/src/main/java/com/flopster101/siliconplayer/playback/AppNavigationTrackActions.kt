@@ -8,8 +8,16 @@ import com.flopster101.siliconplayer.adjacentTrackForOffset
 import com.flopster101.siliconplayer.resolvePreviousTrackAction
 import com.flopster101.siliconplayer.resolveResumeTarget
 import java.io.File
+import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
-internal fun applyTrackSelectionAction(
+private val trackSelectionLoadMutex = Mutex()
+
+internal suspend fun applyTrackSelectionAction(
     file: File,
     autoStart: Boolean,
     expandOverride: Boolean?,
@@ -48,7 +56,12 @@ internal fun applyTrackSelectionAction(
         onSongVolumeDbChanged(0f)
         onSongGainChanged(0f)
     }
-    NativeBridge.loadAudio(file.absolutePath)
+    withContext(Dispatchers.IO) {
+        trackSelectionLoadMutex.withLock {
+            NativeBridge.loadAudio(file.absolutePath)
+        }
+    }
+    coroutineContext.ensureActive()
     applyNativeTrackSnapshot()
     refreshSubtuneState()
     onPositionChanged(0.0)

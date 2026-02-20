@@ -32,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -72,6 +73,7 @@ internal fun MiniPlayerBar(
     artwork: ImageBitmap?,
     noArtworkIcon: ImageVector,
     isPlaying: Boolean,
+    playbackStartInProgress: Boolean,
     seekInProgress: Boolean,
     canResumeStoppedTrack: Boolean,
     positionSeconds: Double,
@@ -268,21 +270,30 @@ internal fun MiniPlayerBar(
                     }
                     IconButton(
                         onClick = onPlayPause,
-                        enabled = (hasTrack || canResumeStoppedTrack) && !seekInProgress,
+                        enabled = (hasTrack || canResumeStoppedTrack) &&
+                            !seekInProgress &&
+                            !playbackStartInProgress,
                         modifier = Modifier.size(controlButtonSize)
                     ) {
-                        AnimatedContent(
-                            targetState = isPlaying,
-                            transitionSpec = {
-                                fadeIn() togetherWith fadeOut()
-                            },
-                            label = "miniPlayPauseIcon"
-                        ) { playing ->
-                            Icon(
-                                imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (playing) "Pause" else "Play",
-                                modifier = Modifier.size(controlIconSize)
+                        if (playbackStartInProgress) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size((controlIconSize.value + 2f).dp),
+                                strokeWidth = 2.dp
                             )
+                        } else {
+                            AnimatedContent(
+                                targetState = isPlaying,
+                                transitionSpec = {
+                                    fadeIn() togetherWith fadeOut()
+                                },
+                                label = "miniPlayPauseIcon"
+                            ) { playing ->
+                                Icon(
+                                    imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = if (playing) "Pause" else "Play",
+                                    modifier = Modifier.size(controlIconSize)
+                                )
+                            }
                         }
                     }
                     IconButton(
@@ -299,14 +310,24 @@ internal fun MiniPlayerBar(
                 }
             }
 
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(2.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant
-            )
+            if (playbackStartInProgress) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            } else {
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            }
         }
     }
 }

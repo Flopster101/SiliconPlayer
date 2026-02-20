@@ -144,6 +144,7 @@ fun PlayerScreen(
     canCycleRepeatMode: Boolean,
     canSeek: Boolean,
     hasReliableDuration: Boolean,
+    playbackStartInProgress: Boolean = false,
     seekInProgress: Boolean = false,
     onSeek: (Double) -> Unit,
     onPreviousTrack: () -> Unit,
@@ -825,6 +826,7 @@ fun PlayerScreen(
                             isPlaying = isPlaying,
                             canResumeStoppedTrack = canResumeStoppedTrack,
                             repeatMode = repeatMode,
+                            playbackStartInProgress = playbackStartInProgress,
                             seekInProgress = seekInProgress,
                             canPreviousTrack = canPreviousTrack,
                             canNextTrack = canNextTrack,
@@ -963,6 +965,7 @@ fun PlayerScreen(
                         isPlaying = isPlaying,
                         canResumeStoppedTrack = canResumeStoppedTrack,
                         repeatMode = repeatMode,
+                        playbackStartInProgress = playbackStartInProgress,
                         seekInProgress = seekInProgress,
                         canPreviousTrack = canPreviousTrack,
                         canNextTrack = canNextTrack,
@@ -2057,6 +2060,7 @@ private fun TransportControls(
     isPlaying: Boolean,
     canResumeStoppedTrack: Boolean,
     repeatMode: RepeatMode,
+    playbackStartInProgress: Boolean,
     seekInProgress: Boolean,
     canPreviousTrack: Boolean,
     canNextTrack: Boolean,
@@ -2073,6 +2077,7 @@ private fun TransportControls(
     onStopAndClear: () -> Unit,
     onCycleRepeatMode: () -> Unit
 ) {
+    val controlsBusy = seekInProgress || playbackStartInProgress
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val tight = maxWidth < 350.dp
         val compact = !tight && maxWidth < 390.dp
@@ -2130,7 +2135,7 @@ private fun TransportControls(
 
                     FilledTonalIconButton(
                         onClick = onCycleRepeatMode,
-                        enabled = canCycleRepeatMode && !seekInProgress,
+                        enabled = canCycleRepeatMode && !controlsBusy,
                         modifier = Modifier.size(sideButtonSize),
                         shape = MaterialTheme.shapes.extraLarge,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
@@ -2179,7 +2184,7 @@ private fun TransportControls(
 
                 FilledIconButton(
                     onClick = onPlayPause,
-                    enabled = (hasTrack || canResumeStoppedTrack) && !seekInProgress,
+                    enabled = (hasTrack || canResumeStoppedTrack) && !controlsBusy,
                     modifier = Modifier.size(playButtonSize),
                     shape = MaterialTheme.shapes.extraLarge,
                     colors = IconButtonDefaults.filledIconButtonColors(
@@ -2187,22 +2192,35 @@ private fun TransportControls(
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 ) {
-                    AnimatedContent(
-                        targetState = isPlaying,
-                        transitionSpec = { fadeIn() togetherWith fadeOut() },
-                        label = "playerPlayPauseIcon"
-                    ) { playing ->
-                        Icon(
-                            imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (playing) "Pause" else "Play",
+                    if (playbackStartInProgress) {
+                        CircularProgressIndicator(
                             modifier = Modifier.size(
                                 when {
-                                    tight -> 28.dp
-                                    compact -> 30.dp
-                                    else -> 34.dp
+                                    tight -> 24.dp
+                                    compact -> 26.dp
+                                    else -> 28.dp
                                 }
-                            )
+                            ),
+                            strokeWidth = 3.dp
                         )
+                    } else {
+                        AnimatedContent(
+                            targetState = isPlaying,
+                            transitionSpec = { fadeIn() togetherWith fadeOut() },
+                            label = "playerPlayPauseIcon"
+                        ) { playing ->
+                            Icon(
+                                imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (playing) "Pause" else "Play",
+                                modifier = Modifier.size(
+                                    when {
+                                        tight -> 28.dp
+                                        compact -> 30.dp
+                                        else -> 34.dp
+                                    }
+                                )
+                            )
+                        }
                     }
                 }
 
@@ -2244,6 +2262,15 @@ private fun TransportControls(
                         )
                     }
                 }
+            }
+
+            if (playbackStartInProgress) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Loading track...",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
 
             Spacer(modifier = Modifier.height(10.dp))

@@ -5,8 +5,12 @@ import android.content.SharedPreferences
 import com.flopster101.siliconplayer.restorePlayerStateFromSessionAndNativeAction
 import com.flopster101.siliconplayer.playback.applyTrackSelectionAction
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 internal class AppNavigationTrackLoadDelegates(
+    private val appScope: CoroutineScope,
     private val context: Context,
     private val prefs: SharedPreferences,
     private val cacheRootProvider: () -> File,
@@ -31,8 +35,12 @@ internal class AppNavigationTrackLoadDelegates(
     private val onStartEngine: () -> Unit,
     private val scheduleRecentTrackMetadataRefresh: (String, String?) -> Unit,
     private val onPlayerExpandedChanged: (Boolean) -> Unit,
+    private val onPlaybackStartInProgressChanged: (Boolean) -> Unit,
     private val syncPlaybackService: () -> Unit
 ) {
+    private var currentTrackSelectionJob: Job? = null
+    private var trackSelectionRequestId: Long = 0L
+
     fun applyTrackSelection(
         file: File,
         autoStart: Boolean,
@@ -41,34 +49,53 @@ internal class AppNavigationTrackLoadDelegates(
         locationIdOverride: String? = lastBrowserLocationIdProvider(),
         useSongVolumeLookup: Boolean = true
     ) {
-        applyTrackSelectionAction(
-            file = file,
-            autoStart = autoStart,
-            expandOverride = expandOverride,
-            sourceIdOverride = sourceIdOverride,
-            locationIdOverride = locationIdOverride,
-            useSongVolumeLookup = useSongVolumeLookup,
-            onResetPlayback = onResetPlayback,
-            onSelectedFileChanged = onSelectedFileChanged,
-            onCurrentPlaybackSourceIdChanged = onCurrentPlaybackSourceIdChanged,
-            onPlayerSurfaceVisibleChanged = onPlayerSurfaceVisibleChanged,
-            loadSongVolumeForFile = loadSongVolumeForFile,
-            onSongVolumeDbChanged = onSongVolumeDbChanged,
-            onSongGainChanged = onSongGainChanged,
-            applyNativeTrackSnapshot = { applyNativeTrackSnapshot(readNativeTrackSnapshot()) },
-            refreshSubtuneState = refreshSubtuneState,
-            onPositionChanged = onPositionChanged,
-            onArtworkBitmapCleared = onArtworkBitmapCleared,
-            refreshRepeatModeForTrack = refreshRepeatModeForTrack,
-            onAddRecentPlayedTrack = onAddRecentPlayedTrack,
-            metadataTitleProvider = metadataTitleProvider,
-            metadataArtistProvider = metadataArtistProvider,
-            onStartEngine = onStartEngine,
-            onIsPlayingChanged = onIsPlayingChanged,
-            scheduleRecentTrackMetadataRefresh = scheduleRecentTrackMetadataRefresh,
-            onPlayerExpandedChanged = onPlayerExpandedChanged,
-            syncPlaybackService = syncPlaybackService
-        )
+        trackSelectionRequestId += 1L
+        val requestId = trackSelectionRequestId
+        onPlaybackStartInProgressChanged(true)
+        currentTrackSelectionJob?.cancel()
+        currentTrackSelectionJob = appScope.launch {
+            try {
+                applyTrackSelectionAction(
+                    file = file,
+                    autoStart = autoStart,
+                    expandOverride = expandOverride,
+                    sourceIdOverride = sourceIdOverride,
+                    locationIdOverride = locationIdOverride,
+                    useSongVolumeLookup = useSongVolumeLookup,
+                    onResetPlayback = onResetPlayback,
+                    onSelectedFileChanged = onSelectedFileChanged,
+                    onCurrentPlaybackSourceIdChanged = onCurrentPlaybackSourceIdChanged,
+                    onPlayerSurfaceVisibleChanged = onPlayerSurfaceVisibleChanged,
+                    loadSongVolumeForFile = loadSongVolumeForFile,
+                    onSongVolumeDbChanged = onSongVolumeDbChanged,
+                    onSongGainChanged = onSongGainChanged,
+                    applyNativeTrackSnapshot = { applyNativeTrackSnapshot(readNativeTrackSnapshot()) },
+                    refreshSubtuneState = refreshSubtuneState,
+                    onPositionChanged = onPositionChanged,
+                    onArtworkBitmapCleared = onArtworkBitmapCleared,
+                    refreshRepeatModeForTrack = refreshRepeatModeForTrack,
+                    onAddRecentPlayedTrack = onAddRecentPlayedTrack,
+                    metadataTitleProvider = metadataTitleProvider,
+                    metadataArtistProvider = metadataArtistProvider,
+                    onStartEngine = onStartEngine,
+                    onIsPlayingChanged = onIsPlayingChanged,
+                    scheduleRecentTrackMetadataRefresh = scheduleRecentTrackMetadataRefresh,
+                    onPlayerExpandedChanged = onPlayerExpandedChanged,
+                    syncPlaybackService = syncPlaybackService
+                )
+            } finally {
+                if (requestId == trackSelectionRequestId) {
+                    onPlaybackStartInProgressChanged(false)
+                }
+            }
+        }
+    }
+
+    fun cancelPendingTrackSelection() {
+        trackSelectionRequestId += 1L
+        currentTrackSelectionJob?.cancel()
+        currentTrackSelectionJob = null
+        onPlaybackStartInProgressChanged(false)
     }
 
     suspend fun restorePlayerStateFromSessionAndNative(openExpanded: Boolean) {

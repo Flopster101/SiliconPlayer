@@ -284,6 +284,7 @@ private fun AppNavigation(
     var isPlaying by remember { mutableStateOf(false) }
     var seekInProgress by remember { mutableStateOf(false) }
     var seekUiBusy by remember { mutableStateOf(false) }
+    var playbackStartInProgress by remember { mutableStateOf(false) }
     var seekStartedAtMs by remember { mutableLongStateOf(0L) }
     var seekRequestedAtMs by remember { mutableLongStateOf(0L) }
     var isPlayerExpanded by remember { mutableStateOf(false) }
@@ -852,6 +853,7 @@ private fun AppNavigation(
     )
 
     val trackLoadDelegates = AppNavigationTrackLoadDelegates(
+        appScope = appScope,
         context = context,
         prefs = prefs,
         cacheRootProvider = { File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR) },
@@ -880,6 +882,7 @@ private fun AppNavigation(
             runtimeDelegates.scheduleRecentTrackMetadataRefresh(sourceId, locationId)
         },
         onPlayerExpandedChanged = { isPlayerExpanded = it },
+        onPlaybackStartInProgressChanged = { playbackStartInProgress = it },
         syncPlaybackService = { runtimeDelegates.syncPlaybackService() }
     )
 
@@ -1141,10 +1144,14 @@ private fun AppNavigation(
     var collapseFromSwipe by remember { mutableStateOf(false) }
     val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val miniPreviewLiftPx = with(LocalDensity.current) { 28.dp.toPx() }
-    val stopAndEmptyTrack = buildStopAndEmptyTrackDelegate(
+    val stopAndEmptyTrackBase = buildStopAndEmptyTrackDelegate(
         context = context,
         playbackStateDelegates = playbackStateDelegates
     )
+    val stopAndEmptyTrack: () -> Unit = {
+        trackLoadDelegates.cancelPendingTrackSelection()
+        stopAndEmptyTrackBase()
+    }
     val activeCoreNameForUi = lastUsedCoreName
     val currentCorePluginName = pluginNameForCoreName(activeCoreNameForUi)
     val canOpenCurrentCoreSettings = currentCorePluginName != null
@@ -1202,7 +1209,10 @@ private fun AppNavigation(
     )
     RegisterPlaybackBroadcastReceiver(
         context = context,
-        onCleared = { playbackStateDelegates.resetAndOptionallyKeepLastTrack(keepLastTrack = true) },
+        onCleared = {
+            trackLoadDelegates.cancelPendingTrackSelection()
+            playbackStateDelegates.resetAndOptionallyKeepLastTrack(keepLastTrack = true)
+        },
         onPreviousTrackRequested = { trackNavDelegates.handlePreviousTrackAction() },
         onNextTrackRequested = { trackNavDelegates.playAdjacentTrack(1) }
     )
@@ -1269,6 +1279,7 @@ private fun AppNavigation(
             selectedFile = selectedFile,
             visiblePlayableFiles = visiblePlayableFiles,
             isPlaying = isPlaying,
+            playbackStartInProgress = playbackStartInProgress,
             seekUiBusy = seekUiBusy,
             durationSeconds = duration,
             positionSeconds = position,

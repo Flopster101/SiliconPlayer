@@ -97,7 +97,11 @@ private data class ArchiveMountInfo(
     val parentPath: String
 )
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalMaterialApi::class,
+    ExperimentalFoundationApi::class
+)
 @Composable
 fun FileBrowserScreen(
     repository: FileRepository,
@@ -521,13 +525,35 @@ fun FileBrowserScreen(
                                 style = MaterialTheme.typography.labelLarge
                             )
                             Crossfade(targetState = subtitle, label = "browserSubtitle") { text ->
-                                Text(
-                                    text = text,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                val shouldMarquee = text.length > 52
+                                if (shouldMarquee) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clipToBounds()
+                                    ) {
+                                        Text(
+                                            text = text,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Clip,
+                                            modifier = Modifier.basicMarquee(
+                                                iterations = Int.MAX_VALUE,
+                                                initialDelayMillis = 900
+                                            )
+                                        )
+                                    }
+                                } else {
+                                    Text(
+                                        text = text,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
 

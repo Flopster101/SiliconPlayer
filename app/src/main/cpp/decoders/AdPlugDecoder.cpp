@@ -58,6 +58,7 @@ bool AdPlugDecoder::open(const char* path) {
         closeInternalLocked();
         return false;
     }
+    player->setEndlessLoopMode(repeatMode.load() == 2);
 
     title = safeString(player->gettitle());
     if (title.empty()) {
@@ -111,37 +112,81 @@ int AdPlugDecoder::read(float* buffer, int numFrames) {
         return 0;
     }
 
+    const int mode = repeatMode.load();
+    const bool hasReliableDuration = durationSeconds >= 1.0;
+    const bool gateVirtualEof =
+            (mode == 0) ||
+            (mode == 3) ||
+            (mode == 1 && std::max(1, subtuneCount) > 1);
+
+    if (hasReliableDuration && mode != 2 && playbackPositionSeconds >= durationSeconds) {
+        if (mode == 1 && std::max(1, subtuneCount) == 1) {
+            // Repeat Track on single-subtune files: restart at duration boundary.
+            player->rewind(currentSubtuneIndex);
+            playbackPositionSeconds = 0.0;
+            remainingTickFrames = 0;
+            reachedEnd = false;
+        } else if (gateVirtualEof) {
+            return 0;
+        }
+    }
+
+    auto refreshToTickFrames = [this]() {
+        const float refreshHz = player->getrefresh();
+        const double safeRefreshHz =
+                (std::isfinite(refreshHz) && refreshHz > 0.0f) ? static_cast<double>(refreshHz) : 70.0;
+        return std::max(
+                1,
+                static_cast<int>(std::lround(static_cast<double>(sampleRateHz) / safeRefreshHz))
+        );
+    };
+
     int framesWritten = 0;
-    bool attemptedLoopRecovery = false;
+    int loopRecoveries = 0;
+    constexpr int kMaxLoopRecoveriesPerRead = 512;
 
     while (framesWritten < numFrames) {
         if (remainingTickFrames <= 0) {
             const bool hasNextTick = player->update();
             if (!hasNextTick) {
-                const int mode = repeatMode.load();
-                if ((mode == 1 || mode == 2) && !attemptedLoopRecovery) {
-                    player->rewind(currentSubtuneIndex);
-                    if (mode == 1) {
-                        // Repeat Track restarts timeline at track start.
-                        playbackPositionSeconds = 0.0;
+                if (mode == 1 || mode == 2) {
+                    bool recovered = false;
+                    // Some AdPlug players expect rewind() with default subsong and do not
+                    // reliably recover from rewind(0) after terminal update()==false.
+                    for (int attempt = 0; attempt < 2 && !recovered; ++attempt) {
+                        if (attempt == 0) {
+                            player->rewind(currentSubtuneIndex);
+                        } else {
+                            player->rewind();
+                        }
+                        remainingTickFrames = 0;
+                        reachedEnd = false;
+                        if (mode == 1) {
+                            // Repeat Track restarts timeline at track start.
+                            playbackPositionSeconds = 0.0;
+                        }
+
+                        if (player->update()) {
+                            remainingTickFrames = refreshToTickFrames();
+                            recovered = true;
+                            loopRecoveries = 0;
+                        }
                     }
-                    remainingTickFrames = 0;
-                    reachedEnd = false;
-                    attemptedLoopRecovery = true;
-                    continue;
+
+                    if (recovered) {
+                        continue;
+                    }
+
+                    if (loopRecoveries < kMaxLoopRecoveriesPerRead) {
+                        ++loopRecoveries;
+                        continue;
+                    }
                 }
                 reachedEnd = true;
                 break;
             }
-            attemptedLoopRecovery = false;
-
-            const float refreshHz = player->getrefresh();
-            const double safeRefreshHz =
-                    (std::isfinite(refreshHz) && refreshHz > 0.0f) ? static_cast<double>(refreshHz) : 70.0;
-            remainingTickFrames = std::max(
-                    1,
-                    static_cast<int>(std::lround(static_cast<double>(sampleRateHz) / safeRefreshHz))
-            );
+            loopRecoveries = 0;
+            remainingTickFrames = refreshToTickFrames();
         }
 
         const int framesLeft = numFrames - framesWritten;
@@ -281,7 +326,12 @@ std::string AdPlugDecoder::getGenre() {
 }
 
 void AdPlugDecoder::setRepeatMode(int mode) {
-    repeatMode.store((mode >= 0 && mode <= 3) ? mode : 0);
+    const int normalized = (mode >= 0 && mode <= 3) ? mode : 0;
+    repeatMode.store(normalized);
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (player) {
+        player->setEndlessLoopMode(normalized == 2);
+    }
 }
 
 int AdPlugDecoder::getRepeatModeCapabilities() const {

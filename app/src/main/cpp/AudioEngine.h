@@ -240,7 +240,7 @@ private:
     void resetResamplerStateLocked(bool preserveBuffer = false);
     bool ensureOutputSoxrContextLocked(int channels, int inputRate, int outputRate);
     void freeOutputSoxrContextLocked();
-    int readFromDecoderLocked(float* buffer, int numFrames, bool& reachedEnd);
+    int readFromDecoderLocked(float* buffer, int numFrames, int channels, bool& reachedEnd);
     void renderResampledLocked(float* outputData, int32_t numFrames, int channels, int streamRate, bool& reachedEnd);
     void renderSoxrResampledLocked(float* outputData, int32_t numFrames, int channels, int streamRate, int renderRate, bool& reachedEnd);
     void recoverStreamIfNeeded();

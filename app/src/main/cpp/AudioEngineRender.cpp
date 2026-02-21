@@ -171,19 +171,48 @@ bool AudioEngine::ensureOutputSoxrContextLocked(int channels, int inputRate, int
     return true;
 }
 
-int AudioEngine::readFromDecoderLocked(float* buffer, int numFrames, bool& reachedEnd) {
-    if (!decoder || !buffer || numFrames <= 0) return 0;
-
-    int framesRead = decoder->read(buffer, numFrames);
-    if (framesRead > 0) {
-        return framesRead;
-    }
+int AudioEngine::readFromDecoderLocked(float* buffer, int numFrames, int channels, bool& reachedEnd) {
+    if (!decoder || !buffer || numFrames <= 0 || channels <= 0) return 0;
 
     const int mode = repeatMode.load();
 
+    int framesRead = decoder->read(buffer, numFrames);
+    if (framesRead > 0) {
+        if (mode == 2 && framesRead < numFrames) {
+            // Keep filling in loop-point mode to avoid inserting silence when a
+            // decoder emits a short chunk around wrap boundaries.
+            int total = framesRead;
+            constexpr int kMaxTopUpRounds = 8;
+            for (int round = 0; round < kMaxTopUpRounds && total < numFrames; ++round) {
+                float* writePtr = buffer + static_cast<size_t>(total) * channels;
+                const int remaining = numFrames - total;
+                int more = decoder->read(writePtr, remaining);
+                if (more > 0) {
+                    total += more;
+                    continue;
+                }
+
+                bool recovered = false;
+                for (int retry = 0; retry < 8; ++retry) {
+                    more = decoder->read(writePtr, remaining);
+                    if (more > 0) {
+                        total += more;
+                        recovered = true;
+                        break;
+                    }
+                }
+                if (!recovered) {
+                    break;
+                }
+            }
+            return total;
+        }
+        return framesRead;
+    }
+
     if (mode == 2) {
         // Loop-point mode can return transient 0-frame reads at wrap boundaries.
-        for (int retry = 0; retry < 4; ++retry) {
+        for (int retry = 0; retry < 32; ++retry) {
             framesRead = decoder->read(buffer, numFrames);
             if (framesRead > 0) {
                 return framesRead;
@@ -270,7 +299,7 @@ void AudioEngine::renderResampledLocked(
             );
             resamplerNoOpLoggedForCurrentTrack = true;
         }
-        int framesRead = readFromDecoderLocked(outputData, numFrames, reachedEnd);
+        int framesRead = readFromDecoderLocked(outputData, numFrames, channels, reachedEnd);
         if (framesRead < numFrames) {
             memset(
                     outputData + (framesRead * channels),
@@ -334,7 +363,7 @@ void AudioEngine::renderResampledLocked(
         int baseFrame = static_cast<int>(std::floor(resampleInputPosition));
 
         while (baseFrame + 1 >= availableFrames) {
-            int decoded = readFromDecoderLocked(resampleDecodeScratch.data(), decodeChunkFrames, reachedEnd);
+            int decoded = readFromDecoderLocked(resampleDecodeScratch.data(), decodeChunkFrames, channels, reachedEnd);
             if (decoded <= 0) {
                 break;
             }
@@ -440,7 +469,7 @@ void AudioEngine::renderSoxrResampledLocked(
 
         // Only read more input if the buffer is insufficient for the requested output.
         if (bufferedOutput < outputCapacity && !draining) {
-            int decoded = readFromDecoderLocked(resampleDecodeScratch.data(), decodeChunkFrames, reachedEnd);
+            int decoded = readFromDecoderLocked(resampleDecodeScratch.data(), decodeChunkFrames, channels, reachedEnd);
             if (decoded > 0) {
                 sharedAbsoluteInputPosition += decoded;
                 inData[0] = reinterpret_cast<const uint8_t*>(resampleDecodeScratch.data());
@@ -462,7 +491,7 @@ void AudioEngine::renderSoxrResampledLocked(
         if (converted == 0 && !didRead && !draining) {
             // Estimated buffer was sufficient, but resampler produced no output.
             // Force a read to advance the pipeline.
-            int decoded = readFromDecoderLocked(resampleDecodeScratch.data(), decodeChunkFrames, reachedEnd);
+            int decoded = readFromDecoderLocked(resampleDecodeScratch.data(), decodeChunkFrames, channels, reachedEnd);
             if (decoded > 0) {
                 sharedAbsoluteInputPosition += decoded;
                 inData[0] = reinterpret_cast<const uint8_t*>(resampleDecodeScratch.data());
@@ -847,4 +876,3 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
 
     return AAUDIO_CALLBACK_RESULT_CONTINUE;
 }
-

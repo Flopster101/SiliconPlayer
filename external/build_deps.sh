@@ -521,6 +521,8 @@ build_ffmpeg() {
     local FFMPEG_EXTRA_CFLAGS="-fPIC $DEP_OPT_FLAGS"
     local FFMPEG_AUDIO_DECODERS=""
     local FFMPEG_AUDIO_DEMUXERS=""
+    local FFMPEG_VIDEO_CONTAINER_DEMUXERS=""
+    local FFMPEG_ENABLED_DEMUXERS=""
     local FFMPEG_AUDIO_PARSERS=""
     local FFMPEG_PROTOCOLS=""
 
@@ -543,10 +545,12 @@ build_ffmpeg() {
         EXTRA_FLAGS="--disable-asm"
     fi
 
-    # Keep this list intentionally broad for audio playback, including
-    # demuxers for common video containers that can carry audio-only tracks.
+    # Audio-native demuxers.
     FFMPEG_AUDIO_DECODERS="aac,aac_fixed,aac_latm,ac3,ac3_fixed,alac,als,amrnb,amrwb,ape,atrac1,atrac3,atrac3p,atrac9,cook,dca,eac3,flac,gsm,gsm_ms,mp1,mp1float,mp2,mp2float,mp3,mp3float,mp3on4,mp3on4float,opus,qdm2,qoa,ralf,shorten,tak,truehd,tta,vorbis,wavpack,wmalossless,wmapro,wmav1,wmav2,pcm_alaw,pcm_mulaw,pcm_s8,pcm_s16be,pcm_s16le,pcm_s24be,pcm_s24le,pcm_s32be,pcm_s32le,pcm_u8,pcm_u16be,pcm_u16le,pcm_f32be,pcm_f32le,pcm_f64be,pcm_f64le"
-    FFMPEG_AUDIO_DEMUXERS="aac,ac3,aiff,amr,ape,asf,avi,caf,concat,flac,flv,hls,matroska,mov,mp3,mpegps,mpegts,mpegvideo,ogg,wav,wv,tta,voc,w64"
+    FFMPEG_AUDIO_DEMUXERS="aac,ac3,aiff,amr,ape,caf,concat,dsf,ffmetadata,flac,hls,mp3,ogg,qcp,rso,sdp,truehd,tta,vag,voc,w64,wav,wv,xa,xwma"
+    # Video/container demuxers that may carry playable audio streams.
+    FFMPEG_VIDEO_CONTAINER_DEMUXERS="anm,argo_asf,argo_brp,asf,avi,bethsoftvid,bfi,bink,binka,bmv,c93,ea,ea_cdata,flic,filmstrip,idcin,idf,iv8,ivf,kvag,lmlm4,lxf,matroska,mca,mcc,moflex,mov,mpegps,mpegts,mpegvideo,mxf,mxg,nc,nistsphere,nsv,nut,pmp,pp_bnk,pva,rcwt,redspark,rl2,rm,roq,rpl,rsd,smacker,sol,svag,thp,tiertexseq,tmv,ty,vivo,vmd,vpk,wsaud,wsvqa,wtv,xmv,yop,yuv4mpegpipe"
+    FFMPEG_ENABLED_DEMUXERS="$FFMPEG_AUDIO_DEMUXERS${FFMPEG_VIDEO_CONTAINER_DEMUXERS:+,$FFMPEG_VIDEO_CONTAINER_DEMUXERS}"
     FFMPEG_AUDIO_PARSERS="aac,aac_latm,ac3,adx,amr,ape,atrac3,cook,dca,flac,gsm,mpegaudio,opus,tak,vorbis,wavpack"
     FFMPEG_PROTOCOLS="android_content,cache,concat,crypto,data,fd,file,http,https,httpproxy,pipe,subfile,tcp,tls,udp,udplite,unix"
 
@@ -608,7 +612,7 @@ build_ffmpeg() {
         --disable-encoders \
         --disable-muxers \
         --enable-decoder="$FFMPEG_AUDIO_DECODERS" \
-        --enable-demuxer="$FFMPEG_AUDIO_DEMUXERS" \
+        --enable-demuxer="$FFMPEG_ENABLED_DEMUXERS" \
         --enable-parser="$FFMPEG_AUDIO_PARSERS" \
         --enable-protocol="$FFMPEG_PROTOCOLS" \
         --enable-swresample \

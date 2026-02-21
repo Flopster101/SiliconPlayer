@@ -936,7 +936,7 @@ std::vector<std::string> FFmpegDecoder::getSupportedExtensions() {
         }
 
         cached.assign(dedup.begin(), dedup.end());
-        LOGD("FFmpeg audio extension discovery: %zu extensions", cached.size());
+        LOGD("FFmpeg demuxer extension discovery: %zu extensions", cached.size());
     });
 
     return cached;

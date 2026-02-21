@@ -1907,14 +1907,66 @@ EOF
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build hivelytracker replayer (libhivelytracker static)
+# -----------------------------------------------------------------------------
+build_hivelytracker() {
+    local ABI=$1
+    echo "Building hivelytracker for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/hivelytracker"
+    local REPLAYER_DIR="$PROJECT_PATH/Replayer_Windows"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+    local TARGET_CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "hivelytracker source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    if [ ! -f "$REPLAYER_DIR/hvl_replay.c" ] || [ ! -f "$REPLAYER_DIR/hvl_tables.c" ] || \
+       [ ! -f "$REPLAYER_DIR/hvl_replay.h" ] || [ ! -f "$REPLAYER_DIR/hvl_tables.h" ]; then
+        echo "Error: hivelytracker replayer sources not found in $REPLAYER_DIR."
+        return 1
+    fi
+
+    if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libhivelytracker.a" ] && \
+       [ -f "$INSTALL_DIR/include/hivelytracker/hvl_replay.h" ] && \
+       [ -f "$INSTALL_DIR/include/hivelytracker/hvl_tables.h" ]; then
+        echo "hivelytracker already built for $ABI -> skipping"
+        return 0
+    fi
+
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR" "$INSTALL_DIR/lib" "$INSTALL_DIR/include/hivelytracker"
+
+    # Upstream headers rely on tentative globals in headers; keep common-symbol
+    # behavior to avoid duplicate-definition link issues with modern clang.
+    "$TARGET_CC" -c "$REPLAYER_DIR/hvl_replay.c" \
+        -o "$BUILD_DIR/hvl_replay.o" \
+        -fPIC -fcommon $DEP_OPT_FLAGS
+    "$TARGET_CC" -c "$REPLAYER_DIR/hvl_tables.c" \
+        -o "$BUILD_DIR/hvl_tables.o" \
+        -fPIC -fcommon $DEP_OPT_FLAGS
+
+    "$TOOLCHAIN/bin/llvm-ar" rcs "$INSTALL_DIR/lib/libhivelytracker.a" \
+        "$BUILD_DIR/hvl_replay.o" \
+        "$BUILD_DIR/hvl_tables.o"
+    "$TOOLCHAIN/bin/llvm-ranlib" "$INSTALL_DIR/lib/libhivelytracker.a"
+
+    cp "$REPLAYER_DIR/hvl_replay.h" "$INSTALL_DIR/include/hivelytracker/"
+    cp "$REPLAYER_DIR/hvl_tables.h" "$INSTALL_DIR/include/hivelytracker/"
+}
+
+# -----------------------------------------------------------------------------
 # Argument Parsing
 # -----------------------------------------------------------------------------
 usage() {
     echo "Usage: $0 <abi|all> <lib|all[,lib2,...]> [clean]"
     echo "  ABI: all, arm64-v8a, armeabi-v7a, x86_64 (x86 supported only when explicitly requested)"
-    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68, libbinio, adplug, libzakalwe, bencodetools, vasm, uade"
+    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68, libbinio, adplug, libzakalwe, bencodetools, vasm, uade, hivelytracker"
     echo "  clean (optional): force rebuild (bypass already-built skip checks)"
-    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68, binio, libadplug, zakalwe, bencode, assembler/vasm, libuade"
+    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68, binio, libadplug, zakalwe, bencode, assembler/vasm, libuade, hvl/hively"
 }
 
 if [ "$#" -eq 1 ]; then
@@ -2000,6 +2052,9 @@ normalize_lib_name() {
         uade|libuade)
             echo "uade"
             ;;
+        hvl|hively|hivelytracker|libhivelytracker)
+            echo "hivelytracker"
+            ;;
         *)
             echo "$lib"
             ;;
@@ -2041,7 +2096,7 @@ is_valid_abi() {
 is_valid_lib() {
     local lib="$1"
     case "$lib" in
-        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth|sc68|libbinio|adplug|libzakalwe|bencodetools|vasm|uade)
+        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth|sc68|libbinio|adplug|libzakalwe|bencodetools|vasm|uade|hivelytracker)
             return 0
             ;;
         *)
@@ -2232,6 +2287,10 @@ for ABI in "${ABIS[@]}"; do
 
     if target_has_lib "uade"; then
         build_uade "$ABI"
+    fi
+
+    if target_has_lib "hivelytracker"; then
+        build_hivelytracker "$ABI"
     fi
 done
 

@@ -8,7 +8,7 @@ object AppDefaults {
     object Player {
         const val keepScreenOn = false
         const val fadePauseResume = true
-        const val artworkCornerRadiusDp = 3
+        const val artworkCornerRadiusDp = 6
         const val endFadeApplyToAllTracks = false
         const val endFadeDurationMs = 10_000
         val endFadeCurve = EndFadeCurve.Linear

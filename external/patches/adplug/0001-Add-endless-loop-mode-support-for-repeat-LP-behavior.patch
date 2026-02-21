@@ -1,0 +1,427 @@
+From f8d6499c890555fe39f6086b19315e7e6782231f Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Sat, 21 Feb 2026 04:19:00 -0300
+Subject: [PATCH] Add endless loop mode support for repeat LP behavior
+
+---
+ src/a2m-v2.cpp   |  2 +-
+ src/bam.cpp      |  4 ++--
+ src/coktel.cpp   |  2 +-
+ src/d00.cpp      |  2 +-
+ src/got.cpp      |  2 +-
+ src/herad.cpp    |  2 +-
+ src/hsc.cpp      |  4 ++--
+ src/imf.cpp      |  2 +-
+ src/ksm.cpp      |  2 +-
+ src/mdi.cpp      |  2 +-
+ src/mkj.cpp      |  2 +-
+ src/mus.cpp      |  2 +-
+ src/player.h     | 11 +++++++++++
+ src/protrack.cpp |  6 +++---
+ src/rad2.cpp     |  8 +++++++-
+ src/raw.cpp      |  6 +++---
+ src/s3m.cpp      |  6 +++---
+ src/sng.cpp      |  4 ++--
+ src/sop.cpp      |  2 +-
+ src/u6m.cpp      |  2 +-
+ src/vgm.cpp      |  2 +-
+ src/xad.cpp      |  2 +-
+ src/xsm.cpp      |  2 +-
+ 23 files changed, 48 insertions(+), 31 deletions(-)
+
+diff --git a/src/a2m-v2.cpp b/src/a2m-v2.cpp
+index d7dadbc..b6f6017 100644
+--- a/src/a2m-v2.cpp
++++ b/src/a2m-v2.cpp
+@@ -85,7 +85,7 @@ bool Ca2mv2Player::update()
+ {
+     newtimer();
+ 
+-    return !songend;
++    return mapSongEnd(songend);
+ }
+ 
+ void Ca2mv2Player::rewind(int subsong)
+diff --git a/src/bam.cpp b/src/bam.cpp
+index eca4d94..5904a19 100644
+--- a/src/bam.cpp
++++ b/src/bam.cpp
+@@ -89,7 +89,7 @@ bool CbamPlayer::update()
+ 
+ 	if(del) {
+ 		del--;
+-		return !songend;
++		return mapSongEnd(songend);
+ 	}
+ 
+ 	if(pos >= size) {	// EOF detection
+@@ -189,7 +189,7 @@ bool CbamPlayer::update()
+ 		del = song[pos] - 127;
+ 		pos++;
+ 	}
+-	return !songend;
++	return mapSongEnd(songend);
+ }
+ 
+ void CbamPlayer::rewind(int subsong)
+diff --git a/src/coktel.cpp b/src/coktel.cpp
+index 122ebae..f98c745 100644
+--- a/src/coktel.cpp
++++ b/src/coktel.cpp
+@@ -268,5 +268,5 @@ bool CcoktelPlayer::update()
+ 			else break;
+ 		}
+ 	}
+-	return !songend;
++	return mapSongEnd(songend);
+ }
+diff --git a/src/d00.cpp b/src/d00.cpp
+index eb68a3b..aff7495 100644
+--- a/src/d00.cpp
++++ b/src/d00.cpp
+@@ -464,7 +464,7 @@ bool Cd00Player::update()
+   if(trackend == 9)
+     songend = 1;
+ 
+-  return !songend;
++  return mapSongEnd(songend);
+ }
+ 
+ void Cd00Player::rewind(int subsong)
+diff --git a/src/got.cpp b/src/got.cpp
+index 65136b3..03f8973 100644
+--- a/src/got.cpp
++++ b/src/got.cpp
+@@ -105,7 +105,7 @@ bool CgotPlayer::update()
+ 	} else
+ 		timer = rate / (float)del;
+ 
+-	return !songend;
++	return mapSongEnd(songend);
+ }
+ 
+ void CgotPlayer::rewind(int subsong)
+diff --git a/src/herad.cpp b/src/herad.cpp
+index 3c88c45..b0806ac 100644
+--- a/src/herad.cpp
++++ b/src/herad.cpp
+@@ -1347,5 +1347,5 @@ bool CheradPlayer::update()
+ 		wTime = wTime + wSpeed;
+ 		processEvents();
+ 	}
+-	return !songend;
++	return mapSongEnd(songend);
+ }
+diff --git a/src/hsc.cpp b/src/hsc.cpp
+index cb2a365..628a1bd 100644
+--- a/src/hsc.cpp
++++ b/src/hsc.cpp
+@@ -83,7 +83,7 @@ bool ChscPlayer::update()
+ 
+   del--;                      // player speed handling
+   if(del)
+-    return !songend;		// nothing done
++    return mapSongEnd(songend);		// nothing done
+ 
+   if(fadein)					// fade-in handling
+     fadein--;
+@@ -235,7 +235,7 @@ skip_pattern_data:
+ 	songend = 1;
+     }
+   }
+-  return !songend;		// still playing
++  return mapSongEnd(songend);		// still playing
+ }
+ 
+ void ChscPlayer::rewind(int subsong)
+diff --git a/src/imf.cpp b/src/imf.cpp
+index 19ff04e..7ec9611 100644
+--- a/src/imf.cpp
++++ b/src/imf.cpp
+@@ -169,7 +169,7 @@ bool CimfPlayer::update()
+ 	}
+ 	else timer = rate / (float)del;
+ 
+-	return !songend;
++	return mapSongEnd(songend);
+ }
+ 
+ void CimfPlayer::rewind(int subsong)
+diff --git a/src/ksm.cpp b/src/ksm.cpp
+index 67259c7..a09bda6 100644
+--- a/src/ksm.cpp
++++ b/src/ksm.cpp
+@@ -226,7 +226,7 @@ bool CksmPlayer::update()
+       for(i=0;i<bufnum;i+=3)
+ 	opl->write(databuf[i+1],databuf[i+2]);
+     }
+-  return !songend;
++  return mapSongEnd(songend);
+ }
+ 
+ void CksmPlayer::rewind(int subsong)
+diff --git a/src/mdi.cpp b/src/mdi.cpp
+index b7566bd..e6cc445 100644
+--- a/src/mdi.cpp
++++ b/src/mdi.cpp
+@@ -319,5 +319,5 @@ bool CmdiPlayer::update()
+ 			else break;
+ 		}
+ 	}
+-	return !songend;
++	return mapSongEnd(songend);
+ }
+diff --git a/src/mkj.cpp b/src/mkj.cpp
+index 05e9f36..1486cbf 100644
+--- a/src/mkj.cpp
++++ b/src/mkj.cpp
+@@ -159,7 +159,7 @@ bool CmkjPlayer::update()
+     } while(!channel[c].pstat);
+   }
+ 
+-  return !songend;
++  return mapSongEnd(songend);
+ }
+ 
+ void CmkjPlayer::rewind(int subsong)
+diff --git a/src/mus.cpp b/src/mus.cpp
+index 643b811..d3a296e 100644
+--- a/src/mus.cpp
++++ b/src/mus.cpp
+@@ -539,5 +539,5 @@ bool CmusPlayer::update()
+ 			else break;
+ 		}
+ 	}
+-	return !songend;
++	return mapSongEnd(songend);
+ }
+diff --git a/src/player.h b/src/player.h
+index 5aff188..ac5ed0b 100644
+--- a/src/player.h
++++ b/src/player.h
+@@ -40,6 +40,8 @@ public:
+ 
+ /***** Operational methods *****/
+ 	void seek(unsigned long ms);
++	void setEndlessLoopMode(bool enabled) { endlessLoopMode = enabled; }
++	bool getEndlessLoopMode() const { return endlessLoopMode; }
+ 
+ 	virtual bool load(const std::string &filename,	// loads file
+ 			  const CFileProvider &fp = CProvider_Filesystem()) = 0;
+@@ -81,9 +83,18 @@ public:
+ protected:
+ 	Copl		*opl;	// our OPL chip
+ 	CAdPlugDatabase	*db;	// AdPlug Database
++	bool		endlessLoopMode = false; // suppress loop-end signaling
+ 
+ 	static const unsigned short	note_table[12];	// standard adlib note table
+ 	static const unsigned char	op_table[9];	// the 9 operators as expected by the OPL
++
++	bool mapSongEnd(bool songEnd) const {
++		return endlessLoopMode ? true : !songEnd;
++	}
++
++	bool mapLoopingState(bool playing, bool looped) const {
++		return playing && (endlessLoopMode || !looped);
++	}
+ };
+ 
+ #endif
+diff --git a/src/protrack.cpp b/src/protrack.cpp
+index d1ca3f7..d43692a 100644
+--- a/src/protrack.cpp
++++ b/src/protrack.cpp
+@@ -189,11 +189,11 @@ bool CmodPlayer::update()
+ 
+   if(del) {		// speed compensation
+     del--;
+-    return !songend;
++    return mapSongEnd(songend);
+   }
+ 
+   // arrangement handling
+-  if(!resolve_order()) return !songend;
++  if(!resolve_order()) return mapSongEnd(songend);
+   pattnr = order[ord];
+ 
+   if(!rw) AdPlug_LogWrite("\nCmodPlayer::update(): Pattern: %d, Order: %d\n", pattnr, ord);
+@@ -458,7 +458,7 @@ bool CmodPlayer::update()
+ 
+   resolve_order();	// so we can report songend right away
+   AdPlug_LogWrite("\n");
+-  return !songend;
++  return mapSongEnd(songend);
+ }
+ 
+ unsigned char CmodPlayer::set_opl_chip(unsigned char chan)
+diff --git a/src/rad2.cpp b/src/rad2.cpp
+index e5162f0..7862708 100644
+--- a/src/rad2.cpp
++++ b/src/rad2.cpp
+@@ -1930,7 +1930,13 @@ bool Crad2Player::load(const std::string &filename, const CFileProvider &fp) {
+ 	return false;
+ }
+ 
+-bool Crad2Player::update() { return !rad->Update(); }
++bool Crad2Player::update() {
++	bool ended = rad->Update();
++	if (ended && getEndlessLoopMode()) {
++		return true;
++	}
++	return !ended;
++}
+ void Crad2Player::rewind(int) { rad->Stop(); }
+ float Crad2Player::getrefresh() { return rad->GetHertz(); }
+ 
+diff --git a/src/raw.cpp b/src/raw.cpp
+index f41f552..0750a07 100644
+--- a/src/raw.cpp
++++ b/src/raw.cpp
+@@ -130,7 +130,7 @@ bool CrawPlayer::update()
+ 
+   if (this->del) {
+     del--;
+-    return !songend;
++    return mapSongEnd(songend);
+   }
+ 
+   do {
+@@ -156,7 +156,7 @@ bool CrawPlayer::update()
+       if (this->data[this->pos].param == 0xff) {
+         rewind(0); // auto-rewind song
+         songend = true;
+-        return !songend;
++        return mapSongEnd(songend);
+       }
+       break;
+ 
+@@ -166,7 +166,7 @@ bool CrawPlayer::update()
+     }
+   } while (this->data[this->pos++].command || setspeed);
+ 
+-  return !songend;
++  return mapSongEnd(songend);
+ }
+ 
+ void CrawPlayer::rewind(int subsong)
+diff --git a/src/s3m.cpp b/src/s3m.cpp
+index b123880..b9b1f62 100644
+--- a/src/s3m.cpp
++++ b/src/s3m.cpp
+@@ -266,7 +266,7 @@ bool Cs3mPlayer::update()
+ 
+   if (del) {		// speed compensation
+     del--;
+-    return !songend;
++    return mapSongEnd(songend);
+   }
+ 
+   // arrangement handling
+@@ -288,7 +288,7 @@ bool Cs3mPlayer::update()
+     case 0xff:	// "--" end of song
+       ord = 0;
+       songend = 1;
+-      if (end++) return !songend;	// no order is a valid pattern
++      if (end++) return mapSongEnd(songend);	// no order is a valid pattern
+     }
+   }
+ 
+@@ -465,7 +465,7 @@ bool Cs3mPlayer::update()
+     }
+   }
+ 
+-  return !songend;		// still playing
++  return mapSongEnd(songend);		// still playing
+ }
+ 
+ void Cs3mPlayer::rewind(int subsong)
+diff --git a/src/sng.cpp b/src/sng.cpp
+index 62358bd..01ebe61 100644
+--- a/src/sng.cpp
++++ b/src/sng.cpp
+@@ -58,7 +58,7 @@ bool CsngPlayer::update()
+ {
+   if(header.compressed && del) {
+     del--;
+-    return !songend;
++    return mapSongEnd(songend);
+   }
+ 
+   while(data[pos].reg) {
+@@ -77,7 +77,7 @@ bool CsngPlayer::update()
+   pos++;
+ 
+   if(pos >= header.length) { songend = true; pos = header.loop; }
+-  return !songend;
++  return mapSongEnd(songend);
+ }
+ 
+ void CsngPlayer::rewind(int subsong)
+diff --git a/src/sop.cpp b/src/sop.cpp
+index 244be30..b857073 100644
+--- a/src/sop.cpp
++++ b/src/sop.cpp
+@@ -366,7 +366,7 @@ bool CsopPlayer::update()
+ 			}
+ 		}
+ 	}
+-	return !songend;
++	return mapSongEnd(songend);
+ }
+ 
+ /*
+diff --git a/src/u6m.cpp b/src/u6m.cpp
+index 037952e..0e1c88b 100644
+--- a/src/u6m.cpp
++++ b/src/u6m.cpp
+@@ -138,7 +138,7 @@ bool Cu6mPlayer::update()
+       driver_active = false;
+     }
+ 
+-  return !songend;
++  return mapSongEnd(songend);
+ }
+ 
+ 
+diff --git a/src/vgm.cpp b/src/vgm.cpp
+index fff95cb..a2f1f4d 100644
+--- a/src/vgm.cpp
++++ b/src/vgm.cpp
+@@ -258,7 +258,7 @@ bool CvgmPlayer::update()
+ 		if (pos >= data_sz && loop_ofs >= 0)
+ 			pos = loop_ofs;
+ 	} while (!wait);
+-	return !songend;
++	return mapSongEnd(songend);
+ }
+ 
+ void CvgmPlayer::rewind(int subsong)
+diff --git a/src/xad.cpp b/src/xad.cpp
+index 8d84613..49bcc64 100644
+--- a/src/xad.cpp
++++ b/src/xad.cpp
+@@ -130,7 +130,7 @@ bool CxadPlayer::update()
+ 	xadplayer_update();
+ 
+ update_end:
+-	return (plr.playing && (!plr.looping));
++	return mapLoopingState(plr.playing != 0, plr.looping != 0);
+ }
+ 
+ float CxadPlayer::getrefresh()
+diff --git a/src/xsm.cpp b/src/xsm.cpp
+index 1dbd88c..f85b007 100644
+--- a/src/xsm.cpp
++++ b/src/xsm.cpp
+@@ -95,7 +95,7 @@ bool CxsmPlayer::update()
+ 
+   last = notenum;
+   notenum++;
+-  return !songend;
++  return mapSongEnd(songend);
+ }
+ 
+ void CxsmPlayer::rewind(int subsong)
+-- 
+2.53.0
+

@@ -45,6 +45,7 @@ PATCHES_DIR="$ABSOLUTE_PATH/patches/libopenmpt"
 PATCHES_DIR_LIBGME="$ABSOLUTE_PATH/patches/libgme"
 PATCHES_DIR_LAZYUSF2="$ABSOLUTE_PATH/patches/lazyusf2"
 PATCHES_DIR_VIO2SF="$ABSOLUTE_PATH/patches/vio2sf"
+PATCHES_DIR_ADPLUG="$ABSOLUTE_PATH/patches/adplug"
 OPENSSL_DIR="$ABSOLUTE_PATH/openssl"
 
 # -----------------------------------------------------------------------------
@@ -296,6 +297,37 @@ apply_vio2sf_patches() {
         fi
 
         echo "Applying vio2sf patch: $patch_name"
+        git -C "$PROJECT_PATH" am "$patch_file" || {
+            echo "Error applying patch $patch_name"
+            git -C "$PROJECT_PATH" am --abort
+            exit 1
+        }
+    done
+}
+
+# -----------------------------------------------------------------------------
+# Function: Apply adplug patches (idempotent)
+# -----------------------------------------------------------------------------
+apply_adplug_patches() {
+    local PROJECT_PATH="$ABSOLUTE_PATH/adplug"
+    if [ ! -d "$PROJECT_PATH" ]; then
+        return
+    fi
+    if [ ! -d "$PATCHES_DIR_ADPLUG" ]; then
+        return
+    fi
+
+    for patch_file in "$PATCHES_DIR_ADPLUG"/*.patch; do
+        [ -e "$patch_file" ] || continue
+        local patch_name
+        patch_name="$(basename "$patch_file")"
+
+        if git -C "$PROJECT_PATH" apply --check --reverse "$patch_file" >/dev/null 2>&1; then
+            echo "adplug patch already applied: $patch_name"
+            continue
+        fi
+
+        echo "Applying adplug patch: $patch_name"
         git -C "$PROJECT_PATH" am "$patch_file" || {
             echo "Error applying patch $patch_name"
             git -C "$PROJECT_PATH" am --abort
@@ -1778,6 +1810,10 @@ fi
 
 if target_has_lib "vio2sf"; then
     apply_vio2sf_patches
+fi
+
+if target_has_lib "adplug"; then
+    apply_adplug_patches
 fi
 
 # -----------------------------------------------------------------------------

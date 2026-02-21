@@ -23,6 +23,7 @@ internal data class AppNavigationSettingsStates(
     val sidPlayFpCoreSampleRateHz: MutableIntState,
     val lazyUsf2CoreSampleRateHz: MutableIntState,
     val adPlugCoreSampleRateHz: MutableIntState,
+    val uadeCoreSampleRateHz: MutableIntState,
     val adPlugOplEngine: MutableIntState,
     val lazyUsf2UseHleAudio: MutableState<Boolean>,
     val vio2sfInterpolationQuality: MutableIntState,
@@ -34,6 +35,9 @@ internal data class AppNavigationSettingsStates(
     val sc68AmigaFilter: MutableState<Boolean>,
     val sc68AmigaBlend: MutableIntState,
     val sc68AmigaClock: MutableIntState,
+    val uadeFilterEnabled: MutableState<Boolean>,
+    val uadeNtscMode: MutableState<Boolean>,
+    val uadePanningMode: MutableIntState,
     val sidPlayFpBackend: MutableIntState,
     val sidPlayFpClockMode: MutableIntState,
     val sidPlayFpSidModelMode: MutableIntState,
@@ -131,6 +135,9 @@ internal fun rememberAppNavigationSettingsStates(
     val adPlugCoreSampleRateHz = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CORE_RATE_ADPLUG, AdPlugDefaults.coreSampleRateHz))
     }
+    val uadeCoreSampleRateHz = remember {
+        mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CORE_RATE_UADE, UadeDefaults.coreSampleRateHz))
+    }
     val adPlugOplEngine = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.ADPLUG_OPL_ENGINE, AdPlugDefaults.oplEngine))
     }
@@ -168,6 +175,15 @@ internal fun rememberAppNavigationSettingsStates(
     }
     val sc68AmigaClock = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.SC68_AMIGA_CLOCK, Sc68Defaults.amigaClock))
+    }
+    val uadeFilterEnabled = remember {
+        mutableStateOf(prefs.getBoolean(CorePreferenceKeys.UADE_FILTER_ENABLED, UadeDefaults.filterEnabled))
+    }
+    val uadeNtscMode = remember {
+        mutableStateOf(prefs.getBoolean(CorePreferenceKeys.UADE_NTSC_MODE, UadeDefaults.ntscMode))
+    }
+    val uadePanningMode = remember {
+        mutableIntStateOf(prefs.getInt(CorePreferenceKeys.UADE_PANNING_MODE, UadeDefaults.panningMode))
     }
     val sidPlayFpBackend = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.SIDPLAYFP_BACKEND, SidPlayFpDefaults.backend))
@@ -415,6 +431,7 @@ internal fun rememberAppNavigationSettingsStates(
         sidPlayFpCoreSampleRateHz = sidPlayFpCoreSampleRateHz,
         lazyUsf2CoreSampleRateHz = lazyUsf2CoreSampleRateHz,
         adPlugCoreSampleRateHz = adPlugCoreSampleRateHz,
+        uadeCoreSampleRateHz = uadeCoreSampleRateHz,
         adPlugOplEngine = adPlugOplEngine,
         lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
         vio2sfInterpolationQuality = vio2sfInterpolationQuality,
@@ -426,6 +443,9 @@ internal fun rememberAppNavigationSettingsStates(
         sc68AmigaFilter = sc68AmigaFilter,
         sc68AmigaBlend = sc68AmigaBlend,
         sc68AmigaClock = sc68AmigaClock,
+        uadeFilterEnabled = uadeFilterEnabled,
+        uadeNtscMode = uadeNtscMode,
+        uadePanningMode = uadePanningMode,
         sidPlayFpBackend = sidPlayFpBackend,
         sidPlayFpClockMode = sidPlayFpClockMode,
         sidPlayFpSidModelMode = sidPlayFpSidModelMode,

@@ -20,6 +20,7 @@ import com.flopster101.siliconplayer.pluginsettings.PluginSettings
 import com.flopster101.siliconplayer.pluginsettings.RenderPluginSettings
 import com.flopster101.siliconplayer.pluginsettings.Sc68Settings
 import com.flopster101.siliconplayer.pluginsettings.SidPlayFpSettings
+import com.flopster101.siliconplayer.pluginsettings.UadeSettings
 import com.flopster101.siliconplayer.pluginsettings.Vio2sfSettings
 import com.flopster101.siliconplayer.pluginsettings.VgmPlaySettings
 import java.util.Locale
@@ -36,6 +37,7 @@ internal data class PluginDetailRouteState(
     val sidPlayFpSampleRateHz: Int,
     val lazyUsf2SampleRateHz: Int,
     val adPlugSampleRateHz: Int,
+    val uadeSampleRateHz: Int,
     val adPlugOplEngine: Int,
     val openMptStereoSeparationPercent: Int,
     val openMptStereoSeparationAmigaPercent: Int,
@@ -81,7 +83,10 @@ internal data class PluginDetailRouteState(
     val sc68YmVolModel: Int,
     val sc68AmigaFilter: Boolean,
     val sc68AmigaBlend: Int,
-    val sc68AmigaClock: Int
+    val sc68AmigaClock: Int,
+    val uadeFilterEnabled: Boolean,
+    val uadeNtscMode: Boolean,
+    val uadePanningMode: Int
 )
 
 internal data class PluginDetailRouteActions(
@@ -95,6 +100,7 @@ internal data class PluginDetailRouteActions(
     val onSidPlayFpSampleRateChanged: (Int) -> Unit,
     val onLazyUsf2SampleRateChanged: (Int) -> Unit,
     val onAdPlugSampleRateChanged: (Int) -> Unit,
+    val onUadeSampleRateChanged: (Int) -> Unit,
     val onAdPlugOplEngineChanged: (Int) -> Unit,
     val onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
     val onOpenMptStereoSeparationAmigaPercentChanged: (Int) -> Unit,
@@ -141,7 +147,10 @@ internal data class PluginDetailRouteActions(
     val onSc68YmVolModelChanged: (Int) -> Unit,
     val onSc68AmigaFilterChanged: (Boolean) -> Unit,
     val onSc68AmigaBlendChanged: (Int) -> Unit,
-    val onSc68AmigaClockChanged: (Int) -> Unit
+    val onSc68AmigaClockChanged: (Int) -> Unit,
+    val onUadeFilterEnabledChanged: (Boolean) -> Unit,
+    val onUadeNtscModeChanged: (Boolean) -> Unit,
+    val onUadePanningModeChanged: (Int) -> Unit
 )
 
 @Composable
@@ -180,6 +189,7 @@ internal fun PluginDetailRouteContent(
         "LibSIDPlayFP" -> state.sidPlayFpSampleRateHz
         "LazyUSF2" -> state.lazyUsf2SampleRateHz
         "AdPlug" -> state.adPlugSampleRateHz
+        "UADE" -> state.uadeSampleRateHz
         "SC68" -> state.sc68SamplingRateHz
         else -> fixedSampleRateHz
     }
@@ -191,6 +201,7 @@ internal fun PluginDetailRouteContent(
         "LibSIDPlayFP" -> actions.onSidPlayFpSampleRateChanged
         "LazyUSF2" -> actions.onLazyUsf2SampleRateChanged
         "AdPlug" -> actions.onAdPlugSampleRateChanged
+        "UADE" -> actions.onUadeSampleRateChanged
         "SC68" -> actions.onSc68SamplingRateHzChanged
         else -> null
     }
@@ -342,6 +353,15 @@ internal fun PluginDetailRouteContent(
             onAmigaFilterChanged = actions.onSc68AmigaFilterChanged,
             onAmigaBlendChanged = actions.onSc68AmigaBlendChanged,
             onAmigaClockChanged = actions.onSc68AmigaClockChanged
+        )
+
+        "UADE" -> UadeSettings(
+            filterEnabled = state.uadeFilterEnabled,
+            ntscMode = state.uadeNtscMode,
+            panningMode = state.uadePanningMode,
+            onFilterEnabledChanged = actions.onUadeFilterEnabledChanged,
+            onNtscModeChanged = actions.onUadeNtscModeChanged,
+            onPanningModeChanged = actions.onUadePanningModeChanged
         )
 
         else -> null

@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <android/log.h>
+#include <cctype>
 #include <cerrno>
 #include <cmath>
 #include <cstring>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <mutex>
@@ -33,6 +35,42 @@ int clampSubsong(int subsong, int minSubsong, int maxSubsong) {
         return 0;
     }
     return std::clamp(subsong, minSubsong, maxSubsong);
+}
+
+bool parseBoolOptionString(const char* value, bool fallback) {
+    if (!value) return fallback;
+    std::string normalized(value);
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    if (normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on") {
+        return true;
+    }
+    if (normalized == "0" || normalized == "false" || normalized == "no" || normalized == "off") {
+        return false;
+    }
+    return fallback;
+}
+
+int parseIntOptionString(const char* value, int fallback) {
+    if (!value) return fallback;
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value || (end && *end != '\0')) {
+        return fallback;
+    }
+    return static_cast<int>(parsed);
+}
+
+double panningAmountForMode(int mode) {
+    switch (mode) {
+        case 0: return 2.0; // Mono
+        case 1: return 1.5; // Some
+        case 2: return 1.0; // 50/50
+        case 3: return 0.5; // Lots
+        case 4: return 0.0; // Full stereo
+        default: return 0.0;
+    }
 }
 
 std::string getRuntimeBaseDir() {
@@ -141,6 +179,29 @@ uade_state* UadeDecoder::createStateLocked() {
             uade_config_set_option(config, UC_UAE_CONFIG_FILE, uaercPath.c_str());
             uade_config_set_option(config, UC_ONE_SUBSONG, nullptr);
             uade_config_set_option(config, UC_MUTEMASK, muteMaskOption.c_str());
+            uade_config_set_option(config, UC_FREQUENCY, std::to_string(requestedSampleRateHz).c_str());
+            if (optionFilterEnabled) {
+                uade_config_set_option(config, UC_FILTER_TYPE, "a500");
+            } else {
+                uade_config_set_option(config, UC_NO_FILTER, nullptr);
+            }
+            if (optionNtscMode) {
+                uade_config_set_option(config, UC_NTSC, nullptr);
+            } else {
+                uade_config_set_option(config, UC_PAL, nullptr);
+            }
+            if (optionPanningMode >= 4) {
+                uade_config_set_option(config, UC_NO_PANNING, nullptr);
+            } else {
+                char panningValue[16];
+                std::snprintf(
+                        panningValue,
+                        sizeof(panningValue),
+                        "%.2f",
+                        panningAmountForMode(optionPanningMode)
+                );
+                uade_config_set_option(config, UC_PANNING_VALUE, panningValue);
+            }
             // Keep UADE running internally; app repeat modes enforce end/restart semantics.
             uade_config_set_option(config, UC_NO_EP_END, nullptr);
             uade_config_set_option(config, UC_DISABLE_TIMEOUTS, nullptr);
@@ -458,6 +519,11 @@ std::string UadeDecoder::getGenre() {
     return genre;
 }
 
+void UadeDecoder::setOutputSampleRate(int sampleRateHz) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    requestedSampleRateHz = std::clamp(sampleRateHz, 8000, 192000);
+}
+
 std::string UadeDecoder::getFormatName() const {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return formatName;
@@ -643,16 +709,33 @@ void UadeDecoder::setOption(const char* name, const char* value) {
         return;
     }
 
-    if (std::strcmp(name, "uade.unknown_duration_seconds") == 0) {
-        char* end = nullptr;
-        const long parsed = std::strtol(value, &end, 10);
-        if (end != value && (!end || *end == '\0')) {
-            unknownDurationSeconds = std::clamp(static_cast<int>(parsed), 1, 86400);
-        }
+    if (std::strcmp(name, "uade.filter_enabled") == 0) {
+        optionFilterEnabled = parseBoolOptionString(value, optionFilterEnabled);
+    } else if (std::strcmp(name, "uade.ntsc_mode") == 0) {
+        optionNtscMode = parseBoolOptionString(value, optionNtscMode);
+    } else if (std::strcmp(name, "uade.panning_mode") == 0) {
+        optionPanningMode = std::clamp(parseIntOptionString(value, optionPanningMode), 0, 4);
+    } else if (std::strcmp(name, "uade.unknown_duration_seconds") == 0) {
+        unknownDurationSeconds = std::clamp(parseIntOptionString(value, unknownDurationSeconds), 1, 86400);
         if (!durationReliable.load()) {
             durationSeconds = static_cast<double>(unknownDurationSeconds);
         }
     }
+}
+
+int UadeDecoder::getOptionApplyPolicy(const char* name) const {
+    if (!name) {
+        return OPTION_APPLY_LIVE;
+    }
+    if (std::strcmp(name, "uade.filter_enabled") == 0 ||
+        std::strcmp(name, "uade.ntsc_mode") == 0 ||
+        std::strcmp(name, "uade.panning_mode") == 0) {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    if (std::strcmp(name, "uade.unknown_duration_seconds") == 0) {
+        return OPTION_APPLY_LIVE;
+    }
+    return OPTION_APPLY_LIVE;
 }
 
 void UadeDecoder::setRepeatMode(int mode) {
@@ -666,7 +749,9 @@ int UadeDecoder::getRepeatModeCapabilities() const {
 }
 
 int UadeDecoder::getPlaybackCapabilities() const {
-    int caps = PLAYBACK_CAP_SEEK | PLAYBACK_CAP_LIVE_REPEAT_MODE;
+    int caps = PLAYBACK_CAP_SEEK |
+               PLAYBACK_CAP_LIVE_REPEAT_MODE |
+               PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
     if (durationReliable.load()) {
         caps |= PLAYBACK_CAP_RELIABLE_DURATION;
     }

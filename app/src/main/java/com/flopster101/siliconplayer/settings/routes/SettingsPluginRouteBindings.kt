@@ -13,6 +13,7 @@ internal fun SettingsScreenState.toPluginDetailRouteState(): PluginDetailRouteSt
         sidPlayFpSampleRateHz = pluginCore.sidPlayFpSampleRateHz,
         lazyUsf2SampleRateHz = pluginCore.lazyUsf2SampleRateHz,
         adPlugSampleRateHz = pluginCore.adPlugSampleRateHz,
+        uadeSampleRateHz = pluginCore.uadeSampleRateHz,
         adPlugOplEngine = pluginCore.adPlugOplEngine,
         openMptStereoSeparationPercent = pluginCore.openMptStereoSeparationPercent,
         openMptStereoSeparationAmigaPercent = pluginCore.openMptStereoSeparationAmigaPercent,
@@ -58,7 +59,10 @@ internal fun SettingsScreenState.toPluginDetailRouteState(): PluginDetailRouteSt
         sc68YmVolModel = pluginCore.sc68YmVolModel,
         sc68AmigaFilter = pluginCore.sc68AmigaFilter,
         sc68AmigaBlend = pluginCore.sc68AmigaBlend,
-        sc68AmigaClock = pluginCore.sc68AmigaClock
+        sc68AmigaClock = pluginCore.sc68AmigaClock,
+        uadeFilterEnabled = pluginCore.uadeFilterEnabled,
+        uadeNtscMode = pluginCore.uadeNtscMode,
+        uadePanningMode = pluginCore.uadePanningMode
     )
 
 internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRouteActions =
@@ -73,6 +77,7 @@ internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRou
         onSidPlayFpSampleRateChanged = pluginCoreActions.onSidPlayFpSampleRateChanged,
         onLazyUsf2SampleRateChanged = pluginCoreActions.onLazyUsf2SampleRateChanged,
         onAdPlugSampleRateChanged = pluginCoreActions.onAdPlugSampleRateChanged,
+        onUadeSampleRateChanged = pluginCoreActions.onUadeSampleRateChanged,
         onAdPlugOplEngineChanged = pluginCoreActions.onAdPlugOplEngineChanged,
         onOpenMptStereoSeparationPercentChanged = pluginCoreActions.onOpenMptStereoSeparationPercentChanged,
         onOpenMptStereoSeparationAmigaPercentChanged = pluginCoreActions.onOpenMptStereoSeparationAmigaPercentChanged,
@@ -119,5 +124,8 @@ internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRou
         onSc68YmVolModelChanged = pluginCoreActions.onSc68YmVolModelChanged,
         onSc68AmigaFilterChanged = pluginCoreActions.onSc68AmigaFilterChanged,
         onSc68AmigaBlendChanged = pluginCoreActions.onSc68AmigaBlendChanged,
-        onSc68AmigaClockChanged = pluginCoreActions.onSc68AmigaClockChanged
+        onSc68AmigaClockChanged = pluginCoreActions.onSc68AmigaClockChanged,
+        onUadeFilterEnabledChanged = pluginCoreActions.onUadeFilterEnabledChanged,
+        onUadeNtscModeChanged = pluginCoreActions.onUadeNtscModeChanged,
+        onUadePanningModeChanged = pluginCoreActions.onUadePanningModeChanged
     )

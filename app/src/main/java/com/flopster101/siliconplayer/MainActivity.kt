@@ -654,6 +654,7 @@ private fun AppNavigation(
     var sidPlayFpCoreSampleRateHz by settingsStates.sidPlayFpCoreSampleRateHz
     var lazyUsf2CoreSampleRateHz by settingsStates.lazyUsf2CoreSampleRateHz
     var adPlugCoreSampleRateHz by settingsStates.adPlugCoreSampleRateHz
+    var uadeCoreSampleRateHz by settingsStates.uadeCoreSampleRateHz
     var adPlugOplEngine by settingsStates.adPlugOplEngine
     var lazyUsf2UseHleAudio by settingsStates.lazyUsf2UseHleAudio
     var vio2sfInterpolationQuality by settingsStates.vio2sfInterpolationQuality
@@ -665,6 +666,9 @@ private fun AppNavigation(
     var sc68AmigaFilter by settingsStates.sc68AmigaFilter
     var sc68AmigaBlend by settingsStates.sc68AmigaBlend
     var sc68AmigaClock by settingsStates.sc68AmigaClock
+    var uadeFilterEnabled by settingsStates.uadeFilterEnabled
+    var uadeNtscMode by settingsStates.uadeNtscMode
+    var uadePanningMode by settingsStates.uadePanningMode
     var sidPlayFpBackend by settingsStates.sidPlayFpBackend
     var sidPlayFpClockMode by settingsStates.sidPlayFpClockMode
     var sidPlayFpSidModelMode by settingsStates.sidPlayFpSidModelMode
@@ -1130,6 +1134,7 @@ private fun AppNavigation(
         sidPlayFpCoreSampleRateHz = sidPlayFpCoreSampleRateHz,
         lazyUsf2CoreSampleRateHz = lazyUsf2CoreSampleRateHz,
         adPlugCoreSampleRateHz = adPlugCoreSampleRateHz,
+        uadeCoreSampleRateHz = uadeCoreSampleRateHz,
         adPlugOplEngine = adPlugOplEngine,
         lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
         vio2sfInterpolationQuality = vio2sfInterpolationQuality,
@@ -1141,6 +1146,9 @@ private fun AppNavigation(
         sc68AmigaFilter = sc68AmigaFilter,
         sc68AmigaBlend = sc68AmigaBlend,
         sc68AmigaClock = sc68AmigaClock,
+        uadeFilterEnabled = uadeFilterEnabled,
+        uadeNtscMode = uadeNtscMode,
+        uadePanningMode = uadePanningMode,
         sidPlayFpBackend = sidPlayFpBackend,
         sidPlayFpClockMode = sidPlayFpClockMode,
         sidPlayFpSidModelMode = sidPlayFpSidModelMode,
@@ -1551,6 +1559,7 @@ private fun AppNavigation(
                 onSidPlayFpSampleRateChanged = { sidPlayFpCoreSampleRateHz = it },
                 onLazyUsf2SampleRateChanged = { lazyUsf2CoreSampleRateHz = it },
                 onAdPlugSampleRateChanged = { adPlugCoreSampleRateHz = it },
+                onUadeSampleRateChanged = { uadeCoreSampleRateHz = it },
                 onAdPlugOplEngineChanged = { adPlugOplEngine = it },
                 onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
                 onVio2sfInterpolationQualityChanged = { vio2sfInterpolationQuality = it },
@@ -1562,6 +1571,9 @@ private fun AppNavigation(
                 onSc68AmigaFilterChanged = { sc68AmigaFilter = it },
                 onSc68AmigaBlendChanged = { sc68AmigaBlend = it },
                 onSc68AmigaClockChanged = { sc68AmigaClock = it },
+                onUadeFilterEnabledChanged = { uadeFilterEnabled = it },
+                onUadeNtscModeChanged = { uadeNtscMode = it },
+                onUadePanningModeChanged = { uadePanningMode = it },
                 onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
                 onSidPlayFpClockModeChanged = { sidPlayFpClockMode = it },
                 onSidPlayFpSidModelModeChanged = { sidPlayFpSidModelMode = it },

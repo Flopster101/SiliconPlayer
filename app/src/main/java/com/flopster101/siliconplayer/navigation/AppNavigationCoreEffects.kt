@@ -16,6 +16,7 @@ internal fun AppNavigationCoreEffects(
     sidPlayFpCoreSampleRateHz: Int,
     lazyUsf2CoreSampleRateHz: Int,
     adPlugCoreSampleRateHz: Int,
+    uadeCoreSampleRateHz: Int,
     adPlugOplEngine: Int,
     lazyUsf2UseHleAudio: Boolean,
     vio2sfInterpolationQuality: Int,
@@ -27,6 +28,9 @@ internal fun AppNavigationCoreEffects(
     sc68AmigaFilter: Boolean,
     sc68AmigaBlend: Int,
     sc68AmigaClock: Int,
+    uadeFilterEnabled: Boolean,
+    uadeNtscMode: Boolean,
+    uadePanningMode: Int,
     sidPlayFpBackend: Int,
     sidPlayFpClockMode: Int,
     sidPlayFpSidModelMode: Int,
@@ -129,6 +133,12 @@ internal fun AppNavigationCoreEffects(
         val normalized = if (adPlugCoreSampleRateHz <= 0) 0 else adPlugCoreSampleRateHz.coerceIn(8000, 192000)
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_ADPLUG, normalized).apply()
         NativeBridge.setCoreOutputSampleRate("AdPlug", normalized)
+    }
+
+    LaunchedEffect(uadeCoreSampleRateHz) {
+        val normalized = if (uadeCoreSampleRateHz <= 0) 0 else uadeCoreSampleRateHz.coerceIn(8000, 192000)
+        prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_UADE, normalized).apply()
+        NativeBridge.setCoreOutputSampleRate("UADE", normalized)
     }
 
     LaunchedEffect(adPlugOplEngine) {
@@ -252,6 +262,40 @@ internal fun AppNavigationCoreEffects(
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
             optionLabel = "Amiga clock"
+        )
+    }
+
+    LaunchedEffect(uadeFilterEnabled) {
+        prefs.edit().putBoolean(CorePreferenceKeys.UADE_FILTER_ENABLED, uadeFilterEnabled).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "UADE",
+            optionName = UadeOptionKeys.FILTER_ENABLED,
+            optionValue = uadeFilterEnabled.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Paula filter"
+        )
+    }
+
+    LaunchedEffect(uadeNtscMode) {
+        prefs.edit().putBoolean(CorePreferenceKeys.UADE_NTSC_MODE, uadeNtscMode).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "UADE",
+            optionName = UadeOptionKeys.NTSC_MODE,
+            optionValue = uadeNtscMode.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "NTSC mode"
+        )
+    }
+
+    LaunchedEffect(uadePanningMode) {
+        val normalized = uadePanningMode.coerceIn(0, 4)
+        prefs.edit().putInt(CorePreferenceKeys.UADE_PANNING_MODE, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "UADE",
+            optionName = UadeOptionKeys.PANNING_MODE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Panning"
         )
     }
 

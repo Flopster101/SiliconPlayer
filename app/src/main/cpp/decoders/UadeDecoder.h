@@ -37,6 +37,7 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    void setOutputSampleRate(int sampleRateHz) override;
     std::string getFormatName() const;
     std::string getModuleName() const;
     std::string getPlayerName() const;
@@ -61,6 +62,7 @@ public:
     bool getToggleChannelMuted(int channelIndex) const override;
     void clearToggleChannelMutes() override;
     void setOption(const char* name, const char* value) override;
+    int getOptionApplyPolicy(const char* name) const override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override;
@@ -100,7 +102,11 @@ private:
     std::string detectedFormatName;
     std::string detectedFormatVersion;
     std::atomic<bool> durationReliable { false };
+    int requestedSampleRateHz = 44100;
     int unknownDurationSeconds = 0;
+    bool optionFilterEnabled = false;
+    bool optionNtscMode = false;
+    int optionPanningMode = 3;
     double durationSeconds = 0.0;
     double playbackPositionSeconds = 0.0;
     int64_t renderedFrames = 0;

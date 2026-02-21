@@ -641,6 +641,7 @@ internal fun clearAllSettingsAction(
     sidPlayFpCoreSampleRateHz: Int,
     lazyUsf2CoreSampleRateHz: Int,
     adPlugCoreSampleRateHz: Int,
+    uadeCoreSampleRateHz: Int,
     adPlugOplEngine: Int,
     vio2sfInterpolationQuality: Int,
     sc68SamplingRateHz: Int,
@@ -678,6 +679,8 @@ internal fun clearAllSettingsAction(
     gmeSpcUseNativeSampleRate: Boolean,
     lazyUsf2UseHleAudio: Boolean,
     sc68AmigaFilter: Boolean,
+    uadeFilterEnabled: Boolean,
+    uadeNtscMode: Boolean,
     sidPlayFpFilter6581Enabled: Boolean,
     sidPlayFpFilter8580Enabled: Boolean,
     sidPlayFpDigiBoost8580: Boolean,
@@ -687,6 +690,7 @@ internal fun clearAllSettingsAction(
     openMptSurroundEnabled: Boolean,
     sc68AmigaBlend: Int,
     sc68AmigaClock: Int,
+    uadePanningMode: Int,
     vgmPlayChipCoreSelections: Map<String, Int>,
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
@@ -748,6 +752,10 @@ internal fun clearAllSettingsAction(
     onSc68AmigaFilterChanged: (Boolean) -> Unit,
     onSc68AmigaBlendChanged: (Int) -> Unit,
     onSc68AmigaClockChanged: (Int) -> Unit,
+    onUadeCoreSampleRateHzChanged: (Int) -> Unit,
+    onUadeFilterEnabledChanged: (Boolean) -> Unit,
+    onUadeNtscModeChanged: (Boolean) -> Unit,
+    onUadePanningModeChanged: (Int) -> Unit,
     onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugOplEngineChanged: (Int) -> Unit,
 ) {
@@ -759,6 +767,7 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.CORE_RATE_SIDPLAYFP to sidPlayFpCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_LAZYUSF2 to lazyUsf2CoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_ADPLUG to adPlugCoreSampleRateHz,
+        CorePreferenceKeys.CORE_RATE_UADE to uadeCoreSampleRateHz,
         CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY to vio2sfInterpolationQuality,
         CorePreferenceKeys.ADPLUG_OPL_ENGINE to adPlugOplEngine,
         CorePreferenceKeys.CORE_RATE_SC68 to sc68SamplingRateHz,
@@ -768,6 +777,7 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.SC68_YM_VOLMODEL to sc68YmVolModel,
         CorePreferenceKeys.SC68_AMIGA_BLEND to sc68AmigaBlend,
         CorePreferenceKeys.SC68_AMIGA_CLOCK to sc68AmigaClock,
+        CorePreferenceKeys.UADE_PANNING_MODE to uadePanningMode,
         CorePreferenceKeys.VGMPLAY_LOOP_COUNT to vgmPlayLoopCount,
         CorePreferenceKeys.VGMPLAY_VSYNC_RATE to vgmPlayVsyncRate,
         CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE to vgmPlayResampleMode,
@@ -800,6 +810,8 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE to gmeSpcUseNativeSampleRate,
         CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO to lazyUsf2UseHleAudio,
         CorePreferenceKeys.SC68_AMIGA_FILTER to sc68AmigaFilter,
+        CorePreferenceKeys.UADE_FILTER_ENABLED to uadeFilterEnabled,
+        CorePreferenceKeys.UADE_NTSC_MODE to uadeNtscMode,
         CorePreferenceKeys.SIDPLAYFP_FILTER_6581_ENABLED to sidPlayFpFilter6581Enabled,
         CorePreferenceKeys.SIDPLAYFP_FILTER_8580_ENABLED to sidPlayFpFilter8580Enabled,
         CorePreferenceKeys.SIDPLAYFP_DIGI_BOOST_8580 to sidPlayFpDigiBoost8580,
@@ -865,6 +877,10 @@ internal fun clearAllSettingsAction(
     onSc68AmigaFilterChanged(Sc68Defaults.amigaFilter)
     onSc68AmigaBlendChanged(Sc68Defaults.amigaBlend)
     onSc68AmigaClockChanged(Sc68Defaults.amigaClock)
+    onUadeCoreSampleRateHzChanged(UadeDefaults.coreSampleRateHz)
+    onUadeFilterEnabledChanged(UadeDefaults.filterEnabled)
+    onUadeNtscModeChanged(UadeDefaults.ntscMode)
+    onUadePanningModeChanged(UadeDefaults.panningMode)
     onEndFadeApplyToAllTracksChanged(AppDefaults.Player.endFadeApplyToAllTracks)
     onEndFadeDurationMsChanged(AppDefaults.Player.endFadeDurationMs)
     onEndFadeCurveChanged(AppDefaults.Player.endFadeCurve)
@@ -912,6 +928,7 @@ internal fun clearAllPluginSettingsAction(
     onSidPlayFpCoreSampleRateHzChanged: (Int) -> Unit,
     onLazyUsf2CoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
+    onUadeCoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugOplEngineChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
     onVio2sfInterpolationQualityChanged: (Int) -> Unit,
@@ -923,6 +940,9 @@ internal fun clearAllPluginSettingsAction(
     onSc68AmigaFilterChanged: (Boolean) -> Unit,
     onSc68AmigaBlendChanged: (Int) -> Unit,
     onSc68AmigaClockChanged: (Int) -> Unit,
+    onUadeFilterEnabledChanged: (Boolean) -> Unit,
+    onUadeNtscModeChanged: (Boolean) -> Unit,
+    onUadePanningModeChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
     onSidPlayFpSidModelModeChanged: (Int) -> Unit,
@@ -968,6 +988,7 @@ internal fun clearAllPluginSettingsAction(
     onSidPlayFpCoreSampleRateHzChanged(SidPlayFpDefaults.coreSampleRateHz)
     onLazyUsf2CoreSampleRateHzChanged(LazyUsf2Defaults.coreSampleRateHz)
     onAdPlugCoreSampleRateHzChanged(AdPlugDefaults.coreSampleRateHz)
+    onUadeCoreSampleRateHzChanged(UadeDefaults.coreSampleRateHz)
     onAdPlugOplEngineChanged(AdPlugDefaults.oplEngine)
     onLazyUsf2UseHleAudioChanged(LazyUsf2Defaults.useHleAudio)
     onVio2sfInterpolationQualityChanged(Vio2sfDefaults.interpolationQuality)
@@ -979,6 +1000,9 @@ internal fun clearAllPluginSettingsAction(
     onSc68AmigaFilterChanged(Sc68Defaults.amigaFilter)
     onSc68AmigaBlendChanged(Sc68Defaults.amigaBlend)
     onSc68AmigaClockChanged(Sc68Defaults.amigaClock)
+    onUadeFilterEnabledChanged(UadeDefaults.filterEnabled)
+    onUadeNtscModeChanged(UadeDefaults.ntscMode)
+    onUadePanningModeChanged(UadeDefaults.panningMode)
     onSidPlayFpBackendChanged(SidPlayFpDefaults.backend)
     onSidPlayFpClockModeChanged(SidPlayFpDefaults.clockMode)
     onSidPlayFpSidModelModeChanged(SidPlayFpDefaults.sidModelMode)
@@ -1025,6 +1049,7 @@ internal fun clearAllPluginSettingsAction(
         remove(CorePreferenceKeys.CORE_RATE_SIDPLAYFP)
         remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2)
         remove(CorePreferenceKeys.CORE_RATE_ADPLUG)
+        remove(CorePreferenceKeys.CORE_RATE_UADE)
         remove(CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY)
         remove(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO)
         remove(CorePreferenceKeys.ADPLUG_OPL_ENGINE)
@@ -1036,6 +1061,9 @@ internal fun clearAllPluginSettingsAction(
         remove(CorePreferenceKeys.SC68_AMIGA_FILTER)
         remove(CorePreferenceKeys.SC68_AMIGA_BLEND)
         remove(CorePreferenceKeys.SC68_AMIGA_CLOCK)
+        remove(CorePreferenceKeys.UADE_FILTER_ENABLED)
+        remove(CorePreferenceKeys.UADE_NTSC_MODE)
+        remove(CorePreferenceKeys.UADE_PANNING_MODE)
         remove(CorePreferenceKeys.SIDPLAYFP_BACKEND)
         remove(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE)
         remove(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE)
@@ -1116,6 +1144,7 @@ internal fun resetPluginSettingsAction(
     onGmeSpcUseNativeSampleRateChanged: (Boolean) -> Unit,
     onLazyUsf2CoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
+    onUadeCoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugOplEngineChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
     onVio2sfInterpolationQualityChanged: (Int) -> Unit,
@@ -1127,6 +1156,9 @@ internal fun resetPluginSettingsAction(
     onSc68AmigaFilterChanged: (Boolean) -> Unit,
     onSc68AmigaBlendChanged: (Int) -> Unit,
     onSc68AmigaClockChanged: (Int) -> Unit,
+    onUadeFilterEnabledChanged: (Boolean) -> Unit,
+    onUadeNtscModeChanged: (Boolean) -> Unit,
+    onUadePanningModeChanged: (Int) -> Unit,
     onSidPlayFpCoreSampleRateHzChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
@@ -1211,6 +1243,12 @@ internal fun resetPluginSettingsAction(
             Sc68OptionKeys.AMIGA_FILTER,
             Sc68OptionKeys.AMIGA_BLEND,
             Sc68OptionKeys.AMIGA_CLOCK
+        )
+
+        "UADE" -> listOf(
+            UadeOptionKeys.FILTER_ENABLED,
+            UadeOptionKeys.NTSC_MODE,
+            UadeOptionKeys.PANNING_MODE
         )
 
         else -> emptyList()
@@ -1323,6 +1361,19 @@ internal fun resetPluginSettingsAction(
             prefs.edit()
                 .remove(CorePreferenceKeys.CORE_RATE_ADPLUG)
                 .remove(CorePreferenceKeys.ADPLUG_OPL_ENGINE)
+                .apply()
+        }
+
+        "UADE" -> {
+            onUadeCoreSampleRateHzChanged(UadeDefaults.coreSampleRateHz)
+            onUadeFilterEnabledChanged(UadeDefaults.filterEnabled)
+            onUadeNtscModeChanged(UadeDefaults.ntscMode)
+            onUadePanningModeChanged(UadeDefaults.panningMode)
+            prefs.edit()
+                .remove(CorePreferenceKeys.CORE_RATE_UADE)
+                .remove(CorePreferenceKeys.UADE_FILTER_ENABLED)
+                .remove(CorePreferenceKeys.UADE_NTSC_MODE)
+                .remove(CorePreferenceKeys.UADE_PANNING_MODE)
                 .apply()
         }
 

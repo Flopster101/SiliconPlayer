@@ -10,6 +10,7 @@ object CorePreferenceKeys {
     const val CORE_RATE_LAZYUSF2 = "core_rate_lazyusf2"
     const val CORE_RATE_ADPLUG = "core_rate_adplug"
     const val CORE_RATE_SC68 = "core_rate_sc68"
+    const val CORE_RATE_UADE = "core_rate_uade"
     const val VIO2SF_INTERPOLATION_QUALITY = "vio2sf_interpolation_quality"
     const val OPENMPT_STEREO_SEPARATION_PERCENT = "openmpt_stereo_separation_percent"
     const val OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT = "openmpt_stereo_separation_amiga_percent"
@@ -54,6 +55,9 @@ object CorePreferenceKeys {
     const val SC68_AMIGA_FILTER = "sc68_amiga_filter"
     const val SC68_AMIGA_BLEND = "sc68_amiga_blend"
     const val SC68_AMIGA_CLOCK = "sc68_amiga_clock"
+    const val UADE_FILTER_ENABLED = "uade_filter_enabled"
+    const val UADE_NTSC_MODE = "uade_ntsc_mode"
+    const val UADE_PANNING_MODE = "uade_panning_mode"
     const val ADPLUG_OPL_ENGINE = "adplug_opl_engine"
     fun vgmPlayChipCoreKey(chipKey: String) = "vgmplay_chip_core_$chipKey"
 }
@@ -138,4 +142,11 @@ object Sc68Defaults {
     const val amigaFilter = true
     const val amigaBlend = 0x50
     const val amigaClock = 0
+}
+
+object UadeDefaults {
+    const val coreSampleRateHz = 0
+    const val filterEnabled = false
+    const val ntscMode = false
+    const val panningMode = 3
 }

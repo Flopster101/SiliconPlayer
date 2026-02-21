@@ -43,3 +43,6 @@
 [submodule "external/libbinio"]
 	path = external/libbinio
 	url = https://github.com/adplug/libbinio
+[submodule "external/uade"]
+	path = external/uade
+	url = https://gitlab.com/uade-music-player/uade

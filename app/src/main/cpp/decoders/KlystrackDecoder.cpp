@@ -39,6 +39,7 @@ bool KlystrackDecoder::open(const char* path) {
     genre = "Klystrack";
     playbackPositionSeconds = 0.0;
     durationSeconds = 0.0;
+    durationReliable = false;
     songLengthRows = 0;
 
     player = KSND_CreatePlayerUnregistered(clampSampleRate(sampleRateHz));
@@ -70,6 +71,7 @@ bool KlystrackDecoder::open(const char* path) {
         const int durationMs = KSND_GetPlayTime(song, songLengthRows);
         if (durationMs > 0) {
             durationSeconds = static_cast<double>(durationMs) / 1000.0;
+            durationReliable = true;
         }
     }
 
@@ -90,6 +92,7 @@ void KlystrackDecoder::closeInternalLocked() {
     artist.clear();
     genre.clear();
     durationSeconds = 0.0;
+    durationReliable = false;
     playbackPositionSeconds = 0.0;
     songLengthRows = 0;
     channels = 2;
@@ -171,8 +174,23 @@ void KlystrackDecoder::seek(double seconds) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (!player || !song) return;
 
-    const double clampedSeconds = std::max(0.0, seconds);
-    const int targetMs = static_cast<int>(std::llround(clampedSeconds * 1000.0));
+    double normalizedSeconds = std::max(0.0, seconds);
+    if (durationReliable && durationSeconds > 0.0) {
+        if (repeatMode.load() == 2) {
+            normalizedSeconds = std::fmod(normalizedSeconds, durationSeconds);
+            if (normalizedSeconds < 0.0) {
+                normalizedSeconds += durationSeconds;
+            }
+        } else {
+            normalizedSeconds = std::min(normalizedSeconds, durationSeconds);
+        }
+    }
+    if (songLengthRows <= 0) {
+        playbackPositionSeconds = normalizedSeconds;
+        return;
+    }
+
+    const int targetMs = static_cast<int>(std::llround(normalizedSeconds * 1000.0));
     const int targetRow = resolveRowForTimeMsLocked(targetMs);
     KSND_PlaySong(player, song, targetRow);
     applyRepeatModeLocked();
@@ -180,12 +198,12 @@ void KlystrackDecoder::seek(double seconds) {
     const int resolvedMs = KSND_GetPlayTime(song, targetRow);
     playbackPositionSeconds = resolvedMs >= 0
             ? static_cast<double>(resolvedMs) / 1000.0
-            : clampedSeconds;
+            : normalizedSeconds;
 }
 
 double KlystrackDecoder::getDuration() {
     std::lock_guard<std::mutex> lock(decodeMutex);
-    return durationSeconds;
+    return durationReliable ? durationSeconds : 0.0;
 }
 
 int KlystrackDecoder::getSampleRate() {
@@ -236,10 +254,12 @@ int KlystrackDecoder::getRepeatModeCapabilities() const {
 }
 
 int KlystrackDecoder::getPlaybackCapabilities() const {
-    return PLAYBACK_CAP_SEEK |
-           PLAYBACK_CAP_RELIABLE_DURATION |
-           PLAYBACK_CAP_LIVE_REPEAT_MODE |
-           PLAYBACK_CAP_DIRECT_SEEK;
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    int caps = PLAYBACK_CAP_SEEK | PLAYBACK_CAP_LIVE_REPEAT_MODE;
+    if (durationReliable && songLengthRows > 0) {
+        caps |= PLAYBACK_CAP_RELIABLE_DURATION | PLAYBACK_CAP_DIRECT_SEEK;
+    }
+    return caps;
 }
 
 double KlystrackDecoder::getPlaybackPositionSeconds() {
@@ -251,6 +271,18 @@ double KlystrackDecoder::getPlaybackPositionSeconds() {
     const int positionMs = KSND_GetPlayTime(song, currentRow);
     if (positionMs >= 0) {
         playbackPositionSeconds = static_cast<double>(positionMs) / 1000.0;
+    }
+    if (durationReliable && durationSeconds > 0.0) {
+        if (repeatMode.load() == 2) {
+            playbackPositionSeconds = std::fmod(playbackPositionSeconds, durationSeconds);
+            if (playbackPositionSeconds < 0.0) {
+                playbackPositionSeconds += durationSeconds;
+            }
+        } else {
+            playbackPositionSeconds = std::clamp(playbackPositionSeconds, 0.0, durationSeconds);
+        }
+    } else if (playbackPositionSeconds < 0.0) {
+        playbackPositionSeconds = 0.0;
     }
     return playbackPositionSeconds;
 }

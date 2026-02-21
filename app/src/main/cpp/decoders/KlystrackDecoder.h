@@ -53,6 +53,7 @@ private:
     int channels = 2;
     std::atomic<int> repeatMode { 0 };
     double durationSeconds = 0.0;
+    bool durationReliable = false;
     double playbackPositionSeconds = 0.0;
     int songLengthRows = 0;
     std::vector<int16_t> pcmScratch;

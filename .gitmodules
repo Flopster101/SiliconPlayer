@@ -49,3 +49,6 @@
 [submodule "external/libzakalwe"]
 	path = external/libzakalwe
 	url = https://gitlab.com/hors/libzakalwe
+[submodule "external/bencodetools"]
+	path = external/bencodetools
+	url = https://gitlab.com/heikkiorsila/bencodetools

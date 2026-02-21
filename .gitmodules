@@ -46,3 +46,6 @@
 [submodule "external/uade"]
 	path = external/uade
 	url = https://gitlab.com/uade-music-player/uade
+[submodule "external/libzakalwe"]
+	path = external/libzakalwe
+	url = https://gitlab.com/hors/libzakalwe

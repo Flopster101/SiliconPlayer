@@ -72,7 +72,7 @@ bool AdPlugDecoder::open(const char* path) {
 
     const unsigned long durationMs = player->songlength(currentSubtuneIndex);
     durationReliable = durationMs > 0;
-    durationSeconds = durationReliable ? static_cast<double>(durationMs) / 1000.0 : 0.0;
+    durationSeconds = durationMs > 0 ? static_cast<double>(durationMs) / 1000.0 : 0.0;
 
     remainingTickFrames = 0;
     playbackPositionSeconds = 0.0;
@@ -112,24 +112,28 @@ int AdPlugDecoder::read(float* buffer, int numFrames) {
     }
 
     int framesWritten = 0;
-    int restartAttempts = 0;
+    bool attemptedLoopRecovery = false;
 
     while (framesWritten < numFrames) {
         if (remainingTickFrames <= 0) {
             const bool hasNextTick = player->update();
             if (!hasNextTick) {
                 const int mode = repeatMode.load();
-                if (mode == 1 && restartAttempts < 2) {
+                if ((mode == 1 || mode == 2) && !attemptedLoopRecovery) {
                     player->rewind(currentSubtuneIndex);
-                    playbackPositionSeconds = 0.0;
+                    if (mode == 1) {
+                        // Repeat Track restarts timeline at track start.
+                        playbackPositionSeconds = 0.0;
+                    }
                     remainingTickFrames = 0;
                     reachedEnd = false;
-                    restartAttempts++;
+                    attemptedLoopRecovery = true;
                     continue;
                 }
                 reachedEnd = true;
                 break;
             }
+            attemptedLoopRecovery = false;
 
             const float refreshHz = player->getrefresh();
             const double safeRefreshHz =
@@ -227,7 +231,7 @@ bool AdPlugDecoder::selectSubtune(int index) {
 
     const unsigned long durationMs = player->songlength(currentSubtuneIndex);
     durationReliable = durationMs > 0;
-    durationSeconds = durationReliable ? static_cast<double>(durationMs) / 1000.0 : 0.0;
+    durationSeconds = durationMs > 0 ? static_cast<double>(durationMs) / 1000.0 : 0.0;
     return true;
 }
 
@@ -281,7 +285,7 @@ void AdPlugDecoder::setRepeatMode(int mode) {
 }
 
 int AdPlugDecoder::getRepeatModeCapabilities() const {
-    return REPEAT_CAP_TRACK;
+    return REPEAT_CAP_TRACK | REPEAT_CAP_LOOP_POINT;
 }
 
 int AdPlugDecoder::getPlaybackCapabilities() const {
@@ -290,6 +294,7 @@ int AdPlugDecoder::getPlaybackCapabilities() const {
     if (durationReliable) {
         capabilities |= PLAYBACK_CAP_RELIABLE_DURATION;
     }
+    // Seek is supported but is decode-forward (not direct/random access).
     return capabilities;
 }
 

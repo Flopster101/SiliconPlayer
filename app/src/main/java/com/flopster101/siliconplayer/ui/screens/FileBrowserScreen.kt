@@ -65,7 +65,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.extensionCandidatesForName
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.DecoderArtworkHint
 import com.flopster101.siliconplayer.R
+import com.flopster101.siliconplayer.resolveDecoderArtworkHintForFileName
 import com.flopster101.siliconplayer.data.buildArchiveSourceId
 import com.flopster101.siliconplayer.data.FileItem
 import com.flopster101.siliconplayer.data.FileRepository
@@ -117,6 +119,7 @@ private data class ArchiveMountInfo(
 @Composable
 fun FileBrowserScreen(
     repository: FileRepository,
+    decoderExtensionArtworkHints: Map<String, DecoderArtworkHint> = emptyMap(),
     initialLocationId: String? = null,
     initialDirectoryPath: String? = null,
     onFileSelected: (File, String?) -> Unit,
@@ -778,6 +781,7 @@ fun FileBrowserScreen(
                                 FileItemRow(
                                     item = item,
                                     isPlaying = item.file == playingFile,
+                                    decoderExtensionArtworkHints = decoderExtensionArtworkHints,
                                     onClick = {
                                         if (item.isArchive) {
                                             openArchive(item)
@@ -1100,8 +1104,18 @@ private fun isWithinRoot(file: File, root: File): Boolean {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
+fun FileItemRow(
+    item: FileItem,
+    isPlaying: Boolean,
+    decoderExtensionArtworkHints: Map<String, DecoderArtworkHint> = emptyMap(),
+    onClick: () -> Unit
+) {
     val isVideoFile = !item.isDirectory && isLikelyVideoFile(item.file)
+    val decoderArtworkHint = if (item.isDirectory || isVideoFile) {
+        null
+    } else {
+        resolveDecoderArtworkHintForFileName(item.file.name, decoderExtensionArtworkHints)
+    }
     val subtitle by produceState(
         initialValue = if (item.isDirectory && !item.isArchive) "Loading..." else {
             val format = inferredPrimaryExtensionForName(item.file.name)?.uppercase(Locale.ROOT) ?: "UNKNOWN"
@@ -1159,10 +1173,27 @@ fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
                     }
                 }
             } else {
-                val contentDescription = if (isVideoFile) "Video file" else "Audio file"
+                val contentDescription = when {
+                    isVideoFile -> "Video file"
+                    decoderArtworkHint == DecoderArtworkHint.TrackedFile -> "Tracked file"
+                    decoderArtworkHint == DecoderArtworkHint.GameFile -> "Game file"
+                    else -> "Audio file"
+                }
                 if (isVideoFile) {
                     Icon(
                         imageVector = Icons.Default.VideoFile,
+                        contentDescription = contentDescription,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                } else if (decoderArtworkHint == DecoderArtworkHint.TrackedFile) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_file_tracked),
+                        contentDescription = contentDescription,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                } else if (decoderArtworkHint == DecoderArtworkHint.GameFile) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_file_game),
                         contentDescription = contentDescription,
                         tint = MaterialTheme.colorScheme.primary
                     )

@@ -50,6 +50,7 @@ internal fun MainHomeRouteHost(
 internal fun MainBrowserRouteHost(
     mainPadding: PaddingValues,
     repository: com.flopster101.siliconplayer.data.FileRepository,
+    decoderExtensionArtworkHints: Map<String, DecoderArtworkHint>,
     initialLocationId: String?,
     initialDirectoryPath: String?,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
@@ -63,6 +64,7 @@ internal fun MainBrowserRouteHost(
     Box(modifier = Modifier.padding(mainPadding)) {
         FileBrowserScreen(
             repository = repository,
+            decoderExtensionArtworkHints = decoderExtensionArtworkHints,
             initialLocationId = initialLocationId,
             initialDirectoryPath = initialDirectoryPath,
             onVisiblePlayableFilesChanged = onVisiblePlayableFilesChanged,

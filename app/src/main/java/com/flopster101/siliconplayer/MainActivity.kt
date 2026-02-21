@@ -741,6 +741,15 @@ private fun AppNavigation(
             nameSortMode = browserNameSortMode
         )
     }
+    var decoderIconHintsVersion by remember { mutableIntStateOf(0) }
+    val decoderExtensionArtworkHints by produceState<Map<String, DecoderArtworkHint>>(
+        initialValue = emptyMap(),
+        key1 = decoderIconHintsVersion
+    ) {
+        value = withContext(Dispatchers.Default) {
+            buildDecoderExtensionArtworkHintMap()
+        }
+    }
 
     // Handle pending file from intent
     var pendingFileToOpen by remember { mutableStateOf<File?>(initialFileToOpen) }
@@ -1517,18 +1526,22 @@ private fun AppNavigation(
                 onPluginEnabledChanged = { pluginName, enabled ->
                     NativeBridge.setDecoderEnabled(pluginName, enabled)
                     savePluginConfiguration(prefs, pluginName)
+                    decoderIconHintsVersion++
                 },
                 onPluginPriorityChanged = { pluginName, priority ->
                     NativeBridge.setDecoderPriority(pluginName, priority)
                     normalizeDecoderPriorityValues()
                     persistAllPluginConfigurations(prefs)
+                    decoderIconHintsVersion++
                 },
                 onPluginPriorityOrderChanged = { orderedPluginNames ->
                     applyDecoderPriorityOrder(orderedPluginNames, prefs)
+                    decoderIconHintsVersion++
                 },
                 onPluginExtensionsChanged = { pluginName, extensions ->
                     NativeBridge.setDecoderEnabledExtensions(pluginName, extensions)
                     savePluginConfiguration(prefs, pluginName)
+                    decoderIconHintsVersion++
                 },
                 onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
                 onFfmpegGaplessRepeatTrackChanged = { ffmpegGaplessRepeatTrack = it },
@@ -2126,6 +2139,7 @@ private fun AppNavigation(
                 AppNavigationBrowserRouteSection(
                     mainPadding = mainPadding,
                     repository = repository,
+                    decoderExtensionArtworkHints = decoderExtensionArtworkHints,
                     initialLocationId = browserLaunchLocationId
                         ?: if (rememberBrowserLocation) lastBrowserLocationId else null,
                     initialDirectoryPath = browserLaunchDirectoryPath

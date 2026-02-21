@@ -77,30 +77,16 @@ internal fun placeholderArtworkIconForFile(
         } else {
             null
         }
-    return if (isChipArtworkDecoder(effectiveDecoderName)) {
-        ImageVector.vectorResource(R.drawable.ic_placeholder_tracker_chip)
-    } else if (isGamepadArtworkDecoder(effectiveDecoderName)) {
-        ImageVector.vectorResource(R.drawable.ic_placeholder_gamepad)
-    } else if (isLikelyVideoExtension(extension)) {
-        Icons.Default.Videocam
-    } else {
-        Icons.Default.MusicNote
-    }
-}
-
-private fun isChipArtworkDecoder(decoderName: String?): Boolean {
-    val normalizedPlugin = pluginNameForCoreName(decoderName)
-    return when (normalizedPlugin ?: decoderName?.trim()) {
-        "LibOpenMPT", "VGMPlay", "LibSIDPlayFP", "SC68", "AdPlug" -> true
-        else -> false
-    }
-}
-
-private fun isGamepadArtworkDecoder(decoderName: String?): Boolean {
-    val normalizedPlugin = pluginNameForCoreName(decoderName)
-    return when (normalizedPlugin ?: decoderName?.trim()) {
-        "Game Music Emu", "LazyUSF2", "Vio2SF" -> true
-        else -> false
+    return when (decoderArtworkHintForName(effectiveDecoderName)) {
+        DecoderArtworkHint.TrackedFile -> ImageVector.vectorResource(R.drawable.ic_placeholder_tracker_chip)
+        DecoderArtworkHint.GameFile -> ImageVector.vectorResource(R.drawable.ic_placeholder_gamepad)
+        null -> {
+            if (isLikelyVideoExtension(extension)) {
+                Icons.Default.Videocam
+            } else {
+                Icons.Default.MusicNote
+            }
+        }
     }
 }
 

@@ -49,6 +49,7 @@ internal fun AppNavigationHomeRouteSection(
 internal fun AppNavigationBrowserRouteSection(
     mainPadding: PaddingValues,
     repository: com.flopster101.siliconplayer.data.FileRepository,
+    decoderExtensionArtworkHints: Map<String, DecoderArtworkHint>,
     initialLocationId: String?,
     initialDirectoryPath: String?,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
@@ -62,6 +63,7 @@ internal fun AppNavigationBrowserRouteSection(
     MainBrowserRouteHost(
         mainPadding = mainPadding,
         repository = repository,
+        decoderExtensionArtworkHints = decoderExtensionArtworkHints,
         initialLocationId = initialLocationId,
         initialDirectoryPath = initialDirectoryPath,
         bottomContentPadding = bottomContentPadding,

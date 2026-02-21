@@ -12,6 +12,8 @@
 
 extern "C" {
 #include <uade/uade.h>
+#include <uade/uadeipc.h>
+#include <uade/uadestate.h>
 }
 
 #define LOG_TAG "UadeDecoder"
@@ -41,6 +43,29 @@ std::string getRuntimeBaseDir() {
 std::string getRuntimeUadeCorePath() {
     std::lock_guard<std::mutex> lock(gRuntimeConfigMutex);
     return gUadeCorePath;
+}
+
+std::string buildUadeMuteMaskOption(uint32_t muteMask) {
+    std::string option;
+    option.reserve(10);
+    for (int i = 0; i <= 9; ++i) {
+        if ((muteMask & (1u << static_cast<uint32_t>(i))) != 0u) {
+            option.push_back(static_cast<char>('0' + i));
+        }
+    }
+    return option;
+}
+
+int uadeVoiceBitForUiIndex(int uiIndex) {
+    // uadecore voice layout is 0,1,2,3 where (0,3)=left and (1,2)=right.
+    // UI order requested: L1, L2, R1, R2.
+    switch (uiIndex) {
+        case 0: return 0; // L1
+        case 1: return 3; // L2
+        case 2: return 1; // R1
+        case 3: return 2; // R2
+        default: return uiIndex;
+    }
 }
 }
 
@@ -84,6 +109,7 @@ bool UadeDecoder::open(const char* path) {
     renderedFrames = 0;
     playbackPositionSeconds = 0.0;
     pcmScratch.clear();
+    applyToggleMutesLocked();
     refreshSongInfoLocked();
     return true;
 }
@@ -107,11 +133,14 @@ uade_state* UadeDecoder::createStateLocked() {
             const int scoreErrno = (scoreReadCheck != 0) ? errno : 0;
             const int uaercReadCheck = access(uaercPath.c_str(), R_OK);
             const int uaercErrno = (uaercReadCheck != 0) ? errno : 0;
+            ensureToggleChannelsLocked();
+            const std::string muteMaskOption = buildUadeMuteMaskOption(getToggleMuteMaskLocked());
             uade_config_set_option(config, UC_BASE_DIR, runtimeBaseDir.c_str());
             uade_config_set_option(config, UC_UADECORE_FILE, uadeCorePath.c_str());
             uade_config_set_option(config, UC_SCORE_FILE, scorePath.c_str());
             uade_config_set_option(config, UC_UAE_CONFIG_FILE, uaercPath.c_str());
             uade_config_set_option(config, UC_ONE_SUBSONG, nullptr);
+            uade_config_set_option(config, UC_MUTEMASK, muteMaskOption.c_str());
             // Keep UADE running internally; app repeat modes enforce end/restart semantics.
             uade_config_set_option(config, UC_NO_EP_END, nullptr);
             uade_config_set_option(config, UC_DISABLE_TIMEOUTS, nullptr);
@@ -182,6 +211,7 @@ void UadeDecoder::closeInternalLocked() {
     renderedFrames = 0;
     playbackPositionSeconds = 0.0;
     pcmScratch.clear();
+    toggleChannelMuted.clear();
 }
 
 void UadeDecoder::close() {
@@ -516,6 +546,95 @@ int64_t UadeDecoder::getSongBytes() const {
 int64_t UadeDecoder::getSubsongBytes() const {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return subsongBytes;
+}
+
+std::vector<std::string> UadeDecoder::getToggleChannelNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    ensureToggleChannelsLocked();
+    return toggleChannelNames;
+}
+
+std::vector<uint8_t> UadeDecoder::getToggleChannelAvailability() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    ensureToggleChannelsLocked();
+    return std::vector<uint8_t>(toggleChannelNames.size(), 1u);
+}
+
+void UadeDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    ensureToggleChannelsLocked();
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+    toggleChannelMuted[static_cast<size_t>(channelIndex)] = enabled;
+    applyToggleMutesLocked();
+}
+
+bool UadeDecoder::getToggleChannelMuted(int channelIndex) const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return false;
+    }
+    return toggleChannelMuted[static_cast<size_t>(channelIndex)];
+}
+
+void UadeDecoder::clearToggleChannelMutes() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    ensureToggleChannelsLocked();
+    if (toggleChannelMuted.empty()) {
+        return;
+    }
+    std::fill(toggleChannelMuted.begin(), toggleChannelMuted.end(), false);
+    applyToggleMutesLocked();
+}
+
+uint32_t UadeDecoder::getToggleMuteMaskLocked() const {
+    uint32_t mask = 0;
+    const int count = std::min<int>(static_cast<int>(toggleChannelMuted.size()), 4);
+    for (int i = 0; i < count; ++i) {
+        if (toggleChannelMuted[static_cast<size_t>(i)]) {
+            const int bit = uadeVoiceBitForUiIndex(i);
+            if (bit >= 0 && bit < 32) {
+                mask |= (1u << static_cast<uint32_t>(bit));
+            }
+        }
+    }
+    return mask;
+}
+
+void UadeDecoder::applyToggleMutesLocked() {
+    if (!state) {
+        return;
+    }
+    const uint32_t muteMask = getToggleMuteMaskLocked();
+    state->config.mutemask = static_cast<int>(muteMask);
+    state->config.mutemask_set = 1;
+    const auto priorIpcState = state->ipc.state;
+    if (priorIpcState == UADE_R_STATE) {
+        state->ipc.state = UADE_S_STATE;
+    }
+    const int rc = uade_send_u32(UADE_COMMAND_SET_MUTE_MASK, muteMask, &state->ipc);
+    if (priorIpcState == UADE_R_STATE) {
+        state->ipc.state = UADE_R_STATE;
+    }
+    if (rc != 0) {
+        LOGE("applyToggleMutesLocked: failed to send mute mask=%u rc=%d", muteMask, rc);
+    }
+}
+
+void UadeDecoder::ensureToggleChannelsLocked() {
+    if (!toggleChannelNames.empty() && toggleChannelMuted.size() == toggleChannelNames.size()) {
+        return;
+    }
+    toggleChannelNames = {
+            "Paula L1",
+            "Paula L2",
+            "Paula R1",
+            "Paula R2"
+    };
+    if (toggleChannelMuted.size() != toggleChannelNames.size()) {
+        toggleChannelMuted.assign(toggleChannelNames.size(), false);
+    }
 }
 
 void UadeDecoder::setOption(const char* name, const char* value) {

@@ -55,6 +55,11 @@ public:
     int64_t getModuleBytes() const;
     int64_t getSongBytes() const;
     int64_t getSubsongBytes() const;
+    std::vector<std::string> getToggleChannelNames() override;
+    std::vector<uint8_t> getToggleChannelAvailability() override;
+    void setToggleChannelMuted(int channelIndex, bool enabled) override;
+    bool getToggleChannelMuted(int channelIndex) const override;
+    void clearToggleChannelMutes() override;
     void setOption(const char* name, const char* value) override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
@@ -101,10 +106,15 @@ private:
     int64_t renderedFrames = 0;
     std::atomic<int> repeatMode { 0 };
     std::vector<int16_t> pcmScratch;
+    std::vector<std::string> toggleChannelNames;
+    std::vector<bool> toggleChannelMuted;
 
     void closeInternalLocked();
     uade_state* createStateLocked();
     bool refreshSongInfoLocked();
+    uint32_t getToggleMuteMaskLocked() const;
+    void applyToggleMutesLocked();
+    void ensureToggleChannelsLocked();
 };
 
 #endif // SILICONPLAYER_UADEDECODER_H

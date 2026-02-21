@@ -881,6 +881,11 @@ private enum class StorageKind {
     USB
 }
 
+private enum class MountKindHint {
+    SD,
+    USB
+}
+
 private fun iconForStorageKind(kind: StorageKind, context: Context): ImageVector {
     return when (kind) {
         StorageKind.ROOT -> Icons.Default.Folder
@@ -928,21 +933,49 @@ private fun detectStorageLocations(context: Context): List<StorageLocation> {
 
     val storageManager = context.getSystemService(StorageManager::class.java)
     val removableFromVolumes = mutableSetOf<String>()
+    data class RemovableVolumeCandidate(
+        val root: File,
+        val description: String,
+        val hasUsbMarker: Boolean,
+        val hasSdMarker: Boolean,
+        val mountKindHint: MountKindHint?
+    )
+    val volumeCandidates = mutableListOf<RemovableVolumeCandidate>()
+
     storageManager?.storageVolumes.orEmpty().forEach { volume ->
         if (!volume.isRemovable) return@forEach
         val volumeRoot = resolveStorageVolumeRoot(volume) ?: return@forEach
         val description = volume.getDescription(context).orEmpty().trim()
         val detectionText = "${description.lowercase()} ${volumeRoot.absolutePath.lowercase()}"
-        val isUsb = detectionText.contains("usb") || detectionText.contains("otg")
-        val label = description.ifBlank { volumeRoot.name.ifBlank { "Volume" } }
-        val typeLabel = if (isUsb) "$label USB" else "$label SD"
+        volumeCandidates += RemovableVolumeCandidate(
+            root = volumeRoot,
+            description = description,
+            hasUsbMarker = detectionText.contains("usb") || detectionText.contains("otg"),
+            hasSdMarker = detectionText.contains("sd card") ||
+                detectionText.contains("sdcard") ||
+                detectionText.contains(" microsd") ||
+                detectionText.contains("sd "),
+            mountKindHint = detectMountKindHint(volumeRoot)
+        )
+    }
+
+    volumeCandidates.forEach { candidate ->
+        val isUsb = when {
+            candidate.hasUsbMarker && !candidate.hasSdMarker -> true
+            candidate.hasSdMarker && !candidate.hasUsbMarker -> false
+            candidate.mountKindHint == MountKindHint.USB -> true
+            candidate.mountKindHint == MountKindHint.SD -> false
+            else -> false
+        }
+        val label = candidate.description.ifBlank { candidate.root.name.ifBlank { "Volume" } }
+        val typeLabel = if (isUsb) "$label (USB)" else "$label (SD)"
         addLocation(
             kind = if (isUsb) StorageKind.USB else StorageKind.SD,
             typeLabel = typeLabel,
-            name = volumeRoot.absolutePath,
-            directory = volumeRoot
+            name = candidate.root.absolutePath,
+            directory = candidate.root
         )
-        removableFromVolumes += volumeRoot.absolutePath
+        removableFromVolumes += candidate.root.absolutePath
     }
 
     // Fallback scan for devices that may not expose a StorageVolume path on some OEMs.
@@ -955,10 +988,17 @@ private fun detectStorageLocations(context: Context): List<StorageLocation> {
             val pathLower = volumeRoot.absolutePath.lowercase()
             val isRemovable = Environment.isExternalStorageRemovable(externalDir)
             if (!isRemovable) return@forEach
+            val mountKindHint = detectMountKindHint(volumeRoot)
 
-            val isUsb = pathLower.contains("usb") || pathLower.contains("otg")
+            val isUsb = when {
+                pathLower.contains("usb") || pathLower.contains("otg") -> true
+                pathLower.contains("sd") -> false
+                mountKindHint == MountKindHint.USB -> true
+                mountKindHint == MountKindHint.SD -> false
+                else -> false
+            }
             val label = volumeRoot.name.ifBlank { "Volume" }
-            val typeLabel = if (isUsb) "$label USB" else "$label SD"
+            val typeLabel = if (isUsb) "$label (USB)" else "$label (SD)"
             addLocation(
                 kind = if (isUsb) StorageKind.USB else StorageKind.SD,
                 typeLabel = typeLabel,
@@ -998,6 +1038,49 @@ private fun resolveVolumeRoot(appSpecificDir: File): File? {
     val markerIndex = absolutePath.indexOf(marker)
     if (markerIndex <= 0) return null
     return File(absolutePath.substring(0, markerIndex))
+}
+
+private fun detectMountKindHint(root: File): MountKindHint? {
+    val mountPoint = root.absolutePath
+    val mounts = sequenceOf("/proc/self/mounts", "/proc/mounts")
+    mounts.forEach { mountsPath ->
+        val hint = runCatching {
+            File(mountsPath).useLines { lines ->
+                lines
+                    .mapNotNull { line ->
+                        val parts = line.split(' ')
+                        if (parts.size < 2) return@mapNotNull null
+                        val source = parts[0]
+                        val target = parts[1]
+                        if (target != mountPoint) return@mapNotNull null
+                        classifyMountSource(source)
+                    }
+                    .firstOrNull()
+            }
+        }.getOrNull()
+        if (hint != null) return hint
+    }
+    return null
+}
+
+private fun classifyMountSource(source: String): MountKindHint? {
+    val lower = source.lowercase(Locale.US)
+    if (lower.contains("public:")) {
+        val major = lower
+            .substringAfter("public:", "")
+            .substringBefore(',')
+            .toIntOrNull()
+        return when (major) {
+            179 -> MountKindHint.SD
+            8 -> MountKindHint.USB
+            else -> null
+        }
+    }
+    return when {
+        "mmcblk" in lower -> MountKindHint.SD
+        Regex("""(^|/)(sd[a-z]\d*|usb\d+|uas\d+)($|/)""").containsMatchIn(lower) -> MountKindHint.USB
+        else -> null
+    }
 }
 
 private fun isWithinRoot(file: File, root: File): Boolean {

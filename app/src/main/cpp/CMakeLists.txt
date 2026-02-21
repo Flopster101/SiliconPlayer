@@ -38,6 +38,7 @@ add_library(
         decoders/Vio2sfDecoder.cpp
         decoders/Sc68Decoder.cpp
         decoders/AdPlugDecoder.cpp
+        decoders/UadeDecoder.cpp
         decoders/CPConvStub.c
 )
 
@@ -132,6 +133,16 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
     add_library(libbinio STATIC IMPORTED)
     set_target_properties(libbinio PROPERTIES IMPORTED_LOCATION "${LIBBINIO_LOCATION}")
 
+    # Import UADE stack (Static)
+    add_library(libuade STATIC IMPORTED)
+    set_target_properties(libuade PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libuade.a")
+
+    add_library(libzakalwe STATIC IMPORTED)
+    set_target_properties(libzakalwe PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libzakalwe.a")
+
+    add_library(libbencodetools STATIC IMPORTED)
+    set_target_properties(libbencodetools PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libbencodetools.a")
+
     # Import libsidplayfp + libresidfp (Static)
     add_library(libsidplayfp STATIC IMPORTED)
     set_target_properties(libsidplayfp PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libsidplayfp.a")
@@ -177,6 +188,9 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
             libunice68
             libadplug
             libbinio
+            libuade
+            libzakalwe
+            libbencodetools
             libsidplayfp
             libresidfp
             libresid

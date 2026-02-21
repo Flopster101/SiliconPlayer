@@ -10,6 +10,7 @@
 #include "decoders/Vio2sfDecoder.h"
 #include "decoders/Sc68Decoder.h"
 #include "decoders/AdPlugDecoder.h"
+#include "decoders/UadeDecoder.h"
 
 namespace {
     struct DecoderRegistration {
@@ -49,6 +50,10 @@ namespace {
             DecoderRegistry::getInstance().registerDecoder("AdPlug", AdPlugDecoder::getSupportedExtensions(), []() {
                 return std::make_unique<AdPlugDecoder>();
             }, 12);
+
+            DecoderRegistry::getInstance().registerDecoder("UADE", UadeDecoder::getSupportedExtensions(), []() {
+                return std::make_unique<UadeDecoder>();
+            }, 13);
         }
     };
 

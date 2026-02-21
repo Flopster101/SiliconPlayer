@@ -109,6 +109,17 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+        jniLibs {
+            // UADE launches uadecore via exec(), so the binary must exist as a real file
+            // under nativeLibraryDir instead of being mmap-loaded directly from APK.
+            useLegacyPackaging = true
+        }
+    }
+    sourceSets {
+        getByName("main") {
+            assets.srcDir(layout.buildDirectory.dir("generated/uadeRuntimeAssets/main"))
+            jniLibs.srcDir(layout.buildDirectory.dir("generated/uadeRuntimeJniLibs/main"))
+        }
     }
 }
 
@@ -250,3 +261,71 @@ fun register16kAlignTaskForVariant(variantName: String) {
 
 register16kAlignTaskForVariant("debug")
 register16kAlignTaskForVariant("optimizedDebug")
+
+val uadeRuntimeAssetAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+val syncUadeRuntimeAssets = tasks.register("syncUadeRuntimeAssets") {
+    group = "build setup"
+    description = "Sync ABI-specific UADE runtime files into generated assets."
+
+    doLast {
+        val destinationRoot = layout.buildDirectory
+            .dir("generated/uadeRuntimeAssets/main/uade")
+            .get()
+            .asFile
+        delete(destinationRoot)
+
+        uadeRuntimeAssetAbis.forEach { abi ->
+            val prebuiltRoot = file("src/main/cpp/prebuilt/$abi")
+            val sourceShareDir = File(prebuiltRoot, "share/uade")
+            val sourceUadeCore = File(prebuiltRoot, "lib/uade/uadecore")
+            if (!sourceShareDir.isDirectory || !sourceUadeCore.isFile) {
+                logger.lifecycle(
+                    "UADE runtime assets missing for $abi, skipping (expected: ${sourceShareDir.absolutePath}, ${sourceUadeCore.absolutePath})"
+                )
+                return@forEach
+            }
+
+            copy {
+                from(sourceShareDir)
+                into(File(destinationRoot, abi))
+            }
+            copy {
+                from(sourceUadeCore)
+                into(File(destinationRoot, abi))
+                rename { "uadecore" }
+            }
+        }
+    }
+}
+
+val syncUadeRuntimeJniLibs = tasks.register("syncUadeRuntimeJniLibs") {
+    group = "build setup"
+    description = "Sync ABI-specific UADE core executable into generated jniLibs."
+
+    doLast {
+        val destinationRoot = layout.buildDirectory
+            .dir("generated/uadeRuntimeJniLibs/main")
+            .get()
+            .asFile
+        delete(destinationRoot)
+
+        uadeRuntimeAssetAbis.forEach { abi ->
+            val sourceUadeCore = file("src/main/cpp/prebuilt/$abi/lib/uade/uadecore")
+            if (!sourceUadeCore.isFile) {
+                logger.lifecycle("UADE core executable missing for $abi, skipping (${sourceUadeCore.absolutePath})")
+                return@forEach
+            }
+
+            copy {
+                from(sourceUadeCore)
+                into(File(destinationRoot, abi))
+                rename { "libuadecore_exec.so" }
+            }
+        }
+    }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(syncUadeRuntimeAssets)
+    dependsOn(syncUadeRuntimeJniLibs)
+}

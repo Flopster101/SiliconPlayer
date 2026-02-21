@@ -161,6 +161,22 @@ internal object AboutCatalog {
                 "Integrated with EmuOPL rendering for baseline playback and seek support.",
                 "Current baseline focuses on playback compatibility and core metadata."
             )
+        ),
+        AboutEntity(
+            id = "core.uade",
+            kind = AboutEntityKind.Core,
+            name = "UADE",
+            description = "Amiga music playback core using Unix Amiga Delitracker Emulator format handlers.",
+            author = "UADE contributors",
+            license = "GPL-2.0-or-later",
+            links = listOf(
+                AboutEntityLink("Project", "https://zakalwe.fi/uade/"),
+                AboutEntityLink("Source", "https://github.com/viznut/uade")
+            ),
+            integrationNotes = listOf(
+                "Integrated as a native decoder for Amiga-oriented legacy formats and prefix-style extensions.",
+                "Baseline integration includes playback, seek, subtunes, repeat handling, and core metadata."
+            )
         )
     )
 
@@ -258,7 +274,8 @@ internal object AboutCatalog {
         "LazyUSF2" to "core.lazyusf2",
         "Vio2SF" to "core.vio2sf",
         "SC68" to "core.sc68",
-        "AdPlug" to "core.adplug"
+        "AdPlug" to "core.adplug",
+        "UADE" to "core.uade"
     )
 
     private val entityById: Map<String, AboutEntity> = (coreEntries + libraryEntries).associateBy { it.id }

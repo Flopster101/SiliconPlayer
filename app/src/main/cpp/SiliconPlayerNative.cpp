@@ -3,6 +3,7 @@
 #include <cstdint>
 #include "AudioEngine.h"
 #include "decoders/DecoderRegistry.h"
+#include "decoders/UadeDecoder.h"
 #include <vector>
 #include <string_view>
 #include <thread>
@@ -94,6 +95,39 @@ static void ensureEngine() {
     std::lock_guard<std::mutex> lock(engineMutex);
     if (audioEngine == nullptr) {
         audioEngine = new AudioEngine();
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setUadeRuntimePaths(
+        JNIEnv* env,
+        jobject,
+        jstring baseDir,
+        jstring uadeCorePath) {
+    if (baseDir == nullptr) {
+        UadeDecoder::setRuntimePaths("", "");
+        return;
+    }
+    const char* nativeBaseDir = env->GetStringUTFChars(baseDir, 0);
+    const char* nativeUadeCorePath = nullptr;
+    if (uadeCorePath != nullptr) {
+        nativeUadeCorePath = env->GetStringUTFChars(uadeCorePath, 0);
+    }
+    if (nativeBaseDir != nullptr && nativeUadeCorePath != nullptr) {
+        UadeDecoder::setRuntimePaths(nativeBaseDir, nativeUadeCorePath);
+        env->ReleaseStringUTFChars(uadeCorePath, nativeUadeCorePath);
+        env->ReleaseStringUTFChars(baseDir, nativeBaseDir);
+    } else if (nativeBaseDir != nullptr) {
+        UadeDecoder::setRuntimePaths(nativeBaseDir, "");
+        if (nativeUadeCorePath != nullptr) {
+            env->ReleaseStringUTFChars(uadeCorePath, nativeUadeCorePath);
+        }
+        env->ReleaseStringUTFChars(baseDir, nativeBaseDir);
+    } else {
+        if (nativeUadeCorePath != nullptr) {
+            env->ReleaseStringUTFChars(uadeCorePath, nativeUadeCorePath);
+        }
+        UadeDecoder::setRuntimePaths("", "");
     }
 }
 

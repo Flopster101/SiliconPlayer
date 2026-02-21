@@ -18,6 +18,9 @@ object NativeBridge {
 
     fun installContext(context: Context) {
         appContext = context.applicationContext
+        val runtimeBaseDir = UadeRuntimeSupport.ensureInstalled(appContext!!)
+        val runtimeCorePath = UadeRuntimeSupport.resolveUadeCoreExecutablePath(appContext!!)
+        setUadeRuntimePaths(runtimeBaseDir ?: "", runtimeCorePath ?: "")
     }
 
     @JvmStatic
@@ -197,4 +200,5 @@ object NativeBridge {
     external fun getDecoderSupportedExtensions(decoderName: String): Array<String>
     external fun getDecoderEnabledExtensions(decoderName: String): Array<String>
     external fun setDecoderEnabledExtensions(decoderName: String, extensions: Array<String>)
+    external fun setUadeRuntimePaths(baseDir: String, uadeCorePath: String)
 }

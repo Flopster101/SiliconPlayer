@@ -2090,7 +2090,12 @@ private fun AppNavigation(
                             action = action,
                             recentFolders = recentFolders,
                             recentFoldersLimit = recentFoldersLimit,
-                            onRecentFoldersChanged = { recentFolders = it }
+                            onRecentFoldersChanged = { recentFolders = it },
+                            onOpenInBrowser = { locationId, directoryPath ->
+                                browserLaunchLocationId = locationId
+                                browserLaunchDirectoryPath = directoryPath
+                                currentView = MainView.Browser
+                            }
                         )
                     },
                     onRecentFileAction = { entry, action ->
@@ -2104,6 +2109,11 @@ private fun AppNavigation(
                             onRecentPlayedFilesChanged = { recentPlayedFiles = it },
                             resolveShareableFileForRecent = { recent ->
                                 runtimeDelegates.resolveShareableFileForRecent(recent)
+                            },
+                            onOpenInBrowser = { locationId, directoryPath ->
+                                browserLaunchLocationId = locationId
+                                browserLaunchDirectoryPath = directoryPath
+                                currentView = MainView.Browser
                             }
                         )
                     },

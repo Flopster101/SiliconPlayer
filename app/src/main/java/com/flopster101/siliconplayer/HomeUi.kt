@@ -80,12 +80,14 @@ internal data class RecentTrackDisplay(
 internal enum class SourceEntryAction {
     DeleteFromRecents,
     ShareFile,
-    CopySource
+    CopySource,
+    OpenInBrowser
 }
 
 internal enum class FolderEntryAction {
     DeleteFromRecents,
-    CopyPath
+    CopyPath,
+    OpenInBrowser
 }
 
 internal fun buildRecentTrackDisplay(
@@ -389,6 +391,13 @@ internal fun HomeScreen(
                                     onDismissRequest = { folderActionTargetEntry = null }
                                 ) {
                                     DropdownMenuItem(
+                                        text = { Text("Open location") },
+                                        onClick = {
+                                            onRecentFolderAction(entry, FolderEntryAction.OpenInBrowser)
+                                            folderActionTargetEntry = null
+                                        }
+                                    )
+                                    DropdownMenuItem(
                                         text = { Text("Delete from recents") },
                                         onClick = {
                                             onRecentFolderAction(entry, FolderEntryAction.DeleteFromRecents)
@@ -503,6 +512,13 @@ internal fun HomeScreen(
                                     expanded = fileActionTargetEntry == entry,
                                     onDismissRequest = { fileActionTargetEntry = null }
                                 ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Open location") },
+                                        onClick = {
+                                            onRecentFileAction(entry, SourceEntryAction.OpenInBrowser)
+                                            fileActionTargetEntry = null
+                                        }
+                                    )
                                     DropdownMenuItem(
                                         text = { Text("Delete from recents") },
                                         onClick = {

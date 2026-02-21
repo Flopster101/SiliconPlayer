@@ -7,6 +7,8 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
+import com.flopster101.siliconplayer.data.parseArchiveSourceId
 import java.io.File
 import java.util.Locale
 
@@ -47,9 +49,19 @@ internal fun applyRecentFolderAction(
     action: FolderEntryAction,
     recentFolders: List<RecentPathEntry>,
     recentFoldersLimit: Int,
-    onRecentFoldersChanged: (List<RecentPathEntry>) -> Unit
+    onRecentFoldersChanged: (List<RecentPathEntry>) -> Unit,
+    onOpenInBrowser: (locationId: String?, directoryPath: String) -> Unit
 ) {
     when (action) {
+        FolderEntryAction.OpenInBrowser -> {
+            val target = resolveBrowserParentForRecentFolder(entry)
+            if (target == null) {
+                Toast.makeText(context, "Unable to open folder in browser", Toast.LENGTH_SHORT).show()
+            } else {
+                onOpenInBrowser(target.first, target.second)
+            }
+        }
+
         FolderEntryAction.DeleteFromRecents -> {
             val updated = recentFolders.filterNot { samePath(it.path, entry.path) }
             onRecentFoldersChanged(updated)
@@ -78,9 +90,19 @@ internal fun applyRecentSourceAction(
     recentPlayedFiles: List<RecentPathEntry>,
     recentFilesLimit: Int,
     onRecentPlayedFilesChanged: (List<RecentPathEntry>) -> Unit,
-    resolveShareableFileForRecent: (RecentPathEntry) -> File?
+    resolveShareableFileForRecent: (RecentPathEntry) -> File?,
+    onOpenInBrowser: (locationId: String?, directoryPath: String) -> Unit
 ) {
     when (action) {
+        SourceEntryAction.OpenInBrowser -> {
+            val target = resolveBrowserFolderForRecentSource(entry)
+            if (target == null) {
+                Toast.makeText(context, "This source cannot be opened in file browser", Toast.LENGTH_SHORT).show()
+            } else {
+                onOpenInBrowser(target.first, target.second)
+            }
+        }
+
         SourceEntryAction.DeleteFromRecents -> {
             val updated = recentPlayedFiles.filterNot { samePath(it.path, entry.path) }
             onRecentPlayedFilesChanged(updated)
@@ -126,4 +148,62 @@ internal fun applyRecentSourceAction(
             Toast.makeText(context, "Copied URL/path", Toast.LENGTH_SHORT).show()
         }
     }
+}
+
+private fun resolveBrowserFolderForRecentSource(entry: RecentPathEntry): Pair<String?, String>? {
+    parseArchiveSourceId(entry.path)?.let { archiveSource ->
+        val parentInArchive = archiveSource.entryPath
+            .replace('\\', '/')
+            .substringBeforeLast('/', "")
+            .trim('/')
+        val logicalDirectory = if (parentInArchive.isBlank()) {
+            archiveSource.archivePath
+        } else {
+            "${archiveSource.archivePath}/$parentInArchive"
+        }
+        return entry.locationId to logicalDirectory
+    }
+
+    val parsed = Uri.parse(entry.path)
+    val scheme = parsed.scheme?.lowercase(Locale.ROOT)
+    if (scheme == "http" || scheme == "https") return null
+
+    val localPath = if (scheme == "file") {
+        parsed.path
+    } else {
+        entry.path
+    }?.trim().takeIf { !it.isNullOrBlank() } ?: return null
+
+    val localFile = File(localPath)
+    val directory = if (localFile.isDirectory) {
+        localFile.absolutePath
+    } else {
+        localFile.parentFile?.absolutePath
+    } ?: return null
+    return entry.locationId to directory
+}
+
+private fun resolveBrowserParentForRecentFolder(entry: RecentPathEntry): Pair<String?, String>? {
+    parseArchiveLogicalPath(entry.path)?.let { (archivePath, entryPath) ->
+        if (entryPath.isNullOrBlank()) {
+            val archiveParent = File(archivePath).parentFile?.absolutePath ?: return null
+            return entry.locationId to archiveParent
+        }
+        val parentInArchive = entryPath
+            .replace('\\', '/')
+            .trim('/')
+            .substringBeforeLast('/', "")
+            .trim('/')
+        val logicalParent = if (parentInArchive.isBlank()) {
+            archivePath
+        } else {
+            "$archivePath/$parentInArchive"
+        }
+        return entry.locationId to logicalParent
+    }
+
+    val rawPath = entry.path.trim().takeIf { it.isNotBlank() } ?: return null
+    val folder = File(rawPath)
+    val parentPath = folder.parentFile?.absolutePath ?: return null
+    return entry.locationId to parentPath
 }

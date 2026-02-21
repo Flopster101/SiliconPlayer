@@ -13,6 +13,24 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 namespace {
+class TrackingEmuopl final : public CEmuopl {
+public:
+    explicit TrackingEmuopl(int rate, bool bit16, bool useStereo)
+        : CEmuopl(rate, bit16, useStereo) {
+        // Most AdPlug tracks are single-chip OPL2. Start in OPL2 so mono
+        // content is mirrored to both channels instead of left-only output.
+        settype(TYPE_OPL2);
+    }
+
+    void setchip(int n) override {
+        CEmuopl::setchip(n);
+        if (n == 1) {
+            // Auto-promote to dual-chip output once a track actually uses chip 1.
+            settype(TYPE_DUAL_OPL2);
+        }
+    }
+};
+
 std::string safeString(const std::string& value) {
     return value;
 }
@@ -33,7 +51,7 @@ bool AdPlugDecoder::open(const char* path) {
     }
 
     sourcePath = path;
-    opl = std::make_unique<CEmuopl>(sampleRateHz, true, true);
+    opl = std::make_unique<TrackingEmuopl>(sampleRateHz, true, true);
     player.reset(CAdPlug::factory(sourcePath, opl.get()));
     if (!player) {
         LOGE("CAdPlug::factory failed for file: %s", sourcePath.c_str());

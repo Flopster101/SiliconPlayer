@@ -3,10 +3,71 @@
 #include <algorithm>
 #include <filesystem>
 #include <android/log.h>
+#include <cctype>
+#include <unordered_set>
 
 #define LOG_TAG "DecoderRegistry"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+
+namespace {
+std::string toLowerAscii(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return value;
+}
+
+std::vector<std::string> buildExtensionCandidates(const std::string& filePath) {
+    std::string baseName = std::filesystem::path(filePath).filename().string();
+    if (baseName.empty()) {
+        baseName = filePath;
+    }
+
+    std::vector<std::string> rawCandidates;
+    const std::size_t firstDot = baseName.find('.');
+    const std::size_t lastDot = baseName.rfind('.');
+
+    if (lastDot != std::string::npos && lastDot > 0 && (lastDot + 1) < baseName.size()) {
+        rawCandidates.push_back(baseName.substr(lastDot + 1)); // trailing extension
+    }
+
+    if (lastDot != std::string::npos && lastDot > 0) {
+        const std::size_t secondLastDot = baseName.rfind('.', lastDot - 1);
+        if (secondLastDot != std::string::npos && secondLastDot < lastDot) {
+            rawCandidates.push_back(baseName.substr(secondLastDot + 1)); // compound extension
+        }
+    }
+
+    if (firstDot != std::string::npos && firstDot > 0) {
+        rawCandidates.push_back(baseName.substr(0, firstDot)); // prefix extension
+    }
+
+    std::vector<std::string> candidates;
+    std::unordered_set<std::string> seen;
+    for (std::string candidate : rawCandidates) {
+        candidate = toLowerAscii(std::move(candidate));
+        if (candidate.empty()) continue;
+        if (seen.insert(candidate).second) {
+            candidates.push_back(std::move(candidate));
+        }
+    }
+    return candidates;
+}
+
+bool decoderSupportsExtension(const DecoderInfo& info, const std::string& extension) {
+    if (info.enabledExtensions.empty()) {
+        for (const auto& ext : info.supportedExtensions) {
+            if (toLowerAscii(ext) == extension) return true;
+        }
+        return false;
+    }
+    for (const auto& ext : info.enabledExtensions) {
+        if (toLowerAscii(ext) == extension) return true;
+    }
+    return false;
+}
+}
 
 DecoderRegistry& DecoderRegistry::getInstance() {
     static DecoderRegistry instance;
@@ -34,51 +95,27 @@ std::unique_ptr<AudioDecoder> DecoderRegistry::createDecoder(const char* path) {
     if (!path) return nullptr;
 
     std::string filePath = path;
-    std::string extension = std::filesystem::path(filePath).extension().string();
-
-    // Normalize extension to lowercase and remove dot
-    if (!extension.empty() && extension[0] == '.') {
-        extension = extension.substr(1);
+    const std::vector<std::string> extensionCandidates = buildExtensionCandidates(filePath);
+    if (extensionCandidates.empty()) {
+        LOGE("No extension candidates resolved for file: %s", filePath.c_str());
+        return nullptr;
     }
-    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 
-    LOGD("Looking for decoder for extension: %s", extension.c_str());
+    LOGD("Looking for decoder for extension candidates: first=%s count=%zu",
+         extensionCandidates.front().c_str(),
+         extensionCandidates.size());
 
     // Try to find an enabled decoder that supports this extension
-    for (const auto& info : decoders) {
-        // Skip disabled decoders
-        if (!info.enabled) {
-            continue;
-        }
-
-        // Check if extension is in the enabled list
-        bool extensionEnabled = false;
-
-        // If enabledExtensions is empty, all extensions are enabled
-        if (info.enabledExtensions.empty()) {
-            // Check if extension is in supportedExtensions
-            for (const auto& ext : info.supportedExtensions) {
-                std::string supportedExt = ext;
-                std::transform(supportedExt.begin(), supportedExt.end(), supportedExt.begin(), ::tolower);
-                if (supportedExt == extension) {
-                    extensionEnabled = true;
-                    break;
-                }
+    for (const auto& extension : extensionCandidates) {
+        for (const auto& info : decoders) {
+            if (!info.enabled) {
+                continue;
             }
-        } else {
-            // Check if extension is in enabledExtensions
-            for (const auto& ext : info.enabledExtensions) {
-                std::string enabledExt = ext;
-                std::transform(enabledExt.begin(), enabledExt.end(), enabledExt.begin(), ::tolower);
-                if (enabledExt == extension) {
-                    extensionEnabled = true;
-                    break;
-                }
+            if (!decoderSupportsExtension(info, extension)) {
+                continue;
             }
-        }
-
-        if (extensionEnabled) {
-            LOGD("Found matching decoder: %s (priority %d)", info.name.c_str(), info.priority);
+            LOGD("Found matching decoder: %s (priority %d) for extension: %s",
+                 info.name.c_str(), info.priority, extension.c_str());
             auto decoder = info.factory();
             if (decoder) {
                 return decoder;
@@ -86,7 +123,7 @@ std::unique_ptr<AudioDecoder> DecoderRegistry::createDecoder(const char* path) {
         }
     }
 
-    LOGE("No enabled decoder found for extension: %s", extension.c_str());
+    LOGE("No enabled decoder found for any extension candidate (file=%s)", filePath.c_str());
     return nullptr;
 }
 

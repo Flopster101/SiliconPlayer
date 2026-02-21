@@ -64,8 +64,7 @@ private val artworkFallbackVideoExtensions = setOf(
 
 @Composable
 internal fun placeholderArtworkIconForFile(file: File?, decoderName: String?): ImageVector {
-    val extension = file?.extension?.lowercase()?.ifBlank { return Icons.Default.MusicNote }
-        ?: return Icons.Default.MusicNote
+    val extension = file?.name?.let(::inferredPrimaryExtensionForName) ?: return Icons.Default.MusicNote
     val effectiveDecoderName = decoderName
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
@@ -136,7 +135,7 @@ internal fun MiniPlayerBar(
     modifier: Modifier = Modifier
 ) {
     val hasTrack = file != null
-    val formatLabel = file?.extension?.uppercase()?.ifBlank { "UNKNOWN" } ?: "EMPTY"
+    val formatLabel = file?.name?.let(::inferredPrimaryExtensionForName)?.uppercase(Locale.ROOT) ?: "EMPTY"
     val positionLabel = formatTimeForMini(positionSeconds)
     val durationLabel = if (durationSeconds > 0.0) {
         if (hasReliableDuration) formatTimeForMini(durationSeconds) else "${formatTimeForMini(durationSeconds)}?"

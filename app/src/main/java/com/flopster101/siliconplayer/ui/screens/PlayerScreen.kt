@@ -93,6 +93,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import android.view.MotionEvent
 import com.flopster101.siliconplayer.AppDefaults
+import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.R
 import com.flopster101.siliconplayer.RepeatMode
 import com.flopster101.siliconplayer.VisualizationMode
@@ -1057,7 +1058,7 @@ private fun TrackInfoChips(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val formatLabel = file?.extension?.uppercase()?.ifBlank { "UNKNOWN" } ?: "EMPTY"
+    val formatLabel = file?.name?.let(::inferredPrimaryExtensionForName)?.uppercase() ?: "EMPTY"
 
     // Bitrate or file size based on decoder
     val bitrateOrSize = remember(file, decoderName, fileSizeBytes) {
@@ -1452,7 +1453,7 @@ private fun TrackInfoDetailsDialog(
 
     val fileSizeBytes = file?.length() ?: 0L
     val filename = file?.name ?: "No file loaded"
-    val extension = file?.extension?.uppercase()?.ifBlank { "UNKNOWN" } ?: "UNKNOWN"
+    val extension = file?.name?.let(::inferredPrimaryExtensionForName)?.uppercase() ?: "UNKNOWN"
     val decoderLabel = decoderName?.ifBlank { "Unknown" } ?: "Unknown"
     val bitrateLabel = if (liveBitrate > 0L) {
         "${formatBitrate(liveBitrate, liveIsVbr)} (${if (liveIsVbr) "VBR" else "CBR"})"

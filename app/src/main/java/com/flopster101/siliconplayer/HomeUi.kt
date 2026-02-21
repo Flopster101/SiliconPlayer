@@ -449,7 +449,8 @@ internal fun HomeScreen(
                                 }
                             }
                             val storagePresentation = storagePresentationForEntry(entry)
-                            val extensionLabel = trackFile.extension.uppercase().ifBlank { "UNKNOWN" }
+                            val extensionLabel =
+                                inferredPrimaryExtensionForName(trackFile.name)?.uppercase() ?: "UNKNOWN"
                             val useLiveMetadata = samePath(currentTrackPath, entry.path)
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 ElevatedCard(

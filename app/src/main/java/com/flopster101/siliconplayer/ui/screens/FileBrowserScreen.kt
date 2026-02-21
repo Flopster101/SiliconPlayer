@@ -63,6 +63,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.extensionCandidatesForName
+import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.R
 import com.flopster101.siliconplayer.data.buildArchiveSourceId
 import com.flopster101.siliconplayer.data.FileItem
@@ -1102,7 +1104,7 @@ fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
     val isVideoFile = !item.isDirectory && isLikelyVideoFile(item.file)
     val subtitle by produceState(
         initialValue = if (item.isDirectory && !item.isArchive) "Loading..." else {
-            val format = item.file.extension.uppercase().ifBlank { "UNKNOWN" }
+            val format = inferredPrimaryExtensionForName(item.file.name)?.uppercase(Locale.ROOT) ?: "UNKNOWN"
             "$format • ${formatFileSizeHumanReadable(item.size)}"
         },
         key1 = item.file.absolutePath,
@@ -1115,7 +1117,7 @@ fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
             } else if (item.isDirectory) {
                 buildFolderSummary(item.file)
             } else {
-                val format = item.file.extension.uppercase().ifBlank { "UNKNOWN" }
+                val format = inferredPrimaryExtensionForName(item.file.name)?.uppercase(Locale.ROOT) ?: "UNKNOWN"
                 "$format • ${formatFileSizeHumanReadable(item.size)}"
             }
         }
@@ -1223,15 +1225,12 @@ fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
 }
 
 private fun isLikelyVideoFile(file: File): Boolean {
-    val extension = file.extension.lowercase(Locale.ROOT)
-    if (extension.isBlank()) {
-        return false
+    val candidates = extensionCandidatesForName(file.name)
+    if (candidates.isEmpty()) return false
+    return candidates.any { extension ->
+        val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+        mimeType?.startsWith("video/") == true || extension in FALLBACK_VIDEO_EXTENSIONS
     }
-    val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
-    if (mimeType?.startsWith("video/") == true) {
-        return true
-    }
-    return extension in FALLBACK_VIDEO_EXTENSIONS
 }
 
 private fun formatFileSizeHumanReadable(bytes: Long): String {

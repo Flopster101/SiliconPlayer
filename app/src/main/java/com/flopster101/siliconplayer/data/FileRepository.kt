@@ -1,6 +1,7 @@
 package com.flopster101.siliconplayer.data
 
 import com.flopster101.siliconplayer.BrowserNameSortMode
+import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import java.io.File
 
 class FileRepository(
@@ -14,7 +15,7 @@ class FileRepository(
         return files
             .filter {
                 it.isDirectory ||
-                    it.extension.lowercase() in supportedExtensions ||
+                    fileMatchesSupportedExtensions(it, supportedExtensions) ||
                     isSupportedArchive(it)
             }
             .map { file ->

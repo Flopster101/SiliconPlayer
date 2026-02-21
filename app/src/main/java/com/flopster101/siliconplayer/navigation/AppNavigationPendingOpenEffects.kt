@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import java.io.File
 import kotlinx.coroutines.launch
 
@@ -37,7 +38,7 @@ internal fun AppNavigationPendingOpenEffects(
 
     LaunchedEffect(pendingFileToOpen) {
         pendingFileToOpen?.let { file ->
-            if (file.exists() && supportedExtensions.contains(file.extension.lowercase())) {
+            if (file.exists() && fileMatchesSupportedExtensions(file, supportedExtensions)) {
                 onSelectedFileChanged(file)
 
                 if (autoPlayOnTrackSelect) {

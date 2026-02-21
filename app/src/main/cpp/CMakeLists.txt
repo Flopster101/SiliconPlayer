@@ -39,6 +39,7 @@ add_library(
         decoders/Sc68Decoder.cpp
         decoders/AdPlugDecoder.cpp
         decoders/UadeDecoder.cpp
+        decoders/HivelyTrackerDecoder.cpp
         decoders/CPConvStub.c
 )
 
@@ -143,6 +144,10 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
     add_library(libbencodetools STATIC IMPORTED)
     set_target_properties(libbencodetools PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libbencodetools.a")
 
+    # Import hivelytracker (Static)
+    add_library(libhivelytracker STATIC IMPORTED)
+    set_target_properties(libhivelytracker PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libhivelytracker.a")
+
     # Import libsidplayfp + libresidfp (Static)
     add_library(libsidplayfp STATIC IMPORTED)
     set_target_properties(libsidplayfp PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libsidplayfp.a")
@@ -191,6 +196,7 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
             libuade
             libzakalwe
             libbencodetools
+            libhivelytracker
             libsidplayfp
             libresidfp
             libresid

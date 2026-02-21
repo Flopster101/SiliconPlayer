@@ -11,6 +11,7 @@
 #include "decoders/Sc68Decoder.h"
 #include "decoders/AdPlugDecoder.h"
 #include "decoders/UadeDecoder.h"
+#include "decoders/HivelyTrackerDecoder.h"
 
 namespace {
     struct DecoderRegistration {
@@ -53,6 +54,10 @@ namespace {
 
             DecoderRegistry::getInstance().registerDecoder("UADE", UadeDecoder::getSupportedExtensions(), []() {
                 return std::make_unique<UadeDecoder>();
+            }, 14);
+
+            DecoderRegistry::getInstance().registerDecoder("HivelyTracker", HivelyTrackerDecoder::getSupportedExtensions(), []() {
+                return std::make_unique<HivelyTrackerDecoder>();
             }, 13);
         }
     };

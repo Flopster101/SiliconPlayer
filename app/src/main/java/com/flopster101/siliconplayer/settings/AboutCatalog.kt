@@ -177,6 +177,21 @@ internal object AboutCatalog {
                 "Integrated as a native decoder for Amiga-oriented legacy formats and prefix-style extensions.",
                 "Baseline integration includes playback, seek, subtunes, repeat handling, and core metadata."
             )
+        ),
+        AboutEntity(
+            id = "core.hivelytracker",
+            kind = AboutEntityKind.Core,
+            name = "HivelyTracker",
+            description = "AHX/HVL tracker replayer core for Amiga-style chiptune modules.",
+            author = "Xeron, Xigh, and HivelyTracker contributors",
+            license = "BSD-3-Clause",
+            links = listOf(
+                AboutEntityLink("Source", "https://github.com/pete-gordon/hivelytracker")
+            ),
+            integrationNotes = listOf(
+                "Integrated as a baseline core with playback, subtunes, repeat handling, and seek support.",
+                "Uses native HivelyTracker replay routines with configurable output sample rate."
+            )
         )
     )
 
@@ -275,7 +290,8 @@ internal object AboutCatalog {
         "Vio2SF" to "core.vio2sf",
         "SC68" to "core.sc68",
         "AdPlug" to "core.adplug",
-        "UADE" to "core.uade"
+        "UADE" to "core.uade",
+        "HivelyTracker" to "core.hivelytracker"
     )
 
     private val entityById: Map<String, AboutEntity> = (coreEntries + libraryEntries).associateBy { it.id }

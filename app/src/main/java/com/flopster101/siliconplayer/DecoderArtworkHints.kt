@@ -11,7 +11,7 @@ enum class DecoderArtworkHint {
 internal fun decoderArtworkHintForName(decoderName: String?): DecoderArtworkHint? {
     val normalizedPlugin = pluginNameForCoreName(decoderName)
     return when (normalizedPlugin ?: decoderName?.trim()) {
-        "LibOpenMPT", "VGMPlay", "LibSIDPlayFP", "SC68", "AdPlug", "UADE" -> DecoderArtworkHint.TrackedFile
+        "LibOpenMPT", "VGMPlay", "LibSIDPlayFP", "SC68", "AdPlug", "UADE", "HivelyTracker" -> DecoderArtworkHint.TrackedFile
         "Game Music Emu", "LazyUSF2", "Vio2SF" -> DecoderArtworkHint.GameFile
         else -> null
     }

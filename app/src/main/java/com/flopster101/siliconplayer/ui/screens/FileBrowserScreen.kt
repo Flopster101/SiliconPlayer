@@ -90,6 +90,8 @@ private const val BROWSER_PAGE_DURATION_MS = 280
 private const val MIN_LOADING_SPINNER_MS = 220L
 private const val FILE_ENTRY_ANIM_DURATION_MS = 280
 private const val DIRECTORY_DIRECT_PUBLISH_MAX_ITEMS = 3000
+private val FILE_ICON_BOX_SIZE = 38.dp
+private val FILE_ICON_GLYPH_SIZE = 26.dp
 private val FALLBACK_VIDEO_EXTENSIONS = setOf(
     "3g2", "3gp", "asf", "avi", "divx", "f4v", "flv", "m2ts", "m2v", "m4v",
     "mkv", "mov", "mp4", "mpeg", "mpg", "mts", "ogm", "ogv", "rm", "rmvb",
@@ -1145,7 +1147,7 @@ fun FileItemRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier.size(34.dp),
+            modifier = Modifier.size(FILE_ICON_BOX_SIZE),
             contentAlignment = Alignment.Center
         ) {
             if (item.isDirectory) {
@@ -1162,13 +1164,15 @@ fun FileItemRow(
                         Icon(
                             painter = painterResource(id = R.drawable.ic_folder_zip),
                             contentDescription = "ZIP archive",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Default.Folder,
                             contentDescription = "Directory",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
                         )
                     }
                 }
@@ -1183,25 +1187,29 @@ fun FileItemRow(
                     Icon(
                         imageVector = Icons.Default.VideoFile,
                         contentDescription = contentDescription,
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
                     )
                 } else if (decoderArtworkHint == DecoderArtworkHint.TrackedFile) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_file_tracked),
                         contentDescription = contentDescription,
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
                     )
                 } else if (decoderArtworkHint == DecoderArtworkHint.GameFile) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_file_game),
                         contentDescription = contentDescription,
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Default.AudioFile,
                         contentDescription = contentDescription,
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
                     )
                 }
             }

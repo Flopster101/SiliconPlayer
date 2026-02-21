@@ -2,7 +2,10 @@ package com.flopster101.siliconplayer.ui.screens
 
 import android.content.Context
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Environment
+import android.os.storage.StorageManager
+import android.os.storage.StorageVolume
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
@@ -923,27 +926,70 @@ private fun detectStorageLocations(context: Context): List<StorageLocation> {
         directory = internalStorage
     )
 
+    val storageManager = context.getSystemService(StorageManager::class.java)
+    val removableFromVolumes = mutableSetOf<String>()
+    storageManager?.storageVolumes.orEmpty().forEach { volume ->
+        if (!volume.isRemovable) return@forEach
+        val volumeRoot = resolveStorageVolumeRoot(volume) ?: return@forEach
+        val description = volume.getDescription(context).orEmpty().trim()
+        val detectionText = "${description.lowercase()} ${volumeRoot.absolutePath.lowercase()}"
+        val isUsb = detectionText.contains("usb") || detectionText.contains("otg")
+        val label = description.ifBlank { volumeRoot.name.ifBlank { "Volume" } }
+        val typeLabel = if (isUsb) "$label USB" else "$label SD"
+        addLocation(
+            kind = if (isUsb) StorageKind.USB else StorageKind.SD,
+            typeLabel = typeLabel,
+            name = volumeRoot.absolutePath,
+            directory = volumeRoot
+        )
+        removableFromVolumes += volumeRoot.absolutePath
+    }
+
+    // Fallback scan for devices that may not expose a StorageVolume path on some OEMs.
     context.getExternalFilesDirs(null)
         .orEmpty()
         .forEach { externalDir ->
             if (externalDir == null) return@forEach
             val volumeRoot = resolveVolumeRoot(externalDir) ?: return@forEach
+            if (volumeRoot.absolutePath in removableFromVolumes) return@forEach
             val pathLower = volumeRoot.absolutePath.lowercase()
             val isRemovable = Environment.isExternalStorageRemovable(externalDir)
             if (!isRemovable) return@forEach
 
             val isUsb = pathLower.contains("usb") || pathLower.contains("otg")
-            val typeLabel = if (isUsb) "USB storage" else "SD card"
-            val name = volumeRoot.name.ifBlank { volumeRoot.absolutePath }
+            val label = volumeRoot.name.ifBlank { "Volume" }
+            val typeLabel = if (isUsb) "$label USB" else "$label SD"
             addLocation(
                 kind = if (isUsb) StorageKind.USB else StorageKind.SD,
                 typeLabel = typeLabel,
-                name = name,
+                name = volumeRoot.absolutePath,
                 directory = volumeRoot
             )
         }
 
     return results
+}
+
+private fun resolveStorageVolumeRoot(volume: StorageVolume): File? {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        volume.directory?.let { directory ->
+            if (directory.exists() && directory.isDirectory) return directory
+        }
+    }
+    runCatching {
+        val method = StorageVolume::class.java.getMethod("getPathFile")
+        (method.invoke(volume) as? File)?.let { file ->
+            if (file.exists() && file.isDirectory) return file
+        }
+    }
+    runCatching {
+        val method = StorageVolume::class.java.getMethod("getPath")
+        val path = method.invoke(volume) as? String
+        path?.let { File(it) }?.let { file ->
+            if (file.exists() && file.isDirectory) return file
+        }
+    }
+    return null
 }
 
 private fun resolveVolumeRoot(appSpecificDir: File): File? {

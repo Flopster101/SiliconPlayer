@@ -55,6 +55,13 @@ internal fun AudioPluginsRouteContent(
     SettingsSectionLabel("Registered cores")
 
     val registeredPluginNames = remember { NativeBridge.getRegisteredDecoderNames().toList() }
+    val pluginEnabledState = remember(registeredPluginNames) {
+        mutableStateMapOf<String, Boolean>().apply {
+            registeredPluginNames.forEach { pluginName ->
+                this[pluginName] = NativeBridge.isDecoderEnabled(pluginName)
+            }
+        }
+    }
     val defaultPluginOrder = remember(registeredPluginNames) {
         registeredPluginNames.sortedBy { pluginName ->
             NativeBridge.getDecoderDefaultPriority(pluginName)
@@ -138,7 +145,7 @@ internal fun AudioPluginsRouteContent(
         Column(modifier = Modifier.fillMaxWidth()) {
             orderedPluginNames.forEachIndexed { index, pluginName ->
                 key(pluginName) {
-                    val isEnabled = remember(pluginName) { NativeBridge.isDecoderEnabled(pluginName) }
+                    val isEnabled = pluginEnabledState[pluginName] ?: NativeBridge.isDecoderEnabled(pluginName)
                     val priority = index
                     val isDraggedRow = draggingPluginName == pluginName
 
@@ -154,6 +161,7 @@ internal fun AudioPluginsRouteContent(
                             priority = priority,
                             enabled = isEnabled,
                             onEnabledChanged = { enabled ->
+                                pluginEnabledState[pluginName] = enabled
                                 onPluginEnabledChanged(pluginName, enabled)
                             },
                             onClick = {
@@ -225,7 +233,7 @@ internal fun AudioPluginsRouteContent(
             } else {
                 NativeBridge.getDecoderPriority(draggedName)
             }
-            val draggedEnabled = NativeBridge.isDecoderEnabled(draggedName)
+            val draggedEnabled = pluginEnabledState[draggedName] ?: NativeBridge.isDecoderEnabled(draggedName)
             PluginListItemCard(
                 pluginName = draggedName,
                 priority = draggedPriority,

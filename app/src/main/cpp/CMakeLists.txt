@@ -20,6 +20,12 @@ add_library(
         SHARED
         SiliconPlayerNative.cpp
         AudioEngine.cpp
+        AudioEngineStream.cpp
+        AudioEngineRender.cpp
+        AudioEngineCoreOptions.cpp
+        AudioEngineMetadata.cpp
+        AudioEngineTransport.cpp
+        AudioEngineEffects.cpp
         decoders/sid/ReSidBuilder.cpp
         decoders/sid/ReSidEmu.cpp
         decoders/FFmpegDecoder.cpp

@@ -46,6 +46,11 @@ public:
     int getCurrentSpeedInfo();
     int getInstrumentCountInfo();
     std::string getInstrumentNamesInfo();
+    std::vector<std::string> getToggleChannelNames() override;
+    std::vector<uint8_t> getToggleChannelAvailability() override;
+    void setToggleChannelMuted(int channelIndex, bool enabled) override;
+    bool getToggleChannelMuted(int channelIndex) const override;
+    void clearToggleChannelMutes() override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override;
@@ -79,8 +84,12 @@ private:
     std::string artist;
     std::string composer;
     std::string genre;
+    std::vector<std::string> toggleChannelNames;
+    std::vector<bool> toggleChannelMuted;
 
     void closeInternalLocked();
+    void syncToggleChannelsLocked();
+    void applyToggleMutesLocked();
 };
 
 #endif // SILICONPLAYER_ADPLUGDECODER_H

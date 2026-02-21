@@ -27,8 +27,95 @@ public:
         if (n == 1) {
             // Auto-promote to dual-chip output once a track actually uses chip 1.
             settype(TYPE_DUAL_OPL2);
+            dualChipActive_ = true;
         }
     }
+
+    void write(int reg, int val) override {
+        const int chip = getchip();
+        const auto mapping = mapTotalLevelRegister(reg);
+        if (mapping.valid && chip >= 0 && chip < kChipCount) {
+            rawTotalLevel_[chip][mapping.channel][mapping.slot] = val;
+            const bool muted = channelMuted_[chip][mapping.channel];
+            const int effective = muted ? forceMuteTotalLevel(val) : val;
+            CEmuopl::write(reg, effective);
+            return;
+        }
+        CEmuopl::write(reg, val);
+    }
+
+    int getVoiceCount() const {
+        return dualChipActive_ ? 18 : 9;
+    }
+
+    void setVoiceMuted(int voiceIndex, bool muted) {
+        if (voiceIndex < 0 || voiceIndex >= 18) {
+            return;
+        }
+        const int chip = voiceIndex / 9;
+        const int channel = voiceIndex % 9;
+        channelMuted_[chip][channel] = muted;
+        applyChannelTotalLevel(chip, channel);
+    }
+
+    bool getVoiceMuted(int voiceIndex) const {
+        if (voiceIndex < 0 || voiceIndex >= 18) {
+            return false;
+        }
+        const int chip = voiceIndex / 9;
+        const int channel = voiceIndex % 9;
+        return channelMuted_[chip][channel];
+    }
+
+private:
+    static constexpr int kChipCount = 2;
+    static constexpr int kChannelCountPerChip = 9;
+    static constexpr int kOpTable[kChannelCountPerChip] = { 0, 1, 2, 8, 9, 10, 16, 17, 18 };
+
+    struct RegMapping {
+        bool valid = false;
+        int channel = 0;
+        int slot = 0;
+    };
+
+    static RegMapping mapTotalLevelRegister(int reg) {
+        for (int channel = 0; channel < kChannelCountPerChip; ++channel) {
+            const int op = kOpTable[channel];
+            if (reg == (0x40 + op)) {
+                return { true, channel, 0 };
+            }
+            if (reg == (0x43 + op)) {
+                return { true, channel, 1 };
+            }
+        }
+        return {};
+    }
+
+    static int forceMuteTotalLevel(int rawValue) {
+        return (rawValue & 0xC0) | 0x3F;
+    }
+
+    void applyChannelTotalLevel(int chip, int channel) {
+        if (chip < 0 || chip >= kChipCount || channel < 0 || channel >= kChannelCountPerChip) {
+            return;
+        }
+        const int previousChip = getchip();
+        CEmuopl::setchip(chip);
+
+        const int op = kOpTable[channel];
+        for (int slot = 0; slot < 2; ++slot) {
+            const int raw = rawTotalLevel_[chip][channel][slot];
+            const int reg = (slot == 0) ? (0x40 + op) : (0x43 + op);
+            const int effective = channelMuted_[chip][channel] ? forceMuteTotalLevel(raw) : raw;
+            CEmuopl::write(reg, effective);
+        }
+
+        CEmuopl::setchip(previousChip);
+    }
+
+    bool dualChipActive_ = false;
+    int rawTotalLevel_[kChipCount][kChannelCountPerChip][2] {};
+    bool channelMuted_[kChipCount][kChannelCountPerChip] {};
 };
 
 std::string safeString(const std::string& value) {
@@ -79,6 +166,8 @@ bool AdPlugDecoder::open(const char* path) {
     playbackPositionSeconds = 0.0;
     reachedEnd = false;
     pcmScratch.clear();
+    syncToggleChannelsLocked();
+    applyToggleMutesLocked();
     return true;
 }
 
@@ -98,6 +187,8 @@ void AdPlugDecoder::closeInternalLocked() {
     durationSeconds = 0.0;
     playbackPositionSeconds = 0.0;
     reachedEnd = false;
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
 }
 
 void AdPlugDecoder::close() {
@@ -111,6 +202,7 @@ int AdPlugDecoder::read(float* buffer, int numFrames) {
     if (!player || !opl || !buffer || numFrames <= 0) {
         return 0;
     }
+    syncToggleChannelsLocked();
 
     const int mode = repeatMode.load();
     const bool hasReliableDuration = durationSeconds >= 1.0;
@@ -414,6 +506,88 @@ std::string AdPlugDecoder::getInstrumentNamesInfo() {
         names += instrumentName;
     }
     return names;
+}
+
+std::vector<std::string> AdPlugDecoder::getToggleChannelNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    return toggleChannelNames;
+}
+
+std::vector<uint8_t> AdPlugDecoder::getToggleChannelAvailability() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    return std::vector<uint8_t>(toggleChannelNames.size(), 1u);
+}
+
+void AdPlugDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+    toggleChannelMuted[static_cast<size_t>(channelIndex)] = enabled;
+    applyToggleMutesLocked();
+}
+
+bool AdPlugDecoder::getToggleChannelMuted(int channelIndex) const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return false;
+    }
+    return toggleChannelMuted[static_cast<size_t>(channelIndex)];
+}
+
+void AdPlugDecoder::clearToggleChannelMutes() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (toggleChannelMuted.empty()) {
+        return;
+    }
+    std::fill(toggleChannelMuted.begin(), toggleChannelMuted.end(), false);
+    applyToggleMutesLocked();
+}
+
+void AdPlugDecoder::syncToggleChannelsLocked() {
+    auto* trackingOpl = dynamic_cast<TrackingEmuopl*>(opl.get());
+    const int voiceCount = trackingOpl ? trackingOpl->getVoiceCount() : 9;
+
+    if (voiceCount == static_cast<int>(toggleChannelNames.size()) &&
+        voiceCount == static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+
+    std::vector<bool> previousMuted = toggleChannelMuted;
+    toggleChannelNames.clear();
+    toggleChannelNames.reserve(static_cast<size_t>(voiceCount));
+    toggleChannelMuted.assign(static_cast<size_t>(voiceCount), false);
+
+    for (int i = 0; i < voiceCount; ++i) {
+        if (voiceCount > 9) {
+            const int chipIndex = i / 9;
+            const int chipChannel = (i % 9) + 1;
+            const char chipLabel = static_cast<char>('A' + chipIndex);
+            toggleChannelNames.push_back(
+                    "Chip " + std::string(1, chipLabel) + " Ch " + std::to_string(chipChannel)
+            );
+        } else {
+            toggleChannelNames.push_back("OPL Ch " + std::to_string(i + 1));
+        }
+        if (i < static_cast<int>(previousMuted.size())) {
+            toggleChannelMuted[static_cast<size_t>(i)] = previousMuted[static_cast<size_t>(i)];
+        }
+    }
+
+    applyToggleMutesLocked();
+}
+
+void AdPlugDecoder::applyToggleMutesLocked() {
+    auto* trackingOpl = dynamic_cast<TrackingEmuopl*>(opl.get());
+    if (!trackingOpl) {
+        return;
+    }
+    for (int i = 0; i < static_cast<int>(toggleChannelMuted.size()); ++i) {
+        trackingOpl->setVoiceMuted(i, toggleChannelMuted[static_cast<size_t>(i)]);
+    }
 }
 
 void AdPlugDecoder::setRepeatMode(int mode) {

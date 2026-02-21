@@ -37,6 +37,7 @@ add_library(
         decoders/LazyUsf2Decoder.cpp
         decoders/Vio2sfDecoder.cpp
         decoders/Sc68Decoder.cpp
+        decoders/AdPlugDecoder.cpp
         decoders/CPConvStub.c
 )
 
@@ -120,6 +121,17 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
     add_library(libunice68 STATIC IMPORTED)
     set_target_properties(libunice68 PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libunice68.a")
 
+    # Import adplug stack (Static)
+    add_library(libadplug STATIC IMPORTED)
+    set_target_properties(libadplug PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libadplug.a")
+
+    set(LIBBINIO_LOCATION "${PREBUILT_DIR}/lib/libbinio.a")
+    if (NOT EXISTS "${LIBBINIO_LOCATION}")
+        set(LIBBINIO_LOCATION "${PREBUILT_DIR}/lib/liblibbinio.a")
+    endif()
+    add_library(libbinio STATIC IMPORTED)
+    set_target_properties(libbinio PROPERTIES IMPORTED_LOCATION "${LIBBINIO_LOCATION}")
+
     # Import libsidplayfp + libresidfp (Static)
     add_library(libsidplayfp STATIC IMPORTED)
     set_target_properties(libsidplayfp PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libsidplayfp.a")
@@ -163,10 +175,13 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
             libsc68
             libfile68
             libunice68
+            libadplug
+            libbinio
             libsidplayfp
             libresidfp
             libresid
             z # zlib is needed for openmpt/ffmpeg/vgm
+            m # libbinio can require libm symbols on some toolchains
     )
 
     if (HAS_OPENSSL_PREBUILT)

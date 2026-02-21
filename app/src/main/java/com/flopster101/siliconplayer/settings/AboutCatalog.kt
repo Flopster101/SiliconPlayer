@@ -145,6 +145,22 @@ internal object AboutCatalog {
                 "Integrated as a native decoder using libsc68 + file68 + unice68.",
                 "Current baseline targets playback, seek, subtunes, and core metadata fields."
             )
+        ),
+        AboutEntity(
+            id = "core.adplug",
+            kind = AboutEntityKind.Core,
+            name = "AdPlug",
+            description = "OPL2/OPL3 replayer core for many DOS-era AdLib and OPL music formats.",
+            author = "Simon Peter and AdPlug contributors",
+            license = "LGPL-2.1-or-later",
+            links = listOf(
+                AboutEntityLink("Project", "https://adplug.github.io/"),
+                AboutEntityLink("Source", "https://github.com/adplug/adplug")
+            ),
+            integrationNotes = listOf(
+                "Integrated with EmuOPL rendering for baseline playback and seek support.",
+                "Current baseline focuses on playback compatibility and core metadata."
+            )
         )
     )
 
@@ -215,6 +231,21 @@ internal object AboutCatalog {
             links = listOf(
                 AboutEntityLink("Source", "https://github.com/openssl/openssl")
             )
+        ),
+        AboutEntity(
+            id = "lib.libbinio",
+            kind = AboutEntityKind.Library,
+            name = "libbinio",
+            description = "Binary I/O support library used by AdPlug loaders.",
+            author = "Simon Peter and libbinio contributors",
+            license = "LGPL-2.1-or-later",
+            links = listOf(
+                AboutEntityLink("Project", "https://adplug.github.io/libbinio/"),
+                AboutEntityLink("Source", "https://github.com/adplug/libbinio")
+            ),
+            integrationNotes = listOf(
+                "Linked as a static dependency for the AdPlug core."
+            )
         )
     )
 
@@ -226,7 +257,8 @@ internal object AboutCatalog {
         "LibSIDPlayFP" to "core.libsidplayfp",
         "LazyUSF2" to "core.lazyusf2",
         "Vio2SF" to "core.vio2sf",
-        "SC68" to "core.sc68"
+        "SC68" to "core.sc68",
+        "AdPlug" to "core.adplug"
     )
 
     private val entityById: Map<String, AboutEntity> = (coreEntries + libraryEntries).associateBy { it.id }

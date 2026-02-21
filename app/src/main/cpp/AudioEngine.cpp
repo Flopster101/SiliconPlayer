@@ -9,6 +9,7 @@
 #include "decoders/LazyUsf2Decoder.h"
 #include "decoders/Vio2sfDecoder.h"
 #include "decoders/Sc68Decoder.h"
+#include "decoders/AdPlugDecoder.h"
 
 namespace {
     struct DecoderRegistration {
@@ -44,6 +45,10 @@ namespace {
             DecoderRegistry::getInstance().registerDecoder("SC68", Sc68Decoder::getSupportedExtensions(), []() {
                 return std::make_unique<Sc68Decoder>();
             }, 11);
+
+            DecoderRegistry::getInstance().registerDecoder("AdPlug", AdPlugDecoder::getSupportedExtensions(), []() {
+                return std::make_unique<AdPlugDecoder>();
+            }, 12);
         }
     };
 

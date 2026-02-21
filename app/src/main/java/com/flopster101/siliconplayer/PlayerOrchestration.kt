@@ -142,6 +142,7 @@ internal fun pluginNameForCoreName(coreName: String?): String? {
         "lazyusf2", "lazyusf", "usf" -> "LazyUSF2"
         "vio2sf", "2sf", "mini2sf" -> "Vio2SF"
         "sc68", "sndh" -> "SC68"
+        "adplug", "opl" -> "AdPlug"
         else -> null
     }
 }

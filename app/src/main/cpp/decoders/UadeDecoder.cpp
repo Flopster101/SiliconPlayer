@@ -65,6 +65,30 @@ bool UadeDecoder::open(const char* path) {
     }
 
     sourcePath = path;
+    state = createStateLocked();
+    if (!state) {
+        LOGE("uade_new_state failed");
+        return false;
+    }
+
+    const int playRc = uade_play(sourcePath.c_str(), -1, state);
+    if (playRc != 1) {
+        LOGE("uade_play failed for %s (rc=%d)", sourcePath.c_str(), playRc);
+        closeInternalLocked();
+        return false;
+    }
+
+    sampleRateHz = std::max(8000, uade_get_sampling_rate(state));
+    channels = 2;
+    bitDepth = 16;
+    renderedFrames = 0;
+    playbackPositionSeconds = 0.0;
+    pcmScratch.clear();
+    refreshSongInfoLocked();
+    return true;
+}
+
+uade_state* UadeDecoder::createStateLocked() {
     uade_config* config = nullptr;
     const std::string runtimeBaseDir = getRuntimeBaseDir();
     const std::string runtimeUadeCorePath = getRuntimeUadeCorePath();
@@ -87,6 +111,10 @@ bool UadeDecoder::open(const char* path) {
             uade_config_set_option(config, UC_UADECORE_FILE, uadeCorePath.c_str());
             uade_config_set_option(config, UC_SCORE_FILE, scorePath.c_str());
             uade_config_set_option(config, UC_UAE_CONFIG_FILE, uaercPath.c_str());
+            uade_config_set_option(config, UC_ONE_SUBSONG, nullptr);
+            // Keep UADE running internally; app repeat modes enforce end/restart semantics.
+            uade_config_set_option(config, UC_NO_EP_END, nullptr);
+            uade_config_set_option(config, UC_DISABLE_TIMEOUTS, nullptr);
             if (coreExecCheck != 0 || scoreReadCheck != 0 || uaercReadCheck != 0) {
                 LOGE(
                         "UADE runtime assets missing/inaccessible: base=%s core=%s "
@@ -109,30 +137,12 @@ bool UadeDecoder::open(const char* path) {
         LOGE("UADE runtime base dir is not configured; default compiled paths will be used");
     }
 
-    state = uade_new_state(config);
+    uade_state* created = uade_new_state(config);
     if (config) {
         std::free(config);
         config = nullptr;
     }
-    if (!state) {
-        LOGE("uade_new_state failed");
-        return false;
-    }
-
-    const int playRc = uade_play(sourcePath.c_str(), -1, state);
-    if (playRc != 1) {
-        LOGE("uade_play failed for %s (rc=%d)", sourcePath.c_str(), playRc);
-        closeInternalLocked();
-        return false;
-    }
-
-    sampleRateHz = std::max(8000, uade_get_sampling_rate(state));
-    channels = 2;
-    bitDepth = 16;
-    playbackPositionSeconds = 0.0;
-    pcmScratch.clear();
-    refreshSongInfoLocked();
-    return true;
+    return created;
 }
 
 void UadeDecoder::closeInternalLocked() {
@@ -154,6 +164,7 @@ void UadeDecoder::closeInternalLocked() {
     currentSubsong = 0;
     durationReliable.store(false);
     durationSeconds = 0.0;
+    renderedFrames = 0;
     playbackPositionSeconds = 0.0;
     pcmScratch.clear();
 }
@@ -185,26 +196,14 @@ bool UadeDecoder::refreshSongInfoLocked() {
     composer = artist;
     genre = safeString(info->formatname);
 
-    durationSeconds = info->duration;
-    durationReliable.store(durationSeconds > 0.0 && std::isfinite(durationSeconds));
+    const double reportedDuration = info->duration;
+    const bool hasReliableDuration =
+            reportedDuration > 0.0 && std::isfinite(reportedDuration);
+    durationReliable.store(hasReliableDuration);
+    durationSeconds = hasReliableDuration
+            ? reportedDuration
+            : ((unknownDurationSeconds > 0) ? static_cast<double>(unknownDurationSeconds) : 0.0);
 
-    return true;
-}
-
-bool UadeDecoder::restartCurrentSubsongLocked() {
-    if (!state || sourcePath.empty()) {
-        return false;
-    }
-    const int restartSubsong = currentSubsong;
-    if (uade_stop(state) < 0) {
-        return false;
-    }
-    const int playRc = uade_play(sourcePath.c_str(), restartSubsong, state);
-    if (playRc != 1) {
-        return false;
-    }
-    playbackPositionSeconds = 0.0;
-    refreshSongInfoLocked();
     return true;
 }
 
@@ -215,13 +214,26 @@ int UadeDecoder::read(float* buffer, int numFrames) {
         return 0;
     }
 
-    const int requestedBytes = numFrames * UADE_BYTES_PER_FRAME;
+    int framesToRead = numFrames;
+    const int mode = repeatMode.load();
+    if (mode != 2 && durationSeconds > 0.0 && sampleRateHz > 0) {
+        const int64_t durationFrames = static_cast<int64_t>(
+                std::llround(durationSeconds * static_cast<double>(sampleRateHz))
+        );
+        const int64_t remaining = durationFrames - renderedFrames;
+        if (remaining <= 0) {
+            return 0;
+        }
+        framesToRead = static_cast<int>(std::min<int64_t>(framesToRead, remaining));
+    }
+
+    const int requestedBytes = framesToRead * UADE_BYTES_PER_FRAME;
     if (requestedBytes <= 0) {
         return 0;
     }
 
-    if (static_cast<int>(pcmScratch.size()) < numFrames * channels) {
-        pcmScratch.resize(numFrames * channels);
+    if (static_cast<int>(pcmScratch.size()) < framesToRead * channels) {
+        pcmScratch.resize(framesToRead * channels);
     }
 
     ssize_t bytesRead = uade_read(pcmScratch.data(), static_cast<size_t>(requestedBytes), state);
@@ -231,18 +243,22 @@ int UadeDecoder::read(float* buffer, int numFrames) {
     }
 
     if (bytesRead == 0) {
-        const int mode = repeatMode.load();
-        if ((mode == 1 || mode == 2) && restartCurrentSubsongLocked()) {
-            bytesRead = uade_read(pcmScratch.data(), static_cast<size_t>(requestedBytes), state);
-            if (bytesRead <= 0) {
-                return 0;
+        if (mode == 2) {
+            // LP mode is core-driven: never force decoder-level wrap/seek-back.
+            constexpr int kCoreContinuationReadRetries = 64;
+            for (int retry = 0; retry < kCoreContinuationReadRetries; ++retry) {
+                bytesRead = uade_read(pcmScratch.data(), static_cast<size_t>(requestedBytes), state);
+                if (bytesRead != 0) break;
             }
-        } else {
+        }
+
+        if (bytesRead <= 0) {
             return 0;
         }
     }
 
     const int framesRead = static_cast<int>(bytesRead / UADE_BYTES_PER_FRAME);
+    renderedFrames += framesRead;
     const int samplesRead = framesRead * channels;
     for (int i = 0; i < samplesRead; ++i) {
         buffer[i] = static_cast<float>(pcmScratch[i]) / 32768.0f;
@@ -252,7 +268,7 @@ int UadeDecoder::read(float* buffer, int numFrames) {
     if (std::isfinite(reportedPosition) && reportedPosition >= 0.0) {
         playbackPositionSeconds = reportedPosition;
     } else {
-        playbackPositionSeconds += static_cast<double>(framesRead) / static_cast<double>(sampleRateHz);
+        playbackPositionSeconds = static_cast<double>(renderedFrames) / static_cast<double>(sampleRateHz);
     }
     refreshSongInfoLocked();
     return framesRead;
@@ -266,7 +282,10 @@ void UadeDecoder::seek(double seconds) {
     }
 
     const double target = std::max(0.0, seconds);
-    if (uade_seek(UADE_SEEK_SUBSONG_RELATIVE, target, -1, state) == 0) {
+    const int seekSubsong = (currentSubsong >= 0) ? currentSubsong : -1;
+    if (uade_seek(UADE_SEEK_SUBSONG_RELATIVE, target, seekSubsong, state) == 0) {
+        renderedFrames = static_cast<int64_t>(std::llround(target * static_cast<double>(sampleRateHz)));
+        if (renderedFrames < 0) renderedFrames = 0;
         playbackPositionSeconds = target;
     }
 }
@@ -275,7 +294,7 @@ double UadeDecoder::getDuration() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (!state) return 0.0;
     refreshSongInfoLocked();
-    return durationReliable.load() ? durationSeconds : 0.0;
+    return durationSeconds > 0.0 ? durationSeconds : 0.0;
 }
 
 int UadeDecoder::getSampleRate() {
@@ -323,6 +342,7 @@ bool UadeDecoder::selectSubtune(int index) {
     if (playRc != 1) return false;
 
     playbackPositionSeconds = 0.0;
+    renderedFrames = 0;
     refreshSongInfoLocked();
     return true;
 }
@@ -345,7 +365,7 @@ double UadeDecoder::getSubtuneDurationSeconds(int index) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     const int count = (subtuneMax >= subtuneMin) ? (subtuneMax - subtuneMin + 1) : 1;
     if (index < 0 || index >= count) return 0.0;
-    return durationReliable.load() ? durationSeconds : 0.0;
+    return durationSeconds > 0.0 ? durationSeconds : 0.0;
 }
 
 std::string UadeDecoder::getTitle() {
@@ -366,6 +386,24 @@ std::string UadeDecoder::getComposer() {
 std::string UadeDecoder::getGenre() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return genre;
+}
+
+void UadeDecoder::setOption(const char* name, const char* value) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!name || !value) {
+        return;
+    }
+
+    if (std::strcmp(name, "uade.unknown_duration_seconds") == 0) {
+        char* end = nullptr;
+        const long parsed = std::strtol(value, &end, 10);
+        if (end != value && (!end || *end == '\0')) {
+            unknownDurationSeconds = std::clamp(static_cast<int>(parsed), 1, 86400);
+        }
+        if (!durationReliable.load()) {
+            durationSeconds = static_cast<double>(unknownDurationSeconds);
+        }
+    }
 }
 
 void UadeDecoder::setRepeatMode(int mode) {
@@ -392,6 +430,8 @@ double UadeDecoder::getPlaybackPositionSeconds() {
     const double reportedPosition = uade_get_time_position(UADE_SEEK_SUBSONG_RELATIVE, state);
     if (std::isfinite(reportedPosition) && reportedPosition >= 0.0) {
         playbackPositionSeconds = reportedPosition;
+    } else if (sampleRateHz > 0) {
+        playbackPositionSeconds = static_cast<double>(renderedFrames) / static_cast<double>(sampleRateHz);
     }
     return std::max(0.0, playbackPositionSeconds);
 }

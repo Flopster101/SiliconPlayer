@@ -508,6 +508,13 @@ internal fun AppNavigationCoreEffects(
             policy = CoreOptionApplyPolicy.Live,
             optionLabel = "Unknown track duration"
         )
+        applyCoreOptionWithPolicy(
+            coreName = "UADE",
+            optionName = UadeOptionKeys.UNKNOWN_DURATION_SECONDS,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Unknown track duration"
+        )
     }
 
     LaunchedEffect(vgmPlayLoopCount) {

@@ -37,6 +37,7 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    void setOption(const char* name, const char* value) override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override;
@@ -61,14 +62,16 @@ private:
     int subtuneMax = 0;
     int currentSubsong = 0;
     std::atomic<bool> durationReliable { false };
+    int unknownDurationSeconds = 0;
     double durationSeconds = 0.0;
     double playbackPositionSeconds = 0.0;
+    int64_t renderedFrames = 0;
     std::atomic<int> repeatMode { 0 };
     std::vector<int16_t> pcmScratch;
 
     void closeInternalLocked();
+    uade_state* createStateLocked();
     bool refreshSongInfoLocked();
-    bool restartCurrentSubsongLocked();
 };
 
 #endif // SILICONPLAYER_UADEDECODER_H

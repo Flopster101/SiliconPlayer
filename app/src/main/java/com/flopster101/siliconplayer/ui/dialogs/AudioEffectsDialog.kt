@@ -43,7 +43,7 @@ fun AudioEffectsDialog(
                     )
 
                     VolumeSliderRow(
-                        label = "Plugin Volume",
+                        label = "Core Volume",
                         valueDb = pluginVolumeDb,
                         onValueChange = onPluginVolumeChange,
                         enabled = hasActiveCore

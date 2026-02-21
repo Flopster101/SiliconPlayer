@@ -682,7 +682,7 @@ internal fun RecentTrackSummaryText(
     extensionLabel: String,
     isArchiveSource: Boolean
 ) {
-    val fallback = file.nameWithoutExtension.ifBlank { file.name }
+    val fallback = inferredDisplayTitleForName(file.name)
     val display = remember(file.absolutePath, cachedTitle, cachedArtist) {
         buildRecentTrackDisplay(
             title = cachedTitle?.trim().orEmpty(),

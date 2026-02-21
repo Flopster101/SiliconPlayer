@@ -92,6 +92,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import android.view.MotionEvent
 import com.flopster101.siliconplayer.AppDefaults
+import com.flopster101.siliconplayer.inferredDisplayTitleForName
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.R
 import com.flopster101.siliconplayer.RepeatMode
@@ -552,7 +553,7 @@ fun PlayerScreen(
 
     val hasTrack = file != null
     val displayTitle = title.ifBlank {
-        if (file != null) file.nameWithoutExtension.ifBlank { file.name } else "No track selected"
+        if (file != null) inferredDisplayTitleForName(file.name) else "No track selected"
     }
     val displayArtist = artist.ifBlank { if (hasTrack) "Unknown Artist" else "Tap a file to play" }
     val displayFilename = file?.let { toDisplayFilename(it) } ?: "No file loaded"

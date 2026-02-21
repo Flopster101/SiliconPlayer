@@ -44,7 +44,9 @@ internal fun syncPlaybackServiceForState(
     PlaybackService.syncFromUi(
         context = context,
         path = sourceId ?: selectedFile?.absolutePath,
-        title = metadataTitle.ifBlank { selectedFile?.nameWithoutExtension.orEmpty() },
+        title = metadataTitle.ifBlank {
+            selectedFile?.name?.let(::inferredDisplayTitleForName).orEmpty()
+        },
         artist = metadataArtist.ifBlank { "Unknown Artist" },
         durationSeconds = durationSeconds,
         positionSeconds = positionSeconds,

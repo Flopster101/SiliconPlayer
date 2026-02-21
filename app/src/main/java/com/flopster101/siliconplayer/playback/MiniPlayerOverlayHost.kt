@@ -204,7 +204,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
             MiniPlayerBar(
                 file = selectedFile,
                 title = metadataTitle.ifBlank {
-                    selectedFile?.nameWithoutExtension?.ifBlank { selectedFile.name }
+                    selectedFile?.name?.let(::inferredDisplayTitleForName)
                         ?: "No track selected"
                 },
                 artist = metadataArtist.ifBlank {

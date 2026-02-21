@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.vectorResource
@@ -110,6 +111,7 @@ internal fun MiniPlayerBar(
     artist: String,
     artwork: ImageBitmap?,
     noArtworkIcon: ImageVector,
+    artworkCornerRadiusDp: Int,
     isPlaying: Boolean,
     playbackStartInProgress: Boolean,
     seekInProgress: Boolean,
@@ -149,6 +151,9 @@ internal fun MiniPlayerBar(
     val screenHeightPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val previewDistancePx = screenHeightPx * 0.72f
     var upwardDragPx by remember { mutableFloatStateOf(0f) }
+    val artworkCornerRatio = artworkCornerRadiusDp.coerceIn(0, 48) / 48f
+    val miniArtworkSize = 46.dp
+    val artworkCornerRadius = miniArtworkSize * (0.5f * artworkCornerRatio)
 
     Surface(
         modifier = modifier,
@@ -191,8 +196,10 @@ internal fun MiniPlayerBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    modifier = Modifier.size(46.dp),
-                    shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .size(miniArtworkSize)
+                        .clip(androidx.compose.foundation.shape.RoundedCornerShape(artworkCornerRadius)),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(artworkCornerRadius),
                     color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     if (artwork != null) {

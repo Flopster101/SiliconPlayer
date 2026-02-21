@@ -212,6 +212,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 },
                 artwork = artworkBitmap,
                 noArtworkIcon = placeholderArtworkIconForFile(selectedFile, decoderName),
+                artworkCornerRadiusDp = playerArtworkCornerRadiusDp,
                 isPlaying = isPlaying,
                 playbackStartInProgress = playbackStartInProgress,
                 seekInProgress = seekUiBusy,

@@ -198,6 +198,7 @@ private:
     AAudioStream *stream = nullptr;
     int streamSampleRate = 48000;
     int streamChannelCount = 2;
+    bool streamStartupPrerollPending = true;
     int outputBackendPreference = 0; // 0 auto, 1 aaudio, 2 opensl, 3 audiotrack
     int outputPerformanceMode = 2; // 0 auto, 1 low-latency, 2 none, 3 power-saving
     int outputBufferPreset = 0; // 0 auto, 1 small, 2 medium, 3 large

@@ -38,6 +38,7 @@ void AudioEngine::createStream() {
     if (result != AAUDIO_OK) {
         LOGE("Failed to open stream: %s", AAudio_convertResultToText(result));
     } else {
+        streamStartupPrerollPending = true;
         streamSampleRate = AAudioStream_getSampleRate(stream);
         streamChannelCount = AAudioStream_getChannelCount(stream);
         if (streamSampleRate <= 0) streamSampleRate = 48000;

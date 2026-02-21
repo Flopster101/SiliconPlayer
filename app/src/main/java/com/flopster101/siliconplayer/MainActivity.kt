@@ -1490,6 +1490,88 @@ private fun AppNavigation(
 
     val settingsRouteContent: @Composable (androidx.compose.foundation.layout.PaddingValues) -> Unit = { mainPadding ->
         AppNavigationSettingsRouteSection(mainPadding = mainPadding) {
+            val settingsPluginCoreActions = SettingsPluginCoreActions(
+                onOpenVgmPlayChipSettings = {
+                    openSettingsRoute(SettingsRoute.PluginVgmPlayChipSettings, false)
+                },
+                onPluginSelected = { pluginName ->
+                    selectedPluginName = pluginName
+                    openSettingsRoute(SettingsRoute.PluginDetail, false)
+                },
+                onPluginEnabledChanged = { pluginName, enabled ->
+                    NativeBridge.setDecoderEnabled(pluginName, enabled)
+                    savePluginConfiguration(prefs, pluginName)
+                },
+                onPluginPriorityChanged = { pluginName, priority ->
+                    NativeBridge.setDecoderPriority(pluginName, priority)
+                    normalizeDecoderPriorityValues()
+                    persistAllPluginConfigurations(prefs)
+                },
+                onPluginPriorityOrderChanged = { orderedPluginNames ->
+                    applyDecoderPriorityOrder(orderedPluginNames, prefs)
+                },
+                onPluginExtensionsChanged = { pluginName, extensions ->
+                    NativeBridge.setDecoderEnabledExtensions(pluginName, extensions)
+                    savePluginConfiguration(prefs, pluginName)
+                },
+                onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
+                onFfmpegGaplessRepeatTrackChanged = { ffmpegGaplessRepeatTrack = it },
+                onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it },
+                onVgmPlaySampleRateChanged = { vgmPlayCoreSampleRateHz = it },
+                onGmeSampleRateChanged = { gmeCoreSampleRateHz = it },
+                onSidPlayFpSampleRateChanged = { sidPlayFpCoreSampleRateHz = it },
+                onLazyUsf2SampleRateChanged = { lazyUsf2CoreSampleRateHz = it },
+                onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
+                onVio2sfInterpolationQualityChanged = { vio2sfInterpolationQuality = it },
+                onSc68SamplingRateHzChanged = { sc68SamplingRateHz = it },
+                onSc68AsidChanged = { sc68Asid = it },
+                onSc68DefaultTimeSecondsChanged = { sc68DefaultTimeSeconds = it },
+                onSc68YmEngineChanged = { sc68YmEngine = it },
+                onSc68YmVolModelChanged = { sc68YmVolModel = it },
+                onSc68AmigaFilterChanged = { sc68AmigaFilter = it },
+                onSc68AmigaBlendChanged = { sc68AmigaBlend = it },
+                onSc68AmigaClockChanged = { sc68AmigaClock = it },
+                onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
+                onSidPlayFpClockModeChanged = { sidPlayFpClockMode = it },
+                onSidPlayFpSidModelModeChanged = { sidPlayFpSidModelMode = it },
+                onSidPlayFpFilter6581EnabledChanged = { sidPlayFpFilter6581Enabled = it },
+                onSidPlayFpFilter8580EnabledChanged = { sidPlayFpFilter8580Enabled = it },
+                onSidPlayFpDigiBoost8580Changed = { sidPlayFpDigiBoost8580 = it },
+                onSidPlayFpFilterCurve6581PercentChanged = { sidPlayFpFilterCurve6581Percent = it },
+                onSidPlayFpFilterRange6581PercentChanged = { sidPlayFpFilterRange6581Percent = it },
+                onSidPlayFpFilterCurve8580PercentChanged = { sidPlayFpFilterCurve8580Percent = it },
+                onSidPlayFpReSidFpFastSamplingChanged = { sidPlayFpReSidFpFastSampling = it },
+                onSidPlayFpReSidFpCombinedWaveformsStrengthChanged = {
+                    sidPlayFpReSidFpCombinedWaveformsStrength = it
+                },
+                onGmeTempoPercentChanged = { gmeTempoPercent = it },
+                onGmeStereoSeparationPercentChanged = { gmeStereoSeparationPercent = it },
+                onGmeEchoEnabledChanged = { gmeEchoEnabled = it },
+                onGmeAccuracyEnabledChanged = { gmeAccuracyEnabled = it },
+                onGmeEqTrebleDecibelChanged = { gmeEqTrebleDecibel = it },
+                onGmeEqBassHzChanged = { gmeEqBassHz = it },
+                onGmeSpcUseBuiltInFadeChanged = { gmeSpcUseBuiltInFade = it },
+                onGmeSpcInterpolationChanged = { gmeSpcInterpolation = it },
+                onGmeSpcUseNativeSampleRateChanged = { gmeSpcUseNativeSampleRate = it },
+                onVgmPlayLoopCountChanged = { vgmPlayLoopCount = it },
+                onVgmPlayAllowNonLoopingLoopChanged = { vgmPlayAllowNonLoopingLoop = it },
+                onVgmPlayVsyncRateChanged = { vgmPlayVsyncRate = it },
+                onVgmPlayResampleModeChanged = { vgmPlayResampleMode = it },
+                onVgmPlayChipSampleModeChanged = { vgmPlayChipSampleMode = it },
+                onVgmPlayChipSampleRateChanged = { vgmPlayChipSampleRate = it },
+                onVgmPlayChipCoreChanged = { chipKey, selectedValue ->
+                    vgmPlayChipCoreSelections = vgmPlayChipCoreSelections + (chipKey to selectedValue)
+                },
+                onOpenMptStereoSeparationPercentChanged = { openMptStereoSeparationPercent = it },
+                onOpenMptStereoSeparationAmigaPercentChanged = { openMptStereoSeparationAmigaPercent = it },
+                onOpenMptInterpolationFilterLengthChanged = { openMptInterpolationFilterLength = it },
+                onOpenMptAmigaResamplerModeChanged = { openMptAmigaResamplerMode = it },
+                onOpenMptAmigaResamplerApplyAllModulesChanged = { openMptAmigaResamplerApplyAllModules = it },
+                onOpenMptVolumeRampingStrengthChanged = { openMptVolumeRampingStrength = it },
+                onOpenMptFt2XmVolumeRampingChanged = { openMptFt2XmVolumeRamping = it },
+                onOpenMptMasterGainMilliBelChanged = { openMptMasterGainMilliBel = it },
+                onOpenMptSurroundEnabledChanged = { openMptSurroundEnabled = it }
+            )
             SettingsScreen(
                                 route = settingsRoute,
                                 bottomContentPadding = miniPlayerListInset,
@@ -1598,27 +1680,7 @@ private fun AppNavigation(
                         },
                                     onOpenUi = { openSettingsRoute(SettingsRoute.Ui, false) },
                                     onOpenAbout = { openSettingsRoute(SettingsRoute.About, false) },
-                                    onOpenVgmPlayChipSettings = { openSettingsRoute(SettingsRoute.PluginVgmPlayChipSettings, false) },
-                                    onPluginSelected = { pluginName ->
-                            selectedPluginName = pluginName
-                            openSettingsRoute(SettingsRoute.PluginDetail, false)
-                        },
-                                    onPluginEnabledChanged = { pluginName, enabled ->
-                            NativeBridge.setDecoderEnabled(pluginName, enabled)
-                            savePluginConfiguration(prefs, pluginName)
-                        },
-                                    onPluginPriorityChanged = { pluginName, priority ->
-                            NativeBridge.setDecoderPriority(pluginName, priority)
-                            normalizeDecoderPriorityValues()
-                            persistAllPluginConfigurations(prefs)
-                        },
-                                    onPluginPriorityOrderChanged = { orderedPluginNames ->
-                            applyDecoderPriorityOrder(orderedPluginNames, prefs)
-                        },
-                                    onPluginExtensionsChanged = { pluginName, extensions ->
-                            NativeBridge.setDecoderEnabledExtensions(pluginName, extensions)
-                            savePluginConfiguration(prefs, pluginName)
-                        },
+                                    pluginCoreActions = settingsPluginCoreActions,
                                     onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
                                     onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
                                     onAutoPlayNextTrackOnEndChanged = { autoPlayNextTrackOnEnd = it },
@@ -1863,63 +1925,6 @@ private fun AppNavigation(
                                 defaultScopeTextSizeSp = defaultScopeTextSizeSp
                             )
                         },
-                                    onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
-                                    onFfmpegGaplessRepeatTrackChanged = { ffmpegGaplessRepeatTrack = it },
-                                    onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it },
-                                    onVgmPlaySampleRateChanged = { vgmPlayCoreSampleRateHz = it },
-                                    onGmeSampleRateChanged = { gmeCoreSampleRateHz = it },
-                                    onSidPlayFpSampleRateChanged = { sidPlayFpCoreSampleRateHz = it },
-                                    onLazyUsf2SampleRateChanged = { lazyUsf2CoreSampleRateHz = it },
-                                    onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
-                                    onVio2sfInterpolationQualityChanged = { vio2sfInterpolationQuality = it },
-                                    onSc68SamplingRateHzChanged = { sc68SamplingRateHz = it },
-                                    onSc68AsidChanged = { sc68Asid = it },
-                                    onSc68DefaultTimeSecondsChanged = { sc68DefaultTimeSeconds = it },
-                                    onSc68YmEngineChanged = { sc68YmEngine = it },
-                                    onSc68YmVolModelChanged = { sc68YmVolModel = it },
-                                    onSc68AmigaFilterChanged = { sc68AmigaFilter = it },
-                                    onSc68AmigaBlendChanged = { sc68AmigaBlend = it },
-                                    onSc68AmigaClockChanged = { sc68AmigaClock = it },
-                                    onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
-                                    onSidPlayFpClockModeChanged = { sidPlayFpClockMode = it },
-                                    onSidPlayFpSidModelModeChanged = { sidPlayFpSidModelMode = it },
-                                    onSidPlayFpFilter6581EnabledChanged = { sidPlayFpFilter6581Enabled = it },
-                                    onSidPlayFpFilter8580EnabledChanged = { sidPlayFpFilter8580Enabled = it },
-                                    onSidPlayFpDigiBoost8580Changed = { sidPlayFpDigiBoost8580 = it },
-                                    onSidPlayFpFilterCurve6581PercentChanged = { sidPlayFpFilterCurve6581Percent = it },
-                                    onSidPlayFpFilterRange6581PercentChanged = { sidPlayFpFilterRange6581Percent = it },
-                                    onSidPlayFpFilterCurve8580PercentChanged = { sidPlayFpFilterCurve8580Percent = it },
-                                    onSidPlayFpReSidFpFastSamplingChanged = { sidPlayFpReSidFpFastSampling = it },
-                                    onSidPlayFpReSidFpCombinedWaveformsStrengthChanged = {
-                            sidPlayFpReSidFpCombinedWaveformsStrength = it
-                        },
-                                    onGmeTempoPercentChanged = { gmeTempoPercent = it },
-                                    onGmeStereoSeparationPercentChanged = { gmeStereoSeparationPercent = it },
-                                    onGmeEchoEnabledChanged = { gmeEchoEnabled = it },
-                                    onGmeAccuracyEnabledChanged = { gmeAccuracyEnabled = it },
-                                    onGmeEqTrebleDecibelChanged = { gmeEqTrebleDecibel = it },
-                                    onGmeEqBassHzChanged = { gmeEqBassHz = it },
-                                    onGmeSpcUseBuiltInFadeChanged = { gmeSpcUseBuiltInFade = it },
-                                    onGmeSpcInterpolationChanged = { gmeSpcInterpolation = it },
-                                    onGmeSpcUseNativeSampleRateChanged = { gmeSpcUseNativeSampleRate = it },
-                                    onVgmPlayLoopCountChanged = { vgmPlayLoopCount = it },
-                                    onVgmPlayAllowNonLoopingLoopChanged = { vgmPlayAllowNonLoopingLoop = it },
-                                    onVgmPlayVsyncRateChanged = { vgmPlayVsyncRate = it },
-                                    onVgmPlayResampleModeChanged = { vgmPlayResampleMode = it },
-                                    onVgmPlayChipSampleModeChanged = { vgmPlayChipSampleMode = it },
-                                    onVgmPlayChipSampleRateChanged = { vgmPlayChipSampleRate = it },
-                                    onVgmPlayChipCoreChanged = { chipKey, selectedValue ->
-                            vgmPlayChipCoreSelections = vgmPlayChipCoreSelections + (chipKey to selectedValue)
-                        },
-                                    onOpenMptStereoSeparationPercentChanged = { openMptStereoSeparationPercent = it },
-                                    onOpenMptStereoSeparationAmigaPercentChanged = { openMptStereoSeparationAmigaPercent = it },
-                                    onOpenMptInterpolationFilterLengthChanged = { openMptInterpolationFilterLength = it },
-                                    onOpenMptAmigaResamplerModeChanged = { openMptAmigaResamplerMode = it },
-                                    onOpenMptAmigaResamplerApplyAllModulesChanged = { openMptAmigaResamplerApplyAllModules = it },
-                                    onOpenMptVolumeRampingStrengthChanged = { openMptVolumeRampingStrength = it },
-                                    onOpenMptFt2XmVolumeRampingChanged = { openMptFt2XmVolumeRamping = it },
-                                    onOpenMptMasterGainMilliBelChanged = { openMptMasterGainMilliBel = it },
-                                    onOpenMptSurroundEnabledChanged = { openMptSurroundEnabled = it },
                                     onClearRecentHistory = {
                             clearRecentHistoryAction(
                                 context = context,

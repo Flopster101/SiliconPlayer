@@ -125,9 +125,9 @@ internal fun SettingsRouteContentHost(
                                 pluginPriorityEditMode = pluginPriorityEditMode
                             ),
                             actions = AudioPluginsRouteActions(
-                                onPluginSelected = actions.onPluginSelected,
-                                onPluginEnabledChanged = actions.onPluginEnabledChanged,
-                                onPluginPriorityOrderChanged = actions.onPluginPriorityOrderChanged,
+                                onPluginSelected = actions.pluginCoreActions.onPluginSelected,
+                                onPluginEnabledChanged = actions.pluginCoreActions.onPluginEnabledChanged,
+                                onPluginPriorityOrderChanged = actions.pluginCoreActions.onPluginPriorityOrderChanged,
                                 onRequestClearPluginSettings = onRequestClearPluginSettings
                             )
                         )
@@ -143,10 +143,10 @@ internal fun SettingsRouteContentHost(
                     SettingsRoute.PluginVgmPlayChipSettings -> {
                         PluginVgmPlayChipSettingsRouteContent(
                             state = PluginVgmPlayChipSettingsRouteState(
-                                vgmPlayChipCoreSelections = state.vgmPlayChipCoreSelections
+                                vgmPlayChipCoreSelections = state.pluginCore.vgmPlayChipCoreSelections
                             ),
                             actions = PluginVgmPlayChipSettingsRouteActions(
-                                onVgmPlayChipCoreChanged = actions.onVgmPlayChipCoreChanged
+                                onVgmPlayChipCoreChanged = actions.pluginCoreActions.onVgmPlayChipCoreChanged
                             )
                         )
                     }
@@ -156,11 +156,11 @@ internal fun SettingsRouteContentHost(
                             state = PluginSampleRateRouteState(
                                 title = "Render sample rate",
                                 description = "Preferred internal render sample rate for this core. Audio is resampled to the active output stream rate.",
-                                selectedHz = state.ffmpegSampleRateHz,
-                                enabled = supportsCustomSampleRate(state.ffmpegCapabilities)
+                                selectedHz = state.pluginCore.ffmpegSampleRateHz,
+                                enabled = supportsCustomSampleRate(state.pluginCore.ffmpegCapabilities)
                             ),
                             actions = PluginSampleRateRouteActions(
-                                onSelected = actions.onFfmpegSampleRateChanged
+                                onSelected = actions.pluginCoreActions.onFfmpegSampleRateChanged
                             )
                         )
                     }
@@ -170,11 +170,11 @@ internal fun SettingsRouteContentHost(
                             state = PluginSampleRateRouteState(
                                 title = "Render sample rate",
                                 description = "Preferred internal render sample rate for this core. Audio is resampled to the active output stream rate.",
-                                selectedHz = state.vgmPlaySampleRateHz,
-                                enabled = supportsCustomSampleRate(state.vgmPlayCapabilities)
+                                selectedHz = state.pluginCore.vgmPlaySampleRateHz,
+                                enabled = supportsCustomSampleRate(state.pluginCore.vgmPlayCapabilities)
                             ),
                             actions = PluginSampleRateRouteActions(
-                                onSelected = actions.onVgmPlaySampleRateChanged
+                                onSelected = actions.pluginCoreActions.onVgmPlaySampleRateChanged
                             )
                         )
                     }
@@ -182,29 +182,29 @@ internal fun SettingsRouteContentHost(
                     SettingsRoute.PluginOpenMpt -> {
                         PluginOpenMptRouteContent(
                             state = PluginOpenMptRouteState(
-                                openMptSampleRateHz = state.openMptSampleRateHz,
-                                openMptCapabilities = state.openMptCapabilities,
-                                openMptStereoSeparationPercent = state.openMptStereoSeparationPercent,
-                                openMptStereoSeparationAmigaPercent = state.openMptStereoSeparationAmigaPercent,
-                                openMptInterpolationFilterLength = state.openMptInterpolationFilterLength,
-                                openMptAmigaResamplerMode = state.openMptAmigaResamplerMode,
-                                openMptAmigaResamplerApplyAllModules = state.openMptAmigaResamplerApplyAllModules,
-                                openMptVolumeRampingStrength = state.openMptVolumeRampingStrength,
-                                openMptFt2XmVolumeRamping = state.openMptFt2XmVolumeRamping,
-                                openMptMasterGainMilliBel = state.openMptMasterGainMilliBel,
-                                openMptSurroundEnabled = state.openMptSurroundEnabled
+                                openMptSampleRateHz = state.pluginCore.openMptSampleRateHz,
+                                openMptCapabilities = state.pluginCore.openMptCapabilities,
+                                openMptStereoSeparationPercent = state.pluginCore.openMptStereoSeparationPercent,
+                                openMptStereoSeparationAmigaPercent = state.pluginCore.openMptStereoSeparationAmigaPercent,
+                                openMptInterpolationFilterLength = state.pluginCore.openMptInterpolationFilterLength,
+                                openMptAmigaResamplerMode = state.pluginCore.openMptAmigaResamplerMode,
+                                openMptAmigaResamplerApplyAllModules = state.pluginCore.openMptAmigaResamplerApplyAllModules,
+                                openMptVolumeRampingStrength = state.pluginCore.openMptVolumeRampingStrength,
+                                openMptFt2XmVolumeRamping = state.pluginCore.openMptFt2XmVolumeRamping,
+                                openMptMasterGainMilliBel = state.pluginCore.openMptMasterGainMilliBel,
+                                openMptSurroundEnabled = state.pluginCore.openMptSurroundEnabled
                             ),
                             actions = PluginOpenMptRouteActions(
-                                onOpenMptStereoSeparationPercentChanged = actions.onOpenMptStereoSeparationPercentChanged,
-                                onOpenMptStereoSeparationAmigaPercentChanged = actions.onOpenMptStereoSeparationAmigaPercentChanged,
-                                onOpenMptInterpolationFilterLengthChanged = actions.onOpenMptInterpolationFilterLengthChanged,
-                                onOpenMptAmigaResamplerModeChanged = actions.onOpenMptAmigaResamplerModeChanged,
-                                onOpenMptAmigaResamplerApplyAllModulesChanged = actions.onOpenMptAmigaResamplerApplyAllModulesChanged,
-                                onOpenMptVolumeRampingStrengthChanged = actions.onOpenMptVolumeRampingStrengthChanged,
-                                onOpenMptFt2XmVolumeRampingChanged = actions.onOpenMptFt2XmVolumeRampingChanged,
-                                onOpenMptMasterGainMilliBelChanged = actions.onOpenMptMasterGainMilliBelChanged,
-                                onOpenMptSurroundEnabledChanged = actions.onOpenMptSurroundEnabledChanged,
-                                onOpenMptSampleRateChanged = actions.onOpenMptSampleRateChanged
+                                onOpenMptStereoSeparationPercentChanged = actions.pluginCoreActions.onOpenMptStereoSeparationPercentChanged,
+                                onOpenMptStereoSeparationAmigaPercentChanged = actions.pluginCoreActions.onOpenMptStereoSeparationAmigaPercentChanged,
+                                onOpenMptInterpolationFilterLengthChanged = actions.pluginCoreActions.onOpenMptInterpolationFilterLengthChanged,
+                                onOpenMptAmigaResamplerModeChanged = actions.pluginCoreActions.onOpenMptAmigaResamplerModeChanged,
+                                onOpenMptAmigaResamplerApplyAllModulesChanged = actions.pluginCoreActions.onOpenMptAmigaResamplerApplyAllModulesChanged,
+                                onOpenMptVolumeRampingStrengthChanged = actions.pluginCoreActions.onOpenMptVolumeRampingStrengthChanged,
+                                onOpenMptFt2XmVolumeRampingChanged = actions.pluginCoreActions.onOpenMptFt2XmVolumeRampingChanged,
+                                onOpenMptMasterGainMilliBelChanged = actions.pluginCoreActions.onOpenMptMasterGainMilliBelChanged,
+                                onOpenMptSurroundEnabledChanged = actions.pluginCoreActions.onOpenMptSurroundEnabledChanged,
+                                onOpenMptSampleRateChanged = actions.pluginCoreActions.onOpenMptSampleRateChanged
                             )
                         )
                     }

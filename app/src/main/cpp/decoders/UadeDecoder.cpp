@@ -161,7 +161,22 @@ void UadeDecoder::closeInternalLocked() {
     bitDepth = 16;
     subtuneMin = 0;
     subtuneMax = 0;
+    subtuneDefault = 0;
     currentSubsong = 0;
+    detectionByContent = false;
+    detectionIsCustom = false;
+    moduleBytes = 0;
+    songBytes = 0;
+    subsongBytes = 0;
+    formatName.clear();
+    moduleName.clear();
+    playerName.clear();
+    moduleFileName.clear();
+    playerFileName.clear();
+    moduleMd5.clear();
+    detectionExtension.clear();
+    detectedFormatName.clear();
+    detectedFormatVersion.clear();
     durationReliable.store(false);
     durationSeconds = 0.0;
     renderedFrames = 0;
@@ -186,13 +201,38 @@ bool UadeDecoder::refreshSongInfoLocked() {
 
     subtuneMin = info->subsongs.min;
     subtuneMax = info->subsongs.max;
+    subtuneDefault = clampSubsong(info->subsongs.def, subtuneMin, subtuneMax);
     currentSubsong = clampSubsong(info->subsongs.cur, subtuneMin, subtuneMax);
+    detectionByContent = info->detectioninfo.content != 0;
+    detectionIsCustom = info->detectioninfo.custom != 0;
+    moduleBytes = static_cast<int64_t>(info->modulebytes);
+    songBytes = info->songbytes;
+    subsongBytes = info->subsongbytes;
+    formatName = safeString(info->formatname);
+    moduleName = safeString(info->modulename);
+    playerName = safeString(info->playername);
+    moduleFileName = safeString(info->modulefname);
+    playerFileName = safeString(info->playerfname);
+    moduleMd5 = safeString(info->modulemd5);
+    detectionExtension = safeString(info->detectioninfo.ext);
+    detectedFormatName.clear();
+    detectedFormatVersion.clear();
+    if (!detectionExtension.empty()) {
+        if (const auto* detected = uade_file_ext_to_format_version(&info->detectioninfo)) {
+            if (detected->format != nullptr) {
+                detectedFormatName = detected->format;
+            }
+            if (detected->version != nullptr) {
+                detectedFormatVersion = detected->version;
+            }
+        }
+    }
 
-    title = safeString(info->modulename);
+    title = moduleName;
     if (title.empty()) {
         title = std::filesystem::path(sourcePath).stem().string();
     }
-    artist = safeString(info->playername);
+    artist = playerName;
     composer = artist;
     genre = safeString(info->formatname);
 
@@ -386,6 +426,96 @@ std::string UadeDecoder::getComposer() {
 std::string UadeDecoder::getGenre() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return genre;
+}
+
+std::string UadeDecoder::getFormatName() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return formatName;
+}
+
+std::string UadeDecoder::getModuleName() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return moduleName;
+}
+
+std::string UadeDecoder::getPlayerName() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return playerName;
+}
+
+std::string UadeDecoder::getModuleFileName() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return moduleFileName;
+}
+
+std::string UadeDecoder::getPlayerFileName() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return playerFileName;
+}
+
+std::string UadeDecoder::getModuleMd5() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return moduleMd5;
+}
+
+std::string UadeDecoder::getDetectionExtension() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return detectionExtension;
+}
+
+std::string UadeDecoder::getDetectedFormatName() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return detectedFormatName;
+}
+
+std::string UadeDecoder::getDetectedFormatVersion() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return detectedFormatVersion;
+}
+
+bool UadeDecoder::getDetectionByContent() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return detectionByContent;
+}
+
+bool UadeDecoder::getDetectionIsCustom() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return detectionIsCustom;
+}
+
+int UadeDecoder::getSubsongMin() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return subtuneMin;
+}
+
+int UadeDecoder::getSubsongMax() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return subtuneMax;
+}
+
+int UadeDecoder::getSubsongDefault() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return subtuneDefault;
+}
+
+int UadeDecoder::getCurrentSubsong() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return currentSubsong;
+}
+
+int64_t UadeDecoder::getModuleBytes() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return moduleBytes;
+}
+
+int64_t UadeDecoder::getSongBytes() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return songBytes;
+}
+
+int64_t UadeDecoder::getSubsongBytes() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return subsongBytes;
 }
 
 void UadeDecoder::setOption(const char* name, const char* value) {

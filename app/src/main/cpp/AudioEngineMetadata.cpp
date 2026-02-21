@@ -9,6 +9,7 @@
 #include "decoders/Vio2sfDecoder.h"
 #include "decoders/Sc68Decoder.h"
 #include "decoders/AdPlugDecoder.h"
+#include "decoders/UadeDecoder.h"
 
 bool AudioEngine::consumeNaturalEndEvent() {
     return naturalEndPending.exchange(false);
@@ -766,4 +767,130 @@ std::string AudioEngine::getAdplugInstrumentNames() {
     if (!decoder) return "";
     auto* adplugDecoder = dynamic_cast<AdPlugDecoder*>(decoder.get());
     return adplugDecoder ? adplugDecoder->getInstrumentNamesInfo() : "";
+}
+
+std::string AudioEngine::getUadeFormatName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getFormatName() : "";
+}
+
+std::string AudioEngine::getUadeModuleName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getModuleName() : "";
+}
+
+std::string AudioEngine::getUadePlayerName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getPlayerName() : "";
+}
+
+std::string AudioEngine::getUadeModuleFileName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getModuleFileName() : "";
+}
+
+std::string AudioEngine::getUadePlayerFileName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getPlayerFileName() : "";
+}
+
+std::string AudioEngine::getUadeModuleMd5() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getModuleMd5() : "";
+}
+
+std::string AudioEngine::getUadeDetectionExtension() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getDetectionExtension() : "";
+}
+
+std::string AudioEngine::getUadeDetectedFormatName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getDetectedFormatName() : "";
+}
+
+std::string AudioEngine::getUadeDetectedFormatVersion() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getDetectedFormatVersion() : "";
+}
+
+bool AudioEngine::getUadeDetectionByContent() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return false;
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getDetectionByContent() : false;
+}
+
+bool AudioEngine::getUadeDetectionIsCustom() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return false;
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getDetectionIsCustom() : false;
+}
+
+int AudioEngine::getUadeSubsongMin() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getSubsongMin() : 0;
+}
+
+int AudioEngine::getUadeSubsongMax() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getSubsongMax() : 0;
+}
+
+int AudioEngine::getUadeSubsongDefault() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getSubsongDefault() : 0;
+}
+
+int AudioEngine::getUadeCurrentSubsong() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getCurrentSubsong() : 0;
+}
+
+int64_t AudioEngine::getUadeModuleBytes() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getModuleBytes() : 0;
+}
+
+int64_t AudioEngine::getUadeSongBytes() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getSongBytes() : 0;
+}
+
+int64_t AudioEngine::getUadeSubsongBytes() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* uadeDecoder = dynamic_cast<UadeDecoder*>(decoder.get());
+    return uadeDecoder ? uadeDecoder->getSubsongBytes() : 0;
 }

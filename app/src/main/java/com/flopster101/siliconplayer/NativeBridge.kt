@@ -149,6 +149,24 @@ object NativeBridge {
     external fun getAdplugCurrentSpeed(): Int
     external fun getAdplugInstrumentCount(): Int
     external fun getAdplugInstrumentNames(): String
+    external fun getUadeFormatName(): String
+    external fun getUadeModuleName(): String
+    external fun getUadePlayerName(): String
+    external fun getUadeModuleFileName(): String
+    external fun getUadePlayerFileName(): String
+    external fun getUadeModuleMd5(): String
+    external fun getUadeDetectionExtension(): String
+    external fun getUadeDetectedFormatName(): String
+    external fun getUadeDetectedFormatVersion(): String
+    external fun getUadeDetectionByContent(): Boolean
+    external fun getUadeDetectionIsCustom(): Boolean
+    external fun getUadeSubsongMin(): Int
+    external fun getUadeSubsongMax(): Int
+    external fun getUadeSubsongDefault(): Int
+    external fun getUadeCurrentSubsong(): Int
+    external fun getUadeModuleBytes(): Long
+    external fun getUadeSongBytes(): Long
+    external fun getUadeSubsongBytes(): Long
     external fun getTrackBitrate(): Long
     external fun isTrackVBR(): Boolean
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)

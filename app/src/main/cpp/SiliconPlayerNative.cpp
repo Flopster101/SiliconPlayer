@@ -1217,6 +1217,114 @@ Java_com_flopster101_siliconplayer_NativeBridge_getAdplugInstrumentNames(JNIEnv*
     return toJString(env, value);
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeFormatName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getUadeFormatName());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeModuleName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getUadeModuleName());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadePlayerName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getUadePlayerName());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeModuleFileName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getUadeModuleFileName());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadePlayerFileName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getUadePlayerFileName());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeModuleMd5(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getUadeModuleMd5());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeDetectionExtension(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getUadeDetectionExtension());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeDetectedFormatName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getUadeDetectedFormatName());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeDetectedFormatVersion(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getUadeDetectedFormatVersion());
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeDetectionByContent(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return JNI_FALSE;
+    return audioEngine->getUadeDetectionByContent() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeDetectionIsCustom(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return JNI_FALSE;
+    return audioEngine->getUadeDetectionIsCustom() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeSubsongMin(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getUadeSubsongMin());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeSubsongMax(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getUadeSubsongMax());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeSubsongDefault(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getUadeSubsongDefault());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeCurrentSubsong(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getUadeCurrentSubsong());
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeModuleBytes(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jlong>(audioEngine->getUadeModuleBytes());
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeSongBytes(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jlong>(audioEngine->getUadeSongBytes());
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getUadeSubsongBytes(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jlong>(audioEngine->getUadeSubsongBytes());
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_startEngine(JNIEnv* env, jobject thiz) {
     Java_com_flopster101_siliconplayer_MainActivity_startEngine(env, thiz);

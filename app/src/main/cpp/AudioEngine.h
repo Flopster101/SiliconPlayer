@@ -150,6 +150,24 @@ public:
     int getAdplugCurrentSpeed();
     int getAdplugInstrumentCount();
     std::string getAdplugInstrumentNames();
+    std::string getUadeFormatName();
+    std::string getUadeModuleName();
+    std::string getUadePlayerName();
+    std::string getUadeModuleFileName();
+    std::string getUadePlayerFileName();
+    std::string getUadeModuleMd5();
+    std::string getUadeDetectionExtension();
+    std::string getUadeDetectedFormatName();
+    std::string getUadeDetectedFormatVersion();
+    bool getUadeDetectionByContent();
+    bool getUadeDetectionIsCustom();
+    int getUadeSubsongMin();
+    int getUadeSubsongMax();
+    int getUadeSubsongDefault();
+    int getUadeCurrentSubsong();
+    int64_t getUadeModuleBytes();
+    int64_t getUadeSongBytes();
+    int64_t getUadeSubsongBytes();
 
     // Bitrate information
     int64_t getTrackBitrate();

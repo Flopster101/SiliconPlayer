@@ -1247,6 +1247,24 @@ private fun TrackInfoDetailsDialog(
     var adplugCurrentSpeed by remember { mutableIntStateOf(0) }
     var adplugInstrumentCount by remember { mutableIntStateOf(0) }
     var adplugInstrumentNames by remember { mutableStateOf("") }
+    var uadeFormatName by remember { mutableStateOf("") }
+    var uadeModuleName by remember { mutableStateOf("") }
+    var uadePlayerName by remember { mutableStateOf("") }
+    var uadeModuleFileName by remember { mutableStateOf("") }
+    var uadePlayerFileName by remember { mutableStateOf("") }
+    var uadeModuleMd5 by remember { mutableStateOf("") }
+    var uadeDetectionExtension by remember { mutableStateOf("") }
+    var uadeDetectedFormatName by remember { mutableStateOf("") }
+    var uadeDetectedFormatVersion by remember { mutableStateOf("") }
+    var uadeDetectionByContent by remember { mutableStateOf(false) }
+    var uadeDetectionIsCustom by remember { mutableStateOf(false) }
+    var uadeSubsongMin by remember { mutableIntStateOf(0) }
+    var uadeSubsongMax by remember { mutableIntStateOf(0) }
+    var uadeSubsongDefault by remember { mutableIntStateOf(0) }
+    var uadeCurrentSubsong by remember { mutableIntStateOf(0) }
+    var uadeModuleBytes by remember { mutableLongStateOf(0L) }
+    var uadeSongBytes by remember { mutableLongStateOf(0L) }
+    var uadeSubsongBytes by remember { mutableLongStateOf(0L) }
     val detailsScrollState = rememberScrollState()
     var detailsViewportHeightPx by remember { mutableIntStateOf(0) }
 
@@ -1447,6 +1465,45 @@ private fun TrackInfoDetailsDialog(
                 adplugInstrumentCount = 0
                 adplugInstrumentNames = ""
             }
+            if (decoderName.equals("UADE", ignoreCase = true)) {
+                uadeFormatName = NativeBridge.getUadeFormatName()
+                uadeModuleName = NativeBridge.getUadeModuleName()
+                uadePlayerName = NativeBridge.getUadePlayerName()
+                uadeModuleFileName = NativeBridge.getUadeModuleFileName()
+                uadePlayerFileName = NativeBridge.getUadePlayerFileName()
+                uadeModuleMd5 = NativeBridge.getUadeModuleMd5()
+                uadeDetectionExtension = NativeBridge.getUadeDetectionExtension()
+                uadeDetectedFormatName = NativeBridge.getUadeDetectedFormatName()
+                uadeDetectedFormatVersion = NativeBridge.getUadeDetectedFormatVersion()
+                uadeDetectionByContent = NativeBridge.getUadeDetectionByContent()
+                uadeDetectionIsCustom = NativeBridge.getUadeDetectionIsCustom()
+                uadeSubsongMin = NativeBridge.getUadeSubsongMin()
+                uadeSubsongMax = NativeBridge.getUadeSubsongMax()
+                uadeSubsongDefault = NativeBridge.getUadeSubsongDefault()
+                uadeCurrentSubsong = NativeBridge.getUadeCurrentSubsong()
+                uadeModuleBytes = NativeBridge.getUadeModuleBytes()
+                uadeSongBytes = NativeBridge.getUadeSongBytes()
+                uadeSubsongBytes = NativeBridge.getUadeSubsongBytes()
+            } else {
+                uadeFormatName = ""
+                uadeModuleName = ""
+                uadePlayerName = ""
+                uadeModuleFileName = ""
+                uadePlayerFileName = ""
+                uadeModuleMd5 = ""
+                uadeDetectionExtension = ""
+                uadeDetectedFormatName = ""
+                uadeDetectedFormatVersion = ""
+                uadeDetectionByContent = false
+                uadeDetectionIsCustom = false
+                uadeSubsongMin = 0
+                uadeSubsongMax = 0
+                uadeSubsongDefault = 0
+                uadeCurrentSubsong = 0
+                uadeModuleBytes = 0L
+                uadeSongBytes = 0L
+                uadeSubsongBytes = 0L
+            }
             delay(500)
         }
     }
@@ -1601,6 +1658,28 @@ private fun TrackInfoDetailsDialog(
             if (adplugCurrentSpeed > 0) row("Current speed", adplugCurrentSpeed.toString())
             if (adplugInstrumentCount > 0) row("Instruments", adplugInstrumentCount.toString())
             if (adplugInstrumentNames.isNotBlank()) row("Instrument names", adplugInstrumentNames)
+        }
+        if (decoderName.equals("UADE", ignoreCase = true)) {
+            append('\n').append("[UADE]").append('\n')
+            if (uadeFormatName.isNotBlank()) row("Format name", uadeFormatName)
+            if (uadeModuleName.isNotBlank()) row("Module name", uadeModuleName)
+            if (uadePlayerName.isNotBlank()) row("Player name", uadePlayerName)
+            if (uadeDetectionExtension.isNotBlank()) row("Detected extension", uadeDetectionExtension)
+            if (uadeDetectedFormatName.isNotBlank()) row("Detected format", uadeDetectedFormatName)
+            if (uadeDetectedFormatVersion.isNotBlank()) row("Detected version", uadeDetectedFormatVersion)
+            row("Detection source", if (uadeDetectionByContent) "Content" else "Filename/extension")
+            row("Custom format", if (uadeDetectionIsCustom) "Yes" else "No")
+            if (uadeSubsongMax >= uadeSubsongMin) {
+                row("Subsong range", "${uadeSubsongMin}..${uadeSubsongMax}")
+                row("Default subsong", uadeSubsongDefault.toString())
+                row("Current subsong", uadeCurrentSubsong.toString())
+            }
+            if (uadeModuleFileName.isNotBlank()) row("Module file", uadeModuleFileName)
+            if (uadePlayerFileName.isNotBlank()) row("Player file", uadePlayerFileName)
+            if (uadeModuleMd5.isNotBlank()) row("Module MD5", uadeModuleMd5)
+            if (uadeModuleBytes > 0L) row("Module size", formatFileSize(uadeModuleBytes))
+            if (uadeSongBytes > 0L) row("Rendered bytes (song)", formatFileSize(uadeSongBytes))
+            if (uadeSubsongBytes > 0L) row("Rendered bytes (subsong)", formatFileSize(uadeSubsongBytes))
         }
     }
 
@@ -1939,6 +2018,60 @@ private fun TrackInfoDetailsDialog(
                                 }
                                 if (adplugInstrumentNames.isNotBlank()) {
                                     TrackInfoDetailsRow("Instrument names", adplugInstrumentNames)
+                                }
+                            }
+                            if (decoderName.equals("UADE", ignoreCase = true)) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "UADE",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (uadeFormatName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Format name", uadeFormatName)
+                                }
+                                if (uadeModuleName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Module name", uadeModuleName)
+                                }
+                                if (uadePlayerName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Player name", uadePlayerName)
+                                }
+                                if (uadeDetectionExtension.isNotBlank()) {
+                                    TrackInfoDetailsRow("Detected extension", uadeDetectionExtension)
+                                }
+                                if (uadeDetectedFormatName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Detected format", uadeDetectedFormatName)
+                                }
+                                if (uadeDetectedFormatVersion.isNotBlank()) {
+                                    TrackInfoDetailsRow("Detected version", uadeDetectedFormatVersion)
+                                }
+                                TrackInfoDetailsRow(
+                                    "Detection source",
+                                    if (uadeDetectionByContent) "Content" else "Filename/extension"
+                                )
+                                TrackInfoDetailsRow("Custom format", if (uadeDetectionIsCustom) "Yes" else "No")
+                                if (uadeSubsongMax >= uadeSubsongMin) {
+                                    TrackInfoDetailsRow("Subsong range", "${uadeSubsongMin}..${uadeSubsongMax}")
+                                    TrackInfoDetailsRow("Default subsong", uadeSubsongDefault.toString())
+                                    TrackInfoDetailsRow("Current subsong", uadeCurrentSubsong.toString())
+                                }
+                                if (uadeModuleFileName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Module file", uadeModuleFileName)
+                                }
+                                if (uadePlayerFileName.isNotBlank()) {
+                                    TrackInfoDetailsRow("Player file", uadePlayerFileName)
+                                }
+                                if (uadeModuleMd5.isNotBlank()) {
+                                    TrackInfoDetailsRow("Module MD5", uadeModuleMd5)
+                                }
+                                if (uadeModuleBytes > 0L) {
+                                    TrackInfoDetailsRow("Module size", formatFileSize(uadeModuleBytes))
+                                }
+                                if (uadeSongBytes > 0L) {
+                                    TrackInfoDetailsRow("Rendered bytes (song)", formatFileSize(uadeSongBytes))
+                                }
+                                if (uadeSubsongBytes > 0L) {
+                                    TrackInfoDetailsRow("Rendered bytes (subsong)", formatFileSize(uadeSubsongBytes))
                                 }
                             }
                         }

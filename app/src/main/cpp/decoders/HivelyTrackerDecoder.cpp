@@ -7,6 +7,8 @@
 
 extern "C" {
 #include <hivelytracker/hvl_replay.h>
+void hvl_play_irq(struct hvl_tune* ht);
+void hvl_mixchunk(struct hvl_tune* ht, uint32 samples, int8* buf1, int8* buf2, int32 bufmod);
 }
 
 namespace {
@@ -73,6 +75,8 @@ bool HivelyTrackerDecoder::open(const char* path) {
         closeInternalLocked();
         return false;
     }
+    syncToggleChannelsLocked();
+    applyToggleMutesLocked();
 
     const std::string extension = lowercase(std::filesystem::path(sourcePath).extension().string());
     if (extension == ".ahx") {
@@ -134,6 +138,8 @@ void HivelyTrackerDecoder::closeInternalLocked() {
     subtuneDurationSeconds.clear();
     subtuneDurationKnown.clear();
     subtuneDurationReliable.clear();
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
 }
 
 void HivelyTrackerDecoder::close() {
@@ -155,14 +161,21 @@ bool HivelyTrackerDecoder::decodeFrameIntoPendingLocked() {
     if (static_cast<int>(decodeInterleavedScratch.size()) < sampleCount) {
         decodeInterleavedScratch.resize(sampleCount);
     }
+    std::fill_n(decodeInterleavedScratch.data(), sampleCount, static_cast<int16_t>(0));
 
     const bool songEndBefore = tune->ht_SongEndReached != 0;
-    int8* interleavedBase = reinterpret_cast<int8*>(decodeInterleavedScratch.data());
-    hvl_DecodeFrame(
-            tune,
-            interleavedBase,
-            interleavedBase + static_cast<int32>(sizeof(int16_t)),
-            static_cast<int32>(sizeof(int16_t) * channels));
+    int8* bufLeft = reinterpret_cast<int8*>(decodeInterleavedScratch.data());
+    int8* bufRight = bufLeft + static_cast<int32>(sizeof(int16_t));
+    const int32 bufferStride = static_cast<int32>(sizeof(int16_t) * channels);
+    const uint32 loopCount = std::max<uint32>(1u, static_cast<uint32>(tune->ht_SpeedMultiplier));
+    const uint32 samplesPerLoop = static_cast<uint32>(frameSamples) / loopCount;
+    for (uint32 loop = 0; loop < loopCount; ++loop) {
+        hvl_play_irq(tune);
+        applyToggleMutesLocked();
+        hvl_mixchunk(tune, samplesPerLoop, bufLeft, bufRight, bufferStride);
+        bufLeft += static_cast<int32>(samplesPerLoop * static_cast<uint32>(bufferStride));
+        bufRight += static_cast<int32>(samplesPerLoop * static_cast<uint32>(bufferStride));
+    }
     const bool songEndAfter = tune->ht_SongEndReached != 0;
 
     pendingInterleaved.resize(static_cast<std::size_t>(frameSamples * channels));
@@ -463,6 +476,8 @@ bool HivelyTrackerDecoder::selectSubtune(int index) {
     if (!hvl_InitSubsong(tune, static_cast<uint32>(index))) {
         return false;
     }
+    syncToggleChannelsLocked();
+    applyToggleMutesLocked();
     currentSubtuneIndex = index;
     analyzeSubtuneDurationLocked(currentSubtuneIndex);
     updateCurrentDurationFromCacheLocked();
@@ -596,6 +611,91 @@ std::string HivelyTrackerDecoder::getInstrumentNamesInfo() {
         names.append(name);
     }
     return names;
+}
+
+std::vector<std::string> HivelyTrackerDecoder::getToggleChannelNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    return toggleChannelNames;
+}
+
+std::vector<uint8_t> HivelyTrackerDecoder::getToggleChannelAvailability() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    return std::vector<uint8_t>(toggleChannelNames.size(), 1u);
+}
+
+void HivelyTrackerDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+    toggleChannelMuted[static_cast<size_t>(channelIndex)] = enabled;
+    applyToggleMutesLocked();
+}
+
+bool HivelyTrackerDecoder::getToggleChannelMuted(int channelIndex) const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return false;
+    }
+    return toggleChannelMuted[static_cast<size_t>(channelIndex)];
+}
+
+void HivelyTrackerDecoder::clearToggleChannelMutes() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    if (toggleChannelMuted.empty()) {
+        return;
+    }
+    std::fill(toggleChannelMuted.begin(), toggleChannelMuted.end(), false);
+    applyToggleMutesLocked();
+}
+
+void HivelyTrackerDecoder::syncToggleChannelsLocked() {
+    const int channelCount = tune
+            ? std::clamp(static_cast<int>(tune->ht_Channels), 1, MAX_CHANNELS)
+            : std::clamp(displayChannels, 1, MAX_CHANNELS);
+    if (channelCount == static_cast<int>(toggleChannelNames.size()) &&
+        channelCount == static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+
+    const std::vector<bool> previousMuted = toggleChannelMuted;
+    toggleChannelNames.clear();
+    toggleChannelNames.reserve(static_cast<size_t>(channelCount));
+    toggleChannelMuted.assign(static_cast<size_t>(channelCount), false);
+
+    int leftIndex = 0;
+    int rightIndex = 0;
+    for (int i = 0; i < channelCount; ++i) {
+        const bool isLeft = ((i & 3) == 0) || ((i & 3) == 3);
+        if (isLeft) {
+            ++leftIndex;
+            toggleChannelNames.push_back("Paula L" + std::to_string(leftIndex));
+        } else {
+            ++rightIndex;
+            toggleChannelNames.push_back("Paula R" + std::to_string(rightIndex));
+        }
+        if (i < static_cast<int>(previousMuted.size())) {
+            toggleChannelMuted[static_cast<size_t>(i)] = previousMuted[static_cast<size_t>(i)];
+        }
+    }
+}
+
+void HivelyTrackerDecoder::applyToggleMutesLocked() {
+    if (!tune) {
+        return;
+    }
+    const int channelCount = std::min<int>(
+            static_cast<int>(toggleChannelMuted.size()),
+            std::clamp(static_cast<int>(tune->ht_Channels), 0, MAX_CHANNELS));
+    for (int i = 0; i < channelCount; ++i) {
+        if (toggleChannelMuted[static_cast<size_t>(i)]) {
+            tune->ht_Voices[i].vc_VoiceVolume = 0;
+        }
+    }
 }
 
 void HivelyTrackerDecoder::setOutputSampleRate(int sampleRate) {

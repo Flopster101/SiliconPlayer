@@ -50,6 +50,11 @@ public:
     int getCurrentTempoInfo();
     int getMixGainPercentInfo();
     std::string getInstrumentNamesInfo();
+    std::vector<std::string> getToggleChannelNames() override;
+    std::vector<uint8_t> getToggleChannelAvailability() override;
+    void setToggleChannelMuted(int channelIndex, bool enabled) override;
+    bool getToggleChannelMuted(int channelIndex) const override;
+    void clearToggleChannelMutes() override;
     void setOutputSampleRate(int sampleRateHz) override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
@@ -90,6 +95,8 @@ private:
     std::vector<double> subtuneDurationSeconds;
     std::vector<uint8_t> subtuneDurationKnown;
     std::vector<uint8_t> subtuneDurationReliable;
+    std::vector<std::string> toggleChannelNames;
+    std::vector<bool> toggleChannelMuted;
     bool stopAfterPendingDrain = false;
 
     void closeInternalLocked();
@@ -98,6 +105,8 @@ private:
     bool resetToSubtuneStartLocked();
     bool analyzeSubtuneDurationLocked(int index);
     void updateCurrentDurationFromCacheLocked();
+    void syncToggleChannelsLocked();
+    void applyToggleMutesLocked();
 };
 
 #endif // SILICONPLAYER_HIVELYTRACKERDECODER_H

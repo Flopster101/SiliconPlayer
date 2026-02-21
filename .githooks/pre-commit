@@ -1,0 +1,38 @@
+#!/usr/bin/env sh
+set -eu
+
+# Allow explicit override for intentional submodule pointer commits.
+if [ "${ALLOW_SUBMODULE_POINTER_UPDATE:-0}" = "1" ]; then
+    exit 0
+fi
+
+# Nothing staged, nothing to enforce.
+staged_paths="$(git diff --cached --name-only)"
+if [ -z "$staged_paths" ]; then
+    exit 0
+fi
+
+# Gather submodule paths declared in .gitmodules.
+submodule_paths="$(
+    git config -f .gitmodules --get-regexp '^submodule\..*\.path$' 2>/dev/null | awk '{print $2}'
+)"
+if [ -z "$submodule_paths" ]; then
+    exit 0
+fi
+
+blocked=""
+for p in $submodule_paths; do
+    if printf '%s\n' "$staged_paths" | grep -Fxq "$p"; then
+        blocked="${blocked}${p}\n"
+    fi
+done
+
+if [ -n "$blocked" ]; then
+    printf >&2 "Blocked: staged submodule pointer update(s):\n"
+    printf >&2 "%b" "$blocked"
+    printf >&2 "\nIf intentional, run commit with:\n"
+    printf >&2 "  ALLOW_SUBMODULE_POINTER_UPDATE=1 git commit ...\n"
+    exit 1
+fi
+
+exit 0

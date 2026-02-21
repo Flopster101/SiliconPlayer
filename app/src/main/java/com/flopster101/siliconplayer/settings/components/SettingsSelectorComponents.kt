@@ -138,6 +138,23 @@ internal fun ThemeModeSelectorCard(
 }
 
 @Composable
+internal fun BrowserNameSortModeSelectorCard(
+    selectedMode: BrowserNameSortMode,
+    onSelectedModeChanged: (BrowserNameSortMode) -> Unit
+) {
+    SettingsEnumSelectorCard(
+        title = "File name sort mode",
+        description = "Choose how names with numbers are ordered in browser lists and track navigation.",
+        selectedValue = selectedMode,
+        options = listOf(
+            EnumChoice(BrowserNameSortMode.Natural, BrowserNameSortMode.Natural.label),
+            EnumChoice(BrowserNameSortMode.Lexicographic, BrowserNameSortMode.Lexicographic.label)
+        ),
+        onSelected = onSelectedModeChanged
+    )
+}
+
+@Composable
 internal fun AudioBackendSelectorCard(
     selectedPreference: AudioBackendPreference,
     onSelectedPreferenceChanged: (AudioBackendPreference) -> Unit

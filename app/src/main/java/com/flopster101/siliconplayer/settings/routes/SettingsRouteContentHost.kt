@@ -380,11 +380,13 @@ internal fun SettingsRouteContentHost(
                         MiscRouteContent(
                             state = MiscRouteState(
                                 rememberBrowserLocation = state.rememberBrowserLocation,
-                                sortArchivesBeforeFiles = state.sortArchivesBeforeFiles
+                                sortArchivesBeforeFiles = state.sortArchivesBeforeFiles,
+                                browserNameSortMode = state.browserNameSortMode
                             ),
                             actions = MiscRouteActions(
                                 onRememberBrowserLocationChanged = actions.onRememberBrowserLocationChanged,
                                 onSortArchivesBeforeFilesChanged = actions.onSortArchivesBeforeFilesChanged,
+                                onBrowserNameSortModeChanged = actions.onBrowserNameSortModeChanged,
                                 onClearRecentHistory = actions.onClearRecentHistory
                             )
                         )

@@ -1,6 +1,10 @@
 package com.flopster101.siliconplayer
 
 object AppDefaults {
+    object Browser {
+        val nameSortMode = BrowserNameSortMode.Natural
+    }
+
     object Player {
         const val keepScreenOn = false
         const val fadePauseResume = true

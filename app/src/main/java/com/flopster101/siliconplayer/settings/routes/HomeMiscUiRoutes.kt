@@ -27,12 +27,14 @@ internal data class HomeRouteActions(
 
 internal data class MiscRouteState(
     val rememberBrowserLocation: Boolean,
-    val sortArchivesBeforeFiles: Boolean
+    val sortArchivesBeforeFiles: Boolean,
+    val browserNameSortMode: BrowserNameSortMode
 )
 
 internal data class MiscRouteActions(
     val onRememberBrowserLocationChanged: (Boolean) -> Unit,
     val onSortArchivesBeforeFilesChanged: (Boolean) -> Unit,
+    val onBrowserNameSortModeChanged: (BrowserNameSortMode) -> Unit,
     val onClearRecentHistory: () -> Unit
 )
 
@@ -121,6 +123,11 @@ internal fun MiscRouteContent(
         description = "Restore last storage and folder when reopening the library browser.",
         checked = state.rememberBrowserLocation,
         onCheckedChange = actions.onRememberBrowserLocationChanged
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    BrowserNameSortModeSelectorCard(
+        selectedMode = state.browserNameSortMode,
+        onSelectedModeChanged = actions.onBrowserNameSortModeChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
     PlayerSettingToggleCard(

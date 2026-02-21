@@ -40,3 +40,6 @@
 [submodule "external/adplug"]
 	path = external/adplug
 	url = https://github.com/adplug/adplug
+[submodule "external/libbinio"]
+	path = external/libbinio
+	url = https://github.com/adplug/libbinio

@@ -38,7 +38,9 @@ DEP_WARN_FLAGS="-w"
 DEP_OPT_FLAGS="$DEP_WARN_FLAGS -Ofast"
 
 # Architecture independent variables
-ABIS=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
+# Default ABI pool for "all" targets.
+# Keep x86 support available when explicitly requested, but exclude it from "all".
+ABIS=("arm64-v8a" "armeabi-v7a" "x86_64")
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 ABSOLUTE_PATH="$SCRIPT_DIR"
 PATCHES_DIR="$ABSOLUTE_PATH/patches/libopenmpt"
@@ -1639,7 +1641,7 @@ build_adplug() {
 # -----------------------------------------------------------------------------
 usage() {
     echo "Usage: $0 <abi|all> <lib|all[,lib2,...]> [clean]"
-    echo "  ABI: all, arm64-v8a, armeabi-v7a, x86_64, x86"
+    echo "  ABI: all, arm64-v8a, armeabi-v7a, x86_64 (x86 supported only when explicitly requested)"
     echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68, libbinio, adplug"
     echo "  clean (optional): force rebuild (bypass already-built skip checks)"
     echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68, binio, libadplug"

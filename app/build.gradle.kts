@@ -51,6 +51,13 @@ android {
                 cppFlags += "-std=c++20"
             }
         }
+        ndk {
+            // Exclude x86 from default app packaging/build variants.
+            // x86 remains supported in dependency build scripts when explicitly requested.
+            abiFilters += "arm64-v8a"
+            abiFilters += "armeabi-v7a"
+            abiFilters += "x86_64"
+        }
     }
 
     buildTypes {

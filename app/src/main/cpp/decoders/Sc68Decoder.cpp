@@ -486,9 +486,6 @@ void Sc68Decoder::updatePlaybackPositionLocked(int producedFrames) {
         const double posSeconds = static_cast<double>(posMs) / 1000.0;
         if (mode == 2) {
             playbackPositionSeconds = posSeconds;
-            if (durationSeconds > 0.0 && playbackPositionSeconds > durationSeconds) {
-                playbackPositionSeconds = durationSeconds;
-            }
         } else if (repeatTrackSingle &&
                    lastCorePositionMs >= 0 &&
                    posMs <= lastCorePositionMs &&
@@ -626,10 +623,25 @@ int Sc68Decoder::read(float* buffer, int numFrames) {
             (mode == 0) ||
             (mode == 3) ||
             (mode == 1 && std::max(1, subtuneCount) > 1);
-    if (gateVirtualEof && durationSeconds > 0.0 && playbackPositionSeconds >= durationSeconds) {
+    // Some SNDH files report placeholder/invalid tiny durations (for example
+    // when no reliable timer length exists). Avoid immediate false EOF.
+    if (gateVirtualEof && durationSeconds >= 1.0 && playbackPositionSeconds >= durationSeconds) {
         return 0;
     }
-    return processIntoLocked(buffer, numFrames);
+    int produced = processIntoLocked(buffer, numFrames);
+    if (produced > 0) {
+        return produced;
+    }
+
+    // SC68 can occasionally emit transient 0-frame reads on startup/state
+    // transitions. Retry a few times before signaling terminal EOF.
+    for (int retry = 0; retry < 4; ++retry) {
+        produced = processIntoLocked(buffer, numFrames);
+        if (produced > 0) {
+            return produced;
+        }
+    }
+    return 0;
 }
 
 void Sc68Decoder::seek(double seconds) {
@@ -933,11 +945,7 @@ int Sc68Decoder::getFixedSampleRateHz() const {
 double Sc68Decoder::getPlaybackPositionSeconds() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (!isOpen || !handle) return 0.0;
-    double posSeconds = playbackPositionSeconds;
-    if (repeatMode.load() == 2 && durationSeconds > 0.0 && posSeconds > durationSeconds) {
-        posSeconds = durationSeconds;
-    }
-    return posSeconds;
+    return playbackPositionSeconds;
 }
 
 std::vector<std::string> Sc68Decoder::getSupportedExtensions() {

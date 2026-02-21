@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer
 
+import android.webkit.MimeTypeMap
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -52,6 +54,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.io.File
+import java.util.Locale
+
+private val artworkFallbackVideoExtensions = setOf(
+    "3g2", "3gp", "asf", "avi", "divx", "f4v", "flv", "m2ts", "m2v", "m4v",
+    "mkv", "mov", "mp4", "mpeg", "mpg", "mts", "ogm", "ogv", "rm", "rmvb",
+    "ts", "vob", "webm", "wmv"
+)
 
 @Composable
 internal fun placeholderArtworkIconForFile(file: File?): ImageVector {
@@ -59,9 +68,23 @@ internal fun placeholderArtworkIconForFile(file: File?): ImageVector {
         ?: return Icons.Default.MusicNote
     return if (extension in trackerModuleExtensions) {
         ImageVector.vectorResource(R.drawable.ic_placeholder_tracker_chip)
+    } else if (isLikelyVideoExtension(extension)) {
+        Icons.Default.Videocam
     } else {
         Icons.Default.MusicNote
     }
+}
+
+private fun isLikelyVideoExtension(extension: String): Boolean {
+    if (extension.isBlank()) {
+        return false
+    }
+    val normalized = extension.lowercase(Locale.ROOT)
+    val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(normalized)
+    if (mimeType?.startsWith("video/") == true) {
+        return true
+    }
+    return normalized in artworkFallbackVideoExtensions
 }
 
 @OptIn(ExperimentalFoundationApi::class)

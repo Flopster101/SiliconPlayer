@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.storage.StorageManager
 import android.os.storage.StorageVolume
+import android.webkit.MimeTypeMap
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.TabletAndroid
 import androidx.compose.material.icons.filled.Usb
+import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
@@ -84,6 +86,11 @@ private const val BROWSER_PAGE_DURATION_MS = 280
 private const val MIN_LOADING_SPINNER_MS = 220L
 private const val FILE_ENTRY_ANIM_DURATION_MS = 280
 private const val DIRECTORY_DIRECT_PUBLISH_MAX_ITEMS = 3000
+private val FALLBACK_VIDEO_EXTENSIONS = setOf(
+    "3g2", "3gp", "asf", "avi", "divx", "f4v", "flv", "m2ts", "m2v", "m4v",
+    "mkv", "mov", "mp4", "mpeg", "mpg", "mts", "ogm", "ogv", "rm", "rmvb",
+    "ts", "vob", "webm", "wmv"
+)
 
 private enum class BrowserNavDirection {
     Forward,
@@ -1092,6 +1099,7 @@ private fun isWithinRoot(file: File, root: File): Boolean {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
+    val isVideoFile = !item.isDirectory && isLikelyVideoFile(item.file)
     val subtitle by produceState(
         initialValue = if (item.isDirectory && !item.isArchive) "Loading..." else {
             val format = item.file.extension.uppercase().ifBlank { "UNKNOWN" }
@@ -1149,11 +1157,20 @@ fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
                     }
                 }
             } else {
-                Icon(
-                    imageVector = Icons.Default.AudioFile,
-                    contentDescription = "Audio file",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                val contentDescription = if (isVideoFile) "Video file" else "Audio file"
+                if (isVideoFile) {
+                    Icon(
+                        imageVector = Icons.Default.VideoFile,
+                        contentDescription = contentDescription,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.AudioFile,
+                        contentDescription = contentDescription,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.width(16.dp))
@@ -1203,6 +1220,18 @@ fun FileItemRow(item: FileItem, isPlaying: Boolean, onClick: () -> Unit) {
             )
         }
     }
+}
+
+private fun isLikelyVideoFile(file: File): Boolean {
+    val extension = file.extension.lowercase(Locale.ROOT)
+    if (extension.isBlank()) {
+        return false
+    }
+    val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+    if (mimeType?.startsWith("video/") == true) {
+        return true
+    }
+    return extension in FALLBACK_VIDEO_EXTENSIONS
 }
 
 private fun formatFileSizeHumanReadable(bytes: Long): String {

@@ -35,7 +35,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -2699,8 +2698,9 @@ private fun FutureActionStrip(
             }
             IconButton(onClick = onOpenCoreSettings, enabled = canOpenCoreSettings) {
                 Icon(
-                    imageVector = Icons.Default.Extension,
-                    contentDescription = "Open current core settings"
+                    painter = painterResource(id = R.drawable.ic_settings_applications),
+                    contentDescription = "Open current core settings",
+                    modifier = Modifier.size(26.dp)
                 )
             }
             IconButton(onClick = onOpenAudioEffects, enabled = true) {

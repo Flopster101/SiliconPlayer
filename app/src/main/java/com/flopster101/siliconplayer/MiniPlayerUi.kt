@@ -72,6 +72,8 @@ internal fun placeholderArtworkIconForFile(file: File?, decoderName: String?): I
         ?: NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() }
     return if (isChipArtworkDecoder(effectiveDecoderName)) {
         ImageVector.vectorResource(R.drawable.ic_placeholder_tracker_chip)
+    } else if (isGamepadArtworkDecoder(effectiveDecoderName)) {
+        ImageVector.vectorResource(R.drawable.ic_placeholder_gamepad)
     } else if (isLikelyVideoExtension(extension)) {
         Icons.Default.Videocam
     } else {
@@ -83,6 +85,14 @@ private fun isChipArtworkDecoder(decoderName: String?): Boolean {
     val normalizedPlugin = pluginNameForCoreName(decoderName)
     return when (normalizedPlugin ?: decoderName?.trim()) {
         "LibOpenMPT", "VGMPlay", "LibSIDPlayFP", "SC68", "AdPlug" -> true
+        else -> false
+    }
+}
+
+private fun isGamepadArtworkDecoder(decoderName: String?): Boolean {
+    val normalizedPlugin = pluginNameForCoreName(decoderName)
+    return when (normalizedPlugin ?: decoderName?.trim()) {
+        "Game Music Emu", "LazyUSF2", "Vio2SF" -> true
         else -> false
     }
 }

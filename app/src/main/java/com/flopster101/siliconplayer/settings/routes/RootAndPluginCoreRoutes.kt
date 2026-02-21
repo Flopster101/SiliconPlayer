@@ -234,7 +234,7 @@ internal fun PluginOpenMptRouteContent(
     val onOpenMptSampleRateChanged = actions.onOpenMptSampleRateChanged
 
     SettingsSectionLabel("Core options")
-    OpenMptDialogSliderCard(
+    CoreDialogSliderCard(
         title = "Stereo separation",
         description = "Sets mixer stereo separation.",
         value = openMptStereoSeparationPercent,
@@ -244,7 +244,7 @@ internal fun PluginOpenMptRouteContent(
         onValueChanged = onOpenMptStereoSeparationPercentChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
-    OpenMptDialogSliderCard(
+    CoreDialogSliderCard(
         title = "Amiga stereo separation",
         description = "Stereo separation used specifically for Amiga modules.",
         value = openMptStereoSeparationAmigaPercent,
@@ -254,7 +254,7 @@ internal fun PluginOpenMptRouteContent(
         onValueChanged = onOpenMptStereoSeparationAmigaPercentChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
-    OpenMptChoiceSelectorCard(
+    CoreChoiceSelectorCard(
         title = "Interpolation filter",
         description = "Selects interpolation quality for module playback.",
         selectedValue = openMptInterpolationFilterLength,
@@ -268,7 +268,7 @@ internal fun PluginOpenMptRouteContent(
         onSelected = onOpenMptInterpolationFilterLengthChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
-    OpenMptChoiceSelectorCard(
+    CoreChoiceSelectorCard(
         title = "Amiga resampler",
         description = "Choose Amiga resampler mode. None uses interpolation filter.",
         selectedValue = openMptAmigaResamplerMode,
@@ -288,7 +288,7 @@ internal fun PluginOpenMptRouteContent(
         onCheckedChange = onOpenMptAmigaResamplerApplyAllModulesChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
-    OpenMptVolumeRampingCard(
+    CoreVolumeRampingCard(
         title = "Volume ramping strength",
         description = "Controls smoothing strength for volume changes.",
         value = openMptVolumeRampingStrength,
@@ -302,7 +302,7 @@ internal fun PluginOpenMptRouteContent(
         onCheckedChange = onOpenMptFt2XmVolumeRampingChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
-    OpenMptDialogSliderCard(
+    CoreDialogSliderCard(
         title = "Master gain",
         description = "Applies decoder gain before output.",
         value = openMptMasterGainMilliBel,

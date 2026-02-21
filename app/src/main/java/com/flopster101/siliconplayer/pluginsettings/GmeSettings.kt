@@ -2,8 +2,8 @@ package com.flopster101.siliconplayer.pluginsettings
 
 import androidx.compose.runtime.Composable
 import com.flopster101.siliconplayer.IntChoice
-import com.flopster101.siliconplayer.OpenMptChoiceSelectorCard
-import com.flopster101.siliconplayer.OpenMptDialogSliderCard
+import com.flopster101.siliconplayer.CoreChoiceSelectorCard
+import com.flopster101.siliconplayer.CoreDialogSliderCard
 import com.flopster101.siliconplayer.PlayerSettingToggleCard
 
 internal class GmeSettings(
@@ -31,7 +31,7 @@ internal class GmeSettings(
     override fun buildSettings(builder: PluginSettingsBuilder) {
         builder.coreOptions {
             custom {
-                OpenMptDialogSliderCard(
+                CoreDialogSliderCard(
                     title = "Tempo",
                     description = "Playback speed multiplier for GME tracks.",
                     value = tempoPercent,
@@ -43,7 +43,7 @@ internal class GmeSettings(
             }
             spacer()
             custom {
-                OpenMptDialogSliderCard(
+                CoreDialogSliderCard(
                     title = "Stereo separation",
                     description = "Stereo depth used by libgme (0% = mono mix, 100% = maximum depth).",
                     value = stereoSeparationPercent,
@@ -73,7 +73,7 @@ internal class GmeSettings(
             }
             spacer()
             custom {
-                OpenMptDialogSliderCard(
+                CoreDialogSliderCard(
                     title = "EQ treble",
                     description = "libgme equalizer treble gain.",
                     value = eqTrebleDecibel,
@@ -87,7 +87,7 @@ internal class GmeSettings(
             }
             spacer()
             custom {
-                OpenMptDialogSliderCard(
+                CoreDialogSliderCard(
                     title = "EQ bass",
                     description = "libgme equalizer bass cutoff frequency.",
                     value = eqBassHz,
@@ -110,7 +110,7 @@ internal class GmeSettings(
             }
             spacer()
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "SPC interpolation",
                     description = "SPC interpolation mode.",
                     selectedValue = spcInterpolation,

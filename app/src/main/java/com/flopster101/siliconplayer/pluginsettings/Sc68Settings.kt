@@ -2,8 +2,8 @@ package com.flopster101.siliconplayer.pluginsettings
 
 import androidx.compose.runtime.Composable
 import com.flopster101.siliconplayer.IntChoice
-import com.flopster101.siliconplayer.OpenMptChoiceSelectorCard
-import com.flopster101.siliconplayer.OpenMptDialogSliderCard
+import com.flopster101.siliconplayer.CoreChoiceSelectorCard
+import com.flopster101.siliconplayer.CoreDialogSliderCard
 import com.flopster101.siliconplayer.PlayerSettingToggleCard
 
 internal class Sc68Settings(
@@ -25,7 +25,7 @@ internal class Sc68Settings(
     override fun buildSettings(builder: PluginSettingsBuilder) {
         builder.coreOptions {
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "aSID filter",
                     description = "Enable the aSIDifier compatibility path for unsupported tunes.",
                     selectedValue = asid,
@@ -39,7 +39,7 @@ internal class Sc68Settings(
             }
             spacer()
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "YM engine",
                     description = "YM-2149 emulation backend.",
                     selectedValue = ymEngine,
@@ -52,7 +52,7 @@ internal class Sc68Settings(
             }
             spacer()
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "YM volume model",
                     description = "YM-2149 output volume model.",
                     selectedValue = ymVolModel,
@@ -74,7 +74,7 @@ internal class Sc68Settings(
             }
             spacer()
             custom {
-                OpenMptDialogSliderCard(
+                CoreDialogSliderCard(
                     title = "Amiga blend",
                     description = "Paula left/right voice blend factor (128 is mono-like).",
                     value = amigaBlend,
@@ -88,7 +88,7 @@ internal class Sc68Settings(
             }
             spacer()
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "Amiga clock",
                     description = "Paula timing standard.",
                     selectedValue = amigaClock,

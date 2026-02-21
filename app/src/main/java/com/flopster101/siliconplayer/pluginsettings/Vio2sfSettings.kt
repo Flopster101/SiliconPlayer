@@ -2,7 +2,7 @@ package com.flopster101.siliconplayer.pluginsettings
 
 import androidx.compose.runtime.Composable
 import com.flopster101.siliconplayer.IntChoice
-import com.flopster101.siliconplayer.OpenMptChoiceSelectorCard
+import com.flopster101.siliconplayer.CoreChoiceSelectorCard
 
 internal class Vio2sfSettings(
     private val interpolationQuality: Int,
@@ -13,7 +13,7 @@ internal class Vio2sfSettings(
     override fun buildSettings(builder: PluginSettingsBuilder) {
         builder.coreOptions {
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "Interpolation quality",
                     description = "Internal DS SPU interpolation mode.",
                     selectedValue = interpolationQuality,

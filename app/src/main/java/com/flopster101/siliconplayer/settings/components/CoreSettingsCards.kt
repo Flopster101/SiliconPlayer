@@ -21,11 +21,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-private val OpenMptCardShape = RoundedCornerShape(16.dp)
+private val CoreSettingsCardShape = RoundedCornerShape(16.dp)
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-internal fun OpenMptChoiceSelectorCard(
+internal fun CoreChoiceSelectorCard(
     title: String,
     description: String,
     selectedValue: Int,
@@ -37,7 +37,7 @@ internal fun OpenMptChoiceSelectorCard(
 
     androidx.compose.material3.ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = OpenMptCardShape,
+        shape = CoreSettingsCardShape,
         onClick = { dialogOpen = true }
     ) {
         Row(
@@ -79,7 +79,7 @@ internal fun OpenMptChoiceSelectorCard(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-internal fun OpenMptDialogSliderCard(
+internal fun CoreDialogSliderCard(
     title: String,
     description: String,
     value: Int,
@@ -94,7 +94,7 @@ internal fun OpenMptDialogSliderCard(
     var dialogOpen by remember { mutableStateOf(false) }
     androidx.compose.material3.ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = OpenMptCardShape,
+        shape = CoreSettingsCardShape,
         onClick = { dialogOpen = true }
     ) {
         Row(
@@ -145,7 +145,7 @@ internal fun OpenMptDialogSliderCard(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-internal fun OpenMptVolumeRampingCard(
+internal fun CoreVolumeRampingCard(
     title: String,
     description: String,
     value: Int,
@@ -157,7 +157,7 @@ internal fun OpenMptVolumeRampingCard(
 
     androidx.compose.material3.ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = OpenMptCardShape,
+        shape = CoreSettingsCardShape,
         onClick = { dialogOpen = true }
     ) {
         Row(

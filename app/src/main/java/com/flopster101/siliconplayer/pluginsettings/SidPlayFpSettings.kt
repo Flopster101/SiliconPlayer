@@ -2,8 +2,8 @@ package com.flopster101.siliconplayer.pluginsettings
 
 import androidx.compose.runtime.Composable
 import com.flopster101.siliconplayer.IntChoice
-import com.flopster101.siliconplayer.OpenMptChoiceSelectorCard
-import com.flopster101.siliconplayer.OpenMptDialogSliderCard
+import com.flopster101.siliconplayer.CoreChoiceSelectorCard
+import com.flopster101.siliconplayer.CoreDialogSliderCard
 import com.flopster101.siliconplayer.PlayerSettingToggleCard
 
 internal class SidPlayFpSettings(
@@ -35,7 +35,7 @@ internal class SidPlayFpSettings(
     override fun buildSettings(builder: PluginSettingsBuilder) {
         builder.coreOptions {
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "Engine",
                     description = "Select SID emulation backend.",
                     selectedValue = backend,
@@ -49,7 +49,7 @@ internal class SidPlayFpSettings(
             }
             spacer()
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "Timing standard",
                     description = "Select C64 timing mode used for playback.",
                     selectedValue = clockMode,
@@ -63,7 +63,7 @@ internal class SidPlayFpSettings(
             }
             spacer()
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "SID model",
                     description = "Choose Auto or force a specific SID model.",
                     selectedValue = sidModelMode,
@@ -104,7 +104,7 @@ internal class SidPlayFpSettings(
             }
             spacer()
             custom {
-                OpenMptDialogSliderCard(
+                CoreDialogSliderCard(
                     title = "Filter curve 6581",
                     description = "ReSIDfp 6581 filter curve.",
                     value = filterCurve6581Percent,
@@ -118,7 +118,7 @@ internal class SidPlayFpSettings(
             }
             spacer()
             custom {
-                OpenMptDialogSliderCard(
+                CoreDialogSliderCard(
                     title = "Filter range 6581",
                     description = "ReSIDfp 6581 filter range adjustment.",
                     value = filterRange6581Percent,
@@ -132,7 +132,7 @@ internal class SidPlayFpSettings(
             }
             spacer()
             custom {
-                OpenMptDialogSliderCard(
+                CoreDialogSliderCard(
                     title = "Filter curve 8580",
                     description = "ReSIDfp 8580 filter curve.",
                     value = filterCurve8580Percent,
@@ -155,7 +155,7 @@ internal class SidPlayFpSettings(
             }
             spacer()
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "Combined waveforms (ReSIDfp)",
                     description = "Strength of combined waveform emulation.",
                     selectedValue = reSidFpCombinedWaveformsStrength,

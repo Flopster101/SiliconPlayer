@@ -37,7 +37,7 @@ class OpenMptSettings(
         // Core-specific options
         builder.coreOptions {
             custom {
-                OpenMptDialogSliderCard(
+                CoreDialogSliderCard(
                     title = "Stereo separation",
                     description = "Sets mixer stereo separation.",
                     value = stereoSeparationPercent,
@@ -49,7 +49,7 @@ class OpenMptSettings(
             }
             spacer()
             custom {
-                OpenMptDialogSliderCard(
+                CoreDialogSliderCard(
                     title = "Amiga stereo separation",
                     description = "Stereo separation used specifically for Amiga modules.",
                     value = stereoSeparationAmigaPercent,
@@ -61,7 +61,7 @@ class OpenMptSettings(
             }
             spacer()
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "Interpolation filter",
                     description = "Selects interpolation quality for module playback.",
                     selectedValue = interpolationFilterLength,
@@ -77,7 +77,7 @@ class OpenMptSettings(
             }
             spacer()
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "Amiga resampler",
                     description = "Choose Amiga resampler mode. None uses interpolation filter.",
                     selectedValue = amigaResamplerMode,
@@ -101,7 +101,7 @@ class OpenMptSettings(
             }
             spacer()
             custom {
-                OpenMptVolumeRampingCard(
+                CoreVolumeRampingCard(
                     title = "Volume ramping strength",
                     description = "Controls smoothing strength for volume changes.",
                     value = volumeRampingStrength,
@@ -119,7 +119,7 @@ class OpenMptSettings(
             }
             spacer()
             custom {
-                OpenMptDialogSliderCard(
+                CoreDialogSliderCard(
                     title = "Master gain",
                     description = "Applies decoder gain before output.",
                     value = masterGainMilliBel,

@@ -16,8 +16,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.IntChoice
-import com.flopster101.siliconplayer.OpenMptChoiceSelectorCard
-import com.flopster101.siliconplayer.OpenMptDialogSliderCard
+import com.flopster101.siliconplayer.CoreChoiceSelectorCard
+import com.flopster101.siliconplayer.CoreDialogSliderCard
 import com.flopster101.siliconplayer.PlayerSettingToggleCard
 import com.flopster101.siliconplayer.SampleRateSelectorCard
 import com.flopster101.siliconplayer.VgmChipCoreSpec
@@ -48,7 +48,7 @@ internal class VgmPlaySettings(
     override fun buildSettings(builder: PluginSettingsBuilder) {
         builder.coreOptions {
             custom {
-                OpenMptDialogSliderCard(
+                CoreDialogSliderCard(
                     title = "Loop count",
                     description = "How many loops to play for looped songs in non-loop-point modes.",
                     value = loopCount,
@@ -69,7 +69,7 @@ internal class VgmPlaySettings(
             }
             spacer()
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "VSync mode",
                     description = "Force playback timing or keep the file's original timing.",
                     selectedValue = vsyncRate,
@@ -79,7 +79,7 @@ internal class VgmPlaySettings(
             }
             spacer()
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "Resampling mode",
                     description = "Select libvgm chip resampling quality mode.",
                     selectedValue = resampleMode,
@@ -89,7 +89,7 @@ internal class VgmPlaySettings(
             }
             spacer()
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "Chip sample mode",
                     description = "Choose how chip sample rates are resolved.",
                     selectedValue = chipSampleMode,
@@ -99,7 +99,7 @@ internal class VgmPlaySettings(
             }
             spacer()
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "Chip sample rate",
                     description = "Target chip sample rate for custom/highest sample modes.",
                     selectedValue = chipSampleRate,
@@ -140,7 +140,7 @@ internal fun VgmPlayChipSettingsScreen(
     onChipCoreChanged: (String, Int) -> Unit
 ) {
     chipCoreSpecs.forEachIndexed { index, spec ->
-        OpenMptChoiceSelectorCard(
+        CoreChoiceSelectorCard(
             title = "${spec.title} emulator core",
             description = "Select the emulation core used for ${spec.title}.",
             selectedValue = chipCoreSelections[spec.key] ?: spec.defaultValue,

@@ -2,7 +2,7 @@ package com.flopster101.siliconplayer.pluginsettings
 
 import androidx.compose.runtime.Composable
 import com.flopster101.siliconplayer.AdPlugConfig
-import com.flopster101.siliconplayer.OpenMptChoiceSelectorCard
+import com.flopster101.siliconplayer.CoreChoiceSelectorCard
 
 internal class AdPlugSettings(
     private val oplEngine: Int,
@@ -13,7 +13,7 @@ internal class AdPlugSettings(
     override fun buildSettings(builder: PluginSettingsBuilder) {
         builder.coreOptions {
             custom {
-                OpenMptChoiceSelectorCard(
+                CoreChoiceSelectorCard(
                     title = "Adlib core",
                     description = "OPL emulator backend used by AdPlug.",
                     selectedValue = oplEngine,

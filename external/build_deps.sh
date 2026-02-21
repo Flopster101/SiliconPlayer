@@ -1637,14 +1637,284 @@ build_adplug() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build libzakalwe
+# -----------------------------------------------------------------------------
+build_libzakalwe() {
+    local ABI=$1
+    echo "Building libzakalwe for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/libzakalwe"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "libzakalwe source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libzakalwe.a" ] && \
+       [ -f "$INSTALL_DIR/include/zakalwe/string.h" ]; then
+        echo "libzakalwe already built for $ABI -> skipping"
+        return 0
+    fi
+
+    mkdir -p "$INSTALL_DIR/lib" "$INSTALL_DIR/include/zakalwe"
+
+    (
+        cd "$PROJECT_PATH"
+        make clean >/dev/null 2>&1 || true
+
+        CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
+        CFLAGS="-fPIC $DEP_OPT_FLAGS" \
+        ./configure
+
+        # Build static archive payload target from upstream Makefile.in.
+        make --no-print-directory V=0 -j"$NPROC" AR="$TOOLCHAIN/bin/llvm-ar" static_pack.o
+    )
+
+    if [ ! -f "$PROJECT_PATH/static_pack.o" ]; then
+        echo "Error: libzakalwe static archive payload not found after build."
+        return 1
+    fi
+
+    cp "$PROJECT_PATH/static_pack.o" "$INSTALL_DIR/lib/libzakalwe.a"
+    cp "$PROJECT_PATH/include/zakalwe/"*.h "$INSTALL_DIR/include/zakalwe/" 2>/dev/null || true
+}
+
+# -----------------------------------------------------------------------------
+# Function: Build bencodetools
+# -----------------------------------------------------------------------------
+build_bencodetools() {
+    local ABI=$1
+    echo "Building bencodetools for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/bencodetools"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "bencodetools source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libbencodetools.a" ] && \
+       [ -f "$INSTALL_DIR/include/bencodetools/bencode.h" ]; then
+        echo "bencodetools already built for $ABI -> skipping"
+        return 0
+    fi
+
+    mkdir -p "$INSTALL_DIR/lib" "$INSTALL_DIR/include/bencodetools"
+
+    (
+        cd "$PROJECT_PATH"
+        make clean >/dev/null 2>&1 || true
+
+        CFLAGS="-fPIC $DEP_OPT_FLAGS" \
+        LDFLAGS="-L$INSTALL_DIR/lib" \
+        ./configure \
+            --prefix="$INSTALL_DIR" \
+            --without-python \
+            --c-compiler="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang"
+
+        make --no-print-directory V=0 -j"$NPROC" compile-c
+    )
+
+    if [ ! -f "$PROJECT_PATH/bencode.o" ]; then
+        echo "Error: bencodetools object payload not found after build."
+        return 1
+    fi
+
+    "$TOOLCHAIN/bin/llvm-ar" rcs "$INSTALL_DIR/lib/libbencodetools.a" "$PROJECT_PATH/bencode.o"
+    cp "$PROJECT_PATH/include/bencodetools/"*.h "$INSTALL_DIR/include/bencodetools/" 2>/dev/null || true
+}
+
+# -----------------------------------------------------------------------------
+# Function: Build vasm host tool (required by UADE score build)
+# -----------------------------------------------------------------------------
+build_vasm_host() {
+    echo "Building vasm host tool..."
+
+    local PROJECT_PATH="$ABSOLUTE_PATH/vasm"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "Error: vasm source not found at $PROJECT_PATH."
+        return 1
+    fi
+
+    if [ "$FORCE_CLEAN" -eq 1 ]; then
+        (
+            cd "$PROJECT_PATH"
+            make --no-print-directory clean >/dev/null 2>&1 || true
+        )
+    fi
+
+    if [ -x "$PROJECT_PATH/vasmm68k_mot" ]; then
+        echo "vasm host tool already built -> skipping"
+        return 0
+    fi
+
+    (
+        cd "$PROJECT_PATH"
+        make --no-print-directory -j"$NPROC" CPU=m68k SYNTAX=mot
+    )
+
+    if [ ! -x "$PROJECT_PATH/vasmm68k_mot" ]; then
+        echo "Error: vasm build succeeded but vasmm68k_mot is missing."
+        return 1
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# Function: Build uade (libuade static)
+# -----------------------------------------------------------------------------
+build_uade() {
+    local ABI=$1
+    echo "Building uade for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/uade"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+    local CONFIGURE_HOST=""
+    local UADE_DEPS_PREFIX="$BUILD_DIR/uade_deps_prefix"
+    local HOST_VASM_WRAPPER_DIR="$BUILD_DIR/.host-tools"
+    local HOST_VASM_WRAPPER="$HOST_VASM_WRAPPER_DIR/vasm.vasmm68k-mot"
+    local HOST_NATIVE_CC=""
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "uade source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    if [ ! -f "$PROJECT_PATH/configure" ]; then
+        echo "Error: uade source at $PROJECT_PATH does not contain configure."
+        return 1
+    fi
+
+    if command -v gcc >/dev/null 2>&1; then
+        HOST_NATIVE_CC="$(command -v gcc)"
+    elif command -v cc >/dev/null 2>&1; then
+        HOST_NATIVE_CC="$(command -v cc)"
+    else
+        echo "Error: no host C compiler found (gcc/cc) for UADE helper tools."
+        return 1
+    fi
+
+    # UADE build depends on host vasm + libzakalwe + bencode-tools.
+    build_vasm_host || return 1
+
+    # UADE libuade build depends on libzakalwe + bencode-tools.
+    # Auto-build dependencies when missing, or when clean mode is requested.
+    if [ "$FORCE_CLEAN" -eq 1 ] || [ ! -f "$INSTALL_DIR/lib/libzakalwe.a" ] || \
+       [ ! -f "$INSTALL_DIR/include/zakalwe/string.h" ]; then
+        build_libzakalwe "$ABI"
+    fi
+    if [ "$FORCE_CLEAN" -eq 1 ] || [ ! -f "$INSTALL_DIR/lib/libbencodetools.a" ] || \
+       [ ! -f "$INSTALL_DIR/include/bencodetools/bencode.h" ]; then
+        build_bencodetools "$ABI"
+    fi
+    if [ ! -f "$INSTALL_DIR/lib/libzakalwe.a" ] || [ ! -f "$INSTALL_DIR/include/zakalwe/string.h" ] || \
+       [ ! -f "$INSTALL_DIR/lib/libbencodetools.a" ] || [ ! -f "$INSTALL_DIR/include/bencodetools/bencode.h" ]; then
+        echo "Error: uade dependencies still missing for $ABI after attempted build."
+        return 1
+    fi
+
+    case "$ABI" in
+        "arm64-v8a")
+            CONFIGURE_HOST="aarch64-linux-android"
+            ;;
+        "armeabi-v7a")
+            CONFIGURE_HOST="arm-linux-androideabi"
+            ;;
+        "x86_64")
+            CONFIGURE_HOST="x86_64-linux-android"
+            ;;
+        "x86")
+            CONFIGURE_HOST="i686-linux-android"
+            ;;
+        *)
+            echo "Unsupported ABI for uade: $ABI"
+            return 1
+            ;;
+    esac
+
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR" "$INSTALL_DIR/lib" "$INSTALL_DIR/include/uade"
+    mkdir -p "$UADE_DEPS_PREFIX/lib" "$UADE_DEPS_PREFIX/include"
+    mkdir -p "$HOST_VASM_WRAPPER_DIR"
+
+    # UADE configure looks for shared-lib names when resolving prefixes.
+    # Provide local ABI-scoped shim names pointing to our static archives.
+    ln -sfn "$INSTALL_DIR/lib/libzakalwe.a" "$UADE_DEPS_PREFIX/lib/libzakalwe.so"
+    ln -sfn "$INSTALL_DIR/lib/libbencodetools.a" "$UADE_DEPS_PREFIX/lib/libbencodetools.so"
+    ln -sfn "$INSTALL_DIR/include/zakalwe" "$UADE_DEPS_PREFIX/include/zakalwe"
+    ln -sfn "$INSTALL_DIR/include/bencodetools" "$UADE_DEPS_PREFIX/include/bencodetools"
+
+    cat > "$HOST_VASM_WRAPPER" <<EOF
+#!/usr/bin/env bash
+exec "$ABSOLUTE_PATH/vasm/vasmm68k_mot" "\$@"
+EOF
+    chmod +x "$HOST_VASM_WRAPPER"
+
+    (
+        cd "$BUILD_DIR"
+        PATH="$HOST_VASM_WRAPPER_DIR:$PATH" \
+        CC="$HOST_NATIVE_CC" \
+        CXX="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang++" \
+        AR="$TOOLCHAIN/bin/llvm-ar" \
+        CFLAGS="-fPIC $DEP_OPT_FLAGS" \
+        LDFLAGS="-L$INSTALL_DIR/lib" \
+        "$PROJECT_PATH/configure" \
+            --srcdir="$PROJECT_PATH" \
+            --host="$CONFIGURE_HOST" \
+            --prefix="$INSTALL_DIR" \
+            --pkg-config=false \
+            --without-uade123 \
+            --without-uadesimple \
+            --without-uadefs \
+            --without-write-audio \
+            --without-avx2 \
+            --bencode-tools-prefix="$UADE_DEPS_PREFIX" \
+            --libzakalwe-prefix="$UADE_DEPS_PREFIX" \
+            --target-cc="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
+            --target-ar="$TOOLCHAIN/bin/llvm-ar" \
+            --target-objcopy="$TOOLCHAIN/bin/llvm-objcopy"
+
+        PATH="$HOST_VASM_WRAPPER_DIR:$PATH" make --no-print-directory V=0 -j"$NPROC" staticlibuade uadecore score
+    )
+
+    if [ ! -f "$BUILD_DIR/src/frontends/common/libuade.a" ]; then
+        echo "Error: uade static library not found after build."
+        return 1
+    fi
+
+    cp "$BUILD_DIR/src/frontends/common/libuade.a" "$INSTALL_DIR/lib/libuade.a"
+    cp "$BUILD_DIR/src/frontends/include/uade/"*.h "$INSTALL_DIR/include/uade/" 2>/dev/null || true
+
+    if [ ! -f "$BUILD_DIR/src/uadecore" ]; then
+        echo "Error: uadecore binary not found after build."
+        return 1
+    fi
+    if [ ! -f "$BUILD_DIR/amigasrc/score/score" ]; then
+        echo "Error: UADE score binary not found after build."
+        return 1
+    fi
+
+    mkdir -p "$INSTALL_DIR/lib/uade" "$INSTALL_DIR/share/uade"
+    cp "$BUILD_DIR/src/uadecore" "$INSTALL_DIR/lib/uade/uadecore"
+    cp "$BUILD_DIR/amigasrc/score/score" "$INSTALL_DIR/share/uade/score"
+    cp "$PROJECT_PATH/uaerc" "$INSTALL_DIR/share/uade/uaerc"
+    cp "$PROJECT_PATH/eagleplayer.conf" "$INSTALL_DIR/share/uade/eagleplayer.conf"
+    rm -rf "$INSTALL_DIR/share/uade/players"
+    cp -R "$PROJECT_PATH/players" "$INSTALL_DIR/share/uade/players"
+}
+
+# -----------------------------------------------------------------------------
 # Argument Parsing
 # -----------------------------------------------------------------------------
 usage() {
     echo "Usage: $0 <abi|all> <lib|all[,lib2,...]> [clean]"
     echo "  ABI: all, arm64-v8a, armeabi-v7a, x86_64 (x86 supported only when explicitly requested)"
-    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68, libbinio, adplug"
+    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68, libbinio, adplug, libzakalwe, bencodetools, vasm, uade"
     echo "  clean (optional): force rebuild (bypass already-built skip checks)"
-    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68, binio, libadplug"
+    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68, binio, libadplug, zakalwe, bencode, assembler/vasm, libuade"
 }
 
 if [ "$#" -eq 1 ]; then
@@ -1718,6 +1988,18 @@ normalize_lib_name() {
         adplug|libadplug)
             echo "adplug"
             ;;
+        zakalwe|libzakalwe)
+            echo "libzakalwe"
+            ;;
+        bencode|bencodetools|libbencodetools)
+            echo "bencodetools"
+            ;;
+        assembler|vasm)
+            echo "vasm"
+            ;;
+        uade|libuade)
+            echo "uade"
+            ;;
         *)
             echo "$lib"
             ;;
@@ -1759,7 +2041,7 @@ is_valid_abi() {
 is_valid_lib() {
     local lib="$1"
     case "$lib" in
-        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth|sc68|libbinio|adplug)
+        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth|sc68|libbinio|adplug|libzakalwe|bencodetools|vasm|uade)
             return 0
             ;;
         *)
@@ -1820,6 +2102,10 @@ fi
 
 if target_has_lib "adplug"; then
     apply_adplug_patches
+fi
+
+if target_has_lib "vasm"; then
+    build_vasm_host
 fi
 
 # -----------------------------------------------------------------------------
@@ -1934,6 +2220,18 @@ for ABI in "${ABIS[@]}"; do
 
     if target_has_lib "adplug"; then
         build_adplug "$ABI"
+    fi
+
+    if target_has_lib "libzakalwe"; then
+        build_libzakalwe "$ABI"
+    fi
+
+    if target_has_lib "bencodetools"; then
+        build_bencodetools "$ABI"
+    fi
+
+    if target_has_lib "uade"; then
+        build_uade "$ABI"
     fi
 done
 

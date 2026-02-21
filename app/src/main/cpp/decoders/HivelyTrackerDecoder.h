@@ -42,7 +42,7 @@ public:
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override;
     double getPlaybackPositionSeconds() override;
-    TimelineMode getTimelineMode() const override { return TimelineMode::ContinuousLinear; }
+    TimelineMode getTimelineMode() const override;
 
     const char* getName() const override { return "HivelyTracker"; }
     static std::vector<std::string> getSupportedExtensions();
@@ -66,16 +66,23 @@ private:
     int currentSubtuneIndex = 0;
     std::atomic<int> repeatMode { 0 };
     double playbackPositionSeconds = 0.0;
+    double durationSeconds = 0.0;
+    std::atomic<bool> durationReliable { false };
 
     std::vector<float> pendingInterleaved;
     std::size_t pendingReadOffset = 0;
     std::vector<int16_t> decodeInterleavedScratch;
+    std::vector<double> subtuneDurationSeconds;
+    std::vector<uint8_t> subtuneDurationKnown;
+    std::vector<uint8_t> subtuneDurationReliable;
     bool stopAfterPendingDrain = false;
 
     void closeInternalLocked();
     int getFrameSamplesPerDecodeLocked() const;
     bool decodeFrameIntoPendingLocked();
     bool resetToSubtuneStartLocked();
+    bool analyzeSubtuneDurationLocked(int index);
+    void updateCurrentDurationFromCacheLocked();
 };
 
 #endif // SILICONPLAYER_HIVELYTRACKERDECODER_H

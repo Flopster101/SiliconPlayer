@@ -79,6 +79,11 @@ bool HivelyTrackerDecoder::open(const char* path) {
     pendingReadOffset = 0;
     playbackPositionSeconds = 0.0;
     decodeInterleavedScratch.clear();
+    subtuneDurationSeconds.assign(static_cast<size_t>(subtuneCount), 0.0);
+    subtuneDurationKnown.assign(static_cast<size_t>(subtuneCount), 0u);
+    subtuneDurationReliable.assign(static_cast<size_t>(subtuneCount), 0u);
+    analyzeSubtuneDurationLocked(currentSubtuneIndex);
+    updateCurrentDurationFromCacheLocked();
     return true;
 }
 
@@ -97,11 +102,16 @@ void HivelyTrackerDecoder::closeInternalLocked() {
     displayChannels = 2;
     subtuneCount = 1;
     currentSubtuneIndex = 0;
+    durationSeconds = 0.0;
+    durationReliable.store(false);
     stopAfterPendingDrain = false;
     pendingInterleaved.clear();
     pendingReadOffset = 0;
     playbackPositionSeconds = 0.0;
     decodeInterleavedScratch.clear();
+    subtuneDurationSeconds.clear();
+    subtuneDurationKnown.clear();
+    subtuneDurationReliable.clear();
 }
 
 void HivelyTrackerDecoder::close() {
@@ -144,7 +154,10 @@ bool HivelyTrackerDecoder::decodeFrameIntoPendingLocked() {
                 static_cast<float>(right) / 32768.0f;
     }
 
-    if (!songEndBefore && songEndAfter && repeatMode.load() == 0) {
+    if (!songEndBefore &&
+        songEndAfter &&
+        repeatMode.load() == 0 &&
+        !durationReliable.load()) {
         stopAfterPendingDrain = true;
     }
     return true;
@@ -162,14 +175,120 @@ bool HivelyTrackerDecoder::resetToSubtuneStartLocked() {
     return true;
 }
 
+bool HivelyTrackerDecoder::analyzeSubtuneDurationLocked(int index) {
+    if (index < 0 || index >= subtuneCount) {
+        return false;
+    }
+    const size_t cacheIndex = static_cast<size_t>(index);
+    if (cacheIndex < subtuneDurationKnown.size() && subtuneDurationKnown[cacheIndex] != 0u) {
+        return subtuneDurationReliable[cacheIndex] != 0u;
+    }
+    if (sourcePath.empty()) {
+        return false;
+    }
+
+    hvl_InitReplayer();
+    hvl_tune* analysisTune = hvl_LoadTune(
+            sourcePath.c_str(),
+            static_cast<uint32>(sampleRateHz),
+            2
+    );
+    if (!analysisTune) {
+        if (cacheIndex < subtuneDurationKnown.size()) {
+            subtuneDurationKnown[cacheIndex] = 1u;
+            subtuneDurationReliable[cacheIndex] = 0u;
+            subtuneDurationSeconds[cacheIndex] = 0.0;
+        }
+        return false;
+    }
+
+    if (!hvl_InitSubsong(analysisTune, static_cast<uint32>(index))) {
+        hvl_FreeTune(analysisTune);
+        if (cacheIndex < subtuneDurationKnown.size()) {
+            subtuneDurationKnown[cacheIndex] = 1u;
+            subtuneDurationReliable[cacheIndex] = 0u;
+            subtuneDurationSeconds[cacheIndex] = 0.0;
+        }
+        return false;
+    }
+
+    const int analysisRate = std::max(8000, static_cast<int>(analysisTune->ht_Frequency));
+    const int frameSamples = std::max(1, analysisRate / 50);
+    std::vector<int16_t> scratch(static_cast<size_t>(frameSamples * 2));
+    int8* scratchBytes = reinterpret_cast<int8*>(scratch.data());
+    const int64_t maxFramesToAnalyze = static_cast<int64_t>(analysisRate) * 60 * 30; // 30 minutes cap.
+    int64_t decodedFrames = 0;
+    bool reachedSongEnd = false;
+
+    while (decodedFrames < maxFramesToAnalyze) {
+        if (analysisTune->ht_SongEndReached != 0) {
+            reachedSongEnd = true;
+            break;
+        }
+        hvl_DecodeFrame(
+                analysisTune,
+                scratchBytes,
+                scratchBytes + static_cast<int32>(sizeof(int16_t)),
+                static_cast<int32>(sizeof(int16_t) * 2)
+        );
+        decodedFrames += frameSamples;
+    }
+
+    hvl_FreeTune(analysisTune);
+
+    if (cacheIndex < subtuneDurationKnown.size()) {
+        subtuneDurationKnown[cacheIndex] = 1u;
+        subtuneDurationReliable[cacheIndex] = reachedSongEnd ? 1u : 0u;
+        subtuneDurationSeconds[cacheIndex] = reachedSongEnd
+                ? static_cast<double>(decodedFrames) / static_cast<double>(analysisRate)
+                : 0.0;
+    }
+
+    return reachedSongEnd;
+}
+
+void HivelyTrackerDecoder::updateCurrentDurationFromCacheLocked() {
+    if (currentSubtuneIndex < 0 || currentSubtuneIndex >= subtuneCount) {
+        durationSeconds = 0.0;
+        durationReliable.store(false);
+        return;
+    }
+    const size_t cacheIndex = static_cast<size_t>(currentSubtuneIndex);
+    if (cacheIndex >= subtuneDurationKnown.size() || subtuneDurationKnown[cacheIndex] == 0u) {
+        durationSeconds = 0.0;
+        durationReliable.store(false);
+        return;
+    }
+    const bool reliable = subtuneDurationReliable[cacheIndex] != 0u;
+    durationSeconds = reliable ? subtuneDurationSeconds[cacheIndex] : 0.0;
+    durationReliable.store(reliable);
+}
+
 int HivelyTrackerDecoder::read(float* buffer, int numFrames) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (!tune || !buffer || numFrames <= 0) {
         return 0;
     }
 
+    int framesTarget = numFrames;
+    const int mode = repeatMode.load();
+    const bool hasReliableDuration = durationReliable.load() && durationSeconds > 0.0;
+    if (hasReliableDuration && mode != 2) {
+        const int64_t durationFrames = static_cast<int64_t>(
+                std::llround(durationSeconds * static_cast<double>(sampleRateHz))
+        );
+        const int64_t playedFrames = static_cast<int64_t>(
+                std::llround(playbackPositionSeconds * static_cast<double>(sampleRateHz))
+        );
+        const int64_t remainingFrames = durationFrames - playedFrames;
+        if (remainingFrames <= 0) {
+            return 0;
+        }
+        framesTarget = static_cast<int>(std::min<int64_t>(framesTarget, remainingFrames));
+    }
+
     int framesWritten = 0;
-    while (framesWritten < numFrames) {
+    while (framesWritten < framesTarget) {
         if (pendingReadOffset >= pendingInterleaved.size()) {
             pendingInterleaved.clear();
             pendingReadOffset = 0;
@@ -187,7 +306,7 @@ int HivelyTrackerDecoder::read(float* buffer, int numFrames) {
             break;
         }
 
-        const int copyFrames = std::min(numFrames - framesWritten, availableFrames);
+        const int copyFrames = std::min(framesTarget - framesWritten, availableFrames);
         const std::size_t copySamples = static_cast<std::size_t>(copyFrames * channels);
         std::copy_n(
                 pendingInterleaved.data() + pendingReadOffset,
@@ -207,7 +326,19 @@ void HivelyTrackerDecoder::seek(double seconds) {
         return;
     }
 
-    const double clampedTarget = std::max(0.0, seconds);
+    double clampedTarget = std::max(0.0, seconds);
+    const bool hasReliableDuration = durationReliable.load() && durationSeconds > 0.0;
+    const int mode = repeatMode.load();
+    if (hasReliableDuration) {
+        if (mode == 2) {
+            clampedTarget = std::fmod(clampedTarget, durationSeconds);
+            if (clampedTarget < 0.0) {
+                clampedTarget += durationSeconds;
+            }
+        } else {
+            clampedTarget = std::min(clampedTarget, durationSeconds);
+        }
+    }
     if (!resetToSubtuneStartLocked()) {
         return;
     }
@@ -271,7 +402,7 @@ void HivelyTrackerDecoder::seek(double seconds) {
 }
 
 double HivelyTrackerDecoder::getDuration() {
-    return 0.0;
+    return durationSeconds;
 }
 
 int HivelyTrackerDecoder::getSampleRate() {
@@ -311,6 +442,8 @@ bool HivelyTrackerDecoder::selectSubtune(int index) {
         return false;
     }
     currentSubtuneIndex = index;
+    analyzeSubtuneDurationLocked(currentSubtuneIndex);
+    updateCurrentDurationFromCacheLocked();
     stopAfterPendingDrain = false;
     pendingInterleaved.clear();
     pendingReadOffset = 0;
@@ -326,7 +459,17 @@ std::string HivelyTrackerDecoder::getSubtuneArtist(int index) {
     return (index >= 0 && index < subtuneCount) ? artist : std::string();
 }
 
-double HivelyTrackerDecoder::getSubtuneDurationSeconds(int /*index*/) {
+double HivelyTrackerDecoder::getSubtuneDurationSeconds(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (subtuneCount <= 0) return 0.0;
+    if (index < 0 || index >= subtuneCount) return 0.0;
+    analyzeSubtuneDurationLocked(index);
+    const size_t cacheIndex = static_cast<size_t>(index);
+    if (cacheIndex < subtuneDurationKnown.size() &&
+        subtuneDurationKnown[cacheIndex] != 0u &&
+        subtuneDurationReliable[cacheIndex] != 0u) {
+        return subtuneDurationSeconds[cacheIndex];
+    }
     return 0.0;
 }
 
@@ -368,13 +511,35 @@ int HivelyTrackerDecoder::getRepeatModeCapabilities() const {
 }
 
 int HivelyTrackerDecoder::getPlaybackCapabilities() const {
-    return PLAYBACK_CAP_SEEK |
-           PLAYBACK_CAP_LIVE_REPEAT_MODE |
-           PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
+    int caps = PLAYBACK_CAP_SEEK |
+               PLAYBACK_CAP_LIVE_REPEAT_MODE |
+               PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
+    if (durationReliable.load()) {
+        caps |= PLAYBACK_CAP_RELIABLE_DURATION;
+    }
+    return caps;
 }
 
 double HivelyTrackerDecoder::getPlaybackPositionSeconds() {
-    return playbackPositionSeconds;
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!tune) return -1.0;
+    double position = playbackPositionSeconds;
+    const bool hasReliableDuration = durationReliable.load() && durationSeconds > 0.0;
+    if (hasReliableDuration) {
+        if (repeatMode.load() == 2) {
+            position = std::fmod(position, durationSeconds);
+            if (position < 0.0) {
+                position += durationSeconds;
+            }
+        } else {
+            position = std::min(position, durationSeconds);
+        }
+    }
+    return position;
+}
+
+AudioDecoder::TimelineMode HivelyTrackerDecoder::getTimelineMode() const {
+    return TimelineMode::Discontinuous;
 }
 
 std::vector<std::string> HivelyTrackerDecoder::getSupportedExtensions() {

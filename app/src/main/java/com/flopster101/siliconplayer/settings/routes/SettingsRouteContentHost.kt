@@ -96,10 +96,7 @@ internal fun SettingsRouteContentHost(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(
-                        state = rememberScrollState(),
-                        enabled = !(currentRoute == SettingsRoute.AudioPlugins && pluginPriorityEditMode)
-                    )
+                    .verticalScroll(state = rememberScrollState())
             ) {
                 when (currentRoute) {
                     SettingsRoute.Root -> {

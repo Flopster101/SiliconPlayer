@@ -95,19 +95,7 @@ internal fun PluginListItemCard(
             .clip(PluginSettingsCardShape)
             .offset { IntOffset(x = 0, y = displayOffsetY.roundToInt()) }
             .let { base ->
-                if (editMode && enableInteractions) {
-                    base.pointerInput(pluginName, editMode) {
-                        detectDragGestures(
-                            onDragStart = { onDragStart() },
-                            onDragEnd = { onDragEnd() },
-                            onDragCancel = { onDragEnd() },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                onDragDelta(dragAmount.y)
-                            }
-                        )
-                    }
-                } else if (!editMode && enableInteractions) {
+                if (!editMode && enableInteractions) {
                     base.clickable(onClick = onClick)
                 } else {
                     base
@@ -157,7 +145,25 @@ internal fun PluginListItemCard(
                     imageVector = Icons.Default.DragIndicator,
                     contentDescription = "Drag to reorder",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier
+                        .size(28.dp)
+                        .let { base ->
+                            if (enableInteractions) {
+                                base.pointerInput(pluginName, editMode) {
+                                    detectDragGestures(
+                                        onDragStart = { onDragStart() },
+                                        onDragEnd = { onDragEnd() },
+                                        onDragCancel = { onDragEnd() },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            onDragDelta(dragAmount.y)
+                                        }
+                                    )
+                                }
+                            } else {
+                                base
+                            }
+                        }
                 )
             } else {
                 Switch(

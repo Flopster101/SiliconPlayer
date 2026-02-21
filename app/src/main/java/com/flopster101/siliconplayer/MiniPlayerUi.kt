@@ -63,15 +63,27 @@ private val artworkFallbackVideoExtensions = setOf(
 )
 
 @Composable
-internal fun placeholderArtworkIconForFile(file: File?): ImageVector {
+internal fun placeholderArtworkIconForFile(file: File?, decoderName: String?): ImageVector {
     val extension = file?.extension?.lowercase()?.ifBlank { return Icons.Default.MusicNote }
         ?: return Icons.Default.MusicNote
-    return if (extension in trackerModuleExtensions) {
+    val effectiveDecoderName = decoderName
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() }
+    return if (isChipArtworkDecoder(effectiveDecoderName)) {
         ImageVector.vectorResource(R.drawable.ic_placeholder_tracker_chip)
     } else if (isLikelyVideoExtension(extension)) {
         Icons.Default.Videocam
     } else {
         Icons.Default.MusicNote
+    }
+}
+
+private fun isChipArtworkDecoder(decoderName: String?): Boolean {
+    val normalizedPlugin = pluginNameForCoreName(decoderName)
+    return when (normalizedPlugin ?: decoderName?.trim()) {
+        "LibOpenMPT", "VGMPlay", "LibSIDPlayFP", "SC68", "AdPlug" -> true
+        else -> false
     }
 }
 

@@ -125,7 +125,7 @@ internal fun ExpandedPlayerOverlayHost(
             playbackSourceLabel = playbackSourceLabel,
             pathOrUrl = pathOrUrl,
             artwork = artworkBitmap,
-            noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
+            noArtworkIcon = placeholderArtworkIconForFile(selectedFile, decoderName),
             repeatMode = repeatMode,
             canCycleRepeatMode = supportsLiveRepeatMode(playbackCapabilitiesFlags),
             canSeek = canSeekPlayback(playbackCapabilitiesFlags),

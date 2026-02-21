@@ -126,7 +126,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 playbackSourceLabel = playbackSourceLabel,
                 pathOrUrl = pathOrUrl,
                 artwork = artworkBitmap,
-                noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
+                noArtworkIcon = placeholderArtworkIconForFile(selectedFile, decoderName),
                 repeatMode = activeRepeatMode,
                 canCycleRepeatMode = supportsLiveRepeatMode(playbackCapabilitiesFlags),
                 canSeek = canSeekPlayback(playbackCapabilitiesFlags),
@@ -211,7 +211,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                     if (selectedFile != null) "Unknown Artist" else "Tap a file to play"
                 },
                 artwork = artworkBitmap,
-                noArtworkIcon = placeholderArtworkIconForFile(selectedFile),
+                noArtworkIcon = placeholderArtworkIconForFile(selectedFile, decoderName),
                 isPlaying = isPlaying,
                 playbackStartInProgress = playbackStartInProgress,
                 seekInProgress = seekUiBusy,

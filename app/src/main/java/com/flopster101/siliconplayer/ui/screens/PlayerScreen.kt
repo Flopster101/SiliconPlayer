@@ -1162,361 +1162,19 @@ private fun TrackInfoDetailsDialog(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
-    var liveBitrate by remember { mutableLongStateOf(0L) }
-    var liveIsVbr by remember { mutableStateOf(false) }
-    var liveRenderRateHz by remember { mutableIntStateOf(0) }
-    var liveOutputRateHz by remember { mutableIntStateOf(0) }
-    var liveComposer by remember { mutableStateOf("") }
-    var liveGenre by remember { mutableStateOf("") }
-    var openMptTypeLong by remember { mutableStateOf("") }
-    var openMptTracker by remember { mutableStateOf("") }
-    var openMptSongMessage by remember { mutableStateOf("") }
-    var openMptOrderCount by remember { mutableIntStateOf(0) }
-    var openMptPatternCount by remember { mutableIntStateOf(0) }
-    var openMptInstrumentCount by remember { mutableIntStateOf(0) }
-    var openMptSampleCount by remember { mutableIntStateOf(0) }
-    var openMptInstrumentNames by remember { mutableStateOf("") }
-    var openMptSampleNames by remember { mutableStateOf("") }
-    var vgmGameName by remember { mutableStateOf("") }
-    var vgmSystemName by remember { mutableStateOf("") }
-    var vgmReleaseDate by remember { mutableStateOf("") }
-    var vgmEncodedBy by remember { mutableStateOf("") }
-    var vgmNotes by remember { mutableStateOf("") }
-    var vgmFileVersion by remember { mutableStateOf("") }
-    var vgmDeviceCount by remember { mutableIntStateOf(0) }
-    var vgmUsedChipList by remember { mutableStateOf("") }
-    var vgmHasLoopPoint by remember { mutableStateOf(false) }
-    var ffmpegCodecName by remember { mutableStateOf("") }
-    var ffmpegContainerName by remember { mutableStateOf("") }
-    var ffmpegSampleFormatName by remember { mutableStateOf("") }
-    var ffmpegChannelLayoutName by remember { mutableStateOf("") }
-    var ffmpegEncoderName by remember { mutableStateOf("") }
-    var gmeSystemName by remember { mutableStateOf("") }
-    var gmeGameName by remember { mutableStateOf("") }
-    var gmeCopyright by remember { mutableStateOf("") }
-    var gmeComment by remember { mutableStateOf("") }
-    var gmeDumper by remember { mutableStateOf("") }
-    var gmeTrackCount by remember { mutableIntStateOf(0) }
-    var gmeVoiceCount by remember { mutableIntStateOf(0) }
-    var gmeHasLoopPoint by remember { mutableStateOf(false) }
-    var gmeLoopStartMs by remember { mutableIntStateOf(-1) }
-    var gmeLoopLengthMs by remember { mutableIntStateOf(-1) }
-    var lazyUsf2GameName by remember { mutableStateOf("") }
-    var lazyUsf2Copyright by remember { mutableStateOf("") }
-    var lazyUsf2Year by remember { mutableStateOf("") }
-    var lazyUsf2UsfBy by remember { mutableStateOf("") }
-    var lazyUsf2LengthTag by remember { mutableStateOf("") }
-    var lazyUsf2FadeTag by remember { mutableStateOf("") }
-    var lazyUsf2EnableCompare by remember { mutableStateOf(false) }
-    var lazyUsf2EnableFifoFull by remember { mutableStateOf(false) }
-    var vio2sfGameName by remember { mutableStateOf("") }
-    var vio2sfCopyright by remember { mutableStateOf("") }
-    var vio2sfYear by remember { mutableStateOf("") }
-    var vio2sfComment by remember { mutableStateOf("") }
-    var vio2sfLengthTag by remember { mutableStateOf("") }
-    var vio2sfFadeTag by remember { mutableStateOf("") }
-    var sidFormatName by remember { mutableStateOf("") }
-    var sidClockName by remember { mutableStateOf("") }
-    var sidSpeedName by remember { mutableStateOf("") }
-    var sidCompatibilityName by remember { mutableStateOf("") }
-    var sidBackendName by remember { mutableStateOf("") }
-    var sidChipCount by remember { mutableIntStateOf(0) }
-    var sidModelSummary by remember { mutableStateOf("") }
-    var sidCurrentModelSummary by remember { mutableStateOf("") }
-    var sidBaseAddressSummary by remember { mutableStateOf("") }
-    var sidCommentSummary by remember { mutableStateOf("") }
-    var sc68FormatName by remember { mutableStateOf("") }
-    var sc68HardwareName by remember { mutableStateOf("") }
-    var sc68PlatformName by remember { mutableStateOf("") }
-    var sc68ReplayName by remember { mutableStateOf("") }
-    var sc68ReplayRateHz by remember { mutableIntStateOf(0) }
-    var sc68TrackCount by remember { mutableIntStateOf(0) }
-    var sc68AlbumName by remember { mutableStateOf("") }
-    var sc68Year by remember { mutableStateOf("") }
-    var sc68Ripper by remember { mutableStateOf("") }
-    var sc68Converter by remember { mutableStateOf("") }
-    var sc68Timer by remember { mutableStateOf("") }
-    var sc68CanAsid by remember { mutableStateOf(false) }
-    var sc68UsesYm by remember { mutableStateOf(false) }
-    var sc68UsesSte by remember { mutableStateOf(false) }
-    var sc68UsesAmiga by remember { mutableStateOf(false) }
-    var adplugDescription by remember { mutableStateOf("") }
-    var adplugPatternCount by remember { mutableIntStateOf(0) }
-    var adplugCurrentPattern by remember { mutableIntStateOf(0) }
-    var adplugOrderCount by remember { mutableIntStateOf(0) }
-    var adplugCurrentOrder by remember { mutableIntStateOf(0) }
-    var adplugCurrentRow by remember { mutableIntStateOf(0) }
-    var adplugCurrentSpeed by remember { mutableIntStateOf(0) }
-    var adplugInstrumentCount by remember { mutableIntStateOf(0) }
-    var adplugInstrumentNames by remember { mutableStateOf("") }
-    var uadeFormatName by remember { mutableStateOf("") }
-    var uadeModuleName by remember { mutableStateOf("") }
-    var uadePlayerName by remember { mutableStateOf("") }
-    var uadeModuleFileName by remember { mutableStateOf("") }
-    var uadePlayerFileName by remember { mutableStateOf("") }
-    var uadeModuleMd5 by remember { mutableStateOf("") }
-    var uadeDetectionExtension by remember { mutableStateOf("") }
-    var uadeDetectedFormatName by remember { mutableStateOf("") }
-    var uadeDetectedFormatVersion by remember { mutableStateOf("") }
-    var uadeDetectionByContent by remember { mutableStateOf(false) }
-    var uadeDetectionIsCustom by remember { mutableStateOf(false) }
-    var uadeSubsongMin by remember { mutableIntStateOf(0) }
-    var uadeSubsongMax by remember { mutableIntStateOf(0) }
-    var uadeSubsongDefault by remember { mutableIntStateOf(0) }
-    var uadeCurrentSubsong by remember { mutableIntStateOf(0) }
-    var uadeModuleBytes by remember { mutableLongStateOf(0L) }
-    var uadeSongBytes by remember { mutableLongStateOf(0L) }
-    var uadeSubsongBytes by remember { mutableLongStateOf(0L) }
+    val liveMetadata = rememberTrackInfoLiveMetadata(
+        filePath = file?.absolutePath,
+        decoderName = decoderName,
+        isDialogVisible = isDialogVisible
+    )
     val detailsScrollState = rememberScrollState()
     var detailsViewportHeightPx by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(file?.absolutePath, decoderName, isDialogVisible) {
-        if (!isDialogVisible) return@LaunchedEffect
-        while (isDialogVisible) {
-            liveBitrate = NativeBridge.getTrackBitrate()
-            liveIsVbr = NativeBridge.isTrackVBR()
-            liveRenderRateHz = NativeBridge.getDecoderRenderSampleRateHz()
-            liveOutputRateHz = NativeBridge.getOutputStreamSampleRateHz()
-            liveComposer = NativeBridge.getTrackComposer()
-            liveGenre = NativeBridge.getTrackGenre()
-            if (decoderName.equals("LibOpenMPT", ignoreCase = true)) {
-                openMptTypeLong = NativeBridge.getOpenMptModuleTypeLong()
-                openMptTracker = NativeBridge.getOpenMptTracker()
-                openMptSongMessage = NativeBridge.getOpenMptSongMessage()
-                openMptOrderCount = NativeBridge.getOpenMptOrderCount()
-                openMptPatternCount = NativeBridge.getOpenMptPatternCount()
-                openMptInstrumentCount = NativeBridge.getOpenMptInstrumentCount()
-                openMptSampleCount = NativeBridge.getOpenMptSampleCount()
-                openMptInstrumentNames = NativeBridge.getOpenMptInstrumentNames()
-                openMptSampleNames = NativeBridge.getOpenMptSampleNames()
-            } else {
-                openMptTypeLong = ""
-                openMptTracker = ""
-                openMptSongMessage = ""
-                openMptOrderCount = 0
-                openMptPatternCount = 0
-                openMptInstrumentCount = 0
-                openMptSampleCount = 0
-                openMptInstrumentNames = ""
-                openMptSampleNames = ""
-            }
-            if (decoderName.equals("VGMPlay", ignoreCase = true)) {
-                vgmGameName = NativeBridge.getVgmGameName()
-                vgmSystemName = NativeBridge.getVgmSystemName()
-                vgmReleaseDate = NativeBridge.getVgmReleaseDate()
-                vgmEncodedBy = NativeBridge.getVgmEncodedBy()
-                vgmNotes = NativeBridge.getVgmNotes()
-                vgmFileVersion = NativeBridge.getVgmFileVersion()
-                vgmDeviceCount = NativeBridge.getVgmDeviceCount()
-                vgmUsedChipList = NativeBridge.getVgmUsedChipList()
-                vgmHasLoopPoint = NativeBridge.getVgmHasLoopPoint()
-            } else {
-                vgmGameName = ""
-                vgmSystemName = ""
-                vgmReleaseDate = ""
-                vgmEncodedBy = ""
-                vgmNotes = ""
-                vgmFileVersion = ""
-                vgmDeviceCount = 0
-                vgmUsedChipList = ""
-                vgmHasLoopPoint = false
-            }
-            if (decoderName.equals("FFmpeg", ignoreCase = true)) {
-                ffmpegCodecName = NativeBridge.getFfmpegCodecName()
-                ffmpegContainerName = NativeBridge.getFfmpegContainerName()
-                ffmpegSampleFormatName = NativeBridge.getFfmpegSampleFormatName()
-                ffmpegChannelLayoutName = NativeBridge.getFfmpegChannelLayoutName()
-                ffmpegEncoderName = NativeBridge.getFfmpegEncoderName()
-            } else {
-                ffmpegCodecName = ""
-                ffmpegContainerName = ""
-                ffmpegSampleFormatName = ""
-                ffmpegChannelLayoutName = ""
-                ffmpegEncoderName = ""
-            }
-            if (decoderName.equals("Game Music Emu", ignoreCase = true)) {
-                gmeSystemName = NativeBridge.getGmeSystemName()
-                gmeGameName = NativeBridge.getGmeGameName()
-                gmeCopyright = NativeBridge.getGmeCopyright()
-                gmeComment = NativeBridge.getGmeComment()
-                gmeDumper = NativeBridge.getGmeDumper()
-                gmeTrackCount = NativeBridge.getGmeTrackCount()
-                gmeVoiceCount = NativeBridge.getGmeVoiceCount()
-                gmeHasLoopPoint = NativeBridge.getGmeHasLoopPoint()
-                gmeLoopStartMs = NativeBridge.getGmeLoopStartMs()
-                gmeLoopLengthMs = NativeBridge.getGmeLoopLengthMs()
-            } else {
-                gmeSystemName = ""
-                gmeGameName = ""
-                gmeCopyright = ""
-                gmeComment = ""
-                gmeDumper = ""
-                gmeTrackCount = 0
-                gmeVoiceCount = 0
-                gmeHasLoopPoint = false
-                gmeLoopStartMs = -1
-                gmeLoopLengthMs = -1
-            }
-            if (decoderName.equals("LazyUSF2", ignoreCase = true)) {
-                lazyUsf2GameName = NativeBridge.getLazyUsf2GameName()
-                lazyUsf2Copyright = NativeBridge.getLazyUsf2Copyright()
-                lazyUsf2Year = NativeBridge.getLazyUsf2Year()
-                lazyUsf2UsfBy = NativeBridge.getLazyUsf2UsfBy()
-                lazyUsf2LengthTag = NativeBridge.getLazyUsf2LengthTag()
-                lazyUsf2FadeTag = NativeBridge.getLazyUsf2FadeTag()
-                lazyUsf2EnableCompare = NativeBridge.getLazyUsf2EnableCompare()
-                lazyUsf2EnableFifoFull = NativeBridge.getLazyUsf2EnableFifoFull()
-            } else {
-                lazyUsf2GameName = ""
-                lazyUsf2Copyright = ""
-                lazyUsf2Year = ""
-                lazyUsf2UsfBy = ""
-                lazyUsf2LengthTag = ""
-                lazyUsf2FadeTag = ""
-                lazyUsf2EnableCompare = false
-                lazyUsf2EnableFifoFull = false
-            }
-            if (decoderName.equals("Vio2SF", ignoreCase = true)) {
-                vio2sfGameName = NativeBridge.getVio2sfGameName()
-                vio2sfCopyright = NativeBridge.getVio2sfCopyright()
-                vio2sfYear = NativeBridge.getVio2sfYear()
-                vio2sfComment = NativeBridge.getVio2sfComment()
-                vio2sfLengthTag = NativeBridge.getVio2sfLengthTag()
-                vio2sfFadeTag = NativeBridge.getVio2sfFadeTag()
-            } else {
-                vio2sfGameName = ""
-                vio2sfCopyright = ""
-                vio2sfYear = ""
-                vio2sfComment = ""
-                vio2sfLengthTag = ""
-                vio2sfFadeTag = ""
-            }
-            if (decoderName.equals("LibSIDPlayFP", ignoreCase = true)) {
-                sidFormatName = NativeBridge.getSidFormatName()
-                sidClockName = NativeBridge.getSidClockName()
-                sidSpeedName = NativeBridge.getSidSpeedName()
-                sidCompatibilityName = NativeBridge.getSidCompatibilityName()
-                sidBackendName = NativeBridge.getSidBackendName()
-                sidChipCount = NativeBridge.getSidChipCount()
-                sidModelSummary = NativeBridge.getSidModelSummary()
-                sidCurrentModelSummary = NativeBridge.getSidCurrentModelSummary()
-                sidBaseAddressSummary = NativeBridge.getSidBaseAddressSummary()
-                sidCommentSummary = NativeBridge.getSidCommentSummary()
-            } else {
-                sidFormatName = ""
-                sidClockName = ""
-                sidSpeedName = ""
-                sidCompatibilityName = ""
-                sidBackendName = ""
-                sidChipCount = 0
-                sidModelSummary = ""
-                sidCurrentModelSummary = ""
-                sidBaseAddressSummary = ""
-                sidCommentSummary = ""
-            }
-            if (decoderName.equals("SC68", ignoreCase = true)) {
-                sc68FormatName = NativeBridge.getSc68FormatName()
-                sc68HardwareName = NativeBridge.getSc68HardwareName()
-                sc68PlatformName = NativeBridge.getSc68PlatformName()
-                sc68ReplayName = NativeBridge.getSc68ReplayName()
-                sc68ReplayRateHz = NativeBridge.getSc68ReplayRateHz()
-                sc68TrackCount = NativeBridge.getSc68TrackCount()
-                sc68AlbumName = NativeBridge.getSc68AlbumName()
-                sc68Year = NativeBridge.getSc68Year()
-                sc68Ripper = NativeBridge.getSc68Ripper()
-                sc68Converter = NativeBridge.getSc68Converter()
-                sc68Timer = NativeBridge.getSc68Timer()
-                sc68CanAsid = NativeBridge.getSc68CanAsid()
-                sc68UsesYm = NativeBridge.getSc68UsesYm()
-                sc68UsesSte = NativeBridge.getSc68UsesSte()
-                sc68UsesAmiga = NativeBridge.getSc68UsesAmiga()
-            } else {
-                sc68FormatName = ""
-                sc68HardwareName = ""
-                sc68PlatformName = ""
-                sc68ReplayName = ""
-                sc68ReplayRateHz = 0
-                sc68TrackCount = 0
-                sc68AlbumName = ""
-                sc68Year = ""
-                sc68Ripper = ""
-                sc68Converter = ""
-                sc68Timer = ""
-                sc68CanAsid = false
-                sc68UsesYm = false
-                sc68UsesSte = false
-                sc68UsesAmiga = false
-            }
-            if (decoderName.equals("AdPlug", ignoreCase = true)) {
-                adplugDescription = NativeBridge.getAdplugDescription()
-                adplugPatternCount = NativeBridge.getAdplugPatternCount()
-                adplugCurrentPattern = NativeBridge.getAdplugCurrentPattern()
-                adplugOrderCount = NativeBridge.getAdplugOrderCount()
-                adplugCurrentOrder = NativeBridge.getAdplugCurrentOrder()
-                adplugCurrentRow = NativeBridge.getAdplugCurrentRow()
-                adplugCurrentSpeed = NativeBridge.getAdplugCurrentSpeed()
-                adplugInstrumentCount = NativeBridge.getAdplugInstrumentCount()
-                adplugInstrumentNames = NativeBridge.getAdplugInstrumentNames()
-            } else {
-                adplugDescription = ""
-                adplugPatternCount = 0
-                adplugCurrentPattern = 0
-                adplugOrderCount = 0
-                adplugCurrentOrder = 0
-                adplugCurrentRow = 0
-                adplugCurrentSpeed = 0
-                adplugInstrumentCount = 0
-                adplugInstrumentNames = ""
-            }
-            if (decoderName.equals("UADE", ignoreCase = true)) {
-                uadeFormatName = NativeBridge.getUadeFormatName()
-                uadeModuleName = NativeBridge.getUadeModuleName()
-                uadePlayerName = NativeBridge.getUadePlayerName()
-                uadeModuleFileName = NativeBridge.getUadeModuleFileName()
-                uadePlayerFileName = NativeBridge.getUadePlayerFileName()
-                uadeModuleMd5 = NativeBridge.getUadeModuleMd5()
-                uadeDetectionExtension = NativeBridge.getUadeDetectionExtension()
-                uadeDetectedFormatName = NativeBridge.getUadeDetectedFormatName()
-                uadeDetectedFormatVersion = NativeBridge.getUadeDetectedFormatVersion()
-                uadeDetectionByContent = NativeBridge.getUadeDetectionByContent()
-                uadeDetectionIsCustom = NativeBridge.getUadeDetectionIsCustom()
-                uadeSubsongMin = NativeBridge.getUadeSubsongMin()
-                uadeSubsongMax = NativeBridge.getUadeSubsongMax()
-                uadeSubsongDefault = NativeBridge.getUadeSubsongDefault()
-                uadeCurrentSubsong = NativeBridge.getUadeCurrentSubsong()
-                uadeModuleBytes = NativeBridge.getUadeModuleBytes()
-                uadeSongBytes = NativeBridge.getUadeSongBytes()
-                uadeSubsongBytes = NativeBridge.getUadeSubsongBytes()
-            } else {
-                uadeFormatName = ""
-                uadeModuleName = ""
-                uadePlayerName = ""
-                uadeModuleFileName = ""
-                uadePlayerFileName = ""
-                uadeModuleMd5 = ""
-                uadeDetectionExtension = ""
-                uadeDetectedFormatName = ""
-                uadeDetectedFormatVersion = ""
-                uadeDetectionByContent = false
-                uadeDetectionIsCustom = false
-                uadeSubsongMin = 0
-                uadeSubsongMax = 0
-                uadeSubsongDefault = 0
-                uadeCurrentSubsong = 0
-                uadeModuleBytes = 0L
-                uadeSongBytes = 0L
-                uadeSubsongBytes = 0L
-            }
-            delay(500)
-        }
-    }
-
     val fileSizeBytes = file?.length() ?: 0L
     val filename = file?.name ?: "No file loaded"
     val extension = file?.name?.let(::inferredPrimaryExtensionForName)?.uppercase() ?: "UNKNOWN"
     val decoderLabel = decoderName?.ifBlank { "Unknown" } ?: "Unknown"
-    val bitrateLabel = if (liveBitrate > 0L) {
-        "${formatBitrate(liveBitrate, liveIsVbr)} (${if (liveIsVbr) "VBR" else "CBR"})"
+    val bitrateLabel = if (liveMetadata.bitrate > 0L) {
+        "${formatBitrate(liveMetadata.bitrate, liveMetadata.isVbr)} (${if (liveMetadata.isVbr) "VBR" else "CBR"})"
     } else {
         "Unavailable"
     }
@@ -1529,8 +1187,8 @@ private fun TrackInfoDetailsDialog(
     val depthLabel = bitDepthLabel.ifBlank { "Unknown" }
     val sampleRateChain =
         "${formatSampleRateForDetails(sampleRateHz)} -> " +
-            "${formatSampleRateForDetails(liveRenderRateHz)} -> " +
-            formatSampleRateForDetails(liveOutputRateHz)
+            "${formatSampleRateForDetails(liveMetadata.renderRateHz)} -> " +
+            formatSampleRateForDetails(liveMetadata.outputRateHz)
     val pathOrUrlLabel = pathOrUrl?.ifBlank { "Unavailable" } ?: "Unavailable"
     val copyAllText = buildString {
         fun row(label: String, value: String) {
@@ -1540,8 +1198,8 @@ private fun TrackInfoDetailsDialog(
         row("Filename", filename)
         row("Title", title)
         row("Artist", artist)
-        if (liveComposer.isNotBlank()) row("Composer", liveComposer)
-        if (liveGenre.isNotBlank()) row("Genre", liveGenre)
+        if (liveMetadata.composer.isNotBlank()) row("Composer", liveMetadata.composer)
+        if (liveMetadata.genre.isNotBlank()) row("Genre", liveMetadata.genre)
         row("Format", extension)
         row("Decoder", decoderLabel)
         playbackSourceLabel?.takeIf { it.isNotBlank() }?.let { row("Playback source", it) }
@@ -1552,138 +1210,12 @@ private fun TrackInfoDetailsDialog(
         row("Audio channels", channelsLabel)
         row("Bit depth", depthLabel)
         row("Path / URL", pathOrUrlLabel)
-
-        if (decoderName.equals("LibOpenMPT", ignoreCase = true)) {
-            append('\n').append("[OpenMPT]").append('\n')
-            if (openMptTypeLong.isNotBlank()) row("Module type", openMptTypeLong)
-            if (openMptTracker.isNotBlank()) row("Tracker", openMptTracker)
-            row("Orders", openMptOrderCount.toString())
-            row("Patterns", openMptPatternCount.toString())
-            row("Instruments", openMptInstrumentCount.toString())
-            row("Samples", openMptSampleCount.toString())
-            if (openMptSongMessage.isNotBlank()) row("Message", openMptSongMessage)
-            if (openMptInstrumentNames.isNotBlank()) row("Instrument names", openMptInstrumentNames)
-            if (openMptSampleNames.isNotBlank()) row("Sample names", openMptSampleNames)
-        }
-        if (decoderName.equals("VGMPlay", ignoreCase = true)) {
-            append('\n').append("[VGMPlay]").append('\n')
-            if (vgmGameName.isNotBlank()) row("Game", vgmGameName)
-            if (vgmSystemName.isNotBlank()) row("System", vgmSystemName)
-            if (vgmReleaseDate.isNotBlank()) row("Release date", vgmReleaseDate)
-            if (vgmEncodedBy.isNotBlank()) row("Encoded by", vgmEncodedBy)
-            if (vgmFileVersion.isNotBlank()) row("VGM version", vgmFileVersion)
-            if (vgmDeviceCount > 0) row("Used chips", vgmDeviceCount.toString())
-            if (vgmUsedChipList.isNotBlank()) row("Chip list", vgmUsedChipList)
-            row("Has loop point", if (vgmHasLoopPoint) "Yes" else "No")
-            if (vgmNotes.isNotBlank()) row("Notes", vgmNotes)
-        }
-        if (decoderName.equals("FFmpeg", ignoreCase = true)) {
-            append('\n').append("[FFmpeg]").append('\n')
-            if (ffmpegCodecName.isNotBlank()) row("Codec", ffmpegCodecName)
-            if (ffmpegContainerName.isNotBlank()) row("Container", ffmpegContainerName)
-            if (ffmpegSampleFormatName.isNotBlank()) row("Sample format", ffmpegSampleFormatName)
-            if (ffmpegChannelLayoutName.isNotBlank()) row("Channel layout", ffmpegChannelLayoutName)
-            if (ffmpegEncoderName.isNotBlank()) row("Encoder", ffmpegEncoderName)
-        }
-        if (decoderName.equals("Game Music Emu", ignoreCase = true)) {
-            append('\n').append("[Game Music Emu]").append('\n')
-            if (gmeSystemName.isNotBlank()) row("System", gmeSystemName)
-            if (gmeGameName.isNotBlank()) row("Game", gmeGameName)
-            if (gmeTrackCount > 0) row("Track count", gmeTrackCount.toString())
-            if (gmeVoiceCount > 0) row("Voice count", gmeVoiceCount.toString())
-            row("Has loop point", if (gmeHasLoopPoint) "Yes" else "No")
-            if (gmeLoopStartMs >= 0) row("Loop start", formatTime(gmeLoopStartMs / 1000.0))
-            if (gmeLoopLengthMs > 0) row("Loop length", formatTime(gmeLoopLengthMs / 1000.0))
-            if (gmeCopyright.isNotBlank()) row("Copyright", gmeCopyright)
-            if (gmeDumper.isNotBlank()) row("Dumper", gmeDumper)
-            if (gmeComment.isNotBlank()) row("Comment", gmeComment)
-        }
-        if (decoderName.equals("LazyUSF2", ignoreCase = true)) {
-            append('\n').append("[LazyUSF2]").append('\n')
-            if (lazyUsf2GameName.isNotBlank()) row("Game", lazyUsf2GameName)
-            if (lazyUsf2Year.isNotBlank()) row("Year", lazyUsf2Year)
-            if (lazyUsf2UsfBy.isNotBlank()) row("USF ripper", lazyUsf2UsfBy)
-            if (lazyUsf2Copyright.isNotBlank()) row("Copyright", lazyUsf2Copyright)
-            if (lazyUsf2LengthTag.isNotBlank()) row("Tagged length", lazyUsf2LengthTag)
-            if (lazyUsf2FadeTag.isNotBlank()) row("Tagged fade", lazyUsf2FadeTag)
-            row("Compare hack", if (lazyUsf2EnableCompare) "Enabled" else "Disabled")
-            row("FIFO full hack", if (lazyUsf2EnableFifoFull) "Enabled" else "Disabled")
-        }
-        if (decoderName.equals("Vio2SF", ignoreCase = true)) {
-            append('\n').append("[Vio2SF]").append('\n')
-            if (vio2sfGameName.isNotBlank()) row("Game", vio2sfGameName)
-            if (vio2sfYear.isNotBlank()) row("Year", vio2sfYear)
-            if (vio2sfCopyright.isNotBlank()) row("Copyright", vio2sfCopyright)
-            if (vio2sfLengthTag.isNotBlank()) row("Tagged length", vio2sfLengthTag)
-            if (vio2sfFadeTag.isNotBlank()) row("Tagged fade", vio2sfFadeTag)
-            if (vio2sfComment.isNotBlank()) row("Comment", vio2sfComment)
-        }
-        if (decoderName.equals("LibSIDPlayFP", ignoreCase = true)) {
-            append('\n').append("[LibSIDPlayFP]").append('\n')
-            if (sidBackendName.isNotBlank()) row("Engine", sidBackendName)
-            if (sidFormatName.isNotBlank()) row("Format name", sidFormatName)
-            if (sidClockName.isNotBlank()) row("Declared clock", sidClockName)
-            if (sidSpeedName.isNotBlank()) row("Playback timing", sidSpeedName)
-            if (sidCompatibilityName.isNotBlank()) row("Compatibility", sidCompatibilityName)
-            if (sidChipCount > 0) row("SID chips", sidChipCount.toString())
-            if (sidModelSummary.isNotBlank()) row("SID models (declared)", sidModelSummary)
-            if (sidCurrentModelSummary.isNotBlank()) row("SID models (current)", sidCurrentModelSummary)
-            if (sidBaseAddressSummary.isNotBlank()) row("SID base addresses", sidBaseAddressSummary)
-            if (sidCommentSummary.isNotBlank()) row("Comments", sidCommentSummary)
-        }
-        if (decoderName.equals("SC68", ignoreCase = true)) {
-            append('\n').append("[SC68]").append('\n')
-            if (sc68FormatName.isNotBlank()) row("Format name", sc68FormatName)
-            if (sc68HardwareName.isNotBlank()) row("Hardware", sc68HardwareName)
-            if (sc68PlatformName.isNotBlank()) row("Platform", sc68PlatformName)
-            if (sc68ReplayName.isNotBlank()) row("Replay", sc68ReplayName)
-            if (sc68ReplayRateHz > 0) row("Replay rate", "${sc68ReplayRateHz} Hz")
-            if (sampleRateHz > 0) row("Frequency", "${sampleRateHz} Hz")
-            if (sc68TrackCount > 0) row("Track count", sc68TrackCount.toString())
-            if (sc68AlbumName.isNotBlank()) row("Album", sc68AlbumName)
-            if (sc68Year.isNotBlank()) row("Year", sc68Year)
-            if (sc68Ripper.isNotBlank()) row("Ripper", sc68Ripper)
-            if (sc68Converter.isNotBlank()) row("Converter", sc68Converter)
-            if (sc68Timer.isNotBlank()) row("Timer", sc68Timer)
-            row("Can aSID", if (sc68CanAsid) "Yes" else "No")
-            row("Uses YM-2149", if (sc68UsesYm) "Yes" else "No")
-            row("Uses STE", if (sc68UsesSte) "Yes" else "No")
-            row("Uses Amiga Paula", if (sc68UsesAmiga) "Yes" else "No")
-        }
-        if (decoderName.equals("AdPlug", ignoreCase = true)) {
-            append('\n').append("[AdPlug]").append('\n')
-            if (adplugDescription.isNotBlank()) row("Description", adplugDescription)
-            if (adplugOrderCount > 0) row("Orders", adplugOrderCount.toString())
-            if (adplugOrderCount > 0) row("Current order", adplugCurrentOrder.toString())
-            if (adplugPatternCount > 0) row("Patterns", adplugPatternCount.toString())
-            if (adplugPatternCount > 0) row("Current pattern", adplugCurrentPattern.toString())
-            if (adplugPatternCount > 0) row("Current row", adplugCurrentRow.toString())
-            if (adplugCurrentSpeed > 0) row("Current speed", adplugCurrentSpeed.toString())
-            if (adplugInstrumentCount > 0) row("Instruments", adplugInstrumentCount.toString())
-            if (adplugInstrumentNames.isNotBlank()) row("Instrument names", adplugInstrumentNames)
-        }
-        if (decoderName.equals("UADE", ignoreCase = true)) {
-            append('\n').append("[UADE]").append('\n')
-            if (uadeFormatName.isNotBlank()) row("Format name", uadeFormatName)
-            if (uadeModuleName.isNotBlank()) row("Module name", uadeModuleName)
-            if (uadePlayerName.isNotBlank()) row("Player name", uadePlayerName)
-            if (uadeDetectionExtension.isNotBlank()) row("Detected extension", uadeDetectionExtension)
-            if (uadeDetectedFormatName.isNotBlank()) row("Detected format", uadeDetectedFormatName)
-            if (uadeDetectedFormatVersion.isNotBlank()) row("Detected version", uadeDetectedFormatVersion)
-            row("Detection source", if (uadeDetectionByContent) "Content" else "Filename/extension")
-            row("Custom format", if (uadeDetectionIsCustom) "Yes" else "No")
-            if (uadeSubsongMax >= uadeSubsongMin) {
-                row("Subsong range", "${uadeSubsongMin}..${uadeSubsongMax}")
-                row("Default subsong", uadeSubsongDefault.toString())
-                row("Current subsong", uadeCurrentSubsong.toString())
-            }
-            if (uadeModuleFileName.isNotBlank()) row("Module file", uadeModuleFileName)
-            if (uadePlayerFileName.isNotBlank()) row("Player file", uadePlayerFileName)
-            if (uadeModuleMd5.isNotBlank()) row("Module MD5", uadeModuleMd5)
-            if (uadeModuleBytes > 0L) row("Module size", formatFileSize(uadeModuleBytes))
-            if (uadeSongBytes > 0L) row("Rendered bytes (song)", formatFileSize(uadeSongBytes))
-            if (uadeSubsongBytes > 0L) row("Rendered bytes (subsong)", formatFileSize(uadeSubsongBytes))
-        }
+        appendCoreTrackInfoCopyRows(
+            builder = this,
+            decoderName = decoderName,
+            sampleRateHz = sampleRateHz,
+            metadata = liveMetadata
+        )
     }
 
     AlertDialog(
@@ -1708,11 +1240,11 @@ private fun TrackInfoDetailsDialog(
                             TrackInfoDetailsRow("Filename", filename)
                             TrackInfoDetailsRow("Title", title)
                             TrackInfoDetailsRow("Artist", artist)
-                            if (liveComposer.isNotBlank()) {
-                                TrackInfoDetailsRow("Composer", liveComposer)
+                            if (liveMetadata.composer.isNotBlank()) {
+                                TrackInfoDetailsRow("Composer", liveMetadata.composer)
                             }
-                            if (liveGenre.isNotBlank()) {
-                                TrackInfoDetailsRow("Genre", liveGenre)
+                            if (liveMetadata.genre.isNotBlank()) {
+                                TrackInfoDetailsRow("Genre", liveMetadata.genre)
                             }
                             TrackInfoDetailsRow("Format", extension)
                             TrackInfoDetailsRow("Decoder", decoderLabel)
@@ -1729,354 +1261,11 @@ private fun TrackInfoDetailsDialog(
                             TrackInfoDetailsRow("Audio channels", channelsLabel)
                             TrackInfoDetailsRow("Bit depth", depthLabel)
                             TrackInfoDetailsRow("Path / URL", pathOrUrlLabel)
-                            if (decoderName.equals("LibOpenMPT", ignoreCase = true)) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "OpenMPT",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                if (openMptTypeLong.isNotBlank()) {
-                                    TrackInfoDetailsRow("Module type", openMptTypeLong)
-                                }
-                                if (openMptTracker.isNotBlank()) {
-                                    TrackInfoDetailsRow("Tracker", openMptTracker)
-                                }
-                                TrackInfoDetailsRow("Orders", openMptOrderCount.toString())
-                                TrackInfoDetailsRow("Patterns", openMptPatternCount.toString())
-                                TrackInfoDetailsRow("Instruments", openMptInstrumentCount.toString())
-                                TrackInfoDetailsRow("Samples", openMptSampleCount.toString())
-                                if (openMptSongMessage.isNotBlank()) {
-                                    TrackInfoDetailsRow("Message", openMptSongMessage)
-                                }
-                                if (openMptInstrumentNames.isNotBlank()) {
-                                    TrackInfoDetailsRow("Instrument names", openMptInstrumentNames)
-                                }
-                                if (openMptSampleNames.isNotBlank()) {
-                                    TrackInfoDetailsRow("Sample names", openMptSampleNames)
-                                }
-                            }
-                            if (decoderName.equals("VGMPlay", ignoreCase = true)) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "VGMPlay",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                if (vgmGameName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Game", vgmGameName)
-                                }
-                                if (vgmSystemName.isNotBlank()) {
-                                    TrackInfoDetailsRow("System", vgmSystemName)
-                                }
-                                if (vgmReleaseDate.isNotBlank()) {
-                                    TrackInfoDetailsRow("Release date", vgmReleaseDate)
-                                }
-                                if (vgmEncodedBy.isNotBlank()) {
-                                    TrackInfoDetailsRow("Encoded by", vgmEncodedBy)
-                                }
-                                if (vgmFileVersion.isNotBlank()) {
-                                    TrackInfoDetailsRow("VGM version", vgmFileVersion)
-                                }
-                                if (vgmDeviceCount > 0) {
-                                    TrackInfoDetailsRow("Used chips", vgmDeviceCount.toString())
-                                }
-                                if (vgmUsedChipList.isNotBlank()) {
-                                    TrackInfoDetailsRow("Chip list", vgmUsedChipList)
-                                }
-                                TrackInfoDetailsRow("Has loop point", if (vgmHasLoopPoint) "Yes" else "No")
-                                if (vgmNotes.isNotBlank()) {
-                                    TrackInfoDetailsRow("Notes", vgmNotes)
-                                }
-                            }
-                            if (decoderName.equals("FFmpeg", ignoreCase = true)) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "FFmpeg",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                if (ffmpegCodecName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Codec", ffmpegCodecName)
-                                }
-                                if (ffmpegContainerName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Container", ffmpegContainerName)
-                                }
-                                if (ffmpegSampleFormatName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Sample format", ffmpegSampleFormatName)
-                                }
-                                if (ffmpegChannelLayoutName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Channel layout", ffmpegChannelLayoutName)
-                                }
-                                if (ffmpegEncoderName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Encoder", ffmpegEncoderName)
-                                }
-                            }
-                            if (decoderName.equals("Game Music Emu", ignoreCase = true)) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "Game Music Emu",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                if (gmeSystemName.isNotBlank()) {
-                                    TrackInfoDetailsRow("System", gmeSystemName)
-                                }
-                                if (gmeGameName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Game", gmeGameName)
-                                }
-                                if (gmeTrackCount > 0) {
-                                    TrackInfoDetailsRow("Track count", gmeTrackCount.toString())
-                                }
-                                if (gmeVoiceCount > 0) {
-                                    TrackInfoDetailsRow("Voice count", gmeVoiceCount.toString())
-                                }
-                                TrackInfoDetailsRow("Has loop point", if (gmeHasLoopPoint) "Yes" else "No")
-                                if (gmeLoopStartMs >= 0) {
-                                    TrackInfoDetailsRow("Loop start", formatTime(gmeLoopStartMs / 1000.0))
-                                }
-                                if (gmeLoopLengthMs > 0) {
-                                    TrackInfoDetailsRow("Loop length", formatTime(gmeLoopLengthMs / 1000.0))
-                                }
-                                if (gmeCopyright.isNotBlank()) {
-                                    TrackInfoDetailsRow("Copyright", gmeCopyright)
-                                }
-                                if (gmeDumper.isNotBlank()) {
-                                    TrackInfoDetailsRow("Dumper", gmeDumper)
-                                }
-                                if (gmeComment.isNotBlank()) {
-                                    TrackInfoDetailsRow("Comment", gmeComment)
-                                }
-                            }
-                            if (decoderName.equals("LazyUSF2", ignoreCase = true)) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "LazyUSF2",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                if (lazyUsf2GameName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Game", lazyUsf2GameName)
-                                }
-                                if (lazyUsf2Year.isNotBlank()) {
-                                    TrackInfoDetailsRow("Year", lazyUsf2Year)
-                                }
-                                if (lazyUsf2UsfBy.isNotBlank()) {
-                                    TrackInfoDetailsRow("USF ripper", lazyUsf2UsfBy)
-                                }
-                                if (lazyUsf2Copyright.isNotBlank()) {
-                                    TrackInfoDetailsRow("Copyright", lazyUsf2Copyright)
-                                }
-                                if (lazyUsf2LengthTag.isNotBlank()) {
-                                    TrackInfoDetailsRow("Tagged length", lazyUsf2LengthTag)
-                                }
-                                if (lazyUsf2FadeTag.isNotBlank()) {
-                                    TrackInfoDetailsRow("Tagged fade", lazyUsf2FadeTag)
-                                }
-                                TrackInfoDetailsRow("Compare hack", if (lazyUsf2EnableCompare) "Enabled" else "Disabled")
-                                TrackInfoDetailsRow("FIFO full hack", if (lazyUsf2EnableFifoFull) "Enabled" else "Disabled")
-                            }
-                            if (decoderName.equals("Vio2SF", ignoreCase = true)) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "Vio2SF",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                if (vio2sfGameName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Game", vio2sfGameName)
-                                }
-                                if (vio2sfYear.isNotBlank()) {
-                                    TrackInfoDetailsRow("Year", vio2sfYear)
-                                }
-                                if (vio2sfCopyright.isNotBlank()) {
-                                    TrackInfoDetailsRow("Copyright", vio2sfCopyright)
-                                }
-                                if (vio2sfLengthTag.isNotBlank()) {
-                                    TrackInfoDetailsRow("Tagged length", vio2sfLengthTag)
-                                }
-                                if (vio2sfFadeTag.isNotBlank()) {
-                                    TrackInfoDetailsRow("Tagged fade", vio2sfFadeTag)
-                                }
-                                if (vio2sfComment.isNotBlank()) {
-                                    TrackInfoDetailsRow("Comment", vio2sfComment)
-                                }
-                            }
-                            if (decoderName.equals("LibSIDPlayFP", ignoreCase = true)) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "LibSIDPlayFP",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                if (sidBackendName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Engine", sidBackendName)
-                                }
-                                if (sidFormatName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Format name", sidFormatName)
-                                }
-                                if (sidClockName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Declared clock", sidClockName)
-                                }
-                                if (sidSpeedName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Playback timing", sidSpeedName)
-                                }
-                                if (sidCompatibilityName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Compatibility", sidCompatibilityName)
-                                }
-                                if (sidChipCount > 0) {
-                                    TrackInfoDetailsRow("SID chips", sidChipCount.toString())
-                                }
-                                if (sidModelSummary.isNotBlank()) {
-                                    TrackInfoDetailsRow("SID models (declared)", sidModelSummary)
-                                }
-                                if (sidCurrentModelSummary.isNotBlank()) {
-                                    TrackInfoDetailsRow("SID models (current)", sidCurrentModelSummary)
-                                }
-                                if (sidBaseAddressSummary.isNotBlank()) {
-                                    TrackInfoDetailsRow("SID base addresses", sidBaseAddressSummary)
-                                }
-                                if (sidCommentSummary.isNotBlank()) {
-                                    TrackInfoDetailsRow("Comments", sidCommentSummary)
-                                }
-                            }
-                            if (decoderName.equals("SC68", ignoreCase = true)) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "SC68",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                if (sc68FormatName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Format name", sc68FormatName)
-                                }
-                                if (sc68HardwareName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Hardware", sc68HardwareName)
-                                }
-                                if (sc68PlatformName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Platform", sc68PlatformName)
-                                }
-                                if (sc68ReplayName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Replay", sc68ReplayName)
-                                }
-                                if (sc68ReplayRateHz > 0) {
-                                    TrackInfoDetailsRow("Replay rate", "${sc68ReplayRateHz} Hz")
-                                }
-                                if (sampleRateHz > 0) {
-                                    TrackInfoDetailsRow("Frequency", "${sampleRateHz} Hz")
-                                }
-                                if (sc68TrackCount > 0) {
-                                    TrackInfoDetailsRow("Track count", sc68TrackCount.toString())
-                                }
-                                if (sc68AlbumName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Album", sc68AlbumName)
-                                }
-                                if (sc68Year.isNotBlank()) {
-                                    TrackInfoDetailsRow("Year", sc68Year)
-                                }
-                                if (sc68Ripper.isNotBlank()) {
-                                    TrackInfoDetailsRow("Ripper", sc68Ripper)
-                                }
-                                if (sc68Converter.isNotBlank()) {
-                                    TrackInfoDetailsRow("Converter", sc68Converter)
-                                }
-                                if (sc68Timer.isNotBlank()) {
-                                    TrackInfoDetailsRow("Timer", sc68Timer)
-                                }
-                                TrackInfoDetailsRow("Can aSID", if (sc68CanAsid) "Yes" else "No")
-                                TrackInfoDetailsRow("Uses YM-2149", if (sc68UsesYm) "Yes" else "No")
-                                TrackInfoDetailsRow("Uses STE", if (sc68UsesSte) "Yes" else "No")
-                                TrackInfoDetailsRow("Uses Amiga Paula", if (sc68UsesAmiga) "Yes" else "No")
-                            }
-                            if (decoderName.equals("AdPlug", ignoreCase = true)) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "AdPlug",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                if (adplugDescription.isNotBlank()) {
-                                    TrackInfoDetailsRow("Description", adplugDescription)
-                                }
-                                if (adplugOrderCount > 0) {
-                                    TrackInfoDetailsRow("Orders", adplugOrderCount.toString())
-                                }
-                                if (adplugOrderCount > 0) {
-                                    TrackInfoDetailsRow("Current order", adplugCurrentOrder.toString())
-                                }
-                                if (adplugPatternCount > 0) {
-                                    TrackInfoDetailsRow("Patterns", adplugPatternCount.toString())
-                                }
-                                if (adplugPatternCount > 0) {
-                                    TrackInfoDetailsRow("Current pattern", adplugCurrentPattern.toString())
-                                }
-                                if (adplugPatternCount > 0) {
-                                    TrackInfoDetailsRow("Current row", adplugCurrentRow.toString())
-                                }
-                                if (adplugCurrentSpeed > 0) {
-                                    TrackInfoDetailsRow("Current speed", adplugCurrentSpeed.toString())
-                                }
-                                if (adplugInstrumentCount > 0) {
-                                    TrackInfoDetailsRow("Instruments", adplugInstrumentCount.toString())
-                                }
-                                if (adplugInstrumentNames.isNotBlank()) {
-                                    TrackInfoDetailsRow("Instrument names", adplugInstrumentNames)
-                                }
-                            }
-                            if (decoderName.equals("UADE", ignoreCase = true)) {
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "UADE",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                if (uadeFormatName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Format name", uadeFormatName)
-                                }
-                                if (uadeModuleName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Module name", uadeModuleName)
-                                }
-                                if (uadePlayerName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Player name", uadePlayerName)
-                                }
-                                if (uadeDetectionExtension.isNotBlank()) {
-                                    TrackInfoDetailsRow("Detected extension", uadeDetectionExtension)
-                                }
-                                if (uadeDetectedFormatName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Detected format", uadeDetectedFormatName)
-                                }
-                                if (uadeDetectedFormatVersion.isNotBlank()) {
-                                    TrackInfoDetailsRow("Detected version", uadeDetectedFormatVersion)
-                                }
-                                TrackInfoDetailsRow(
-                                    "Detection source",
-                                    if (uadeDetectionByContent) "Content" else "Filename/extension"
-                                )
-                                TrackInfoDetailsRow("Custom format", if (uadeDetectionIsCustom) "Yes" else "No")
-                                if (uadeSubsongMax >= uadeSubsongMin) {
-                                    TrackInfoDetailsRow("Subsong range", "${uadeSubsongMin}..${uadeSubsongMax}")
-                                    TrackInfoDetailsRow("Default subsong", uadeSubsongDefault.toString())
-                                    TrackInfoDetailsRow("Current subsong", uadeCurrentSubsong.toString())
-                                }
-                                if (uadeModuleFileName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Module file", uadeModuleFileName)
-                                }
-                                if (uadePlayerFileName.isNotBlank()) {
-                                    TrackInfoDetailsRow("Player file", uadePlayerFileName)
-                                }
-                                if (uadeModuleMd5.isNotBlank()) {
-                                    TrackInfoDetailsRow("Module MD5", uadeModuleMd5)
-                                }
-                                if (uadeModuleBytes > 0L) {
-                                    TrackInfoDetailsRow("Module size", formatFileSize(uadeModuleBytes))
-                                }
-                                if (uadeSongBytes > 0L) {
-                                    TrackInfoDetailsRow("Rendered bytes (song)", formatFileSize(uadeSongBytes))
-                                }
-                                if (uadeSubsongBytes > 0L) {
-                                    TrackInfoDetailsRow("Rendered bytes (subsong)", formatFileSize(uadeSubsongBytes))
-                                }
-                            }
+                            TrackInfoCoreSections(
+                                decoderName = decoderName,
+                                sampleRateHz = sampleRateHz,
+                                metadata = liveMetadata
+                            )
                         }
                     }
                 }
@@ -2108,22 +1297,6 @@ private fun TrackInfoDetailsDialog(
             }
         }
     )
-}
-
-@Composable
-private fun TrackInfoDetailsRow(label: String, value: String) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium
-        )
-    }
 }
 
 @Composable
@@ -3323,7 +2496,7 @@ private fun LineageStyleSeekBar(
     }
 }
 
-private fun formatTime(seconds: Double): String {
+internal fun formatTime(seconds: Double): String {
     val safeSeconds = seconds.coerceAtLeast(0.0).roundToInt()
     val minutes = safeSeconds / 60
     val remainingSeconds = safeSeconds % 60
@@ -3349,7 +2522,7 @@ private fun formatSampleRateForDetails(rateHz: Int): String {
     }
 }
 
-private fun formatFileSize(bytes: Long): String {
+internal fun formatFileSize(bytes: Long): String {
     val units = arrayOf("B", "KB", "MB", "GB")
     var size = bytes.toDouble().coerceAtLeast(0.0)
     var unitIndex = 0

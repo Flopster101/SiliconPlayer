@@ -117,6 +117,22 @@ internal data class AdplugMetadata(
     val instrumentNames: String = ""
 )
 
+internal data class HivelyTrackerMetadata(
+    val formatName: String = "",
+    val formatVersion: Int = 0,
+    val positionCount: Int = 0,
+    val restartPosition: Int = -1,
+    val trackLengthRows: Int = 0,
+    val trackCount: Int = 0,
+    val instrumentCount: Int = 0,
+    val speedMultiplier: Int = 0,
+    val currentPosition: Int = -1,
+    val currentRow: Int = -1,
+    val currentTempo: Int = 0,
+    val mixGainPercent: Int = 0,
+    val instrumentNames: String = ""
+)
+
 internal data class UadeMetadata(
     val formatName: String = "",
     val moduleName: String = "",
@@ -159,6 +175,7 @@ internal data class TrackInfoLiveMetadata(
     val sid: SidMetadata = SidMetadata(),
     val sc68: Sc68Metadata = Sc68Metadata(),
     val adplug: AdplugMetadata = AdplugMetadata(),
+    val hivelyTracker: HivelyTrackerMetadata = HivelyTrackerMetadata(),
     val uade: UadeMetadata = UadeMetadata()
 )
 
@@ -320,6 +337,24 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
                 currentSpeed = NativeBridge.getAdplugCurrentSpeed(),
                 instrumentCount = NativeBridge.getAdplugInstrumentCount(),
                 instrumentNames = NativeBridge.getAdplugInstrumentNames()
+            )
+        )
+
+        decoderName.equals("HivelyTracker", ignoreCase = true) -> common.copy(
+            hivelyTracker = HivelyTrackerMetadata(
+                formatName = NativeBridge.getHivelyFormatName(),
+                formatVersion = NativeBridge.getHivelyFormatVersion(),
+                positionCount = NativeBridge.getHivelyPositionCount(),
+                restartPosition = NativeBridge.getHivelyRestartPosition(),
+                trackLengthRows = NativeBridge.getHivelyTrackLengthRows(),
+                trackCount = NativeBridge.getHivelyTrackCount(),
+                instrumentCount = NativeBridge.getHivelyInstrumentCount(),
+                speedMultiplier = NativeBridge.getHivelySpeedMultiplier(),
+                currentPosition = NativeBridge.getHivelyCurrentPosition(),
+                currentRow = NativeBridge.getHivelyCurrentRow(),
+                currentTempo = NativeBridge.getHivelyCurrentTempo(),
+                mixGainPercent = NativeBridge.getHivelyMixGainPercent(),
+                instrumentNames = NativeBridge.getHivelyInstrumentNames()
             )
         )
 

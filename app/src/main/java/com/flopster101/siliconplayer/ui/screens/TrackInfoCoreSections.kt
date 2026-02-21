@@ -151,6 +151,23 @@ internal fun TrackInfoCoreSections(
             if (metadata.adplug.instrumentNames.isNotBlank()) TrackInfoDetailsRow("Instrument names", metadata.adplug.instrumentNames)
         }
 
+        decoderName.equals("HivelyTracker", ignoreCase = true) -> {
+            TrackInfoSectionHeader("HivelyTracker")
+            if (metadata.hivelyTracker.formatName.isNotBlank()) TrackInfoDetailsRow("Format", metadata.hivelyTracker.formatName)
+            if (metadata.hivelyTracker.formatVersion > 0) TrackInfoDetailsRow("Format version", metadata.hivelyTracker.formatVersion.toString())
+            if (metadata.hivelyTracker.positionCount > 0) TrackInfoDetailsRow("Positions", metadata.hivelyTracker.positionCount.toString())
+            if (metadata.hivelyTracker.restartPosition >= 0) TrackInfoDetailsRow("Restart position", metadata.hivelyTracker.restartPosition.toString())
+            if (metadata.hivelyTracker.trackLengthRows > 0) TrackInfoDetailsRow("Rows per track", metadata.hivelyTracker.trackLengthRows.toString())
+            if (metadata.hivelyTracker.trackCount > 0) TrackInfoDetailsRow("Tracks", metadata.hivelyTracker.trackCount.toString())
+            if (metadata.hivelyTracker.instrumentCount > 0) TrackInfoDetailsRow("Instruments", metadata.hivelyTracker.instrumentCount.toString())
+            if (metadata.hivelyTracker.speedMultiplier > 0) TrackInfoDetailsRow("Speed multiplier", metadata.hivelyTracker.speedMultiplier.toString())
+            if (metadata.hivelyTracker.currentPosition >= 0) TrackInfoDetailsRow("Current position", metadata.hivelyTracker.currentPosition.toString())
+            if (metadata.hivelyTracker.currentRow >= 0) TrackInfoDetailsRow("Current row", metadata.hivelyTracker.currentRow.toString())
+            if (metadata.hivelyTracker.currentTempo > 0) TrackInfoDetailsRow("Current tempo", metadata.hivelyTracker.currentTempo.toString())
+            if (metadata.hivelyTracker.mixGainPercent > 0) TrackInfoDetailsRow("Mix gain", "${metadata.hivelyTracker.mixGainPercent}%")
+            if (metadata.hivelyTracker.instrumentNames.isNotBlank()) TrackInfoDetailsRow("Instrument names", metadata.hivelyTracker.instrumentNames)
+        }
+
         decoderName.equals("UADE", ignoreCase = true) -> {
             TrackInfoSectionHeader("UADE")
             if (metadata.uade.formatName.isNotBlank()) TrackInfoDetailsRow("Format name", metadata.uade.formatName)
@@ -303,6 +320,23 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.adplug.currentSpeed > 0) row("Current speed", metadata.adplug.currentSpeed.toString())
             if (metadata.adplug.instrumentCount > 0) row("Instruments", metadata.adplug.instrumentCount.toString())
             if (metadata.adplug.instrumentNames.isNotBlank()) row("Instrument names", metadata.adplug.instrumentNames)
+        }
+
+        decoderName.equals("HivelyTracker", ignoreCase = true) -> {
+            builder.append('\n').append("[HivelyTracker]").append('\n')
+            if (metadata.hivelyTracker.formatName.isNotBlank()) row("Format", metadata.hivelyTracker.formatName)
+            if (metadata.hivelyTracker.formatVersion > 0) row("Format version", metadata.hivelyTracker.formatVersion.toString())
+            if (metadata.hivelyTracker.positionCount > 0) row("Positions", metadata.hivelyTracker.positionCount.toString())
+            if (metadata.hivelyTracker.restartPosition >= 0) row("Restart position", metadata.hivelyTracker.restartPosition.toString())
+            if (metadata.hivelyTracker.trackLengthRows > 0) row("Rows per track", metadata.hivelyTracker.trackLengthRows.toString())
+            if (metadata.hivelyTracker.trackCount > 0) row("Tracks", metadata.hivelyTracker.trackCount.toString())
+            if (metadata.hivelyTracker.instrumentCount > 0) row("Instruments", metadata.hivelyTracker.instrumentCount.toString())
+            if (metadata.hivelyTracker.speedMultiplier > 0) row("Speed multiplier", metadata.hivelyTracker.speedMultiplier.toString())
+            if (metadata.hivelyTracker.currentPosition >= 0) row("Current position", metadata.hivelyTracker.currentPosition.toString())
+            if (metadata.hivelyTracker.currentRow >= 0) row("Current row", metadata.hivelyTracker.currentRow.toString())
+            if (metadata.hivelyTracker.currentTempo > 0) row("Current tempo", metadata.hivelyTracker.currentTempo.toString())
+            if (metadata.hivelyTracker.mixGainPercent > 0) row("Mix gain", "${metadata.hivelyTracker.mixGainPercent}%")
+            if (metadata.hivelyTracker.instrumentNames.isNotBlank()) row("Instrument names", metadata.hivelyTracker.instrumentNames)
         }
 
         decoderName.equals("UADE", ignoreCase = true) -> {

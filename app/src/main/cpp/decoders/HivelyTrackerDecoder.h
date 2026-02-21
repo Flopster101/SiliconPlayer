@@ -37,6 +37,19 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    std::string getFormatNameInfo();
+    int getFormatVersionInfo();
+    int getPositionCountInfo();
+    int getRestartPositionInfo();
+    int getTrackLengthRowsInfo();
+    int getTrackCountInfo();
+    int getInstrumentCountInfo();
+    int getSpeedMultiplierInfo();
+    int getCurrentPositionInfo();
+    int getCurrentRowInfo();
+    int getCurrentTempoInfo();
+    int getMixGainPercentInfo();
+    std::string getInstrumentNamesInfo();
     void setOutputSampleRate(int sampleRateHz) override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
@@ -56,6 +69,8 @@ private:
     std::string artist;
     std::string composer;
     std::string genre;
+    std::string formatName;
+    int formatVersion = 0;
 
     int sampleRateHz = 44100;
     int requestedSampleRateHz = 44100;

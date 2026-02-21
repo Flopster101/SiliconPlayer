@@ -1,6 +1,7 @@
 #include "HivelyTrackerDecoder.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <filesystem>
 
@@ -27,6 +28,13 @@ int normalizeRepeatMode(int mode) {
 
 int clampSampleRate(int sampleRateHz) {
     return std::clamp(sampleRateHz, 8000, 192000);
+}
+
+std::string lowercase(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::tolower(ch));
+    });
+    return value;
 }
 }
 
@@ -66,6 +74,18 @@ bool HivelyTrackerDecoder::open(const char* path) {
         return false;
     }
 
+    const std::string extension = lowercase(std::filesystem::path(sourcePath).extension().string());
+    if (extension == ".ahx") {
+        formatName = "AHX";
+        formatVersion = 0;
+    } else if (extension == ".hvl") {
+        formatName = "HVL";
+        formatVersion = std::max(0, static_cast<int>(tune->ht_Version));
+    } else {
+        formatName = "AHX/HVL";
+        formatVersion = 0;
+    }
+
     title = copyFixedString(tune->ht_Name, sizeof(tune->ht_Name));
     if (title.empty()) {
         title = std::filesystem::path(sourcePath).stem().string();
@@ -97,6 +117,8 @@ void HivelyTrackerDecoder::closeInternalLocked() {
     artist.clear();
     composer.clear();
     genre.clear();
+    formatName.clear();
+    formatVersion = 0;
     sampleRateHz = 44100;
     channels = 2;
     displayChannels = 2;
@@ -487,6 +509,93 @@ std::string HivelyTrackerDecoder::getComposer() {
 
 std::string HivelyTrackerDecoder::getGenre() {
     return genre;
+}
+
+std::string HivelyTrackerDecoder::getFormatNameInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return formatName;
+}
+
+int HivelyTrackerDecoder::getFormatVersionInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return formatVersion;
+}
+
+int HivelyTrackerDecoder::getPositionCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!tune) return 0;
+    return std::max(0, static_cast<int>(tune->ht_PositionNr));
+}
+
+int HivelyTrackerDecoder::getRestartPositionInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!tune) return -1;
+    return std::max(0, static_cast<int>(tune->ht_Restart));
+}
+
+int HivelyTrackerDecoder::getTrackLengthRowsInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!tune) return 0;
+    return std::max(0, static_cast<int>(tune->ht_TrackLength));
+}
+
+int HivelyTrackerDecoder::getTrackCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!tune) return 0;
+    return std::max(0, static_cast<int>(tune->ht_TrackNr) + 1);
+}
+
+int HivelyTrackerDecoder::getInstrumentCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!tune) return 0;
+    return std::max(0, static_cast<int>(tune->ht_InstrumentNr));
+}
+
+int HivelyTrackerDecoder::getSpeedMultiplierInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!tune) return 0;
+    return std::max(0, static_cast<int>(tune->ht_SpeedMultiplier));
+}
+
+int HivelyTrackerDecoder::getCurrentPositionInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!tune) return -1;
+    return std::max(0, static_cast<int>(tune->ht_PosNr));
+}
+
+int HivelyTrackerDecoder::getCurrentRowInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!tune) return -1;
+    return std::max(0, static_cast<int>(tune->ht_NoteNr));
+}
+
+int HivelyTrackerDecoder::getCurrentTempoInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!tune) return 0;
+    return std::max(0, static_cast<int>(tune->ht_Tempo));
+}
+
+int HivelyTrackerDecoder::getMixGainPercentInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!tune) return 0;
+    return std::max(0, static_cast<int>((static_cast<int64_t>(tune->ht_mixgain) * 100 + 128) / 256));
+}
+
+std::string HivelyTrackerDecoder::getInstrumentNamesInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!tune) return "";
+    const int instrumentCount = std::max(0, static_cast<int>(tune->ht_InstrumentNr));
+    std::string names;
+    for (int i = 1; i <= instrumentCount; ++i) {
+        const std::string name = copyFixedString(tune->ht_Instruments[i].ins_Name, sizeof(tune->ht_Instruments[i].ins_Name));
+        if (!names.empty()) {
+            names.push_back('\n');
+        }
+        names.append(std::to_string(i));
+        names.append(". ");
+        names.append(name);
+    }
+    return names;
 }
 
 void HivelyTrackerDecoder::setOutputSampleRate(int sampleRate) {

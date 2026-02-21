@@ -9,6 +9,7 @@
 #include "decoders/Vio2sfDecoder.h"
 #include "decoders/Sc68Decoder.h"
 #include "decoders/AdPlugDecoder.h"
+#include "decoders/HivelyTrackerDecoder.h"
 #include "decoders/UadeDecoder.h"
 
 bool AudioEngine::consumeNaturalEndEvent() {
@@ -807,6 +808,97 @@ std::string AudioEngine::getAdplugInstrumentNames() {
     if (!decoder) return "";
     auto* adplugDecoder = dynamic_cast<AdPlugDecoder*>(decoder.get());
     return adplugDecoder ? adplugDecoder->getInstrumentNamesInfo() : "";
+}
+
+std::string AudioEngine::getHivelyFormatName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
+    return hivelyDecoder ? hivelyDecoder->getFormatNameInfo() : "";
+}
+
+int AudioEngine::getHivelyFormatVersion() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
+    return hivelyDecoder ? hivelyDecoder->getFormatVersionInfo() : 0;
+}
+
+int AudioEngine::getHivelyPositionCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
+    return hivelyDecoder ? hivelyDecoder->getPositionCountInfo() : 0;
+}
+
+int AudioEngine::getHivelyRestartPosition() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return -1;
+    auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
+    return hivelyDecoder ? hivelyDecoder->getRestartPositionInfo() : -1;
+}
+
+int AudioEngine::getHivelyTrackLengthRows() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
+    return hivelyDecoder ? hivelyDecoder->getTrackLengthRowsInfo() : 0;
+}
+
+int AudioEngine::getHivelyTrackCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
+    return hivelyDecoder ? hivelyDecoder->getTrackCountInfo() : 0;
+}
+
+int AudioEngine::getHivelyInstrumentCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
+    return hivelyDecoder ? hivelyDecoder->getInstrumentCountInfo() : 0;
+}
+
+int AudioEngine::getHivelySpeedMultiplier() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
+    return hivelyDecoder ? hivelyDecoder->getSpeedMultiplierInfo() : 0;
+}
+
+int AudioEngine::getHivelyCurrentPosition() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return -1;
+    auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
+    return hivelyDecoder ? hivelyDecoder->getCurrentPositionInfo() : -1;
+}
+
+int AudioEngine::getHivelyCurrentRow() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return -1;
+    auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
+    return hivelyDecoder ? hivelyDecoder->getCurrentRowInfo() : -1;
+}
+
+int AudioEngine::getHivelyCurrentTempo() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
+    return hivelyDecoder ? hivelyDecoder->getCurrentTempoInfo() : 0;
+}
+
+int AudioEngine::getHivelyMixGainPercent() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
+    return hivelyDecoder ? hivelyDecoder->getMixGainPercentInfo() : 0;
+}
+
+std::string AudioEngine::getHivelyInstrumentNames() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
+    return hivelyDecoder ? hivelyDecoder->getInstrumentNamesInfo() : "";
 }
 
 std::string AudioEngine::getUadeFormatName() {

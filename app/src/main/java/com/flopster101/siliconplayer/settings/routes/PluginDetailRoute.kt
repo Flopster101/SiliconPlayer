@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.pluginsettings.AdPlugSettings
 import com.flopster101.siliconplayer.pluginsettings.FfmpegSettings
 import com.flopster101.siliconplayer.pluginsettings.GmeSettings
 import com.flopster101.siliconplayer.pluginsettings.LazyUsf2Settings
@@ -34,6 +35,8 @@ internal data class PluginDetailRouteState(
     val gmeSampleRateHz: Int,
     val sidPlayFpSampleRateHz: Int,
     val lazyUsf2SampleRateHz: Int,
+    val adPlugSampleRateHz: Int,
+    val adPlugOplEngine: Int,
     val openMptStereoSeparationPercent: Int,
     val openMptStereoSeparationAmigaPercent: Int,
     val openMptInterpolationFilterLength: Int,
@@ -91,6 +94,8 @@ internal data class PluginDetailRouteActions(
     val onGmeSampleRateChanged: (Int) -> Unit,
     val onSidPlayFpSampleRateChanged: (Int) -> Unit,
     val onLazyUsf2SampleRateChanged: (Int) -> Unit,
+    val onAdPlugSampleRateChanged: (Int) -> Unit,
+    val onAdPlugOplEngineChanged: (Int) -> Unit,
     val onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
     val onOpenMptStereoSeparationAmigaPercentChanged: (Int) -> Unit,
     val onOpenMptInterpolationFilterLengthChanged: (Int) -> Unit,
@@ -174,6 +179,7 @@ internal fun PluginDetailRouteContent(
         "Game Music Emu" -> state.gmeSampleRateHz
         "LibSIDPlayFP" -> state.sidPlayFpSampleRateHz
         "LazyUSF2" -> state.lazyUsf2SampleRateHz
+        "AdPlug" -> state.adPlugSampleRateHz
         "SC68" -> state.sc68SamplingRateHz
         else -> fixedSampleRateHz
     }
@@ -184,6 +190,7 @@ internal fun PluginDetailRouteContent(
         "Game Music Emu" -> actions.onGmeSampleRateChanged
         "LibSIDPlayFP" -> actions.onSidPlayFpSampleRateChanged
         "LazyUSF2" -> actions.onLazyUsf2SampleRateChanged
+        "AdPlug" -> actions.onAdPlugSampleRateChanged
         "SC68" -> actions.onSc68SamplingRateHzChanged
         else -> null
     }
@@ -310,6 +317,11 @@ internal fun PluginDetailRouteContent(
         "LazyUSF2" -> LazyUsf2Settings(
             useHleAudio = state.lazyUsf2UseHleAudio,
             onUseHleAudioChanged = actions.onLazyUsf2UseHleAudioChanged
+        )
+
+        "AdPlug" -> AdPlugSettings(
+            oplEngine = state.adPlugOplEngine,
+            onOplEngineChanged = actions.onAdPlugOplEngineChanged
         )
 
         "Vio2SF" -> Vio2sfSettings(

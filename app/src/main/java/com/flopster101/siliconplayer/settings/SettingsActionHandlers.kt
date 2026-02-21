@@ -640,6 +640,8 @@ internal fun clearAllSettingsAction(
     gmeCoreSampleRateHz: Int,
     sidPlayFpCoreSampleRateHz: Int,
     lazyUsf2CoreSampleRateHz: Int,
+    adPlugCoreSampleRateHz: Int,
+    adPlugOplEngine: Int,
     vio2sfInterpolationQuality: Int,
     sc68SamplingRateHz: Int,
     sc68Asid: Int,
@@ -746,6 +748,8 @@ internal fun clearAllSettingsAction(
     onSc68AmigaFilterChanged: (Boolean) -> Unit,
     onSc68AmigaBlendChanged: (Int) -> Unit,
     onSc68AmigaClockChanged: (Int) -> Unit,
+    onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
+    onAdPlugOplEngineChanged: (Int) -> Unit,
 ) {
     val pluginSnapshot = mapOf(
         CorePreferenceKeys.CORE_RATE_FFMPEG to ffmpegCoreSampleRateHz,
@@ -754,7 +758,9 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.CORE_RATE_GME to gmeCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_SIDPLAYFP to sidPlayFpCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_LAZYUSF2 to lazyUsf2CoreSampleRateHz,
+        CorePreferenceKeys.CORE_RATE_ADPLUG to adPlugCoreSampleRateHz,
         CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY to vio2sfInterpolationQuality,
+        CorePreferenceKeys.ADPLUG_OPL_ENGINE to adPlugOplEngine,
         CorePreferenceKeys.CORE_RATE_SC68 to sc68SamplingRateHz,
         CorePreferenceKeys.SC68_ASID to sc68Asid,
         CorePreferenceKeys.SC68_DEFAULT_TIME_SECONDS to sc68DefaultTimeSeconds,
@@ -849,6 +855,8 @@ internal fun clearAllSettingsAction(
     onFilenameDisplayModeChanged(FilenameDisplayMode.Always)
     onFilenameOnlyWhenTitleMissingChanged(false)
     onUnknownTrackDurationSecondsChanged(GmeDefaults.unknownDurationSeconds)
+    onAdPlugCoreSampleRateHzChanged(AdPlugDefaults.coreSampleRateHz)
+    onAdPlugOplEngineChanged(AdPlugDefaults.oplEngine)
     onSc68SamplingRateHzChanged(Sc68Defaults.coreSampleRateHz)
     onSc68AsidChanged(Sc68Defaults.asid)
     onSc68DefaultTimeSecondsChanged(Sc68Defaults.defaultTimeSeconds)
@@ -903,6 +911,8 @@ internal fun clearAllPluginSettingsAction(
     onGmeCoreSampleRateHzChanged: (Int) -> Unit,
     onSidPlayFpCoreSampleRateHzChanged: (Int) -> Unit,
     onLazyUsf2CoreSampleRateHzChanged: (Int) -> Unit,
+    onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
+    onAdPlugOplEngineChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
     onVio2sfInterpolationQualityChanged: (Int) -> Unit,
     onSc68SamplingRateHzChanged: (Int) -> Unit,
@@ -957,6 +967,8 @@ internal fun clearAllPluginSettingsAction(
     onGmeCoreSampleRateHzChanged(GmeDefaults.coreSampleRateHz)
     onSidPlayFpCoreSampleRateHzChanged(SidPlayFpDefaults.coreSampleRateHz)
     onLazyUsf2CoreSampleRateHzChanged(LazyUsf2Defaults.coreSampleRateHz)
+    onAdPlugCoreSampleRateHzChanged(AdPlugDefaults.coreSampleRateHz)
+    onAdPlugOplEngineChanged(AdPlugDefaults.oplEngine)
     onLazyUsf2UseHleAudioChanged(LazyUsf2Defaults.useHleAudio)
     onVio2sfInterpolationQualityChanged(Vio2sfDefaults.interpolationQuality)
     onSc68SamplingRateHzChanged(Sc68Defaults.coreSampleRateHz)
@@ -1012,8 +1024,10 @@ internal fun clearAllPluginSettingsAction(
         remove(CorePreferenceKeys.CORE_RATE_GME)
         remove(CorePreferenceKeys.CORE_RATE_SIDPLAYFP)
         remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2)
+        remove(CorePreferenceKeys.CORE_RATE_ADPLUG)
         remove(CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY)
         remove(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO)
+        remove(CorePreferenceKeys.ADPLUG_OPL_ENGINE)
         remove(CorePreferenceKeys.CORE_RATE_SC68)
         remove(CorePreferenceKeys.SC68_ASID)
         remove(CorePreferenceKeys.SC68_DEFAULT_TIME_SECONDS)
@@ -1101,6 +1115,8 @@ internal fun resetPluginSettingsAction(
     onGmeSpcInterpolationChanged: (Int) -> Unit,
     onGmeSpcUseNativeSampleRateChanged: (Boolean) -> Unit,
     onLazyUsf2CoreSampleRateHzChanged: (Int) -> Unit,
+    onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
+    onAdPlugOplEngineChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
     onVio2sfInterpolationQualityChanged: (Int) -> Unit,
     onSc68SamplingRateHzChanged: (Int) -> Unit,
@@ -1177,6 +1193,10 @@ internal fun resetPluginSettingsAction(
 
         "LazyUSF2" -> listOf(
             LazyUsf2OptionKeys.USE_HLE_AUDIO
+        )
+
+        "AdPlug" -> listOf(
+            AdPlugOptionKeys.OPL_ENGINE
         )
 
         "Vio2SF" -> listOf(
@@ -1294,6 +1314,15 @@ internal fun resetPluginSettingsAction(
             prefs.edit()
                 .remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2)
                 .remove(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO)
+                .apply()
+        }
+
+        "AdPlug" -> {
+            onAdPlugCoreSampleRateHzChanged(AdPlugDefaults.coreSampleRateHz)
+            onAdPlugOplEngineChanged(AdPlugDefaults.oplEngine)
+            prefs.edit()
+                .remove(CorePreferenceKeys.CORE_RATE_ADPLUG)
+                .remove(CorePreferenceKeys.ADPLUG_OPL_ENGINE)
                 .apply()
         }
 

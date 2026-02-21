@@ -8,6 +8,7 @@ object CorePreferenceKeys {
     const val CORE_RATE_GME = "core_rate_gme"
     const val CORE_RATE_SIDPLAYFP = "core_rate_sidplayfp"
     const val CORE_RATE_LAZYUSF2 = "core_rate_lazyusf2"
+    const val CORE_RATE_ADPLUG = "core_rate_adplug"
     const val CORE_RATE_SC68 = "core_rate_sc68"
     const val VIO2SF_INTERPOLATION_QUALITY = "vio2sf_interpolation_quality"
     const val OPENMPT_STEREO_SEPARATION_PERCENT = "openmpt_stereo_separation_percent"
@@ -53,6 +54,7 @@ object CorePreferenceKeys {
     const val SC68_AMIGA_FILTER = "sc68_amiga_filter"
     const val SC68_AMIGA_BLEND = "sc68_amiga_blend"
     const val SC68_AMIGA_CLOCK = "sc68_amiga_clock"
+    const val ADPLUG_OPL_ENGINE = "adplug_opl_engine"
     fun vgmPlayChipCoreKey(chipKey: String) = "vgmplay_chip_core_$chipKey"
 }
 
@@ -116,6 +118,11 @@ object SidPlayFpDefaults {
 object LazyUsf2Defaults {
     const val coreSampleRateHz = 0
     const val useHleAudio = true
+}
+
+object AdPlugDefaults {
+    const val coreSampleRateHz = 0
+    const val oplEngine = 2
 }
 
 object Vio2sfDefaults {

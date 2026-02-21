@@ -653,6 +653,8 @@ private fun AppNavigation(
     var gmeCoreSampleRateHz by settingsStates.gmeCoreSampleRateHz
     var sidPlayFpCoreSampleRateHz by settingsStates.sidPlayFpCoreSampleRateHz
     var lazyUsf2CoreSampleRateHz by settingsStates.lazyUsf2CoreSampleRateHz
+    var adPlugCoreSampleRateHz by settingsStates.adPlugCoreSampleRateHz
+    var adPlugOplEngine by settingsStates.adPlugOplEngine
     var lazyUsf2UseHleAudio by settingsStates.lazyUsf2UseHleAudio
     var vio2sfInterpolationQuality by settingsStates.vio2sfInterpolationQuality
     var sc68SamplingRateHz by settingsStates.sc68SamplingRateHz
@@ -1118,6 +1120,8 @@ private fun AppNavigation(
         gmeCoreSampleRateHz = gmeCoreSampleRateHz,
         sidPlayFpCoreSampleRateHz = sidPlayFpCoreSampleRateHz,
         lazyUsf2CoreSampleRateHz = lazyUsf2CoreSampleRateHz,
+        adPlugCoreSampleRateHz = adPlugCoreSampleRateHz,
+        adPlugOplEngine = adPlugOplEngine,
         lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
         vio2sfInterpolationQuality = vio2sfInterpolationQuality,
         sc68SamplingRateHz = sc68SamplingRateHz,
@@ -1533,6 +1537,8 @@ private fun AppNavigation(
                 onGmeSampleRateChanged = { gmeCoreSampleRateHz = it },
                 onSidPlayFpSampleRateChanged = { sidPlayFpCoreSampleRateHz = it },
                 onLazyUsf2SampleRateChanged = { lazyUsf2CoreSampleRateHz = it },
+                onAdPlugSampleRateChanged = { adPlugCoreSampleRateHz = it },
+                onAdPlugOplEngineChanged = { adPlugOplEngine = it },
                 onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
                 onVio2sfInterpolationQualityChanged = { vio2sfInterpolationQuality = it },
                 onSc68SamplingRateHzChanged = { sc68SamplingRateHz = it },

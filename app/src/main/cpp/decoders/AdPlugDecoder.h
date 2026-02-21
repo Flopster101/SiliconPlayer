@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-class CEmuopl;
+class Copl;
 class CPlayer;
 
 class AdPlugDecoder : public AudioDecoder {
@@ -54,6 +54,9 @@ public:
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override;
+    void setOutputSampleRate(int sampleRate) override;
+    void setOption(const char* name, const char* value) override;
+    int getOptionApplyPolicy(const char* name) const override;
     int getFixedSampleRateHz() const override;
     double getPlaybackPositionSeconds() override;
     TimelineMode getTimelineMode() const override;
@@ -63,11 +66,12 @@ public:
 
 private:
     mutable std::mutex decodeMutex;
-    std::unique_ptr<CEmuopl> opl;
+    std::unique_ptr<Copl> opl;
     std::unique_ptr<CPlayer> player;
     std::vector<short> pcmScratch;
 
     int sampleRateHz = 44100;
+    int adlibCore = 2;
     int channels = 2;
     int bitDepth = 16;
     std::atomic<int> repeatMode { 0 };

@@ -76,6 +76,8 @@ internal fun clearAllSettingsFromMainAction(
         gmeCoreSampleRateHz = pluginCoreState.gmeSampleRateHz,
         sidPlayFpCoreSampleRateHz = pluginCoreState.sidPlayFpSampleRateHz,
         lazyUsf2CoreSampleRateHz = pluginCoreState.lazyUsf2SampleRateHz,
+        adPlugCoreSampleRateHz = pluginCoreState.adPlugSampleRateHz,
+        adPlugOplEngine = pluginCoreState.adPlugOplEngine,
         vio2sfInterpolationQuality = pluginCoreState.vio2sfInterpolationQuality,
         sc68SamplingRateHz = pluginCoreState.sc68SamplingRateHz,
         sc68Asid = pluginCoreState.sc68Asid,
@@ -182,6 +184,8 @@ internal fun clearAllSettingsFromMainAction(
         onSc68AmigaFilterChanged = pluginCoreActions.onSc68AmigaFilterChanged,
         onSc68AmigaBlendChanged = pluginCoreActions.onSc68AmigaBlendChanged,
         onSc68AmigaClockChanged = pluginCoreActions.onSc68AmigaClockChanged,
+        onAdPlugCoreSampleRateHzChanged = pluginCoreActions.onAdPlugSampleRateChanged,
+        onAdPlugOplEngineChanged = pluginCoreActions.onAdPlugOplEngineChanged,
     )
 }
 
@@ -200,6 +204,8 @@ internal fun clearAllPluginSettingsFromMainAction(
         onGmeCoreSampleRateHzChanged = pluginCoreActions.onGmeSampleRateChanged,
         onSidPlayFpCoreSampleRateHzChanged = pluginCoreActions.onSidPlayFpSampleRateChanged,
         onLazyUsf2CoreSampleRateHzChanged = pluginCoreActions.onLazyUsf2SampleRateChanged,
+        onAdPlugCoreSampleRateHzChanged = pluginCoreActions.onAdPlugSampleRateChanged,
+        onAdPlugOplEngineChanged = pluginCoreActions.onAdPlugOplEngineChanged,
         onLazyUsf2UseHleAudioChanged = pluginCoreActions.onLazyUsf2UseHleAudioChanged,
         onVio2sfInterpolationQualityChanged = pluginCoreActions.onVio2sfInterpolationQualityChanged,
         onSc68SamplingRateHzChanged = pluginCoreActions.onSc68SamplingRateHzChanged,
@@ -298,6 +304,8 @@ internal fun resetPluginSettingsFromMainAction(
         onGmeSpcInterpolationChanged = pluginCoreActions.onGmeSpcInterpolationChanged,
         onGmeSpcUseNativeSampleRateChanged = pluginCoreActions.onGmeSpcUseNativeSampleRateChanged,
         onLazyUsf2CoreSampleRateHzChanged = pluginCoreActions.onLazyUsf2SampleRateChanged,
+        onAdPlugCoreSampleRateHzChanged = pluginCoreActions.onAdPlugSampleRateChanged,
+        onAdPlugOplEngineChanged = pluginCoreActions.onAdPlugOplEngineChanged,
         onLazyUsf2UseHleAudioChanged = pluginCoreActions.onLazyUsf2UseHleAudioChanged,
         onVio2sfInterpolationQualityChanged = pluginCoreActions.onVio2sfInterpolationQualityChanged,
         onSc68SamplingRateHzChanged = pluginCoreActions.onSc68SamplingRateHzChanged,

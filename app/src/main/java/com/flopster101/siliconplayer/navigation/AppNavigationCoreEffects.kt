@@ -15,6 +15,8 @@ internal fun AppNavigationCoreEffects(
     gmeCoreSampleRateHz: Int,
     sidPlayFpCoreSampleRateHz: Int,
     lazyUsf2CoreSampleRateHz: Int,
+    adPlugCoreSampleRateHz: Int,
+    adPlugOplEngine: Int,
     lazyUsf2UseHleAudio: Boolean,
     vio2sfInterpolationQuality: Int,
     sc68SamplingRateHz: Int,
@@ -121,6 +123,24 @@ internal fun AppNavigationCoreEffects(
         val normalized = if (lazyUsf2CoreSampleRateHz <= 0) 0 else lazyUsf2CoreSampleRateHz
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_LAZYUSF2, normalized).apply()
         NativeBridge.setCoreOutputSampleRate("LazyUSF2", normalized)
+    }
+
+    LaunchedEffect(adPlugCoreSampleRateHz) {
+        val normalized = if (adPlugCoreSampleRateHz <= 0) 0 else adPlugCoreSampleRateHz.coerceIn(8000, 192000)
+        prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_ADPLUG, normalized).apply()
+        NativeBridge.setCoreOutputSampleRate("AdPlug", normalized)
+    }
+
+    LaunchedEffect(adPlugOplEngine) {
+        val normalized = adPlugOplEngine.coerceIn(0, 3)
+        prefs.edit().putInt(CorePreferenceKeys.ADPLUG_OPL_ENGINE, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "AdPlug",
+            optionName = AdPlugOptionKeys.OPL_ENGINE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Adlib core"
+        )
     }
 
     LaunchedEffect(lazyUsf2UseHleAudio) {

@@ -2,46 +2,125 @@
 
 #include <adplug/adplug.h>
 #include <adplug/emuopl.h>
+#include <adplug/kemuopl.h>
+#include <adplug/nemuopl.h>
 #include <adplug/player.h>
+#include <adplug/wemuopl.h>
 
 #include <algorithm>
 #include <android/log.h>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 
 #define LOG_TAG "AdPlugDecoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 namespace {
-class TrackingEmuopl final : public CEmuopl {
+class TrackingOplProxy final : public Copl {
 public:
-    explicit TrackingEmuopl(int rate, bool bit16, bool useStereo)
-        : CEmuopl(rate, bit16, useStereo) {
-        // Most AdPlug tracks are single-chip OPL2. Start in OPL2 so mono
-        // content is mirrored to both channels instead of left-only output.
-        settype(TYPE_OPL2);
-    }
+    enum class Engine : int {
+        DosBox = 0,
+        KenSilverman = 1,
+        Mame = 2,
+        Nuked = 3
+    };
 
-    void setchip(int n) override {
-        CEmuopl::setchip(n);
-        if (n == 1) {
-            // Auto-promote to dual-chip output once a track actually uses chip 1.
-            settype(TYPE_DUAL_OPL2);
-            dualChipActive_ = true;
+    static std::unique_ptr<TrackingOplProxy> create(Engine engine, int sampleRateHz) {
+        std::unique_ptr<Copl> backend;
+        bool promoteDualOnSecondChip = false;
+        bool mirrorMonoWhenSingleChip = false;
+
+        switch (engine) {
+            case Engine::DosBox:
+                backend = std::make_unique<CWemuopl>(sampleRateHz, true, true);
+                break;
+            case Engine::KenSilverman:
+                backend = std::make_unique<CKemuopl>(sampleRateHz, true, true);
+                mirrorMonoWhenSingleChip = true;
+                break;
+            case Engine::Nuked:
+                backend = std::make_unique<CNemuopl>(sampleRateHz);
+                break;
+            case Engine::Mame:
+            default:
+                backend = std::make_unique<CEmuopl>(sampleRateHz, true, true);
+                // CEmuopl defaults to dual mode, which sends single-chip tunes
+                // to one side. Promote to dual only once chip 1 is actually used.
+                promoteDualOnSecondChip = true;
+                break;
         }
+
+        return std::unique_ptr<TrackingOplProxy>(
+                new TrackingOplProxy(std::move(backend), promoteDualOnSecondChip, mirrorMonoWhenSingleChip));
     }
 
     void write(int reg, int val) override {
-        const int chip = getchip();
+        if (!backend_) {
+            return;
+        }
+        const int chip = backend_->getchip();
         const auto mapping = mapTotalLevelRegister(reg);
         if (mapping.valid && chip >= 0 && chip < kChipCount) {
             rawTotalLevel_[chip][mapping.channel][mapping.slot] = val;
             const bool muted = channelMuted_[chip][mapping.channel];
             const int effective = muted ? forceMuteTotalLevel(val) : val;
-            CEmuopl::write(reg, effective);
+            backend_->write(reg, effective);
             return;
         }
-        CEmuopl::write(reg, val);
+        backend_->write(reg, val);
+    }
+
+    void setchip(int n) override {
+        if (!backend_) {
+            return;
+        }
+        backend_->setchip(n);
+        currChip = backend_->getchip();
+        if (n == 1) {
+            dualChipActive_ = true;
+            if (promoteDualOnSecondChip_) {
+                if (auto* emuOpl = dynamic_cast<CEmuopl*>(backend_.get())) {
+                    emuOpl->settype(TYPE_DUAL_OPL2);
+                    currType = TYPE_DUAL_OPL2;
+                }
+            }
+        }
+    }
+
+    int getchip() override {
+        if (!backend_) {
+            return currChip;
+        }
+        return backend_->getchip();
+    }
+
+    void update(short* buf, int samples) override {
+        if (!backend_ || !buf || samples <= 0) {
+            return;
+        }
+        backend_->update(buf, samples);
+        if (mirrorMonoWhenSingleChip_ && !dualChipActive_) {
+            for (int i = 0; i < samples; ++i) {
+                buf[(i * 2) + 1] = buf[i * 2];
+            }
+        }
+    }
+
+    void init() override {
+        if (!backend_) {
+            return;
+        }
+        backend_->init();
+        currChip = backend_->getchip();
+        currType = backend_->gettype();
+        dualChipActive_ = false;
+        std::memset(rawTotalLevel_, 0, sizeof(rawTotalLevel_));
+        if (auto* emuOpl = dynamic_cast<CEmuopl*>(backend_.get())) {
+            emuOpl->settype(TYPE_OPL2);
+            currType = TYPE_OPL2;
+        }
     }
 
     int getVoiceCount() const {
@@ -96,27 +175,56 @@ private:
     }
 
     void applyChannelTotalLevel(int chip, int channel) {
-        if (chip < 0 || chip >= kChipCount || channel < 0 || channel >= kChannelCountPerChip) {
+        if (!backend_ ||
+            chip < 0 || chip >= kChipCount ||
+            channel < 0 || channel >= kChannelCountPerChip) {
             return;
         }
-        const int previousChip = getchip();
-        CEmuopl::setchip(chip);
+        const int previousChip = backend_->getchip();
+        backend_->setchip(chip);
 
         const int op = kOpTable[channel];
         for (int slot = 0; slot < 2; ++slot) {
             const int raw = rawTotalLevel_[chip][channel][slot];
             const int reg = (slot == 0) ? (0x40 + op) : (0x43 + op);
             const int effective = channelMuted_[chip][channel] ? forceMuteTotalLevel(raw) : raw;
-            CEmuopl::write(reg, effective);
+            backend_->write(reg, effective);
         }
 
-        CEmuopl::setchip(previousChip);
+        backend_->setchip(previousChip);
     }
 
+    explicit TrackingOplProxy(
+            std::unique_ptr<Copl> backend,
+            bool promoteDualOnSecondChip,
+            bool mirrorMonoWhenSingleChip)
+        : backend_(std::move(backend)),
+          promoteDualOnSecondChip_(promoteDualOnSecondChip),
+          mirrorMonoWhenSingleChip_(mirrorMonoWhenSingleChip) {
+        if (backend_) {
+            currChip = backend_->getchip();
+            currType = backend_->gettype();
+            if (auto* emuOpl = dynamic_cast<CEmuopl*>(backend_.get())) {
+                emuOpl->settype(TYPE_OPL2);
+                currType = TYPE_OPL2;
+            }
+        }
+    }
+
+    std::unique_ptr<Copl> backend_;
+    bool promoteDualOnSecondChip_ = false;
+    bool mirrorMonoWhenSingleChip_ = false;
     bool dualChipActive_ = false;
     int rawTotalLevel_[kChipCount][kChannelCountPerChip][2] {};
     bool channelMuted_[kChipCount][kChannelCountPerChip] {};
 };
+
+int normalizeAdlibCore(int value) {
+    if (value < 0 || value > 3) {
+        return 2;
+    }
+    return value;
+}
 
 std::string safeString(const std::string& value) {
     return value;
@@ -138,7 +246,8 @@ bool AdPlugDecoder::open(const char* path) {
     }
 
     sourcePath = path;
-    opl = std::make_unique<TrackingEmuopl>(sampleRateHz, true, true);
+    const auto engine = static_cast<TrackingOplProxy::Engine>(normalizeAdlibCore(adlibCore));
+    opl = TrackingOplProxy::create(engine, sampleRateHz);
     player.reset(CAdPlug::factory(sourcePath, opl.get()));
     if (!player) {
         LOGE("CAdPlug::factory failed for file: %s", sourcePath.c_str());
@@ -548,7 +657,7 @@ void AdPlugDecoder::clearToggleChannelMutes() {
 }
 
 void AdPlugDecoder::syncToggleChannelsLocked() {
-    auto* trackingOpl = dynamic_cast<TrackingEmuopl*>(opl.get());
+    auto* trackingOpl = dynamic_cast<TrackingOplProxy*>(opl.get());
     const int voiceCount = trackingOpl ? trackingOpl->getVoiceCount() : 9;
 
     if (voiceCount == static_cast<int>(toggleChannelNames.size()) &&
@@ -581,7 +690,7 @@ void AdPlugDecoder::syncToggleChannelsLocked() {
 }
 
 void AdPlugDecoder::applyToggleMutesLocked() {
-    auto* trackingOpl = dynamic_cast<TrackingEmuopl*>(opl.get());
+    auto* trackingOpl = dynamic_cast<TrackingOplProxy*>(opl.get());
     if (!trackingOpl) {
         return;
     }
@@ -605,7 +714,7 @@ int AdPlugDecoder::getRepeatModeCapabilities() const {
 
 int AdPlugDecoder::getPlaybackCapabilities() const {
     std::lock_guard<std::mutex> lock(decodeMutex);
-    int capabilities = PLAYBACK_CAP_SEEK | PLAYBACK_CAP_LIVE_REPEAT_MODE | PLAYBACK_CAP_FIXED_SAMPLE_RATE;
+    int capabilities = PLAYBACK_CAP_SEEK | PLAYBACK_CAP_LIVE_REPEAT_MODE | PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
     if (durationReliable) {
         capabilities |= PLAYBACK_CAP_RELIABLE_DURATION;
     }
@@ -613,8 +722,37 @@ int AdPlugDecoder::getPlaybackCapabilities() const {
     return capabilities;
 }
 
+void AdPlugDecoder::setOutputSampleRate(int sampleRate) {
+    const int normalized = (sampleRate > 0) ? std::clamp(sampleRate, 8000, 192000) : 44100;
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    sampleRateHz = normalized;
+}
+
+void AdPlugDecoder::setOption(const char* name, const char* value) {
+    if (!name || !value) {
+        return;
+    }
+    if (std::strcmp(name, "adplug.opl_engine") != 0) {
+        return;
+    }
+
+    const int parsed = std::atoi(value);
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    adlibCore = normalizeAdlibCore(parsed);
+}
+
+int AdPlugDecoder::getOptionApplyPolicy(const char* name) const {
+    if (!name) {
+        return OPTION_APPLY_LIVE;
+    }
+    if (std::strcmp(name, "adplug.opl_engine") == 0) {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    return OPTION_APPLY_LIVE;
+}
+
 int AdPlugDecoder::getFixedSampleRateHz() const {
-    return sampleRateHz;
+    return 0;
 }
 
 double AdPlugDecoder::getPlaybackPositionSeconds() {

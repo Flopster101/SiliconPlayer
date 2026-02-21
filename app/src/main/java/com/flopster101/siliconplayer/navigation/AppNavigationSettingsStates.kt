@@ -22,6 +22,8 @@ internal data class AppNavigationSettingsStates(
     val gmeCoreSampleRateHz: MutableIntState,
     val sidPlayFpCoreSampleRateHz: MutableIntState,
     val lazyUsf2CoreSampleRateHz: MutableIntState,
+    val adPlugCoreSampleRateHz: MutableIntState,
+    val adPlugOplEngine: MutableIntState,
     val lazyUsf2UseHleAudio: MutableState<Boolean>,
     val vio2sfInterpolationQuality: MutableIntState,
     val sc68SamplingRateHz: MutableIntState,
@@ -125,6 +127,12 @@ internal fun rememberAppNavigationSettingsStates(
     }
     val lazyUsf2CoreSampleRateHz = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CORE_RATE_LAZYUSF2, LazyUsf2Defaults.coreSampleRateHz))
+    }
+    val adPlugCoreSampleRateHz = remember {
+        mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CORE_RATE_ADPLUG, AdPlugDefaults.coreSampleRateHz))
+    }
+    val adPlugOplEngine = remember {
+        mutableIntStateOf(prefs.getInt(CorePreferenceKeys.ADPLUG_OPL_ENGINE, AdPlugDefaults.oplEngine))
     }
     val lazyUsf2UseHleAudio = remember {
         mutableStateOf(prefs.getBoolean(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO, LazyUsf2Defaults.useHleAudio))
@@ -406,6 +414,8 @@ internal fun rememberAppNavigationSettingsStates(
         gmeCoreSampleRateHz = gmeCoreSampleRateHz,
         sidPlayFpCoreSampleRateHz = sidPlayFpCoreSampleRateHz,
         lazyUsf2CoreSampleRateHz = lazyUsf2CoreSampleRateHz,
+        adPlugCoreSampleRateHz = adPlugCoreSampleRateHz,
+        adPlugOplEngine = adPlugOplEngine,
         lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
         vio2sfInterpolationQuality = vio2sfInterpolationQuality,
         sc68SamplingRateHz = sc68SamplingRateHz,

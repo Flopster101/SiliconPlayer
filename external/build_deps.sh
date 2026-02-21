@@ -1481,14 +1481,140 @@ build_sc68() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build libbinio
+# -----------------------------------------------------------------------------
+build_libbinio() {
+    local ABI=$1
+    echo "Building libbinio for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/libbinio"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "libbinio source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
+
+    cmake -Wno-dev -Wno-deprecated \
+        -S "$PROJECT_PATH" \
+        -B "$BUILD_DIR" \
+        -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+        -DANDROID_ABI="$ABI" \
+        -DANDROID_PLATFORM="android-$ANDROID_API" \
+        -DCMAKE_C_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_C_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
+        -DCMAKE_CXX_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
+        -Dlibbinio_BUILD_SHARED_LIBS=OFF \
+        -Dlibbinio_BUILD_DOCUMENTATION=OFF \
+        -Dlibbinio_INCLUDE_PACKAGING=ON \
+        -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"
+
+    cmake --build "$BUILD_DIR" -j"$NPROC"
+    cmake --install "$BUILD_DIR"
+
+    if [ -f "$INSTALL_DIR/lib/liblibbinio.a" ] && [ ! -f "$INSTALL_DIR/lib/libbinio.a" ]; then
+        cp "$INSTALL_DIR/lib/liblibbinio.a" "$INSTALL_DIR/lib/libbinio.a"
+    fi
+
+    if [ ! -f "$INSTALL_DIR/lib/libbinio.a" ] && [ ! -f "$INSTALL_DIR/lib/liblibbinio.a" ]; then
+        local built_lib
+        built_lib="$(find "$BUILD_DIR" -type f -name 'lib*binio.a' | head -n 1)"
+        if [ -z "$built_lib" ]; then
+            echo "Error: libbinio static library not found after build."
+            return 1
+        fi
+        mkdir -p "$INSTALL_DIR/lib"
+        cp "$built_lib" "$INSTALL_DIR/lib/libbinio.a"
+    fi
+
+    if [ ! -f "$INSTALL_DIR/include/binio.h" ]; then
+        mkdir -p "$INSTALL_DIR/include"
+        cp "$PROJECT_PATH/src/"*.h "$INSTALL_DIR/include/" 2>/dev/null || true
+        cp "$BUILD_DIR/src/generated/include/binio.h" "$INSTALL_DIR/include/" 2>/dev/null || true
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# Function: Build adplug
+# -----------------------------------------------------------------------------
+build_adplug() {
+    local ABI=$1
+    echo "Building adplug for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/adplug"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "adplug source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    if [ ! -f "$INSTALL_DIR/lib/libbinio.a" ]; then
+        build_libbinio "$ABI"
+    fi
+
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
+
+    cmake -Wno-dev -Wno-deprecated \
+        -S "$PROJECT_PATH" \
+        -B "$BUILD_DIR" \
+        -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+        -DANDROID_ABI="$ABI" \
+        -DANDROID_PLATFORM="android-$ANDROID_API" \
+        -DCMAKE_C_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_C_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
+        -DCMAKE_CXX_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_SHARED_LIBS=OFF \
+        -Dadplug_BUILD_SHARED_LIBS=OFF \
+        -DADPLUG_PRECOMPILED_HEADERS=OFF \
+        -Dlibadplug_BUILD_DOCUMENTATION=OFF \
+        -Dadplug_INCLUDE_TEST=OFF \
+        -Dadplug_INCLUDE_PACKAGING=ON \
+        -DCMAKE_PREFIX_PATH="$INSTALL_DIR" \
+        -Dlibbinio_DIR="$INSTALL_DIR/lib/cmake/libbinio" \
+        -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"
+
+    cmake --build "$BUILD_DIR" -j"$NPROC"
+    cmake --install "$BUILD_DIR"
+
+    if [ ! -f "$INSTALL_DIR/lib/libadplug.a" ]; then
+        local built_lib
+        built_lib="$(find "$BUILD_DIR" -type f -name 'libadplug.a' | head -n 1)"
+        if [ -z "$built_lib" ]; then
+            echo "Error: adplug static library not found after build."
+            return 1
+        fi
+        mkdir -p "$INSTALL_DIR/lib"
+        cp "$built_lib" "$INSTALL_DIR/lib/libadplug.a"
+    fi
+
+    mkdir -p "$INSTALL_DIR/include/adplug"
+    cp "$PROJECT_PATH/src/"*.h "$INSTALL_DIR/include/adplug/" 2>/dev/null || true
+    cp "$BUILD_DIR/src/generated/include/adplug/version.h" "$INSTALL_DIR/include/adplug/" 2>/dev/null || true
+}
+
+# -----------------------------------------------------------------------------
 # Argument Parsing
 # -----------------------------------------------------------------------------
 usage() {
     echo "Usage: $0 <abi|all> <lib|all[,lib2,...]> [clean]"
     echo "  ABI: all, arm64-v8a, armeabi-v7a, x86_64, x86"
-    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68"
+    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68, libbinio, adplug"
     echo "  clean (optional): force rebuild (bypass already-built skip checks)"
-    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68"
+    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68, binio, libadplug"
 }
 
 if [ "$#" -eq 1 ]; then
@@ -1556,6 +1682,12 @@ normalize_lib_name() {
         sc68|libsc68)
             echo "sc68"
             ;;
+        binio|libbinio)
+            echo "libbinio"
+            ;;
+        adplug|libadplug)
+            echo "adplug"
+            ;;
         *)
             echo "$lib"
             ;;
@@ -1597,7 +1729,7 @@ is_valid_abi() {
 is_valid_lib() {
     local lib="$1"
     case "$lib" in
-        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth|sc68)
+        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth|sc68|libbinio|adplug)
             return 0
             ;;
         *)
@@ -1760,6 +1892,14 @@ for ABI in "${ABIS[@]}"; do
 
     if target_has_lib "sc68"; then
         build_sc68 "$ABI"
+    fi
+
+    if target_has_lib "libbinio"; then
+        build_libbinio "$ABI"
+    fi
+
+    if target_has_lib "adplug"; then
+        build_adplug "$ABI"
     fi
 done
 

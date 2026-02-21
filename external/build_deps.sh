@@ -1230,43 +1230,11 @@ build_libsidplayfp() {
             return 1
         fi
 
-        # libsidplayfp autotools expects these submodules to exist.
-        # Auto-initialize them when available instead of failing immediately.
         if [ ! -d "$PROJECT_PATH/src/builders/exsid-builder/driver/m4" ] || \
            [ ! -f "$PROJECT_PATH/src/builders/usbsid-builder/driver/src/USBSID.cpp" ]; then
-            echo "libsidplayfp submodules missing; attempting init/update..."
-            git -C "$PROJECT_PATH" submodule update --init --recursive || true
-        fi
-
-        if [ ! -d "$PROJECT_PATH/src/builders/exsid-builder/driver/m4" ] || \
-           [ ! -f "$PROJECT_PATH/src/builders/usbsid-builder/driver/src/USBSID.cpp" ]; then
-            echo "libsidplayfp submodules still missing; attempting direct fallback clones..."
-            if command -v git >/dev/null 2>&1; then
-                local EXSID_DIR="$PROJECT_PATH/src/builders/exsid-builder/driver"
-                local USBSID_DIR="$PROJECT_PATH/src/builders/usbsid-builder/driver"
-
-                if [ ! -d "$EXSID_DIR/m4" ]; then
-                    rm -rf "$EXSID_DIR"
-                    mkdir -p "$(dirname "$EXSID_DIR")"
-                    git clone --depth 1 https://github.com/libsidplayfp/exsid-driver.git "$EXSID_DIR" || true
-                fi
-
-                if [ ! -f "$USBSID_DIR/src/USBSID.cpp" ]; then
-                    rm -rf "$USBSID_DIR"
-                    mkdir -p "$(dirname "$USBSID_DIR")"
-                    git clone --depth 1 https://github.com/LouDnl/USBSID-Pico-driver.git "$USBSID_DIR" || true
-                fi
-            fi
-        fi
-
-        if [ ! -d "$PROJECT_PATH/src/builders/exsid-builder/driver/m4" ] || \
-           [ ! -f "$PROJECT_PATH/src/builders/usbsid-builder/driver/src/USBSID.cpp" ]; then
-            echo "Error: libsidplayfp submodule/fallback dependencies are still missing."
+            echo "Error: libsidplayfp submodule dependencies are missing."
             echo "Run:"
             echo "  git -C \"$PROJECT_PATH\" submodule update --init --recursive"
-            echo "or clone:"
-            echo "  https://github.com/libsidplayfp/exsid-driver.git"
-            echo "  https://github.com/LouDnl/USBSID-Pico-driver.git"
             return 1
         fi
 
@@ -1498,18 +1466,6 @@ build_libbinio() {
     fi
 
     if [ ! -f "$CMAKE_SOURCE/CMakeLists.txt" ]; then
-        echo "libbinio source still incomplete; attempting direct clone..."
-        if command -v git >/dev/null 2>&1; then
-            if [ -d "$PROJECT_PATH" ] && [ -z "$(ls -A "$PROJECT_PATH" 2>/dev/null)" ]; then
-                rmdir "$PROJECT_PATH" || true
-            fi
-            if [ ! -e "$PROJECT_PATH/CMakeLists.txt" ] && [ ! -d "$PROJECT_PATH/.git" ] && [ ! -f "$PROJECT_PATH/.git" ]; then
-                git clone --depth 1 https://github.com/adplug/libbinio "$PROJECT_PATH" || true
-            fi
-        fi
-    fi
-
-    if [ ! -f "$CMAKE_SOURCE/CMakeLists.txt" ]; then
         local nested_cmakelists
         nested_cmakelists="$(find "$PROJECT_PATH" -mindepth 2 -maxdepth 3 -type f -name CMakeLists.txt | head -n 1)"
         if [ -n "$nested_cmakelists" ]; then
@@ -1520,7 +1476,8 @@ build_libbinio() {
 
     if [ ! -f "$CMAKE_SOURCE/CMakeLists.txt" ]; then
         echo "Error: libbinio source at $PROJECT_PATH does not contain CMakeLists.txt."
-        echo "Run: git clone --depth 1 https://github.com/adplug/libbinio \"$PROJECT_PATH\""
+        echo "Ensure submodules are initialized:"
+        echo "  git -C \"$ABSOLUTE_PATH\" submodule update --init --recursive"
         return 1
     fi
 
@@ -1587,20 +1544,9 @@ build_adplug() {
     fi
 
     if [ ! -f "$PROJECT_PATH/CMakeLists.txt" ]; then
-        echo "adplug source still incomplete; attempting direct clone..."
-        if command -v git >/dev/null 2>&1; then
-            if [ -d "$PROJECT_PATH" ] && [ -z "$(ls -A "$PROJECT_PATH" 2>/dev/null)" ]; then
-                rmdir "$PROJECT_PATH" || true
-            fi
-            if [ ! -e "$PROJECT_PATH/CMakeLists.txt" ] && [ ! -d "$PROJECT_PATH/.git" ] && [ ! -f "$PROJECT_PATH/.git" ]; then
-                git clone --depth 1 https://github.com/adplug/adplug "$PROJECT_PATH" || true
-            fi
-        fi
-    fi
-
-    if [ ! -f "$PROJECT_PATH/CMakeLists.txt" ]; then
         echo "Error: adplug source at $PROJECT_PATH does not contain CMakeLists.txt."
-        echo "Run: git clone --depth 1 https://github.com/adplug/adplug \"$PROJECT_PATH\""
+        echo "Ensure submodules are initialized:"
+        echo "  git -C \"$ABSOLUTE_PATH\" submodule update --init --recursive"
         return 1
     fi
 

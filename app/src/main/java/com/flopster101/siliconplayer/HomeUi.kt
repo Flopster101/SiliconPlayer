@@ -461,6 +461,11 @@ internal fun HomeScreen(
                             val extensionLabel =
                                 inferredPrimaryExtensionForName(trackFile.name)?.uppercase() ?: "UNKNOWN"
                             val useLiveMetadata = samePath(currentTrackPath, entry.path)
+                            val fallbackIcon = placeholderArtworkIconForFile(
+                                file = trackFile,
+                                decoderName = entry.decoderName,
+                                allowCurrentDecoderFallback = false
+                            )
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 ElevatedCard(
                                     modifier = Modifier
@@ -482,7 +487,7 @@ internal fun HomeScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.MusicNote,
+                                            imageVector = fallbackIcon,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary
                                         )

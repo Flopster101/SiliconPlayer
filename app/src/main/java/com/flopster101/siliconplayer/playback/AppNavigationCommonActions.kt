@@ -87,6 +87,7 @@ internal fun addRecentPlayedTrackAction(
     locationId: String?,
     title: String?,
     artist: String?,
+    decoderName: String?,
     limit: Int,
     onRecentPlayedChanged: (List<RecentPathEntry>) -> Unit,
     prefs: SharedPreferences
@@ -97,6 +98,7 @@ internal fun addRecentPlayedTrackAction(
         locationId = locationId,
         title = title,
         artist = artist,
+        decoderName = decoderName,
         limit = limit,
         update = onRecentPlayedChanged,
         write = { entries, max ->

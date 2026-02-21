@@ -50,12 +50,14 @@ internal fun buildAppNavigationRuntimeDelegates(
     applyRepeatModeToNative: (RepeatMode) -> Unit
 ): AppNavigationRuntimeDelegates {
     val addRecentPlayedTrack: (String, String?, String?, String?) -> Unit = { path, locationId, title, artist ->
+        val currentDecoderName = NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() }
         addRecentPlayedTrackAction(
             current = recentPlayedFilesProvider(),
             path = path,
             locationId = locationId,
             title = title,
             artist = artist,
+            decoderName = currentDecoderName,
             limit = recentFilesLimitProvider(),
             onRecentPlayedChanged = onRecentPlayedChanged,
             prefs = prefs

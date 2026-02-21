@@ -63,12 +63,20 @@ private val artworkFallbackVideoExtensions = setOf(
 )
 
 @Composable
-internal fun placeholderArtworkIconForFile(file: File?, decoderName: String?): ImageVector {
+internal fun placeholderArtworkIconForFile(
+    file: File?,
+    decoderName: String?,
+    allowCurrentDecoderFallback: Boolean = true
+): ImageVector {
     val extension = file?.name?.let(::inferredPrimaryExtensionForName) ?: return Icons.Default.MusicNote
     val effectiveDecoderName = decoderName
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
-        ?: NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() }
+        ?: if (allowCurrentDecoderFallback) {
+            NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() }
+        } else {
+            null
+        }
     return if (isChipArtworkDecoder(effectiveDecoderName)) {
         ImageVector.vectorResource(R.drawable.ic_placeholder_tracker_chip)
     } else if (isGamepadArtworkDecoder(effectiveDecoderName)) {

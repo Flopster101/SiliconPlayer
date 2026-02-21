@@ -163,7 +163,8 @@ internal data class RecentPathEntry(
     val path: String,
     val locationId: String?,
     val title: String? = null,
-    val artist: String? = null
+    val artist: String? = null,
+    val decoderName: String? = null
 )
 
 internal data class StorageDescriptor(
@@ -286,12 +287,14 @@ internal fun readRecentEntries(
                 val locationId = objectValue.optString("locationId", "").ifBlank { null }
                 val title = objectValue.optString("title", "").ifBlank { null }
                 val artist = objectValue.optString("artist", "").ifBlank { null }
+                val decoderName = objectValue.optString("decoderName", "").ifBlank { null }
                 add(
                     RecentPathEntry(
                         path = path,
                         locationId = locationId,
                         title = title,
-                        artist = artist
+                        artist = artist,
+                        decoderName = decoderName
                     )
                 )
                 if (size >= maxItems) break
@@ -317,6 +320,7 @@ internal fun writeRecentEntries(
                 .put("locationId", entry.locationId ?: "")
                 .put("title", entry.title ?: "")
                 .put("artist", entry.artist ?: "")
+                .put("decoderName", entry.decoderName ?: "")
         )
     }
     prefs.edit().putString(key, array.toString()).apply()
@@ -341,18 +345,21 @@ internal fun buildUpdatedRecentPlayedTracks(
     locationId: String?,
     title: String? = null,
     artist: String? = null,
+    decoderName: String? = null,
     limit: Int
 ): List<RecentPathEntry> {
     val normalized = normalizeSourceIdentity(newPath) ?: newPath
     val existing = current.firstOrNull { samePath(it.path, normalized) }
     val resolvedTitle = title?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.title
     val resolvedArtist = artist?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.artist
+    val resolvedDecoderName = decoderName?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.decoderName
     val updated = listOf(
         RecentPathEntry(
             path = normalized,
             locationId = locationId ?: existing?.locationId,
             title = resolvedTitle,
-            artist = resolvedArtist
+            artist = resolvedArtist,
+            decoderName = resolvedDecoderName
         )
     ) + current.filterNot { samePath(it.path, normalized) }
     return updated.take(limit)

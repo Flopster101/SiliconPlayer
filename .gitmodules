@@ -55,3 +55,6 @@
 [submodule "external/vasm"]
 	path = external/vasm
 	url = https://github.com/StarWolf3000/vasm-mirror
+[submodule "external/hivelytracker"]
+	path = external/hivelytracker
+	url = https://github.com/pete-gordon/hivelytracker

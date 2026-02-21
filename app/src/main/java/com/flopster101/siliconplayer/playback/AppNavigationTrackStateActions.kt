@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
 internal fun applyNativeTrackSnapshotAction(
     snapshot: NativeTrackSnapshot,
     prefs: SharedPreferences,
+    ignoreCoreVolumeForCurrentSong: Boolean,
     onLastUsedCoreNameChanged: (String) -> Unit,
     onPluginVolumeDbChanged: (Float) -> Unit,
     onPluginGainChanged: (Float) -> Unit,
@@ -28,7 +29,7 @@ internal fun applyNativeTrackSnapshotAction(
         onLastUsedCoreNameChanged(decoderName)
         applied.pluginVolumeDb?.let { decoderPluginVolumeDb ->
             onPluginVolumeDbChanged(decoderPluginVolumeDb)
-            onPluginGainChanged(decoderPluginVolumeDb)
+            onPluginGainChanged(if (ignoreCoreVolumeForCurrentSong) 0f else decoderPluginVolumeDb)
         }
     }
     onMetadataTitleChanged(applied.title)
@@ -109,7 +110,8 @@ internal fun clearPlaybackMetadataStateAction(
     onShowSubtuneSelectorDialogChanged: (Boolean) -> Unit,
     onRepeatModeCapabilitiesFlagsChanged: (Int) -> Unit,
     onPlaybackCapabilitiesFlagsChanged: (Int) -> Unit,
-    onArtworkBitmapCleared: () -> Unit
+    onArtworkBitmapCleared: () -> Unit,
+    onIgnoreCoreVolumeForSongChanged: (Boolean) -> Unit
 ) {
     val cleared = ClearedPlaybackState()
     onSelectedFileChanged(null)
@@ -133,6 +135,7 @@ internal fun clearPlaybackMetadataStateAction(
     onRepeatModeCapabilitiesFlagsChanged(cleared.repeatModeCapabilitiesFlags)
     onPlaybackCapabilitiesFlagsChanged(cleared.playbackCapabilitiesFlags)
     onArtworkBitmapCleared()
+    onIgnoreCoreVolumeForSongChanged(false)
 }
 
 internal fun resetAndOptionallyKeepLastTrackAction(

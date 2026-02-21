@@ -21,6 +21,7 @@ internal class AppNavigationPlaybackStateDelegates(
     private val addRecentPlayedTrack: (String, String?, String?, String?) -> Unit,
     private val syncPlaybackService: () -> Unit,
     private val readNativeTrackSnapshot: () -> NativeTrackSnapshot,
+    private val ignoreCoreVolumeForCurrentSongProvider: () -> Boolean,
     private val onLastUsedCoreNameChanged: (String?) -> Unit,
     private val onPluginVolumeDbChanged: (Float) -> Unit,
     private val onPluginGainChanged: (Float) -> Unit,
@@ -43,6 +44,7 @@ internal class AppNavigationPlaybackStateDelegates(
     private val onRepeatModeCapabilitiesFlagsChanged: (Int) -> Unit,
     private val onPlaybackCapabilitiesFlagsChanged: (Int) -> Unit,
     private val onArtworkBitmapCleared: () -> Unit,
+    private val onIgnoreCoreVolumeForSongChanged: (Boolean) -> Unit,
     private val onLastStoppedChanged: (File?, String?) -> Unit,
     private val onStopEngine: () -> Unit
 ) {
@@ -69,6 +71,7 @@ internal class AppNavigationPlaybackStateDelegates(
         applyNativeTrackSnapshotAction(
             snapshot = snapshot,
             prefs = prefs,
+            ignoreCoreVolumeForCurrentSong = ignoreCoreVolumeForCurrentSongProvider(),
             onLastUsedCoreNameChanged = onLastUsedCoreNameChanged,
             onPluginVolumeDbChanged = onPluginVolumeDbChanged,
             onPluginGainChanged = onPluginGainChanged,
@@ -126,7 +129,8 @@ internal class AppNavigationPlaybackStateDelegates(
             onShowSubtuneSelectorDialogChanged = onShowSubtuneSelectorDialogChanged,
             onRepeatModeCapabilitiesFlagsChanged = onRepeatModeCapabilitiesFlagsChanged,
             onPlaybackCapabilitiesFlagsChanged = onPlaybackCapabilitiesFlagsChanged,
-            onArtworkBitmapCleared = onArtworkBitmapCleared
+            onArtworkBitmapCleared = onArtworkBitmapCleared,
+            onIgnoreCoreVolumeForSongChanged = onIgnoreCoreVolumeForSongChanged
         )
     }
 

@@ -44,16 +44,19 @@ internal fun primeAudioEffectsDialogState(
     masterVolumeDb: Float,
     pluginVolumeDb: Float,
     songVolumeDb: Float,
+    ignoreCoreVolumeForSong: Boolean,
     forceMono: Boolean,
     onTempMasterVolumeChanged: (Float) -> Unit,
     onTempPluginVolumeChanged: (Float) -> Unit,
     onTempSongVolumeChanged: (Float) -> Unit,
+    onTempIgnoreCoreVolumeForSongChanged: (Boolean) -> Unit,
     onTempForceMonoChanged: (Boolean) -> Unit,
     onShowAudioEffectsDialog: (Boolean) -> Unit
 ) {
     onTempMasterVolumeChanged(masterVolumeDb)
     onTempPluginVolumeChanged(pluginVolumeDb)
     onTempSongVolumeChanged(songVolumeDb)
+    onTempIgnoreCoreVolumeForSongChanged(ignoreCoreVolumeForSong)
     onTempForceMonoChanged(forceMono)
     onShowAudioEffectsDialog(true)
 }
@@ -118,10 +121,12 @@ internal fun buildOpenAudioEffectsDialogAction(
     masterVolumeDbProvider: () -> Float,
     pluginVolumeDbProvider: () -> Float,
     songVolumeDbProvider: () -> Float,
+    ignoreCoreVolumeForSongProvider: () -> Boolean,
     forceMonoProvider: () -> Boolean,
     onTempMasterVolumeChanged: (Float) -> Unit,
     onTempPluginVolumeChanged: (Float) -> Unit,
     onTempSongVolumeChanged: (Float) -> Unit,
+    onTempIgnoreCoreVolumeForSongChanged: (Boolean) -> Unit,
     onTempForceMonoChanged: (Boolean) -> Unit,
     onShowAudioEffectsDialogChanged: (Boolean) -> Unit
 ): () -> Unit = {
@@ -129,10 +134,12 @@ internal fun buildOpenAudioEffectsDialogAction(
         masterVolumeDb = masterVolumeDbProvider(),
         pluginVolumeDb = pluginVolumeDbProvider(),
         songVolumeDb = songVolumeDbProvider(),
+        ignoreCoreVolumeForSong = ignoreCoreVolumeForSongProvider(),
         forceMono = forceMonoProvider(),
         onTempMasterVolumeChanged = onTempMasterVolumeChanged,
         onTempPluginVolumeChanged = onTempPluginVolumeChanged,
         onTempSongVolumeChanged = onTempSongVolumeChanged,
+        onTempIgnoreCoreVolumeForSongChanged = onTempIgnoreCoreVolumeForSongChanged,
         onTempForceMonoChanged = onTempForceMonoChanged,
         onShowAudioEffectsDialog = onShowAudioEffectsDialogChanged
     )

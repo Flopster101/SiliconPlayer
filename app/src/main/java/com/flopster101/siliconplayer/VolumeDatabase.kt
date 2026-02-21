@@ -6,8 +6,10 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
 /**
- * Database for storing per-song volume adjustments.
- * Each song is identified by its file path and has an associated volume in dB.
+ * Database for storing per-song audio overrides.
+ * Each song is identified by its file path and can store:
+ * - Song volume in dB
+ * - Whether core volume should be ignored for this song
  */
 class VolumeDatabase private constructor(context: Context) :
     SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
@@ -18,6 +20,7 @@ class VolumeDatabase private constructor(context: Context) :
             CREATE TABLE $TABLE_SONG_VOLUMES (
                 $COLUMN_FILE_PATH TEXT PRIMARY KEY,
                 $COLUMN_VOLUME_DB REAL NOT NULL,
+                $COLUMN_IGNORE_CORE_VOLUME INTEGER NOT NULL DEFAULT 0,
                 $COLUMN_LAST_MODIFIED INTEGER NOT NULL
             )
             """.trimIndent()
@@ -28,9 +31,11 @@ class VolumeDatabase private constructor(context: Context) :
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Future migrations can be added here
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_SONG_VOLUMES")
-        onCreate(db)
+        if (oldVersion < 2) {
+            db.execSQL(
+                "ALTER TABLE $TABLE_SONG_VOLUMES ADD COLUMN $COLUMN_IGNORE_CORE_VOLUME INTEGER NOT NULL DEFAULT 0"
+            )
+        }
     }
 
     /**
@@ -67,17 +72,70 @@ class VolumeDatabase private constructor(context: Context) :
     fun setSongVolume(filePath: String, volumeDb: Float) {
         val db = writableDatabase
         val values = ContentValues().apply {
-            put(COLUMN_FILE_PATH, filePath)
             put(COLUMN_VOLUME_DB, volumeDb)
             put(COLUMN_LAST_MODIFIED, System.currentTimeMillis())
         }
-
-        db.insertWithOnConflict(
+        val updatedRows = db.update(
             TABLE_SONG_VOLUMES,
-            null,
             values,
-            SQLiteDatabase.CONFLICT_REPLACE
+            "$COLUMN_FILE_PATH = ?",
+            arrayOf(filePath)
         )
+        if (updatedRows == 0) {
+            values.put(COLUMN_FILE_PATH, filePath)
+            values.put(COLUMN_IGNORE_CORE_VOLUME, 0)
+            db.insert(TABLE_SONG_VOLUMES, null, values)
+        }
+    }
+
+    /**
+     * Get whether core volume should be ignored for a specific song.
+     * @param filePath The absolute file path of the song
+     * @return true if core volume should be ignored for this song
+     */
+    fun getSongIgnoreCoreVolume(filePath: String): Boolean {
+        val db = readableDatabase
+        val cursor = db.query(
+            TABLE_SONG_VOLUMES,
+            arrayOf(COLUMN_IGNORE_CORE_VOLUME),
+            "$COLUMN_FILE_PATH = ?",
+            arrayOf(filePath),
+            null,
+            null,
+            null
+        )
+
+        return cursor.use {
+            if (it.moveToFirst()) {
+                it.getInt(it.getColumnIndexOrThrow(COLUMN_IGNORE_CORE_VOLUME)) != 0
+            } else {
+                false
+            }
+        }
+    }
+
+    /**
+     * Set whether core volume should be ignored for a specific song.
+     * @param filePath The absolute file path of the song
+     * @param ignoreCoreVolume true to ignore core volume for this song
+     */
+    fun setSongIgnoreCoreVolume(filePath: String, ignoreCoreVolume: Boolean) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put(COLUMN_IGNORE_CORE_VOLUME, if (ignoreCoreVolume) 1 else 0)
+            put(COLUMN_LAST_MODIFIED, System.currentTimeMillis())
+        }
+        val updatedRows = db.update(
+            TABLE_SONG_VOLUMES,
+            values,
+            "$COLUMN_FILE_PATH = ?",
+            arrayOf(filePath)
+        )
+        if (updatedRows == 0) {
+            values.put(COLUMN_FILE_PATH, filePath)
+            values.put(COLUMN_VOLUME_DB, 0f)
+            db.insert(TABLE_SONG_VOLUMES, null, values)
+        }
     }
 
     /**
@@ -116,11 +174,12 @@ class VolumeDatabase private constructor(context: Context) :
 
     companion object {
         private const val DATABASE_NAME = "silicon_player_volumes.db"
-        private const val DATABASE_VERSION = 1
+        private const val DATABASE_VERSION = 2
 
         private const val TABLE_SONG_VOLUMES = "song_volumes"
         private const val COLUMN_FILE_PATH = "file_path"
         private const val COLUMN_VOLUME_DB = "volume_db"
+        private const val COLUMN_IGNORE_CORE_VOLUME = "ignore_core_volume"
         private const val COLUMN_LAST_MODIFIED = "last_modified"
 
         @Volatile

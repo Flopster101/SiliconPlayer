@@ -265,6 +265,7 @@ private fun AppNavigation(
     var masterVolumeDb by remember { mutableFloatStateOf(0f) }
     var pluginVolumeDb by remember { mutableFloatStateOf(0f) }
     var songVolumeDb by remember { mutableFloatStateOf(0f) }
+    var ignoreCoreVolumeForSong by remember { mutableStateOf(false) }
     var forceMono by remember { mutableStateOf(false) }
     var showAudioEffectsDialog by remember { mutableStateOf(false) }
 
@@ -272,6 +273,7 @@ private fun AppNavigation(
     var tempMasterVolumeDb by remember { mutableFloatStateOf(0f) }
     var tempPluginVolumeDb by remember { mutableFloatStateOf(0f) }
     var tempSongVolumeDb by remember { mutableFloatStateOf(0f) }
+    var tempIgnoreCoreVolumeForSong by remember { mutableStateOf(false) }
     var tempForceMono by remember { mutableStateOf(false) }
 
     var currentView by remember { mutableStateOf(MainView.Home) }
@@ -766,7 +768,8 @@ private fun AppNavigation(
     val loadSongVolumeForFile = buildLoadSongVolumeForFileDelegate(
         volumeDatabase = volumeDatabase,
         onSongVolumeDbChanged = { songVolumeDb = it },
-        onSongGainChanged = { NativeBridge.setSongGain(it) }
+        onSongGainChanged = { NativeBridge.setSongGain(it) },
+        onIgnoreCoreVolumeForSongChanged = { ignoreCoreVolumeForSong = it }
     )
 
     val isLocalPlayableFile = buildIsLocalPlayableFileDelegate()
@@ -907,6 +910,9 @@ private fun AppNavigation(
         },
         syncPlaybackService = { runtimeDelegates.syncPlaybackService() },
         readNativeTrackSnapshot = { readNativeTrackSnapshot() },
+        ignoreCoreVolumeForCurrentSongProvider = {
+            if (showAudioEffectsDialog) tempIgnoreCoreVolumeForSong else ignoreCoreVolumeForSong
+        },
         onLastUsedCoreNameChanged = { lastUsedCoreName = it },
         onPluginVolumeDbChanged = { pluginVolumeDb = it },
         onPluginGainChanged = { NativeBridge.setPluginGain(it) },
@@ -929,6 +935,7 @@ private fun AppNavigation(
         onRepeatModeCapabilitiesFlagsChanged = { repeatModeCapabilitiesFlags = it },
         onPlaybackCapabilitiesFlagsChanged = { playbackCapabilitiesFlags = it },
         onArtworkBitmapCleared = { artworkBitmap = null },
+        onIgnoreCoreVolumeForSongChanged = { ignoreCoreVolumeForSong = it },
         onLastStoppedChanged = { file, sourceId ->
             lastStoppedFile = file
             lastStoppedSourceId = sourceId
@@ -1360,10 +1367,12 @@ private fun AppNavigation(
             masterVolumeDbProvider = { masterVolumeDb },
             pluginVolumeDbProvider = { pluginVolumeDb },
             songVolumeDbProvider = { songVolumeDb },
+            ignoreCoreVolumeForSongProvider = { ignoreCoreVolumeForSong },
             forceMonoProvider = { forceMono },
             onTempMasterVolumeChanged = { tempMasterVolumeDb = it },
             onTempPluginVolumeChanged = { tempPluginVolumeDb = it },
             onTempSongVolumeChanged = { tempSongVolumeDb = it },
+            onTempIgnoreCoreVolumeForSongChanged = { tempIgnoreCoreVolumeForSong = it },
             onTempForceMonoChanged = { tempForceMono = it },
             onShowAudioEffectsDialogChanged = { showAudioEffectsDialog = it }
         )
@@ -1510,17 +1519,21 @@ private fun AppNavigation(
             tempMasterVolumeDb = tempMasterVolumeDb,
             tempPluginVolumeDb = tempPluginVolumeDb,
             tempSongVolumeDb = tempSongVolumeDb,
+            tempIgnoreCoreVolumeForSong = tempIgnoreCoreVolumeForSong,
             tempForceMono = tempForceMono,
             masterVolumeDb = masterVolumeDb,
             songVolumeDb = songVolumeDb,
+            ignoreCoreVolumeForSong = ignoreCoreVolumeForSong,
             forceMono = forceMono,
             onTempMasterVolumeDbChanged = { tempMasterVolumeDb = it },
             onTempPluginVolumeDbChanged = { tempPluginVolumeDb = it },
             onTempSongVolumeDbChanged = { tempSongVolumeDb = it },
+            onTempIgnoreCoreVolumeForSongChanged = { tempIgnoreCoreVolumeForSong = it },
             onTempForceMonoChanged = { tempForceMono = it },
             onMasterVolumeDbChanged = { masterVolumeDb = it },
             onPluginVolumeDbChanged = { pluginVolumeDb = it },
             onSongVolumeDbChanged = { songVolumeDb = it },
+            onIgnoreCoreVolumeForSongChanged = { ignoreCoreVolumeForSong = it },
             onForceMonoChanged = { forceMono = it },
             onShowAudioEffectsDialogChanged = { showAudioEffectsDialog = it }
         )
@@ -1683,6 +1696,7 @@ private fun AppNavigation(
                             tempMasterVolumeDb = masterVolumeDb
                             tempPluginVolumeDb = pluginVolumeDb
                             tempSongVolumeDb = songVolumeDb
+                            tempIgnoreCoreVolumeForSong = ignoreCoreVolumeForSong
                             tempForceMono = forceMono
                             showAudioEffectsDialog = true
                         },
@@ -1694,6 +1708,7 @@ private fun AppNavigation(
                                 onMasterVolumeDbChanged = { masterVolumeDb = it },
                                 onPluginVolumeDbChanged = { pluginVolumeDb = it },
                                 onSongVolumeDbChanged = { songVolumeDb = it },
+                                onIgnoreCoreVolumeForSongChanged = { ignoreCoreVolumeForSong = it },
                                 onForceMonoChanged = { forceMono = it }
                             )
                         },
@@ -1708,8 +1723,10 @@ private fun AppNavigation(
                             clearSongAudioParametersAction(
                                 context = context,
                                 volumeDatabase = volumeDatabase,
-                                onSongVolumeDbChanged = { songVolumeDb = it }
+                                onSongVolumeDbChanged = { songVolumeDb = it },
+                                onIgnoreCoreVolumeForSongChanged = { ignoreCoreVolumeForSong = it }
                             )
+                            NativeBridge.setPluginGain(pluginVolumeDb)
                         },
                                     onOpenPlayer = { openSettingsRoute(SettingsRoute.Player, false) },
                                     onOpenVisualization = { openSettingsRoute(SettingsRoute.Visualization, false) },

@@ -11,10 +11,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun AudioEffectsDialog(
     masterVolumeDb: Float,
     pluginVolumeDb: Float,
     songVolumeDb: Float,
+    ignoreCoreVolumeForSong: Boolean,
     forceMono: Boolean,
     hasActiveCore: Boolean,
     hasActiveSong: Boolean,
@@ -22,6 +24,7 @@ fun AudioEffectsDialog(
     onMasterVolumeChange: (Float) -> Unit,
     onPluginVolumeChange: (Float) -> Unit,
     onSongVolumeChange: (Float) -> Unit,
+    onIgnoreCoreVolumeForSongChange: (Boolean) -> Unit,
     onForceMonoChange: (Boolean) -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit,
@@ -56,16 +59,41 @@ fun AudioEffectsDialog(
                         enabled = hasActiveSong
                     )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    CompositionLocalProvider(
+                        LocalMinimumInteractiveComponentEnforcement provides false
                     ) {
-                        Text("Force Mono", style = MaterialTheme.typography.bodyMedium)
-                        Switch(
-                            checked = forceMono,
-                            onCheckedChange = onForceMonoChange
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "Ignore Core volume for this song",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Switch(
+                                    checked = ignoreCoreVolumeForSong,
+                                    onCheckedChange = onIgnoreCoreVolumeForSongChange,
+                                    enabled = hasActiveSong
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Force Mono", style = MaterialTheme.typography.bodyMedium)
+                                Switch(
+                                    checked = forceMono,
+                                    onCheckedChange = onForceMonoChange
+                                )
+                            }
+                        }
                     }
                 }
 

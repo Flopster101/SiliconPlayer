@@ -6,13 +6,15 @@ import kotlinx.coroutines.CoroutineScope
 internal fun buildLoadSongVolumeForFileDelegate(
     volumeDatabase: VolumeDatabase,
     onSongVolumeDbChanged: (Float) -> Unit,
-    onSongGainChanged: (Float) -> Unit
+    onSongGainChanged: (Float) -> Unit,
+    onIgnoreCoreVolumeForSongChanged: (Boolean) -> Unit
 ): (String) -> Unit = { filePath ->
     loadSongVolumeForFileAction(
         volumeDatabase = volumeDatabase,
         filePath = filePath,
         onSongVolumeDbChanged = onSongVolumeDbChanged,
-        onSongGainChanged = onSongGainChanged
+        onSongGainChanged = onSongGainChanged,
+        onIgnoreCoreVolumeForSongChanged = onIgnoreCoreVolumeForSongChanged
     )
 }
 

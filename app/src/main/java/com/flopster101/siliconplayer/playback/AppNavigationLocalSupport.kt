@@ -10,11 +10,14 @@ internal fun loadSongVolumeForFileAction(
     volumeDatabase: VolumeDatabase,
     filePath: String,
     onSongVolumeDbChanged: (Float) -> Unit,
-    onSongGainChanged: (Float) -> Unit
+    onSongGainChanged: (Float) -> Unit,
+    onIgnoreCoreVolumeForSongChanged: (Boolean) -> Unit
 ) {
     val value = volumeDatabase.getSongVolume(filePath) ?: 0f
+    val ignoreCoreVolumeForSong = volumeDatabase.getSongIgnoreCoreVolume(filePath)
     onSongVolumeDbChanged(value)
     onSongGainChanged(value)
+    onIgnoreCoreVolumeForSongChanged(ignoreCoreVolumeForSong)
 }
 
 internal fun isLocalPlayableFileAction(file: File?): Boolean {

@@ -21,6 +21,7 @@ internal fun clearAllAudioParametersAction(
     onMasterVolumeDbChanged: (Float) -> Unit,
     onPluginVolumeDbChanged: (Float) -> Unit,
     onSongVolumeDbChanged: (Float) -> Unit,
+    onIgnoreCoreVolumeForSongChanged: (Boolean) -> Unit,
     onForceMonoChanged: (Boolean) -> Unit
 ) {
     prefs.edit().apply {
@@ -33,6 +34,7 @@ internal fun clearAllAudioParametersAction(
     onMasterVolumeDbChanged(0f)
     onPluginVolumeDbChanged(0f)
     onSongVolumeDbChanged(0f)
+    onIgnoreCoreVolumeForSongChanged(false)
     onForceMonoChanged(false)
     NativeBridge.setMasterGain(0f)
     NativeBridge.setPluginGain(0f)
@@ -55,10 +57,12 @@ internal fun clearPluginAudioParametersAction(
 internal fun clearSongAudioParametersAction(
     context: Context,
     volumeDatabase: VolumeDatabase,
-    onSongVolumeDbChanged: (Float) -> Unit
+    onSongVolumeDbChanged: (Float) -> Unit,
+    onIgnoreCoreVolumeForSongChanged: (Boolean) -> Unit
 ) {
     volumeDatabase.resetAllSongVolumes()
     onSongVolumeDbChanged(0f)
+    onIgnoreCoreVolumeForSongChanged(false)
     NativeBridge.setSongGain(0f)
     Toast.makeText(context, "All song volumes cleared", Toast.LENGTH_SHORT).show()
 }

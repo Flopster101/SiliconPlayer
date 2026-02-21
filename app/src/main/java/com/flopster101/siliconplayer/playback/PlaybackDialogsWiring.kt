@@ -31,17 +31,21 @@ internal fun AppNavigationPlaybackDialogsSection(
     tempMasterVolumeDb: Float,
     tempPluginVolumeDb: Float,
     tempSongVolumeDb: Float,
+    tempIgnoreCoreVolumeForSong: Boolean,
     tempForceMono: Boolean,
     masterVolumeDb: Float,
     songVolumeDb: Float,
+    ignoreCoreVolumeForSong: Boolean,
     forceMono: Boolean,
     onTempMasterVolumeDbChanged: (Float) -> Unit,
     onTempPluginVolumeDbChanged: (Float) -> Unit,
     onTempSongVolumeDbChanged: (Float) -> Unit,
+    onTempIgnoreCoreVolumeForSongChanged: (Boolean) -> Unit,
     onTempForceMonoChanged: (Boolean) -> Unit,
     onMasterVolumeDbChanged: (Float) -> Unit,
     onPluginVolumeDbChanged: (Float) -> Unit,
     onSongVolumeDbChanged: (Float) -> Unit,
+    onIgnoreCoreVolumeForSongChanged: (Boolean) -> Unit,
     onForceMonoChanged: (Boolean) -> Unit,
     onShowAudioEffectsDialogChanged: (Boolean) -> Unit
 ) {
@@ -81,6 +85,7 @@ internal fun AppNavigationPlaybackDialogsSection(
         tempMasterVolumeDb = tempMasterVolumeDb,
         tempPluginVolumeDb = tempPluginVolumeDb,
         tempSongVolumeDb = tempSongVolumeDb,
+        tempIgnoreCoreVolumeForSong = tempIgnoreCoreVolumeForSong,
         tempForceMono = tempForceMono,
         hasActiveCore = lastUsedCoreName != null,
         hasActiveSong = selectedFile != null,
@@ -91,11 +96,15 @@ internal fun AppNavigationPlaybackDialogsSection(
         },
         onPluginVolumeChange = {
             onTempPluginVolumeDbChanged(it)
-            NativeBridge.setPluginGain(it)
+            NativeBridge.setPluginGain(if (tempIgnoreCoreVolumeForSong) 0f else it)
         },
         onSongVolumeChange = {
             onTempSongVolumeDbChanged(it)
             NativeBridge.setSongGain(it)
+        },
+        onIgnoreCoreVolumeForSongChange = {
+            onTempIgnoreCoreVolumeForSongChanged(it)
+            NativeBridge.setPluginGain(if (it) 0f else tempPluginVolumeDb)
         },
         onForceMonoChange = {
             onTempForceMonoChanged(it)
@@ -105,6 +114,7 @@ internal fun AppNavigationPlaybackDialogsSection(
             onTempMasterVolumeDbChanged(0f)
             onTempPluginVolumeDbChanged(0f)
             onTempSongVolumeDbChanged(0f)
+            onTempIgnoreCoreVolumeForSongChanged(false)
             onTempForceMonoChanged(false)
             NativeBridge.setMasterGain(0f)
             NativeBridge.setPluginGain(0f)
@@ -113,7 +123,9 @@ internal fun AppNavigationPlaybackDialogsSection(
         },
         onAudioEffectsDismiss = {
             NativeBridge.setMasterGain(masterVolumeDb)
-            NativeBridge.setPluginGain(readPluginVolumeForDecoder(prefs, lastUsedCoreName))
+            NativeBridge.setPluginGain(
+                if (ignoreCoreVolumeForSong) 0f else readPluginVolumeForDecoder(prefs, lastUsedCoreName)
+            )
             NativeBridge.setSongGain(songVolumeDb)
             NativeBridge.setForceMono(forceMono)
             onShowAudioEffectsDialogChanged(false)
@@ -122,6 +134,7 @@ internal fun AppNavigationPlaybackDialogsSection(
             onMasterVolumeDbChanged(tempMasterVolumeDb)
             onPluginVolumeDbChanged(tempPluginVolumeDb)
             onSongVolumeDbChanged(tempSongVolumeDb)
+            onIgnoreCoreVolumeForSongChanged(tempIgnoreCoreVolumeForSong)
             onForceMonoChanged(tempForceMono)
             prefs.edit().apply {
                 putFloat(AppPreferenceKeys.AUDIO_MASTER_VOLUME_DB, tempMasterVolumeDb)
@@ -135,7 +148,9 @@ internal fun AppNavigationPlaybackDialogsSection(
             )
             selectedFile?.absolutePath?.let { path ->
                 volumeDatabase.setSongVolume(path, tempSongVolumeDb)
+                volumeDatabase.setSongIgnoreCoreVolume(path, tempIgnoreCoreVolumeForSong)
             }
+            NativeBridge.setPluginGain(if (tempIgnoreCoreVolumeForSong) 0f else tempPluginVolumeDb)
             onShowAudioEffectsDialogChanged(false)
         }
     )

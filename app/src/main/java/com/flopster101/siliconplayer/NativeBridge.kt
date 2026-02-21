@@ -56,6 +56,7 @@ object NativeBridge {
     external fun getTrackBitDepthLabel(): String
     external fun getRepeatModeCapabilities(): Int
     external fun getPlaybackCapabilities(): Int
+    external fun getTimelineMode(): Int
     external fun getCurrentDecoderName(): String
     external fun getSubtuneCount(): Int
     external fun getCurrentSubtuneIndex(): Int
@@ -172,6 +173,8 @@ object NativeBridge {
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)
     external fun setCoreOption(coreName: String, optionName: String, optionValue: String)
     external fun getCoreCapabilities(coreName: String): Int
+    external fun getCoreRepeatModeCapabilities(coreName: String): Int
+    external fun getCoreTimelineMode(coreName: String): Int
     external fun getCoreOptionApplyPolicy(coreName: String, optionName: String): Int
     external fun getCoreFixedSampleRateHz(coreName: String): Int
     external fun setAudioPipelineConfig(

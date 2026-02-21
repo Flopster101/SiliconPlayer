@@ -582,3 +582,11 @@ int AudioEngine::getPlaybackCapabilities() {
     }
     return decoder->getPlaybackCapabilities();
 }
+
+int AudioEngine::getTimelineMode() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return static_cast<int>(AudioDecoder::TimelineMode::Unknown);
+    }
+    return static_cast<int>(decoder->getTimelineMode());
+}

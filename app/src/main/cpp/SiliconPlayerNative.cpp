@@ -454,6 +454,26 @@ Java_com_flopster101_siliconplayer_MainActivity_getCoreCapabilities(
 }
 
 extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getCoreRepeatModeCapabilities(
+        JNIEnv* env, jobject, jstring coreName) {
+    ensureEngine();
+    const char* nativeCoreName = env->GetStringUTFChars(coreName, 0);
+    const int caps = audioEngine->getCoreRepeatModeCapabilities(nativeCoreName);
+    env->ReleaseStringUTFChars(coreName, nativeCoreName);
+    return static_cast<jint>(caps);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getCoreTimelineMode(
+        JNIEnv* env, jobject, jstring coreName) {
+    ensureEngine();
+    const char* nativeCoreName = env->GetStringUTFChars(coreName, 0);
+    const int mode = audioEngine->getCoreTimelineMode(nativeCoreName);
+    env->ReleaseStringUTFChars(coreName, nativeCoreName);
+    return static_cast<jint>(mode);
+}
+
+extern "C" JNIEXPORT jint JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getCoreOptionApplyPolicy(
         JNIEnv* env, jobject, jstring coreName, jstring optionName) {
     ensureEngine();
@@ -608,6 +628,14 @@ Java_com_flopster101_siliconplayer_MainActivity_getPlaybackCapabilities(JNIEnv* 
         );
     }
     return static_cast<jint>(audioEngine->getPlaybackCapabilities());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTimelineMode(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) {
+        return static_cast<jint>(AudioDecoder::TimelineMode::Unknown);
+    }
+    return static_cast<jint>(audioEngine->getTimelineMode());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -1455,6 +1483,11 @@ Java_com_flopster101_siliconplayer_NativeBridge_getPlaybackCapabilities(JNIEnv* 
     return Java_com_flopster101_siliconplayer_MainActivity_getPlaybackCapabilities(env, thiz);
 }
 
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getTimelineMode(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getTimelineMode(env, thiz);
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getCurrentDecoderName(JNIEnv* env, jobject thiz) {
     return Java_com_flopster101_siliconplayer_MainActivity_getCurrentDecoderName(env, thiz);
@@ -1592,6 +1625,22 @@ extern "C" JNIEXPORT jint JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getCoreCapabilities(
         JNIEnv* env, jobject thiz, jstring coreName) {
     return Java_com_flopster101_siliconplayer_MainActivity_getCoreCapabilities(env, thiz, coreName);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getCoreRepeatModeCapabilities(
+        JNIEnv* env, jobject thiz, jstring coreName) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getCoreRepeatModeCapabilities(
+            env, thiz, coreName
+    );
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getCoreTimelineMode(
+        JNIEnv* env, jobject thiz, jstring coreName) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getCoreTimelineMode(
+            env, thiz, coreName
+    );
 }
 
 extern "C" JNIEXPORT jint JNICALL

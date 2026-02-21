@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -161,6 +162,7 @@ internal fun PluginDetailRouteContent(
     val pluginName = state.selectedPluginName ?: return
     val coreAboutEntry = remember(pluginName) { AboutCatalog.resolveCoreForPlugin(pluginName) }
     var selectedAboutEntry by remember(pluginName) { mutableStateOf<AboutEntity?>(null) }
+    var showCoreCapabilitiesDialog by remember(pluginName) { mutableStateOf(false) }
 
     PluginDetailScreen(
         pluginName = pluginName,
@@ -174,6 +176,44 @@ internal fun PluginDetailRouteContent(
 
     val selectedCoreCapabilities = remember(pluginName) {
         NativeBridge.getCoreCapabilities(pluginName)
+    }
+    val selectedCoreRepeatCapabilities = remember(pluginName) {
+        NativeBridge.getCoreRepeatModeCapabilities(pluginName)
+    }
+    val selectedCoreTimelineMode = remember(pluginName) {
+        NativeBridge.getCoreTimelineMode(pluginName)
+    }
+    val coreCapabilitySections = remember(
+        selectedCoreCapabilities,
+        selectedCoreRepeatCapabilities,
+        selectedCoreTimelineMode
+    ) {
+        buildCoreCapabilitySections(
+            playbackCapabilities = selectedCoreCapabilities,
+            repeatCapabilities = selectedCoreRepeatCapabilities,
+            timelineMode = selectedCoreTimelineMode
+        )
+    }
+    var coreCapabilitiesDialogSections by remember(pluginName, coreCapabilitySections) {
+        mutableStateOf(coreCapabilitySections)
+    }
+    var coreCapabilitiesDialogIsLiveSnapshot by remember(pluginName) { mutableStateOf(false) }
+
+    LaunchedEffect(showCoreCapabilitiesDialog, pluginName, coreCapabilitySections) {
+        if (!showCoreCapabilitiesDialog) return@LaunchedEffect
+        val isEnginePlaying = NativeBridge.isEnginePlaying()
+        val currentDecoderName = NativeBridge.getCurrentDecoderName()
+        if (isEnginePlaying && currentDecoderName == pluginName) {
+            coreCapabilitiesDialogSections = buildCoreCapabilitySections(
+                playbackCapabilities = NativeBridge.getPlaybackCapabilities(),
+                repeatCapabilities = NativeBridge.getRepeatModeCapabilities(),
+                timelineMode = NativeBridge.getTimelineMode()
+            )
+            coreCapabilitiesDialogIsLiveSnapshot = true
+        } else {
+            coreCapabilitiesDialogSections = coreCapabilitySections
+            coreCapabilitiesDialogIsLiveSnapshot = false
+        }
     }
     val fixedSampleRateHz = remember(pluginName) {
         NativeBridge.getCoreFixedSampleRateHz(pluginName)
@@ -385,21 +425,43 @@ internal fun PluginDetailRouteContent(
         onSelected = { hz -> onSampleRateSelected?.invoke(hz) }
     )
 
-    if (coreAboutEntry != null) {
+    if (coreAboutEntry != null || coreCapabilitySections.isNotEmpty()) {
         Spacer(modifier = Modifier.height(16.dp))
         SettingsSectionLabel("Info")
-        SettingsItemCard(
-            title = "About this core",
-            description = "Credits, license info, upstream links, and integration notes.",
-            icon = Icons.Default.Info,
-            onClick = { selectedAboutEntry = coreAboutEntry }
-        )
+        if (coreCapabilitySections.isNotEmpty()) {
+            SettingsItemCard(
+                title = "Core capabilities",
+                description = "Reported seek, repeat, timeline, and output capability flags for this core.",
+                icon = Icons.Default.Info,
+                onClick = { showCoreCapabilitiesDialog = true }
+            )
+            if (coreAboutEntry != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        if (coreAboutEntry != null) {
+            SettingsItemCard(
+                title = "About this core",
+                description = "Credits, license info, upstream links, and integration notes.",
+                icon = Icons.Default.Info,
+                onClick = { selectedAboutEntry = coreAboutEntry }
+            )
+        }
     }
 
     selectedAboutEntry?.let { entity ->
         AboutEntityDialog(
             entity = entity,
             onDismiss = { selectedAboutEntry = null }
+        )
+    }
+
+    if (showCoreCapabilitiesDialog) {
+        CoreCapabilitiesDialog(
+            sections = coreCapabilitiesDialogSections,
+            isLiveSnapshot = coreCapabilitiesDialogIsLiveSnapshot,
+            onDismiss = { showCoreCapabilitiesDialog = false }
         )
     }
 }

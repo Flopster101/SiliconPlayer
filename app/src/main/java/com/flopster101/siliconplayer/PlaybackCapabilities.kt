@@ -6,6 +6,7 @@ const val PLAYBACK_CAP_LIVE_REPEAT_MODE = 1 shl 2
 const val PLAYBACK_CAP_CUSTOM_SAMPLE_RATE = 1 shl 3
 const val PLAYBACK_CAP_LIVE_SAMPLE_RATE_CHANGE = 1 shl 4
 const val PLAYBACK_CAP_FIXED_SAMPLE_RATE = 1 shl 5
+const val PLAYBACK_CAP_DIRECT_SEEK = 1 shl 6
 
 fun canSeekPlayback(flags: Int): Boolean = (flags and PLAYBACK_CAP_SEEK) != 0
 
@@ -18,3 +19,5 @@ fun supportsCustomSampleRate(flags: Int): Boolean = (flags and PLAYBACK_CAP_CUST
 fun supportsLiveSampleRateChange(flags: Int): Boolean = (flags and PLAYBACK_CAP_LIVE_SAMPLE_RATE_CHANGE) != 0
 
 fun hasFixedSampleRate(flags: Int): Boolean = (flags and PLAYBACK_CAP_FIXED_SAMPLE_RATE) != 0
+
+fun supportsDirectSeek(flags: Int): Boolean = (flags and PLAYBACK_CAP_DIRECT_SEEK) != 0

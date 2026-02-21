@@ -81,6 +81,42 @@ int AudioEngine::getCoreCapabilities(const std::string& coreName) {
     return 0;
 }
 
+int AudioEngine::getCoreRepeatModeCapabilities(const std::string& coreName) {
+    if (coreName.empty()) return AudioDecoder::REPEAT_CAP_TRACK;
+
+    {
+        std::lock_guard<std::mutex> lock(decoderMutex);
+        if (decoder && decoder->getName() == coreName) {
+            return decoder->getRepeatModeCapabilities();
+        }
+    }
+
+    auto tempDecoder = DecoderRegistry::getInstance().createDecoderByName(coreName);
+    if (tempDecoder) {
+        return tempDecoder->getRepeatModeCapabilities();
+    }
+    return AudioDecoder::REPEAT_CAP_TRACK;
+}
+
+int AudioEngine::getCoreTimelineMode(const std::string& coreName) {
+    if (coreName.empty()) {
+        return static_cast<int>(AudioDecoder::TimelineMode::Unknown);
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(decoderMutex);
+        if (decoder && decoder->getName() == coreName) {
+            return static_cast<int>(decoder->getTimelineMode());
+        }
+    }
+
+    auto tempDecoder = DecoderRegistry::getInstance().createDecoderByName(coreName);
+    if (tempDecoder) {
+        return static_cast<int>(tempDecoder->getTimelineMode());
+    }
+    return static_cast<int>(AudioDecoder::TimelineMode::Unknown);
+}
+
 int AudioEngine::getCoreFixedSampleRateHz(const std::string& coreName) {
     if (coreName.empty()) return 0;
 

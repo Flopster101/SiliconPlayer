@@ -7,6 +7,7 @@
 #include <mutex>
 #include <optional>
 #include <cstdlib>
+#include <set>
 #include <libavutil/error.h>
 
 #define LOG_TAG "FFmpegDecoder"
@@ -79,6 +80,23 @@ std::string trimAscii(std::string value) {
         return !isSpace(static_cast<unsigned char>(c));
     }).base(), value.end());
     return value;
+}
+
+std::vector<std::string> splitExtensionsCsv(const char* csv) {
+    std::vector<std::string> result;
+    if (!csv || *csv == '\0') {
+        return result;
+    }
+
+    std::stringstream ss(csv);
+    std::string ext;
+    while (std::getline(ss, ext, ',')) {
+        ext = trimAscii(toLowerAscii(ext));
+        if (!ext.empty()) {
+            result.push_back(ext);
+        }
+    }
+    return result;
 }
 
 bool parseBoolString(const std::string& value, bool fallback) {
@@ -894,13 +912,34 @@ double FFmpegDecoder::getPlaybackPositionSeconds() {
 }
 
 std::vector<std::string> FFmpegDecoder::getSupportedExtensions() {
-    return {
-        // Common Audio
-        "mp3", "flac", "ogg", "m4a", "wav", "aac", "wma", "opus", "ape", "wv",
-        "alac", "mpc", "aiff", "aif", "amr", "awb", "ac3", "dts", "ra", "rm",
-        "tta", "shn", "voc", "au", "snd", "oga", "mka", "weba", "caf", "qcp",
-        "dsf", "dff", "mlp", "truehd", "mp2", "mp1"
-    };
+    static std::vector<std::string> cached;
+    static std::once_flag once;
+
+    std::call_once(once, []() {
+        std::set<std::string> dedup;
+        void* opaque = nullptr;
+        const AVInputFormat* iformat = nullptr;
+
+        while ((iformat = av_demuxer_iterate(&opaque)) != nullptr) {
+            if (!iformat->extensions || *iformat->extensions == '\0') {
+                continue;
+            }
+
+            const auto extensions = splitExtensionsCsv(iformat->extensions);
+            if (extensions.empty()) {
+                continue;
+            }
+
+            for (const auto& ext : extensions) {
+                dedup.insert(ext);
+            }
+        }
+
+        cached.assign(dedup.begin(), dedup.end());
+        LOGD("FFmpeg audio extension discovery: %zu extensions", cached.size());
+    });
+
+    return cached;
 }
 
 int64_t FFmpegDecoder::getBitrate() const {

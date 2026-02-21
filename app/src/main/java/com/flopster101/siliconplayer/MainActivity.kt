@@ -1692,6 +1692,7 @@ private fun AppNavigation(
                                     onOpenAudioPlugins = { openSettingsRoute(SettingsRoute.AudioPlugins, false) },
                                     onOpenGeneralAudio = { openSettingsRoute(SettingsRoute.GeneralAudio, false) },
                                     onOpenHome = { openSettingsRoute(SettingsRoute.Home, false) },
+                                    onOpenFileBrowser = { openSettingsRoute(SettingsRoute.FileBrowser, false) },
                                     onOpenAudioEffects = {
                             tempMasterVolumeDb = masterVolumeDb
                             tempPluginVolumeDb = pluginVolumeDb

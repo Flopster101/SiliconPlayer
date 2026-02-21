@@ -25,16 +25,19 @@ internal data class HomeRouteActions(
     val onRecentFilesLimitChanged: (Int) -> Unit
 )
 
-internal data class MiscRouteState(
+internal data class FileBrowserRouteState(
     val rememberBrowserLocation: Boolean,
     val sortArchivesBeforeFiles: Boolean,
     val browserNameSortMode: BrowserNameSortMode
 )
 
-internal data class MiscRouteActions(
+internal data class FileBrowserRouteActions(
     val onRememberBrowserLocationChanged: (Boolean) -> Unit,
     val onSortArchivesBeforeFilesChanged: (Boolean) -> Unit,
-    val onBrowserNameSortModeChanged: (BrowserNameSortMode) -> Unit,
+    val onBrowserNameSortModeChanged: (BrowserNameSortMode) -> Unit
+)
+
+internal data class MiscRouteActions(
     val onClearRecentHistory: () -> Unit
 )
 
@@ -114,8 +117,21 @@ internal fun HomeRouteContent(
 
 @Composable
 internal fun MiscRouteContent(
-    state: MiscRouteState,
     actions: MiscRouteActions
+) {
+    SettingsSectionLabel("Utilities")
+    SettingsItemCard(
+        title = "Clear home recents",
+        description = "Remove recent folders and recently played shortcuts from the Home screen.",
+        icon = Icons.Default.MoreHoriz,
+        onClick = actions.onClearRecentHistory
+    )
+}
+
+@Composable
+internal fun FileBrowserRouteContent(
+    state: FileBrowserRouteState,
+    actions: FileBrowserRouteActions
 ) {
     SettingsSectionLabel("Browser behavior")
     PlayerSettingToggleCard(
@@ -135,13 +151,6 @@ internal fun MiscRouteContent(
         description = "List ZIP archives after folders but before regular files.",
         checked = state.sortArchivesBeforeFiles,
         onCheckedChange = actions.onSortArchivesBeforeFilesChanged
-    )
-    Spacer(modifier = Modifier.height(10.dp))
-    SettingsItemCard(
-        title = "Clear home recents",
-        description = "Remove recent folders and recently played shortcuts from the Home screen.",
-        icon = Icons.Default.MoreHoriz,
-        onClick = actions.onClearRecentHistory
     )
 }
 

@@ -106,6 +106,7 @@ internal fun SettingsRouteContentHost(
                                 onOpenGeneralAudio = actions.onOpenGeneralAudio,
                                 onOpenPlayer = actions.onOpenPlayer,
                                 onOpenHome = actions.onOpenHome,
+                                onOpenFileBrowser = actions.onOpenFileBrowser,
                                 onOpenVisualization = actions.onOpenVisualization,
                                 onOpenUrlCache = actions.onOpenUrlCache,
                                 onOpenMisc = actions.onOpenMisc,
@@ -252,6 +253,21 @@ internal fun SettingsRouteContentHost(
                         )
                     }
 
+                    SettingsRoute.FileBrowser -> {
+                        FileBrowserRouteContent(
+                            state = FileBrowserRouteState(
+                                rememberBrowserLocation = state.rememberBrowserLocation,
+                                sortArchivesBeforeFiles = state.sortArchivesBeforeFiles,
+                                browserNameSortMode = state.browserNameSortMode
+                            ),
+                            actions = FileBrowserRouteActions(
+                                onRememberBrowserLocationChanged = actions.onRememberBrowserLocationChanged,
+                                onSortArchivesBeforeFilesChanged = actions.onSortArchivesBeforeFilesChanged,
+                                onBrowserNameSortModeChanged = actions.onBrowserNameSortModeChanged
+                            )
+                        )
+                    }
+
                     SettingsRoute.Player -> {
                         PlayerRouteContent(
                             state = PlayerRouteState(
@@ -377,15 +393,7 @@ internal fun SettingsRouteContentHost(
 
                     SettingsRoute.Misc -> {
                         MiscRouteContent(
-                            state = MiscRouteState(
-                                rememberBrowserLocation = state.rememberBrowserLocation,
-                                sortArchivesBeforeFiles = state.sortArchivesBeforeFiles,
-                                browserNameSortMode = state.browserNameSortMode
-                            ),
                             actions = MiscRouteActions(
-                                onRememberBrowserLocationChanged = actions.onRememberBrowserLocationChanged,
-                                onSortArchivesBeforeFilesChanged = actions.onSortArchivesBeforeFilesChanged,
-                                onBrowserNameSortModeChanged = actions.onBrowserNameSortModeChanged,
                                 onClearRecentHistory = actions.onClearRecentHistory
                             )
                         )
@@ -462,6 +470,7 @@ internal fun settingsSecondaryTitle(route: SettingsRoute, selectedPluginName: St
         SettingsRoute.CacheManager -> "Manage cached files"
         SettingsRoute.GeneralAudio -> "General audio"
         SettingsRoute.Home -> "Home settings"
+        SettingsRoute.FileBrowser -> "File browser settings"
         SettingsRoute.Player -> "Player settings"
         SettingsRoute.Visualization -> "Visualization settings"
         SettingsRoute.VisualizationBasic -> "Basic visualizations"

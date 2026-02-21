@@ -18,6 +18,7 @@ enum class SettingsRoute {
     CacheManager,
     GeneralAudio,
     Home,
+    FileBrowser,
     Player,
     Visualization,
     VisualizationBasic,
@@ -49,6 +50,7 @@ internal fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.CacheManager -> 2
     SettingsRoute.GeneralAudio -> 1
     SettingsRoute.Home -> 1
+    SettingsRoute.FileBrowser -> 1
     SettingsRoute.Player -> 1
     SettingsRoute.Visualization -> 1
     SettingsRoute.VisualizationBasic -> 2

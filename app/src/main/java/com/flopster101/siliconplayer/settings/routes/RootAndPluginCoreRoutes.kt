@@ -3,6 +3,7 @@ package com.flopster101.siliconplayer
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
@@ -21,6 +22,7 @@ internal data class RootRouteActions(
     val onOpenGeneralAudio: () -> Unit,
     val onOpenPlayer: () -> Unit,
     val onOpenHome: () -> Unit,
+    val onOpenFileBrowser: () -> Unit,
     val onOpenVisualization: () -> Unit,
     val onOpenUrlCache: () -> Unit,
     val onOpenMisc: () -> Unit,
@@ -83,6 +85,7 @@ internal fun RootRouteContent(
     val onOpenGeneralAudio = actions.onOpenGeneralAudio
     val onOpenPlayer = actions.onOpenPlayer
     val onOpenHome = actions.onOpenHome
+    val onOpenFileBrowser = actions.onOpenFileBrowser
     val onOpenVisualization = actions.onOpenVisualization
     val onOpenUrlCache = actions.onOpenUrlCache
     val onOpenMisc = actions.onOpenMisc
@@ -117,6 +120,13 @@ internal fun RootRouteContent(
         description = "Configure recents shown on the Home page.",
         icon = Icons.Default.Home,
         onClick = onOpenHome
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    SettingsItemCard(
+        title = "File browser settings",
+        description = "Sorting and behavior preferences for the library browser.",
+        icon = Icons.Default.Folder,
+        onClick = onOpenFileBrowser
     )
     Spacer(modifier = Modifier.height(10.dp))
     SettingsItemCard(

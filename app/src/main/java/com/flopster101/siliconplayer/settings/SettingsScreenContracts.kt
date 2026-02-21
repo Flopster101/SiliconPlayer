@@ -196,6 +196,7 @@ internal data class SettingsScreenActions(
     val onOpenAudioPlugins: () -> Unit,
     val onOpenGeneralAudio: () -> Unit,
     val onOpenHome: () -> Unit,
+    val onOpenFileBrowser: () -> Unit,
     val onOpenAudioEffects: () -> Unit,
     val onClearAllAudioParameters: () -> Unit,
     val onClearPluginAudioParameters: () -> Unit,

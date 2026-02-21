@@ -27,12 +27,14 @@ internal data class HomeRouteActions(
 
 internal data class FileBrowserRouteState(
     val rememberBrowserLocation: Boolean,
+    val showParentDirectoryEntry: Boolean,
     val sortArchivesBeforeFiles: Boolean,
     val browserNameSortMode: BrowserNameSortMode
 )
 
 internal data class FileBrowserRouteActions(
     val onRememberBrowserLocationChanged: (Boolean) -> Unit,
+    val onShowParentDirectoryEntryChanged: (Boolean) -> Unit,
     val onSortArchivesBeforeFilesChanged: (Boolean) -> Unit,
     val onBrowserNameSortModeChanged: (BrowserNameSortMode) -> Unit
 )
@@ -139,6 +141,13 @@ internal fun FileBrowserRouteContent(
         description = "Restore last storage and folder when reopening the library browser.",
         checked = state.rememberBrowserLocation,
         onCheckedChange = actions.onRememberBrowserLocationChanged
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Show parent directory entry (..)",
+        description = "Show a '..' row at the top of file lists to go one level up.",
+        checked = state.showParentDirectoryEntry,
+        onCheckedChange = actions.onShowParentDirectoryEntryChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
     BrowserNameSortModeSelectorCard(

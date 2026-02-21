@@ -428,6 +428,14 @@ private fun AppNavigation(
             prefs.getBoolean(AppPreferenceKeys.REMEMBER_BROWSER_LOCATION, true)
         )
     }
+    var showParentDirectoryEntry by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                AppPreferenceKeys.BROWSER_SHOW_PARENT_DIRECTORY_ENTRY,
+                AppDefaults.Browser.showParentDirectoryEntry
+            )
+        )
+    }
     var sortArchivesBeforeFiles by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.BROWSER_SORT_ARCHIVES_BEFORE_FILES, false)
@@ -1118,6 +1126,7 @@ private fun AppNavigation(
         previousRestartsAfterThreshold = previousRestartsAfterThreshold,
         fadePauseResume = fadePauseResume,
         rememberBrowserLocation = rememberBrowserLocation,
+        showParentDirectoryEntry = showParentDirectoryEntry,
         sortArchivesBeforeFiles = sortArchivesBeforeFiles,
         browserNameSortMode = browserNameSortMode,
         onArtworkBitmapChanged = { artworkBitmap = it },
@@ -1648,6 +1657,7 @@ private fun AppNavigation(
                                     persistRepeatMode = persistRepeatMode,
                                     themeMode = themeMode,
                                     rememberBrowserLocation = rememberBrowserLocation,
+                                    showParentDirectoryEntry = showParentDirectoryEntry,
                                     sortArchivesBeforeFiles = sortArchivesBeforeFiles,
                                     browserNameSortMode = browserNameSortMode,
                                     recentFoldersLimit = recentFoldersLimit,
@@ -1786,6 +1796,7 @@ private fun AppNavigation(
                                     onPersistRepeatModeChanged = { persistRepeatMode = it },
                                     onThemeModeChanged = onThemeModeChanged,
                                     onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
+                                    onShowParentDirectoryEntryChanged = { showParentDirectoryEntry = it },
                                     onSortArchivesBeforeFilesChanged = { sortArchivesBeforeFiles = it },
                                     onBrowserNameSortModeChanged = { browserNameSortMode = it },
                                     onRecentFoldersLimitChanged = { recentFoldersLimit = it.coerceIn(1, RECENTS_LIMIT_MAX) },
@@ -2018,6 +2029,7 @@ private fun AppNavigation(
                                 onPersistRepeatModeChanged = { persistRepeatMode = it },
                                 onPreferredRepeatModeChanged = { preferredRepeatMode = it },
                                 onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
+                                onShowParentDirectoryEntryChanged = { showParentDirectoryEntry = it },
                                 onBrowserNameSortModeChanged = { browserNameSortMode = it },
                                 onLastBrowserLocationIdChanged = { lastBrowserLocationId = it },
                                 onLastBrowserDirectoryPathChanged = { lastBrowserDirectoryPath = it },
@@ -2181,6 +2193,7 @@ private fun AppNavigation(
                     initialDirectoryPath = browserLaunchDirectoryPath
                         ?: if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
                     bottomContentPadding = miniPlayerListInset,
+                    showParentDirectoryEntry = showParentDirectoryEntry,
                     backHandlingEnabled = !isPlayerExpanded,
                     playingFile = selectedFile,
                     onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },

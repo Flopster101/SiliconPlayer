@@ -7,6 +7,7 @@ internal object AppPreferenceKeys {
     const val AUTO_PLAY_NEXT_TRACK_ON_END = "auto_play_next_track_on_end"
     const val PREVIOUS_RESTART_AFTER_THRESHOLD = "previous_restart_after_threshold"
     const val REMEMBER_BROWSER_LOCATION = "remember_browser_location"
+    const val BROWSER_SHOW_PARENT_DIRECTORY_ENTRY = "browser_show_parent_directory_entry"
     const val BROWSER_SORT_ARCHIVES_BEFORE_FILES = "browser_sort_archives_before_files"
     const val BROWSER_NAME_SORT_MODE = "browser_name_sort_mode"
     const val BROWSER_LAST_LOCATION_ID = "browser_last_location_id"

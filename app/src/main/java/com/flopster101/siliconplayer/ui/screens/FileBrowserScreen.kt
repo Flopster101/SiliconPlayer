@@ -128,6 +128,7 @@ fun FileBrowserScreen(
     onVisiblePlayableFilesChanged: (List<File>) -> Unit = {},
     onBrowserLocationChanged: (String?, String?) -> Unit = { _, _ -> },
     bottomContentPadding: Dp = 0.dp,
+    showParentDirectoryEntry: Boolean = true,
     backHandlingEnabled: Boolean = true,
     onExitBrowser: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
@@ -771,6 +772,17 @@ fun FileBrowserScreen(
                         state = directoryListState,
                         contentPadding = PaddingValues(bottom = bottomContentPadding)
                     ) {
+                        if (showParentDirectoryEntry) {
+                            item(key = "parent:${state.currentDirectoryPath}") {
+                                AnimatedFileBrowserEntry(
+                                    itemKey = "parent:${state.currentDirectoryPath}",
+                                    animationEpoch = directoryAnimationEpoch,
+                                    animateOnFirstComposition = isLoadingDirectory
+                                ) {
+                                    ParentDirectoryItemRow(onClick = { navigateUpWithinLocation() })
+                                }
+                            }
+                        }
                         items(
                             items = fileList,
                             key = { item -> item.file.absolutePath }
@@ -821,6 +833,56 @@ fun FileBrowserScreen(
                 modifier = Modifier.align(Alignment.TopCenter),
                 backgroundColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 contentColor = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+private fun ParentDirectoryItemRow(
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(FILE_ICON_BOX_SIZE),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(11.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Folder,
+                    contentDescription = "Parent directory",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "..",
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1
+            )
+            Text(
+                text = "Parent directory",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

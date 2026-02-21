@@ -257,11 +257,13 @@ internal fun SettingsRouteContentHost(
                         FileBrowserRouteContent(
                             state = FileBrowserRouteState(
                                 rememberBrowserLocation = state.rememberBrowserLocation,
+                                showParentDirectoryEntry = state.showParentDirectoryEntry,
                                 sortArchivesBeforeFiles = state.sortArchivesBeforeFiles,
                                 browserNameSortMode = state.browserNameSortMode
                             ),
                             actions = FileBrowserRouteActions(
                                 onRememberBrowserLocationChanged = actions.onRememberBrowserLocationChanged,
+                                onShowParentDirectoryEntryChanged = actions.onShowParentDirectoryEntryChanged,
                                 onSortArchivesBeforeFilesChanged = actions.onSortArchivesBeforeFilesChanged,
                                 onBrowserNameSortModeChanged = actions.onBrowserNameSortModeChanged
                             )

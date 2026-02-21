@@ -1009,6 +1009,7 @@ fun PlayerScreen(
             title = displayTitle,
             artist = displayArtist,
             decoderName = decoderName,
+            isDialogVisible = showTrackInfoDialog,
             playbackSourceLabel = playbackSourceLabel,
             pathOrUrl = pathOrUrl,
             sampleRateHz = sampleRateHz,
@@ -1149,6 +1150,7 @@ private fun TrackInfoDetailsDialog(
     title: String,
     artist: String,
     decoderName: String?,
+    isDialogVisible: Boolean,
     playbackSourceLabel: String?,
     pathOrUrl: String?,
     sampleRateHz: Int,
@@ -1268,8 +1270,9 @@ private fun TrackInfoDetailsDialog(
     val detailsScrollState = rememberScrollState()
     var detailsViewportHeightPx by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(file?.absolutePath, decoderName) {
-        while (true) {
+    LaunchedEffect(file?.absolutePath, decoderName, isDialogVisible) {
+        if (!isDialogVisible) return@LaunchedEffect
+        while (isDialogVisible) {
             liveBitrate = NativeBridge.getTrackBitrate()
             liveIsVbr = NativeBridge.isTrackVBR()
             liveRenderRateHz = NativeBridge.getDecoderRenderSampleRateHz()

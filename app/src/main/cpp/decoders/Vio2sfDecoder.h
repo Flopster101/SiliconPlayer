@@ -30,10 +30,10 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    std::string getCopyright() override;
+    std::string getYear() override;
+    std::string getComment() override;
     std::string getGameName();
-    std::string getCopyright();
-    std::string getYear();
-    std::string getComment();
     std::string getLengthTag();
     std::string getFadeTag();
     std::vector<std::string> getToggleChannelNames() override;

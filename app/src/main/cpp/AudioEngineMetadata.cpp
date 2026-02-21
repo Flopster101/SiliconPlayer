@@ -47,6 +47,46 @@ std::string AudioEngine::getGenre() {
     return decoder->getGenre();
 }
 
+std::string AudioEngine::getAlbum() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return "";
+    }
+    return decoder->getAlbum();
+}
+
+std::string AudioEngine::getYear() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return "";
+    }
+    return decoder->getYear();
+}
+
+std::string AudioEngine::getDate() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return "";
+    }
+    return decoder->getDate();
+}
+
+std::string AudioEngine::getCopyright() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return "";
+    }
+    return decoder->getCopyright();
+}
+
+std::string AudioEngine::getComment() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) {
+        return "";
+    }
+    return decoder->getComment();
+}
+
 int AudioEngine::getSampleRate() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) {

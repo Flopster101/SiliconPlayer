@@ -798,6 +798,16 @@ std::string Sc68Decoder::getGenre() {
     return genre;
 }
 
+std::string Sc68Decoder::getAlbum() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return albumName;
+}
+
+std::string Sc68Decoder::getYear() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return yearTag;
+}
+
 std::string Sc68Decoder::getFormatName() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return formatName;

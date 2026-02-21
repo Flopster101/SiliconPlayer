@@ -308,8 +308,14 @@ bool FFmpegDecoder::open(const char* path) {
     artist = getFirstMetadataValue(formatContext->metadata, {"artist", "album_artist", "author", "composer"});
     composer = getFirstMetadataValue(formatContext->metadata, {"composer", "author"});
     genre = getFirstMetadataValue(formatContext->metadata, {"genre"});
+    album = getFirstMetadataValue(formatContext->metadata, {"album"});
+    date = getFirstMetadataValue(formatContext->metadata, {"date"});
+    year = getFirstMetadataValue(formatContext->metadata, {"year"});
+    copyrightText = getFirstMetadataValue(formatContext->metadata, {"copyright"});
+    comment = getFirstMetadataValue(formatContext->metadata, {"comment", "description"});
     encoderName = getFirstMetadataValue(formatContext->metadata, {"encoder", "encoded_by"});
-    if (title.empty() || artist.empty()) {
+    if (title.empty() || artist.empty() || composer.empty() || genre.empty() ||
+        album.empty() || date.empty() || year.empty() || copyrightText.empty() || comment.empty() || encoderName.empty()) {
         AVDictionary* streamMetadata = formatContext->streams[audioStreamIndex]->metadata;
         if (title.empty()) {
             title = getFirstMetadataValue(streamMetadata, {"title"});
@@ -323,8 +329,32 @@ bool FFmpegDecoder::open(const char* path) {
         if (genre.empty()) {
             genre = getFirstMetadataValue(streamMetadata, {"genre"});
         }
+        if (album.empty()) {
+            album = getFirstMetadataValue(streamMetadata, {"album"});
+        }
+        if (date.empty()) {
+            date = getFirstMetadataValue(streamMetadata, {"date"});
+        }
+        if (year.empty()) {
+            year = getFirstMetadataValue(streamMetadata, {"year"});
+        }
+        if (copyrightText.empty()) {
+            copyrightText = getFirstMetadataValue(streamMetadata, {"copyright"});
+        }
+        if (comment.empty()) {
+            comment = getFirstMetadataValue(streamMetadata, {"comment", "description"});
+        }
         if (encoderName.empty()) {
             encoderName = getFirstMetadataValue(streamMetadata, {"encoder", "encoded_by"});
+        }
+    }
+
+    if (year.empty() && !date.empty()) {
+        if (date.size() >= 4) {
+            const std::string yearCandidate = date.substr(0, 4);
+            if (std::all_of(yearCandidate.begin(), yearCandidate.end(), ::isdigit)) {
+                year = yearCandidate;
+            }
         }
     }
 
@@ -415,6 +445,11 @@ void FFmpegDecoder::close() {
     artist.clear();
     composer.clear();
     genre.clear();
+    album.clear();
+    year.clear();
+    date.clear();
+    copyrightText.clear();
+    comment.clear();
     codecName.clear();
     containerName.clear();
     sampleFormatName.clear();
@@ -844,6 +879,31 @@ std::string FFmpegDecoder::getComposer() {
 std::string FFmpegDecoder::getGenre() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return genre;
+}
+
+std::string FFmpegDecoder::getAlbum() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return album;
+}
+
+std::string FFmpegDecoder::getYear() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return year;
+}
+
+std::string FFmpegDecoder::getDate() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return date;
+}
+
+std::string FFmpegDecoder::getCopyright() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return copyrightText;
+}
+
+std::string FFmpegDecoder::getComment() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return comment;
 }
 
 void FFmpegDecoder::setOutputSampleRate(int sampleRate) {

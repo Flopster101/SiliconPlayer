@@ -34,10 +34,10 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    std::string getCopyright() override;
+    std::string getComment() override;
     std::string getSystemName();
     std::string getGameName();
-    std::string getCopyright();
-    std::string getComment();
     std::string getDumper();
     int getTrackCountInfo();
     int getVoiceCountInfo();

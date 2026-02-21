@@ -50,6 +50,11 @@ object NativeBridge {
     external fun getTrackArtist(): String
     external fun getTrackComposer(): String
     external fun getTrackGenre(): String
+    external fun getTrackAlbum(): String
+    external fun getTrackYear(): String
+    external fun getTrackDate(): String
+    external fun getTrackCopyright(): String
+    external fun getTrackComment(): String
     external fun getTrackSampleRate(): Int
     external fun getTrackChannelCount(): Int
     external fun getTrackBitDepth(): Int

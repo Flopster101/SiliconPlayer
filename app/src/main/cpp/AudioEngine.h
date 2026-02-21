@@ -50,6 +50,11 @@ public:
     std::string getArtist();
     std::string getComposer();
     std::string getGenre();
+    std::string getAlbum();
+    std::string getYear();
+    std::string getDate();
+    std::string getCopyright();
+    std::string getComment();
     int getSampleRate();
     int getDisplayChannelCount();
     int getChannelCount();

@@ -34,6 +34,11 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    std::string getAlbum() override;
+    std::string getYear() override;
+    std::string getDate() override;
+    std::string getCopyright() override;
+    std::string getComment() override;
     std::string getCodecName() const;
     std::string getContainerName() const;
     std::string getSampleFormatName() const;
@@ -86,6 +91,11 @@ private:
     std::string artist;
     std::string composer;
     std::string genre;
+    std::string album;
+    std::string year;
+    std::string date;
+    std::string copyrightText;
+    std::string comment;
     std::string codecName;
     std::string containerName;
     std::string sampleFormatName;

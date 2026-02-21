@@ -1200,6 +1200,11 @@ private fun TrackInfoDetailsDialog(
         row("Artist", artist)
         if (liveMetadata.composer.isNotBlank()) row("Composer", liveMetadata.composer)
         if (liveMetadata.genre.isNotBlank()) row("Genre", liveMetadata.genre)
+        if (liveMetadata.album.isNotBlank()) row("Album", liveMetadata.album)
+        if (liveMetadata.year.isNotBlank()) row("Year", liveMetadata.year)
+        if (liveMetadata.date.isNotBlank()) row("Date", liveMetadata.date)
+        if (liveMetadata.copyrightText.isNotBlank()) row("Copyright", liveMetadata.copyrightText)
+        if (liveMetadata.comment.isNotBlank()) row("Comment", liveMetadata.comment)
         row("Format", extension)
         row("Decoder", decoderLabel)
         playbackSourceLabel?.takeIf { it.isNotBlank() }?.let { row("Playback source", it) }
@@ -1245,6 +1250,21 @@ private fun TrackInfoDetailsDialog(
                             }
                             if (liveMetadata.genre.isNotBlank()) {
                                 TrackInfoDetailsRow("Genre", liveMetadata.genre)
+                            }
+                            if (liveMetadata.album.isNotBlank()) {
+                                TrackInfoDetailsRow("Album", liveMetadata.album)
+                            }
+                            if (liveMetadata.year.isNotBlank()) {
+                                TrackInfoDetailsRow("Year", liveMetadata.year)
+                            }
+                            if (liveMetadata.date.isNotBlank()) {
+                                TrackInfoDetailsRow("Date", liveMetadata.date)
+                            }
+                            if (liveMetadata.copyrightText.isNotBlank()) {
+                                TrackInfoDetailsRow("Copyright", liveMetadata.copyrightText)
+                            }
+                            if (liveMetadata.comment.isNotBlank()) {
+                                TrackInfoDetailsRow("Comment", liveMetadata.comment)
                             }
                             TrackInfoDetailsRow("Format", extension)
                             TrackInfoDetailsRow("Decoder", decoderLabel)

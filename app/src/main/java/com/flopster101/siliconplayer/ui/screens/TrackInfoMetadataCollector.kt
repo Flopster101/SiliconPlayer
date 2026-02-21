@@ -145,6 +145,11 @@ internal data class TrackInfoLiveMetadata(
     val outputRateHz: Int = 0,
     val composer: String = "",
     val genre: String = "",
+    val album: String = "",
+    val year: String = "",
+    val date: String = "",
+    val copyrightText: String = "",
+    val comment: String = "",
     val openMpt: OpenMptMetadata = OpenMptMetadata(),
     val vgmPlay: VgmPlayMetadata = VgmPlayMetadata(),
     val ffmpeg: FfmpegMetadata = FfmpegMetadata(),
@@ -183,7 +188,12 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
         renderRateHz = NativeBridge.getDecoderRenderSampleRateHz(),
         outputRateHz = NativeBridge.getOutputStreamSampleRateHz(),
         composer = NativeBridge.getTrackComposer(),
-        genre = NativeBridge.getTrackGenre()
+        genre = NativeBridge.getTrackGenre(),
+        album = NativeBridge.getTrackAlbum(),
+        year = NativeBridge.getTrackYear(),
+        date = NativeBridge.getTrackDate(),
+        copyrightText = NativeBridge.getTrackCopyright(),
+        comment = NativeBridge.getTrackComment()
     )
 
     return when {

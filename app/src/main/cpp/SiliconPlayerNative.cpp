@@ -577,6 +577,51 @@ Java_com_flopster101_siliconplayer_MainActivity_getTrackGenre(JNIEnv* env, jobje
     return toJString(env, value);
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTrackAlbum(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return toJString(env, "");
+    }
+    std::string value = audioEngine->getAlbum();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTrackYear(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return toJString(env, "");
+    }
+    std::string value = audioEngine->getYear();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTrackDate(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return toJString(env, "");
+    }
+    std::string value = audioEngine->getDate();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTrackCopyright(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return toJString(env, "");
+    }
+    std::string value = audioEngine->getCopyright();
+    return toJString(env, value);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_MainActivity_getTrackComment(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) {
+        return toJString(env, "");
+    }
+    std::string value = audioEngine->getComment();
+    return toJString(env, value);
+}
+
 extern "C" JNIEXPORT jint JNICALL
 Java_com_flopster101_siliconplayer_MainActivity_getTrackSampleRate(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) {
@@ -1451,6 +1496,31 @@ Java_com_flopster101_siliconplayer_NativeBridge_getTrackComposer(JNIEnv* env, jo
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getTrackGenre(JNIEnv* env, jobject thiz) {
     return Java_com_flopster101_siliconplayer_MainActivity_getTrackGenre(env, thiz);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getTrackAlbum(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getTrackAlbum(env, thiz);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getTrackYear(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getTrackYear(env, thiz);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getTrackDate(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getTrackDate(env, thiz);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getTrackCopyright(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getTrackCopyright(env, thiz);
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getTrackComment(JNIEnv* env, jobject thiz) {
+    return Java_com_flopster101_siliconplayer_MainActivity_getTrackComment(env, thiz);
 }
 
 extern "C" JNIEXPORT jint JNICALL

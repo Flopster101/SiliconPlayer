@@ -35,6 +35,8 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    std::string getAlbum() override;
+    std::string getYear() override;
     std::string getFormatName();
     std::string getHardwareName();
     std::string getPlatformName();

@@ -137,6 +137,15 @@ object NativeBridge {
     external fun getSc68UsesYm(): Boolean
     external fun getSc68UsesSte(): Boolean
     external fun getSc68UsesAmiga(): Boolean
+    external fun getAdplugDescription(): String
+    external fun getAdplugPatternCount(): Int
+    external fun getAdplugCurrentPattern(): Int
+    external fun getAdplugOrderCount(): Int
+    external fun getAdplugCurrentOrder(): Int
+    external fun getAdplugCurrentRow(): Int
+    external fun getAdplugCurrentSpeed(): Int
+    external fun getAdplugInstrumentCount(): Int
+    external fun getAdplugInstrumentNames(): String
     external fun getTrackBitrate(): Long
     external fun isTrackVBR(): Boolean
     external fun setCoreOutputSampleRate(coreName: String, sampleRateHz: Int)

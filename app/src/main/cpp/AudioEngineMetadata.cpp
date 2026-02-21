@@ -8,6 +8,7 @@
 #include "decoders/LazyUsf2Decoder.h"
 #include "decoders/Vio2sfDecoder.h"
 #include "decoders/Sc68Decoder.h"
+#include "decoders/AdPlugDecoder.h"
 
 bool AudioEngine::consumeNaturalEndEvent() {
     return naturalEndPending.exchange(false);
@@ -704,3 +705,65 @@ bool AudioEngine::getSc68UsesAmiga() {
     return sc68Decoder ? sc68Decoder->getUsesAmiga() : false;
 }
 
+std::string AudioEngine::getAdplugDescription() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* adplugDecoder = dynamic_cast<AdPlugDecoder*>(decoder.get());
+    return adplugDecoder ? adplugDecoder->getDescription() : "";
+}
+
+int AudioEngine::getAdplugPatternCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* adplugDecoder = dynamic_cast<AdPlugDecoder*>(decoder.get());
+    return adplugDecoder ? adplugDecoder->getPatternCountInfo() : 0;
+}
+
+int AudioEngine::getAdplugCurrentPattern() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* adplugDecoder = dynamic_cast<AdPlugDecoder*>(decoder.get());
+    return adplugDecoder ? adplugDecoder->getCurrentPatternInfo() : 0;
+}
+
+int AudioEngine::getAdplugOrderCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* adplugDecoder = dynamic_cast<AdPlugDecoder*>(decoder.get());
+    return adplugDecoder ? adplugDecoder->getOrderCountInfo() : 0;
+}
+
+int AudioEngine::getAdplugCurrentOrder() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* adplugDecoder = dynamic_cast<AdPlugDecoder*>(decoder.get());
+    return adplugDecoder ? adplugDecoder->getCurrentOrderInfo() : 0;
+}
+
+int AudioEngine::getAdplugCurrentRow() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* adplugDecoder = dynamic_cast<AdPlugDecoder*>(decoder.get());
+    return adplugDecoder ? adplugDecoder->getCurrentRowInfo() : 0;
+}
+
+int AudioEngine::getAdplugCurrentSpeed() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* adplugDecoder = dynamic_cast<AdPlugDecoder*>(decoder.get());
+    return adplugDecoder ? adplugDecoder->getCurrentSpeedInfo() : 0;
+}
+
+int AudioEngine::getAdplugInstrumentCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* adplugDecoder = dynamic_cast<AdPlugDecoder*>(decoder.get());
+    return adplugDecoder ? adplugDecoder->getInstrumentCountInfo() : 0;
+}
+
+std::string AudioEngine::getAdplugInstrumentNames() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* adplugDecoder = dynamic_cast<AdPlugDecoder*>(decoder.get());
+    return adplugDecoder ? adplugDecoder->getInstrumentNamesInfo() : "";
+}

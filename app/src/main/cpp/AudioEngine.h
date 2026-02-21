@@ -141,6 +141,15 @@ public:
     bool getSc68UsesYm();
     bool getSc68UsesSte();
     bool getSc68UsesAmiga();
+    std::string getAdplugDescription();
+    int getAdplugPatternCount();
+    int getAdplugCurrentPattern();
+    int getAdplugOrderCount();
+    int getAdplugCurrentOrder();
+    int getAdplugCurrentRow();
+    int getAdplugCurrentSpeed();
+    int getAdplugInstrumentCount();
+    std::string getAdplugInstrumentNames();
 
     // Bitrate information
     int64_t getTrackBitrate();

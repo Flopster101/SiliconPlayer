@@ -325,6 +325,97 @@ std::string AdPlugDecoder::getGenre() {
     return genre;
 }
 
+std::string AdPlugDecoder::getDescription() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player) {
+        return "";
+    }
+    return safeString(player->getdesc());
+}
+
+int AdPlugDecoder::getPatternCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player) {
+        return 0;
+    }
+    return static_cast<int>(player->getpatterns());
+}
+
+int AdPlugDecoder::getCurrentPatternInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player) {
+        return 0;
+    }
+    return static_cast<int>(player->getpattern());
+}
+
+int AdPlugDecoder::getOrderCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player) {
+        return 0;
+    }
+    return static_cast<int>(player->getorders());
+}
+
+int AdPlugDecoder::getCurrentOrderInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player) {
+        return 0;
+    }
+    return static_cast<int>(player->getorder());
+}
+
+int AdPlugDecoder::getCurrentRowInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player) {
+        return 0;
+    }
+    return static_cast<int>(player->getrow());
+}
+
+int AdPlugDecoder::getCurrentSpeedInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player) {
+        return 0;
+    }
+    return static_cast<int>(player->getspeed());
+}
+
+int AdPlugDecoder::getInstrumentCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player) {
+        return 0;
+    }
+    return static_cast<int>(player->getinstruments());
+}
+
+std::string AdPlugDecoder::getInstrumentNamesInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player) {
+        return "";
+    }
+    const int instrumentCount = static_cast<int>(player->getinstruments());
+    if (instrumentCount <= 0) {
+        return "";
+    }
+
+    std::string names;
+    names.reserve(static_cast<size_t>(instrumentCount) * 10);
+    for (int i = 0; i < instrumentCount; ++i) {
+        const std::string instrumentName = safeString(player->getinstrument(static_cast<unsigned int>(i)));
+        if (instrumentName.empty()) {
+            continue;
+        }
+        if (!names.empty()) {
+            names += "\n";
+        }
+        names += std::to_string(i + 1);
+        names += ". ";
+        names += instrumentName;
+    }
+    return names;
+}
+
 void AdPlugDecoder::setRepeatMode(int mode) {
     const int normalized = (mode >= 0 && mode <= 3) ? mode : 0;
     repeatMode.store(normalized);

@@ -37,6 +37,15 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    std::string getDescription();
+    int getPatternCountInfo();
+    int getCurrentPatternInfo();
+    int getOrderCountInfo();
+    int getCurrentOrderInfo();
+    int getCurrentRowInfo();
+    int getCurrentSpeedInfo();
+    int getInstrumentCountInfo();
+    std::string getInstrumentNamesInfo();
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override;

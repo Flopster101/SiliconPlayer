@@ -1237,6 +1237,15 @@ private fun TrackInfoDetailsDialog(
     var sc68UsesYm by remember { mutableStateOf(false) }
     var sc68UsesSte by remember { mutableStateOf(false) }
     var sc68UsesAmiga by remember { mutableStateOf(false) }
+    var adplugDescription by remember { mutableStateOf("") }
+    var adplugPatternCount by remember { mutableIntStateOf(0) }
+    var adplugCurrentPattern by remember { mutableIntStateOf(0) }
+    var adplugOrderCount by remember { mutableIntStateOf(0) }
+    var adplugCurrentOrder by remember { mutableIntStateOf(0) }
+    var adplugCurrentRow by remember { mutableIntStateOf(0) }
+    var adplugCurrentSpeed by remember { mutableIntStateOf(0) }
+    var adplugInstrumentCount by remember { mutableIntStateOf(0) }
+    var adplugInstrumentNames by remember { mutableStateOf("") }
     val detailsScrollState = rememberScrollState()
     var detailsViewportHeightPx by remember { mutableIntStateOf(0) }
 
@@ -1416,6 +1425,27 @@ private fun TrackInfoDetailsDialog(
                 sc68UsesSte = false
                 sc68UsesAmiga = false
             }
+            if (decoderName.equals("AdPlug", ignoreCase = true)) {
+                adplugDescription = NativeBridge.getAdplugDescription()
+                adplugPatternCount = NativeBridge.getAdplugPatternCount()
+                adplugCurrentPattern = NativeBridge.getAdplugCurrentPattern()
+                adplugOrderCount = NativeBridge.getAdplugOrderCount()
+                adplugCurrentOrder = NativeBridge.getAdplugCurrentOrder()
+                adplugCurrentRow = NativeBridge.getAdplugCurrentRow()
+                adplugCurrentSpeed = NativeBridge.getAdplugCurrentSpeed()
+                adplugInstrumentCount = NativeBridge.getAdplugInstrumentCount()
+                adplugInstrumentNames = NativeBridge.getAdplugInstrumentNames()
+            } else {
+                adplugDescription = ""
+                adplugPatternCount = 0
+                adplugCurrentPattern = 0
+                adplugOrderCount = 0
+                adplugCurrentOrder = 0
+                adplugCurrentRow = 0
+                adplugCurrentSpeed = 0
+                adplugInstrumentCount = 0
+                adplugInstrumentNames = ""
+            }
             delay(500)
         }
     }
@@ -1558,6 +1588,18 @@ private fun TrackInfoDetailsDialog(
             row("Uses YM-2149", if (sc68UsesYm) "Yes" else "No")
             row("Uses STE", if (sc68UsesSte) "Yes" else "No")
             row("Uses Amiga Paula", if (sc68UsesAmiga) "Yes" else "No")
+        }
+        if (decoderName.equals("AdPlug", ignoreCase = true)) {
+            append('\n').append("[AdPlug]").append('\n')
+            if (adplugDescription.isNotBlank()) row("Description", adplugDescription)
+            if (adplugOrderCount > 0) row("Orders", adplugOrderCount.toString())
+            if (adplugOrderCount > 0) row("Current order", adplugCurrentOrder.toString())
+            if (adplugPatternCount > 0) row("Patterns", adplugPatternCount.toString())
+            if (adplugPatternCount > 0) row("Current pattern", adplugCurrentPattern.toString())
+            if (adplugPatternCount > 0) row("Current row", adplugCurrentRow.toString())
+            if (adplugCurrentSpeed > 0) row("Current speed", adplugCurrentSpeed.toString())
+            if (adplugInstrumentCount > 0) row("Instruments", adplugInstrumentCount.toString())
+            if (adplugInstrumentNames.isNotBlank()) row("Instrument names", adplugInstrumentNames)
         }
     }
 
@@ -1862,6 +1904,41 @@ private fun TrackInfoDetailsDialog(
                                 TrackInfoDetailsRow("Uses YM-2149", if (sc68UsesYm) "Yes" else "No")
                                 TrackInfoDetailsRow("Uses STE", if (sc68UsesSte) "Yes" else "No")
                                 TrackInfoDetailsRow("Uses Amiga Paula", if (sc68UsesAmiga) "Yes" else "No")
+                            }
+                            if (decoderName.equals("AdPlug", ignoreCase = true)) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "AdPlug",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                if (adplugDescription.isNotBlank()) {
+                                    TrackInfoDetailsRow("Description", adplugDescription)
+                                }
+                                if (adplugOrderCount > 0) {
+                                    TrackInfoDetailsRow("Orders", adplugOrderCount.toString())
+                                }
+                                if (adplugOrderCount > 0) {
+                                    TrackInfoDetailsRow("Current order", adplugCurrentOrder.toString())
+                                }
+                                if (adplugPatternCount > 0) {
+                                    TrackInfoDetailsRow("Patterns", adplugPatternCount.toString())
+                                }
+                                if (adplugPatternCount > 0) {
+                                    TrackInfoDetailsRow("Current pattern", adplugCurrentPattern.toString())
+                                }
+                                if (adplugPatternCount > 0) {
+                                    TrackInfoDetailsRow("Current row", adplugCurrentRow.toString())
+                                }
+                                if (adplugCurrentSpeed > 0) {
+                                    TrackInfoDetailsRow("Current speed", adplugCurrentSpeed.toString())
+                                }
+                                if (adplugInstrumentCount > 0) {
+                                    TrackInfoDetailsRow("Instruments", adplugInstrumentCount.toString())
+                                }
+                                if (adplugInstrumentNames.isNotBlank()) {
+                                    TrackInfoDetailsRow("Instrument names", adplugInstrumentNames)
+                                }
                             }
                         }
                     }

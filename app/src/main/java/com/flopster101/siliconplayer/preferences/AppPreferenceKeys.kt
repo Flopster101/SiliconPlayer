@@ -35,6 +35,7 @@ internal object AppPreferenceKeys {
     const val AUDIO_MASTER_VOLUME_DB = "audio_master_volume_db"
     const val AUDIO_PLUGIN_VOLUME_DB = "audio_plugin_volume_db"
     const val AUDIO_FORCE_MONO = "audio_force_mono"
+    const val AUDIO_OUTPUT_LIMITER_ENABLED = "audio_output_limiter_enabled"
     const val URL_PATH_FORCE_CACHING = "url_path_force_caching"
     const val URL_CACHE_CLEAR_ON_LAUNCH = "url_cache_clear_on_launch"
     const val URL_CACHE_MAX_TRACKS = "url_cache_max_tracks"

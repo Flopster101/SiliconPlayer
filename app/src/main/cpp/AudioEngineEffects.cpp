@@ -93,6 +93,10 @@ void AudioEngine::setForceMono(bool enabled) {
     forceMono.store(enabled);
 }
 
+void AudioEngine::setOutputLimiterEnabled(bool enabled) {
+    outputLimiterEnabled.store(enabled);
+}
+
 void AudioEngine::setMasterChannelMute(int channelIndex, bool enabled) {
     if (channelIndex == 0) {
         masterMuteLeft.store(enabled);
@@ -327,6 +331,43 @@ void AudioEngine::applyMonoDownmix(float* buffer, int numFrames, int channels) {
         const float mono = (buffer[i * 2] + buffer[i * 2 + 1]) * 0.5f;
         buffer[i * 2] = mono;
         buffer[i * 2 + 1] = mono;
+    }
+}
+
+void AudioEngine::applyOutputLimiter(float* buffer, int numFrames, int channels) {
+    if (!buffer || numFrames <= 0 || channels <= 0) {
+        return;
+    }
+
+    const bool limiterEnabledNow = outputLimiterEnabled.load(std::memory_order_relaxed);
+    const int totalSamples = numFrames * channels;
+    float limiterGain = 1.0f;
+    if (limiterEnabledNow) {
+        float peak = 0.0f;
+        for (int i = 0; i < totalSamples; ++i) {
+            peak = std::max(peak, std::abs(buffer[i]));
+        }
+        const float targetGain = (peak > 1.0f) ? (1.0f / peak) : 1.0f;
+        const float attack = 0.45f;
+        const float release = 0.04f;
+        const float coeff = (targetGain < outputLimiterGain) ? attack : release;
+        outputLimiterGain += (targetGain - outputLimiterGain) * coeff;
+        outputLimiterGain = std::clamp(outputLimiterGain, 0.1f, 1.0f);
+        limiterGain = outputLimiterGain;
+    } else {
+        outputLimiterGain = 1.0f;
+    }
+
+    constexpr float kSoftClipStart = 0.92f;
+    constexpr float kSoftClipDrive = 1.45f;
+    const float tanhNorm = std::tanh(kSoftClipDrive);
+    for (int i = 0; i < totalSamples; ++i) {
+        float sample = buffer[i] * limiterGain;
+        const float absSample = std::abs(sample);
+        if (absSample > kSoftClipStart) {
+            sample = std::tanh(sample * kSoftClipDrive) / tanhNorm;
+        }
+        buffer[i] = std::clamp(sample, -1.0f, 1.0f);
     }
 }
 

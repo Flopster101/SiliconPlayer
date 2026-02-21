@@ -1669,6 +1669,13 @@ Java_com_flopster101_siliconplayer_NativeBridge_setForceMono(
     audioEngine->setForceMono(enabled == JNI_TRUE);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setOutputLimiterEnabled(
+        JNIEnv*, jobject, jboolean enabled) {
+    ensureEngine();
+    audioEngine->setOutputLimiterEnabled(enabled == JNI_TRUE);
+}
+
 extern "C" JNIEXPORT jfloat JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getMasterGain(
         JNIEnv* env, jobject thiz) {

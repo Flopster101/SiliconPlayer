@@ -86,6 +86,7 @@ bool AudioEngine::start() {
                     sharedAbsoluteInputPositionBaseSeconds = 0.0;
                 }
             }
+            outputLimiterGain = 1.0f;
             pauseResumeFadeTotalFrames = 0;
             pauseResumeFadeProcessedFrames = 0;
             pauseResumeFadeFromGain = 1.0f;
@@ -229,6 +230,7 @@ void AudioEngine::setUrl(const char* url) {
         decoder.reset();
         cachedDurationSeconds.store(0.0);
         resetResamplerStateLocked();
+        outputLimiterGain = 1.0f;
         decoderRenderSampleRate = streamSampleRate;
         positionSeconds.store(0.0);
         sharedAbsoluteInputPositionBaseSeconds = 0.0;

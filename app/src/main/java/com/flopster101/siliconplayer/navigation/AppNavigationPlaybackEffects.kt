@@ -17,6 +17,7 @@ internal fun AppNavigationPlaybackEffects(
     audioPerformanceMode: AudioPerformanceMode,
     audioBufferPreset: AudioBufferPreset,
     audioResamplerPreference: AudioResamplerPreference,
+    audioOutputLimiterEnabled: Boolean,
     audioAllowBackendFallback: Boolean,
     pendingSoxExperimentalDialog: Boolean,
     onPendingSoxExperimentalDialogChanged: (Boolean) -> Unit,
@@ -98,6 +99,16 @@ internal fun AppNavigationPlaybackEffects(
                 audioAllowBackendFallback
             )
             .apply()
+    }
+
+    LaunchedEffect(audioOutputLimiterEnabled) {
+        prefs.edit()
+            .putBoolean(
+                AppPreferenceKeys.AUDIO_OUTPUT_LIMITER_ENABLED,
+                audioOutputLimiterEnabled
+            )
+            .apply()
+        NativeBridge.setOutputLimiterEnabled(audioOutputLimiterEnabled)
     }
 
     LaunchedEffect(

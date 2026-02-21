@@ -703,6 +703,7 @@ internal fun clearAllSettingsAction(
     onAudioPerformanceModeChanged: (AudioPerformanceMode) -> Unit,
     onAudioBufferPresetChanged: (AudioBufferPreset) -> Unit,
     onAudioResamplerPreferenceChanged: (AudioResamplerPreference) -> Unit,
+    onAudioOutputLimiterEnabledChanged: (Boolean) -> Unit,
     onAudioAllowBackendFallbackChanged: (Boolean) -> Unit,
     onOpenPlayerFromNotificationChanged: (Boolean) -> Unit,
     onPersistRepeatModeChanged: (Boolean) -> Unit,
@@ -843,6 +844,7 @@ internal fun clearAllSettingsAction(
     onAudioPerformanceModeChanged(AudioPerformanceMode.None)
     onAudioBufferPresetChanged(AudioBufferPreset.Medium)
     onAudioResamplerPreferenceChanged(AudioResamplerPreference.BuiltIn)
+    onAudioOutputLimiterEnabledChanged(AppDefaults.AudioProcessing.outputLimiterEnabled)
     onAudioAllowBackendFallbackChanged(true)
     onOpenPlayerFromNotificationChanged(true)
     onPersistRepeatModeChanged(true)

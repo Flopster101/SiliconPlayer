@@ -194,6 +194,7 @@ object NativeBridge {
     external fun setPluginGain(gainDb: Float)
     external fun setSongGain(gainDb: Float)
     external fun setForceMono(enabled: Boolean)
+    external fun setOutputLimiterEnabled(enabled: Boolean)
     external fun getMasterGain(): Float
     external fun getPluginGain(): Float
     external fun getSongGain(): Float

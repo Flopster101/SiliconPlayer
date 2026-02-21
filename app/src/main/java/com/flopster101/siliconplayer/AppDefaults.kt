@@ -14,6 +14,10 @@ object AppDefaults {
         val endFadeCurve = EndFadeCurve.Linear
     }
 
+    object AudioProcessing {
+        const val outputLimiterEnabled = false
+    }
+
     object Visualization {
         const val showDebugInfo = false
 

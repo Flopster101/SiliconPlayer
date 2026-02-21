@@ -26,6 +26,7 @@ internal data class GeneralAudioRouteState(
     val audioPerformanceMode: AudioPerformanceMode,
     val audioBufferPreset: AudioBufferPreset,
     val audioResamplerPreference: AudioResamplerPreference,
+    val audioOutputLimiterEnabled: Boolean,
     val audioAllowBackendFallback: Boolean
 )
 
@@ -42,6 +43,7 @@ internal data class GeneralAudioRouteActions(
     val onAudioPerformanceModeChanged: (AudioPerformanceMode) -> Unit,
     val onAudioBufferPresetChanged: (AudioBufferPreset) -> Unit,
     val onAudioResamplerPreferenceChanged: (AudioResamplerPreference) -> Unit,
+    val onAudioOutputLimiterEnabledChanged: (Boolean) -> Unit,
     val onAudioAllowBackendFallbackChanged: (Boolean) -> Unit
 )
 
@@ -108,6 +110,13 @@ internal fun GeneralAudioRouteContent(
         description = "Volume controls and audio processing.",
         icon = Icons.Default.Tune,
         onClick = actions.onOpenAudioEffects
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Output limiter",
+        description = "Enable dynamic limiting before soft-clip to reduce hard clipping crackle at high gain.",
+        checked = state.audioOutputLimiterEnabled,
+        onCheckedChange = actions.onAudioOutputLimiterEnabledChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
     ClearAudioParametersCard(

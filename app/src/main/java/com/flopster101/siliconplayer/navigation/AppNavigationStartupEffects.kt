@@ -47,6 +47,10 @@ internal fun AppNavigationStartupEffects(
     LaunchedEffect(Unit) {
         val masterVolumeDb = prefs.getFloat(AppPreferenceKeys.AUDIO_MASTER_VOLUME_DB, 0f)
         val forceMono = prefs.getBoolean(AppPreferenceKeys.AUDIO_FORCE_MONO, false)
+        val outputLimiterEnabled = prefs.getBoolean(
+            AppPreferenceKeys.AUDIO_OUTPUT_LIMITER_ENABLED,
+            AppDefaults.AudioProcessing.outputLimiterEnabled
+        )
 
         onMasterVolumeDbChanged(masterVolumeDb)
         onPluginVolumeDbChanged(0f)
@@ -55,6 +59,7 @@ internal fun AppNavigationStartupEffects(
         NativeBridge.setMasterGain(masterVolumeDb)
         NativeBridge.setPluginGain(0f)
         NativeBridge.setForceMono(forceMono)
+        NativeBridge.setOutputLimiterEnabled(outputLimiterEnabled)
 
         withContext(Dispatchers.IO) {
             loadPluginConfigurations(prefs)

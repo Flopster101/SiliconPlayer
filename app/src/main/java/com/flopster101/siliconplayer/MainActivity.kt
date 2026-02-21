@@ -711,6 +711,7 @@ private fun AppNavigation(
     var audioPerformanceMode by settingsStates.audioPerformanceMode
     var audioBufferPreset by settingsStates.audioBufferPreset
     var audioResamplerPreference by settingsStates.audioResamplerPreference
+    var audioOutputLimiterEnabled by settingsStates.audioOutputLimiterEnabled
     var pendingSoxExperimentalDialog by settingsStates.pendingSoxExperimentalDialog
     var showSoxExperimentalDialog by settingsStates.showSoxExperimentalDialog
     var showUrlOrPathDialog by settingsStates.showUrlOrPathDialog
@@ -1208,6 +1209,7 @@ private fun AppNavigation(
         audioPerformanceMode = audioPerformanceMode,
         audioBufferPreset = audioBufferPreset,
         audioResamplerPreference = audioResamplerPreference,
+        audioOutputLimiterEnabled = audioOutputLimiterEnabled,
         audioAllowBackendFallback = audioAllowBackendFallback,
         pendingSoxExperimentalDialog = pendingSoxExperimentalDialog,
         onPendingSoxExperimentalDialogChanged = { pendingSoxExperimentalDialog = it },
@@ -1757,6 +1759,7 @@ private fun AppNavigation(
                                 pendingSoxExperimentalDialog = true
                             }
                         },
+                                    onAudioOutputLimiterEnabledChanged = { audioOutputLimiterEnabled = it },
                                     onAudioAllowBackendFallbackChanged = { audioAllowBackendFallback = it },
                                     onOpenPlayerFromNotificationChanged = { openPlayerFromNotification = it },
                                     onPersistRepeatModeChanged = { persistRepeatMode = it },

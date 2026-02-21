@@ -755,6 +755,7 @@ void AudioEngine::renderWorkerLoop() {
             applyGain(localBuffer.data(), chunkFrames, channels, endFadeGain);
             applyMasterChannelRouting(localBuffer.data(), chunkFrames, channels);
             applyMonoDownmix(localBuffer.data(), chunkFrames, channels);
+            applyOutputLimiter(localBuffer.data(), chunkFrames, channels);
             if (shouldUpdateVisualization()) {
                 updateVisualizationDataLocked(localBuffer.data(), chunkFrames, channels);
             }

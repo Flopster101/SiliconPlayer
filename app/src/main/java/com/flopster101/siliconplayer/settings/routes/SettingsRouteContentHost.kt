@@ -217,6 +217,7 @@ internal fun SettingsRouteContentHost(
                                 audioPerformanceMode = state.audioPerformanceMode,
                                 audioBufferPreset = state.audioBufferPreset,
                                 audioResamplerPreference = state.audioResamplerPreference,
+                                audioOutputLimiterEnabled = state.audioOutputLimiterEnabled,
                                 audioAllowBackendFallback = state.audioAllowBackendFallback
                             ),
                             actions = GeneralAudioRouteActions(
@@ -232,6 +233,7 @@ internal fun SettingsRouteContentHost(
                                 onAudioPerformanceModeChanged = actions.onAudioPerformanceModeChanged,
                                 onAudioBufferPresetChanged = actions.onAudioBufferPresetChanged,
                                 onAudioResamplerPreferenceChanged = actions.onAudioResamplerPreferenceChanged,
+                                onAudioOutputLimiterEnabledChanged = actions.onAudioOutputLimiterEnabledChanged,
                                 onAudioAllowBackendFallbackChanged = actions.onAudioAllowBackendFallbackChanged
                             )
                         )

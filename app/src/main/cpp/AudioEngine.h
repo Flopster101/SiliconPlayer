@@ -178,6 +178,7 @@ public:
     void setPluginGain(float gainDb);
     void setSongGain(float gainDb);
     void setForceMono(bool enabled);
+    void setOutputLimiterEnabled(bool enabled);
     void setMasterChannelMute(int channelIndex, bool enabled);
     void setMasterChannelSolo(int channelIndex, bool enabled);
     void setEndFadeApplyToAllTracks(bool enabled);
@@ -244,6 +245,8 @@ private:
     std::atomic<bool> masterMuteRight { false };
     std::atomic<bool> masterSoloLeft { false };
     std::atomic<bool> masterSoloRight { false };
+    std::atomic<bool> outputLimiterEnabled { false };
+    float outputLimiterGain = 1.0f;
     std::atomic<bool> endFadeApplyToAllTracks { false };
     std::atomic<int> endFadeDurationMs { 10000 };
     std::atomic<int> endFadeCurve { 0 }; // 0 linear, 1 ease-in, 2 ease-out
@@ -290,6 +293,7 @@ private:
     void applyGain(float* buffer, int numFrames, int channels, float extraGain = 1.0f);
     void applyMasterChannelRouting(float* buffer, int numFrames, int channels);
     void applyMonoDownmix(float* buffer, int numFrames, int channels);
+    void applyOutputLimiter(float* buffer, int numFrames, int channels);
     void updateVisualizationDataLocked(const float* buffer, int numFrames, int channels);
     void markVisualizationRequested() const;
     bool shouldUpdateVisualization() const;

@@ -80,6 +80,7 @@ internal data class AppNavigationSettingsStates(
     val audioPerformanceMode: MutableState<AudioPerformanceMode>,
     val audioBufferPreset: MutableState<AudioBufferPreset>,
     val audioResamplerPreference: MutableState<AudioResamplerPreference>,
+    val audioOutputLimiterEnabled: MutableState<Boolean>,
     val pendingSoxExperimentalDialog: MutableState<Boolean>,
     val showSoxExperimentalDialog: MutableState<Boolean>,
     val showUrlOrPathDialog: MutableState<Boolean>,
@@ -381,6 +382,14 @@ internal fun rememberAppNavigationSettingsStates(
             )
         )
     }
+    val audioOutputLimiterEnabled = remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                AppPreferenceKeys.AUDIO_OUTPUT_LIMITER_ENABLED,
+                AppDefaults.AudioProcessing.outputLimiterEnabled
+            )
+        )
+    }
     val pendingSoxExperimentalDialog = remember { mutableStateOf(false) }
     val showSoxExperimentalDialog = remember { mutableStateOf(false) }
     val showUrlOrPathDialog = remember { mutableStateOf(false) }
@@ -488,6 +497,7 @@ internal fun rememberAppNavigationSettingsStates(
         audioPerformanceMode = audioPerformanceMode,
         audioBufferPreset = audioBufferPreset,
         audioResamplerPreference = audioResamplerPreference,
+        audioOutputLimiterEnabled = audioOutputLimiterEnabled,
         pendingSoxExperimentalDialog = pendingSoxExperimentalDialog,
         showSoxExperimentalDialog = showSoxExperimentalDialog,
         showUrlOrPathDialog = showUrlOrPathDialog,

@@ -37,3 +37,6 @@
 [submodule "external/psflib"]
 	path = external/psflib
 	url = https://github.com/kode54/psflib
+[submodule "external/adplug"]
+	path = external/adplug
+	url = https://github.com/adplug/adplug

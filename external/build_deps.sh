@@ -1942,12 +1942,14 @@ build_hivelytracker() {
 
     # Upstream headers rely on tentative globals in headers; keep common-symbol
     # behavior to avoid duplicate-definition link issues with modern clang.
+    # Hively uses "typedef char int8" and requires signed semantics for waveform math.
+    # Android NDK defaults plain char to unsigned on ARM, so force signed char here.
     "$TARGET_CC" -c "$REPLAYER_DIR/hvl_replay.c" \
         -o "$BUILD_DIR/hvl_replay.o" \
-        -fPIC -fcommon $DEP_OPT_FLAGS
+        -fPIC -fcommon -fsigned-char $DEP_OPT_FLAGS
     "$TARGET_CC" -c "$REPLAYER_DIR/hvl_tables.c" \
         -o "$BUILD_DIR/hvl_tables.o" \
-        -fPIC -fcommon $DEP_OPT_FLAGS
+        -fPIC -fcommon -fsigned-char $DEP_OPT_FLAGS
 
     "$TOOLCHAIN/bin/llvm-ar" rcs "$INSTALL_DIR/lib/libhivelytracker.a" \
         "$BUILD_DIR/hvl_replay.o" \

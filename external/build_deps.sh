@@ -1490,17 +1490,45 @@ build_libbinio() {
     local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
     local PROJECT_PATH="$ABSOLUTE_PATH/libbinio"
     local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+    local CMAKE_SOURCE="$PROJECT_PATH"
 
     if [ ! -d "$PROJECT_PATH" ]; then
         echo "libbinio source not found at $PROJECT_PATH (skipping)."
         return 0
     fi
 
+    if [ ! -f "$CMAKE_SOURCE/CMakeLists.txt" ]; then
+        echo "libbinio source still incomplete; attempting direct clone..."
+        if command -v git >/dev/null 2>&1; then
+            if [ -d "$PROJECT_PATH" ] && [ -z "$(ls -A "$PROJECT_PATH" 2>/dev/null)" ]; then
+                rmdir "$PROJECT_PATH" || true
+            fi
+            if [ ! -e "$PROJECT_PATH/CMakeLists.txt" ] && [ ! -d "$PROJECT_PATH/.git" ] && [ ! -f "$PROJECT_PATH/.git" ]; then
+                git clone --depth 1 https://github.com/adplug/libbinio "$PROJECT_PATH" || true
+            fi
+        fi
+    fi
+
+    if [ ! -f "$CMAKE_SOURCE/CMakeLists.txt" ]; then
+        local nested_cmakelists
+        nested_cmakelists="$(find "$PROJECT_PATH" -mindepth 2 -maxdepth 3 -type f -name CMakeLists.txt | head -n 1)"
+        if [ -n "$nested_cmakelists" ]; then
+            CMAKE_SOURCE="$(dirname "$nested_cmakelists")"
+            echo "libbinio: using nested CMake source root: $CMAKE_SOURCE"
+        fi
+    fi
+
+    if [ ! -f "$CMAKE_SOURCE/CMakeLists.txt" ]; then
+        echo "Error: libbinio source at $PROJECT_PATH does not contain CMakeLists.txt."
+        echo "Run: git clone --depth 1 https://github.com/adplug/libbinio \"$PROJECT_PATH\""
+        return 1
+    fi
+
     rm -rf "$BUILD_DIR"
     mkdir -p "$BUILD_DIR" "$INSTALL_DIR"
 
     cmake -Wno-dev -Wno-deprecated \
-        -S "$PROJECT_PATH" \
+        -S "$CMAKE_SOURCE" \
         -B "$BUILD_DIR" \
         -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
@@ -1537,7 +1565,7 @@ build_libbinio() {
 
     if [ ! -f "$INSTALL_DIR/include/binio.h" ]; then
         mkdir -p "$INSTALL_DIR/include"
-        cp "$PROJECT_PATH/src/"*.h "$INSTALL_DIR/include/" 2>/dev/null || true
+        cp "$CMAKE_SOURCE/src/"*.h "$INSTALL_DIR/include/" 2>/dev/null || true
         cp "$BUILD_DIR/src/generated/include/binio.h" "$INSTALL_DIR/include/" 2>/dev/null || true
     fi
 }
@@ -1556,6 +1584,24 @@ build_adplug() {
     if [ ! -d "$PROJECT_PATH" ]; then
         echo "adplug source not found at $PROJECT_PATH (skipping)."
         return 0
+    fi
+
+    if [ ! -f "$PROJECT_PATH/CMakeLists.txt" ]; then
+        echo "adplug source still incomplete; attempting direct clone..."
+        if command -v git >/dev/null 2>&1; then
+            if [ -d "$PROJECT_PATH" ] && [ -z "$(ls -A "$PROJECT_PATH" 2>/dev/null)" ]; then
+                rmdir "$PROJECT_PATH" || true
+            fi
+            if [ ! -e "$PROJECT_PATH/CMakeLists.txt" ] && [ ! -d "$PROJECT_PATH/.git" ] && [ ! -f "$PROJECT_PATH/.git" ]; then
+                git clone --depth 1 https://github.com/adplug/adplug "$PROJECT_PATH" || true
+            fi
+        fi
+    fi
+
+    if [ ! -f "$PROJECT_PATH/CMakeLists.txt" ]; then
+        echo "Error: adplug source at $PROJECT_PATH does not contain CMakeLists.txt."
+        echo "Run: git clone --depth 1 https://github.com/adplug/adplug \"$PROJECT_PATH\""
+        return 1
     fi
 
     if [ ! -f "$INSTALL_DIR/lib/libbinio.a" ]; then

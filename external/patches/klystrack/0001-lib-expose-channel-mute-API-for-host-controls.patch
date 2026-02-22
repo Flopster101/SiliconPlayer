@@ -1,0 +1,79 @@
+From fdffcff5f4c5ee8c4807a45c7a882a9aa2963d27 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Sat, 21 Feb 2026 23:48:31 -0300
+Subject: [PATCH] lib: expose channel mute API for host controls
+
+Add KSND_SetChannelMute() so host integrations can mute individual Klystrack channels at runtime.
+---
+ src/lib/ksnd.c | 32 ++++++++++++++++++++++----------
+ src/lib/ksnd.h | 11 ++++++++++-
+ 2 files changed, 32 insertions(+), 11 deletions(-)
+
+diff --git a/src/lib/ksnd.c b/src/lib/ksnd.c
+index 996b22f..1369b33 100644
+--- a/src/lib/ksnd.c
++++ b/src/lib/ksnd.c
+@@ -218,16 +218,28 @@ KLYSAPI int KSND_GetPlayPosition(KPlayer *player)
+ }
+ 
+ 
+-KLYSAPI void KSND_SetVolume(KPlayer *player, int volume)
+-{
+-	cyd_lock(&player->cyd, 1);
+-	player->mus.volume = volume;
+-	cyd_lock(&player->cyd, 0);
+-}
+-
+-
+-KLYSAPI void KSND_GetVUMeters(KPlayer *player, int *dest, int n_channels)
+-{
++KLYSAPI void KSND_SetVolume(KPlayer *player, int volume)
++{
++	cyd_lock(&player->cyd, 1);
++	player->mus.volume = volume;
++	cyd_lock(&player->cyd, 0);
++}
++
++KLYSAPI void KSND_SetChannelMute(KPlayer *player, int channel, int muted)
++{
++	if (player == NULL || player->mus.song == NULL)
++		return;
++
++	const int n_channels = player->mus.song->num_channels;
++	if (channel < 0 || channel >= n_channels)
++		return;
++
++	mus_set_channel_volume(&player->mus, channel, muted ? 0 : MAX_VOLUME);
++}
++
++
++KLYSAPI void KSND_GetVUMeters(KPlayer *player, int *dest, int n_channels)
++{
+ 	int temp[MUS_MAX_CHANNELS];
+ 	mus_poll_status(&player->mus, NULL, NULL, NULL, NULL, temp, NULL, NULL);
+ 	memcpy(dest, temp, sizeof(dest[0]) * n_channels);
+diff --git a/src/lib/ksnd.h b/src/lib/ksnd.h
+index 0f7b4c5..662d93d 100644
+--- a/src/lib/ksnd.h
++++ b/src/lib/ksnd.h
+@@ -185,7 +185,16 @@ KLYSAPI extern void KSND_SetPlayerQuality(KPlayer *player, int oversample);
+  * @param player player context which is currently playing a song set with KSND_PlaySong()
+  * @param volume volume [0..128]
+  */
+-KLYSAPI extern void KSND_SetVolume(KPlayer *player, int volume);
++KLYSAPI extern void KSND_SetVolume(KPlayer *player, int volume);
++
++/**
++ * Mute or unmute a specific song channel.
++ *
++ * @param player player context which is currently playing a song set with KSND_PlaySong()
++ * @param channel channel index [0..n_channels-1]
++ * @param muted non-zero mutes the channel, zero restores normal channel volume behavior
++ */
++KLYSAPI extern void KSND_SetChannelMute(KPlayer *player, int channel, int muted);
+ 
+ /**
+  * Enable or disable song looping.
+-- 
+2.53.0
+

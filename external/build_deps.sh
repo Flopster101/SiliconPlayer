@@ -48,6 +48,7 @@ PATCHES_DIR_LIBGME="$ABSOLUTE_PATH/patches/libgme"
 PATCHES_DIR_LAZYUSF2="$ABSOLUTE_PATH/patches/lazyusf2"
 PATCHES_DIR_VIO2SF="$ABSOLUTE_PATH/patches/vio2sf"
 PATCHES_DIR_ADPLUG="$ABSOLUTE_PATH/patches/adplug"
+PATCHES_DIR_KLYSTRACK="$ABSOLUTE_PATH/patches/klystrack"
 OPENSSL_DIR="$ABSOLUTE_PATH/openssl"
 
 # -----------------------------------------------------------------------------
@@ -331,6 +332,51 @@ apply_adplug_patches() {
 
         echo "Applying adplug patch: $patch_name"
         git -C "$PROJECT_PATH" am "$patch_file" || {
+            echo "Error applying patch $patch_name"
+            git -C "$PROJECT_PATH" am --abort
+            exit 1
+        }
+    done
+}
+
+# -----------------------------------------------------------------------------
+# Function: Apply klystrack (klystron) patches (idempotent)
+# -----------------------------------------------------------------------------
+apply_klystrack_patches() {
+    local PROJECT_PATH="$ABSOLUTE_PATH/klystrack/klystron"
+    if [ ! -d "$PROJECT_PATH" ]; then
+        return
+    fi
+    if [ ! -d "$PATCHES_DIR_KLYSTRACK" ]; then
+        return
+    fi
+
+    for patch_file in "$PATCHES_DIR_KLYSTRACK"/*.patch; do
+        [ -e "$patch_file" ] || continue
+        local patch_name
+        patch_name="$(basename "$patch_file")"
+        local patch_subject
+        patch_subject="$(sed -n 's/^Subject: \[PATCH[^]]*\] //p' "$patch_file" | head -n 1)"
+
+        # Secondary idempotency check:
+        # If the patch subject already exists in git history, treat it as applied.
+        if [ -n "$patch_subject" ] && git -C "$PROJECT_PATH" log --format=%s | grep -Fqx "$patch_subject"; then
+            echo "klystrack patch already applied (subject): $patch_name"
+            continue
+        fi
+
+        # Reliable idempotency check with whitespace-tolerant reverse-apply.
+        if git -C "$PROJECT_PATH" apply --check --reverse \
+            --ignore-space-change --ignore-whitespace \
+            "$patch_file" >/dev/null 2>&1; then
+            echo "klystrack patch already applied: $patch_name"
+            continue
+        fi
+
+        echo "Applying klystrack patch: $patch_name"
+        # Use 3-way + whitespace-tolerant apply path for robustness across minor
+        # upstream drift and line-ending differences.
+        git -C "$PROJECT_PATH" am --3way --ignore-whitespace --whitespace=nowarn "$patch_file" || {
             echo "Error applying patch $patch_name"
             git -C "$PROJECT_PATH" am --abort
             exit 1
@@ -2223,6 +2269,10 @@ fi
 
 if target_has_lib "adplug"; then
     apply_adplug_patches
+fi
+
+if target_has_lib "klystrack"; then
+    apply_klystrack_patches
 fi
 
 if target_has_lib "vasm"; then

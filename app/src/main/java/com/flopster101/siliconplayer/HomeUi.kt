@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -44,6 +45,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.SideEffect
@@ -142,6 +144,7 @@ internal fun HomeScreen(
     onOpenUrlOrPath: () -> Unit,
     onOpenRecentFolder: (RecentPathEntry) -> Unit,
     onPlayRecentFile: (RecentPathEntry) -> Unit,
+    onPersistRecentFileMetadata: (RecentPathEntry, String, String) -> Unit,
     onRecentFolderAction: (RecentPathEntry, FolderEntryAction) -> Unit,
     onRecentFileAction: (RecentPathEntry, SourceEntryAction) -> Unit,
     canShareRecentFile: (RecentPathEntry) -> Boolean
@@ -203,6 +206,20 @@ internal fun HomeScreen(
                 }
             }
         }
+    }
+    val recentLiveMetadataSnapshots = remember {
+        mutableStateMapOf<String, Pair<String, String>>()
+    }
+    val recentPersistedMetadataSnapshots = remember {
+        mutableStateMapOf<String, Pair<String, String>>()
+    }
+    LaunchedEffect(renderedRecentPlayedFiles) {
+        val validKeys = renderedRecentPlayedFiles
+            .map { playedEntryKey(it) }
+            .toSet()
+        recentLiveMetadataSnapshots.keys
+            .filterNot { it in validKeys }
+            .forEach { recentLiveMetadataSnapshots.remove(it) }
     }
 
     LaunchedEffect(requestedPlayedPromoteKey, recentPlayedByKey) {
@@ -526,7 +543,58 @@ internal fun HomeScreen(
                             val storagePresentation = storagePresentationForEntry(entry)
                             val extensionLabel =
                                 inferredPrimaryExtensionForName(trackFile.name)?.uppercase() ?: "UNKNOWN"
-                            val useLiveMetadata = samePath(currentTrackPath, entry.path)
+                            val useLiveMetadata = index == 0 && samePath(currentTrackPath, entry.path)
+                            val liveTitle = currentTrackTitle.trim()
+                            val liveArtist = currentTrackArtist.trim()
+                            val liveMetadataReady = liveTitle.isNotBlank() || liveArtist.isNotBlank()
+                            LaunchedEffect(itemKey, useLiveMetadata, liveTitle, liveArtist) {
+                                if (useLiveMetadata && liveMetadataReady) {
+                                    recentLiveMetadataSnapshots[itemKey] = liveTitle to liveArtist
+                                }
+                            }
+                            var allowLiveMetadataSwap by remember(itemKey, useLiveMetadata) {
+                                mutableStateOf(!useLiveMetadata)
+                            }
+                            LaunchedEffect(itemKey, useLiveMetadata) {
+                                if (!useLiveMetadata) {
+                                    allowLiveMetadataSwap = true
+                                    return@LaunchedEffect
+                                }
+                                allowLiveMetadataSwap = false
+                                delay(HOME_RECENTS_INSERT_ANIM_DURATION_MS.toLong())
+                                allowLiveMetadataSwap = true
+                            }
+                            LaunchedEffect(
+                                itemKey,
+                                useLiveMetadata,
+                                allowLiveMetadataSwap,
+                                liveTitle,
+                                liveArtist,
+                                entry.path,
+                                entry.locationId
+                            ) {
+                                if (!useLiveMetadata || !allowLiveMetadataSwap || !liveMetadataReady) {
+                                    return@LaunchedEffect
+                                }
+                                val normalizedLiveTitle = liveTitle.trim()
+                                val normalizedLiveArtist = liveArtist.trim()
+                                val persistedSignature = normalizedLiveTitle to normalizedLiveArtist
+                                if (recentPersistedMetadataSnapshots[itemKey] == persistedSignature) {
+                                    return@LaunchedEffect
+                                }
+                                recentPersistedMetadataSnapshots[itemKey] = persistedSignature
+                                onPersistRecentFileMetadata(entry, normalizedLiveTitle, normalizedLiveArtist)
+                            }
+                            val targetDisplayMetadata = if (
+                                useLiveMetadata &&
+                                allowLiveMetadataSwap &&
+                                liveMetadataReady
+                            ) {
+                                liveTitle to liveArtist
+                            } else {
+                                recentLiveMetadataSnapshots[itemKey]
+                                    ?: (entry.title.orEmpty() to entry.artist.orEmpty())
+                            }
                             val fallbackIcon = placeholderArtworkIconForFile(
                                 file = trackFile,
                                 decoderName = entry.decoderName,
@@ -565,8 +633,8 @@ internal fun HomeScreen(
                                         Column(modifier = Modifier.weight(1f)) {
                                             RecentTrackSummaryText(
                                                 file = trackFile,
-                                                cachedTitle = if (useLiveMetadata) currentTrackTitle else entry.title,
-                                                cachedArtist = if (useLiveMetadata) currentTrackArtist else entry.artist,
+                                                cachedTitle = targetDisplayMetadata.first,
+                                                cachedArtist = targetDisplayMetadata.second,
                                                 storagePresentation = storagePresentation,
                                                 extensionLabel = extensionLabel,
                                                 isArchiveSource = archiveSource != null
@@ -828,15 +896,32 @@ internal fun RecentTrackSummaryText(
             fallback = fallback
         )
     }
-    val shouldMarquee = display.primaryText.length > 28
+    var renderedDisplay by remember(file.absolutePath) { mutableStateOf(display) }
+    val metadataAlpha = remember(file.absolutePath) { Animatable(1f) }
+
+    LaunchedEffect(display) {
+        if (display == renderedDisplay) return@LaunchedEffect
+        metadataAlpha.animateTo(
+            targetValue = 0f,
+            animationSpec = tween(durationMillis = 90, easing = FastOutSlowInEasing)
+        )
+        renderedDisplay = display
+        metadataAlpha.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing)
+        )
+    }
+
+    val shouldMarquee = renderedDisplay.primaryText.length > 28
     if (shouldMarquee) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .clipToBounds()
+                .graphicsLayer { alpha = metadataAlpha.value }
         ) {
             Text(
-                text = display.primaryText,
+                text = renderedDisplay.primaryText,
                 style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Clip,
@@ -849,10 +934,11 @@ internal fun RecentTrackSummaryText(
         }
     } else {
         Text(
-            text = display.primaryText,
+            text = renderedDisplay.primaryText,
             style = MaterialTheme.typography.titleSmall,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.graphicsLayer { alpha = metadataAlpha.value }
         )
     }
     val subtitleText = buildString {
@@ -863,7 +949,7 @@ internal fun RecentTrackSummaryText(
         }
         append(" • ")
         append(extensionLabel)
-        if (display.includeFilenameInSubtitle) {
+        if (renderedDisplay.includeFilenameInSubtitle) {
             append(" • ")
             append(fallback)
         }
@@ -890,6 +976,7 @@ internal fun RecentTrackSummaryText(
             modifier = Modifier
                 .weight(1f)
                 .clipToBounds()
+                .graphicsLayer { alpha = metadataAlpha.value }
         ) {
             Text(
                 text = subtitleText,

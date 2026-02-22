@@ -73,6 +73,7 @@ internal fun scheduleRecentTrackMetadataRefresh(
     scope.launch {
         repeat(8) { attempt ->
             delay(if (attempt == 0) 120L else 220L)
+            if (!NativeBridge.isEnginePlaying()) return@repeat
             val current = selectedFileProvider() ?: return@launch
             val activeSource = currentPlaybackSourceIdProvider() ?: current.absolutePath
             if (!samePath(activeSource, sourceId)) return@launch

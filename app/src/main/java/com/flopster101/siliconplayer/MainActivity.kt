@@ -904,6 +904,38 @@ private fun AppNavigation(
         runtimeDelegates.scheduleRecentPlayedMetadataBackfill()
     }
 
+    LaunchedEffect(
+        currentPlaybackSourceId,
+        selectedFile?.absolutePath,
+        metadataTitle,
+        metadataArtist,
+        lastBrowserLocationId,
+        isPlaying
+    ) {
+        if (!isPlaying) return@LaunchedEffect
+        val sourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath ?: return@LaunchedEffect
+        val normalizedTitle = metadataTitle.trim()
+        val normalizedArtist = metadataArtist.trim()
+        val decoderName = NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() }
+        val updatedRecentPlayed = buildUpdatedRecentPlayedTracks(
+            current = recentPlayedFiles,
+            newPath = sourceId,
+            locationId = if (isLocalPlayableFile(selectedFile)) lastBrowserLocationId else null,
+            title = normalizedTitle,
+            artist = normalizedArtist,
+            decoderName = decoderName,
+            clearBlankMetadataOnUpdate = true,
+            limit = recentFilesLimit
+        )
+        recentPlayedFiles = updatedRecentPlayed
+        writeRecentEntries(
+            prefs,
+            AppPreferenceKeys.RECENT_PLAYED_FILES,
+            updatedRecentPlayed,
+            recentFilesLimit
+        )
+    }
+
     val playbackStateDelegates = AppNavigationPlaybackStateDelegates(
         context = context,
         prefs = prefs,
@@ -2156,6 +2188,27 @@ private fun AppNavigation(
                             onApplyManualInputSelection = { rawInput ->
                                 manualOpenDelegates.applyManualInputSelection(rawInput)
                             }
+                        )
+                    },
+                    onPersistRecentFileMetadata = { entry, title, artist ->
+                        if (!isPlaying) return@AppNavigationHomeRouteSection
+                        val decoderName = NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() }
+                        val updatedRecentPlayed = buildUpdatedRecentPlayedTracks(
+                            current = recentPlayedFiles,
+                            newPath = entry.path,
+                            locationId = entry.locationId,
+                            title = title,
+                            artist = artist,
+                            decoderName = decoderName,
+                            clearBlankMetadataOnUpdate = true,
+                            limit = recentFilesLimit
+                        )
+                        recentPlayedFiles = updatedRecentPlayed
+                        writeRecentEntries(
+                            prefs,
+                            AppPreferenceKeys.RECENT_PLAYED_FILES,
+                            updatedRecentPlayed,
+                            recentFilesLimit
                         )
                     },
                     onRecentFolderAction = { entry, action ->

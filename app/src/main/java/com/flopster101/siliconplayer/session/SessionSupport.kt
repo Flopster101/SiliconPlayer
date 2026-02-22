@@ -346,12 +346,21 @@ internal fun buildUpdatedRecentPlayedTracks(
     title: String? = null,
     artist: String? = null,
     decoderName: String? = null,
+    clearBlankMetadataOnUpdate: Boolean = false,
     limit: Int
 ): List<RecentPathEntry> {
     val normalized = normalizeSourceIdentity(newPath) ?: newPath
     val existing = current.firstOrNull { samePath(it.path, normalized) }
-    val resolvedTitle = title?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.title
-    val resolvedArtist = artist?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.artist
+    val trimmedTitle = title?.trim()
+    val trimmedArtist = artist?.trim()
+    val resolvedTitle = when {
+        clearBlankMetadataOnUpdate && trimmedTitle != null -> trimmedTitle.ifBlank { null }
+        else -> trimmedTitle.takeUnless { it.isNullOrBlank() } ?: existing?.title
+    }
+    val resolvedArtist = when {
+        clearBlankMetadataOnUpdate && trimmedArtist != null -> trimmedArtist.ifBlank { null }
+        else -> trimmedArtist.takeUnless { it.isNullOrBlank() } ?: existing?.artist
+    }
     val resolvedDecoderName = decoderName?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.decoderName
     val updated = listOf(
         RecentPathEntry(

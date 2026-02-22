@@ -22,6 +22,7 @@ internal fun AppNavigationHomeRouteSection(
     onOpenUrlOrPath: () -> Unit,
     onOpenRecentFolder: (RecentPathEntry) -> Unit,
     onPlayRecentFile: (RecentPathEntry) -> Unit,
+    onPersistRecentFileMetadata: (RecentPathEntry, String, String) -> Unit,
     onRecentFolderAction: (RecentPathEntry, FolderEntryAction) -> Unit,
     onRecentFileAction: (RecentPathEntry, SourceEntryAction) -> Unit,
     canShareRecentFile: (RecentPathEntry) -> Boolean
@@ -39,6 +40,7 @@ internal fun AppNavigationHomeRouteSection(
         onOpenUrlOrPath = onOpenUrlOrPath,
         onOpenRecentFolder = onOpenRecentFolder,
         onPlayRecentFile = onPlayRecentFile,
+        onPersistRecentFileMetadata = onPersistRecentFileMetadata,
         onRecentFolderAction = onRecentFolderAction,
         onRecentFileAction = onRecentFileAction,
         canShareRecentFile = canShareRecentFile

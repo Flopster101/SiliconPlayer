@@ -46,6 +46,7 @@ internal fun AppNavigationPlaybackPollEffects(
         var localSeekRequestedAtMs = seekRequestedAtMs
         var localDuration = duration
         var localPlaybackWatchPath = playbackWatchPath
+        var lastPersistedRecentMetadata: Triple<String, String, String>? = null
 
         while (selectedFileProvider() != null) {
             val currentFile = selectedFileProvider()
@@ -127,13 +128,30 @@ internal fun AppNavigationPlaybackPollEffects(
                         onMetadataArtistChanged(nextArtist)
                     }
                     val recentSourceId = currentPlaybackSourceIdProvider() ?: currentFile?.absolutePath
-                    if ((titleChanged || artistChanged) && recentSourceId != null) {
+                    if (nextIsPlaying && (titleChanged || artistChanged) && recentSourceId != null) {
                         onAddRecentPlayedTrack(
                             recentSourceId,
                             if (isLocalPlayableFile(currentFile)) lastBrowserLocationId else null,
                             nextTitle,
                             nextArtist
                         )
+                    }
+                    if (nextIsPlaying && recentSourceId != null) {
+                        val normalizedTitle = nextTitle.trim()
+                        val normalizedArtist = nextArtist.trim()
+                        if (normalizedTitle.isNotBlank() || normalizedArtist.isNotBlank()) {
+                            val metadataSignature =
+                                Triple(recentSourceId, normalizedTitle, normalizedArtist)
+                            if (metadataSignature != lastPersistedRecentMetadata) {
+                                onAddRecentPlayedTrack(
+                                    recentSourceId,
+                                    if (isLocalPlayableFile(currentFile)) lastBrowserLocationId else null,
+                                    nextTitle,
+                                    nextArtist
+                                )
+                                lastPersistedRecentMetadata = metadataSignature
+                            }
+                        }
                     }
                 }
             } else {

@@ -519,7 +519,20 @@ void AudioEngine::setRepeatMode(int mode) {
             if (previousMode == 2 && normalized != 2) {
                 const double durationNow = decoder->getDuration();
                 const double currentPosition = positionSeconds.load();
-                const bool atOrPastEnd = durationNow > 0.0 && currentPosition >= (durationNow - 0.01);
+                const double decoderPosition = decoder->getPlaybackPositionSeconds();
+                const int playbackCaps = decoder->getPlaybackCapabilities();
+                const bool hasDirectSeek = (playbackCaps & AudioDecoder::PLAYBACK_CAP_DIRECT_SEEK) != 0;
+                const bool hasReliableDuration =
+                        (playbackCaps & AudioDecoder::PLAYBACK_CAP_RELIABLE_DURATION) != 0;
+                const bool uiAtOrPastEnd = durationNow > 0.0 && currentPosition >= (durationNow - 0.01);
+                const bool decoderAtOrPastEnd =
+                        durationNow > 0.0 &&
+                        decoderPosition >= 0.0 &&
+                        decoderPosition >= (durationNow - 0.01);
+                const bool requireDecoderConfirmation = hasDirectSeek && hasReliableDuration;
+                const bool atOrPastEnd = requireDecoderConfirmation
+                        ? (uiAtOrPastEnd && decoderAtOrPastEnd)
+                        : uiAtOrPastEnd;
                 if (atOrPastEnd) {
                     if (normalized == 1) {
                         const int subtuneCount = std::max(1, decoder->getSubtuneCount());

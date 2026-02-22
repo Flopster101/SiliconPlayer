@@ -18,6 +18,7 @@ internal fun AppNavigationCoreEffects(
     adPlugCoreSampleRateHz: Int,
     hivelyTrackerCoreSampleRateHz: Int,
     klystrackCoreSampleRateHz: Int,
+    furnaceCoreSampleRateHz: Int,
     uadeCoreSampleRateHz: Int,
     adPlugOplEngine: Int,
     lazyUsf2UseHleAudio: Boolean,
@@ -36,6 +37,13 @@ internal fun AppNavigationCoreEffects(
     hivelyTrackerPanningMode: Int,
     hivelyTrackerMixGainPercent: Int,
     klystrackPlayerQuality: Int,
+    furnaceYm2612Core: Int,
+    furnaceSnCore: Int,
+    furnaceNesCore: Int,
+    furnaceC64Core: Int,
+    furnaceGbQuality: Int,
+    furnaceDsidQuality: Int,
+    furnaceAyCore: Int,
     sidPlayFpBackend: Int,
     sidPlayFpClockMode: Int,
     sidPlayFpSidModelMode: Int,
@@ -158,6 +166,16 @@ internal fun AppNavigationCoreEffects(
         }
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_KLYSTRACK, normalized).apply()
         NativeBridge.setCoreOutputSampleRate("Klystrack", normalized)
+    }
+
+    LaunchedEffect(furnaceCoreSampleRateHz) {
+        val normalized = if (furnaceCoreSampleRateHz <= 0) {
+            0
+        } else {
+            furnaceCoreSampleRateHz.coerceIn(8000, 192000)
+        }
+        prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_FURNACE, normalized).apply()
+        NativeBridge.setCoreOutputSampleRate("Furnace", normalized)
     }
 
     LaunchedEffect(uadeCoreSampleRateHz) {
@@ -361,6 +379,90 @@ internal fun AppNavigationCoreEffects(
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
             optionLabel = "Replay quality"
+        )
+    }
+
+    LaunchedEffect(furnaceYm2612Core) {
+        val normalized = furnaceYm2612Core.coerceIn(0, 2)
+        prefs.edit().putInt(CorePreferenceKeys.FURNACE_YM2612_CORE, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Furnace",
+            optionName = FurnaceOptionKeys.YM2612_CORE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "YM2612 core"
+        )
+    }
+
+    LaunchedEffect(furnaceSnCore) {
+        val normalized = furnaceSnCore.coerceIn(0, 1)
+        prefs.edit().putInt(CorePreferenceKeys.FURNACE_SN_CORE, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Furnace",
+            optionName = FurnaceOptionKeys.SN_CORE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "SN76489 core"
+        )
+    }
+
+    LaunchedEffect(furnaceNesCore) {
+        val normalized = furnaceNesCore.coerceIn(0, 1)
+        prefs.edit().putInt(CorePreferenceKeys.FURNACE_NES_CORE, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Furnace",
+            optionName = FurnaceOptionKeys.NES_CORE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "NES core"
+        )
+    }
+
+    LaunchedEffect(furnaceC64Core) {
+        val normalized = furnaceC64Core.coerceIn(0, 2)
+        prefs.edit().putInt(CorePreferenceKeys.FURNACE_C64_CORE, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Furnace",
+            optionName = FurnaceOptionKeys.C64_CORE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "C64 core"
+        )
+    }
+
+    LaunchedEffect(furnaceGbQuality) {
+        val normalized = furnaceGbQuality.coerceIn(0, 5)
+        prefs.edit().putInt(CorePreferenceKeys.FURNACE_GB_QUALITY, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Furnace",
+            optionName = FurnaceOptionKeys.GB_QUALITY,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Game Boy quality"
+        )
+    }
+
+    LaunchedEffect(furnaceDsidQuality) {
+        val normalized = furnaceDsidQuality.coerceIn(0, 5)
+        prefs.edit().putInt(CorePreferenceKeys.FURNACE_DSID_QUALITY, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Furnace",
+            optionName = FurnaceOptionKeys.DSID_QUALITY,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "dSID quality"
+        )
+    }
+
+    LaunchedEffect(furnaceAyCore) {
+        val normalized = furnaceAyCore.coerceIn(0, 1)
+        prefs.edit().putInt(CorePreferenceKeys.FURNACE_AY_CORE, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Furnace",
+            optionName = FurnaceOptionKeys.AY_CORE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "AY core"
         )
     }
 

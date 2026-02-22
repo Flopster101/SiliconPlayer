@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.pluginsettings.AdPlugSettings
 import com.flopster101.siliconplayer.pluginsettings.FfmpegSettings
+import com.flopster101.siliconplayer.pluginsettings.FurnaceSettings
 import com.flopster101.siliconplayer.pluginsettings.GmeSettings
 import com.flopster101.siliconplayer.pluginsettings.HivelyTrackerSettings
 import com.flopster101.siliconplayer.pluginsettings.KlystrackSettings
@@ -42,6 +43,7 @@ internal data class PluginDetailRouteState(
     val adPlugSampleRateHz: Int,
     val hivelyTrackerSampleRateHz: Int,
     val klystrackSampleRateHz: Int,
+    val furnaceSampleRateHz: Int,
     val uadeSampleRateHz: Int,
     val adPlugOplEngine: Int,
     val openMptStereoSeparationPercent: Int,
@@ -94,7 +96,14 @@ internal data class PluginDetailRouteState(
     val uadePanningMode: Int,
     val hivelyTrackerPanningMode: Int,
     val hivelyTrackerMixGainPercent: Int,
-    val klystrackPlayerQuality: Int
+    val klystrackPlayerQuality: Int,
+    val furnaceYm2612Core: Int,
+    val furnaceSnCore: Int,
+    val furnaceNesCore: Int,
+    val furnaceC64Core: Int,
+    val furnaceGbQuality: Int,
+    val furnaceDsidQuality: Int,
+    val furnaceAyCore: Int
 )
 
 internal data class PluginDetailRouteActions(
@@ -110,6 +119,7 @@ internal data class PluginDetailRouteActions(
     val onAdPlugSampleRateChanged: (Int) -> Unit,
     val onHivelyTrackerSampleRateChanged: (Int) -> Unit,
     val onKlystrackSampleRateChanged: (Int) -> Unit,
+    val onFurnaceSampleRateChanged: (Int) -> Unit,
     val onUadeSampleRateChanged: (Int) -> Unit,
     val onAdPlugOplEngineChanged: (Int) -> Unit,
     val onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
@@ -163,7 +173,14 @@ internal data class PluginDetailRouteActions(
     val onUadePanningModeChanged: (Int) -> Unit,
     val onHivelyTrackerPanningModeChanged: (Int) -> Unit,
     val onHivelyTrackerMixGainPercentChanged: (Int) -> Unit,
-    val onKlystrackPlayerQualityChanged: (Int) -> Unit
+    val onKlystrackPlayerQualityChanged: (Int) -> Unit,
+    val onFurnaceYm2612CoreChanged: (Int) -> Unit,
+    val onFurnaceSnCoreChanged: (Int) -> Unit,
+    val onFurnaceNesCoreChanged: (Int) -> Unit,
+    val onFurnaceC64CoreChanged: (Int) -> Unit,
+    val onFurnaceGbQualityChanged: (Int) -> Unit,
+    val onFurnaceDsidQualityChanged: (Int) -> Unit,
+    val onFurnaceAyCoreChanged: (Int) -> Unit
 )
 
 @Composable
@@ -243,6 +260,7 @@ internal fun PluginDetailRouteContent(
         "AdPlug" -> state.adPlugSampleRateHz
         "HivelyTracker" -> state.hivelyTrackerSampleRateHz
         "Klystrack" -> state.klystrackSampleRateHz
+        "Furnace" -> state.furnaceSampleRateHz
         "UADE" -> state.uadeSampleRateHz
         "SC68" -> state.sc68SamplingRateHz
         else -> fixedSampleRateHz
@@ -257,6 +275,7 @@ internal fun PluginDetailRouteContent(
         "AdPlug" -> actions.onAdPlugSampleRateChanged
         "HivelyTracker" -> actions.onHivelyTrackerSampleRateChanged
         "Klystrack" -> actions.onKlystrackSampleRateChanged
+        "Furnace" -> actions.onFurnaceSampleRateChanged
         "UADE" -> actions.onUadeSampleRateChanged
         "SC68" -> actions.onSc68SamplingRateHzChanged
         else -> null
@@ -430,6 +449,23 @@ internal fun PluginDetailRouteContent(
         "Klystrack" -> KlystrackSettings(
             playerQuality = state.klystrackPlayerQuality,
             onPlayerQualityChanged = actions.onKlystrackPlayerQualityChanged
+        )
+
+        "Furnace" -> FurnaceSettings(
+            ym2612Core = state.furnaceYm2612Core,
+            snCore = state.furnaceSnCore,
+            nesCore = state.furnaceNesCore,
+            c64Core = state.furnaceC64Core,
+            gbQuality = state.furnaceGbQuality,
+            dsidQuality = state.furnaceDsidQuality,
+            ayCore = state.furnaceAyCore,
+            onYm2612CoreChanged = actions.onFurnaceYm2612CoreChanged,
+            onSnCoreChanged = actions.onFurnaceSnCoreChanged,
+            onNesCoreChanged = actions.onFurnaceNesCoreChanged,
+            onC64CoreChanged = actions.onFurnaceC64CoreChanged,
+            onGbQualityChanged = actions.onFurnaceGbQualityChanged,
+            onDsidQualityChanged = actions.onFurnaceDsidQualityChanged,
+            onAyCoreChanged = actions.onFurnaceAyCoreChanged
         )
 
         else -> null

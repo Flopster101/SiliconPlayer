@@ -42,6 +42,8 @@ public:
     bool getToggleChannelMuted(int channelIndex) const override;
     void clearToggleChannelMutes() override;
     void setOutputSampleRate(int sampleRateHz) override;
+    void setOption(const char* name, const char* value) override;
+    int getOptionApplyPolicy(const char* name) const override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override;
@@ -88,6 +90,13 @@ private:
     int sampleRateHz = 44100;
     int requestedSampleRateHz = 44100;
     int channels = 2;
+    int optionYm2612Core = 0;
+    int optionSnCore = 0;
+    int optionNesCore = 0;
+    int optionC64Core = 0;
+    int optionGbQuality = 3;
+    int optionDsidQuality = 3;
+    int optionAyCore = 0;
     int subtuneCount = 1;
     int currentSubtuneIndex = 0;
     std::atomic<int> repeatMode { 0 };
@@ -113,6 +122,7 @@ private:
     void refreshTimelineLocked();
     void syncToggleChannelsLocked();
     void applyToggleChannelMutesLocked();
+    void applyCoreOptionsLocked(DivEngine* targetEngine) const;
     void applyRepeatModeLocked();
     double normalizeTimelinePositionLocked(double seconds) const;
     double normalizeSeekTargetLocked(double seconds) const;

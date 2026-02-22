@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -43,6 +44,16 @@ std::string uppercaseExtensionWithoutDot(const std::filesystem::path& path) {
         return static_cast<char>(std::toupper(ch));
     });
     return ext;
+}
+
+int parseIntOptionString(const char* value, int fallback) {
+    if (!value) return fallback;
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value || (end && *end != '\0')) {
+        return fallback;
+    }
+    return static_cast<int>(parsed);
 }
 } // namespace
 
@@ -85,6 +96,7 @@ bool FurnaceDecoder::open(const char* path) {
     localEngine->setConf("audioRate", clampSampleRate(requestedSampleRateHz));
     localEngine->setConf("audioChans", 2);
     localEngine->setConf("audioBufSize", 1024);
+    applyCoreOptionsLocked(localEngine.get());
 
     auto* ownedData = new unsigned char[fileData.size()];
     std::memcpy(ownedData, fileData.data(), fileData.size());
@@ -338,6 +350,19 @@ void FurnaceDecoder::applyToggleChannelMutesLocked() {
     for (int i = 0; i < channelCount; ++i) {
         engine->muteChannel(i, toggleChannelMuted[static_cast<size_t>(i)]);
     }
+}
+
+void FurnaceDecoder::applyCoreOptionsLocked(DivEngine* targetEngine) const {
+    if (!targetEngine) {
+        return;
+    }
+    targetEngine->setConf("ym2612Core", optionYm2612Core);
+    targetEngine->setConf("snCore", optionSnCore);
+    targetEngine->setConf("nesCore", optionNesCore);
+    targetEngine->setConf("c64Core", optionC64Core);
+    targetEngine->setConf("gbQuality", optionGbQuality);
+    targetEngine->setConf("dsidQuality", optionDsidQuality);
+    targetEngine->setConf("ayCore", optionAyCore);
 }
 
 double FurnaceDecoder::normalizeTimelinePositionLocked(double seconds) const {
@@ -697,6 +722,51 @@ void FurnaceDecoder::setOutputSampleRate(int sampleRateHzValue) {
     requestedSampleRateHz = clampSampleRate(sampleRateHzValue > 0 ? sampleRateHzValue : 44100);
 }
 
+void FurnaceDecoder::setOption(const char* name, const char* value) {
+    if (!name) {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (std::strcmp(name, "furnace.ym2612_core") == 0) {
+        optionYm2612Core = std::clamp(parseIntOptionString(value, optionYm2612Core), 0, 2);
+    } else if (std::strcmp(name, "furnace.sn_core") == 0) {
+        optionSnCore = std::clamp(parseIntOptionString(value, optionSnCore), 0, 1);
+    } else if (std::strcmp(name, "furnace.nes_core") == 0) {
+        optionNesCore = std::clamp(parseIntOptionString(value, optionNesCore), 0, 1);
+    } else if (std::strcmp(name, "furnace.c64_core") == 0) {
+        optionC64Core = std::clamp(parseIntOptionString(value, optionC64Core), 0, 2);
+    } else if (std::strcmp(name, "furnace.gb_quality") == 0) {
+        optionGbQuality = std::clamp(parseIntOptionString(value, optionGbQuality), 0, 5);
+    } else if (std::strcmp(name, "furnace.dsid_quality") == 0) {
+        optionDsidQuality = std::clamp(parseIntOptionString(value, optionDsidQuality), 0, 5);
+    } else if (std::strcmp(name, "furnace.ay_core") == 0) {
+        optionAyCore = std::clamp(parseIntOptionString(value, optionAyCore), 0, 1);
+    } else {
+        return;
+    }
+
+    if (engine) {
+        applyCoreOptionsLocked(engine.get());
+    }
+}
+
+int FurnaceDecoder::getOptionApplyPolicy(const char* name) const {
+    if (!name) {
+        return OPTION_APPLY_LIVE;
+    }
+    if (std::strcmp(name, "furnace.ym2612_core") == 0 ||
+        std::strcmp(name, "furnace.sn_core") == 0 ||
+        std::strcmp(name, "furnace.nes_core") == 0 ||
+        std::strcmp(name, "furnace.c64_core") == 0 ||
+        std::strcmp(name, "furnace.gb_quality") == 0 ||
+        std::strcmp(name, "furnace.dsid_quality") == 0 ||
+        std::strcmp(name, "furnace.ay_core") == 0) {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    return OPTION_APPLY_LIVE;
+}
+
 void FurnaceDecoder::setRepeatMode(int mode) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     const int normalizedMode = normalizeRepeatMode(mode);
@@ -719,7 +789,10 @@ int FurnaceDecoder::getRepeatModeCapabilities() const {
 
 int FurnaceDecoder::getPlaybackCapabilities() const {
     std::lock_guard<std::mutex> lock(decodeMutex);
-    int caps = PLAYBACK_CAP_SEEK | PLAYBACK_CAP_LIVE_REPEAT_MODE | PLAYBACK_CAP_DIRECT_SEEK;
+    int caps = PLAYBACK_CAP_SEEK |
+               PLAYBACK_CAP_LIVE_REPEAT_MODE |
+               PLAYBACK_CAP_DIRECT_SEEK |
+               PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
     if (durationReliable) {
         caps |= PLAYBACK_CAP_RELIABLE_DURATION;
     }

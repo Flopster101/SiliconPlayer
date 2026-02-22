@@ -678,6 +678,7 @@ private fun AppNavigation(
     var adPlugCoreSampleRateHz by settingsStates.adPlugCoreSampleRateHz
     var hivelyTrackerCoreSampleRateHz by settingsStates.hivelyTrackerCoreSampleRateHz
     var klystrackCoreSampleRateHz by settingsStates.klystrackCoreSampleRateHz
+    var furnaceCoreSampleRateHz by settingsStates.furnaceCoreSampleRateHz
     var uadeCoreSampleRateHz by settingsStates.uadeCoreSampleRateHz
     var adPlugOplEngine by settingsStates.adPlugOplEngine
     var lazyUsf2UseHleAudio by settingsStates.lazyUsf2UseHleAudio
@@ -696,6 +697,13 @@ private fun AppNavigation(
     var hivelyTrackerPanningMode by settingsStates.hivelyTrackerPanningMode
     var hivelyTrackerMixGainPercent by settingsStates.hivelyTrackerMixGainPercent
     var klystrackPlayerQuality by settingsStates.klystrackPlayerQuality
+    var furnaceYm2612Core by settingsStates.furnaceYm2612Core
+    var furnaceSnCore by settingsStates.furnaceSnCore
+    var furnaceNesCore by settingsStates.furnaceNesCore
+    var furnaceC64Core by settingsStates.furnaceC64Core
+    var furnaceGbQuality by settingsStates.furnaceGbQuality
+    var furnaceDsidQuality by settingsStates.furnaceDsidQuality
+    var furnaceAyCore by settingsStates.furnaceAyCore
     var sidPlayFpBackend by settingsStates.sidPlayFpBackend
     var sidPlayFpClockMode by settingsStates.sidPlayFpClockMode
     var sidPlayFpSidModelMode by settingsStates.sidPlayFpSidModelMode
@@ -1212,6 +1220,7 @@ private fun AppNavigation(
         adPlugCoreSampleRateHz = adPlugCoreSampleRateHz,
         hivelyTrackerCoreSampleRateHz = hivelyTrackerCoreSampleRateHz,
         klystrackCoreSampleRateHz = klystrackCoreSampleRateHz,
+        furnaceCoreSampleRateHz = furnaceCoreSampleRateHz,
         uadeCoreSampleRateHz = uadeCoreSampleRateHz,
         adPlugOplEngine = adPlugOplEngine,
         lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
@@ -1230,6 +1239,13 @@ private fun AppNavigation(
         hivelyTrackerPanningMode = hivelyTrackerPanningMode,
         hivelyTrackerMixGainPercent = hivelyTrackerMixGainPercent,
         klystrackPlayerQuality = klystrackPlayerQuality,
+        furnaceYm2612Core = furnaceYm2612Core,
+        furnaceSnCore = furnaceSnCore,
+        furnaceNesCore = furnaceNesCore,
+        furnaceC64Core = furnaceC64Core,
+        furnaceGbQuality = furnaceGbQuality,
+        furnaceDsidQuality = furnaceDsidQuality,
+        furnaceAyCore = furnaceAyCore,
         sidPlayFpBackend = sidPlayFpBackend,
         sidPlayFpClockMode = sidPlayFpClockMode,
         sidPlayFpSidModelMode = sidPlayFpSidModelMode,
@@ -1711,6 +1727,7 @@ private fun AppNavigation(
                 onAdPlugSampleRateChanged = { adPlugCoreSampleRateHz = it },
                 onHivelyTrackerSampleRateChanged = { hivelyTrackerCoreSampleRateHz = it },
                 onKlystrackSampleRateChanged = { klystrackCoreSampleRateHz = it },
+                onFurnaceSampleRateChanged = { furnaceCoreSampleRateHz = it },
                 onUadeSampleRateChanged = { uadeCoreSampleRateHz = it },
                 onAdPlugOplEngineChanged = { adPlugOplEngine = it },
                 onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
@@ -1729,6 +1746,13 @@ private fun AppNavigation(
                 onHivelyTrackerPanningModeChanged = { hivelyTrackerPanningMode = it },
                 onHivelyTrackerMixGainPercentChanged = { hivelyTrackerMixGainPercent = it },
                 onKlystrackPlayerQualityChanged = { klystrackPlayerQuality = it },
+                onFurnaceYm2612CoreChanged = { furnaceYm2612Core = it },
+                onFurnaceSnCoreChanged = { furnaceSnCore = it },
+                onFurnaceNesCoreChanged = { furnaceNesCore = it },
+                onFurnaceC64CoreChanged = { furnaceC64Core = it },
+                onFurnaceGbQualityChanged = { furnaceGbQuality = it },
+                onFurnaceDsidQualityChanged = { furnaceDsidQuality = it },
+                onFurnaceAyCoreChanged = { furnaceAyCore = it },
                 onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
                 onSidPlayFpClockModeChanged = { sidPlayFpClockMode = it },
                 onSidPlayFpSidModelModeChanged = { sidPlayFpSidModelMode = it },

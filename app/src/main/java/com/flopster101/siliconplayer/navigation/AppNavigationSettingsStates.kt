@@ -25,6 +25,7 @@ internal data class AppNavigationSettingsStates(
     val adPlugCoreSampleRateHz: MutableIntState,
     val hivelyTrackerCoreSampleRateHz: MutableIntState,
     val klystrackCoreSampleRateHz: MutableIntState,
+    val furnaceCoreSampleRateHz: MutableIntState,
     val uadeCoreSampleRateHz: MutableIntState,
     val adPlugOplEngine: MutableIntState,
     val lazyUsf2UseHleAudio: MutableState<Boolean>,
@@ -43,6 +44,13 @@ internal data class AppNavigationSettingsStates(
     val hivelyTrackerPanningMode: MutableIntState,
     val hivelyTrackerMixGainPercent: MutableIntState,
     val klystrackPlayerQuality: MutableIntState,
+    val furnaceYm2612Core: MutableIntState,
+    val furnaceSnCore: MutableIntState,
+    val furnaceNesCore: MutableIntState,
+    val furnaceC64Core: MutableIntState,
+    val furnaceGbQuality: MutableIntState,
+    val furnaceDsidQuality: MutableIntState,
+    val furnaceAyCore: MutableIntState,
     val sidPlayFpBackend: MutableIntState,
     val sidPlayFpClockMode: MutableIntState,
     val sidPlayFpSidModelMode: MutableIntState,
@@ -157,6 +165,14 @@ internal fun rememberAppNavigationSettingsStates(
             )
         )
     }
+    val furnaceCoreSampleRateHz = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.CORE_RATE_FURNACE,
+                FurnaceDefaults.coreSampleRateHz
+            )
+        )
+    }
     val uadeCoreSampleRateHz = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CORE_RATE_UADE, UadeDefaults.coreSampleRateHz))
     }
@@ -228,6 +244,62 @@ internal fun rememberAppNavigationSettingsStates(
             prefs.getInt(
                 CorePreferenceKeys.KLYSTRACK_PLAYER_QUALITY,
                 KlystrackDefaults.playerQuality
+            )
+        )
+    }
+    val furnaceYm2612Core = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.FURNACE_YM2612_CORE,
+                FurnaceDefaults.ym2612Core
+            )
+        )
+    }
+    val furnaceSnCore = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.FURNACE_SN_CORE,
+                FurnaceDefaults.snCore
+            )
+        )
+    }
+    val furnaceNesCore = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.FURNACE_NES_CORE,
+                FurnaceDefaults.nesCore
+            )
+        )
+    }
+    val furnaceC64Core = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.FURNACE_C64_CORE,
+                FurnaceDefaults.c64Core
+            )
+        )
+    }
+    val furnaceGbQuality = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.FURNACE_GB_QUALITY,
+                FurnaceDefaults.gbQuality
+            )
+        )
+    }
+    val furnaceDsidQuality = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.FURNACE_DSID_QUALITY,
+                FurnaceDefaults.dsidQuality
+            )
+        )
+    }
+    val furnaceAyCore = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.FURNACE_AY_CORE,
+                FurnaceDefaults.ayCore
             )
         )
     }
@@ -487,6 +559,7 @@ internal fun rememberAppNavigationSettingsStates(
         adPlugCoreSampleRateHz = adPlugCoreSampleRateHz,
         hivelyTrackerCoreSampleRateHz = hivelyTrackerCoreSampleRateHz,
         klystrackCoreSampleRateHz = klystrackCoreSampleRateHz,
+        furnaceCoreSampleRateHz = furnaceCoreSampleRateHz,
         uadeCoreSampleRateHz = uadeCoreSampleRateHz,
         adPlugOplEngine = adPlugOplEngine,
         lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
@@ -505,6 +578,13 @@ internal fun rememberAppNavigationSettingsStates(
         hivelyTrackerPanningMode = hivelyTrackerPanningMode,
         hivelyTrackerMixGainPercent = hivelyTrackerMixGainPercent,
         klystrackPlayerQuality = klystrackPlayerQuality,
+        furnaceYm2612Core = furnaceYm2612Core,
+        furnaceSnCore = furnaceSnCore,
+        furnaceNesCore = furnaceNesCore,
+        furnaceC64Core = furnaceC64Core,
+        furnaceGbQuality = furnaceGbQuality,
+        furnaceDsidQuality = furnaceDsidQuality,
+        furnaceAyCore = furnaceAyCore,
         sidPlayFpBackend = sidPlayFpBackend,
         sidPlayFpClockMode = sidPlayFpClockMode,
         sidPlayFpSidModelMode = sidPlayFpSidModelMode,

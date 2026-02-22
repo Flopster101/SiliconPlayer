@@ -647,6 +647,7 @@ internal fun clearAllSettingsAction(
     adPlugCoreSampleRateHz: Int,
     hivelyTrackerCoreSampleRateHz: Int,
     klystrackCoreSampleRateHz: Int,
+    furnaceCoreSampleRateHz: Int,
     uadeCoreSampleRateHz: Int,
     adPlugOplEngine: Int,
     vio2sfInterpolationQuality: Int,
@@ -700,6 +701,13 @@ internal fun clearAllSettingsAction(
     hivelyTrackerPanningMode: Int,
     hivelyTrackerMixGainPercent: Int,
     klystrackPlayerQuality: Int,
+    furnaceYm2612Core: Int,
+    furnaceSnCore: Int,
+    furnaceNesCore: Int,
+    furnaceC64Core: Int,
+    furnaceGbQuality: Int,
+    furnaceDsidQuality: Int,
+    furnaceAyCore: Int,
     vgmPlayChipCoreSelections: Map<String, Int>,
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
@@ -770,9 +778,17 @@ internal fun clearAllSettingsAction(
     onUadePanningModeChanged: (Int) -> Unit,
     onHivelyTrackerCoreSampleRateHzChanged: (Int) -> Unit,
     onKlystrackCoreSampleRateHzChanged: (Int) -> Unit,
+    onFurnaceCoreSampleRateHzChanged: (Int) -> Unit,
     onHivelyTrackerPanningModeChanged: (Int) -> Unit,
     onHivelyTrackerMixGainPercentChanged: (Int) -> Unit,
     onKlystrackPlayerQualityChanged: (Int) -> Unit,
+    onFurnaceYm2612CoreChanged: (Int) -> Unit,
+    onFurnaceSnCoreChanged: (Int) -> Unit,
+    onFurnaceNesCoreChanged: (Int) -> Unit,
+    onFurnaceC64CoreChanged: (Int) -> Unit,
+    onFurnaceGbQualityChanged: (Int) -> Unit,
+    onFurnaceDsidQualityChanged: (Int) -> Unit,
+    onFurnaceAyCoreChanged: (Int) -> Unit,
     onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugOplEngineChanged: (Int) -> Unit,
 ) {
@@ -786,6 +802,7 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.CORE_RATE_ADPLUG to adPlugCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_HIVELYTRACKER to hivelyTrackerCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_KLYSTRACK to klystrackCoreSampleRateHz,
+        CorePreferenceKeys.CORE_RATE_FURNACE to furnaceCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_UADE to uadeCoreSampleRateHz,
         CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY to vio2sfInterpolationQuality,
         CorePreferenceKeys.ADPLUG_OPL_ENGINE to adPlugOplEngine,
@@ -800,6 +817,13 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.HIVELYTRACKER_PANNING_MODE to hivelyTrackerPanningMode,
         CorePreferenceKeys.HIVELYTRACKER_MIX_GAIN_PERCENT to hivelyTrackerMixGainPercent,
         CorePreferenceKeys.KLYSTRACK_PLAYER_QUALITY to klystrackPlayerQuality,
+        CorePreferenceKeys.FURNACE_YM2612_CORE to furnaceYm2612Core,
+        CorePreferenceKeys.FURNACE_SN_CORE to furnaceSnCore,
+        CorePreferenceKeys.FURNACE_NES_CORE to furnaceNesCore,
+        CorePreferenceKeys.FURNACE_C64_CORE to furnaceC64Core,
+        CorePreferenceKeys.FURNACE_GB_QUALITY to furnaceGbQuality,
+        CorePreferenceKeys.FURNACE_DSID_QUALITY to furnaceDsidQuality,
+        CorePreferenceKeys.FURNACE_AY_CORE to furnaceAyCore,
         CorePreferenceKeys.VGMPLAY_LOOP_COUNT to vgmPlayLoopCount,
         CorePreferenceKeys.VGMPLAY_VSYNC_RATE to vgmPlayVsyncRate,
         CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE to vgmPlayResampleMode,
@@ -908,9 +932,17 @@ internal fun clearAllSettingsAction(
     onUadePanningModeChanged(UadeDefaults.panningMode)
     onHivelyTrackerCoreSampleRateHzChanged(HivelyTrackerDefaults.coreSampleRateHz)
     onKlystrackCoreSampleRateHzChanged(KlystrackDefaults.coreSampleRateHz)
+    onFurnaceCoreSampleRateHzChanged(FurnaceDefaults.coreSampleRateHz)
     onHivelyTrackerPanningModeChanged(HivelyTrackerDefaults.panningMode)
     onHivelyTrackerMixGainPercentChanged(HivelyTrackerDefaults.mixGainPercent)
     onKlystrackPlayerQualityChanged(KlystrackDefaults.playerQuality)
+    onFurnaceYm2612CoreChanged(FurnaceDefaults.ym2612Core)
+    onFurnaceSnCoreChanged(FurnaceDefaults.snCore)
+    onFurnaceNesCoreChanged(FurnaceDefaults.nesCore)
+    onFurnaceC64CoreChanged(FurnaceDefaults.c64Core)
+    onFurnaceGbQualityChanged(FurnaceDefaults.gbQuality)
+    onFurnaceDsidQualityChanged(FurnaceDefaults.dsidQuality)
+    onFurnaceAyCoreChanged(FurnaceDefaults.ayCore)
     onEndFadeApplyToAllTracksChanged(AppDefaults.Player.endFadeApplyToAllTracks)
     onEndFadeDurationMsChanged(AppDefaults.Player.endFadeDurationMs)
     onEndFadeCurveChanged(AppDefaults.Player.endFadeCurve)
@@ -960,6 +992,7 @@ internal fun clearAllPluginSettingsAction(
     onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
     onHivelyTrackerCoreSampleRateHzChanged: (Int) -> Unit,
     onKlystrackCoreSampleRateHzChanged: (Int) -> Unit,
+    onFurnaceCoreSampleRateHzChanged: (Int) -> Unit,
     onUadeCoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugOplEngineChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
@@ -978,6 +1011,13 @@ internal fun clearAllPluginSettingsAction(
     onHivelyTrackerPanningModeChanged: (Int) -> Unit,
     onHivelyTrackerMixGainPercentChanged: (Int) -> Unit,
     onKlystrackPlayerQualityChanged: (Int) -> Unit,
+    onFurnaceYm2612CoreChanged: (Int) -> Unit,
+    onFurnaceSnCoreChanged: (Int) -> Unit,
+    onFurnaceNesCoreChanged: (Int) -> Unit,
+    onFurnaceC64CoreChanged: (Int) -> Unit,
+    onFurnaceGbQualityChanged: (Int) -> Unit,
+    onFurnaceDsidQualityChanged: (Int) -> Unit,
+    onFurnaceAyCoreChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
     onSidPlayFpSidModelModeChanged: (Int) -> Unit,
@@ -1025,6 +1065,7 @@ internal fun clearAllPluginSettingsAction(
     onAdPlugCoreSampleRateHzChanged(AdPlugDefaults.coreSampleRateHz)
     onHivelyTrackerCoreSampleRateHzChanged(HivelyTrackerDefaults.coreSampleRateHz)
     onKlystrackCoreSampleRateHzChanged(KlystrackDefaults.coreSampleRateHz)
+    onFurnaceCoreSampleRateHzChanged(FurnaceDefaults.coreSampleRateHz)
     onUadeCoreSampleRateHzChanged(UadeDefaults.coreSampleRateHz)
     onAdPlugOplEngineChanged(AdPlugDefaults.oplEngine)
     onLazyUsf2UseHleAudioChanged(LazyUsf2Defaults.useHleAudio)
@@ -1043,6 +1084,13 @@ internal fun clearAllPluginSettingsAction(
     onHivelyTrackerPanningModeChanged(HivelyTrackerDefaults.panningMode)
     onHivelyTrackerMixGainPercentChanged(HivelyTrackerDefaults.mixGainPercent)
     onKlystrackPlayerQualityChanged(KlystrackDefaults.playerQuality)
+    onFurnaceYm2612CoreChanged(FurnaceDefaults.ym2612Core)
+    onFurnaceSnCoreChanged(FurnaceDefaults.snCore)
+    onFurnaceNesCoreChanged(FurnaceDefaults.nesCore)
+    onFurnaceC64CoreChanged(FurnaceDefaults.c64Core)
+    onFurnaceGbQualityChanged(FurnaceDefaults.gbQuality)
+    onFurnaceDsidQualityChanged(FurnaceDefaults.dsidQuality)
+    onFurnaceAyCoreChanged(FurnaceDefaults.ayCore)
     onSidPlayFpBackendChanged(SidPlayFpDefaults.backend)
     onSidPlayFpClockModeChanged(SidPlayFpDefaults.clockMode)
     onSidPlayFpSidModelModeChanged(SidPlayFpDefaults.sidModelMode)
@@ -1091,6 +1139,7 @@ internal fun clearAllPluginSettingsAction(
         remove(CorePreferenceKeys.CORE_RATE_ADPLUG)
         remove(CorePreferenceKeys.CORE_RATE_HIVELYTRACKER)
         remove(CorePreferenceKeys.CORE_RATE_KLYSTRACK)
+        remove(CorePreferenceKeys.CORE_RATE_FURNACE)
         remove(CorePreferenceKeys.CORE_RATE_UADE)
         remove(CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY)
         remove(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO)
@@ -1109,6 +1158,13 @@ internal fun clearAllPluginSettingsAction(
         remove(CorePreferenceKeys.HIVELYTRACKER_PANNING_MODE)
         remove(CorePreferenceKeys.HIVELYTRACKER_MIX_GAIN_PERCENT)
         remove(CorePreferenceKeys.KLYSTRACK_PLAYER_QUALITY)
+        remove(CorePreferenceKeys.FURNACE_YM2612_CORE)
+        remove(CorePreferenceKeys.FURNACE_SN_CORE)
+        remove(CorePreferenceKeys.FURNACE_NES_CORE)
+        remove(CorePreferenceKeys.FURNACE_C64_CORE)
+        remove(CorePreferenceKeys.FURNACE_GB_QUALITY)
+        remove(CorePreferenceKeys.FURNACE_DSID_QUALITY)
+        remove(CorePreferenceKeys.FURNACE_AY_CORE)
         remove(CorePreferenceKeys.SIDPLAYFP_BACKEND)
         remove(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE)
         remove(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE)
@@ -1191,6 +1247,7 @@ internal fun resetPluginSettingsAction(
     onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
     onHivelyTrackerCoreSampleRateHzChanged: (Int) -> Unit,
     onKlystrackCoreSampleRateHzChanged: (Int) -> Unit,
+    onFurnaceCoreSampleRateHzChanged: (Int) -> Unit,
     onUadeCoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugOplEngineChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
@@ -1209,6 +1266,13 @@ internal fun resetPluginSettingsAction(
     onHivelyTrackerPanningModeChanged: (Int) -> Unit,
     onHivelyTrackerMixGainPercentChanged: (Int) -> Unit,
     onKlystrackPlayerQualityChanged: (Int) -> Unit,
+    onFurnaceYm2612CoreChanged: (Int) -> Unit,
+    onFurnaceSnCoreChanged: (Int) -> Unit,
+    onFurnaceNesCoreChanged: (Int) -> Unit,
+    onFurnaceC64CoreChanged: (Int) -> Unit,
+    onFurnaceGbQualityChanged: (Int) -> Unit,
+    onFurnaceDsidQualityChanged: (Int) -> Unit,
+    onFurnaceAyCoreChanged: (Int) -> Unit,
     onSidPlayFpCoreSampleRateHzChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
@@ -1308,6 +1372,16 @@ internal fun resetPluginSettingsAction(
 
         "Klystrack" -> listOf(
             KlystrackOptionKeys.PLAYER_QUALITY
+        )
+
+        "Furnace" -> listOf(
+            FurnaceOptionKeys.YM2612_CORE,
+            FurnaceOptionKeys.SN_CORE,
+            FurnaceOptionKeys.NES_CORE,
+            FurnaceOptionKeys.C64_CORE,
+            FurnaceOptionKeys.GB_QUALITY,
+            FurnaceOptionKeys.DSID_QUALITY,
+            FurnaceOptionKeys.AY_CORE
         )
 
         else -> emptyList()
@@ -1441,6 +1515,28 @@ internal fun resetPluginSettingsAction(
                 .remove(CorePreferenceKeys.CORE_RATE_KLYSTRACK)
                 .remove(CorePreferenceKeys.KLYSTRACK_PLAYER_QUALITY)
                 .apply()
+        }
+
+        "Furnace" -> {
+            onFurnaceCoreSampleRateHzChanged(FurnaceDefaults.coreSampleRateHz)
+            onFurnaceYm2612CoreChanged(FurnaceDefaults.ym2612Core)
+            onFurnaceSnCoreChanged(FurnaceDefaults.snCore)
+            onFurnaceNesCoreChanged(FurnaceDefaults.nesCore)
+            onFurnaceC64CoreChanged(FurnaceDefaults.c64Core)
+            onFurnaceGbQualityChanged(FurnaceDefaults.gbQuality)
+            onFurnaceDsidQualityChanged(FurnaceDefaults.dsidQuality)
+            onFurnaceAyCoreChanged(FurnaceDefaults.ayCore)
+            prefs.edit().apply {
+                remove(CorePreferenceKeys.CORE_RATE_FURNACE)
+                remove(CorePreferenceKeys.FURNACE_YM2612_CORE)
+                remove(CorePreferenceKeys.FURNACE_SN_CORE)
+                remove(CorePreferenceKeys.FURNACE_NES_CORE)
+                remove(CorePreferenceKeys.FURNACE_C64_CORE)
+                remove(CorePreferenceKeys.FURNACE_GB_QUALITY)
+                remove(CorePreferenceKeys.FURNACE_DSID_QUALITY)
+                remove(CorePreferenceKeys.FURNACE_AY_CORE)
+                apply()
+            }
         }
 
         "UADE" -> {

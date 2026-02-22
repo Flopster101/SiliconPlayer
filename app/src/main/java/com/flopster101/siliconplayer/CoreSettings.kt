@@ -11,6 +11,7 @@ object CorePreferenceKeys {
     const val CORE_RATE_ADPLUG = "core_rate_adplug"
     const val CORE_RATE_HIVELYTRACKER = "core_rate_hivelytracker"
     const val CORE_RATE_KLYSTRACK = "core_rate_klystrack"
+    const val CORE_RATE_FURNACE = "core_rate_furnace"
     const val CORE_RATE_SC68 = "core_rate_sc68"
     const val CORE_RATE_UADE = "core_rate_uade"
     const val VIO2SF_INTERPOLATION_QUALITY = "vio2sf_interpolation_quality"
@@ -63,6 +64,13 @@ object CorePreferenceKeys {
     const val HIVELYTRACKER_PANNING_MODE = "hivelytracker_panning_mode"
     const val HIVELYTRACKER_MIX_GAIN_PERCENT = "hivelytracker_mix_gain_percent"
     const val KLYSTRACK_PLAYER_QUALITY = "klystrack_player_quality"
+    const val FURNACE_YM2612_CORE = "furnace_ym2612_core"
+    const val FURNACE_SN_CORE = "furnace_sn_core"
+    const val FURNACE_NES_CORE = "furnace_nes_core"
+    const val FURNACE_C64_CORE = "furnace_c64_core"
+    const val FURNACE_GB_QUALITY = "furnace_gb_quality"
+    const val FURNACE_DSID_QUALITY = "furnace_dsid_quality"
+    const val FURNACE_AY_CORE = "furnace_ay_core"
     const val ADPLUG_OPL_ENGINE = "adplug_opl_engine"
     fun vgmPlayChipCoreKey(chipKey: String) = "vgmplay_chip_core_$chipKey"
 }
@@ -143,6 +151,17 @@ object HivelyTrackerDefaults {
 object KlystrackDefaults {
     const val coreSampleRateHz = 0
     const val playerQuality = 2
+}
+
+object FurnaceDefaults {
+    const val coreSampleRateHz = 0
+    const val ym2612Core = 0
+    const val snCore = 0
+    const val nesCore = 0
+    const val c64Core = 0
+    const val gbQuality = 3
+    const val dsidQuality = 3
+    const val ayCore = 0
 }
 
 object Vio2sfDefaults {

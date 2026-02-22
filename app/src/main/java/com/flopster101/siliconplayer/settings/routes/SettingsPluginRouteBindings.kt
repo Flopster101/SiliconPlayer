@@ -15,6 +15,7 @@ internal fun SettingsScreenState.toPluginDetailRouteState(): PluginDetailRouteSt
         adPlugSampleRateHz = pluginCore.adPlugSampleRateHz,
         hivelyTrackerSampleRateHz = pluginCore.hivelyTrackerSampleRateHz,
         klystrackSampleRateHz = pluginCore.klystrackSampleRateHz,
+        furnaceSampleRateHz = pluginCore.furnaceSampleRateHz,
         uadeSampleRateHz = pluginCore.uadeSampleRateHz,
         adPlugOplEngine = pluginCore.adPlugOplEngine,
         openMptStereoSeparationPercent = pluginCore.openMptStereoSeparationPercent,
@@ -67,7 +68,14 @@ internal fun SettingsScreenState.toPluginDetailRouteState(): PluginDetailRouteSt
         uadePanningMode = pluginCore.uadePanningMode,
         hivelyTrackerPanningMode = pluginCore.hivelyTrackerPanningMode,
         hivelyTrackerMixGainPercent = pluginCore.hivelyTrackerMixGainPercent,
-        klystrackPlayerQuality = pluginCore.klystrackPlayerQuality
+        klystrackPlayerQuality = pluginCore.klystrackPlayerQuality,
+        furnaceYm2612Core = pluginCore.furnaceYm2612Core,
+        furnaceSnCore = pluginCore.furnaceSnCore,
+        furnaceNesCore = pluginCore.furnaceNesCore,
+        furnaceC64Core = pluginCore.furnaceC64Core,
+        furnaceGbQuality = pluginCore.furnaceGbQuality,
+        furnaceDsidQuality = pluginCore.furnaceDsidQuality,
+        furnaceAyCore = pluginCore.furnaceAyCore
     )
 
 internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRouteActions =
@@ -84,6 +92,7 @@ internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRou
         onAdPlugSampleRateChanged = pluginCoreActions.onAdPlugSampleRateChanged,
         onHivelyTrackerSampleRateChanged = pluginCoreActions.onHivelyTrackerSampleRateChanged,
         onKlystrackSampleRateChanged = pluginCoreActions.onKlystrackSampleRateChanged,
+        onFurnaceSampleRateChanged = pluginCoreActions.onFurnaceSampleRateChanged,
         onUadeSampleRateChanged = pluginCoreActions.onUadeSampleRateChanged,
         onAdPlugOplEngineChanged = pluginCoreActions.onAdPlugOplEngineChanged,
         onOpenMptStereoSeparationPercentChanged = pluginCoreActions.onOpenMptStereoSeparationPercentChanged,
@@ -137,5 +146,12 @@ internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRou
         onUadePanningModeChanged = pluginCoreActions.onUadePanningModeChanged,
         onHivelyTrackerPanningModeChanged = pluginCoreActions.onHivelyTrackerPanningModeChanged,
         onHivelyTrackerMixGainPercentChanged = pluginCoreActions.onHivelyTrackerMixGainPercentChanged,
-        onKlystrackPlayerQualityChanged = pluginCoreActions.onKlystrackPlayerQualityChanged
+        onKlystrackPlayerQualityChanged = pluginCoreActions.onKlystrackPlayerQualityChanged,
+        onFurnaceYm2612CoreChanged = pluginCoreActions.onFurnaceYm2612CoreChanged,
+        onFurnaceSnCoreChanged = pluginCoreActions.onFurnaceSnCoreChanged,
+        onFurnaceNesCoreChanged = pluginCoreActions.onFurnaceNesCoreChanged,
+        onFurnaceC64CoreChanged = pluginCoreActions.onFurnaceC64CoreChanged,
+        onFurnaceGbQualityChanged = pluginCoreActions.onFurnaceGbQualityChanged,
+        onFurnaceDsidQualityChanged = pluginCoreActions.onFurnaceDsidQualityChanged,
+        onFurnaceAyCoreChanged = pluginCoreActions.onFurnaceAyCoreChanged
     )

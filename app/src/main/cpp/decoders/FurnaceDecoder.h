@@ -36,6 +36,11 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
+    std::vector<std::string> getToggleChannelNames() override;
+    std::vector<uint8_t> getToggleChannelAvailability() override;
+    void setToggleChannelMuted(int channelIndex, bool enabled) override;
+    bool getToggleChannelMuted(int channelIndex) const override;
+    void clearToggleChannelMutes() override;
     void setOutputSampleRate(int sampleRateHz) override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
@@ -95,6 +100,8 @@ private:
     bool trackRepeatVirtualInitialized = false;
     double trackRepeatVirtualSeconds = 0.0;
     double playbackPositionSeconds = 0.0;
+    std::vector<std::string> toggleChannelNames;
+    std::vector<bool> toggleChannelMuted;
 
     std::vector<SeekPoint> seekTimeline;
     std::vector<double> subtuneDurations;
@@ -104,6 +111,8 @@ private:
     void closeInternalLocked();
     void refreshMetadataLocked();
     void refreshTimelineLocked();
+    void syncToggleChannelsLocked();
+    void applyToggleChannelMutesLocked();
     void applyRepeatModeLocked();
     double normalizeTimelinePositionLocked(double seconds) const;
     double normalizeSeekTargetLocked(double seconds) const;

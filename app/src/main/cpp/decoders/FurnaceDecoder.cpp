@@ -114,6 +114,8 @@ bool FurnaceDecoder::open(const char* path) {
 
     refreshMetadataLocked();
     refreshTimelineLocked();
+    syncToggleChannelsLocked();
+    applyToggleChannelMutesLocked();
     applyRepeatModeLocked();
 
     if (!engine->play()) {
@@ -149,6 +151,8 @@ void FurnaceDecoder::closeInternalLocked() {
     trackRepeatVirtualInitialized = false;
     trackRepeatVirtualSeconds = 0.0;
     playbackPositionSeconds = 0.0;
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
     seekTimeline.clear();
     subtuneDurations.clear();
     leftScratch.clear();
@@ -278,6 +282,61 @@ void FurnaceDecoder::applyRepeatModeLocked() {
         engine->setLoops(1);
     } else {
         engine->setLoops(-1);
+    }
+}
+
+void FurnaceDecoder::syncToggleChannelsLocked() {
+    if (!engine) {
+        toggleChannelNames.clear();
+        toggleChannelMuted.clear();
+        return;
+    }
+
+    const int channelCount = std::clamp(engine->getTotalChannelCount(), 0, DIV_MAX_CHANS);
+    std::vector<std::string> nextNames;
+    nextNames.reserve(static_cast<size_t>(channelCount));
+
+    for (int i = 0; i < channelCount; ++i) {
+        std::string channelName;
+        const char* name = engine->getChannelName(i);
+        if (name && name[0] != '\0' && std::strcmp(name, "??") != 0) {
+            channelName = name;
+        } else {
+            const char* shortName = engine->getChannelShortName(i);
+            if (shortName && shortName[0] != '\0' && std::strcmp(shortName, "??") != 0) {
+                channelName = shortName;
+            }
+        }
+        if (channelName.empty()) {
+            channelName = "Channel " + std::to_string(i + 1);
+        }
+        nextNames.push_back(channelName);
+    }
+
+    if (nextNames == toggleChannelNames &&
+        static_cast<int>(toggleChannelMuted.size()) == channelCount) {
+        return;
+    }
+
+    std::vector<bool> nextMuted(static_cast<size_t>(channelCount), false);
+    const int preserved = std::min(channelCount, static_cast<int>(toggleChannelMuted.size()));
+    for (int i = 0; i < preserved; ++i) {
+        nextMuted[static_cast<size_t>(i)] = toggleChannelMuted[static_cast<size_t>(i)];
+    }
+    toggleChannelNames = std::move(nextNames);
+    toggleChannelMuted = std::move(nextMuted);
+}
+
+void FurnaceDecoder::applyToggleChannelMutesLocked() {
+    if (!engine || toggleChannelMuted.empty()) {
+        return;
+    }
+    const int channelCount = std::min(
+            engine->getTotalChannelCount(),
+            static_cast<int>(toggleChannelMuted.size())
+    );
+    for (int i = 0; i < channelCount; ++i) {
+        engine->muteChannel(i, toggleChannelMuted[static_cast<size_t>(i)]);
     }
 }
 
@@ -531,6 +590,8 @@ bool FurnaceDecoder::selectSubtune(int index) {
     trackRepeatVirtualSeconds = 0.0;
     refreshMetadataLocked();
     refreshTimelineLocked();
+    syncToggleChannelsLocked();
+    applyToggleChannelMutesLocked();
     applyRepeatModeLocked();
     return engine->play();
 }
@@ -586,6 +647,49 @@ std::string FurnaceDecoder::getComposer() {
 std::string FurnaceDecoder::getGenre() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return genre;
+}
+
+std::vector<std::string> FurnaceDecoder::getToggleChannelNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    return toggleChannelNames;
+}
+
+std::vector<uint8_t> FurnaceDecoder::getToggleChannelAvailability() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    return std::vector<uint8_t>(toggleChannelNames.size(), 1u);
+}
+
+void FurnaceDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+    toggleChannelMuted[static_cast<size_t>(channelIndex)] = enabled;
+    if (engine) {
+        engine->muteChannel(channelIndex, enabled);
+    }
+}
+
+bool FurnaceDecoder::getToggleChannelMuted(int channelIndex) const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return false;
+    }
+    return toggleChannelMuted[static_cast<size_t>(channelIndex)];
+}
+
+void FurnaceDecoder::clearToggleChannelMutes() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (toggleChannelMuted.empty()) {
+        return;
+    }
+    std::fill(toggleChannelMuted.begin(), toggleChannelMuted.end(), false);
+    if (engine) {
+        engine->unmuteAll();
+    }
 }
 
 void FurnaceDecoder::setOutputSampleRate(int sampleRateHzValue) {

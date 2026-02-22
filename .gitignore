@@ -23,3 +23,6 @@ external/libopenmpt/obj/
 external/libopenmpt/libs/
 external/libopenmpt/Android.mk
 external/libopenmpt/Application.mk
+
+# Android studio
+.idea/

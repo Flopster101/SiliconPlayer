@@ -1902,6 +1902,42 @@ private fun TransportControls(
             tight -> 8.dp
             else -> 10.dp
         }
+        val repeatIconSize = when {
+            ultraCompact -> 18.dp
+            tight -> 20.dp
+            compact -> 22.dp
+            else -> 24.dp
+        }
+        val repeatBadgeCenterOffsetX = when {
+            ultraCompact -> 8.dp
+            tight -> 9.dp
+            compact -> 10.dp
+            else -> 11.dp
+        }
+        val repeatBadgeCenterOffsetY = when {
+            ultraCompact -> (-7).dp
+            tight -> (-8).dp
+            compact -> (-9).dp
+            else -> (-10).dp
+        }
+        val repeatBadgeHorizontalPadding = when {
+            ultraCompact -> 3.dp
+            tight -> 4.dp
+            compact -> 4.dp
+            else -> 5.dp
+        }
+        val repeatBadgeVerticalPadding = when {
+            ultraCompact -> 1.dp
+            tight -> 1.dp
+            compact -> 1.dp
+            else -> 2.dp
+        }
+        val repeatBadgeTextSize = when {
+            ultraCompact -> 8.sp
+            tight -> 9.sp
+            compact -> 9.sp
+            else -> 10.sp
+        }
         val loadingSpacer = when {
             compactHeightLevel >= 3 -> 4.dp
             compactHeightLevel >= 2 -> 6.dp
@@ -1962,34 +1998,42 @@ private fun TransportControls(
                             RepeatMode.Subtune -> "ST"
                             RepeatMode.LoopPoint -> "LP"
                         }
-                        BadgedBox(
-                            badge = {
-                                if (modeBadge.isNotEmpty()) {
-                                    Badge(containerColor = MaterialTheme.colorScheme.primaryContainer) {
-                                        Text(
-                                            text = modeBadge,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Loop,
                                 contentDescription = "Repeat mode: ${repeatMode.label}",
-                                modifier = Modifier.size(
-                                    when {
-                                        tight -> 20.dp
-                                        compact -> 22.dp
-                                        else -> 24.dp
-                                    }
-                                )
+                                modifier = Modifier.size(repeatIconSize)
                             )
+                            if (modeBadge.isNotEmpty()) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    shape = RoundedCornerShape(percent = 50),
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .offset(
+                                            x = repeatBadgeCenterOffsetX,
+                                            y = repeatBadgeCenterOffsetY
+                                        )
+                                ) {
+                                    Text(
+                                        text = modeBadge,
+                                        fontSize = repeatBadgeTextSize,
+                                        lineHeight = repeatBadgeTextSize,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(
+                                            horizontal = repeatBadgeHorizontalPadding,
+                                            vertical = repeatBadgeVerticalPadding
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-
                 Spacer(modifier = Modifier.width(rowGap))
 
                 FilledIconButton(

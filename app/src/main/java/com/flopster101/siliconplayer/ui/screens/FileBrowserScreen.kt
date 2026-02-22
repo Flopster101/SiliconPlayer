@@ -1230,8 +1230,19 @@ fun FileItemRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         val showIconChipBackground = item.isDirectory || showFileIconChipBackground
-        val iconTint = if (showIconChipBackground) {
+        val chipShape = RoundedCornerShape(11.dp)
+        val chipContainerColor = if (item.isDirectory) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer
+        }
+        val chipContentColor = if (item.isDirectory) {
             MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        }
+        val iconTint = if (showIconChipBackground) {
+            chipContentColor
         } else {
             MaterialTheme.colorScheme.primary
         }
@@ -1299,8 +1310,8 @@ fun FileItemRow(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(11.dp)
+                            color = chipContainerColor,
+                            shape = chipShape
                         ),
                     contentAlignment = Alignment.Center
                 ) {

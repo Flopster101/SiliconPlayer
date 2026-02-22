@@ -58,3 +58,6 @@
 [submodule "external/hivelytracker"]
 	path = external/hivelytracker
 	url = https://github.com/pete-gordon/hivelytracker
+[submodule "external/klystrack"]
+	path = external/klystrack
+	url = https://github.com/kometbomb/klystrack/

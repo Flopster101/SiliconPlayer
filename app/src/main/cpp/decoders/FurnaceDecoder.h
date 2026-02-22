@@ -88,6 +88,12 @@ private:
     std::atomic<int> repeatMode { 0 };
     bool durationReliable = false;
     double durationSeconds = 0.0;
+    bool loopRegionReliable = false;
+    double loopStartSeconds = 0.0;
+    double loopLengthSeconds = 0.0;
+    int timelineRepeatMode = 0;
+    bool trackRepeatVirtualInitialized = false;
+    double trackRepeatVirtualSeconds = 0.0;
     double playbackPositionSeconds = 0.0;
 
     std::vector<SeekPoint> seekTimeline;
@@ -99,6 +105,8 @@ private:
     void refreshMetadataLocked();
     void refreshTimelineLocked();
     void applyRepeatModeLocked();
+    double normalizeTimelinePositionLocked(double seconds) const;
+    double normalizeSeekTargetLocked(double seconds) const;
     bool seekToTimelineLocked(double targetSeconds);
     static int normalizeRepeatMode(int mode);
     static int clampSampleRate(int sampleRateHz);

@@ -13,6 +13,7 @@
 
 namespace {
 constexpr double kSeekEpsilonSeconds = 0.000001;
+constexpr double kLoopEpsilonSeconds = 0.000001;
 
 std::vector<unsigned char> readBinaryFile(const std::string& path) {
     std::ifstream stream(path, std::ios::binary | std::ios::ate);
@@ -106,6 +107,9 @@ bool FurnaceDecoder::open(const char* path) {
     playbackPositionSeconds = 0.0;
     subtuneCount = std::max(1, static_cast<int>(engine->song.subsong.size()));
     currentSubtuneIndex = std::clamp(static_cast<int>(engine->getCurrentSubSong()), 0, subtuneCount - 1);
+    timelineRepeatMode = normalizeRepeatMode(repeatMode.load());
+    trackRepeatVirtualInitialized = false;
+    trackRepeatVirtualSeconds = 0.0;
     subtuneDurations.assign(static_cast<size_t>(subtuneCount), 0.0);
 
     refreshMetadataLocked();
@@ -138,6 +142,12 @@ void FurnaceDecoder::closeInternalLocked() {
     currentSubtuneIndex = 0;
     durationReliable = false;
     durationSeconds = 0.0;
+    loopRegionReliable = false;
+    loopStartSeconds = 0.0;
+    loopLengthSeconds = 0.0;
+    timelineRepeatMode = 0;
+    trackRepeatVirtualInitialized = false;
+    trackRepeatVirtualSeconds = 0.0;
     playbackPositionSeconds = 0.0;
     seekTimeline.clear();
     subtuneDurations.clear();
@@ -189,6 +199,9 @@ void FurnaceDecoder::refreshTimelineLocked() {
     seekTimeline.clear();
     durationReliable = false;
     durationSeconds = 0.0;
+    loopRegionReliable = false;
+    loopStartSeconds = 0.0;
+    loopLengthSeconds = 0.0;
 
     if (!engine || !engine->curSubSong) {
         return;
@@ -203,6 +216,16 @@ void FurnaceDecoder::refreshTimelineLocked() {
         durationSeconds = totalDuration;
         if (currentSubtuneIndex >= 0 && currentSubtuneIndex < static_cast<int>(subtuneDurations.size())) {
             subtuneDurations[static_cast<size_t>(currentSubtuneIndex)] = totalDuration;
+        }
+    }
+    if (durationReliable && subSong->ts.isLoopDefined && subSong->ts.isLoopable) {
+        const double loopStart = subSong->ts.loopStartTime.toDouble();
+        if (std::isfinite(loopStart) &&
+            loopStart >= 0.0 &&
+            durationSeconds > loopStart + kLoopEpsilonSeconds) {
+            loopRegionReliable = true;
+            loopStartSeconds = loopStart;
+            loopLengthSeconds = durationSeconds - loopStartSeconds;
         }
     }
 
@@ -258,6 +281,41 @@ void FurnaceDecoder::applyRepeatModeLocked() {
     }
 }
 
+double FurnaceDecoder::normalizeTimelinePositionLocked(double seconds) const {
+    if (!std::isfinite(seconds)) {
+        return playbackPositionSeconds;
+    }
+
+    double normalized = std::max(0.0, seconds);
+    if (!durationReliable || durationSeconds <= 0.0) {
+        return normalized;
+    }
+
+    const int mode = normalizeRepeatMode(repeatMode.load());
+    if (mode == 2) {
+        if (loopRegionReliable && loopLengthSeconds > kLoopEpsilonSeconds) {
+            if (normalized >= loopStartSeconds) {
+                normalized = loopStartSeconds + std::fmod(normalized - loopStartSeconds, loopLengthSeconds);
+            }
+        } else {
+            normalized = std::fmod(normalized, durationSeconds);
+        }
+    } else if (mode == 1 || mode == 3) {
+        normalized = std::fmod(normalized, durationSeconds);
+    } else {
+        normalized = std::clamp(normalized, 0.0, durationSeconds);
+    }
+
+    if (normalized < 0.0) {
+        normalized += durationSeconds;
+    }
+    return normalized;
+}
+
+double FurnaceDecoder::normalizeSeekTargetLocked(double seconds) const {
+    return normalizeTimelinePositionLocked(std::max(0.0, seconds));
+}
+
 bool FurnaceDecoder::seekToTimelineLocked(double targetSeconds) {
     if (!engine || seekTimeline.empty()) {
         return false;
@@ -279,8 +337,11 @@ bool FurnaceDecoder::seekToTimelineLocked(double targetSeconds) {
 
     const int order = std::max(0, it->order);
     const int row = std::max(0, it->row);
+    if (engine->isPlaying()) {
+        engine->stop();
+    }
     engine->setOrder(static_cast<unsigned char>(std::clamp(order, 0, 255)));
-    engine->playToRow(row);
+    engine->playToRow(std::max(0, row));
     return true;
 }
 
@@ -315,15 +376,60 @@ int FurnaceDecoder::read(float* buffer, int numFrames) {
         }
     }
 
-    playbackPositionSeconds = std::max(0.0, engine->getCurTime().toDouble());
-    if (durationReliable && durationSeconds > 0.0) {
-        if (repeatMode.load() == 2) {
-            playbackPositionSeconds = std::fmod(playbackPositionSeconds, durationSeconds);
-            if (playbackPositionSeconds < 0.0) {
-                playbackPositionSeconds += durationSeconds;
+    const int mode = normalizeRepeatMode(repeatMode.load());
+    const double deltaSeconds = (sampleRateHz > 0)
+            ? (static_cast<double>(numFrames) / static_cast<double>(sampleRateHz))
+            : 0.0;
+    if (mode != timelineRepeatMode) {
+        timelineRepeatMode = mode;
+        trackRepeatVirtualInitialized = false;
+        trackRepeatVirtualSeconds = 0.0;
+    }
+
+    const double rawPlaybackSeconds = std::max(0.0, engine->getCurTime().toDouble());
+
+    if ((mode == 1 || mode == 3) && durationReliable && durationSeconds > 0.0) {
+        if (!trackRepeatVirtualInitialized) {
+            const double initial = std::clamp(playbackPositionSeconds, 0.0, durationSeconds);
+            trackRepeatVirtualSeconds = initial;
+            trackRepeatVirtualInitialized = true;
+        }
+
+        trackRepeatVirtualSeconds = std::max(0.0, trackRepeatVirtualSeconds + deltaSeconds);
+        const bool wrappedTrackEnd = trackRepeatVirtualSeconds >= durationSeconds - kLoopEpsilonSeconds;
+        if (wrappedTrackEnd) {
+            trackRepeatVirtualSeconds = std::fmod(trackRepeatVirtualSeconds, durationSeconds);
+            if (trackRepeatVirtualSeconds < 0.0) {
+                trackRepeatVirtualSeconds += durationSeconds;
+            }
+            if (engine->isPlaying()) {
+                engine->stop();
+            }
+            engine->setOrder(0);
+            engine->playToRow(0);
+            applyRepeatModeLocked();
+            if (!engine->isPlaying()) {
+                engine->play();
+            }
+        }
+
+        playbackPositionSeconds = std::clamp(trackRepeatVirtualSeconds, 0.0, durationSeconds);
+    } else {
+        trackRepeatVirtualInitialized = false;
+        trackRepeatVirtualSeconds = 0.0;
+        if (mode == 0 &&
+            durationReliable &&
+            durationSeconds > 0.0 &&
+            rawPlaybackSeconds > durationSeconds + kLoopEpsilonSeconds) {
+            // Core time can keep increasing after a loop; keep UI timeline continuous
+            // and enforce a real terminal stop at track end in no-repeat mode.
+            const double continuityBase = std::clamp(playbackPositionSeconds, 0.0, durationSeconds);
+            playbackPositionSeconds = std::clamp(continuityBase + deltaSeconds, 0.0, durationSeconds);
+            if (playbackPositionSeconds >= durationSeconds - kLoopEpsilonSeconds && engine->isPlaying()) {
+                engine->stop();
             }
         } else {
-            playbackPositionSeconds = std::min(playbackPositionSeconds, durationSeconds);
+            playbackPositionSeconds = normalizeTimelinePositionLocked(rawPlaybackSeconds);
         }
     }
 
@@ -336,19 +442,12 @@ void FurnaceDecoder::seek(double seconds) {
         return;
     }
 
-    double targetSeconds = std::max(0.0, seconds);
-    if (durationReliable && durationSeconds > 0.0) {
-        if (repeatMode.load() == 2) {
-            targetSeconds = std::fmod(targetSeconds, durationSeconds);
-            if (targetSeconds < 0.0) {
-                targetSeconds += durationSeconds;
-            }
-        } else {
-            targetSeconds = std::min(targetSeconds, durationSeconds);
-        }
-    }
+    const double targetSeconds = normalizeSeekTargetLocked(seconds);
 
     if (targetSeconds <= 0.0) {
+        if (engine->isPlaying()) {
+            engine->stop();
+        }
         engine->setOrder(0);
         engine->playToRow(0);
     } else if (!seekToTimelineLocked(targetSeconds)) {
@@ -361,8 +460,19 @@ void FurnaceDecoder::seek(double seconds) {
         engine->play();
     }
 
-    playbackPositionSeconds = engine->getCurTime().toDouble();
-    if (!std::isfinite(playbackPositionSeconds)) {
+    const int mode = normalizeRepeatMode(repeatMode.load());
+    timelineRepeatMode = mode;
+    if ((mode == 1 || mode == 3) && durationReliable && durationSeconds > 0.0) {
+        trackRepeatVirtualSeconds = std::clamp(targetSeconds, 0.0, durationSeconds);
+        trackRepeatVirtualInitialized = true;
+        playbackPositionSeconds = trackRepeatVirtualSeconds;
+    } else {
+        trackRepeatVirtualInitialized = false;
+        trackRepeatVirtualSeconds = 0.0;
+        playbackPositionSeconds = normalizeTimelinePositionLocked(engine->getCurTime().toDouble());
+    }
+
+    if (!std::isfinite(playbackPositionSeconds) || playbackPositionSeconds < 0.0) {
         playbackPositionSeconds = targetSeconds;
     }
 }
@@ -416,6 +526,9 @@ bool FurnaceDecoder::selectSubtune(int index) {
     engine->changeSongP(static_cast<size_t>(index));
     currentSubtuneIndex = index;
     playbackPositionSeconds = 0.0;
+    timelineRepeatMode = normalizeRepeatMode(repeatMode.load());
+    trackRepeatVirtualInitialized = false;
+    trackRepeatVirtualSeconds = 0.0;
     refreshMetadataLocked();
     refreshTimelineLocked();
     applyRepeatModeLocked();
@@ -482,8 +595,18 @@ void FurnaceDecoder::setOutputSampleRate(int sampleRateHzValue) {
 
 void FurnaceDecoder::setRepeatMode(int mode) {
     std::lock_guard<std::mutex> lock(decodeMutex);
-    repeatMode.store(normalizeRepeatMode(mode));
+    const int normalizedMode = normalizeRepeatMode(mode);
+    repeatMode.store(normalizedMode);
     applyRepeatModeLocked();
+    timelineRepeatMode = normalizedMode;
+    if (normalizedMode == 1 || normalizedMode == 3) {
+        // Initialize on next audio read from current on-screen timeline position.
+        trackRepeatVirtualInitialized = false;
+        trackRepeatVirtualSeconds = 0.0;
+    } else {
+        trackRepeatVirtualInitialized = false;
+        trackRepeatVirtualSeconds = 0.0;
+    }
 }
 
 int FurnaceDecoder::getRepeatModeCapabilities() const {
@@ -492,7 +615,7 @@ int FurnaceDecoder::getRepeatModeCapabilities() const {
 
 int FurnaceDecoder::getPlaybackCapabilities() const {
     std::lock_guard<std::mutex> lock(decodeMutex);
-    int caps = PLAYBACK_CAP_SEEK | PLAYBACK_CAP_LIVE_REPEAT_MODE;
+    int caps = PLAYBACK_CAP_SEEK | PLAYBACK_CAP_LIVE_REPEAT_MODE | PLAYBACK_CAP_DIRECT_SEEK;
     if (durationReliable) {
         caps |= PLAYBACK_CAP_RELIABLE_DURATION;
     }
@@ -505,24 +628,13 @@ double FurnaceDecoder::getPlaybackPositionSeconds() {
         return -1.0;
     }
 
-    if (engine->isPlaying()) {
-        const double current = engine->getCurTime().toDouble();
-        if (std::isfinite(current) && current >= 0.0) {
-            playbackPositionSeconds = current;
-        }
+    const int mode = normalizeRepeatMode(repeatMode.load());
+    if ((mode == 1 || mode == 3) && durationReliable && durationSeconds > 0.0 && trackRepeatVirtualInitialized) {
+        playbackPositionSeconds = std::clamp(trackRepeatVirtualSeconds, 0.0, durationSeconds);
+        return playbackPositionSeconds;
     }
 
-    if (durationReliable && durationSeconds > 0.0) {
-        if (repeatMode.load() == 2) {
-            playbackPositionSeconds = std::fmod(playbackPositionSeconds, durationSeconds);
-            if (playbackPositionSeconds < 0.0) {
-                playbackPositionSeconds += durationSeconds;
-            }
-        } else {
-            playbackPositionSeconds = std::clamp(playbackPositionSeconds, 0.0, durationSeconds);
-        }
-    }
-
+    playbackPositionSeconds = normalizeTimelinePositionLocked(playbackPositionSeconds);
     return playbackPositionSeconds;
 }
 

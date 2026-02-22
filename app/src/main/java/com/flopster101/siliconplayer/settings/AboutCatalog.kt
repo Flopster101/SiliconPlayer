@@ -192,6 +192,22 @@ internal object AboutCatalog {
                 "Integrated as a baseline core with playback, subtunes, repeat handling, and seek support.",
                 "Uses native HivelyTracker replay routines with configurable output sample rate."
             )
+        ),
+        AboutEntity(
+            id = "core.klystrack",
+            kind = AboutEntityKind.Core,
+            name = "Klystrack",
+            description = "Klystrack module replay core using the klystron audio engine.",
+            author = "Tero Lindeman (kometbomb) and Klystrack/Klystron contributors",
+            license = "zlib License",
+            links = listOf(
+                AboutEntityLink("Project", "https://github.com/kometbomb/klystrack"),
+                AboutEntityLink("Source", "https://github.com/kometbomb/klystrack")
+            ),
+            integrationNotes = listOf(
+                "Integrated as baseline playback support for Klystrack song modules.",
+                "Uses static klystron replay library build from the bundled submodule."
+            )
         )
     )
 
@@ -291,7 +307,8 @@ internal object AboutCatalog {
         "SC68" to "core.sc68",
         "AdPlug" to "core.adplug",
         "UADE" to "core.uade",
-        "HivelyTracker" to "core.hivelytracker"
+        "HivelyTracker" to "core.hivelytracker",
+        "Klystrack" to "core.klystrack"
     )
 
     private val entityById: Map<String, AboutEntity> = (coreEntries + libraryEntries).associateBy { it.id }

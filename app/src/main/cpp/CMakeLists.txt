@@ -40,6 +40,8 @@ add_library(
         decoders/AdPlugDecoder.cpp
         decoders/UadeDecoder.cpp
         decoders/HivelyTrackerDecoder.cpp
+        decoders/KlystrackDecoder.cpp
+        decoders/SdlCompat.c
         decoders/CPConvStub.c
 )
 
@@ -148,6 +150,10 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
     add_library(libhivelytracker STATIC IMPORTED)
     set_target_properties(libhivelytracker PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libhivelytracker.a")
 
+    # Import klystrack replayer (Static)
+    add_library(libklystrack STATIC IMPORTED)
+    set_target_properties(libklystrack PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libklystrack.a")
+
     # Import libsidplayfp + libresidfp (Static)
     add_library(libsidplayfp STATIC IMPORTED)
     set_target_properties(libsidplayfp PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libsidplayfp.a")
@@ -197,6 +203,7 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
             libzakalwe
             libbencodetools
             libhivelytracker
+            libklystrack
             libsidplayfp
             libresidfp
             libresid

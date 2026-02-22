@@ -645,6 +645,7 @@ internal fun clearAllSettingsAction(
     sidPlayFpCoreSampleRateHz: Int,
     lazyUsf2CoreSampleRateHz: Int,
     adPlugCoreSampleRateHz: Int,
+    hivelyTrackerCoreSampleRateHz: Int,
     uadeCoreSampleRateHz: Int,
     adPlugOplEngine: Int,
     vio2sfInterpolationQuality: Int,
@@ -695,6 +696,8 @@ internal fun clearAllSettingsAction(
     sc68AmigaBlend: Int,
     sc68AmigaClock: Int,
     uadePanningMode: Int,
+    hivelyTrackerPanningMode: Int,
+    hivelyTrackerMixGainPercent: Int,
     vgmPlayChipCoreSelections: Map<String, Int>,
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
@@ -762,6 +765,9 @@ internal fun clearAllSettingsAction(
     onUadeFilterEnabledChanged: (Boolean) -> Unit,
     onUadeNtscModeChanged: (Boolean) -> Unit,
     onUadePanningModeChanged: (Int) -> Unit,
+    onHivelyTrackerCoreSampleRateHzChanged: (Int) -> Unit,
+    onHivelyTrackerPanningModeChanged: (Int) -> Unit,
+    onHivelyTrackerMixGainPercentChanged: (Int) -> Unit,
     onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugOplEngineChanged: (Int) -> Unit,
 ) {
@@ -773,6 +779,7 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.CORE_RATE_SIDPLAYFP to sidPlayFpCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_LAZYUSF2 to lazyUsf2CoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_ADPLUG to adPlugCoreSampleRateHz,
+        CorePreferenceKeys.CORE_RATE_HIVELYTRACKER to hivelyTrackerCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_UADE to uadeCoreSampleRateHz,
         CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY to vio2sfInterpolationQuality,
         CorePreferenceKeys.ADPLUG_OPL_ENGINE to adPlugOplEngine,
@@ -784,6 +791,8 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.SC68_AMIGA_BLEND to sc68AmigaBlend,
         CorePreferenceKeys.SC68_AMIGA_CLOCK to sc68AmigaClock,
         CorePreferenceKeys.UADE_PANNING_MODE to uadePanningMode,
+        CorePreferenceKeys.HIVELYTRACKER_PANNING_MODE to hivelyTrackerPanningMode,
+        CorePreferenceKeys.HIVELYTRACKER_MIX_GAIN_PERCENT to hivelyTrackerMixGainPercent,
         CorePreferenceKeys.VGMPLAY_LOOP_COUNT to vgmPlayLoopCount,
         CorePreferenceKeys.VGMPLAY_VSYNC_RATE to vgmPlayVsyncRate,
         CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE to vgmPlayResampleMode,
@@ -889,6 +898,9 @@ internal fun clearAllSettingsAction(
     onUadeFilterEnabledChanged(UadeDefaults.filterEnabled)
     onUadeNtscModeChanged(UadeDefaults.ntscMode)
     onUadePanningModeChanged(UadeDefaults.panningMode)
+    onHivelyTrackerCoreSampleRateHzChanged(HivelyTrackerDefaults.coreSampleRateHz)
+    onHivelyTrackerPanningModeChanged(HivelyTrackerDefaults.panningMode)
+    onHivelyTrackerMixGainPercentChanged(HivelyTrackerDefaults.mixGainPercent)
     onEndFadeApplyToAllTracksChanged(AppDefaults.Player.endFadeApplyToAllTracks)
     onEndFadeDurationMsChanged(AppDefaults.Player.endFadeDurationMs)
     onEndFadeCurveChanged(AppDefaults.Player.endFadeCurve)
@@ -936,6 +948,7 @@ internal fun clearAllPluginSettingsAction(
     onSidPlayFpCoreSampleRateHzChanged: (Int) -> Unit,
     onLazyUsf2CoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
+    onHivelyTrackerCoreSampleRateHzChanged: (Int) -> Unit,
     onUadeCoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugOplEngineChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
@@ -951,6 +964,8 @@ internal fun clearAllPluginSettingsAction(
     onUadeFilterEnabledChanged: (Boolean) -> Unit,
     onUadeNtscModeChanged: (Boolean) -> Unit,
     onUadePanningModeChanged: (Int) -> Unit,
+    onHivelyTrackerPanningModeChanged: (Int) -> Unit,
+    onHivelyTrackerMixGainPercentChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
     onSidPlayFpSidModelModeChanged: (Int) -> Unit,
@@ -996,6 +1011,7 @@ internal fun clearAllPluginSettingsAction(
     onSidPlayFpCoreSampleRateHzChanged(SidPlayFpDefaults.coreSampleRateHz)
     onLazyUsf2CoreSampleRateHzChanged(LazyUsf2Defaults.coreSampleRateHz)
     onAdPlugCoreSampleRateHzChanged(AdPlugDefaults.coreSampleRateHz)
+    onHivelyTrackerCoreSampleRateHzChanged(HivelyTrackerDefaults.coreSampleRateHz)
     onUadeCoreSampleRateHzChanged(UadeDefaults.coreSampleRateHz)
     onAdPlugOplEngineChanged(AdPlugDefaults.oplEngine)
     onLazyUsf2UseHleAudioChanged(LazyUsf2Defaults.useHleAudio)
@@ -1011,6 +1027,8 @@ internal fun clearAllPluginSettingsAction(
     onUadeFilterEnabledChanged(UadeDefaults.filterEnabled)
     onUadeNtscModeChanged(UadeDefaults.ntscMode)
     onUadePanningModeChanged(UadeDefaults.panningMode)
+    onHivelyTrackerPanningModeChanged(HivelyTrackerDefaults.panningMode)
+    onHivelyTrackerMixGainPercentChanged(HivelyTrackerDefaults.mixGainPercent)
     onSidPlayFpBackendChanged(SidPlayFpDefaults.backend)
     onSidPlayFpClockModeChanged(SidPlayFpDefaults.clockMode)
     onSidPlayFpSidModelModeChanged(SidPlayFpDefaults.sidModelMode)
@@ -1057,6 +1075,7 @@ internal fun clearAllPluginSettingsAction(
         remove(CorePreferenceKeys.CORE_RATE_SIDPLAYFP)
         remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2)
         remove(CorePreferenceKeys.CORE_RATE_ADPLUG)
+        remove(CorePreferenceKeys.CORE_RATE_HIVELYTRACKER)
         remove(CorePreferenceKeys.CORE_RATE_UADE)
         remove(CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY)
         remove(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO)
@@ -1072,6 +1091,8 @@ internal fun clearAllPluginSettingsAction(
         remove(CorePreferenceKeys.UADE_FILTER_ENABLED)
         remove(CorePreferenceKeys.UADE_NTSC_MODE)
         remove(CorePreferenceKeys.UADE_PANNING_MODE)
+        remove(CorePreferenceKeys.HIVELYTRACKER_PANNING_MODE)
+        remove(CorePreferenceKeys.HIVELYTRACKER_MIX_GAIN_PERCENT)
         remove(CorePreferenceKeys.SIDPLAYFP_BACKEND)
         remove(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE)
         remove(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE)
@@ -1152,6 +1173,7 @@ internal fun resetPluginSettingsAction(
     onGmeSpcUseNativeSampleRateChanged: (Boolean) -> Unit,
     onLazyUsf2CoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
+    onHivelyTrackerCoreSampleRateHzChanged: (Int) -> Unit,
     onUadeCoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugOplEngineChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
@@ -1167,6 +1189,8 @@ internal fun resetPluginSettingsAction(
     onUadeFilterEnabledChanged: (Boolean) -> Unit,
     onUadeNtscModeChanged: (Boolean) -> Unit,
     onUadePanningModeChanged: (Int) -> Unit,
+    onHivelyTrackerPanningModeChanged: (Int) -> Unit,
+    onHivelyTrackerMixGainPercentChanged: (Int) -> Unit,
     onSidPlayFpCoreSampleRateHzChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
@@ -1257,6 +1281,11 @@ internal fun resetPluginSettingsAction(
             UadeOptionKeys.FILTER_ENABLED,
             UadeOptionKeys.NTSC_MODE,
             UadeOptionKeys.PANNING_MODE
+        )
+
+        "HivelyTracker" -> listOf(
+            HivelyTrackerOptionKeys.PANNING_MODE,
+            HivelyTrackerOptionKeys.MIX_GAIN_PERCENT
         )
 
         else -> emptyList()
@@ -1369,6 +1398,17 @@ internal fun resetPluginSettingsAction(
             prefs.edit()
                 .remove(CorePreferenceKeys.CORE_RATE_ADPLUG)
                 .remove(CorePreferenceKeys.ADPLUG_OPL_ENGINE)
+                .apply()
+        }
+
+        "HivelyTracker" -> {
+            onHivelyTrackerCoreSampleRateHzChanged(HivelyTrackerDefaults.coreSampleRateHz)
+            onHivelyTrackerPanningModeChanged(HivelyTrackerDefaults.panningMode)
+            onHivelyTrackerMixGainPercentChanged(HivelyTrackerDefaults.mixGainPercent)
+            prefs.edit()
+                .remove(CorePreferenceKeys.CORE_RATE_HIVELYTRACKER)
+                .remove(CorePreferenceKeys.HIVELYTRACKER_PANNING_MODE)
+                .remove(CorePreferenceKeys.HIVELYTRACKER_MIX_GAIN_PERCENT)
                 .apply()
         }
 

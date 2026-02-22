@@ -13,6 +13,7 @@ internal fun SettingsScreenState.toPluginDetailRouteState(): PluginDetailRouteSt
         sidPlayFpSampleRateHz = pluginCore.sidPlayFpSampleRateHz,
         lazyUsf2SampleRateHz = pluginCore.lazyUsf2SampleRateHz,
         adPlugSampleRateHz = pluginCore.adPlugSampleRateHz,
+        hivelyTrackerSampleRateHz = pluginCore.hivelyTrackerSampleRateHz,
         uadeSampleRateHz = pluginCore.uadeSampleRateHz,
         adPlugOplEngine = pluginCore.adPlugOplEngine,
         openMptStereoSeparationPercent = pluginCore.openMptStereoSeparationPercent,
@@ -62,7 +63,9 @@ internal fun SettingsScreenState.toPluginDetailRouteState(): PluginDetailRouteSt
         sc68AmigaClock = pluginCore.sc68AmigaClock,
         uadeFilterEnabled = pluginCore.uadeFilterEnabled,
         uadeNtscMode = pluginCore.uadeNtscMode,
-        uadePanningMode = pluginCore.uadePanningMode
+        uadePanningMode = pluginCore.uadePanningMode,
+        hivelyTrackerPanningMode = pluginCore.hivelyTrackerPanningMode,
+        hivelyTrackerMixGainPercent = pluginCore.hivelyTrackerMixGainPercent
     )
 
 internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRouteActions =
@@ -77,6 +80,7 @@ internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRou
         onSidPlayFpSampleRateChanged = pluginCoreActions.onSidPlayFpSampleRateChanged,
         onLazyUsf2SampleRateChanged = pluginCoreActions.onLazyUsf2SampleRateChanged,
         onAdPlugSampleRateChanged = pluginCoreActions.onAdPlugSampleRateChanged,
+        onHivelyTrackerSampleRateChanged = pluginCoreActions.onHivelyTrackerSampleRateChanged,
         onUadeSampleRateChanged = pluginCoreActions.onUadeSampleRateChanged,
         onAdPlugOplEngineChanged = pluginCoreActions.onAdPlugOplEngineChanged,
         onOpenMptStereoSeparationPercentChanged = pluginCoreActions.onOpenMptStereoSeparationPercentChanged,
@@ -127,5 +131,7 @@ internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRou
         onSc68AmigaClockChanged = pluginCoreActions.onSc68AmigaClockChanged,
         onUadeFilterEnabledChanged = pluginCoreActions.onUadeFilterEnabledChanged,
         onUadeNtscModeChanged = pluginCoreActions.onUadeNtscModeChanged,
-        onUadePanningModeChanged = pluginCoreActions.onUadePanningModeChanged
+        onUadePanningModeChanged = pluginCoreActions.onUadePanningModeChanged,
+        onHivelyTrackerPanningModeChanged = pluginCoreActions.onHivelyTrackerPanningModeChanged,
+        onHivelyTrackerMixGainPercentChanged = pluginCoreActions.onHivelyTrackerMixGainPercentChanged
     )

@@ -145,6 +145,7 @@ internal fun pluginNameForCoreName(coreName: String?): String? {
         "vio2sf", "2sf", "mini2sf" -> "Vio2SF"
         "sc68", "sndh" -> "SC68"
         "adplug", "opl" -> "AdPlug"
+        "hivelytracker", "hively", "hvl", "ahx" -> "HivelyTracker"
         "uade", "amiga" -> "UADE"
         else -> null
     }

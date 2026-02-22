@@ -16,6 +16,7 @@ internal fun AppNavigationCoreEffects(
     sidPlayFpCoreSampleRateHz: Int,
     lazyUsf2CoreSampleRateHz: Int,
     adPlugCoreSampleRateHz: Int,
+    hivelyTrackerCoreSampleRateHz: Int,
     uadeCoreSampleRateHz: Int,
     adPlugOplEngine: Int,
     lazyUsf2UseHleAudio: Boolean,
@@ -31,6 +32,8 @@ internal fun AppNavigationCoreEffects(
     uadeFilterEnabled: Boolean,
     uadeNtscMode: Boolean,
     uadePanningMode: Int,
+    hivelyTrackerPanningMode: Int,
+    hivelyTrackerMixGainPercent: Int,
     sidPlayFpBackend: Int,
     sidPlayFpClockMode: Int,
     sidPlayFpSidModelMode: Int,
@@ -133,6 +136,16 @@ internal fun AppNavigationCoreEffects(
         val normalized = if (adPlugCoreSampleRateHz <= 0) 0 else adPlugCoreSampleRateHz.coerceIn(8000, 192000)
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_ADPLUG, normalized).apply()
         NativeBridge.setCoreOutputSampleRate("AdPlug", normalized)
+    }
+
+    LaunchedEffect(hivelyTrackerCoreSampleRateHz) {
+        val normalized = if (hivelyTrackerCoreSampleRateHz <= 0) {
+            0
+        } else {
+            hivelyTrackerCoreSampleRateHz.coerceIn(8000, 192000)
+        }
+        prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_HIVELYTRACKER, normalized).apply()
+        NativeBridge.setCoreOutputSampleRate("HivelyTracker", normalized)
     }
 
     LaunchedEffect(uadeCoreSampleRateHz) {
@@ -296,6 +309,34 @@ internal fun AppNavigationCoreEffects(
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
             optionLabel = "Panning"
+        )
+    }
+
+    LaunchedEffect(hivelyTrackerPanningMode) {
+        val normalized = hivelyTrackerPanningMode.coerceIn(-1, 4)
+        prefs.edit().putInt(CorePreferenceKeys.HIVELYTRACKER_PANNING_MODE, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "HivelyTracker",
+            optionName = HivelyTrackerOptionKeys.PANNING_MODE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Stereo panning"
+        )
+    }
+
+    LaunchedEffect(hivelyTrackerMixGainPercent) {
+        val normalized = if (hivelyTrackerMixGainPercent < 0) {
+            -1
+        } else {
+            hivelyTrackerMixGainPercent.coerceIn(25, 300)
+        }
+        prefs.edit().putInt(CorePreferenceKeys.HIVELYTRACKER_MIX_GAIN_PERCENT, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "HivelyTracker",
+            optionName = HivelyTrackerOptionKeys.MIX_GAIN_PERCENT,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Replay mix gain"
         )
     }
 

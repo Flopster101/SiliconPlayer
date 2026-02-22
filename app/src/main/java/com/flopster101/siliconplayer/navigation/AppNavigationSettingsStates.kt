@@ -23,6 +23,7 @@ internal data class AppNavigationSettingsStates(
     val sidPlayFpCoreSampleRateHz: MutableIntState,
     val lazyUsf2CoreSampleRateHz: MutableIntState,
     val adPlugCoreSampleRateHz: MutableIntState,
+    val hivelyTrackerCoreSampleRateHz: MutableIntState,
     val uadeCoreSampleRateHz: MutableIntState,
     val adPlugOplEngine: MutableIntState,
     val lazyUsf2UseHleAudio: MutableState<Boolean>,
@@ -38,6 +39,8 @@ internal data class AppNavigationSettingsStates(
     val uadeFilterEnabled: MutableState<Boolean>,
     val uadeNtscMode: MutableState<Boolean>,
     val uadePanningMode: MutableIntState,
+    val hivelyTrackerPanningMode: MutableIntState,
+    val hivelyTrackerMixGainPercent: MutableIntState,
     val sidPlayFpBackend: MutableIntState,
     val sidPlayFpClockMode: MutableIntState,
     val sidPlayFpSidModelMode: MutableIntState,
@@ -136,6 +139,14 @@ internal fun rememberAppNavigationSettingsStates(
     val adPlugCoreSampleRateHz = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CORE_RATE_ADPLUG, AdPlugDefaults.coreSampleRateHz))
     }
+    val hivelyTrackerCoreSampleRateHz = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.CORE_RATE_HIVELYTRACKER,
+                HivelyTrackerDefaults.coreSampleRateHz
+            )
+        )
+    }
     val uadeCoreSampleRateHz = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CORE_RATE_UADE, UadeDefaults.coreSampleRateHz))
     }
@@ -185,6 +196,22 @@ internal fun rememberAppNavigationSettingsStates(
     }
     val uadePanningMode = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.UADE_PANNING_MODE, UadeDefaults.panningMode))
+    }
+    val hivelyTrackerPanningMode = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.HIVELYTRACKER_PANNING_MODE,
+                HivelyTrackerDefaults.panningMode
+            )
+        )
+    }
+    val hivelyTrackerMixGainPercent = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.HIVELYTRACKER_MIX_GAIN_PERCENT,
+                HivelyTrackerDefaults.mixGainPercent
+            )
+        )
     }
     val sidPlayFpBackend = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.SIDPLAYFP_BACKEND, SidPlayFpDefaults.backend))
@@ -440,6 +467,7 @@ internal fun rememberAppNavigationSettingsStates(
         sidPlayFpCoreSampleRateHz = sidPlayFpCoreSampleRateHz,
         lazyUsf2CoreSampleRateHz = lazyUsf2CoreSampleRateHz,
         adPlugCoreSampleRateHz = adPlugCoreSampleRateHz,
+        hivelyTrackerCoreSampleRateHz = hivelyTrackerCoreSampleRateHz,
         uadeCoreSampleRateHz = uadeCoreSampleRateHz,
         adPlugOplEngine = adPlugOplEngine,
         lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
@@ -455,6 +483,8 @@ internal fun rememberAppNavigationSettingsStates(
         uadeFilterEnabled = uadeFilterEnabled,
         uadeNtscMode = uadeNtscMode,
         uadePanningMode = uadePanningMode,
+        hivelyTrackerPanningMode = hivelyTrackerPanningMode,
+        hivelyTrackerMixGainPercent = hivelyTrackerMixGainPercent,
         sidPlayFpBackend = sidPlayFpBackend,
         sidPlayFpClockMode = sidPlayFpClockMode,
         sidPlayFpSidModelMode = sidPlayFpSidModelMode,

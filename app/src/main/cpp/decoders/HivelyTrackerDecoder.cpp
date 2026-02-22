@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <filesystem>
 
 extern "C" {
@@ -32,6 +34,49 @@ int clampSampleRate(int sampleRateHz) {
     return std::clamp(sampleRateHz, 8000, 192000);
 }
 
+int parseIntOptionString(const char* value, int fallback) {
+    if (!value) return fallback;
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value || (end && *end != '\0')) {
+        return fallback;
+    }
+    return static_cast<int>(parsed);
+}
+
+int normalizePanningMode(int mode) {
+    return std::clamp(mode, -1, 4);
+}
+
+int normalizeMixGainPercent(int percent) {
+    if (percent < 0) {
+        return -1;
+    }
+    return std::clamp(percent, 25, 300);
+}
+
+int panningLeftIndexForMode(int mode) {
+    static constexpr int kLeftIndices[5] = {128, 96, 64, 32, 0};
+    return kLeftIndices[std::clamp(mode, 0, 4)];
+}
+
+int panningRightIndexForMode(int mode) {
+    static constexpr int kRightIndices[5] = {128, 160, 193, 225, 255};
+    return kRightIndices[std::clamp(mode, 0, 4)];
+}
+
+uint32 panMultiplierLeft(int panIndex) {
+    constexpr double kHalfPi = 1.5707963267948966;
+    const double t = std::clamp(panIndex, 0, 255) / 256.0;
+    return static_cast<uint32>(std::llround(std::cos(t * kHalfPi) * 255.0));
+}
+
+uint32 panMultiplierRight(int panIndex) {
+    constexpr double kHalfPi = 1.5707963267948966;
+    const double t = std::clamp(panIndex, 0, 255) / 256.0;
+    return static_cast<uint32>(std::llround(std::sin(t * kHalfPi) * 255.0));
+}
+
 std::string lowercase(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
         return static_cast<char>(std::tolower(ch));
@@ -57,7 +102,10 @@ bool HivelyTrackerDecoder::open(const char* path) {
     hvl_InitReplayer();
 
     sourcePath = path;
-    tune = hvl_LoadTune(sourcePath.c_str(), static_cast<uint32>(clampSampleRate(requestedSampleRateHz)), 2);
+    tune = hvl_LoadTune(
+            sourcePath.c_str(),
+            static_cast<uint32>(clampSampleRate(requestedSampleRateHz)),
+            static_cast<uint32>((optionPanningMode >= 0) ? optionPanningMode : 2));
     if (!tune) {
         closeInternalLocked();
         return false;
@@ -71,10 +119,13 @@ bool HivelyTrackerDecoder::open(const char* path) {
         // Some files can surface zero gain through loader/header oddities.
         tune->ht_mixgain = (76 * 256) / 100;
     }
+    loadedTuneMixGain = tune->ht_mixgain;
     if (!hvl_InitSubsong(tune, static_cast<uint32>(currentSubtuneIndex))) {
         closeInternalLocked();
         return false;
     }
+    applyMixGainLocked();
+    applyStereoPanningLocked();
     syncToggleChannelsLocked();
     applyToggleMutesLocked();
 
@@ -128,6 +179,7 @@ void HivelyTrackerDecoder::closeInternalLocked() {
     displayChannels = 2;
     subtuneCount = 1;
     currentSubtuneIndex = 0;
+    loadedTuneMixGain = 0;
     durationSeconds = 0.0;
     durationReliable.store(false);
     stopAfterPendingDrain = false;
@@ -203,6 +255,8 @@ bool HivelyTrackerDecoder::resetToSubtuneStartLocked() {
     if (!hvl_InitSubsong(tune, static_cast<uint32>(currentSubtuneIndex))) {
         return false;
     }
+    applyMixGainLocked();
+    applyStereoPanningLocked();
     stopAfterPendingDrain = false;
     pendingInterleaved.clear();
     pendingReadOffset = 0;
@@ -226,7 +280,7 @@ bool HivelyTrackerDecoder::analyzeSubtuneDurationLocked(int index) {
     hvl_tune* analysisTune = hvl_LoadTune(
             sourcePath.c_str(),
             static_cast<uint32>(sampleRateHz),
-            2
+            static_cast<uint32>((optionPanningMode >= 0) ? optionPanningMode : 2)
     );
     if (!analysisTune) {
         if (cacheIndex < subtuneDurationKnown.size()) {
@@ -476,6 +530,8 @@ bool HivelyTrackerDecoder::selectSubtune(int index) {
     if (!hvl_InitSubsong(tune, static_cast<uint32>(index))) {
         return false;
     }
+    applyMixGainLocked();
+    applyStereoPanningLocked();
     syncToggleChannelsLocked();
     applyToggleMutesLocked();
     currentSubtuneIndex = index;
@@ -684,6 +740,56 @@ void HivelyTrackerDecoder::syncToggleChannelsLocked() {
     }
 }
 
+void HivelyTrackerDecoder::applyMixGainLocked() {
+    if (!tune) {
+        return;
+    }
+    if (optionMixGainPercent < 0) {
+        if (loadedTuneMixGain > 0) {
+            tune->ht_mixgain = loadedTuneMixGain;
+        }
+        return;
+    }
+    tune->ht_mixgain = static_cast<int32>((optionMixGainPercent * 256 + 50) / 100);
+}
+
+void HivelyTrackerDecoder::applyStereoPanningLocked() {
+    if (!tune) {
+        return;
+    }
+
+    const int normalizedMode = normalizePanningMode(optionPanningMode);
+    if (normalizedMode < 0) {
+        return;
+    }
+    const int leftPan = panningLeftIndexForMode(normalizedMode);
+    const int rightPan = panningRightIndexForMode(normalizedMode);
+    const uint32 leftMulL = panMultiplierLeft(leftPan);
+    const uint32 leftMulR = panMultiplierRight(leftPan);
+    const uint32 rightMulL = panMultiplierLeft(rightPan);
+    const uint32 rightMulR = panMultiplierRight(rightPan);
+
+    tune->ht_defstereo = normalizedMode;
+    tune->ht_defpanleft = leftPan;
+    tune->ht_defpanright = rightPan;
+
+    const int channelCount = std::clamp(static_cast<int>(tune->ht_Channels), 0, MAX_CHANNELS);
+    for (int i = 0; i < channelCount; ++i) {
+        const bool isLeft = ((i & 3) == 0) || ((i & 3) == 3);
+        if (isLeft) {
+            tune->ht_Voices[i].vc_Pan = static_cast<uint8>(leftPan);
+            tune->ht_Voices[i].vc_SetPan = static_cast<uint8>(leftPan);
+            tune->ht_Voices[i].vc_PanMultLeft = leftMulL;
+            tune->ht_Voices[i].vc_PanMultRight = leftMulR;
+        } else {
+            tune->ht_Voices[i].vc_Pan = static_cast<uint8>(rightPan);
+            tune->ht_Voices[i].vc_SetPan = static_cast<uint8>(rightPan);
+            tune->ht_Voices[i].vc_PanMultLeft = rightMulL;
+            tune->ht_Voices[i].vc_PanMultRight = rightMulR;
+        }
+    }
+}
+
 void HivelyTrackerDecoder::applyToggleMutesLocked() {
     if (!tune) {
         return;
@@ -704,6 +810,30 @@ void HivelyTrackerDecoder::setOutputSampleRate(int sampleRate) {
     if (!tune) {
         sampleRateHz = requestedSampleRateHz;
     }
+}
+
+void HivelyTrackerDecoder::setOption(const char* name, const char* value) {
+    if (!name) return;
+    std::lock_guard<std::mutex> lock(decodeMutex);
+
+    if (std::strcmp(name, "hivelytracker.panning_mode") == 0) {
+        optionPanningMode = normalizePanningMode(parseIntOptionString(value, optionPanningMode));
+        applyStereoPanningLocked();
+    } else if (std::strcmp(name, "hivelytracker.mix_gain_percent") == 0) {
+        optionMixGainPercent = normalizeMixGainPercent(parseIntOptionString(value, optionMixGainPercent));
+        applyMixGainLocked();
+    }
+}
+
+int HivelyTrackerDecoder::getOptionApplyPolicy(const char* name) const {
+    if (!name) return OPTION_APPLY_LIVE;
+    if (std::strcmp(name, "hivelytracker.panning_mode") == 0) {
+        return OPTION_APPLY_LIVE;
+    }
+    if (std::strcmp(name, "hivelytracker.mix_gain_percent") == 0) {
+        return OPTION_APPLY_LIVE;
+    }
+    return OPTION_APPLY_LIVE;
 }
 
 void HivelyTrackerDecoder::setRepeatMode(int mode) {

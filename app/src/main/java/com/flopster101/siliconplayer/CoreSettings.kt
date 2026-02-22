@@ -9,6 +9,7 @@ object CorePreferenceKeys {
     const val CORE_RATE_SIDPLAYFP = "core_rate_sidplayfp"
     const val CORE_RATE_LAZYUSF2 = "core_rate_lazyusf2"
     const val CORE_RATE_ADPLUG = "core_rate_adplug"
+    const val CORE_RATE_HIVELYTRACKER = "core_rate_hivelytracker"
     const val CORE_RATE_SC68 = "core_rate_sc68"
     const val CORE_RATE_UADE = "core_rate_uade"
     const val VIO2SF_INTERPOLATION_QUALITY = "vio2sf_interpolation_quality"
@@ -58,6 +59,8 @@ object CorePreferenceKeys {
     const val UADE_FILTER_ENABLED = "uade_filter_enabled"
     const val UADE_NTSC_MODE = "uade_ntsc_mode"
     const val UADE_PANNING_MODE = "uade_panning_mode"
+    const val HIVELYTRACKER_PANNING_MODE = "hivelytracker_panning_mode"
+    const val HIVELYTRACKER_MIX_GAIN_PERCENT = "hivelytracker_mix_gain_percent"
     const val ADPLUG_OPL_ENGINE = "adplug_opl_engine"
     fun vgmPlayChipCoreKey(chipKey: String) = "vgmplay_chip_core_$chipKey"
 }
@@ -127,6 +130,12 @@ object LazyUsf2Defaults {
 object AdPlugDefaults {
     const val coreSampleRateHz = 0
     const val oplEngine = 2
+}
+
+object HivelyTrackerDefaults {
+    const val coreSampleRateHz = 0
+    const val panningMode = -1
+    const val mixGainPercent = -1
 }
 
 object Vio2sfDefaults {

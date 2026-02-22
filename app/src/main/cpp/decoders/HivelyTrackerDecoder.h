@@ -56,6 +56,8 @@ public:
     bool getToggleChannelMuted(int channelIndex) const override;
     void clearToggleChannelMutes() override;
     void setOutputSampleRate(int sampleRateHz) override;
+    void setOption(const char* name, const char* value) override;
+    int getOptionApplyPolicy(const char* name) const override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override;
@@ -79,6 +81,9 @@ private:
 
     int sampleRateHz = 44100;
     int requestedSampleRateHz = 44100;
+    int optionPanningMode = -1;
+    int optionMixGainPercent = -1;
+    int loadedTuneMixGain = 0;
     int channels = 2;
     int displayChannels = 2;
     int bitDepth = 8;
@@ -106,6 +111,8 @@ private:
     bool analyzeSubtuneDurationLocked(int index);
     void updateCurrentDurationFromCacheLocked();
     void syncToggleChannelsLocked();
+    void applyMixGainLocked();
+    void applyStereoPanningLocked();
     void applyToggleMutesLocked();
 };
 

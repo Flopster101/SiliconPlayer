@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.RemoteLoadPhase
 import com.flopster101.siliconplayer.RemoteLoadUiState
 import com.flopster101.siliconplayer.SubtuneEntry
+import com.flopster101.siliconplayer.adaptiveDialogModifier
+import com.flopster101.siliconplayer.adaptiveDialogProperties
 import com.flopster101.siliconplayer.formatByteCount
 import com.flopster101.siliconplayer.formatShortDuration
 
@@ -42,6 +44,8 @@ internal fun UrlOrPathDialog(
     onOpen: () -> Unit
 ) {
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text("Open URL or path") },
         text = {
@@ -102,6 +106,8 @@ internal fun RemoteLoadProgressDialog(
     onCancel: () -> Unit
 ) {
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = {},
         title = { Text("Opening remote source") },
         text = {
@@ -158,6 +164,8 @@ internal fun SoxExperimentalDialog(
     onDismiss: () -> Unit
 ) {
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text("SoX is experimental") },
         text = {
@@ -183,6 +191,8 @@ internal fun SubtuneSelectorDialog(
     onDismiss: () -> Unit
 ) {
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text("Subtunes") },
         text = {

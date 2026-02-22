@@ -43,6 +43,8 @@ internal fun SettingsConfirmDialog(
     dismissLabel: String = "Cancel"
 ) {
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { Text(message) },
@@ -71,6 +73,8 @@ internal fun SettingsActionListDialog(
     dismissLabel: String = "Cancel"
 ) {
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -114,6 +118,8 @@ internal fun <T> SettingsSingleChoiceDialog(
 ) {
     val configuration = LocalConfiguration.current
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {

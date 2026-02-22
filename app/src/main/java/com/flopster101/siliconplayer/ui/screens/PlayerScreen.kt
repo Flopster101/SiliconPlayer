@@ -102,6 +102,8 @@ import com.flopster101.siliconplayer.VisualizationOscColorMode
 import com.flopster101.siliconplayer.VisualizationOscFpsMode
 import com.flopster101.siliconplayer.VisualizationRenderBackend
 import com.flopster101.siliconplayer.VisualizationVuAnchor
+import com.flopster101.siliconplayer.adaptiveDialogModifier
+import com.flopster101.siliconplayer.adaptiveDialogProperties
 import com.flopster101.siliconplayer.pluginNameForCoreName
 import com.flopster101.siliconplayer.ui.dialogs.VisualizationModePickerDialog
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
@@ -1462,6 +1464,8 @@ private fun TrackInfoDetailsDialog(
     }
 
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text("Track and decoder info") },
         text = {
@@ -2358,6 +2362,8 @@ private fun ChannelControlDialog(
     }
 
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text("Channel controls") },
         text = {

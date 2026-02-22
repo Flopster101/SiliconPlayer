@@ -36,6 +36,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.VisualizationMode
+import com.flopster101.siliconplayer.adaptiveDialogModifier
+import com.flopster101.siliconplayer.adaptiveDialogProperties
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,6 +74,8 @@ internal fun VisualizationModePickerDialog(
     }
 
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text("Visualization mode") },
         text = {

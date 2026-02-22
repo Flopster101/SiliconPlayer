@@ -43,6 +43,8 @@ internal fun AboutEntityDialog(
     onDismiss: () -> Unit
 ) {
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -74,6 +74,8 @@ internal fun SettingsTextInputDialog(
 ) {
     var input by remember(initialValue) { mutableStateOf(initialValue) }
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -120,6 +122,8 @@ internal fun SettingsPriorityPickerDialog(
     var value by remember(currentValue, safeMax) { mutableIntStateOf(currentValue.coerceIn(0, safeMax)) }
 
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -174,6 +178,8 @@ internal fun SettingsSearchableMultiSelectDialog(
     }
 
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -269,6 +275,8 @@ internal fun <T> SettingsGroupedToggleDialog(
     val groupedOptions = options.groupBy { it.groupLabel }
 
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -375,6 +383,8 @@ internal fun CacheSizeLimitDialog(
         )
     }
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text("Cache size limit") },
         text = {
@@ -504,6 +514,8 @@ internal fun SteppedIntSliderDialog(
     }
 
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -591,6 +603,8 @@ internal fun SettingsSwitchSliderDialog(
         mutableIntStateOf(currentValue.coerceIn(valueRange.first, valueRange.last))
     }
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -680,6 +694,8 @@ internal fun VisualizationRgbColorPickerDialog(
     val hex = String.format(Locale.US, "#%02X%02X%02X", red, green, blue)
 
     AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {

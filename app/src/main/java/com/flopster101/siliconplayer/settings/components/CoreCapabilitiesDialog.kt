@@ -30,7 +30,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
@@ -47,9 +46,8 @@ internal fun CoreCapabilitiesDialog(
     val density = LocalDensity.current
 
     AlertDialog(
-        modifier = Modifier
-            .fillMaxWidth(0.85f),
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
         title = { Text("Core capabilities") },
         text = {

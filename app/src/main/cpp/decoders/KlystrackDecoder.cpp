@@ -6,6 +6,10 @@
 
 extern "C" {
 #include <klystrack/ksnd.h>
+#if defined(__GNUC__)
+__attribute__((weak))
+#endif
+void KSND_SetChannelMute(KPlayer* player, int channel, int muted);
 }
 
 namespace {
@@ -41,6 +45,8 @@ bool KlystrackDecoder::open(const char* path) {
     trackCount = 0;
     instrumentCount = 0;
     instrumentNames.clear();
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
     playbackPositionSeconds = 0.0;
     durationSeconds = 0.0;
     durationReliable = false;
@@ -64,6 +70,8 @@ bool KlystrackDecoder::open(const char* path) {
     applyRepeatModeLocked();
     KSND_PlaySong(player, song, 0);
     updateSongInfoLocked();
+    syncToggleChannelsLocked();
+    applyToggleMutesLocked();
 
     songLengthRows = std::max(0, KSND_GetSongLength(song));
     if (songLengthRows > 0) {
@@ -94,6 +102,8 @@ void KlystrackDecoder::closeInternalLocked() {
     trackCount = 0;
     instrumentCount = 0;
     instrumentNames.clear();
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
     durationSeconds = 0.0;
     durationReliable = false;
     playbackPositionSeconds = 0.0;
@@ -142,6 +152,37 @@ void KlystrackDecoder::updateSongInfoLocked() {
     }
 }
 
+void KlystrackDecoder::syncToggleChannelsLocked() {
+    const int channelCount = std::max(0, trackCount);
+    if (channelCount == static_cast<int>(toggleChannelNames.size()) &&
+        channelCount == static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
+    toggleChannelNames.reserve(static_cast<size_t>(channelCount));
+    toggleChannelMuted.reserve(static_cast<size_t>(channelCount));
+    for (int i = 0; i < channelCount; ++i) {
+        toggleChannelNames.push_back("Channel " + std::to_string(i + 1));
+        toggleChannelMuted.push_back(false);
+    }
+}
+
+void KlystrackDecoder::applyToggleMutesLocked() {
+    if (!player || toggleChannelMuted.empty() || KSND_SetChannelMute == nullptr) {
+        return;
+    }
+    const int channelCount = std::min(trackCount, static_cast<int>(toggleChannelMuted.size()));
+    for (int i = 0; i < channelCount; ++i) {
+        KSND_SetChannelMute(
+                player,
+                i,
+                toggleChannelMuted[static_cast<size_t>(i)] ? 1 : 0
+        );
+    }
+}
+
 void KlystrackDecoder::applyRepeatModeLocked() {
     if (!player) return;
     const int mode = normalizeRepeatMode(repeatMode.load());
@@ -160,6 +201,7 @@ int KlystrackDecoder::read(float* buffer, int numFrames) {
         pcmScratch.resize(static_cast<size_t>(sampleCount));
     }
     std::fill_n(pcmScratch.data(), sampleCount, static_cast<int16_t>(0));
+    applyToggleMutesLocked();
 
     const int requestedBytes = sampleCount * static_cast<int>(sizeof(int16_t));
     const int framesRead = std::max(0, KSND_FillBuffer(player, pcmScratch.data(), requestedBytes));
@@ -232,6 +274,7 @@ void KlystrackDecoder::seek(double seconds) {
     const int targetRow = resolveRowForTimeMsLocked(targetMs);
     KSND_PlaySong(player, song, targetRow);
     applyRepeatModeLocked();
+    applyToggleMutesLocked();
 
     const int resolvedMs = KSND_GetPlayTime(song, targetRow);
     playbackPositionSeconds = resolvedMs >= 0
@@ -312,6 +355,46 @@ int KlystrackDecoder::getCurrentRowInfo() {
 std::string KlystrackDecoder::getInstrumentNamesInfo() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return instrumentNames;
+}
+
+std::vector<std::string> KlystrackDecoder::getToggleChannelNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    return toggleChannelNames;
+}
+
+std::vector<uint8_t> KlystrackDecoder::getToggleChannelAvailability() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    return std::vector<uint8_t>(toggleChannelNames.size(), 1u);
+}
+
+void KlystrackDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+    toggleChannelMuted[static_cast<size_t>(channelIndex)] = enabled;
+    applyToggleMutesLocked();
+}
+
+bool KlystrackDecoder::getToggleChannelMuted(int channelIndex) const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return false;
+    }
+    return toggleChannelMuted[static_cast<size_t>(channelIndex)];
+}
+
+void KlystrackDecoder::clearToggleChannelMutes() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    syncToggleChannelsLocked();
+    if (toggleChannelMuted.empty()) {
+        return;
+    }
+    std::fill(toggleChannelMuted.begin(), toggleChannelMuted.end(), false);
+    applyToggleMutesLocked();
 }
 
 void KlystrackDecoder::setRepeatMode(int mode) {

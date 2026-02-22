@@ -36,6 +36,11 @@ public:
     int getSongLengthRowsInfo();
     int getCurrentRowInfo();
     std::string getInstrumentNamesInfo();
+    std::vector<std::string> getToggleChannelNames() override;
+    std::vector<uint8_t> getToggleChannelAvailability() override;
+    void setToggleChannelMuted(int channelIndex, bool enabled) override;
+    bool getToggleChannelMuted(int channelIndex) const override;
+    void clearToggleChannelMutes() override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override;
@@ -58,6 +63,8 @@ private:
     int trackCount = 0;
     int instrumentCount = 0;
     std::string instrumentNames;
+    std::vector<std::string> toggleChannelNames;
+    std::vector<bool> toggleChannelMuted;
 
     int sampleRateHz = 44100;
     int channels = 2;
@@ -71,6 +78,8 @@ private:
     void closeInternalLocked();
     void applyRepeatModeLocked();
     void updateSongInfoLocked();
+    void syncToggleChannelsLocked();
+    void applyToggleMutesLocked();
     int resolveRowForTimeMsLocked(int targetMs) const;
     static int normalizeRepeatMode(int mode);
 };

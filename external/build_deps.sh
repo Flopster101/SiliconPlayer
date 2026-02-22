@@ -1961,14 +1961,75 @@ build_hivelytracker() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build klystrack replay engine (libklystrack static)
+# -----------------------------------------------------------------------------
+build_klystrack() {
+    local ABI=$1
+    echo "Building klystrack for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/klystrack"
+    local KLYSTRON_PATH="$PROJECT_PATH/klystron"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+    local TARGET_CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang"
+    local SDL2_CFLAGS=""
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "klystrack source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    # Do not auto-clone missing deps; fail fast so they can be provisioned explicitly.
+    if [ ! -f "$KLYSTRON_PATH/src/lib/ksnd.c" ] || [ ! -d "$KLYSTRON_PATH/src/snd" ]; then
+        echo "Error: missing required klystrack dependency 'klystron' at $KLYSTRON_PATH."
+        echo "Please populate external/klystrack/klystron first, then rerun build_deps."
+        return 1
+    fi
+
+    if command -v sdl2-config >/dev/null 2>&1; then
+        SDL2_CFLAGS="$(sdl2-config --cflags)"
+    elif [ -f "/usr/include/SDL2/SDL.h" ]; then
+        SDL2_CFLAGS="-I/usr/include/SDL2"
+    else
+        echo "Error: SDL2 headers not found (required by klystrack/klystron sources)."
+        echo "Please install SDL2 development headers (e.g. libsdl2-dev), then rerun build_deps."
+        return 1
+    fi
+
+    if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libklystrack.a" ] && \
+       [ -f "$INSTALL_DIR/include/klystrack/ksnd.h" ]; then
+        echo "klystrack already built for $ABI -> skipping"
+        return 0
+    fi
+
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR" "$INSTALL_DIR/lib" "$INSTALL_DIR/include/klystrack"
+
+    local common_flags
+    common_flags="-fPIC $DEP_OPT_FLAGS -DNOSDL_MIXER -DSTEREOOUTPUT -DUSESDLMUTEXES -I$KLYSTRON_PATH/src $SDL2_CFLAGS"
+
+    local src
+    for src in "$KLYSTRON_PATH"/src/snd/*.c "$KLYSTRON_PATH"/src/lib/ksnd.c; do
+        local obj
+        obj="$BUILD_DIR/$(basename "$src" .c).o"
+        "$TARGET_CC" -c "$src" -o "$obj" $common_flags
+    done
+
+    "$TOOLCHAIN/bin/llvm-ar" rcs "$INSTALL_DIR/lib/libklystrack.a" "$BUILD_DIR"/*.o
+    "$TOOLCHAIN/bin/llvm-ranlib" "$INSTALL_DIR/lib/libklystrack.a"
+
+    cp "$KLYSTRON_PATH/src/lib/ksnd.h" "$INSTALL_DIR/include/klystrack/"
+}
+
+# -----------------------------------------------------------------------------
 # Argument Parsing
 # -----------------------------------------------------------------------------
 usage() {
     echo "Usage: $0 <abi|all> <lib|all[,lib2,...]> [clean]"
     echo "  ABI: all, arm64-v8a, armeabi-v7a, x86_64 (x86 supported only when explicitly requested)"
-    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68, libbinio, adplug, libzakalwe, bencodetools, vasm, uade, hivelytracker"
+    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68, libbinio, adplug, libzakalwe, bencodetools, vasm, uade, hivelytracker, klystrack"
     echo "  clean (optional): force rebuild (bypass already-built skip checks)"
-    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68, binio, libadplug, zakalwe, bencode, assembler/vasm, libuade, hvl/hively"
+    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68, binio, libadplug, zakalwe, bencode, assembler/vasm, libuade, hvl/hively, kly/kt"
 }
 
 if [ "$#" -eq 1 ]; then
@@ -2057,6 +2118,9 @@ normalize_lib_name() {
         hvl|hively|hivelytracker|libhivelytracker)
             echo "hivelytracker"
             ;;
+        kly|kt|klystrack|libklystrack)
+            echo "klystrack"
+            ;;
         *)
             echo "$lib"
             ;;
@@ -2098,7 +2162,7 @@ is_valid_abi() {
 is_valid_lib() {
     local lib="$1"
     case "$lib" in
-        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth|sc68|libbinio|adplug|libzakalwe|bencodetools|vasm|uade|hivelytracker)
+        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth|sc68|libbinio|adplug|libzakalwe|bencodetools|vasm|uade|hivelytracker|klystrack)
             return 0
             ;;
         *)
@@ -2293,6 +2357,10 @@ for ABI in "${ABIS[@]}"; do
 
     if target_has_lib "hivelytracker"; then
         build_hivelytracker "$ABI"
+    fi
+
+    if target_has_lib "klystrack"; then
+        build_klystrack "$ABI"
     fi
 done
 

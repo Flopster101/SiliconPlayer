@@ -26,6 +26,7 @@ internal suspend fun applyTrackSelectionAction(
     expandOverride: Boolean?,
     sourceIdOverride: String?,
     locationIdOverride: String?,
+    initialSeekSeconds: Double?,
     useSongVolumeLookup: Boolean,
     onResetPlayback: () -> Unit,
     onSelectedFileChanged: (File) -> Unit,
@@ -68,7 +69,21 @@ internal suspend fun applyTrackSelectionAction(
     coroutineContext.ensureActive()
     applyNativeTrackSnapshot()
     refreshSubtuneState()
-    onPositionChanged(0.0)
+    val loadedDurationSeconds = NativeBridge.getDuration().coerceAtLeast(0.0)
+    val shouldApplyInitialSeek = initialSeekSeconds != null &&
+        loadedDurationSeconds > 0.0
+    val resolvedPositionSeconds = if (shouldApplyInitialSeek) {
+        initialSeekSeconds
+            ?.coerceIn(0.0, loadedDurationSeconds)
+            ?.also { seekTargetSeconds ->
+                if (seekTargetSeconds > 0.0) {
+                    NativeBridge.seekTo(seekTargetSeconds)
+                }
+            } ?: 0.0
+    } else {
+        0.0
+    }
+    onPositionChanged(resolvedPositionSeconds)
     onArtworkBitmapCleared()
     refreshRepeatModeForTrack()
     if (autoStart) {

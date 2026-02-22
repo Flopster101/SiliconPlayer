@@ -287,6 +287,7 @@ private fun AppNavigation(
     var lastStoppedSourceId by remember { mutableStateOf<String?>(null) }
     var duration by remember { mutableDoubleStateOf(0.0) }
     var position by remember { mutableDoubleStateOf(0.0) }
+    var deferredPlaybackSeek by remember { mutableStateOf<DeferredPlaybackSeek?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     var seekInProgress by remember { mutableStateOf(false) }
     var seekUiBusy by remember { mutableStateOf(false) }
@@ -1019,8 +1020,16 @@ private fun AppNavigation(
         },
         onPlayerExpandedChanged = { isPlayerExpanded = it },
         onPlaybackStartInProgressChanged = { playbackStartInProgress = it },
-        syncPlaybackService = { runtimeDelegates.syncPlaybackService() }
+        syncPlaybackService = { runtimeDelegates.syncPlaybackService() },
+        onDeferredPlaybackSeekChanged = { deferredPlaybackSeek = it }
     )
+
+    LaunchedEffect(selectedFile?.absolutePath, currentPlaybackSourceId) {
+        val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
+        if (deferredPlaybackSeek?.sourceId != activeSourceId) {
+            deferredPlaybackSeek = null
+        }
+    }
 
     val playbackSessionCoordinator = buildPlaybackSessionCoordinator(
         runtimeDelegates = runtimeDelegates,
@@ -1110,6 +1119,7 @@ private fun AppNavigation(
         selectedFile = selectedFile,
         isPlayingProvider = { isPlaying },
         selectedFileProvider = { selectedFile },
+        deferredPlaybackSeekProvider = { deferredPlaybackSeek },
         seekInProgress = seekInProgress,
         seekStartedAtMs = seekStartedAtMs,
         seekRequestedAtMs = seekRequestedAtMs,
@@ -1311,6 +1321,7 @@ private fun AppNavigation(
     )
     val stopAndEmptyTrack: () -> Unit = {
         trackLoadDelegates.cancelPendingTrackSelection()
+        deferredPlaybackSeek = null
         stopAndEmptyTrackBase()
     }
     val activeCoreNameForUi = lastUsedCoreName
@@ -1372,6 +1383,7 @@ private fun AppNavigation(
         context = context,
         onCleared = {
             trackLoadDelegates.cancelPendingTrackSelection()
+            deferredPlaybackSeek = null
             playbackStateDelegates.resetAndOptionallyKeepLastTrack(keepLastTrack = true)
         },
         onPreviousTrackRequested = { trackNavDelegates.handlePreviousTrackAction() },
@@ -1414,6 +1426,40 @@ private fun AppNavigation(
                 trackNavDelegates.resumeLastStoppedTrack(autoStart = autoStart)
             }
         )
+        val startPlaybackFromSurfaceWithDeferredSeek: () -> Unit = {
+            val activeSelectedFile = selectedFile
+            val activeSourceId = currentPlaybackSourceId ?: activeSelectedFile?.absolutePath
+            val pendingSeek = deferredPlaybackSeek
+            if (
+                activeSelectedFile != null &&
+                pendingSeek != null &&
+                activeSourceId == pendingSeek.sourceId
+            ) {
+                val maxDuration = duration.coerceAtLeast(0.0)
+                val clampedSeekSeconds = if (maxDuration > 0.0) {
+                    pendingSeek.positionSeconds.coerceIn(0.0, maxDuration)
+                } else {
+                    pendingSeek.positionSeconds.coerceAtLeast(0.0)
+                }
+                deferredPlaybackSeek = null
+                if (NativeBridge.getTrackSampleRate() <= 0) {
+                    trackLoadDelegates.applyTrackSelection(
+                        file = activeSelectedFile,
+                        autoStart = true,
+                        sourceIdOverride = activeSourceId,
+                        initialSeekSeconds = clampedSeekSeconds
+                    )
+                } else {
+                    if (clampedSeekSeconds > 0.0) {
+                        NativeBridge.seekTo(clampedSeekSeconds)
+                    }
+                    position = clampedSeekSeconds
+                    startPlaybackFromSurface()
+                }
+            } else {
+                startPlaybackFromSurface()
+            }
+        }
         val openAudioEffectsDialog = buildOpenAudioEffectsDialogAction(
             masterVolumeDbProvider = { masterVolumeDb },
             pluginVolumeDbProvider = { pluginVolumeDb },
@@ -1493,10 +1539,10 @@ private fun AppNavigation(
                         playbackSessionCoordinator.syncPlaybackService()
                     }
                 } else {
-                    startPlaybackFromSurface()
+                    startPlaybackFromSurfaceWithDeferredSeek()
                 }
             },
-            onPlay = startPlaybackFromSurface,
+            onPlay = startPlaybackFromSurfaceWithDeferredSeek,
             onStopAndClear = stopAndEmptyTrack,
             onOpenAudioEffects = openAudioEffectsDialog,
             onPause = {
@@ -1509,11 +1555,37 @@ private fun AppNavigation(
             canNextTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) in 0 until (visiblePlayableFiles.size - 1),
             onSeek = { seconds ->
                 if (!seekInProgress) {
-                    NativeBridge.seekTo(seconds)
-                    seekRequestedAtMs = SystemClock.elapsedRealtime()
-                    seekUiBusy = false
-                    position = seconds
-                    playbackSessionCoordinator.syncPlaybackService()
+                    val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
+                    val pendingSeek = deferredPlaybackSeek
+                    if (
+                        pendingSeek != null &&
+                        activeSourceId == pendingSeek.sourceId
+                    ) {
+                        val maxDuration = duration.coerceAtLeast(0.0)
+                        val clamped = if (maxDuration > 0.0) {
+                            seconds.coerceIn(0.0, maxDuration)
+                        } else {
+                            seconds.coerceAtLeast(0.0)
+                        }
+                        if (NativeBridge.getTrackSampleRate() <= 0) {
+                            deferredPlaybackSeek = pendingSeek.copy(positionSeconds = clamped)
+                            position = clamped
+                            playbackSessionCoordinator.syncPlaybackService()
+                        } else {
+                            deferredPlaybackSeek = null
+                            NativeBridge.seekTo(clamped)
+                            seekRequestedAtMs = SystemClock.elapsedRealtime()
+                            seekUiBusy = false
+                            position = clamped
+                            playbackSessionCoordinator.syncPlaybackService()
+                        }
+                    } else {
+                        NativeBridge.seekTo(seconds)
+                        seekRequestedAtMs = SystemClock.elapsedRealtime()
+                        seekUiBusy = false
+                        position = seconds
+                        playbackSessionCoordinator.syncPlaybackService()
+                    }
                 }
             },
             onPreviousSubtune = {
@@ -2182,7 +2254,7 @@ private fun AppNavigation(
                                     expandOverride,
                                     sourceIdOverride,
                                     locationIdOverride,
-                                    useSongVolumeLookup
+                                    useSongVolumeLookup = useSongVolumeLookup
                                 )
                             },
                             onApplyManualInputSelection = { rawInput ->

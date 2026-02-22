@@ -11,6 +11,7 @@ internal fun AppNavigationPlaybackPollEffects(
     selectedFile: File?,
     isPlayingProvider: () -> Boolean,
     selectedFileProvider: () -> File?,
+    deferredPlaybackSeekProvider: () -> DeferredPlaybackSeek?,
     seekInProgress: Boolean,
     seekStartedAtMs: Long,
     seekRequestedAtMs: Long,
@@ -73,7 +74,22 @@ internal fun AppNavigationPlaybackPollEffects(
                 onSeekUiBusyChanged(false)
             }
             val nextDuration = if (nextSeekInProgress) localDuration else NativeBridge.getDuration()
-            val nextPosition = NativeBridge.getPosition()
+            val activeSourceId = currentPlaybackSourceIdProvider() ?: currentFile?.absolutePath
+            val deferredPlaybackSeek = deferredPlaybackSeekProvider()
+            val nextPosition = if (
+                deferredPlaybackSeek != null &&
+                activeSourceId != null &&
+                deferredPlaybackSeek.sourceId == activeSourceId
+            ) {
+                val maxDuration = nextDuration.coerceAtLeast(0.0)
+                if (maxDuration > 0.0) {
+                    deferredPlaybackSeek.positionSeconds.coerceIn(0.0, maxDuration)
+                } else {
+                    deferredPlaybackSeek.positionSeconds.coerceAtLeast(0.0)
+                }
+            } else {
+                NativeBridge.getPosition()
+            }
             val nextIsPlaying = NativeBridge.isEnginePlaying()
             localSeekInProgress = nextSeekInProgress
             localDuration = nextDuration

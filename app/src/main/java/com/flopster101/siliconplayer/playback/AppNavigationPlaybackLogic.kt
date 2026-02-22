@@ -24,6 +24,11 @@ internal data class NativeSubtuneCursor(
     val index: Int
 )
 
+internal data class DeferredPlaybackSeek(
+    val sourceId: String,
+    val positionSeconds: Double
+)
+
 internal data class SnapshotApplicationResult(
     val decoderName: String?,
     val pluginVolumeDb: Float?,

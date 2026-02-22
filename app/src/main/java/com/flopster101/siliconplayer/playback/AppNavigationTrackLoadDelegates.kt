@@ -36,7 +36,8 @@ internal class AppNavigationTrackLoadDelegates(
     private val scheduleRecentTrackMetadataRefresh: (String, String?) -> Unit,
     private val onPlayerExpandedChanged: (Boolean) -> Unit,
     private val onPlaybackStartInProgressChanged: (Boolean) -> Unit,
-    private val syncPlaybackService: () -> Unit
+    private val syncPlaybackService: () -> Unit,
+    private val onDeferredPlaybackSeekChanged: (DeferredPlaybackSeek?) -> Unit
 ) {
     private var currentTrackSelectionJob: Job? = null
     private var trackSelectionRequestId: Long = 0L
@@ -47,10 +48,12 @@ internal class AppNavigationTrackLoadDelegates(
         expandOverride: Boolean? = null,
         sourceIdOverride: String? = null,
         locationIdOverride: String? = lastBrowserLocationIdProvider(),
+        initialSeekSeconds: Double? = null,
         useSongVolumeLookup: Boolean = true
     ) {
         trackSelectionRequestId += 1L
         val requestId = trackSelectionRequestId
+        onDeferredPlaybackSeekChanged(null)
         onPlaybackStartInProgressChanged(true)
         currentTrackSelectionJob?.cancel()
         currentTrackSelectionJob = appScope.launch {
@@ -62,6 +65,7 @@ internal class AppNavigationTrackLoadDelegates(
                     expandOverride = expandOverride,
                     sourceIdOverride = sourceIdOverride,
                     locationIdOverride = locationIdOverride,
+                    initialSeekSeconds = initialSeekSeconds,
                     useSongVolumeLookup = useSongVolumeLookup,
                     onResetPlayback = onResetPlayback,
                     onSelectedFileChanged = onSelectedFileChanged,
@@ -115,7 +119,8 @@ internal class AppNavigationTrackLoadDelegates(
             onPositionChanged = onPositionChanged,
             onIsPlayingChanged = onIsPlayingChanged,
             onArtworkBitmapCleared = onArtworkBitmapCleared,
-            refreshRepeatModeForTrack = refreshRepeatModeForTrack
+            refreshRepeatModeForTrack = refreshRepeatModeForTrack,
+            onDeferredPlaybackSeekChanged = onDeferredPlaybackSeekChanged
         )
     }
 }

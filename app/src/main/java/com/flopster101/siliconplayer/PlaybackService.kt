@@ -86,13 +86,23 @@ class PlaybackService : Service() {
     private var positionSeconds: Double = 0.0
     private var isPlaying: Boolean = false
     private var durationRefreshCountdown = 0
+    private var lastPersistedResumeSourceId: String? = null
+    private var lastPersistedResumePositionBucket: Int = Int.MIN_VALUE
+    private var lastPersistedResumeDurationBucket: Int = Int.MIN_VALUE
+    private var lastPersistedResumeIsPlaying: Boolean? = null
+    private var lastPersistedResumeTitle: String? = null
+    private var lastPersistedResumeArtist: String? = null
+    private var lastPersistedResumePlaybackCaps: Int = Int.MIN_VALUE
+    private var lastPersistedResumeRepeatCaps: Int = Int.MIN_VALUE
+    private var hasPersistedResumeCheckpoint: Boolean = false
 
     private val handler = Handler(Looper.getMainLooper())
     private val ticker = object : Runnable {
         override fun run() {
             if (currentPath != null) {
-                val seekInProgress = NativeBridge.isSeekInProgress()
-                if (!seekInProgress) {
+                val trackLoaded = NativeBridge.getTrackSampleRate() > 0
+                val seekInProgress = trackLoaded && NativeBridge.isSeekInProgress()
+                if (!seekInProgress && trackLoaded) {
                     positionSeconds = NativeBridge.getPosition()
                     if (durationRefreshCountdown <= 0) {
                         durationSeconds = NativeBridge.getDuration()
@@ -101,7 +111,8 @@ class PlaybackService : Service() {
                         durationRefreshCountdown -= 1
                     }
                 }
-                isPlaying = NativeBridge.isEnginePlaying()
+                isPlaying = if (trackLoaded) NativeBridge.isEnginePlaying() else false
+                persistResumeCheckpointIfNeeded()
                 updateMediaSessionState()
                 pushNotification()
                 val delayMs = when {
@@ -185,6 +196,7 @@ class PlaybackService : Service() {
             abandonAudioFocus()
             resumeOnFocusGain = false
         }
+        persistResumeCheckpointIfNeeded(force = true)
 
         if (currentPath == null) {
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -209,6 +221,7 @@ class PlaybackService : Service() {
             NativeBridge.startEngine()
         }
         isPlaying = true
+        persistResumeCheckpointIfNeeded(force = true)
         updateMediaSessionState()
         pushNotification()
     }
@@ -221,12 +234,14 @@ class PlaybackService : Service() {
         if (!shouldApplyPauseResumeFade() || !NativeBridge.isEnginePlaying()) {
             NativeBridge.stopEngine()
             isPlaying = false
+            persistResumeCheckpointIfNeeded(force = true)
             updateMediaSessionState()
             pushNotification()
             return
         }
         NativeBridge.stopEngineWithPauseResumeFade()
         isPlaying = false
+        persistResumeCheckpointIfNeeded(force = true)
         updateMediaSessionState()
         pushNotification()
     }
@@ -249,6 +264,7 @@ class PlaybackService : Service() {
         currentArtist = "Silicon Player"
         durationSeconds = 0.0
         positionSeconds = 0.0
+        clearResumeCheckpoint()
         updateMediaSessionState()
         stopForeground(STOP_FOREGROUND_REMOVE)
         notificationManager.cancel(NOTIFICATION_ID)
@@ -340,8 +356,108 @@ class PlaybackService : Service() {
         }
         NativeBridge.seekTo(clamped)
         positionSeconds = clamped
+        persistResumeCheckpointIfNeeded(force = true)
         updateMediaSessionState()
         pushNotification()
+    }
+
+    private fun persistResumeCheckpointIfNeeded(force: Boolean = false) {
+        val sourceId = currentPath?.takeIf { it.isNotBlank() }
+        if (sourceId == null) {
+            clearResumeCheckpoint()
+            return
+        }
+
+        val trackLoaded = NativeBridge.getTrackSampleRate() > 0
+        val storedSourceId = prefs.getString(AppPreferenceKeys.SESSION_RESUME_SOURCE_ID, null)
+        val playbackCapabilities = if (trackLoaded) {
+            NativeBridge.getPlaybackCapabilities()
+        } else {
+            if (storedSourceId != sourceId) {
+                clearResumeCheckpoint()
+                return
+            }
+            prefs.getInt(AppPreferenceKeys.SESSION_RESUME_PLAYBACK_CAPABILITIES, 0)
+        }
+        val repeatCapabilities = if (trackLoaded) {
+            NativeBridge.getRepeatModeCapabilities()
+        } else {
+            prefs.getInt(AppPreferenceKeys.SESSION_RESUME_REPEAT_CAPABILITIES, REPEAT_CAP_ALL)
+        }
+        if (durationSeconds <= 0.0) {
+            clearResumeCheckpoint()
+            return
+        }
+        if (positionSeconds > durationSeconds + RESUME_POSITION_DURATION_EPSILON_SECONDS) {
+            // Some looping cores can report elapsed time beyond declared duration.
+            // Treat this as non-resumable timeline data.
+            clearResumeCheckpoint()
+            return
+        }
+
+        val clampedDuration = durationSeconds.coerceAtLeast(0.0)
+        val clampedPosition = positionSeconds.coerceIn(0.0, clampedDuration)
+        val positionBucket = (clampedPosition * 2.0).toInt()
+        val durationBucket = (clampedDuration * 2.0).toInt()
+
+        if (
+            !force &&
+            hasPersistedResumeCheckpoint &&
+            sourceId == lastPersistedResumeSourceId &&
+            positionBucket == lastPersistedResumePositionBucket &&
+            durationBucket == lastPersistedResumeDurationBucket &&
+            isPlaying == lastPersistedResumeIsPlaying &&
+            currentTitle == lastPersistedResumeTitle &&
+            currentArtist == lastPersistedResumeArtist &&
+            playbackCapabilities == lastPersistedResumePlaybackCaps &&
+            repeatCapabilities == lastPersistedResumeRepeatCaps
+        ) {
+            return
+        }
+
+        prefs.edit()
+            .putString(AppPreferenceKeys.SESSION_RESUME_SOURCE_ID, sourceId)
+            .putFloat(AppPreferenceKeys.SESSION_RESUME_POSITION_SECONDS, clampedPosition.toFloat())
+            .putFloat(AppPreferenceKeys.SESSION_RESUME_DURATION_SECONDS, clampedDuration.toFloat())
+            .putBoolean(AppPreferenceKeys.SESSION_RESUME_WAS_PLAYING, isPlaying)
+            .putString(AppPreferenceKeys.SESSION_RESUME_TITLE, currentTitle)
+            .putString(AppPreferenceKeys.SESSION_RESUME_ARTIST, currentArtist)
+            .putInt(AppPreferenceKeys.SESSION_RESUME_PLAYBACK_CAPABILITIES, playbackCapabilities)
+            .putInt(AppPreferenceKeys.SESSION_RESUME_REPEAT_CAPABILITIES, repeatCapabilities)
+            .apply()
+
+        hasPersistedResumeCheckpoint = true
+        lastPersistedResumeSourceId = sourceId
+        lastPersistedResumePositionBucket = positionBucket
+        lastPersistedResumeDurationBucket = durationBucket
+        lastPersistedResumeIsPlaying = isPlaying
+        lastPersistedResumeTitle = currentTitle
+        lastPersistedResumeArtist = currentArtist
+        lastPersistedResumePlaybackCaps = playbackCapabilities
+        lastPersistedResumeRepeatCaps = repeatCapabilities
+    }
+
+    private fun clearResumeCheckpoint() {
+        if (!hasPersistedResumeCheckpoint && !prefs.contains(AppPreferenceKeys.SESSION_RESUME_SOURCE_ID)) return
+        prefs.edit()
+            .remove(AppPreferenceKeys.SESSION_RESUME_SOURCE_ID)
+            .remove(AppPreferenceKeys.SESSION_RESUME_POSITION_SECONDS)
+            .remove(AppPreferenceKeys.SESSION_RESUME_DURATION_SECONDS)
+            .remove(AppPreferenceKeys.SESSION_RESUME_WAS_PLAYING)
+            .remove(AppPreferenceKeys.SESSION_RESUME_TITLE)
+            .remove(AppPreferenceKeys.SESSION_RESUME_ARTIST)
+            .remove(AppPreferenceKeys.SESSION_RESUME_PLAYBACK_CAPABILITIES)
+            .remove(AppPreferenceKeys.SESSION_RESUME_REPEAT_CAPABILITIES)
+            .apply()
+        hasPersistedResumeCheckpoint = false
+        lastPersistedResumeSourceId = null
+        lastPersistedResumePositionBucket = Int.MIN_VALUE
+        lastPersistedResumeDurationBucket = Int.MIN_VALUE
+        lastPersistedResumeIsPlaying = null
+        lastPersistedResumeTitle = null
+        lastPersistedResumeArtist = null
+        lastPersistedResumePlaybackCaps = Int.MIN_VALUE
+        lastPersistedResumeRepeatCaps = Int.MIN_VALUE
     }
 
     private fun updateMediaSessionState() {
@@ -604,6 +720,7 @@ class PlaybackService : Service() {
         private const val PREF_AUDIO_FOCUS_INTERRUPT = "audio_focus_interrupt"
         private const val PREF_AUDIO_DUCKING = "audio_ducking"
         private const val PREF_SESSION_CURRENT_PATH = "session_current_path"
+        private const val RESUME_POSITION_DURATION_EPSILON_SECONDS = 0.05
         private const val EXTRA_PATH = "extra_path"
         private const val EXTRA_TITLE = "extra_title"
         private const val EXTRA_ARTIST = "extra_artist"

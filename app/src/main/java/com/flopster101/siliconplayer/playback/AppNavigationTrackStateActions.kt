@@ -168,7 +168,8 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
     onPositionChanged: (Double) -> Unit,
     onIsPlayingChanged: (Boolean) -> Unit,
     onArtworkBitmapCleared: () -> Unit,
-    refreshRepeatModeForTrack: () -> Unit
+    refreshRepeatModeForTrack: () -> Unit,
+    onDeferredPlaybackSeekChanged: (DeferredPlaybackSeek?) -> Unit
 ) {
     val restoreTarget = resolveSessionRestoreTarget(
         context = context,
@@ -180,8 +181,76 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
     onPlayerSurfaceVisibleChanged(false)
     onPlayerExpandedChanged(openExpanded)
 
+    val isLoaded = withContext(Dispatchers.IO) {
+        NativeBridge.getTrackSampleRate() > 0
+    }
+    val resumeCheckpoint = if (isLoaded) {
+        null
+    } else {
+        readSessionResumeCheckpointForSource(prefs, restoreTarget.sourceId)
+    }
+
+    if (!isLoaded && resumeCheckpoint != null) {
+        applyNativeTrackSnapshot(
+            NativeTrackSnapshot(
+                decoderName = null,
+                title = resumeCheckpoint.title,
+                artist = resumeCheckpoint.artist,
+                sampleRateHz = 0,
+                channelCount = 0,
+                bitDepthLabel = "Unknown",
+                repeatModeCapabilitiesFlags = resumeCheckpoint.repeatCapabilitiesFlags,
+                playbackCapabilitiesFlags = resumeCheckpoint.playbackCapabilitiesFlags,
+                durationSeconds = resumeCheckpoint.durationSeconds
+            )
+        )
+        refreshSubtuneState()
+        onPositionChanged(resumeCheckpoint.positionSeconds)
+        onIsPlayingChanged(false)
+        onDeferredPlaybackSeekChanged(
+            DeferredPlaybackSeek(
+                sourceId = restoreTarget.sourceId,
+                positionSeconds = resumeCheckpoint.positionSeconds
+            )
+        )
+        onArtworkBitmapCleared()
+        refreshRepeatModeForTrack()
+        onPlayerSurfaceVisibleChanged(true)
+
+        val initialized = withContext(Dispatchers.IO) {
+            if (!restoreTarget.displayFile.exists() || !restoreTarget.displayFile.isFile) {
+                null
+            } else {
+                loadSongVolumeForFile(restoreTarget.displayFile.absolutePath)
+                NativeBridge.loadAudio(restoreTarget.displayFile.absolutePath)
+                readNativeTrackSnapshot()
+            }
+        }
+        if (initialized != null) {
+            applyNativeTrackSnapshot(initialized)
+            refreshSubtuneState()
+            val initializedDuration = initialized.durationSeconds.coerceAtLeast(0.0)
+            val restoredPosition = if (initializedDuration > 0.0) {
+                resumeCheckpoint.positionSeconds.coerceIn(0.0, initializedDuration)
+            } else {
+                resumeCheckpoint.positionSeconds
+            }
+            onPositionChanged(restoredPosition)
+            onIsPlayingChanged(false)
+            onDeferredPlaybackSeekChanged(
+                DeferredPlaybackSeek(
+                    sourceId = restoreTarget.sourceId,
+                    positionSeconds = restoredPosition
+                )
+            )
+            onArtworkBitmapCleared()
+            refreshRepeatModeForTrack()
+        }
+        return
+    }
+
+    onDeferredPlaybackSeekChanged(null)
     val snapshotAndState = withContext(Dispatchers.IO) {
-        val isLoaded = NativeBridge.getTrackSampleRate() > 0
         if (!isLoaded && restoreTarget.displayFile.exists() && restoreTarget.displayFile.isFile) {
             loadSongVolumeForFile(restoreTarget.displayFile.absolutePath)
             NativeBridge.loadAudio(restoreTarget.displayFile.absolutePath)
@@ -201,3 +270,55 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
     refreshRepeatModeForTrack()
     onPlayerSurfaceVisibleChanged(true)
 }
+
+private data class SessionResumeCheckpoint(
+    val positionSeconds: Double,
+    val durationSeconds: Double,
+    val title: String,
+    val artist: String,
+    val playbackCapabilitiesFlags: Int,
+    val repeatCapabilitiesFlags: Int
+)
+
+private fun readSessionResumeCheckpointForSource(
+    prefs: SharedPreferences,
+    sourceId: String
+): SessionResumeCheckpoint? {
+    val storedSourceId = prefs.getString(AppPreferenceKeys.SESSION_RESUME_SOURCE_ID, null)
+    if (storedSourceId != sourceId) return null
+    val playbackCapabilitiesFlags = prefs.getInt(
+        AppPreferenceKeys.SESSION_RESUME_PLAYBACK_CAPABILITIES,
+        PLAYBACK_CAP_SEEK
+    )
+    val durationSeconds = prefs.getFloat(
+        AppPreferenceKeys.SESSION_RESUME_DURATION_SECONDS,
+        0f
+    ).toDouble()
+    if (durationSeconds <= 0.0) return null
+    val rawPositionSeconds = prefs.getFloat(
+        AppPreferenceKeys.SESSION_RESUME_POSITION_SECONDS,
+        0f
+    ).toDouble()
+    if (rawPositionSeconds > durationSeconds + RESUME_POSITION_DURATION_EPSILON_SECONDS) return null
+    val positionSeconds = rawPositionSeconds.coerceIn(0.0, durationSeconds)
+    val repeatCapabilitiesFlags = prefs.getInt(
+        AppPreferenceKeys.SESSION_RESUME_REPEAT_CAPABILITIES,
+        REPEAT_CAP_ALL
+    )
+    val title = prefs.getString(AppPreferenceKeys.SESSION_RESUME_TITLE, null)
+        .orEmpty()
+        .ifBlank { "Unknown Title" }
+    val artist = prefs.getString(AppPreferenceKeys.SESSION_RESUME_ARTIST, null)
+        .orEmpty()
+        .ifBlank { "Unknown Artist" }
+    return SessionResumeCheckpoint(
+        positionSeconds = positionSeconds,
+        durationSeconds = durationSeconds,
+        title = title,
+        artist = artist,
+        playbackCapabilitiesFlags = playbackCapabilitiesFlags,
+        repeatCapabilitiesFlags = repeatCapabilitiesFlags
+    )
+}
+
+private const val RESUME_POSITION_DURATION_EPSILON_SECONDS = 0.05

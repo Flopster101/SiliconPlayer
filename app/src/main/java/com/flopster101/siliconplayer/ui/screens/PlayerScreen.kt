@@ -689,12 +689,16 @@ fun PlayerScreen(
     ) {
         Scaffold(
             topBar = {
+                val compactLandscapeHeader = isLandscape && !isTabletLike
+                val headerHeight = if (compactLandscapeHeader) 30.dp else 40.dp
+                val navButtonSize = if (compactLandscapeHeader) 28.dp else 32.dp
+                val navIconSize = if (compactLandscapeHeader) 22.dp else 24.dp
                 // Keep a minimal header so the player can use more vertical space on phones.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
-                        .height(40.dp),
+                        .height(headerHeight),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     IconButton(
@@ -702,12 +706,12 @@ fun PlayerScreen(
                         enabled = enableCollapseGesture,
                         modifier = Modifier
                             .padding(start = 4.dp)
-                            .size(32.dp)
+                            .size(navButtonSize)
                     ) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
                             contentDescription = "Minimize player",
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(navIconSize)
                         )
                     }
                 }
@@ -727,149 +731,273 @@ fun PlayerScreen(
                     )
             ) {
             if (isLandscape) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 20.dp, vertical = 18.dp),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AlbumArtPlaceholder(
-                        file = file,
-                        isPlaying = isPlaying && !seekInProgress,
-                        decoderName = decoderName,
-                        sampleRateHz = sampleRateHz,
-                        artwork = artwork,
-                        placeholderIcon = noArtworkIcon,
-                        visualizationModeBadgeText = visualizationModeBadgeText,
-                        showVisualizationModeBadge = showVisualizationModeBadge,
-                        visualizationMode = visualizationMode,
-                        visualizationShowDebugInfo = visualizationShowDebugInfo,
-                        visualizationOscWindowMs = visualizationOscWindowMs,
-                        visualizationOscTriggerModeNative = visualizationOscTriggerModeNative,
-                        visualizationOscFpsMode = visualizationOscFpsMode,
-                        visualizationOscRenderBackend = visualizationOscRenderBackend,
-                        visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
-                        visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
-                        barCount = visualizationBarCount,
-                        barRoundnessDp = visualizationBarRoundnessDp,
-                        barOverlayArtwork = visualizationBarOverlayArtwork,
-                        barUseThemeColor = visualizationBarUseThemeColor,
-                        barRenderBackend = visualizationBarRuntimeRenderBackend,
-                        barColorModeNoArtwork = visualizationBarColorModeNoArtwork,
-                        barColorModeWithArtwork = visualizationBarColorModeWithArtwork,
-                        barCustomColorArgb = visualizationBarCustomColorArgb,
-                        oscStereo = visualizationOscStereo,
-                        oscLineWidthDp = visualizationOscLineWidthDp,
-                        oscGridWidthDp = visualizationOscGridWidthDp,
-                        oscVerticalGridEnabled = visualizationOscVerticalGridEnabled,
-                        oscCenterLineEnabled = visualizationOscCenterLineEnabled,
-                        oscLineColorModeNoArtwork = visualizationOscLineColorModeNoArtwork,
-                        oscGridColorModeNoArtwork = visualizationOscGridColorModeNoArtwork,
-                        oscLineColorModeWithArtwork = visualizationOscLineColorModeWithArtwork,
-                        oscGridColorModeWithArtwork = visualizationOscGridColorModeWithArtwork,
-                        oscCustomLineColorArgb = visualizationOscCustomLineColorArgb,
-                        oscCustomGridColorArgb = visualizationOscCustomGridColorArgb,
-                        vuAnchor = visualizationVuAnchor,
-                        vuUseThemeColor = visualizationVuUseThemeColor,
-                        vuRenderBackend = visualizationVuRuntimeRenderBackend,
-                        vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
-                        vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
-                        vuCustomColorArgb = visualizationVuCustomColorArgb,
-                        channelScopePrefs = channelScopePrefs,
-                        artworkCornerRadiusDp = artworkCornerRadiusDp,
-                        modifier = Modifier
-                            .weight(0.45f)
-                            .fillMaxHeight(0.84f)
-                    )
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val compactHeightLevel = when {
+                        maxHeight < 360.dp -> 3
+                        maxHeight < 460.dp -> 2
+                        maxHeight < 520.dp -> 1
+                        else -> 0
+                    }
+                    val horizontalPadding = when (compactHeightLevel) {
+                        3 -> 10.dp
+                        2 -> 12.dp
+                        else -> 16.dp
+                    }
+                    val verticalPadding = when (compactHeightLevel) {
+                        3 -> 6.dp
+                        2 -> 8.dp
+                        else -> 12.dp
+                    }
+                    val paneGap = when (compactHeightLevel) {
+                        3 -> 12.dp
+                        2 -> 14.dp
+                        else -> 20.dp
+                    }
+                    val artPaneWeight = when (compactHeightLevel) {
+                        3 -> 0.36f
+                        2 -> 0.39f
+                        1 -> 0.43f
+                        else -> 0.48f
+                    }
+                    val rightPaneWeight = 1f - artPaneWeight
+                    val timelineWidthFraction = when (compactHeightLevel) {
+                        3 -> 0.88f
+                        2 -> 0.90f
+                        1 -> 0.93f
+                        else -> 0.96f
+                    }
+                    val actionStripWidthFraction = when (compactHeightLevel) {
+                        3 -> 0.86f
+                        2 -> 0.88f
+                        1 -> 0.91f
+                        else -> 0.94f
+                    }
+                    val chipSpacer = when {
+                        compactHeightLevel >= 3 -> 4.dp
+                        compactHeightLevel >= 2 -> 6.dp
+                        compactHeightLevel >= 1 -> 8.dp
+                        else -> 10.dp
+                    }
+                    val metadataSpacer = when {
+                        compactHeightLevel >= 3 -> 6.dp
+                        compactHeightLevel >= 2 -> 8.dp
+                        compactHeightLevel >= 1 -> 10.dp
+                        else -> 12.dp
+                    }
+                    val timelineSpacer = when {
+                        compactHeightLevel >= 3 -> 4.dp
+                        compactHeightLevel >= 2 -> 6.dp
+                        compactHeightLevel >= 1 -> 8.dp
+                        else -> 10.dp
+                    }
+                    val actionStripSpacer = when {
+                        compactHeightLevel >= 3 -> 6.dp
+                        compactHeightLevel >= 2 -> 8.dp
+                        compactHeightLevel >= 1 -> 10.dp
+                        else -> 12.dp
+                    }
+                    val actionStripBottomPadding = if (compactHeightLevel >= 2) 2.dp else 4.dp
 
-                    Column(
+                    Row(
                         modifier = Modifier
-                            .weight(0.55f)
-                            .fillMaxHeight(0.86f),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.Start
+                            .fillMaxSize()
+                            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
+                        horizontalArrangement = Arrangement.spacedBy(paneGap),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TrackInfoChips(
-                        file = file,
-                        decoderName = decoderName,
-                        fileSizeBytes = file?.length() ?: 0L,
-                        sampleRateHz = sampleRateHz,
-                        channelCount = channelCount,
-                        bitDepthLabel = bitDepthLabel,
-                        onClick = { showTrackInfoDialog = true }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        TrackMetadataBlock(
-                            title = displayTitle,
-                            artist = displayArtist,
-                            filename = displayFilename,
-                            filenameDisplayMode = filenameDisplayMode,
-                            decoderName = decoderName,
-                            filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
-                            centerSupportingMetadata = isTabletLike && isLandscape,
-                            currentSubtuneIndex = currentSubtuneIndex,
-                            subtuneCount = subtuneCount
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        TimelineSection(
-                            sliderPosition = if (isSeeking) sliderPosition else animatedSliderPosition.toDouble(),
-                            elapsedPositionSeconds = if (isSeeking) sliderPosition else positionSeconds,
-                            durationSeconds = durationSeconds,
-                            canSeek = canSeek,
-                            hasReliableDuration = hasReliableDuration,
-                            seekInProgress = seekInProgress,
-                            onSeekInteractionChanged = { isTimelineTouchActive = it },
-                            onSliderValueChange = { value ->
-                                isSeeking = true
-                                val sliderMax = durationSeconds.coerceAtLeast(0.0)
-                                sliderPosition = value.toDouble().coerceIn(0.0, sliderMax)
-                            },
-                            onSliderValueChangeFinished = {
-                                isSeeking = false
-                                if (canSeek && durationSeconds > 0.0) {
-                                    onSeek(sliderPosition)
+                        BoxWithConstraints(
+                            modifier = Modifier
+                                .weight(artPaneWeight)
+                                .fillMaxHeight()
+                        ) {
+                            val artMaxByHeight = this.maxHeight * if (compactHeightLevel >= 2) 0.90f else 0.95f
+                            val artSize = minOf(this.maxWidth, artMaxByHeight).coerceAtLeast(120.dp)
+                            AlbumArtPlaceholder(
+                                file = file,
+                                isPlaying = isPlaying && !seekInProgress,
+                                decoderName = decoderName,
+                                sampleRateHz = sampleRateHz,
+                                artwork = artwork,
+                                placeholderIcon = noArtworkIcon,
+                                visualizationModeBadgeText = visualizationModeBadgeText,
+                                showVisualizationModeBadge = showVisualizationModeBadge,
+                                visualizationMode = visualizationMode,
+                                visualizationShowDebugInfo = visualizationShowDebugInfo,
+                                visualizationOscWindowMs = visualizationOscWindowMs,
+                                visualizationOscTriggerModeNative = visualizationOscTriggerModeNative,
+                                visualizationOscFpsMode = visualizationOscFpsMode,
+                                visualizationOscRenderBackend = visualizationOscRenderBackend,
+                                visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
+                                visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
+                                barCount = visualizationBarCount,
+                                barRoundnessDp = visualizationBarRoundnessDp,
+                                barOverlayArtwork = visualizationBarOverlayArtwork,
+                                barUseThemeColor = visualizationBarUseThemeColor,
+                                barRenderBackend = visualizationBarRuntimeRenderBackend,
+                                barColorModeNoArtwork = visualizationBarColorModeNoArtwork,
+                                barColorModeWithArtwork = visualizationBarColorModeWithArtwork,
+                                barCustomColorArgb = visualizationBarCustomColorArgb,
+                                oscStereo = visualizationOscStereo,
+                                oscLineWidthDp = visualizationOscLineWidthDp,
+                                oscGridWidthDp = visualizationOscGridWidthDp,
+                                oscVerticalGridEnabled = visualizationOscVerticalGridEnabled,
+                                oscCenterLineEnabled = visualizationOscCenterLineEnabled,
+                                oscLineColorModeNoArtwork = visualizationOscLineColorModeNoArtwork,
+                                oscGridColorModeNoArtwork = visualizationOscGridColorModeNoArtwork,
+                                oscLineColorModeWithArtwork = visualizationOscLineColorModeWithArtwork,
+                                oscGridColorModeWithArtwork = visualizationOscGridColorModeWithArtwork,
+                                oscCustomLineColorArgb = visualizationOscCustomLineColorArgb,
+                                oscCustomGridColorArgb = visualizationOscCustomGridColorArgb,
+                                vuAnchor = visualizationVuAnchor,
+                                vuUseThemeColor = visualizationVuUseThemeColor,
+                                vuRenderBackend = visualizationVuRuntimeRenderBackend,
+                                vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
+                                vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
+                                vuCustomColorArgb = visualizationVuCustomColorArgb,
+                                channelScopePrefs = channelScopePrefs,
+                                artworkCornerRadiusDp = artworkCornerRadiusDp,
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .size(artSize)
+                            )
+                        }
+
+                        BoxWithConstraints(
+                            modifier = Modifier
+                                .weight(rightPaneWeight)
+                                .fillMaxHeight()
+                        ) {
+                            var actionStripHeightPx by remember { mutableIntStateOf(0) }
+                            val actionStripHeightDp = with(density) { actionStripHeightPx.toDp() }
+                            val centerLandscapeContent = compactHeightLevel == 0
+
+                            Column(
+                                modifier = Modifier
+                                    .align(if (centerLandscapeContent) Alignment.Center else Alignment.TopCenter)
+                                    .fillMaxWidth(if (centerLandscapeContent) 0.98f else 1f)
+                                    .padding(
+                                        bottom = if (centerLandscapeContent) 0.dp
+                                        else actionStripHeightDp + actionStripSpacer + actionStripBottomPadding
+                                    ),
+                                verticalArrangement = if (centerLandscapeContent) Arrangement.Center else Arrangement.Top,
+                                horizontalAlignment = if (centerLandscapeContent) Alignment.CenterHorizontally else Alignment.Start
+                            ) {
+                                TrackInfoChips(
+                                    file = file,
+                                    decoderName = decoderName,
+                                    fileSizeBytes = file?.length() ?: 0L,
+                                    sampleRateHz = sampleRateHz,
+                                    channelCount = channelCount,
+                                    bitDepthLabel = bitDepthLabel,
+                                    compactHeightLevel = compactHeightLevel,
+                                    onClick = { showTrackInfoDialog = true }
+                                )
+                                Spacer(modifier = Modifier.height(chipSpacer))
+                                TrackMetadataBlock(
+                                    title = displayTitle,
+                                    artist = displayArtist,
+                                    filename = displayFilename,
+                                    filenameDisplayMode = filenameDisplayMode,
+                                    decoderName = decoderName,
+                                    filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
+                                    showFilename = compactHeightLevel == 0,
+                                    centerSupportingMetadata = isLandscape,
+                                    currentSubtuneIndex = currentSubtuneIndex,
+                                    subtuneCount = subtuneCount,
+                                    compactHeightLevel = compactHeightLevel
+                                )
+                                Spacer(modifier = Modifier.height(metadataSpacer))
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.CenterHorizontally)
+                                        .fillMaxWidth(timelineWidthFraction),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    TimelineSection(
+                                        sliderPosition = if (isSeeking) sliderPosition else animatedSliderPosition.toDouble(),
+                                        elapsedPositionSeconds = if (isSeeking) sliderPosition else positionSeconds,
+                                        durationSeconds = durationSeconds,
+                                        canSeek = canSeek,
+                                        hasReliableDuration = hasReliableDuration,
+                                        seekInProgress = seekInProgress,
+                                        onSeekInteractionChanged = { isTimelineTouchActive = it },
+                                        onSliderValueChange = { value ->
+                                            isSeeking = true
+                                            val sliderMax = durationSeconds.coerceAtLeast(0.0)
+                                            sliderPosition = value.toDouble().coerceIn(0.0, sliderMax)
+                                        },
+                                        onSliderValueChangeFinished = {
+                                            isSeeking = false
+                                            if (canSeek && durationSeconds > 0.0) {
+                                                onSeek(sliderPosition)
+                                            }
+                                        }
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(timelineSpacer))
+                                TransportControls(
+                                    hasTrack = hasTrack,
+                                    isPlaying = isPlaying,
+                                    canResumeStoppedTrack = canResumeStoppedTrack,
+                                    repeatMode = repeatMode,
+                                    playbackStartInProgress = playbackStartInProgress,
+                                    seekInProgress = seekInProgress,
+                                    canPreviousTrack = canPreviousTrack,
+                                    canNextTrack = canNextTrack,
+                                    canCycleRepeatMode = canCycleRepeatMode,
+                                    onPlayPause = {
+                                        if (isPlaying) {
+                                            onPause()
+                                        } else {
+                                            onPlay()
+                                        }
+                                    },
+                                    onPreviousTrack = onPreviousTrack,
+                                    onNextTrack = onNextTrack,
+                                    onPreviousSubtune = onPreviousSubtune,
+                                    onNextSubtune = onNextSubtune,
+                                    onOpenSubtuneSelector = onOpenSubtuneSelector,
+                                    canPreviousSubtune = canPreviousSubtune,
+                                    canNextSubtune = canNextSubtune,
+                                    canOpenSubtuneSelector = canOpenSubtuneSelector,
+                                    onStopAndClear = onStopAndClear,
+                                    onCycleRepeatMode = onCycleRepeatMode,
+                                    compactHeightLevel = compactHeightLevel
+                                )
+
+                                if (centerLandscapeContent) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    FutureActionStrip(
+                                        modifier = Modifier.fillMaxWidth(actionStripWidthFraction),
+                                        canOpenCoreSettings = canOpenCoreSettings,
+                                        onOpenCoreSettings = onOpenCoreSettings,
+                                        onCycleVisualizationMode = onCycleVisualizationMode,
+                                        onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
+                                        onOpenAudioEffects = onOpenAudioEffects,
+                                        onOpenChannelControls = { showChannelControlDialog = true },
+                                        compactHeightLevel = compactHeightLevel
+                                    )
                                 }
                             }
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        TransportControls(
-                            hasTrack = hasTrack,
-                            isPlaying = isPlaying,
-                            canResumeStoppedTrack = canResumeStoppedTrack,
-                            repeatMode = repeatMode,
-                            playbackStartInProgress = playbackStartInProgress,
-                            seekInProgress = seekInProgress,
-                            canPreviousTrack = canPreviousTrack,
-                            canNextTrack = canNextTrack,
-                            canCycleRepeatMode = canCycleRepeatMode,
-                            onPlayPause = {
-                                if (isPlaying) {
-                                    onPause()
-                                } else {
-                                    onPlay()
-                                }
-                            },
-                            onPreviousTrack = onPreviousTrack,
-                            onNextTrack = onNextTrack,
-                            onPreviousSubtune = onPreviousSubtune,
-                            onNextSubtune = onNextSubtune,
-                            onOpenSubtuneSelector = onOpenSubtuneSelector,
-                            canPreviousSubtune = canPreviousSubtune,
-                            canNextSubtune = canNextSubtune,
-                            canOpenSubtuneSelector = canOpenSubtuneSelector,
-                            onStopAndClear = onStopAndClear,
-                            onCycleRepeatMode = onCycleRepeatMode
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        FutureActionStrip(
-                            canOpenCoreSettings = canOpenCoreSettings,
-                            onOpenCoreSettings = onOpenCoreSettings,
-                            onCycleVisualizationMode = onCycleVisualizationMode,
-                            onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
-                            onOpenAudioEffects = onOpenAudioEffects,
-                            onOpenChannelControls = { showChannelControlDialog = true }
-                        )
+
+                            if (!centerLandscapeContent) {
+                                FutureActionStrip(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth(actionStripWidthFraction)
+                                        .navigationBarsPadding()
+                                        .padding(bottom = actionStripBottomPadding)
+                                        .onSizeChanged { actionStripHeightPx = it.height },
+                                    canOpenCoreSettings = canOpenCoreSettings,
+                                    onOpenCoreSettings = onOpenCoreSettings,
+                                    onCycleVisualizationMode = onCycleVisualizationMode,
+                                    onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
+                                    onOpenAudioEffects = onOpenAudioEffects,
+                                    onOpenChannelControls = { showChannelControlDialog = true },
+                                    compactHeightLevel = compactHeightLevel
+                                )
+                            }
+                        }
                     }
                 }
             } else {
@@ -1015,6 +1143,7 @@ fun PlayerScreen(
                                     sampleRateHz = sampleRateHz,
                                     channelCount = channelCount,
                                     bitDepthLabel = bitDepthLabel,
+                                    compactHeightLevel = compactHeightLevel,
                                     onClick = { showTrackInfoDialog = true },
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -1158,6 +1287,7 @@ private fun TrackInfoChips(
     channelCount: Int,
     bitDepthLabel: String,
     onClick: () -> Unit,
+    compactHeightLevel: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val formatLabel = file?.name?.let(::inferredPrimaryExtensionForName)?.uppercase() ?: "EMPTY"
@@ -1195,16 +1325,17 @@ private fun TrackInfoChips(
         else -> "--ch"
     }
 
-    val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val compactLevel = when {
-        screenWidthDp <= 400 -> 2
-        screenWidthDp <= 460 -> 1
-        else -> 0
-    }
-    Box(
+    BoxWithConstraints(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
+        val widthCompactLevel = when {
+            maxWidth <= 440.dp -> 3
+            maxWidth <= 560.dp -> 2
+            maxWidth <= 680.dp -> 1
+            else -> 0
+        }
+        val compactLevel = maxOf(widthCompactLevel, compactHeightLevel.coerceAtMost(3))
         Row(
             modifier = Modifier
                 .wrapContentWidth()
@@ -1212,6 +1343,7 @@ private fun TrackInfoChips(
                 .clickable(onClick = onClick),
             horizontalArrangement = Arrangement.spacedBy(
                 when (compactLevel) {
+                    3 -> 2.dp
                     2 -> 3.dp
                     1 -> 4.dp
                     else -> 6.dp
@@ -1459,33 +1591,40 @@ private fun TrackInfoChip(
     compactLevel: Int
 ) {
     val iconSize = when (compactLevel) {
+        3 -> 10.dp
         2 -> 12.dp
         1 -> 13.dp
         else -> 14.dp
     }
     val iconSlot = when (compactLevel) {
+        3 -> 10.dp
         2 -> 12.dp
         else -> 14.dp
     }
     val sideInset = when (compactLevel) {
+        3 -> 4.dp
         2 -> 5.dp
         1 -> 6.dp
         else -> 7.dp
     }
     val minHeight = when (compactLevel) {
+        3 -> 26.dp
         2 -> 30.dp
         1 -> 32.dp
         else -> 34.dp
     }
     val textStartPadding = iconSlot + when (compactLevel) {
+        3 -> 1.dp
         2 -> 2.dp
         else -> 3.dp
     }
     val textEndPadding = when (compactLevel) {
+        3 -> 1.dp
         2 -> 1.dp
         else -> 2.dp
     }
     val textStyle = when {
+        compactLevel >= 3 -> MaterialTheme.typography.labelSmall
         compactLevel == 2 -> MaterialTheme.typography.labelSmall
         compactLevel == 1 && text.length >= 10 -> MaterialTheme.typography.labelSmall
         else -> MaterialTheme.typography.labelMedium
@@ -1531,23 +1670,32 @@ private fun TrackMetadataBlock(
     filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode,
     decoderName: String?,
     filenameOnlyWhenTitleMissing: Boolean,
+    showFilename: Boolean = true,
     centerSupportingMetadata: Boolean = false,
     currentSubtuneIndex: Int = 0,
     subtuneCount: Int = 0,
     compactHeightLevel: Int = 0
 ) {
     val titleTextStyle = if (compactHeightLevel >= 2) {
-        MaterialTheme.typography.titleLarge
+        if (compactHeightLevel >= 3) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge
     } else {
         MaterialTheme.typography.headlineSmall
     }
     val artistTextStyle = if (compactHeightLevel >= 2) {
-        MaterialTheme.typography.bodyLarge
+        if (compactHeightLevel >= 3) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge
     } else {
         MaterialTheme.typography.titleMedium
     }
-    val titleArtistSpacer = if (compactHeightLevel >= 2) 6.dp else 8.dp
-    val artistFilenameSpacer = if (compactHeightLevel >= 2) 4.dp else 6.dp
+    val titleArtistSpacer = when {
+        compactHeightLevel >= 3 -> 4.dp
+        compactHeightLevel >= 2 -> 6.dp
+        else -> 8.dp
+    }
+    val artistFilenameSpacer = when {
+        compactHeightLevel >= 3 -> 2.dp
+        compactHeightLevel >= 2 -> 4.dp
+        else -> 6.dp
+    }
     val shouldShowFilename = remember(filenameDisplayMode, decoderName, title, filenameOnlyWhenTitleMissing) {
         when (filenameDisplayMode) {
             com.flopster101.siliconplayer.FilenameDisplayMode.Always -> {
@@ -1653,7 +1801,7 @@ private fun TrackMetadataBlock(
             modifier = if (centerSupportingMetadata) Modifier.fillMaxWidth() else Modifier
         )
     }
-    if (shouldShowFilename) {
+    if (showFilename && shouldShowFilename) {
         Spacer(modifier = Modifier.height(artistFilenameSpacer))
         val shouldMarqueeFilename = filename.length > 42
         if (shouldMarqueeFilename) {
@@ -1720,27 +1868,27 @@ private fun TransportControls(
         val tight = maxWidth < 350.dp || ultraCompact
         val compact = !tight && maxWidth < 390.dp
         val sideButtonSize = when {
-            ultraCompact -> 42.dp
+            ultraCompact -> 40.dp
             tight -> 48.dp
-            compact -> 54.dp
+            compact -> 52.dp
             else -> 62.dp
         }
         val playButtonSize = when {
-            ultraCompact -> 68.dp
+            ultraCompact -> 62.dp
             tight -> 76.dp
-            compact -> 82.dp
+            compact -> 78.dp
             else -> 90.dp
         }
         val subtuneButtonSize = when {
-            ultraCompact -> 44.dp
+            ultraCompact -> 40.dp
             tight -> 48.dp
-            compact -> 52.dp
+            compact -> 48.dp
             else -> 56.dp
         }
         val rowGap = when {
             ultraCompact -> 6.dp
             tight -> 6.dp
-            compact -> 8.dp
+            compact -> 6.dp
             else -> 10.dp
         }
         val subtuneGap = when {
@@ -1748,8 +1896,16 @@ private fun TransportControls(
             tight -> 8.dp
             else -> 10.dp
         }
-        val loadingSpacer = if (compactHeightLevel >= 2) 6.dp else 8.dp
-        val subtuneRowTopSpacer = if (compactHeightLevel >= 2) 8.dp else 10.dp
+        val loadingSpacer = when {
+            compactHeightLevel >= 3 -> 4.dp
+            compactHeightLevel >= 2 -> 6.dp
+            else -> 8.dp
+        }
+        val subtuneRowTopSpacer = when {
+            compactHeightLevel >= 3 -> 4.dp
+            compactHeightLevel >= 2 -> 8.dp
+            else -> 10.dp
+        }
 
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -1989,17 +2145,17 @@ private fun FutureActionStrip(
     compactHeightLevel: Int = 0
 ) {
     val stripHorizontalPadding = when (compactHeightLevel) {
-        3 -> 6.dp
+        3 -> 5.dp
         2 -> 8.dp
         else -> 10.dp
     }
     val stripVerticalPadding = when (compactHeightLevel) {
-        3 -> 3.dp
+        3 -> 2.dp
         2 -> 4.dp
         else -> 6.dp
     }
     val iconButtonSize = when (compactHeightLevel) {
-        3 -> 42.dp
+        3 -> 40.dp
         2 -> 44.dp
         else -> 48.dp
     }

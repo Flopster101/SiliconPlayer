@@ -580,6 +580,20 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (!player || !buffer || numFrames <= 0) return 0;
     const int channels = std::clamp(outputChannels, 1, 2);
+    const auto shouldSignalTrackEndForEngine = [&]() -> bool {
+        // Repeat Track (1) and Repeat Subtune (3) are enforced by AudioEngine.
+        // Signal end when the configured duration is reached so engine restart
+        // paths trigger even if sidplayfp continues producing audio internally.
+        const int mode = repeatMode.load(std::memory_order_relaxed);
+        if (mode != 1 && mode != 3) return false;
+
+        const double durationSeconds = currentSubtuneDurationSecondsAtomic.load(std::memory_order_relaxed);
+        if (!(durationSeconds > 0.0)) return false;
+
+        constexpr double kDurationEndEpsilonSeconds = 0.001;
+        const double playbackSeconds = static_cast<double>(player->timeMs()) / 1000.0;
+        return playbackSeconds + kDurationEndEpsilonSeconds >= durationSeconds;
+    };
 
     int framesWritten = 0;
     int emptyPlayRetries = 0;
@@ -613,6 +627,10 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
                 pendingMixedOffset = 0;
             }
             continue;
+        }
+
+        if (shouldSignalTrackEndForEngine()) {
+            break;
         }
 
         const int framesRemaining = numFrames - framesWritten;

@@ -113,7 +113,7 @@ private:
     std::string sidBaseAddressSummary;
     std::string sidCommentSummary;
     double fallbackDurationSeconds = 180.0;
-    std::atomic<int> repeatMode { 0 }; // 0 none, 1 repeat track, 2 repeat loop-point style
+    std::atomic<int> repeatMode { 0 }; // 0 none, 1 repeat track-set, 2 loop-point, 3 repeat current subtune
     std::vector<int16_t> pendingMixedSamples;
     size_t pendingMixedOffset = 0;
     std::vector<int16_t> mixedScratchSamples;

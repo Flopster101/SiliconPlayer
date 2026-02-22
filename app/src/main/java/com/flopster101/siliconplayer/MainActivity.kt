@@ -437,6 +437,14 @@ private fun AppNavigation(
             )
         )
     }
+    var showFileIconChipBackground by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                AppPreferenceKeys.BROWSER_SHOW_FILE_ICON_CHIP_BACKGROUND,
+                AppDefaults.Browser.showFileIconChipBackground
+            )
+        )
+    }
     var sortArchivesBeforeFiles by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.BROWSER_SORT_ARCHIVES_BEFORE_FILES, false)
@@ -1174,6 +1182,7 @@ private fun AppNavigation(
         fadePauseResume = fadePauseResume,
         rememberBrowserLocation = rememberBrowserLocation,
         showParentDirectoryEntry = showParentDirectoryEntry,
+        showFileIconChipBackground = showFileIconChipBackground,
         sortArchivesBeforeFiles = sortArchivesBeforeFiles,
         browserNameSortMode = browserNameSortMode,
         onArtworkBitmapChanged = { artworkBitmap = it },
@@ -1777,6 +1786,7 @@ private fun AppNavigation(
                                     themeMode = themeMode,
                                     rememberBrowserLocation = rememberBrowserLocation,
                                     showParentDirectoryEntry = showParentDirectoryEntry,
+                                    showFileIconChipBackground = showFileIconChipBackground,
                                     sortArchivesBeforeFiles = sortArchivesBeforeFiles,
                                     browserNameSortMode = browserNameSortMode,
                                     recentFoldersLimit = recentFoldersLimit,
@@ -1916,6 +1926,7 @@ private fun AppNavigation(
                                     onThemeModeChanged = onThemeModeChanged,
                                     onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
                                     onShowParentDirectoryEntryChanged = { showParentDirectoryEntry = it },
+                                    onShowFileIconChipBackgroundChanged = { showFileIconChipBackground = it },
                                     onSortArchivesBeforeFilesChanged = { sortArchivesBeforeFiles = it },
                                     onBrowserNameSortModeChanged = { browserNameSortMode = it },
                                     onRecentFoldersLimitChanged = { recentFoldersLimit = it.coerceIn(1, RECENTS_LIMIT_MAX) },
@@ -2149,6 +2160,7 @@ private fun AppNavigation(
                                 onPreferredRepeatModeChanged = { preferredRepeatMode = it },
                                 onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
                                 onShowParentDirectoryEntryChanged = { showParentDirectoryEntry = it },
+                                onShowFileIconChipBackgroundChanged = { showFileIconChipBackground = it },
                                 onBrowserNameSortModeChanged = { browserNameSortMode = it },
                                 onLastBrowserLocationIdChanged = { lastBrowserLocationId = it },
                                 onLastBrowserDirectoryPathChanged = { lastBrowserDirectoryPath = it },
@@ -2334,6 +2346,7 @@ private fun AppNavigation(
                         ?: if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
                     bottomContentPadding = miniPlayerListInset,
                     showParentDirectoryEntry = showParentDirectoryEntry,
+                    showFileIconChipBackground = showFileIconChipBackground,
                     backHandlingEnabled = !isPlayerExpanded,
                     playingFile = selectedFile,
                     onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },

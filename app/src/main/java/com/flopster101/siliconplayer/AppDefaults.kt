@@ -4,6 +4,7 @@ object AppDefaults {
     object Browser {
         val nameSortMode = BrowserNameSortMode.Natural
         const val showParentDirectoryEntry = true
+        const val showFileIconChipBackground = true
     }
 
     object Player {

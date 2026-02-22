@@ -28,6 +28,7 @@ internal data class HomeRouteActions(
 internal data class FileBrowserRouteState(
     val rememberBrowserLocation: Boolean,
     val showParentDirectoryEntry: Boolean,
+    val showFileIconChipBackground: Boolean,
     val sortArchivesBeforeFiles: Boolean,
     val browserNameSortMode: BrowserNameSortMode
 )
@@ -35,6 +36,7 @@ internal data class FileBrowserRouteState(
 internal data class FileBrowserRouteActions(
     val onRememberBrowserLocationChanged: (Boolean) -> Unit,
     val onShowParentDirectoryEntryChanged: (Boolean) -> Unit,
+    val onShowFileIconChipBackgroundChanged: (Boolean) -> Unit,
     val onSortArchivesBeforeFilesChanged: (Boolean) -> Unit,
     val onBrowserNameSortModeChanged: (BrowserNameSortMode) -> Unit
 )
@@ -148,6 +150,13 @@ internal fun FileBrowserRouteContent(
         description = "Show a '..' row at the top of file lists to go one level up.",
         checked = state.showParentDirectoryEntry,
         onCheckedChange = actions.onShowParentDirectoryEntryChanged
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Show file icon chip background",
+        description = "Draw the same rounded chip background behind file icons as folders.",
+        checked = state.showFileIconChipBackground,
+        onCheckedChange = actions.onShowFileIconChipBackgroundChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
     BrowserNameSortModeSelectorCard(

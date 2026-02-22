@@ -719,6 +719,7 @@ internal fun clearAllSettingsAction(
     onPreferredRepeatModeChanged: (RepeatMode) -> Unit,
     onRememberBrowserLocationChanged: (Boolean) -> Unit,
     onShowParentDirectoryEntryChanged: (Boolean) -> Unit,
+    onShowFileIconChipBackgroundChanged: (Boolean) -> Unit,
     onBrowserNameSortModeChanged: (BrowserNameSortMode) -> Unit,
     onUrlCacheClearOnLaunchChanged: (Boolean) -> Unit,
     onUrlCacheMaxTracksChanged: (Int) -> Unit,
@@ -871,6 +872,7 @@ internal fun clearAllSettingsAction(
     onPreferredRepeatModeChanged(RepeatMode.None)
     onRememberBrowserLocationChanged(true)
     onShowParentDirectoryEntryChanged(AppDefaults.Browser.showParentDirectoryEntry)
+    onShowFileIconChipBackgroundChanged(AppDefaults.Browser.showFileIconChipBackground)
     onBrowserNameSortModeChanged(AppDefaults.Browser.nameSortMode)
     onUrlCacheClearOnLaunchChanged(false)
     onUrlCacheMaxTracksChanged(SOURCE_CACHE_MAX_TRACKS_DEFAULT)

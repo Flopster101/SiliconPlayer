@@ -129,6 +129,7 @@ fun FileBrowserScreen(
     onBrowserLocationChanged: (String?, String?) -> Unit = { _, _ -> },
     bottomContentPadding: Dp = 0.dp,
     showParentDirectoryEntry: Boolean = true,
+    showFileIconChipBackground: Boolean = true,
     backHandlingEnabled: Boolean = true,
     onExitBrowser: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
@@ -795,6 +796,7 @@ fun FileBrowserScreen(
                                 FileItemRow(
                                     item = item,
                                     isPlaying = item.file == playingFile,
+                                    showFileIconChipBackground = showFileIconChipBackground,
                                     decoderExtensionArtworkHints = decoderExtensionArtworkHints,
                                     onClick = {
                                         if (item.isArchive) {
@@ -1189,6 +1191,7 @@ private fun isWithinRoot(file: File, root: File): Boolean {
 fun FileItemRow(
     item: FileItem,
     isPlaying: Boolean,
+    showFileIconChipBackground: Boolean,
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint> = emptyMap(),
     onClick: () -> Unit
 ) {
@@ -1226,11 +1229,72 @@ fun FileItemRow(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val showIconChipBackground = item.isDirectory || showFileIconChipBackground
+        val iconTint = if (showIconChipBackground) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
         Box(
             modifier = Modifier.size(FILE_ICON_BOX_SIZE),
             contentAlignment = Alignment.Center
         ) {
-            if (item.isDirectory) {
+            val iconContent: @Composable () -> Unit = {
+                if (item.isDirectory) {
+                    if (item.isArchive) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_folder_zip),
+                            contentDescription = "ZIP archive",
+                            tint = iconTint,
+                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = "Directory",
+                            tint = iconTint,
+                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                        )
+                    }
+                } else {
+                    val contentDescription = when {
+                        isVideoFile -> "Video file"
+                        decoderArtworkHint == DecoderArtworkHint.TrackedFile -> "Tracked file"
+                        decoderArtworkHint == DecoderArtworkHint.GameFile -> "Game file"
+                        else -> "Audio file"
+                    }
+                    if (isVideoFile) {
+                        Icon(
+                            imageVector = Icons.Default.VideoFile,
+                            contentDescription = contentDescription,
+                            tint = iconTint,
+                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                        )
+                    } else if (decoderArtworkHint == DecoderArtworkHint.TrackedFile) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_file_tracked),
+                            contentDescription = contentDescription,
+                            tint = iconTint,
+                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                        )
+                    } else if (decoderArtworkHint == DecoderArtworkHint.GameFile) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_file_game),
+                            contentDescription = contentDescription,
+                            tint = iconTint,
+                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.AudioFile,
+                            contentDescription = contentDescription,
+                            tint = iconTint,
+                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                        )
+                    }
+                }
+            }
+            if (showIconChipBackground) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -1240,57 +1304,14 @@ fun FileItemRow(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (item.isArchive) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_folder_zip),
-                            contentDescription = "ZIP archive",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Folder,
-                            contentDescription = "Directory",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                        )
-                    }
+                    iconContent()
                 }
             } else {
-                val contentDescription = when {
-                    isVideoFile -> "Video file"
-                    decoderArtworkHint == DecoderArtworkHint.TrackedFile -> "Tracked file"
-                    decoderArtworkHint == DecoderArtworkHint.GameFile -> "Game file"
-                    else -> "Audio file"
-                }
-                if (isVideoFile) {
-                    Icon(
-                        imageVector = Icons.Default.VideoFile,
-                        contentDescription = contentDescription,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                    )
-                } else if (decoderArtworkHint == DecoderArtworkHint.TrackedFile) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_file_tracked),
-                        contentDescription = contentDescription,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                    )
-                } else if (decoderArtworkHint == DecoderArtworkHint.GameFile) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_file_game),
-                        contentDescription = contentDescription,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.AudioFile,
-                        contentDescription = contentDescription,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                    )
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    iconContent()
                 }
             }
         }

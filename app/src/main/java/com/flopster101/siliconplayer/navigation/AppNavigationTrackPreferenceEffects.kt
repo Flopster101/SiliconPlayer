@@ -23,6 +23,7 @@ internal fun AppNavigationTrackPreferenceEffects(
     fadePauseResume: Boolean,
     rememberBrowserLocation: Boolean,
     showParentDirectoryEntry: Boolean,
+    showFileIconChipBackground: Boolean,
     sortArchivesBeforeFiles: Boolean,
     browserNameSortMode: BrowserNameSortMode,
     onArtworkBitmapChanged: (androidx.compose.ui.graphics.ImageBitmap?) -> Unit,
@@ -110,6 +111,15 @@ internal fun AppNavigationTrackPreferenceEffects(
     LaunchedEffect(showParentDirectoryEntry) {
         prefs.edit()
             .putBoolean(AppPreferenceKeys.BROWSER_SHOW_PARENT_DIRECTORY_ENTRY, showParentDirectoryEntry)
+            .apply()
+    }
+
+    LaunchedEffect(showFileIconChipBackground) {
+        prefs.edit()
+            .putBoolean(
+                AppPreferenceKeys.BROWSER_SHOW_FILE_ICON_CHIP_BACKGROUND,
+                showFileIconChipBackground
+            )
             .apply()
     }
 

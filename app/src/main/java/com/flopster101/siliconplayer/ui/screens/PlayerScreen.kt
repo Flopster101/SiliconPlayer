@@ -1335,7 +1335,12 @@ private fun TrackInfoChips(
             maxWidth <= 680.dp -> 1
             else -> 0
         }
-        val compactLevel = maxOf(widthCompactLevel, compactHeightLevel.coerceAtMost(3))
+        val heightCompactLevel = when (compactHeightLevel.coerceAtMost(3)) {
+            3 -> 2
+            2 -> 1
+            else -> compactHeightLevel.coerceAtLeast(0)
+        }
+        val compactLevel = maxOf(widthCompactLevel, heightCompactLevel)
         Row(
             modifier = Modifier
                 .wrapContentWidth()
@@ -1343,10 +1348,10 @@ private fun TrackInfoChips(
                 .clickable(onClick = onClick),
             horizontalArrangement = Arrangement.spacedBy(
                 when (compactLevel) {
-                    3 -> 2.dp
-                    2 -> 3.dp
-                    1 -> 4.dp
-                    else -> 6.dp
+                    3 -> 3.dp
+                    2 -> 4.dp
+                    1 -> 5.dp
+                    else -> 7.dp
                 }
             )
         ) {
@@ -1591,15 +1596,15 @@ private fun TrackInfoChip(
     compactLevel: Int
 ) {
     val iconSize = when (compactLevel) {
-        3 -> 10.dp
-        2 -> 12.dp
-        1 -> 13.dp
-        else -> 14.dp
+        3 -> 12.dp
+        2 -> 13.dp
+        1 -> 14.dp
+        else -> 15.dp
     }
     val iconSlot = when (compactLevel) {
-        3 -> 10.dp
-        2 -> 12.dp
-        else -> 14.dp
+        3 -> 13.dp
+        2 -> 14.dp
+        else -> 15.dp
     }
     val sideInset = when (compactLevel) {
         3 -> 4.dp
@@ -1613,11 +1618,12 @@ private fun TrackInfoChip(
         1 -> 32.dp
         else -> 34.dp
     }
-    val textStartPadding = iconSlot + when (compactLevel) {
-        3 -> 1.dp
-        2 -> 2.dp
-        else -> 3.dp
+    val iconTextGap = when (compactLevel) {
+        3 -> 2.dp
+        2 -> 3.dp
+        else -> 4.dp
     }
+    val textStartPadding = iconSlot + iconTextGap
     val textEndPadding = when (compactLevel) {
         3 -> 1.dp
         2 -> 1.dp

@@ -226,6 +226,9 @@ int AudioEngine::readFromDecoderLocked(float* buffer, int numFrames, int channel
         positionSeconds.store(0.0);
         resetResamplerStateLocked();
         sharedAbsoluteInputPositionBaseSeconds = 0.0;
+        outputClockSeconds = 0.0;
+        timelineSmoothedSeconds = 0.0;
+        timelineSmootherInitialized = false;
         framesRead = decoder->read(buffer, numFrames);
         if (framesRead > 0) {
             return framesRead;
@@ -252,6 +255,9 @@ int AudioEngine::readFromDecoderLocked(float* buffer, int numFrames, int channel
             positionSeconds.store(0.0);
             resetResamplerStateLocked();
             sharedAbsoluteInputPositionBaseSeconds = 0.0;
+            outputClockSeconds = 0.0;
+            timelineSmoothedSeconds = 0.0;
+            timelineSmootherInitialized = false;
             framesRead = decoder->read(buffer, numFrames);
             if (framesRead > 0) {
                 return framesRead;
@@ -261,6 +267,9 @@ int AudioEngine::readFromDecoderLocked(float* buffer, int numFrames, int channel
             positionSeconds.store(0.0);
             resetResamplerStateLocked();
             sharedAbsoluteInputPositionBaseSeconds = 0.0;
+            outputClockSeconds = 0.0;
+            timelineSmoothedSeconds = 0.0;
+            timelineSmootherInitialized = false;
             framesRead = decoder->read(buffer, numFrames);
             if (framesRead > 0) {
                 return framesRead;
@@ -720,10 +729,21 @@ void AudioEngine::renderWorkerLoop() {
                 }
                 if (decoderPosition >= 0.0) {
                     const bool loopPointRepeatMode = repeatMode.load() == 2;
+                    const int repeatModeNow = repeatMode.load();
                     const double backwardJumpSeconds = nextPosition - decoderPosition;
+                    const bool restartLikeBackwardJump =
+                            !loopPointRepeatMode &&
+                            (repeatModeNow == 1 || repeatModeNow == 3) &&
+                            backwardJumpSeconds > 1.0 &&
+                            decoderPosition < 2.0;
                     if (loopPointRepeatMode && backwardJumpSeconds > 0.5) {
                         // In loop-point mode, backward timeline jumps are expected at wrap.
                         // Snap immediately to avoid visible "step-back" drift in the seek bar.
+                        nextPosition = decoderPosition;
+                        outputClockSeconds = decoderPosition;
+                    } else if (restartLikeBackwardJump) {
+                        // Repeat-track/subtune restarts should also snap immediately instead
+                        // of easing back from the previous end position.
                         nextPosition = decoderPosition;
                         outputClockSeconds = decoderPosition;
                     } else {

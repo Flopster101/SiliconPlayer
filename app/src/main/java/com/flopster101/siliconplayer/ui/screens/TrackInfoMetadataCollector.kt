@@ -133,6 +133,15 @@ internal data class HivelyTrackerMetadata(
     val instrumentNames: String = ""
 )
 
+internal data class KlystrackMetadata(
+    val formatName: String = "",
+    val trackCount: Int = 0,
+    val instrumentCount: Int = 0,
+    val songLengthRows: Int = 0,
+    val currentRow: Int = -1,
+    val instrumentNames: String = ""
+)
+
 internal data class UadeMetadata(
     val formatName: String = "",
     val moduleName: String = "",
@@ -176,6 +185,7 @@ internal data class TrackInfoLiveMetadata(
     val sc68: Sc68Metadata = Sc68Metadata(),
     val adplug: AdplugMetadata = AdplugMetadata(),
     val hivelyTracker: HivelyTrackerMetadata = HivelyTrackerMetadata(),
+    val klystrack: KlystrackMetadata = KlystrackMetadata(),
     val uade: UadeMetadata = UadeMetadata()
 )
 
@@ -355,6 +365,17 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
                 currentTempo = NativeBridge.getHivelyCurrentTempo(),
                 mixGainPercent = NativeBridge.getHivelyMixGainPercent(),
                 instrumentNames = NativeBridge.getHivelyInstrumentNames()
+            )
+        )
+
+        decoderName.equals("Klystrack", ignoreCase = true) -> common.copy(
+            klystrack = KlystrackMetadata(
+                formatName = NativeBridge.getKlystrackFormatName(),
+                trackCount = NativeBridge.getKlystrackTrackCount(),
+                instrumentCount = NativeBridge.getKlystrackInstrumentCount(),
+                songLengthRows = NativeBridge.getKlystrackSongLengthRows(),
+                currentRow = NativeBridge.getKlystrackCurrentRow(),
+                instrumentNames = NativeBridge.getKlystrackInstrumentNames()
             )
         )
 

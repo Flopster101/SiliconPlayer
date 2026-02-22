@@ -37,6 +37,10 @@ bool KlystrackDecoder::open(const char* path) {
     title = std::filesystem::path(sourcePath).stem().string();
     artist.clear();
     genre = "Klystrack";
+    formatName = "KT";
+    trackCount = 0;
+    instrumentCount = 0;
+    instrumentNames.clear();
     playbackPositionSeconds = 0.0;
     durationSeconds = 0.0;
     durationReliable = false;
@@ -59,12 +63,7 @@ bool KlystrackDecoder::open(const char* path) {
     KSND_SetPlayerQuality(player, 2);
     applyRepeatModeLocked();
     KSND_PlaySong(player, song, 0);
-
-    KSongInfo info{};
-    const KSongInfo* resolvedInfo = KSND_GetSongInfo(song, &info);
-    if (resolvedInfo && resolvedInfo->song_title && resolvedInfo->song_title[0] != '\0') {
-        title = resolvedInfo->song_title;
-    }
+    updateSongInfoLocked();
 
     songLengthRows = std::max(0, KSND_GetSongLength(song));
     if (songLengthRows > 0) {
@@ -91,6 +90,10 @@ void KlystrackDecoder::closeInternalLocked() {
     title.clear();
     artist.clear();
     genre.clear();
+    formatName = "KT";
+    trackCount = 0;
+    instrumentCount = 0;
+    instrumentNames.clear();
     durationSeconds = 0.0;
     durationReliable = false;
     playbackPositionSeconds = 0.0;
@@ -102,6 +105,41 @@ void KlystrackDecoder::closeInternalLocked() {
 void KlystrackDecoder::close() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     closeInternalLocked();
+}
+
+void KlystrackDecoder::updateSongInfoLocked() {
+    trackCount = 0;
+    instrumentCount = 0;
+    instrumentNames.clear();
+    if (!song) {
+        return;
+    }
+
+    KSongInfo info{};
+    const KSongInfo* resolvedInfo = KSND_GetSongInfo(song, &info);
+    if (!resolvedInfo) {
+        return;
+    }
+
+    if (resolvedInfo->song_title && resolvedInfo->song_title[0] != '\0') {
+        title = resolvedInfo->song_title;
+    }
+
+    trackCount = std::max(0, resolvedInfo->n_channels);
+    instrumentCount = std::max(0, resolvedInfo->n_instruments);
+    const int maxInstruments = std::min(instrumentCount, 128);
+    instrumentNames.reserve(static_cast<size_t>(maxInstruments) * 12);
+    for (int i = 0; i < maxInstruments; ++i) {
+        if (!instrumentNames.empty()) {
+            instrumentNames.push_back('\n');
+        }
+        instrumentNames.append(std::to_string(i + 1));
+        instrumentNames.append(". ");
+        const char* instrumentName = resolvedInfo->instrument_name[i];
+        if (instrumentName) {
+            instrumentNames.append(instrumentName);
+        }
+    }
 }
 
 void KlystrackDecoder::applyRepeatModeLocked() {
@@ -241,6 +279,39 @@ std::string KlystrackDecoder::getArtist() {
 std::string KlystrackDecoder::getGenre() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return genre;
+}
+
+std::string KlystrackDecoder::getFormatNameInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return formatName;
+}
+
+int KlystrackDecoder::getTrackCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return trackCount;
+}
+
+int KlystrackDecoder::getInstrumentCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return instrumentCount;
+}
+
+int KlystrackDecoder::getSongLengthRowsInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return songLengthRows;
+}
+
+int KlystrackDecoder::getCurrentRowInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player) {
+        return -1;
+    }
+    return std::max(0, KSND_GetPlayPosition(player));
+}
+
+std::string KlystrackDecoder::getInstrumentNamesInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return instrumentNames;
 }
 
 void KlystrackDecoder::setRepeatMode(int mode) {

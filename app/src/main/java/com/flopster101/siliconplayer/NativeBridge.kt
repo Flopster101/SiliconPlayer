@@ -168,6 +168,12 @@ object NativeBridge {
     external fun getHivelyCurrentTempo(): Int
     external fun getHivelyMixGainPercent(): Int
     external fun getHivelyInstrumentNames(): String
+    external fun getKlystrackFormatName(): String
+    external fun getKlystrackTrackCount(): Int
+    external fun getKlystrackInstrumentCount(): Int
+    external fun getKlystrackSongLengthRows(): Int
+    external fun getKlystrackCurrentRow(): Int
+    external fun getKlystrackInstrumentNames(): String
     external fun getUadeFormatName(): String
     external fun getUadeModuleName(): String
     external fun getUadePlayerName(): String

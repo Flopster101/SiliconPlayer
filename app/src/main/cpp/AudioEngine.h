@@ -171,6 +171,12 @@ public:
     int getHivelyCurrentTempo();
     int getHivelyMixGainPercent();
     std::string getHivelyInstrumentNames();
+    std::string getKlystrackFormatName();
+    int getKlystrackTrackCount();
+    int getKlystrackInstrumentCount();
+    int getKlystrackSongLengthRows();
+    int getKlystrackCurrentRow();
+    std::string getKlystrackInstrumentNames();
     std::string getUadeFormatName();
     std::string getUadeModuleName();
     std::string getUadePlayerName();

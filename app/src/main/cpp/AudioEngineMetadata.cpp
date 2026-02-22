@@ -10,6 +10,7 @@
 #include "decoders/Sc68Decoder.h"
 #include "decoders/AdPlugDecoder.h"
 #include "decoders/HivelyTrackerDecoder.h"
+#include "decoders/KlystrackDecoder.h"
 #include "decoders/UadeDecoder.h"
 
 bool AudioEngine::consumeNaturalEndEvent() {
@@ -899,6 +900,48 @@ std::string AudioEngine::getHivelyInstrumentNames() {
     if (!decoder) return "";
     auto* hivelyDecoder = dynamic_cast<HivelyTrackerDecoder*>(decoder.get());
     return hivelyDecoder ? hivelyDecoder->getInstrumentNamesInfo() : "";
+}
+
+std::string AudioEngine::getKlystrackFormatName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* klystrackDecoder = dynamic_cast<KlystrackDecoder*>(decoder.get());
+    return klystrackDecoder ? klystrackDecoder->getFormatNameInfo() : "";
+}
+
+int AudioEngine::getKlystrackTrackCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* klystrackDecoder = dynamic_cast<KlystrackDecoder*>(decoder.get());
+    return klystrackDecoder ? klystrackDecoder->getTrackCountInfo() : 0;
+}
+
+int AudioEngine::getKlystrackInstrumentCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* klystrackDecoder = dynamic_cast<KlystrackDecoder*>(decoder.get());
+    return klystrackDecoder ? klystrackDecoder->getInstrumentCountInfo() : 0;
+}
+
+int AudioEngine::getKlystrackSongLengthRows() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* klystrackDecoder = dynamic_cast<KlystrackDecoder*>(decoder.get());
+    return klystrackDecoder ? klystrackDecoder->getSongLengthRowsInfo() : 0;
+}
+
+int AudioEngine::getKlystrackCurrentRow() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return -1;
+    auto* klystrackDecoder = dynamic_cast<KlystrackDecoder*>(decoder.get());
+    return klystrackDecoder ? klystrackDecoder->getCurrentRowInfo() : -1;
+}
+
+std::string AudioEngine::getKlystrackInstrumentNames() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* klystrackDecoder = dynamic_cast<KlystrackDecoder*>(decoder.get());
+    return klystrackDecoder ? klystrackDecoder->getInstrumentNamesInfo() : "";
 }
 
 std::string AudioEngine::getUadeFormatName() {

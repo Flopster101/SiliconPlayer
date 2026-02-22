@@ -168,6 +168,16 @@ internal fun TrackInfoCoreSections(
             if (metadata.hivelyTracker.instrumentNames.isNotBlank()) TrackInfoDetailsRow("Instrument names", metadata.hivelyTracker.instrumentNames)
         }
 
+        decoderName.equals("Klystrack", ignoreCase = true) -> {
+            TrackInfoSectionHeader("Klystrack")
+            if (metadata.klystrack.formatName.isNotBlank()) TrackInfoDetailsRow("Format", metadata.klystrack.formatName)
+            if (metadata.klystrack.trackCount > 0) TrackInfoDetailsRow("Tracks", metadata.klystrack.trackCount.toString())
+            if (metadata.klystrack.instrumentCount > 0) TrackInfoDetailsRow("Instruments", metadata.klystrack.instrumentCount.toString())
+            if (metadata.klystrack.songLengthRows > 0) TrackInfoDetailsRow("Length (rows)", metadata.klystrack.songLengthRows.toString())
+            if (metadata.klystrack.currentRow >= 0) TrackInfoDetailsRow("Current row", metadata.klystrack.currentRow.toString())
+            if (metadata.klystrack.instrumentNames.isNotBlank()) TrackInfoDetailsRow("Instrument names", metadata.klystrack.instrumentNames)
+        }
+
         decoderName.equals("UADE", ignoreCase = true) -> {
             TrackInfoSectionHeader("UADE")
             if (metadata.uade.formatName.isNotBlank()) TrackInfoDetailsRow("Format name", metadata.uade.formatName)
@@ -337,6 +347,16 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.hivelyTracker.currentTempo > 0) row("Current tempo", metadata.hivelyTracker.currentTempo.toString())
             if (metadata.hivelyTracker.mixGainPercent > 0) row("Mix gain", "${metadata.hivelyTracker.mixGainPercent}%")
             if (metadata.hivelyTracker.instrumentNames.isNotBlank()) row("Instrument names", metadata.hivelyTracker.instrumentNames)
+        }
+
+        decoderName.equals("Klystrack", ignoreCase = true) -> {
+            builder.append('\n').append("[Klystrack]").append('\n')
+            if (metadata.klystrack.formatName.isNotBlank()) row("Format", metadata.klystrack.formatName)
+            if (metadata.klystrack.trackCount > 0) row("Tracks", metadata.klystrack.trackCount.toString())
+            if (metadata.klystrack.instrumentCount > 0) row("Instruments", metadata.klystrack.instrumentCount.toString())
+            if (metadata.klystrack.songLengthRows > 0) row("Length (rows)", metadata.klystrack.songLengthRows.toString())
+            if (metadata.klystrack.currentRow >= 0) row("Current row", metadata.klystrack.currentRow.toString())
+            if (metadata.klystrack.instrumentNames.isNotBlank()) row("Instrument names", metadata.klystrack.instrumentNames)
         }
 
         decoderName.equals("UADE", ignoreCase = true) -> {

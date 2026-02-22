@@ -30,6 +30,12 @@ public:
     std::string getTitle() override;
     std::string getArtist() override;
     std::string getGenre() override;
+    std::string getFormatNameInfo();
+    int getTrackCountInfo();
+    int getInstrumentCountInfo();
+    int getSongLengthRowsInfo();
+    int getCurrentRowInfo();
+    std::string getInstrumentNamesInfo();
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override;
@@ -48,6 +54,10 @@ private:
     std::string title;
     std::string artist;
     std::string genre;
+    std::string formatName = "KT";
+    int trackCount = 0;
+    int instrumentCount = 0;
+    std::string instrumentNames;
 
     int sampleRateHz = 44100;
     int channels = 2;
@@ -60,6 +70,7 @@ private:
 
     void closeInternalLocked();
     void applyRepeatModeLocked();
+    void updateSongInfoLocked();
     int resolveRowForTimeMsLocked(int targetMs) const;
     static int normalizeRepeatMode(int mode);
 };

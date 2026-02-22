@@ -1369,6 +1369,42 @@ Java_com_flopster101_siliconplayer_NativeBridge_getHivelyInstrumentNames(JNIEnv*
 }
 
 extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getKlystrackFormatName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getKlystrackFormatName());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getKlystrackTrackCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getKlystrackTrackCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getKlystrackInstrumentCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getKlystrackInstrumentCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getKlystrackSongLengthRows(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getKlystrackSongLengthRows());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getKlystrackCurrentRow(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return -1;
+    return static_cast<jint>(audioEngine->getKlystrackCurrentRow());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getKlystrackInstrumentNames(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getKlystrackInstrumentNames());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getUadeFormatName(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) return toJString(env, "");
     return toJString(env, audioEngine->getUadeFormatName());

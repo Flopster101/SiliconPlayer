@@ -1008,6 +1008,23 @@ private fun detectStorageLocations(context: Context): List<StorageLocation> {
         directory = internalStorage
     )
 
+    // On some Android 10 devices/emulators with scoped-storage quirks, the legacy
+    // Environment path can be missing or unusable. Recover internal storage root
+    // from app-specific external dirs as a fallback.
+    context.getExternalFilesDirs(null)
+        .orEmpty()
+        .forEach { externalDir ->
+            if (externalDir == null) return@forEach
+            if (Environment.isExternalStorageRemovable(externalDir)) return@forEach
+            val volumeRoot = resolveVolumeRoot(externalDir) ?: return@forEach
+            addLocation(
+                kind = StorageKind.INTERNAL,
+                typeLabel = "Internal storage",
+                name = volumeRoot.absolutePath,
+                directory = volumeRoot
+            )
+        }
+
     val storageManager = context.getSystemService(StorageManager::class.java)
     val removableFromVolumes = mutableSetOf<String>()
     data class RemovableVolumeCandidate(
@@ -1055,7 +1072,8 @@ private fun detectStorageLocations(context: Context): List<StorageLocation> {
         removableFromVolumes += candidate.root.absolutePath
     }
 
-    // Fallback scan for devices that may not expose a StorageVolume path on some OEMs.
+    // Fallback scan for removable media on devices that may not expose a
+    // StorageVolume path on some OEMs.
     context.getExternalFilesDirs(null)
         .orEmpty()
         .forEach { externalDir ->

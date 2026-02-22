@@ -64,9 +64,9 @@ internal fun rememberStoragePermissionState(context: Context): StoragePermission
     }
 
     val storagePermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        hasPermission = isGranted
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        hasPermission = checkStoragePermission(context)
     }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -77,7 +77,12 @@ internal fun rememberStoragePermissionState(context: Context): StoragePermission
         if (Build.VERSION.SDK_INT >= 30) {
             openAllFilesAccessSettings(context)
         } else {
-            storagePermissionLauncher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+            storagePermissionLauncher.launch(
+                arrayOf(
+                    android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                )
+            )
         }
     }
 
@@ -159,10 +164,15 @@ private fun checkStoragePermission(context: Context): Boolean {
     return if (Build.VERSION.SDK_INT >= 30) {
         Environment.isExternalStorageManager()
     } else {
-        ContextCompat.checkSelfPermission(
+        val hasRead = ContextCompat.checkSelfPermission(
             context,
             android.Manifest.permission.READ_EXTERNAL_STORAGE
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val hasWrite = ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        hasRead || hasWrite
     }
 }
 

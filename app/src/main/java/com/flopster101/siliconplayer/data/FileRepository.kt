@@ -11,7 +11,12 @@ class FileRepository(
 ) {
 
     fun getFiles(directory: File): List<FileItem> {
-        val files = directory.listFiles() ?: return emptyList()
+        val files = directory.listFiles()
+            ?: if (directory.absolutePath == "/") {
+                buildRootFallbackEntries().toTypedArray()
+            } else {
+                return emptyList()
+            }
         return files
             .filter {
                 it.isDirectory ||
@@ -51,6 +56,25 @@ class FileRepository(
                 }
                 left.name.compareTo(right.name)
             }
+    }
+
+    private fun buildRootFallbackEntries(): List<File> {
+        val candidates = linkedSetOf(
+            File("/storage"),
+            File("/sdcard"),
+            File("/mnt"),
+            File("/data"),
+            File("/system"),
+            File("/vendor"),
+            File("/product"),
+            File("/odm"),
+            File("/proc"),
+            File("/sys"),
+            File("/dev"),
+            File("/storage/emulated"),
+            File("/storage/emulated/0")
+        )
+        return candidates.filter { it.exists() && it.isDirectory }
     }
 
     private fun sortRank(kind: FileItem.Kind): Int {

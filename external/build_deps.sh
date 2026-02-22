@@ -2134,14 +2134,119 @@ EOF
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build Furnace headless engine (libfurnace shared)
+# -----------------------------------------------------------------------------
+build_furnace() {
+    local ABI=$1
+    echo "Building furnace (headless) for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/furnace"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+    local CMAKE_FILE="$PROJECT_PATH/CMakeLists.txt"
+    local MOBILE_FLAG_OLD="if (ANDROID AND NOT TERMUX)"
+    local MOBILE_FLAG_NEW="if (ANDROID AND NOT TERMUX AND BUILD_GUI)"
+    local BUILT_LIB=""
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "furnace source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    if [ ! -f "$CMAKE_FILE" ]; then
+        echo "Error: furnace source at $PROJECT_PATH does not contain CMakeLists.txt."
+        echo "Ensure submodules are initialized:"
+        echo "  git -C \"$ABSOLUTE_PATH\" submodule update --init --recursive"
+        return 1
+    fi
+
+    if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libfurnace.so" ]; then
+        echo "furnace already built for $ABI -> skipping"
+        return 0
+    fi
+
+    mkdir -p "$BUILD_DIR" "$INSTALL_DIR/lib" "$INSTALL_DIR/include/furnace"
+
+    # Furnace defines IS_MOBILE on Android and then expects SDL2. For headless
+    # builds we patch this define guard in source once (idempotent).
+    if grep -Fq "$MOBILE_FLAG_NEW" "$CMAKE_FILE"; then
+        echo "furnace mobile define already headless-safe."
+    elif grep -Fq "$MOBILE_FLAG_OLD" "$CMAKE_FILE"; then
+        sed -i "s/if (ANDROID AND NOT TERMUX)/if (ANDROID AND NOT TERMUX AND BUILD_GUI)/" "$CMAKE_FILE"
+        echo "Patched furnace CMakeLists for headless Android build."
+    else
+        echo "Warning: furnace mobile define pattern not found; continuing without patch."
+    fi
+
+    if ! cmake -Wno-dev -Wno-deprecated \
+        -S "$PROJECT_PATH" \
+        -B "$BUILD_DIR" \
+        -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+        -DANDROID_ABI="$ABI" \
+        -DANDROID_PLATFORM="android-$ANDROID_API" \
+        -DCMAKE_C_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$DEP_OPT_FLAGS" \
+        -DCMAKE_C_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
+        -DCMAKE_CXX_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_GUI=OFF \
+        -DUSE_SDL2=OFF \
+        -DUSE_SNDFILE=ON \
+        -DWITH_LOCALE=OFF \
+        -DUSE_MOMO=OFF \
+        -DUSE_RTMIDI=OFF \
+        -DUSE_BACKWARD=OFF \
+        -DWITH_OGG=OFF \
+        -DWITH_MPEG=OFF \
+        -DWITH_JACK=OFF \
+        -DWITH_PORTAUDIO=OFF \
+        -DWITH_RENDER_SDL=OFF \
+        -DWITH_RENDER_OPENGL=OFF \
+        -DWITH_RENDER_OPENGL1=OFF \
+        -DWITH_RENDER_DX11=OFF \
+        -DWITH_RENDER_DX9=OFF \
+        -DWITH_RENDER_METAL=OFF \
+        -DUSE_GLES=OFF \
+        -DUSE_FREETYPE=OFF \
+        -DWITH_DEMOS=OFF \
+        -DWITH_INSTRUMENTS=OFF \
+        -DWITH_WAVETABLES=OFF \
+        -DNO_INTRO=ON \
+        -DWARNINGS_ARE_ERRORS=OFF; then
+        return 1
+    fi
+
+    if ! cmake --build "$BUILD_DIR" --target furnace -j"$NPROC"; then
+        return 1
+    fi
+
+    BUILT_LIB="$BUILD_DIR/libfurnace.so"
+    if [ ! -f "$BUILT_LIB" ]; then
+        BUILT_LIB="$(find "$BUILD_DIR" -type f -name 'libfurnace.so' | head -n 1)"
+    fi
+    if [ -z "$BUILT_LIB" ] || [ ! -f "$BUILT_LIB" ]; then
+        echo "Error: furnace shared library not found after build."
+        return 1
+    fi
+
+    cp "$BUILT_LIB" "$INSTALL_DIR/lib/libfurnace.so"
+
+    mkdir -p "$INSTALL_DIR/include/furnace/engine" "$INSTALL_DIR/include/furnace/audio"
+    cp "$PROJECT_PATH/src/"*.h "$INSTALL_DIR/include/furnace/" 2>/dev/null || true
+    cp "$PROJECT_PATH/src/engine/"*.h "$INSTALL_DIR/include/furnace/engine/" 2>/dev/null || true
+    cp "$PROJECT_PATH/src/audio/"*.h "$INSTALL_DIR/include/furnace/audio/" 2>/dev/null || true
+}
+
+# -----------------------------------------------------------------------------
 # Argument Parsing
 # -----------------------------------------------------------------------------
 usage() {
     echo "Usage: $0 <abi|all> <lib|all[,lib2,...]> [clean]"
     echo "  ABI: all, arm64-v8a, armeabi-v7a, x86_64 (x86 supported only when explicitly requested)"
-    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68, libbinio, adplug, libzakalwe, bencodetools, vasm, uade, hivelytracker, klystrack"
+    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68, libbinio, adplug, libzakalwe, bencodetools, vasm, uade, hivelytracker, klystrack, furnace"
     echo "  clean (optional): force rebuild (bypass already-built skip checks)"
-    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68, binio, libadplug, zakalwe, bencode, assembler/vasm, libuade, hvl/hively, kly/kt"
+    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68, binio, libadplug, zakalwe, bencode, assembler/vasm, libuade, hvl/hively, kly/kt, fur"
 }
 
 if [ "$#" -eq 1 ]; then
@@ -2233,6 +2338,9 @@ normalize_lib_name() {
         kly|kt|klystrack|libklystrack)
             echo "klystrack"
             ;;
+        fur|furnace|libfurnace)
+            echo "furnace"
+            ;;
         *)
             echo "$lib"
             ;;
@@ -2274,7 +2382,7 @@ is_valid_abi() {
 is_valid_lib() {
     local lib="$1"
     case "$lib" in
-        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth|sc68|libbinio|adplug|libzakalwe|bencodetools|vasm|uade|hivelytracker|klystrack)
+        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth|sc68|libbinio|adplug|libzakalwe|bencodetools|vasm|uade|hivelytracker|klystrack|furnace)
             return 0
             ;;
         *)
@@ -2477,6 +2585,10 @@ for ABI in "${ABIS[@]}"; do
 
     if target_has_lib "klystrack"; then
         build_klystrack "$ABI"
+    fi
+
+    if target_has_lib "furnace"; then
+        build_furnace "$ABI"
     fi
 done
 

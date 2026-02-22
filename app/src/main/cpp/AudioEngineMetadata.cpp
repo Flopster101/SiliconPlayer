@@ -11,6 +11,7 @@
 #include "decoders/AdPlugDecoder.h"
 #include "decoders/HivelyTrackerDecoder.h"
 #include "decoders/KlystrackDecoder.h"
+#include "decoders/FurnaceDecoder.h"
 #include "decoders/UadeDecoder.h"
 
 bool AudioEngine::consumeNaturalEndEvent() {
@@ -942,6 +943,125 @@ std::string AudioEngine::getKlystrackInstrumentNames() {
     if (!decoder) return "";
     auto* klystrackDecoder = dynamic_cast<KlystrackDecoder*>(decoder.get());
     return klystrackDecoder ? klystrackDecoder->getInstrumentNamesInfo() : "";
+}
+
+std::string AudioEngine::getFurnaceFormatName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getFormatNameInfo() : "";
+}
+
+int AudioEngine::getFurnaceSongVersion() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getSongVersionInfo() : 0;
+}
+
+std::string AudioEngine::getFurnaceSystemName() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getSystemNameInfo() : "";
+}
+
+std::string AudioEngine::getFurnaceSystemNames() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getSystemNamesInfo() : "";
+}
+
+int AudioEngine::getFurnaceSystemCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getSystemCountInfo() : 0;
+}
+
+int AudioEngine::getFurnaceSongChannelCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getSongChannelCountInfo() : 0;
+}
+
+int AudioEngine::getFurnaceInstrumentCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getInstrumentCountInfo() : 0;
+}
+
+int AudioEngine::getFurnaceWavetableCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getWavetableCountInfo() : 0;
+}
+
+int AudioEngine::getFurnaceSampleCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getSampleCountInfo() : 0;
+}
+
+int AudioEngine::getFurnaceOrderCount() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getOrderCountInfo() : 0;
+}
+
+int AudioEngine::getFurnaceRowsPerPattern() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getRowsPerPatternInfo() : 0;
+}
+
+int AudioEngine::getFurnaceCurrentOrder() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return -1;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getCurrentOrderInfo() : -1;
+}
+
+int AudioEngine::getFurnaceCurrentRow() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return -1;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getCurrentRowInfo() : -1;
+}
+
+int AudioEngine::getFurnaceCurrentTick() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return -1;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getCurrentTickInfo() : -1;
+}
+
+int AudioEngine::getFurnaceCurrentSpeed() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getCurrentSpeedInfo() : 0;
+}
+
+int AudioEngine::getFurnaceGrooveLength() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getGrooveLengthInfo() : 0;
+}
+
+float AudioEngine::getFurnaceCurrentHz() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return 0.0f;
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getCurrentHzInfo() : 0.0f;
 }
 
 std::string AudioEngine::getUadeFormatName() {

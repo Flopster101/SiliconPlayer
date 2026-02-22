@@ -174,6 +174,23 @@ object NativeBridge {
     external fun getKlystrackSongLengthRows(): Int
     external fun getKlystrackCurrentRow(): Int
     external fun getKlystrackInstrumentNames(): String
+    external fun getFurnaceFormatName(): String
+    external fun getFurnaceSongVersion(): Int
+    external fun getFurnaceSystemName(): String
+    external fun getFurnaceSystemNames(): String
+    external fun getFurnaceSystemCount(): Int
+    external fun getFurnaceSongChannelCount(): Int
+    external fun getFurnaceInstrumentCount(): Int
+    external fun getFurnaceWavetableCount(): Int
+    external fun getFurnaceSampleCount(): Int
+    external fun getFurnaceOrderCount(): Int
+    external fun getFurnaceRowsPerPattern(): Int
+    external fun getFurnaceCurrentOrder(): Int
+    external fun getFurnaceCurrentRow(): Int
+    external fun getFurnaceCurrentTick(): Int
+    external fun getFurnaceCurrentSpeed(): Int
+    external fun getFurnaceGrooveLength(): Int
+    external fun getFurnaceCurrentHz(): Float
     external fun getUadeFormatName(): String
     external fun getUadeModuleName(): String
     external fun getUadePlayerName(): String

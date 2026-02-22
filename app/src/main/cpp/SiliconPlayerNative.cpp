@@ -1405,6 +1405,108 @@ Java_com_flopster101_siliconplayer_NativeBridge_getKlystrackInstrumentNames(JNIE
 }
 
 extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceFormatName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getFurnaceFormatName());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceSongVersion(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getFurnaceSongVersion());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceSystemName(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getFurnaceSystemName());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceSystemNames(JNIEnv* env, jobject) {
+    if (audioEngine == nullptr) return toJString(env, "");
+    return toJString(env, audioEngine->getFurnaceSystemNames());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceSystemCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getFurnaceSystemCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceSongChannelCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getFurnaceSongChannelCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceInstrumentCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getFurnaceInstrumentCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceWavetableCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getFurnaceWavetableCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceSampleCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getFurnaceSampleCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceOrderCount(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getFurnaceOrderCount());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceRowsPerPattern(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getFurnaceRowsPerPattern());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceCurrentOrder(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return -1;
+    return static_cast<jint>(audioEngine->getFurnaceCurrentOrder());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceCurrentRow(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return -1;
+    return static_cast<jint>(audioEngine->getFurnaceCurrentRow());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceCurrentTick(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return -1;
+    return static_cast<jint>(audioEngine->getFurnaceCurrentTick());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceCurrentSpeed(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getFurnaceCurrentSpeed());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceGrooveLength(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getFurnaceGrooveLength());
+}
+
+extern "C" JNIEXPORT jfloat JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getFurnaceCurrentHz(JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0.0f;
+    return static_cast<jfloat>(audioEngine->getFurnaceCurrentHz());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getUadeFormatName(JNIEnv* env, jobject) {
     if (audioEngine == nullptr) return toJString(env, "");
     return toJString(env, audioEngine->getUadeFormatName());

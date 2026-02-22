@@ -142,6 +142,26 @@ internal data class KlystrackMetadata(
     val instrumentNames: String = ""
 )
 
+internal data class FurnaceMetadata(
+    val formatName: String = "",
+    val songVersion: Int = 0,
+    val systemName: String = "",
+    val systemNames: String = "",
+    val systemCount: Int = 0,
+    val songChannelCount: Int = 0,
+    val instrumentCount: Int = 0,
+    val wavetableCount: Int = 0,
+    val sampleCount: Int = 0,
+    val orderCount: Int = 0,
+    val rowsPerPattern: Int = 0,
+    val currentOrder: Int = -1,
+    val currentRow: Int = -1,
+    val currentTick: Int = -1,
+    val currentSpeed: Int = 0,
+    val grooveLength: Int = 0,
+    val currentHz: Float = 0.0f
+)
+
 internal data class UadeMetadata(
     val formatName: String = "",
     val moduleName: String = "",
@@ -186,6 +206,7 @@ internal data class TrackInfoLiveMetadata(
     val adplug: AdplugMetadata = AdplugMetadata(),
     val hivelyTracker: HivelyTrackerMetadata = HivelyTrackerMetadata(),
     val klystrack: KlystrackMetadata = KlystrackMetadata(),
+    val furnace: FurnaceMetadata = FurnaceMetadata(),
     val uade: UadeMetadata = UadeMetadata()
 )
 
@@ -376,6 +397,28 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
                 songLengthRows = NativeBridge.getKlystrackSongLengthRows(),
                 currentRow = NativeBridge.getKlystrackCurrentRow(),
                 instrumentNames = NativeBridge.getKlystrackInstrumentNames()
+            )
+        )
+
+        decoderName.equals("Furnace", ignoreCase = true) -> common.copy(
+            furnace = FurnaceMetadata(
+                formatName = NativeBridge.getFurnaceFormatName(),
+                songVersion = NativeBridge.getFurnaceSongVersion(),
+                systemName = NativeBridge.getFurnaceSystemName(),
+                systemNames = NativeBridge.getFurnaceSystemNames(),
+                systemCount = NativeBridge.getFurnaceSystemCount(),
+                songChannelCount = NativeBridge.getFurnaceSongChannelCount(),
+                instrumentCount = NativeBridge.getFurnaceInstrumentCount(),
+                wavetableCount = NativeBridge.getFurnaceWavetableCount(),
+                sampleCount = NativeBridge.getFurnaceSampleCount(),
+                orderCount = NativeBridge.getFurnaceOrderCount(),
+                rowsPerPattern = NativeBridge.getFurnaceRowsPerPattern(),
+                currentOrder = NativeBridge.getFurnaceCurrentOrder(),
+                currentRow = NativeBridge.getFurnaceCurrentRow(),
+                currentTick = NativeBridge.getFurnaceCurrentTick(),
+                currentSpeed = NativeBridge.getFurnaceCurrentSpeed(),
+                grooveLength = NativeBridge.getFurnaceGrooveLength(),
+                currentHz = NativeBridge.getFurnaceCurrentHz()
             )
         )
 

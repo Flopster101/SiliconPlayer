@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 
 @Composable
 internal fun TrackInfoDetailsRow(label: String, value: String) {
@@ -176,6 +177,27 @@ internal fun TrackInfoCoreSections(
             if (metadata.klystrack.songLengthRows > 0) TrackInfoDetailsRow("Length (rows)", metadata.klystrack.songLengthRows.toString())
             if (metadata.klystrack.currentRow >= 0) TrackInfoDetailsRow("Current row", metadata.klystrack.currentRow.toString())
             if (metadata.klystrack.instrumentNames.isNotBlank()) TrackInfoDetailsRow("Instrument names", metadata.klystrack.instrumentNames)
+        }
+
+        decoderName.equals("Furnace", ignoreCase = true) -> {
+            TrackInfoSectionHeader("Furnace")
+            if (metadata.furnace.formatName.isNotBlank()) TrackInfoDetailsRow("Format", metadata.furnace.formatName)
+            if (metadata.furnace.songVersion > 0) TrackInfoDetailsRow("Song format version", metadata.furnace.songVersion.toString())
+            if (metadata.furnace.systemNames.isNotBlank()) TrackInfoDetailsRow("Systems", metadata.furnace.systemNames)
+            if (metadata.furnace.songChannelCount > 0) TrackInfoDetailsRow("Channels", metadata.furnace.songChannelCount.toString())
+            if (metadata.furnace.orderCount > 0) TrackInfoDetailsRow("Orders", metadata.furnace.orderCount.toString())
+            if (metadata.furnace.rowsPerPattern > 0) TrackInfoDetailsRow("Rows per pattern", metadata.furnace.rowsPerPattern.toString())
+            if (metadata.furnace.instrumentCount > 0) TrackInfoDetailsRow("Instruments", metadata.furnace.instrumentCount.toString())
+            if (metadata.furnace.wavetableCount > 0) TrackInfoDetailsRow("Wavetables", metadata.furnace.wavetableCount.toString())
+            if (metadata.furnace.sampleCount > 0) TrackInfoDetailsRow("Samples", metadata.furnace.sampleCount.toString())
+            if (metadata.furnace.currentOrder >= 0) TrackInfoDetailsRow("Current order", metadata.furnace.currentOrder.toString())
+            if (metadata.furnace.currentRow >= 0) TrackInfoDetailsRow("Current row", metadata.furnace.currentRow.toString())
+            if (metadata.furnace.currentTick >= 0) TrackInfoDetailsRow("Current tick", metadata.furnace.currentTick.toString())
+            if (metadata.furnace.currentSpeed > 0) TrackInfoDetailsRow("Current speed", metadata.furnace.currentSpeed.toString())
+            if (metadata.furnace.grooveLength > 0) TrackInfoDetailsRow("Groove length", metadata.furnace.grooveLength.toString())
+            if (metadata.furnace.currentHz > 0.0f) {
+                TrackInfoDetailsRow("Current Hz", String.format(Locale.US, "%.2f Hz", metadata.furnace.currentHz))
+            }
         }
 
         decoderName.equals("UADE", ignoreCase = true) -> {
@@ -357,6 +379,25 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.klystrack.songLengthRows > 0) row("Length (rows)", metadata.klystrack.songLengthRows.toString())
             if (metadata.klystrack.currentRow >= 0) row("Current row", metadata.klystrack.currentRow.toString())
             if (metadata.klystrack.instrumentNames.isNotBlank()) row("Instrument names", metadata.klystrack.instrumentNames)
+        }
+
+        decoderName.equals("Furnace", ignoreCase = true) -> {
+            builder.append('\n').append("[Furnace]").append('\n')
+            if (metadata.furnace.formatName.isNotBlank()) row("Format", metadata.furnace.formatName)
+            if (metadata.furnace.songVersion > 0) row("Song format version", metadata.furnace.songVersion.toString())
+            if (metadata.furnace.systemNames.isNotBlank()) row("Systems", metadata.furnace.systemNames)
+            if (metadata.furnace.songChannelCount > 0) row("Channels", metadata.furnace.songChannelCount.toString())
+            if (metadata.furnace.orderCount > 0) row("Orders", metadata.furnace.orderCount.toString())
+            if (metadata.furnace.rowsPerPattern > 0) row("Rows per pattern", metadata.furnace.rowsPerPattern.toString())
+            if (metadata.furnace.instrumentCount > 0) row("Instruments", metadata.furnace.instrumentCount.toString())
+            if (metadata.furnace.wavetableCount > 0) row("Wavetables", metadata.furnace.wavetableCount.toString())
+            if (metadata.furnace.sampleCount > 0) row("Samples", metadata.furnace.sampleCount.toString())
+            if (metadata.furnace.currentOrder >= 0) row("Current order", metadata.furnace.currentOrder.toString())
+            if (metadata.furnace.currentRow >= 0) row("Current row", metadata.furnace.currentRow.toString())
+            if (metadata.furnace.currentTick >= 0) row("Current tick", metadata.furnace.currentTick.toString())
+            if (metadata.furnace.currentSpeed > 0) row("Current speed", metadata.furnace.currentSpeed.toString())
+            if (metadata.furnace.grooveLength > 0) row("Groove length", metadata.furnace.grooveLength.toString())
+            if (metadata.furnace.currentHz > 0.0f) row("Current Hz", String.format(Locale.US, "%.2f Hz", metadata.furnace.currentHz))
         }
 
         decoderName.equals("UADE", ignoreCase = true) -> {

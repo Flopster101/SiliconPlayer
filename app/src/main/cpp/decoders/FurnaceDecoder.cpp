@@ -530,6 +530,179 @@ AudioDecoder::TimelineMode FurnaceDecoder::getTimelineMode() const {
     return TimelineMode::Discontinuous;
 }
 
+std::string FurnaceDecoder::getFormatNameInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return formatName;
+}
+
+int FurnaceDecoder::getSongVersionInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return 0;
+    }
+    return std::max(0, static_cast<int>(engine->song.version));
+}
+
+std::string FurnaceDecoder::getSystemNameInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return "";
+    }
+    if (engine->song.systemName.empty()) {
+        return "";
+    }
+    return std::string("1. ") + engine->song.systemName;
+}
+
+std::string FurnaceDecoder::getSystemNamesInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return "";
+    }
+
+    const int count = std::min(std::max(0, static_cast<int>(engine->song.systemLen)), DIV_MAX_CHIPS);
+    std::vector<std::string> names;
+    for (int i = 0; i < count; ++i) {
+        const char* systemName = engine->getSystemName(engine->song.system[i]);
+        if (!systemName || systemName[0] == '\0') {
+            continue;
+        }
+        names.emplace_back(systemName);
+    }
+
+    if (!names.empty()) {
+        std::string numberedList;
+        for (size_t i = 0; i < names.size(); ++i) {
+            if (!numberedList.empty()) {
+                numberedList += '\n';
+            }
+            numberedList += std::to_string(i + 1);
+            numberedList += ". ";
+            numberedList += names[i];
+        }
+        return numberedList;
+    }
+    return engine->song.systemName;
+}
+
+int FurnaceDecoder::getSystemCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return 0;
+    }
+    return std::max(0, static_cast<int>(engine->song.systemLen));
+}
+
+int FurnaceDecoder::getSongChannelCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return 0;
+    }
+    return std::max(0, engine->song.chans);
+}
+
+int FurnaceDecoder::getInstrumentCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return 0;
+    }
+    return std::max(0, engine->song.insLen);
+}
+
+int FurnaceDecoder::getWavetableCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return 0;
+    }
+    return std::max(0, engine->song.waveLen);
+}
+
+int FurnaceDecoder::getSampleCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return 0;
+    }
+    return std::max(0, engine->song.sampleLen);
+}
+
+int FurnaceDecoder::getOrderCountInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine || !engine->curSubSong) {
+        return 0;
+    }
+    return std::max(0, engine->curSubSong->ordersLen);
+}
+
+int FurnaceDecoder::getRowsPerPatternInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine || !engine->curSubSong) {
+        return 0;
+    }
+    return std::max(0, engine->curSubSong->patLen);
+}
+
+int FurnaceDecoder::getCurrentOrderInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return -1;
+    }
+    return std::max(0, static_cast<int>(engine->getOrder()));
+}
+
+int FurnaceDecoder::getCurrentRowInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return -1;
+    }
+    return std::max(0, engine->getRow());
+}
+
+int FurnaceDecoder::getCurrentTickInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return -1;
+    }
+    int order = 0;
+    int row = 0;
+    int tick = 0;
+    int speed = 0;
+    engine->getPlayPosTick(order, row, tick, speed);
+    return std::max(0, tick);
+}
+
+int FurnaceDecoder::getCurrentSpeedInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return 0;
+    }
+    int order = 0;
+    int row = 0;
+    int tick = 0;
+    int speed = 0;
+    engine->getPlayPosTick(order, row, tick, speed);
+    return std::max(0, speed);
+}
+
+int FurnaceDecoder::getGrooveLengthInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return 0;
+    }
+    return std::max(0, static_cast<int>(engine->getSpeeds().len));
+}
+
+float FurnaceDecoder::getCurrentHzInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return 0.0f;
+    }
+    const float hz = engine->getCurHz();
+    if (!std::isfinite(hz) || hz <= 0.0f) {
+        return 0.0f;
+    }
+    return hz;
+}
+
 std::vector<std::string> FurnaceDecoder::getSupportedExtensions() {
     return {
             "fur",

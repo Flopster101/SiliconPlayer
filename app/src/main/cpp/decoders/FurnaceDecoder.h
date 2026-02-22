@@ -42,6 +42,23 @@ public:
     int getPlaybackCapabilities() const override;
     double getPlaybackPositionSeconds() override;
     TimelineMode getTimelineMode() const override;
+    std::string getFormatNameInfo();
+    int getSongVersionInfo();
+    std::string getSystemNameInfo();
+    std::string getSystemNamesInfo();
+    int getSystemCountInfo();
+    int getSongChannelCountInfo();
+    int getInstrumentCountInfo();
+    int getWavetableCountInfo();
+    int getSampleCountInfo();
+    int getOrderCountInfo();
+    int getRowsPerPatternInfo();
+    int getCurrentOrderInfo();
+    int getCurrentRowInfo();
+    int getCurrentTickInfo();
+    int getCurrentSpeedInfo();
+    int getGrooveLengthInfo();
+    float getCurrentHzInfo();
 
     const char* getName() const override { return "Furnace"; }
     static std::vector<std::string> getSupportedExtensions();

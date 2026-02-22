@@ -300,7 +300,7 @@ val syncUadeRuntimeAssets = tasks.register("syncUadeRuntimeAssets") {
 
 val syncUadeRuntimeJniLibs = tasks.register("syncUadeRuntimeJniLibs") {
     group = "build setup"
-    description = "Sync ABI-specific UADE core executable into generated jniLibs."
+    description = "Sync ABI-specific runtime helper/shared native binaries into generated jniLibs."
 
     doLast {
         val destinationRoot = layout.buildDirectory
@@ -313,13 +313,23 @@ val syncUadeRuntimeJniLibs = tasks.register("syncUadeRuntimeJniLibs") {
             val sourceUadeCore = file("src/main/cpp/prebuilt/$abi/lib/uade/uadecore")
             if (!sourceUadeCore.isFile) {
                 logger.lifecycle("UADE core executable missing for $abi, skipping (${sourceUadeCore.absolutePath})")
-                return@forEach
+            } else {
+                copy {
+                    from(sourceUadeCore)
+                    into(File(destinationRoot, abi))
+                    rename { "libuadecore_exec.so" }
+                }
             }
 
-            copy {
-                from(sourceUadeCore)
-                into(File(destinationRoot, abi))
-                rename { "libuadecore_exec.so" }
+            val sourceFurnaceCore = file("src/main/cpp/prebuilt/$abi/lib/libfurnace.so")
+            if (!sourceFurnaceCore.isFile) {
+                logger.lifecycle("Furnace shared core missing for $abi, skipping (${sourceFurnaceCore.absolutePath})")
+            } else {
+                copy {
+                    from(sourceFurnaceCore)
+                    into(File(destinationRoot, abi))
+                    rename { "libfurnace.so" }
+                }
             }
         }
     }

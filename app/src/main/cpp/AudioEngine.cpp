@@ -13,6 +13,7 @@
 #include "decoders/UadeDecoder.h"
 #include "decoders/HivelyTrackerDecoder.h"
 #include "decoders/KlystrackDecoder.h"
+#include "decoders/FurnaceDecoder.h"
 
 namespace {
     struct DecoderRegistration {
@@ -64,6 +65,10 @@ namespace {
             DecoderRegistry::getInstance().registerDecoder("Klystrack", KlystrackDecoder::getSupportedExtensions(), []() {
                 return std::make_unique<KlystrackDecoder>();
             }, 15);
+
+            DecoderRegistry::getInstance().registerDecoder("Furnace", FurnaceDecoder::getSupportedExtensions(), []() {
+                return std::make_unique<FurnaceDecoder>();
+            }, 16);
         }
     };
 

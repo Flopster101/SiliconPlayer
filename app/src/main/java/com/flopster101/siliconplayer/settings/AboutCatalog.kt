@@ -208,6 +208,22 @@ internal object AboutCatalog {
                 "Integrated as baseline playback support for Klystrack song modules.",
                 "Uses static klystron replay library build from the bundled submodule."
             )
+        ),
+        AboutEntity(
+            id = "core.furnace",
+            kind = AboutEntityKind.Core,
+            name = "Furnace",
+            description = "Furnace Tracker playback core for .fur/.dmf modules using the upstream headless engine.",
+            author = "tildearrow and Furnace contributors",
+            license = "GPL-2.0-or-later",
+            links = listOf(
+                AboutEntityLink("Project", "https://tildearrow.org/furnace/"),
+                AboutEntityLink("Source", "https://github.com/tildearrow/furnace")
+            ),
+            integrationNotes = listOf(
+                "Integrated as baseline playback support with seek, repeat handling, subtunes, and core metadata.",
+                "Uses upstream Furnace engine in headless mode (no tracker GUI stack)."
+            )
         )
     )
 
@@ -308,7 +324,8 @@ internal object AboutCatalog {
         "AdPlug" to "core.adplug",
         "UADE" to "core.uade",
         "HivelyTracker" to "core.hivelytracker",
-        "Klystrack" to "core.klystrack"
+        "Klystrack" to "core.klystrack",
+        "Furnace" to "core.furnace"
     )
 
     private val entityById: Map<String, AboutEntity> = (coreEntries + libraryEntries).associateBy { it.id }

@@ -1,0 +1,538 @@
+#include "FurnaceDecoder.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <limits>
+
+#include <furnace/engine/engine.h>
+
+namespace {
+constexpr double kSeekEpsilonSeconds = 0.000001;
+
+std::vector<unsigned char> readBinaryFile(const std::string& path) {
+    std::ifstream stream(path, std::ios::binary | std::ios::ate);
+    if (!stream) {
+        return {};
+    }
+
+    const std::streamsize size = stream.tellg();
+    if (size <= 0) {
+        return {};
+    }
+
+    std::vector<unsigned char> data(static_cast<size_t>(size));
+    stream.seekg(0, std::ios::beg);
+    if (!stream.read(reinterpret_cast<char*>(data.data()), size)) {
+        return {};
+    }
+    return data;
+}
+
+std::string uppercaseExtensionWithoutDot(const std::filesystem::path& path) {
+    std::string ext = path.extension().string();
+    if (!ext.empty() && ext[0] == '.') {
+        ext.erase(ext.begin());
+    }
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::toupper(ch));
+    });
+    return ext;
+}
+} // namespace
+
+FurnaceDecoder::FurnaceDecoder() = default;
+
+FurnaceDecoder::~FurnaceDecoder() {
+    close();
+}
+
+int FurnaceDecoder::normalizeRepeatMode(int mode) {
+    if (mode < 0 || mode > 3) {
+        return 0;
+    }
+    return mode;
+}
+
+int FurnaceDecoder::clampSampleRate(int sampleRateHz) {
+    return std::clamp(sampleRateHz, 8000, 192000);
+}
+
+bool FurnaceDecoder::open(const char* path) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    closeInternalLocked();
+
+    if (!path || path[0] == '\0') {
+        return false;
+    }
+
+    sourcePath = path;
+    const auto fileData = readBinaryFile(sourcePath);
+    if (fileData.empty()) {
+        closeInternalLocked();
+        return false;
+    }
+
+    auto localEngine = std::make_unique<DivEngine>();
+    localEngine->setAudio(DIV_AUDIO_DUMMY);
+    localEngine->setView(DIV_STATUS_NOTHING);
+    localEngine->setConsoleMode(true, false);
+    localEngine->setConf("audioRate", clampSampleRate(requestedSampleRateHz));
+    localEngine->setConf("audioChans", 2);
+    localEngine->setConf("audioBufSize", 1024);
+
+    auto* ownedData = new unsigned char[fileData.size()];
+    std::memcpy(ownedData, fileData.data(), fileData.size());
+
+    if (!localEngine->load(ownedData, fileData.size(), sourcePath.c_str())) {
+        localEngine->quit(false);
+        closeInternalLocked();
+        return false;
+    }
+
+    if (!localEngine->init()) {
+        localEngine->quit(false);
+        closeInternalLocked();
+        return false;
+    }
+
+    engine = std::move(localEngine);
+    sampleRateHz = std::max(8000, static_cast<int>(std::lround(engine->getAudioDescGot().rate)));
+    channels = 2;
+    playbackPositionSeconds = 0.0;
+    subtuneCount = std::max(1, static_cast<int>(engine->song.subsong.size()));
+    currentSubtuneIndex = std::clamp(static_cast<int>(engine->getCurrentSubSong()), 0, subtuneCount - 1);
+    subtuneDurations.assign(static_cast<size_t>(subtuneCount), 0.0);
+
+    refreshMetadataLocked();
+    refreshTimelineLocked();
+    applyRepeatModeLocked();
+
+    if (!engine->play()) {
+        closeInternalLocked();
+        return false;
+    }
+
+    return true;
+}
+
+void FurnaceDecoder::closeInternalLocked() {
+    if (engine) {
+        engine->quit(false);
+        engine.reset();
+    }
+
+    sourcePath.clear();
+    title.clear();
+    artist.clear();
+    composer.clear();
+    genre.clear();
+    formatName = "Furnace";
+    sampleRateHz = 44100;
+    channels = 2;
+    subtuneCount = 1;
+    currentSubtuneIndex = 0;
+    durationReliable = false;
+    durationSeconds = 0.0;
+    playbackPositionSeconds = 0.0;
+    seekTimeline.clear();
+    subtuneDurations.clear();
+    leftScratch.clear();
+    rightScratch.clear();
+}
+
+void FurnaceDecoder::close() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    closeInternalLocked();
+}
+
+void FurnaceDecoder::refreshMetadataLocked() {
+    const auto sourcePathFs = std::filesystem::path(sourcePath);
+    title = sourcePathFs.stem().string();
+    artist.clear();
+    composer.clear();
+    genre = "Tracker";
+    formatName = "Furnace";
+
+    const std::string extensionLabel = uppercaseExtensionWithoutDot(sourcePathFs);
+    if (!extensionLabel.empty()) {
+        formatName = extensionLabel;
+    }
+
+    if (!engine) {
+        return;
+    }
+
+    subtuneCount = std::max(1, static_cast<int>(engine->song.subsong.size()));
+    currentSubtuneIndex = std::clamp(static_cast<int>(engine->getCurrentSubSong()), 0, subtuneCount - 1);
+    if (static_cast<int>(subtuneDurations.size()) != subtuneCount) {
+        subtuneDurations.assign(static_cast<size_t>(subtuneCount), 0.0);
+    }
+
+    if (!engine->song.name.empty()) {
+        title = engine->song.name;
+    }
+    if (engine->curSubSong != nullptr && !engine->curSubSong->name.empty()) {
+        title = engine->curSubSong->name;
+    }
+    if (!engine->song.author.empty()) {
+        artist = engine->song.author;
+        composer = artist;
+    }
+}
+
+void FurnaceDecoder::refreshTimelineLocked() {
+    seekTimeline.clear();
+    durationReliable = false;
+    durationSeconds = 0.0;
+
+    if (!engine || !engine->curSubSong) {
+        return;
+    }
+
+    engine->calcSongTimestamps();
+    auto* subSong = engine->curSubSong;
+
+    const double totalDuration = subSong->ts.totalTime.toDouble();
+    if (std::isfinite(totalDuration) && totalDuration > 0.0) {
+        durationReliable = true;
+        durationSeconds = totalDuration;
+        if (currentSubtuneIndex >= 0 && currentSubtuneIndex < static_cast<int>(subtuneDurations.size())) {
+            subtuneDurations[static_cast<size_t>(currentSubtuneIndex)] = totalDuration;
+        }
+    }
+
+    const int orderCount = std::max(0, subSong->ordersLen);
+    const int rowCount = std::max(1, subSong->patLen);
+    seekTimeline.reserve(static_cast<size_t>(orderCount * rowCount));
+    for (int order = 0; order < orderCount; ++order) {
+        for (int row = 0; row < rowCount; ++row) {
+            TimeMicros stamp = subSong->ts.getTimes(order, row);
+            if (stamp.seconds < 0) {
+                continue;
+            }
+
+            const double timestampSeconds = stamp.toDouble();
+            if (!std::isfinite(timestampSeconds) || timestampSeconds < 0.0) {
+                continue;
+            }
+
+            if (!seekTimeline.empty()) {
+                const double lastSeconds = seekTimeline.back().seconds;
+                if (timestampSeconds + kSeekEpsilonSeconds < lastSeconds) {
+                    continue;
+                }
+                if (std::abs(timestampSeconds - lastSeconds) <= kSeekEpsilonSeconds) {
+                    continue;
+                }
+            }
+
+            seekTimeline.push_back(SeekPoint {
+                    timestampSeconds,
+                    order,
+                    row
+            });
+        }
+    }
+
+    if (seekTimeline.empty()) {
+        seekTimeline.push_back(SeekPoint { 0.0, 0, 0 });
+    }
+}
+
+void FurnaceDecoder::applyRepeatModeLocked() {
+    if (!engine) {
+        return;
+    }
+
+    const int mode = normalizeRepeatMode(repeatMode.load());
+    if (mode == 0) {
+        // Stop after first full song pass in non-repeat mode.
+        engine->setLoops(1);
+    } else {
+        engine->setLoops(-1);
+    }
+}
+
+bool FurnaceDecoder::seekToTimelineLocked(double targetSeconds) {
+    if (!engine || seekTimeline.empty()) {
+        return false;
+    }
+
+    auto it = std::lower_bound(
+            seekTimeline.begin(),
+            seekTimeline.end(),
+            targetSeconds,
+            [](const SeekPoint& point, double value) {
+                return point.seconds < value;
+            });
+
+    if (it == seekTimeline.end()) {
+        it = std::prev(seekTimeline.end());
+    } else if (it != seekTimeline.begin() && it->seconds > targetSeconds + kSeekEpsilonSeconds) {
+        it = std::prev(it);
+    }
+
+    const int order = std::max(0, it->order);
+    const int row = std::max(0, it->row);
+    engine->setOrder(static_cast<unsigned char>(std::clamp(order, 0, 255)));
+    engine->playToRow(row);
+    return true;
+}
+
+int FurnaceDecoder::read(float* buffer, int numFrames) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine || !buffer || numFrames <= 0) {
+        return 0;
+    }
+
+    if (!engine->isPlaying()) {
+        return 0;
+    }
+
+    if (static_cast<int>(leftScratch.size()) < numFrames) {
+        leftScratch.resize(static_cast<size_t>(numFrames));
+    }
+    if (static_cast<int>(rightScratch.size()) < numFrames) {
+        rightScratch.resize(static_cast<size_t>(numFrames));
+    }
+
+    std::fill_n(leftScratch.data(), numFrames, 0.0f);
+    std::fill_n(rightScratch.data(), numFrames, 0.0f);
+    float* planarOut[2] = { leftScratch.data(), rightScratch.data() };
+    engine->nextBuf(nullptr, planarOut, 0, 2, static_cast<unsigned int>(numFrames));
+
+    for (int i = 0; i < numFrames; ++i) {
+        const float left = leftScratch[static_cast<size_t>(i)];
+        const float right = rightScratch[static_cast<size_t>(i)];
+        buffer[static_cast<size_t>(i * channels)] = left;
+        if (channels > 1) {
+            buffer[static_cast<size_t>(i * channels + 1)] = right;
+        }
+    }
+
+    playbackPositionSeconds = std::max(0.0, engine->getCurTime().toDouble());
+    if (durationReliable && durationSeconds > 0.0) {
+        if (repeatMode.load() == 2) {
+            playbackPositionSeconds = std::fmod(playbackPositionSeconds, durationSeconds);
+            if (playbackPositionSeconds < 0.0) {
+                playbackPositionSeconds += durationSeconds;
+            }
+        } else {
+            playbackPositionSeconds = std::min(playbackPositionSeconds, durationSeconds);
+        }
+    }
+
+    return numFrames;
+}
+
+void FurnaceDecoder::seek(double seconds) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return;
+    }
+
+    double targetSeconds = std::max(0.0, seconds);
+    if (durationReliable && durationSeconds > 0.0) {
+        if (repeatMode.load() == 2) {
+            targetSeconds = std::fmod(targetSeconds, durationSeconds);
+            if (targetSeconds < 0.0) {
+                targetSeconds += durationSeconds;
+            }
+        } else {
+            targetSeconds = std::min(targetSeconds, durationSeconds);
+        }
+    }
+
+    if (targetSeconds <= 0.0) {
+        engine->setOrder(0);
+        engine->playToRow(0);
+    } else if (!seekToTimelineLocked(targetSeconds)) {
+        playbackPositionSeconds = targetSeconds;
+        return;
+    }
+
+    applyRepeatModeLocked();
+    if (!engine->isPlaying()) {
+        engine->play();
+    }
+
+    playbackPositionSeconds = engine->getCurTime().toDouble();
+    if (!std::isfinite(playbackPositionSeconds)) {
+        playbackPositionSeconds = targetSeconds;
+    }
+}
+
+double FurnaceDecoder::getDuration() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return durationReliable ? durationSeconds : 0.0;
+}
+
+int FurnaceDecoder::getSampleRate() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return sampleRateHz;
+}
+
+int FurnaceDecoder::getBitDepth() {
+    return 32;
+}
+
+std::string FurnaceDecoder::getBitDepthLabel() {
+    return "32-bit float";
+}
+
+int FurnaceDecoder::getDisplayChannelCount() {
+    return getChannelCount();
+}
+
+int FurnaceDecoder::getChannelCount() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return channels;
+}
+
+int FurnaceDecoder::getSubtuneCount() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return subtuneCount;
+}
+
+int FurnaceDecoder::getCurrentSubtuneIndex() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return currentSubtuneIndex;
+}
+
+bool FurnaceDecoder::selectSubtune(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine || index < 0 || index >= subtuneCount) {
+        return false;
+    }
+    if (index == currentSubtuneIndex) {
+        return true;
+    }
+
+    engine->changeSongP(static_cast<size_t>(index));
+    currentSubtuneIndex = index;
+    playbackPositionSeconds = 0.0;
+    refreshMetadataLocked();
+    refreshTimelineLocked();
+    applyRepeatModeLocked();
+    return engine->play();
+}
+
+std::string FurnaceDecoder::getSubtuneTitle(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine || index < 0 || index >= subtuneCount) {
+        return "";
+    }
+    if (index >= 0 && index < static_cast<int>(engine->song.subsong.size())) {
+        auto* subSong = engine->song.subsong[static_cast<size_t>(index)];
+        if (subSong != nullptr && !subSong->name.empty()) {
+            return subSong->name;
+        }
+    }
+    if (subtuneCount <= 1) {
+        return title;
+    }
+    return "Subsong " + std::to_string(index + 1);
+}
+
+std::string FurnaceDecoder::getSubtuneArtist(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (index < 0 || index >= subtuneCount) {
+        return "";
+    }
+    return artist;
+}
+
+double FurnaceDecoder::getSubtuneDurationSeconds(int index) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (index < 0 || index >= static_cast<int>(subtuneDurations.size())) {
+        return 0.0;
+    }
+    return subtuneDurations[static_cast<size_t>(index)];
+}
+
+std::string FurnaceDecoder::getTitle() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return title;
+}
+
+std::string FurnaceDecoder::getArtist() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return artist;
+}
+
+std::string FurnaceDecoder::getComposer() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return composer;
+}
+
+std::string FurnaceDecoder::getGenre() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return genre;
+}
+
+void FurnaceDecoder::setOutputSampleRate(int sampleRateHzValue) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    requestedSampleRateHz = clampSampleRate(sampleRateHzValue > 0 ? sampleRateHzValue : 44100);
+}
+
+void FurnaceDecoder::setRepeatMode(int mode) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    repeatMode.store(normalizeRepeatMode(mode));
+    applyRepeatModeLocked();
+}
+
+int FurnaceDecoder::getRepeatModeCapabilities() const {
+    return REPEAT_CAP_TRACK | REPEAT_CAP_LOOP_POINT;
+}
+
+int FurnaceDecoder::getPlaybackCapabilities() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    int caps = PLAYBACK_CAP_SEEK | PLAYBACK_CAP_LIVE_REPEAT_MODE;
+    if (durationReliable) {
+        caps |= PLAYBACK_CAP_RELIABLE_DURATION;
+    }
+    return caps;
+}
+
+double FurnaceDecoder::getPlaybackPositionSeconds() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return -1.0;
+    }
+
+    if (engine->isPlaying()) {
+        const double current = engine->getCurTime().toDouble();
+        if (std::isfinite(current) && current >= 0.0) {
+            playbackPositionSeconds = current;
+        }
+    }
+
+    if (durationReliable && durationSeconds > 0.0) {
+        if (repeatMode.load() == 2) {
+            playbackPositionSeconds = std::fmod(playbackPositionSeconds, durationSeconds);
+            if (playbackPositionSeconds < 0.0) {
+                playbackPositionSeconds += durationSeconds;
+            }
+        } else {
+            playbackPositionSeconds = std::clamp(playbackPositionSeconds, 0.0, durationSeconds);
+        }
+    }
+
+    return playbackPositionSeconds;
+}
+
+AudioDecoder::TimelineMode FurnaceDecoder::getTimelineMode() const {
+    return TimelineMode::Discontinuous;
+}
+
+std::vector<std::string> FurnaceDecoder::getSupportedExtensions() {
+    return {
+            "fur",
+            "dmf"
+    };
+}

@@ -41,9 +41,13 @@ add_library(
         decoders/UadeDecoder.cpp
         decoders/HivelyTrackerDecoder.cpp
         decoders/KlystrackDecoder.cpp
+        decoders/FurnaceDecoder.cpp
         decoders/SdlCompat.c
         decoders/CPConvStub.c
 )
+
+# Furnace exported headers rely on this define for SFWrapper-dependent structs.
+target_compile_definitions(siliconplayer PRIVATE HAVE_SNDFILE)
 
 # Android 15+ prefers 16KB page-aligned native libraries.
 if (ANDROID)
@@ -60,6 +64,12 @@ include_directories(${CMAKE_SOURCE_DIR}/prebuilt/${ANDROID_ABI}/include)
 include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libopenmpt)
 # ReSID backend implementation requires libsidplayfp internal SID emulation headers.
 include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
+# Furnace headers depend on bundled fmt headers through ta-log.h.
+include_directories(${CMAKE_SOURCE_DIR}/../../../../external/furnace/extern/fmt/include)
+# Furnace engine headers also reference bundled blip_buf headers directly.
+include_directories(${CMAKE_SOURCE_DIR}/../../../../external/furnace/extern/blip_buf)
+# Furnace SFWrapper type declarations require bundled libsndfile public headers.
+include_directories(${CMAKE_SOURCE_DIR}/../../../../external/furnace/extern/libsndfile-modified/include)
 
     # Find Android libraries
     find_library(log-lib log)
@@ -154,6 +164,10 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
     add_library(libklystrack STATIC IMPORTED)
     set_target_properties(libklystrack PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libklystrack.a")
 
+    # Import furnace headless engine (Shared)
+    add_library(libfurnace SHARED IMPORTED)
+    set_target_properties(libfurnace PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libfurnace.so")
+
     # Import libsidplayfp + libresidfp (Static)
     add_library(libsidplayfp STATIC IMPORTED)
     set_target_properties(libsidplayfp PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libsidplayfp.a")
@@ -204,6 +218,7 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/libsidplayfp/src)
             libbencodetools
             libhivelytracker
             libklystrack
+            libfurnace
             libsidplayfp
             libresidfp
             libresid

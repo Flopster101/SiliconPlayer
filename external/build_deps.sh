@@ -2017,8 +2017,8 @@ build_klystrack() {
     local PROJECT_PATH="$ABSOLUTE_PATH/klystrack"
     local KLYSTRON_PATH="$PROJECT_PATH/klystron"
     local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+    local SDL_SHIM_DIR="$BUILD_DIR/sdl_compat"
     local TARGET_CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang"
-    local SDL2_CFLAGS=""
 
     if [ ! -d "$PROJECT_PATH" ]; then
         echo "klystrack source not found at $PROJECT_PATH (skipping)."
@@ -2032,16 +2032,6 @@ build_klystrack() {
         return 1
     fi
 
-    if command -v sdl2-config >/dev/null 2>&1; then
-        SDL2_CFLAGS="$(sdl2-config --cflags)"
-    elif [ -f "/usr/include/SDL2/SDL.h" ]; then
-        SDL2_CFLAGS="-I/usr/include/SDL2"
-    else
-        echo "Error: SDL2 headers not found (required by klystrack/klystron sources)."
-        echo "Please install SDL2 development headers (e.g. libsdl2-dev), then rerun build_deps."
-        return 1
-    fi
-
     if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libklystrack.a" ] && \
        [ -f "$INSTALL_DIR/include/klystrack/ksnd.h" ]; then
         echo "klystrack already built for $ABI -> skipping"
@@ -2049,10 +2039,86 @@ build_klystrack() {
     fi
 
     rm -rf "$BUILD_DIR"
-    mkdir -p "$BUILD_DIR" "$INSTALL_DIR/lib" "$INSTALL_DIR/include/klystrack"
+    mkdir -p "$BUILD_DIR" "$SDL_SHIM_DIR" "$INSTALL_DIR/lib" "$INSTALL_DIR/include/klystrack"
+
+    # Build against a local SDL compatibility surface so CI does not depend on host SDL headers.
+    cat > "$SDL_SHIM_DIR/SDL.h" <<'EOF'
+#ifndef SILICONPLAYER_KLYSTRACK_SDL_H
+#define SILICONPLAYER_KLYSTRACK_SDL_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+typedef uint8_t Uint8;
+typedef int8_t Sint8;
+typedef uint16_t Uint16;
+typedef int16_t Sint16;
+typedef uint32_t Uint32;
+typedef int32_t Sint32;
+typedef uint64_t Uint64;
+typedef int64_t Sint64;
+
+typedef struct SDL_mutex SDL_mutex;
+typedef struct SDL_RWops SDL_RWops;
+
+typedef struct SDL_AudioSpec {
+    int freq;
+    Uint16 format;
+    Uint8 channels;
+    Uint8 silence;
+    Uint16 samples;
+    Uint16 padding;
+    Uint32 size;
+    void (*callback)(void *userdata, Uint8 *stream, int len);
+    void *userdata;
+} SDL_AudioSpec;
+
+#define AUDIO_S16SYS 0x8010
+
+Uint32 SDL_GetTicks(void);
+void SDL_Delay(Uint32 ms);
+SDL_mutex* SDL_CreateMutex(void);
+void SDL_DestroyMutex(SDL_mutex* mutex);
+int SDL_LockMutex(SDL_mutex* mutex);
+int SDL_UnlockMutex(SDL_mutex* mutex);
+size_t SDL_RWread(SDL_RWops* context, void* ptr, size_t size, size_t maxnum);
+int SDL_OpenAudio(void* desired, void* obtained);
+void SDL_PauseAudio(int pauseOn);
+void SDL_CloseAudio(void);
+
+#endif
+EOF
+
+    cat > "$SDL_SHIM_DIR/SDL_endian.h" <<'EOF'
+#ifndef SILICONPLAYER_KLYSTRACK_SDL_ENDIAN_H
+#define SILICONPLAYER_KLYSTRACK_SDL_ENDIAN_H
+
+#include "SDL.h"
+
+static inline Uint16 SDL_Swap16(Uint16 value) {
+    return (Uint16)((value << 8) | (value >> 8));
+}
+
+static inline Uint32 SDL_Swap32(Uint32 value) {
+    return ((value & 0x000000FFu) << 24) |
+           ((value & 0x0000FF00u) << 8) |
+           ((value & 0x00FF0000u) >> 8) |
+           ((value & 0xFF000000u) >> 24);
+}
+
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+#define SDL_SwapLE16(X) ((Uint16)(X))
+#define SDL_SwapLE32(X) ((Uint32)(X))
+#else
+#define SDL_SwapLE16(X) SDL_Swap16((Uint16)(X))
+#define SDL_SwapLE32(X) SDL_Swap32((Uint32)(X))
+#endif
+
+#endif
+EOF
 
     local common_flags
-    common_flags="-fPIC $DEP_OPT_FLAGS -DNOSDL_MIXER -DSTEREOOUTPUT -DUSESDLMUTEXES -I$KLYSTRON_PATH/src $SDL2_CFLAGS"
+    common_flags="-fPIC $DEP_OPT_FLAGS -DNOSDL_MIXER -DSTEREOOUTPUT -DUSESDLMUTEXES -I$SDL_SHIM_DIR -I$KLYSTRON_PATH/src"
 
     local src
     for src in "$KLYSTRON_PATH"/src/snd/*.c "$KLYSTRON_PATH"/src/lib/ksnd.c; do

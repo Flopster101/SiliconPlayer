@@ -14,6 +14,7 @@ internal fun SettingsScreenState.toPluginDetailRouteState(): PluginDetailRouteSt
         lazyUsf2SampleRateHz = pluginCore.lazyUsf2SampleRateHz,
         adPlugSampleRateHz = pluginCore.adPlugSampleRateHz,
         hivelyTrackerSampleRateHz = pluginCore.hivelyTrackerSampleRateHz,
+        klystrackSampleRateHz = pluginCore.klystrackSampleRateHz,
         uadeSampleRateHz = pluginCore.uadeSampleRateHz,
         adPlugOplEngine = pluginCore.adPlugOplEngine,
         openMptStereoSeparationPercent = pluginCore.openMptStereoSeparationPercent,
@@ -65,7 +66,8 @@ internal fun SettingsScreenState.toPluginDetailRouteState(): PluginDetailRouteSt
         uadeNtscMode = pluginCore.uadeNtscMode,
         uadePanningMode = pluginCore.uadePanningMode,
         hivelyTrackerPanningMode = pluginCore.hivelyTrackerPanningMode,
-        hivelyTrackerMixGainPercent = pluginCore.hivelyTrackerMixGainPercent
+        hivelyTrackerMixGainPercent = pluginCore.hivelyTrackerMixGainPercent,
+        klystrackPlayerQuality = pluginCore.klystrackPlayerQuality
     )
 
 internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRouteActions =
@@ -81,6 +83,7 @@ internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRou
         onLazyUsf2SampleRateChanged = pluginCoreActions.onLazyUsf2SampleRateChanged,
         onAdPlugSampleRateChanged = pluginCoreActions.onAdPlugSampleRateChanged,
         onHivelyTrackerSampleRateChanged = pluginCoreActions.onHivelyTrackerSampleRateChanged,
+        onKlystrackSampleRateChanged = pluginCoreActions.onKlystrackSampleRateChanged,
         onUadeSampleRateChanged = pluginCoreActions.onUadeSampleRateChanged,
         onAdPlugOplEngineChanged = pluginCoreActions.onAdPlugOplEngineChanged,
         onOpenMptStereoSeparationPercentChanged = pluginCoreActions.onOpenMptStereoSeparationPercentChanged,
@@ -133,5 +136,6 @@ internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRou
         onUadeNtscModeChanged = pluginCoreActions.onUadeNtscModeChanged,
         onUadePanningModeChanged = pluginCoreActions.onUadePanningModeChanged,
         onHivelyTrackerPanningModeChanged = pluginCoreActions.onHivelyTrackerPanningModeChanged,
-        onHivelyTrackerMixGainPercentChanged = pluginCoreActions.onHivelyTrackerMixGainPercentChanged
+        onHivelyTrackerMixGainPercentChanged = pluginCoreActions.onHivelyTrackerMixGainPercentChanged,
+        onKlystrackPlayerQualityChanged = pluginCoreActions.onKlystrackPlayerQualityChanged
     )

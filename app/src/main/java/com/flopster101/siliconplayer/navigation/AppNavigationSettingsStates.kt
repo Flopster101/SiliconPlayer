@@ -24,6 +24,7 @@ internal data class AppNavigationSettingsStates(
     val lazyUsf2CoreSampleRateHz: MutableIntState,
     val adPlugCoreSampleRateHz: MutableIntState,
     val hivelyTrackerCoreSampleRateHz: MutableIntState,
+    val klystrackCoreSampleRateHz: MutableIntState,
     val uadeCoreSampleRateHz: MutableIntState,
     val adPlugOplEngine: MutableIntState,
     val lazyUsf2UseHleAudio: MutableState<Boolean>,
@@ -41,6 +42,7 @@ internal data class AppNavigationSettingsStates(
     val uadePanningMode: MutableIntState,
     val hivelyTrackerPanningMode: MutableIntState,
     val hivelyTrackerMixGainPercent: MutableIntState,
+    val klystrackPlayerQuality: MutableIntState,
     val sidPlayFpBackend: MutableIntState,
     val sidPlayFpClockMode: MutableIntState,
     val sidPlayFpSidModelMode: MutableIntState,
@@ -147,6 +149,14 @@ internal fun rememberAppNavigationSettingsStates(
             )
         )
     }
+    val klystrackCoreSampleRateHz = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.CORE_RATE_KLYSTRACK,
+                KlystrackDefaults.coreSampleRateHz
+            )
+        )
+    }
     val uadeCoreSampleRateHz = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CORE_RATE_UADE, UadeDefaults.coreSampleRateHz))
     }
@@ -210,6 +220,14 @@ internal fun rememberAppNavigationSettingsStates(
             prefs.getInt(
                 CorePreferenceKeys.HIVELYTRACKER_MIX_GAIN_PERCENT,
                 HivelyTrackerDefaults.mixGainPercent
+            )
+        )
+    }
+    val klystrackPlayerQuality = remember {
+        mutableIntStateOf(
+            prefs.getInt(
+                CorePreferenceKeys.KLYSTRACK_PLAYER_QUALITY,
+                KlystrackDefaults.playerQuality
             )
         )
     }
@@ -468,6 +486,7 @@ internal fun rememberAppNavigationSettingsStates(
         lazyUsf2CoreSampleRateHz = lazyUsf2CoreSampleRateHz,
         adPlugCoreSampleRateHz = adPlugCoreSampleRateHz,
         hivelyTrackerCoreSampleRateHz = hivelyTrackerCoreSampleRateHz,
+        klystrackCoreSampleRateHz = klystrackCoreSampleRateHz,
         uadeCoreSampleRateHz = uadeCoreSampleRateHz,
         adPlugOplEngine = adPlugOplEngine,
         lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
@@ -485,6 +504,7 @@ internal fun rememberAppNavigationSettingsStates(
         uadePanningMode = uadePanningMode,
         hivelyTrackerPanningMode = hivelyTrackerPanningMode,
         hivelyTrackerMixGainPercent = hivelyTrackerMixGainPercent,
+        klystrackPlayerQuality = klystrackPlayerQuality,
         sidPlayFpBackend = sidPlayFpBackend,
         sidPlayFpClockMode = sidPlayFpClockMode,
         sidPlayFpSidModelMode = sidPlayFpSidModelMode,

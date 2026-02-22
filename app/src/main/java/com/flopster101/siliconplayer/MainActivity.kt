@@ -668,6 +668,7 @@ private fun AppNavigation(
     var lazyUsf2CoreSampleRateHz by settingsStates.lazyUsf2CoreSampleRateHz
     var adPlugCoreSampleRateHz by settingsStates.adPlugCoreSampleRateHz
     var hivelyTrackerCoreSampleRateHz by settingsStates.hivelyTrackerCoreSampleRateHz
+    var klystrackCoreSampleRateHz by settingsStates.klystrackCoreSampleRateHz
     var uadeCoreSampleRateHz by settingsStates.uadeCoreSampleRateHz
     var adPlugOplEngine by settingsStates.adPlugOplEngine
     var lazyUsf2UseHleAudio by settingsStates.lazyUsf2UseHleAudio
@@ -685,6 +686,7 @@ private fun AppNavigation(
     var uadePanningMode by settingsStates.uadePanningMode
     var hivelyTrackerPanningMode by settingsStates.hivelyTrackerPanningMode
     var hivelyTrackerMixGainPercent by settingsStates.hivelyTrackerMixGainPercent
+    var klystrackPlayerQuality by settingsStates.klystrackPlayerQuality
     var sidPlayFpBackend by settingsStates.sidPlayFpBackend
     var sidPlayFpClockMode by settingsStates.sidPlayFpClockMode
     var sidPlayFpSidModelMode by settingsStates.sidPlayFpSidModelMode
@@ -1158,6 +1160,7 @@ private fun AppNavigation(
         lazyUsf2CoreSampleRateHz = lazyUsf2CoreSampleRateHz,
         adPlugCoreSampleRateHz = adPlugCoreSampleRateHz,
         hivelyTrackerCoreSampleRateHz = hivelyTrackerCoreSampleRateHz,
+        klystrackCoreSampleRateHz = klystrackCoreSampleRateHz,
         uadeCoreSampleRateHz = uadeCoreSampleRateHz,
         adPlugOplEngine = adPlugOplEngine,
         lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
@@ -1175,6 +1178,7 @@ private fun AppNavigation(
         uadePanningMode = uadePanningMode,
         hivelyTrackerPanningMode = hivelyTrackerPanningMode,
         hivelyTrackerMixGainPercent = hivelyTrackerMixGainPercent,
+        klystrackPlayerQuality = klystrackPlayerQuality,
         sidPlayFpBackend = sidPlayFpBackend,
         sidPlayFpClockMode = sidPlayFpClockMode,
         sidPlayFpSidModelMode = sidPlayFpSidModelMode,
@@ -1593,6 +1597,7 @@ private fun AppNavigation(
                 onLazyUsf2SampleRateChanged = { lazyUsf2CoreSampleRateHz = it },
                 onAdPlugSampleRateChanged = { adPlugCoreSampleRateHz = it },
                 onHivelyTrackerSampleRateChanged = { hivelyTrackerCoreSampleRateHz = it },
+                onKlystrackSampleRateChanged = { klystrackCoreSampleRateHz = it },
                 onUadeSampleRateChanged = { uadeCoreSampleRateHz = it },
                 onAdPlugOplEngineChanged = { adPlugOplEngine = it },
                 onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
@@ -1610,6 +1615,7 @@ private fun AppNavigation(
                 onUadePanningModeChanged = { uadePanningMode = it },
                 onHivelyTrackerPanningModeChanged = { hivelyTrackerPanningMode = it },
                 onHivelyTrackerMixGainPercentChanged = { hivelyTrackerMixGainPercent = it },
+                onKlystrackPlayerQualityChanged = { klystrackPlayerQuality = it },
                 onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
                 onSidPlayFpClockModeChanged = { sidPlayFpClockMode = it },
                 onSidPlayFpSidModelModeChanged = { sidPlayFpSidModelMode = it },

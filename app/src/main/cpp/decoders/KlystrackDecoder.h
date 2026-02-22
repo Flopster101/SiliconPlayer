@@ -41,6 +41,9 @@ public:
     void setToggleChannelMuted(int channelIndex, bool enabled) override;
     bool getToggleChannelMuted(int channelIndex) const override;
     void clearToggleChannelMutes() override;
+    void setOutputSampleRate(int sampleRateHz) override;
+    void setOption(const char* name, const char* value) override;
+    int getOptionApplyPolicy(const char* name) const override;
     void setRepeatMode(int mode) override;
     int getRepeatModeCapabilities() const override;
     int getPlaybackCapabilities() const override;
@@ -67,6 +70,8 @@ private:
     std::vector<bool> toggleChannelMuted;
 
     int sampleRateHz = 44100;
+    int requestedSampleRateHz = 44100;
+    int playerQuality = 2;
     int channels = 2;
     std::atomic<int> repeatMode { 0 };
     double durationSeconds = 0.0;

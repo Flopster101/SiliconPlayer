@@ -646,6 +646,7 @@ internal fun clearAllSettingsAction(
     lazyUsf2CoreSampleRateHz: Int,
     adPlugCoreSampleRateHz: Int,
     hivelyTrackerCoreSampleRateHz: Int,
+    klystrackCoreSampleRateHz: Int,
     uadeCoreSampleRateHz: Int,
     adPlugOplEngine: Int,
     vio2sfInterpolationQuality: Int,
@@ -698,6 +699,7 @@ internal fun clearAllSettingsAction(
     uadePanningMode: Int,
     hivelyTrackerPanningMode: Int,
     hivelyTrackerMixGainPercent: Int,
+    klystrackPlayerQuality: Int,
     vgmPlayChipCoreSelections: Map<String, Int>,
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
@@ -766,8 +768,10 @@ internal fun clearAllSettingsAction(
     onUadeNtscModeChanged: (Boolean) -> Unit,
     onUadePanningModeChanged: (Int) -> Unit,
     onHivelyTrackerCoreSampleRateHzChanged: (Int) -> Unit,
+    onKlystrackCoreSampleRateHzChanged: (Int) -> Unit,
     onHivelyTrackerPanningModeChanged: (Int) -> Unit,
     onHivelyTrackerMixGainPercentChanged: (Int) -> Unit,
+    onKlystrackPlayerQualityChanged: (Int) -> Unit,
     onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugOplEngineChanged: (Int) -> Unit,
 ) {
@@ -780,6 +784,7 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.CORE_RATE_LAZYUSF2 to lazyUsf2CoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_ADPLUG to adPlugCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_HIVELYTRACKER to hivelyTrackerCoreSampleRateHz,
+        CorePreferenceKeys.CORE_RATE_KLYSTRACK to klystrackCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_UADE to uadeCoreSampleRateHz,
         CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY to vio2sfInterpolationQuality,
         CorePreferenceKeys.ADPLUG_OPL_ENGINE to adPlugOplEngine,
@@ -793,6 +798,7 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.UADE_PANNING_MODE to uadePanningMode,
         CorePreferenceKeys.HIVELYTRACKER_PANNING_MODE to hivelyTrackerPanningMode,
         CorePreferenceKeys.HIVELYTRACKER_MIX_GAIN_PERCENT to hivelyTrackerMixGainPercent,
+        CorePreferenceKeys.KLYSTRACK_PLAYER_QUALITY to klystrackPlayerQuality,
         CorePreferenceKeys.VGMPLAY_LOOP_COUNT to vgmPlayLoopCount,
         CorePreferenceKeys.VGMPLAY_VSYNC_RATE to vgmPlayVsyncRate,
         CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE to vgmPlayResampleMode,
@@ -899,8 +905,10 @@ internal fun clearAllSettingsAction(
     onUadeNtscModeChanged(UadeDefaults.ntscMode)
     onUadePanningModeChanged(UadeDefaults.panningMode)
     onHivelyTrackerCoreSampleRateHzChanged(HivelyTrackerDefaults.coreSampleRateHz)
+    onKlystrackCoreSampleRateHzChanged(KlystrackDefaults.coreSampleRateHz)
     onHivelyTrackerPanningModeChanged(HivelyTrackerDefaults.panningMode)
     onHivelyTrackerMixGainPercentChanged(HivelyTrackerDefaults.mixGainPercent)
+    onKlystrackPlayerQualityChanged(KlystrackDefaults.playerQuality)
     onEndFadeApplyToAllTracksChanged(AppDefaults.Player.endFadeApplyToAllTracks)
     onEndFadeDurationMsChanged(AppDefaults.Player.endFadeDurationMs)
     onEndFadeCurveChanged(AppDefaults.Player.endFadeCurve)
@@ -949,6 +957,7 @@ internal fun clearAllPluginSettingsAction(
     onLazyUsf2CoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
     onHivelyTrackerCoreSampleRateHzChanged: (Int) -> Unit,
+    onKlystrackCoreSampleRateHzChanged: (Int) -> Unit,
     onUadeCoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugOplEngineChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
@@ -966,6 +975,7 @@ internal fun clearAllPluginSettingsAction(
     onUadePanningModeChanged: (Int) -> Unit,
     onHivelyTrackerPanningModeChanged: (Int) -> Unit,
     onHivelyTrackerMixGainPercentChanged: (Int) -> Unit,
+    onKlystrackPlayerQualityChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
     onSidPlayFpSidModelModeChanged: (Int) -> Unit,
@@ -1012,6 +1022,7 @@ internal fun clearAllPluginSettingsAction(
     onLazyUsf2CoreSampleRateHzChanged(LazyUsf2Defaults.coreSampleRateHz)
     onAdPlugCoreSampleRateHzChanged(AdPlugDefaults.coreSampleRateHz)
     onHivelyTrackerCoreSampleRateHzChanged(HivelyTrackerDefaults.coreSampleRateHz)
+    onKlystrackCoreSampleRateHzChanged(KlystrackDefaults.coreSampleRateHz)
     onUadeCoreSampleRateHzChanged(UadeDefaults.coreSampleRateHz)
     onAdPlugOplEngineChanged(AdPlugDefaults.oplEngine)
     onLazyUsf2UseHleAudioChanged(LazyUsf2Defaults.useHleAudio)
@@ -1029,6 +1040,7 @@ internal fun clearAllPluginSettingsAction(
     onUadePanningModeChanged(UadeDefaults.panningMode)
     onHivelyTrackerPanningModeChanged(HivelyTrackerDefaults.panningMode)
     onHivelyTrackerMixGainPercentChanged(HivelyTrackerDefaults.mixGainPercent)
+    onKlystrackPlayerQualityChanged(KlystrackDefaults.playerQuality)
     onSidPlayFpBackendChanged(SidPlayFpDefaults.backend)
     onSidPlayFpClockModeChanged(SidPlayFpDefaults.clockMode)
     onSidPlayFpSidModelModeChanged(SidPlayFpDefaults.sidModelMode)
@@ -1076,6 +1088,7 @@ internal fun clearAllPluginSettingsAction(
         remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2)
         remove(CorePreferenceKeys.CORE_RATE_ADPLUG)
         remove(CorePreferenceKeys.CORE_RATE_HIVELYTRACKER)
+        remove(CorePreferenceKeys.CORE_RATE_KLYSTRACK)
         remove(CorePreferenceKeys.CORE_RATE_UADE)
         remove(CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY)
         remove(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO)
@@ -1093,6 +1106,7 @@ internal fun clearAllPluginSettingsAction(
         remove(CorePreferenceKeys.UADE_PANNING_MODE)
         remove(CorePreferenceKeys.HIVELYTRACKER_PANNING_MODE)
         remove(CorePreferenceKeys.HIVELYTRACKER_MIX_GAIN_PERCENT)
+        remove(CorePreferenceKeys.KLYSTRACK_PLAYER_QUALITY)
         remove(CorePreferenceKeys.SIDPLAYFP_BACKEND)
         remove(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE)
         remove(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE)
@@ -1174,6 +1188,7 @@ internal fun resetPluginSettingsAction(
     onLazyUsf2CoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
     onHivelyTrackerCoreSampleRateHzChanged: (Int) -> Unit,
+    onKlystrackCoreSampleRateHzChanged: (Int) -> Unit,
     onUadeCoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugOplEngineChanged: (Int) -> Unit,
     onLazyUsf2UseHleAudioChanged: (Boolean) -> Unit,
@@ -1191,6 +1206,7 @@ internal fun resetPluginSettingsAction(
     onUadePanningModeChanged: (Int) -> Unit,
     onHivelyTrackerPanningModeChanged: (Int) -> Unit,
     onHivelyTrackerMixGainPercentChanged: (Int) -> Unit,
+    onKlystrackPlayerQualityChanged: (Int) -> Unit,
     onSidPlayFpCoreSampleRateHzChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
@@ -1286,6 +1302,10 @@ internal fun resetPluginSettingsAction(
         "HivelyTracker" -> listOf(
             HivelyTrackerOptionKeys.PANNING_MODE,
             HivelyTrackerOptionKeys.MIX_GAIN_PERCENT
+        )
+
+        "Klystrack" -> listOf(
+            KlystrackOptionKeys.PLAYER_QUALITY
         )
 
         else -> emptyList()
@@ -1409,6 +1429,15 @@ internal fun resetPluginSettingsAction(
                 .remove(CorePreferenceKeys.CORE_RATE_HIVELYTRACKER)
                 .remove(CorePreferenceKeys.HIVELYTRACKER_PANNING_MODE)
                 .remove(CorePreferenceKeys.HIVELYTRACKER_MIX_GAIN_PERCENT)
+                .apply()
+        }
+
+        "Klystrack" -> {
+            onKlystrackCoreSampleRateHzChanged(KlystrackDefaults.coreSampleRateHz)
+            onKlystrackPlayerQualityChanged(KlystrackDefaults.playerQuality)
+            prefs.edit()
+                .remove(CorePreferenceKeys.CORE_RATE_KLYSTRACK)
+                .remove(CorePreferenceKeys.KLYSTRACK_PLAYER_QUALITY)
                 .apply()
         }
 

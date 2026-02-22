@@ -1,6 +1,8 @@
 #include "KlystrackDecoder.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
 #include <cmath>
 #include <filesystem>
 
@@ -15,6 +17,20 @@ void KSND_SetChannelMute(KPlayer* player, int channel, int muted);
 namespace {
 int clampSampleRate(int sampleRateHz) {
     return std::clamp(sampleRateHz, 8000, 192000);
+}
+
+int normalizePlayerQuality(int quality) {
+    return std::clamp(quality, 0, 4);
+}
+
+int parseIntOptionString(const char* value, int fallback) {
+    if (!value) return fallback;
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value || (end && *end != '\0')) {
+        return fallback;
+    }
+    return static_cast<int>(parsed);
 }
 }
 
@@ -52,7 +68,8 @@ bool KlystrackDecoder::open(const char* path) {
     durationReliable = false;
     songLengthRows = 0;
 
-    player = KSND_CreatePlayerUnregistered(clampSampleRate(sampleRateHz));
+    const int openRateHz = clampSampleRate(requestedSampleRateHz);
+    player = KSND_CreatePlayerUnregistered(openRateHz);
     if (!player) {
         closeInternalLocked();
         return false;
@@ -64,9 +81,9 @@ bool KlystrackDecoder::open(const char* path) {
         return false;
     }
 
-    sampleRateHz = clampSampleRate(sampleRateHz);
+    sampleRateHz = openRateHz;
     channels = 2;
-    KSND_SetPlayerQuality(player, 2);
+    KSND_SetPlayerQuality(player, normalizePlayerQuality(playerQuality));
     applyRepeatModeLocked();
     KSND_PlaySong(player, song, 0);
     updateSongInfoLocked();
@@ -108,6 +125,7 @@ void KlystrackDecoder::closeInternalLocked() {
     durationReliable = false;
     playbackPositionSeconds = 0.0;
     songLengthRows = 0;
+    sampleRateHz = 44100;
     channels = 2;
     pcmScratch.clear();
 }
@@ -409,11 +427,44 @@ int KlystrackDecoder::getRepeatModeCapabilities() const {
 
 int KlystrackDecoder::getPlaybackCapabilities() const {
     std::lock_guard<std::mutex> lock(decodeMutex);
-    int caps = PLAYBACK_CAP_SEEK | PLAYBACK_CAP_LIVE_REPEAT_MODE;
+    int caps = PLAYBACK_CAP_SEEK | PLAYBACK_CAP_LIVE_REPEAT_MODE | PLAYBACK_CAP_CUSTOM_SAMPLE_RATE;
     if (durationReliable && songLengthRows > 0) {
         caps |= PLAYBACK_CAP_RELIABLE_DURATION | PLAYBACK_CAP_DIRECT_SEEK;
     }
     return caps;
+}
+
+void KlystrackDecoder::setOutputSampleRate(int sampleRate) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (sampleRate <= 0) {
+        requestedSampleRateHz = 44100;
+    } else {
+        requestedSampleRateHz = clampSampleRate(sampleRate);
+    }
+}
+
+void KlystrackDecoder::setOption(const char* name, const char* value) {
+    if (!name) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (std::strcmp(name, "klystrack.player_quality") == 0) {
+        const int normalized = normalizePlayerQuality(parseIntOptionString(value, playerQuality));
+        playerQuality = normalized;
+        if (player) {
+            KSND_SetPlayerQuality(player, normalized);
+        }
+    }
+}
+
+int KlystrackDecoder::getOptionApplyPolicy(const char* name) const {
+    if (!name) {
+        return OPTION_APPLY_LIVE;
+    }
+    if (std::strcmp(name, "klystrack.player_quality") == 0) {
+        return OPTION_APPLY_LIVE;
+    }
+    return OPTION_APPLY_LIVE;
 }
 
 double KlystrackDecoder::getPlaybackPositionSeconds() {

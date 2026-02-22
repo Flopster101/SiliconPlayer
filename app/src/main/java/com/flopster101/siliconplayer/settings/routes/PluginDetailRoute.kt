@@ -16,6 +16,7 @@ import com.flopster101.siliconplayer.pluginsettings.AdPlugSettings
 import com.flopster101.siliconplayer.pluginsettings.FfmpegSettings
 import com.flopster101.siliconplayer.pluginsettings.GmeSettings
 import com.flopster101.siliconplayer.pluginsettings.HivelyTrackerSettings
+import com.flopster101.siliconplayer.pluginsettings.KlystrackSettings
 import com.flopster101.siliconplayer.pluginsettings.LazyUsf2Settings
 import com.flopster101.siliconplayer.pluginsettings.OpenMptSettings
 import com.flopster101.siliconplayer.pluginsettings.PluginSettings
@@ -40,6 +41,7 @@ internal data class PluginDetailRouteState(
     val lazyUsf2SampleRateHz: Int,
     val adPlugSampleRateHz: Int,
     val hivelyTrackerSampleRateHz: Int,
+    val klystrackSampleRateHz: Int,
     val uadeSampleRateHz: Int,
     val adPlugOplEngine: Int,
     val openMptStereoSeparationPercent: Int,
@@ -91,7 +93,8 @@ internal data class PluginDetailRouteState(
     val uadeNtscMode: Boolean,
     val uadePanningMode: Int,
     val hivelyTrackerPanningMode: Int,
-    val hivelyTrackerMixGainPercent: Int
+    val hivelyTrackerMixGainPercent: Int,
+    val klystrackPlayerQuality: Int
 )
 
 internal data class PluginDetailRouteActions(
@@ -106,6 +109,7 @@ internal data class PluginDetailRouteActions(
     val onLazyUsf2SampleRateChanged: (Int) -> Unit,
     val onAdPlugSampleRateChanged: (Int) -> Unit,
     val onHivelyTrackerSampleRateChanged: (Int) -> Unit,
+    val onKlystrackSampleRateChanged: (Int) -> Unit,
     val onUadeSampleRateChanged: (Int) -> Unit,
     val onAdPlugOplEngineChanged: (Int) -> Unit,
     val onOpenMptStereoSeparationPercentChanged: (Int) -> Unit,
@@ -158,7 +162,8 @@ internal data class PluginDetailRouteActions(
     val onUadeNtscModeChanged: (Boolean) -> Unit,
     val onUadePanningModeChanged: (Int) -> Unit,
     val onHivelyTrackerPanningModeChanged: (Int) -> Unit,
-    val onHivelyTrackerMixGainPercentChanged: (Int) -> Unit
+    val onHivelyTrackerMixGainPercentChanged: (Int) -> Unit,
+    val onKlystrackPlayerQualityChanged: (Int) -> Unit
 )
 
 @Composable
@@ -237,6 +242,7 @@ internal fun PluginDetailRouteContent(
         "LazyUSF2" -> state.lazyUsf2SampleRateHz
         "AdPlug" -> state.adPlugSampleRateHz
         "HivelyTracker" -> state.hivelyTrackerSampleRateHz
+        "Klystrack" -> state.klystrackSampleRateHz
         "UADE" -> state.uadeSampleRateHz
         "SC68" -> state.sc68SamplingRateHz
         else -> fixedSampleRateHz
@@ -250,6 +256,7 @@ internal fun PluginDetailRouteContent(
         "LazyUSF2" -> actions.onLazyUsf2SampleRateChanged
         "AdPlug" -> actions.onAdPlugSampleRateChanged
         "HivelyTracker" -> actions.onHivelyTrackerSampleRateChanged
+        "Klystrack" -> actions.onKlystrackSampleRateChanged
         "UADE" -> actions.onUadeSampleRateChanged
         "SC68" -> actions.onSc68SamplingRateHzChanged
         else -> null
@@ -418,6 +425,11 @@ internal fun PluginDetailRouteContent(
             mixGainPercent = state.hivelyTrackerMixGainPercent,
             onPanningModeChanged = actions.onHivelyTrackerPanningModeChanged,
             onMixGainPercentChanged = actions.onHivelyTrackerMixGainPercentChanged
+        )
+
+        "Klystrack" -> KlystrackSettings(
+            playerQuality = state.klystrackPlayerQuality,
+            onPlayerQualityChanged = actions.onKlystrackPlayerQualityChanged
         )
 
         else -> null

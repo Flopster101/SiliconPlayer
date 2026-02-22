@@ -17,6 +17,7 @@ internal fun AppNavigationCoreEffects(
     lazyUsf2CoreSampleRateHz: Int,
     adPlugCoreSampleRateHz: Int,
     hivelyTrackerCoreSampleRateHz: Int,
+    klystrackCoreSampleRateHz: Int,
     uadeCoreSampleRateHz: Int,
     adPlugOplEngine: Int,
     lazyUsf2UseHleAudio: Boolean,
@@ -34,6 +35,7 @@ internal fun AppNavigationCoreEffects(
     uadePanningMode: Int,
     hivelyTrackerPanningMode: Int,
     hivelyTrackerMixGainPercent: Int,
+    klystrackPlayerQuality: Int,
     sidPlayFpBackend: Int,
     sidPlayFpClockMode: Int,
     sidPlayFpSidModelMode: Int,
@@ -146,6 +148,16 @@ internal fun AppNavigationCoreEffects(
         }
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_HIVELYTRACKER, normalized).apply()
         NativeBridge.setCoreOutputSampleRate("HivelyTracker", normalized)
+    }
+
+    LaunchedEffect(klystrackCoreSampleRateHz) {
+        val normalized = if (klystrackCoreSampleRateHz <= 0) {
+            0
+        } else {
+            klystrackCoreSampleRateHz.coerceIn(8000, 192000)
+        }
+        prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_KLYSTRACK, normalized).apply()
+        NativeBridge.setCoreOutputSampleRate("Klystrack", normalized)
     }
 
     LaunchedEffect(uadeCoreSampleRateHz) {
@@ -337,6 +349,18 @@ internal fun AppNavigationCoreEffects(
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
             optionLabel = "Replay mix gain"
+        )
+    }
+
+    LaunchedEffect(klystrackPlayerQuality) {
+        val normalized = klystrackPlayerQuality.coerceIn(0, 4)
+        prefs.edit().putInt(CorePreferenceKeys.KLYSTRACK_PLAYER_QUALITY, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = "Klystrack",
+            optionName = KlystrackOptionKeys.PLAYER_QUALITY,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Replay quality"
         )
     }
 

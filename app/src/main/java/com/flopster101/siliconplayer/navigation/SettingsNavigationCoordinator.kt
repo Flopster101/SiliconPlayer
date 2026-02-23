@@ -13,7 +13,6 @@ internal fun buildSettingsNavigationCoordinator(
     currentView: MainView,
     settingsRoute: SettingsRoute,
     settingsRouteHistory: List<SettingsRoute>,
-    settingsLaunchedFromPlayer: Boolean,
     settingsReturnView: MainView,
     lastUsedCoreName: String?,
     setSettingsRoute: (SettingsRoute) -> Unit,
@@ -49,7 +48,7 @@ internal fun buildSettingsNavigationCoordinator(
     }
 
     val exitSettingsToReturnView: () -> Unit = {
-        val target = if (settingsLaunchedFromPlayer) settingsReturnView else MainView.Home
+        val target = settingsReturnView.takeUnless { it == MainView.Settings } ?: MainView.Home
         setSettingsLaunchedFromPlayer(false)
         setSettingsRouteHistory(emptyList())
         setSettingsRoute(SettingsRoute.Root)

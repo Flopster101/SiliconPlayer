@@ -1388,7 +1388,6 @@ private fun AppNavigation(
         currentView = currentView,
         settingsRoute = settingsRoute,
         settingsRouteHistory = settingsRouteHistory,
-        settingsLaunchedFromPlayer = settingsLaunchedFromPlayer,
         settingsReturnView = settingsReturnView,
         lastUsedCoreName = lastUsedCoreName,
         setSettingsRoute = { settingsRoute = it },
@@ -2328,6 +2327,7 @@ private fun AppNavigation(
             onHomeRequested = { currentView = MainView.Home },
             onSettingsRequested = {
                 settingsLaunchedFromPlayer = false
+                settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
                 openSettingsRoute(SettingsRoute.Root, true)
                 currentView = MainView.Settings
             },

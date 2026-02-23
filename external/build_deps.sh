@@ -5,7 +5,7 @@ set -e
 # Configuration
 # -----------------------------------------------------------------------------
 NDK_VERSION="29.0.14206865" # From local.properties/source.properties
-ANDROID_API=24 # minSdk
+ANDROID_API=23 # minSdk
 
 # Auto-detect NDK if not set
 if [ -z "$ANDROID_NDK_HOME" ]; then

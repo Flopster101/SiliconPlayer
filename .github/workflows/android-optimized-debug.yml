@@ -88,12 +88,12 @@ jobs:
       - name: Build native dependencies
         run: |
           chmod +x external/build_deps.sh
-          ./external/build_deps.sh all all
+          ./external/build_deps.sh all_legacy all
 
       - name: Build optimizedDebug APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleOptimizedDebug --no-daemon --stacktrace
+          ./gradlew assembleOptimizedDebug -PenableX86=true --no-daemon --stacktrace
 
       - name: Get short commit hash
         id: vars

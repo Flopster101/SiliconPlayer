@@ -83,7 +83,6 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/furnace/extern/libs
     # Find Android libraries
     find_library(log-lib log)
     find_library(android-lib android)
-    find_library(aaudio-lib aaudio)
     find_library(opensles-lib OpenSLES)
     find_library(mediandk-lib mediandk)
     find_library(dl-lib dl)
@@ -203,7 +202,6 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/furnace/extern/libs
             siliconplayer
             ${log-lib}
             ${android-lib}
-            ${aaudio-lib}
             ${opensles-lib}
             ${mediandk-lib}
             libopenmpt
@@ -237,8 +235,9 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/furnace/extern/libs
             libfurnace
             z # zlib is needed for openmpt/ffmpeg/vgm
             m # libbinio can require libm symbols on some toolchains
+            ${dl-lib}
     )
 
     if (HAS_OPENSSL_PREBUILT)
-        target_link_libraries(siliconplayer libssl libcrypto ${dl-lib})
+        target_link_libraries(siliconplayer libssl libcrypto)
     endif()

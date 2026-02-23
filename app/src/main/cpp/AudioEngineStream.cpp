@@ -2,9 +2,11 @@
 #include "AudioTrackJniBridge.h"
 
 #include <android/log.h>
+#include <android/api-level.h>
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <dlfcn.h>
 
 #define LOG_TAG "AudioEngine"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
@@ -54,15 +56,116 @@ namespace {
         LOGE("OpenSL step failed (%s): result=%d", step, static_cast<int>(result));
         return false;
     }
+
+    namespace AAudioDyn {
+        struct Api {
+            void* handle = nullptr;
+            bool attemptedLoad = false;
+            bool available = false;
+            aaudio_result_t (*createStreamBuilder)(AAudioStreamBuilder**) = nullptr;
+            aaudio_result_t (*streamBuilderDelete)(AAudioStreamBuilder*) = nullptr;
+            void (*streamBuilderSetFormat)(AAudioStreamBuilder*, aaudio_format_t) = nullptr;
+            void (*streamBuilderSetChannelCount)(AAudioStreamBuilder*, int32_t) = nullptr;
+            void (*streamBuilderSetPerformanceMode)(AAudioStreamBuilder*, aaudio_performance_mode_t) = nullptr;
+            void (*streamBuilderSetDataCallback)(AAudioStreamBuilder*, AAudioStream_dataCallback, void*) = nullptr;
+            void (*streamBuilderSetErrorCallback)(AAudioStreamBuilder*, AAudioStream_errorCallback, void*) = nullptr;
+            aaudio_result_t (*streamBuilderOpenStream)(AAudioStreamBuilder*, AAudioStream**) = nullptr;
+            const char* (*convertResultToText)(aaudio_result_t) = nullptr;
+            int32_t (*streamGetSampleRate)(AAudioStream*) = nullptr;
+            int32_t (*streamGetChannelCount)(AAudioStream*) = nullptr;
+            int32_t (*streamGetFramesPerBurst)(AAudioStream*) = nullptr;
+            int32_t (*streamGetBufferCapacityInFrames)(AAudioStream*) = nullptr;
+            int32_t (*streamSetBufferSizeInFrames)(AAudioStream*, int32_t) = nullptr;
+            aaudio_result_t (*streamRequestStart)(AAudioStream*) = nullptr;
+            aaudio_result_t (*streamRequestStop)(AAudioStream*) = nullptr;
+            aaudio_result_t (*streamClose)(AAudioStream*) = nullptr;
+            aaudio_stream_state_t (*streamGetState)(AAudioStream*) = nullptr;
+        };
+
+        Api& api() {
+            static Api instance;
+            return instance;
+        }
+
+        template <typename T>
+        bool loadSymbol(void* handle, const char* name, T& out) {
+            out = reinterpret_cast<T>(dlsym(handle, name));
+            return out != nullptr;
+        }
+
+        bool ensureLoaded() {
+            Api& s = api();
+            if (s.attemptedLoad) return s.available;
+            s.attemptedLoad = true;
+
+            if (android_get_device_api_level() < __ANDROID_API_O__) {
+                return false;
+            }
+
+            s.handle = dlopen("libaaudio.so", RTLD_NOW | RTLD_LOCAL);
+            if (s.handle == nullptr) {
+                LOGD("AAudio runtime load skipped: libaaudio.so not available");
+                return false;
+            }
+
+            const bool ok =
+                    loadSymbol(s.handle, "AAudio_createStreamBuilder", s.createStreamBuilder) &&
+                    loadSymbol(s.handle, "AAudioStreamBuilder_delete", s.streamBuilderDelete) &&
+                    loadSymbol(s.handle, "AAudioStreamBuilder_setFormat", s.streamBuilderSetFormat) &&
+                    loadSymbol(s.handle, "AAudioStreamBuilder_setChannelCount", s.streamBuilderSetChannelCount) &&
+                    loadSymbol(s.handle, "AAudioStreamBuilder_setPerformanceMode", s.streamBuilderSetPerformanceMode) &&
+                    loadSymbol(s.handle, "AAudioStreamBuilder_setDataCallback", s.streamBuilderSetDataCallback) &&
+                    loadSymbol(s.handle, "AAudioStreamBuilder_setErrorCallback", s.streamBuilderSetErrorCallback) &&
+                    loadSymbol(s.handle, "AAudioStreamBuilder_openStream", s.streamBuilderOpenStream) &&
+                    loadSymbol(s.handle, "AAudio_convertResultToText", s.convertResultToText) &&
+                    loadSymbol(s.handle, "AAudioStream_getSampleRate", s.streamGetSampleRate) &&
+                    loadSymbol(s.handle, "AAudioStream_getChannelCount", s.streamGetChannelCount) &&
+                    loadSymbol(s.handle, "AAudioStream_getFramesPerBurst", s.streamGetFramesPerBurst) &&
+                    loadSymbol(s.handle, "AAudioStream_getBufferCapacityInFrames", s.streamGetBufferCapacityInFrames) &&
+                    loadSymbol(s.handle, "AAudioStream_setBufferSizeInFrames", s.streamSetBufferSizeInFrames) &&
+                    loadSymbol(s.handle, "AAudioStream_requestStart", s.streamRequestStart) &&
+                    loadSymbol(s.handle, "AAudioStream_requestStop", s.streamRequestStop) &&
+                    loadSymbol(s.handle, "AAudioStream_close", s.streamClose) &&
+                    loadSymbol(s.handle, "AAudioStream_getState", s.streamGetState);
+
+            if (!ok) {
+                dlclose(s.handle);
+                s.handle = nullptr;
+                LOGE("AAudio runtime load failed: missing required symbols");
+                return false;
+            }
+
+            s.available = true;
+            return true;
+        }
+
+        const char* resultText(aaudio_result_t result) {
+            Api& s = api();
+            if (!s.available || s.convertResultToText == nullptr) return "AAudio unavailable";
+            return s.convertResultToText(result);
+        }
+    }
 }
 
 bool AudioEngine::createAaudioStream() {
+    if (!AAudioDyn::ensureLoaded()) {
+        activeOutputBackend.store(0, std::memory_order_relaxed);
+        outputStreamReady.store(false, std::memory_order_relaxed);
+        return false;
+    }
+    auto& aaudio = AAudioDyn::api();
+
     AAudioStreamBuilder *builder;
-    AAudio_createStreamBuilder(&builder);
+    if (aaudio.createStreamBuilder(&builder) != AAUDIO_OK || builder == nullptr) {
+        activeOutputBackend.store(0, std::memory_order_relaxed);
+        outputStreamReady.store(false, std::memory_order_relaxed);
+        LOGE("Failed to create AAudio stream builder");
+        return false;
+    }
 
     // Set parameters
-    AAudioStreamBuilder_setFormat(builder, AAUDIO_FORMAT_PCM_FLOAT);
-    AAudioStreamBuilder_setChannelCount(builder, 2);
+    aaudio.streamBuilderSetFormat(builder, AAUDIO_FORMAT_PCM_FLOAT);
+    aaudio.streamBuilderSetChannelCount(builder, 2);
     const int configuredPerformanceMode = outputPerformanceMode;
     aaudio_performance_mode_t performanceMode = AAUDIO_PERFORMANCE_MODE_LOW_LATENCY;
     if (configuredPerformanceMode == 2) {
@@ -70,24 +173,24 @@ bool AudioEngine::createAaudioStream() {
     } else if (configuredPerformanceMode == 3) {
         performanceMode = AAUDIO_PERFORMANCE_MODE_POWER_SAVING;
     }
-    AAudioStreamBuilder_setPerformanceMode(builder, performanceMode);
+    aaudio.streamBuilderSetPerformanceMode(builder, performanceMode);
 
     // Set callback
-    AAudioStreamBuilder_setDataCallback(builder, dataCallback, this);
-    AAudioStreamBuilder_setErrorCallback(builder, errorCallback, this);
+    aaudio.streamBuilderSetDataCallback(builder, dataCallback, this);
+    aaudio.streamBuilderSetErrorCallback(builder, errorCallback, this);
 
     // Open the stream
-    aaudio_result_t result = AAudioStreamBuilder_openStream(builder, &stream);
+    aaudio_result_t result = aaudio.streamBuilderOpenStream(builder, &stream);
     if (result != AAUDIO_OK) {
         activeOutputBackend.store(0, std::memory_order_relaxed);
         outputStreamReady.store(false, std::memory_order_relaxed);
-        LOGE("Failed to open stream: %s", AAudio_convertResultToText(result));
+        LOGE("Failed to open stream: %s", AAudioDyn::resultText(result));
     } else {
         activeOutputBackend.store(1, std::memory_order_relaxed);
         outputStreamReady.store(true, std::memory_order_relaxed);
         streamStartupPrerollPending = true;
-        streamSampleRate = AAudioStream_getSampleRate(stream);
-        streamChannelCount = AAudioStream_getChannelCount(stream);
+        streamSampleRate = aaudio.streamGetSampleRate(stream);
+        streamChannelCount = aaudio.streamGetChannelCount(stream);
         if (streamSampleRate <= 0) streamSampleRate = 48000;
         if (streamChannelCount <= 0) streamChannelCount = 2;
         applyStreamBufferPreset();
@@ -102,7 +205,7 @@ bool AudioEngine::createAaudioStream() {
         );
     }
 
-    AAudioStreamBuilder_delete(builder);
+    aaudio.streamBuilderDelete(builder);
     return outputStreamReady.load(std::memory_order_relaxed);
 }
 
@@ -345,8 +448,10 @@ void AudioEngine::applyStreamBufferPreset() {
     if (stream == nullptr) return;
     if (outputBufferPreset == 0) return;
 
-    const int32_t burstFrames = AAudioStream_getFramesPerBurst(stream);
-    const int32_t bufferCapacity = AAudioStream_getBufferCapacityInFrames(stream);
+    if (!AAudioDyn::ensureLoaded()) return;
+    auto& aaudio = AAudioDyn::api();
+    const int32_t burstFrames = aaudio.streamGetFramesPerBurst(stream);
+    const int32_t bufferCapacity = aaudio.streamGetBufferCapacityInFrames(stream);
     if (burstFrames <= 0 || bufferCapacity <= 0) return;
 
     int multiplier = 2;
@@ -361,7 +466,7 @@ void AudioEngine::applyStreamBufferPreset() {
             burstFrames,
             bufferCapacity
     );
-    const int32_t applied = AAudioStream_setBufferSizeInFrames(stream, target);
+    const int32_t applied = aaudio.streamSetBufferSizeInFrames(stream, target);
     LOGD(
             "AAudio buffer preset applied: burst=%d capacity=%d target=%d applied=%d",
             burstFrames,
@@ -616,9 +721,12 @@ bool AudioEngine::requestStreamStart() {
     if (stream == nullptr) {
         return false;
     }
-    const aaudio_result_t result = AAudioStream_requestStart(stream);
+    if (!AAudioDyn::ensureLoaded()) {
+        return false;
+    }
+    const aaudio_result_t result = AAudioDyn::api().streamRequestStart(stream);
     if (result != AAUDIO_OK) {
-        LOGE("Failed to start stream: %s", AAudio_convertResultToText(result));
+        LOGE("Failed to start stream: %s", AAudioDyn::resultText(result));
         return false;
     }
     return true;
@@ -648,7 +756,10 @@ void AudioEngine::requestStreamStop() {
     if (stream == nullptr) {
         return;
     }
-    AAudioStream_requestStop(stream);
+    if (!AAudioDyn::ensureLoaded()) {
+        return;
+    }
+    AAudioDyn::api().streamRequestStop(stream);
 }
 
 bool AudioEngine::isStreamDisconnectedOrClosed() const {
@@ -670,7 +781,10 @@ bool AudioEngine::isStreamDisconnectedOrClosed() const {
     if (stream == nullptr) {
         return true;
     }
-    const aaudio_stream_state_t state = AAudioStream_getState(stream);
+    if (!AAudioDyn::ensureLoaded()) {
+        return true;
+    }
+    const aaudio_stream_state_t state = AAudioDyn::api().streamGetState(stream);
     return state == AAUDIO_STREAM_STATE_DISCONNECTED ||
            state == AAUDIO_STREAM_STATE_CLOSING ||
            state == AAUDIO_STREAM_STATE_CLOSED;
@@ -688,7 +802,10 @@ int AudioEngine::getStreamBurstFrames() const {
     if (stream == nullptr) {
         return 0;
     }
-    return static_cast<int>(AAudioStream_getFramesPerBurst(stream));
+    if (!AAudioDyn::ensureLoaded()) {
+        return 0;
+    }
+    return static_cast<int>(AAudioDyn::api().streamGetFramesPerBurst(stream));
 }
 
 std::string AudioEngine::getAudioBackendLabel() const {
@@ -752,7 +869,9 @@ void AudioEngine::reconfigureStream(bool resumePlayback) {
 
 void AudioEngine::closeAaudioStream() {
     if (stream != nullptr) {
-        AAudioStream_close(stream);
+        if (AAudioDyn::ensureLoaded()) {
+            AAudioDyn::api().streamClose(stream);
+        }
         stream = nullptr;
     }
 }
@@ -849,7 +968,7 @@ void AudioEngine::errorCallback(
         void *userData,
         aaudio_result_t error) {
     auto *engine = static_cast<AudioEngine *>(userData);
-    LOGE("AAudio stream error callback: %s", AAudio_convertResultToText(error));
+    LOGE("AAudio stream error callback: %s", AAudioDyn::resultText(error));
     engine->resumeAfterRebuild.store(engine->isPlaying.load());
     engine->isPlaying.store(false);
     engine->streamNeedsRebuild.store(true);
@@ -894,10 +1013,13 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         void *audioData,
         int32_t numFrames) {
     auto *engine = static_cast<AudioEngine *>(userData);
+    const int callbackStreamRate = AAudioDyn::ensureLoaded()
+            ? static_cast<int>(AAudioDyn::api().streamGetSampleRate(callbackStream))
+            : 0;
     auto *outputData = static_cast<float *>(audioData);
     const int callbackRate = engine->streamSampleRate > 0
             ? engine->streamSampleRate
-            : static_cast<int>(AAudioStream_getSampleRate(callbackStream));
+            : callbackStreamRate;
 
     if (engine->renderOutputCallbackFrames(outputData, numFrames, callbackRate)) {
         return AAUDIO_CALLBACK_RESULT_STOP;

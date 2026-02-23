@@ -250,7 +250,7 @@ private:
     SLObjectItf openSlPlayerObject = nullptr;
     SLPlayItf openSlPlayerPlay = nullptr;
     SLAndroidSimpleBufferQueueItf openSlBufferQueue = nullptr;
-    static constexpr int kOpenSlBufferQueueCount = 3;
+    static constexpr int kOpenSlBufferQueueCount = 6;
     std::array<std::vector<int16_t>, kOpenSlBufferQueueCount> openSlPcmBuffers {};
     std::vector<float> openSlFloatBuffer;
     size_t openSlNextBufferIndex = 0;
@@ -351,7 +351,7 @@ private:
     void closeAaudioStream();
     void closeOpenSlStream();
     bool renderOutputCallbackFrames(float* outputData, int32_t numFrames, int callbackRate);
-    bool enqueueOpenSlBuffer();
+    bool enqueueOpenSlBuffer(bool allowUnderrun = true);
 
     void createStream();
     void closeStream();

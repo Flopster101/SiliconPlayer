@@ -10,18 +10,20 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 namespace {
-    constexpr int kOpenSlDefaultBufferFrames = 1024;
+    constexpr int kOpenSlStartupReadyWaitMs = 420;
+    constexpr int kOpenSlStartupStrictEnqueueWaitMs = 220;
+    constexpr int kOpenSlStartupPollIntervalMs = 2;
 
     int openSlBufferFramesForPreset(int bufferPreset) {
         switch (bufferPreset) {
             case 1:
-                return 512;
+                return 1024;
             case 3:
-                return 2048;
+                return 4096;
             case 0:
             case 2:
             default:
-                return kOpenSlDefaultBufferFrames;
+                return 2048;
         }
     }
 
@@ -391,9 +393,30 @@ bool AudioEngine::renderOutputCallbackFrames(float* outputData, int32_t numFrame
     return false;
 }
 
-bool AudioEngine::enqueueOpenSlBuffer() {
+bool AudioEngine::enqueueOpenSlBuffer(bool allowUnderrun) {
     if (openSlBufferQueue == nullptr || openSlBufferFrames <= 0) {
         return false;
+    }
+
+    if (!allowUnderrun) {
+        int bufferedFrames = renderQueueFrames();
+        const auto strictDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(
+                kOpenSlStartupStrictEnqueueWaitMs
+        );
+        while (bufferedFrames < openSlBufferFrames &&
+               std::chrono::steady_clock::now() < strictDeadline) {
+            renderWorkerCv.notify_one();
+            std::this_thread::sleep_for(std::chrono::milliseconds(kOpenSlStartupPollIntervalMs));
+            bufferedFrames = renderQueueFrames();
+        }
+        if (bufferedFrames < openSlBufferFrames) {
+            LOGD(
+                    "OpenSL strict startup enqueue deferred: required=%d buffered=%d",
+                    openSlBufferFrames,
+                    bufferedFrames
+            );
+            return false;
+        }
     }
 
     const size_t nextIndex = openSlNextBufferIndex % kOpenSlBufferQueueCount;
@@ -444,19 +467,38 @@ bool AudioEngine::requestStreamStart() {
             return false;
         }
 
+        const int minStartupFrames = std::max(
+                openSlBufferFrames * kOpenSlBufferQueueCount,
+                renderWorkerChunkFrames.load(std::memory_order_relaxed) * 2
+        );
+        const auto readyDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(
+                kOpenSlStartupReadyWaitMs
+        );
+        while (renderQueueFrames() < minStartupFrames &&
+               std::chrono::steady_clock::now() < readyDeadline) {
+            renderWorkerCv.notify_one();
+            std::this_thread::sleep_for(std::chrono::milliseconds(kOpenSlStartupPollIntervalMs));
+        }
+
         openSlStopAfterCurrentBuffer.store(false, std::memory_order_relaxed);
         openSlNextBufferIndex = 0;
         (*openSlBufferQueue)->Clear(openSlBufferQueue);
 
         int queued = 0;
         for (int i = 0; i < kOpenSlBufferQueueCount; ++i) {
-            if (!enqueueOpenSlBuffer()) {
+            if (!enqueueOpenSlBuffer(false)) {
                 break;
             }
             queued++;
         }
-        if (queued <= 0) {
-            LOGE("OpenSL failed to enqueue startup buffers");
+        if (queued < kOpenSlBufferQueueCount) {
+            const int bufferedFrames = renderQueueFrames();
+            LOGE(
+                    "OpenSL startup prequeue incomplete: queued=%d/%d buffered=%d",
+                    queued,
+                    kOpenSlBufferQueueCount,
+                    bufferedFrames
+            );
             return false;
         }
 

@@ -15,6 +15,13 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 namespace {
+    constexpr int kStartupPrefillDeadlineAaudioMs = 220;
+    constexpr int kStartupPrefillDeadlineOpenSlMs = 760;
+    constexpr int kStartupRetryDeadlineOpenSlMs = 420;
+    constexpr int kStartupPrefillPollIntervalMs = 2;
+    constexpr int kStartupRetryPollIntervalMs = 4;
+    constexpr int kOpenSlStartupQueueMultiplier = 3;
+
     pid_t currentThreadId() {
 #ifdef SYS_gettid
         return static_cast<pid_t>(syscall(SYS_gettid));
@@ -97,11 +104,18 @@ bool AudioEngine::start() {
         clearRenderQueue();
         isPlaying = true;
         naturalEndPending.store(false);
+        const bool openSlActive = activeOutputBackend.load(std::memory_order_relaxed) == 2;
         const int startupChunkFrames = std::max(256, renderWorkerChunkFrames.load(std::memory_order_relaxed));
-        const int startupBaseTargetFrames = std::max(
+        int startupBaseTargetFrames = std::max(
                 startupChunkFrames * 2,
                 std::min(renderWorkerTargetFrames.load(std::memory_order_relaxed), 4096)
         );
+        if (openSlActive) {
+            startupBaseTargetFrames = std::max(
+                    startupBaseTargetFrames,
+                    openSlBufferFrames * AudioEngine::kOpenSlBufferQueueCount * kOpenSlStartupQueueMultiplier
+            );
+        }
         int startupPrerollFrames = 0;
         if (streamStartupPrerollPending) {
             int burstFrames = getStreamBurstFrames();
@@ -115,21 +129,44 @@ bool AudioEngine::start() {
         }
         const int startupTargetFrames = startupBaseTargetFrames + startupPrerollFrames;
         renderWorkerCv.notify_one();
-        const auto prefillDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(220);
+        const auto prefillDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(
+                openSlActive ? kStartupPrefillDeadlineOpenSlMs : kStartupPrefillDeadlineAaudioMs
+        );
         while (renderQueueFrames() < startupTargetFrames &&
                std::chrono::steady_clock::now() < prefillDeadline) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            std::this_thread::sleep_for(std::chrono::milliseconds(kStartupPrefillPollIntervalMs));
             renderWorkerCv.notify_one();
         }
 
-        if (!requestStreamStart()) {
+        auto requestStartWithWarmupRetry = [this]() -> bool {
+            if (requestStreamStart()) {
+                return true;
+            }
+            if (activeOutputBackend.load(std::memory_order_relaxed) != 2) {
+                return false;
+            }
+
+            const auto retryDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(
+                    kStartupRetryDeadlineOpenSlMs
+            );
+            while (std::chrono::steady_clock::now() < retryDeadline) {
+                renderWorkerCv.notify_one();
+                std::this_thread::sleep_for(std::chrono::milliseconds(kStartupRetryPollIntervalMs));
+                if (requestStreamStart()) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        if (!requestStartWithWarmupRetry()) {
             closeStream();
             createStream();
             if (!outputStreamReady.load(std::memory_order_relaxed)) {
                 isPlaying = false;
                 return false;
             }
-            if (!requestStreamStart()) {
+            if (!requestStartWithWarmupRetry()) {
                 LOGE("Retry start failed");
                 isPlaying = false;
                 return false;

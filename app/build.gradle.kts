@@ -6,6 +6,13 @@ plugins {
 import java.io.ByteArrayOutputStream
 import java.io.File
 
+fun parseBooleanGradleProperty(value: String?): Boolean {
+    return when (value?.trim()?.lowercase()) {
+        "1", "true", "yes", "on" -> true
+        else -> false
+    }
+}
+
 fun gitShortSha(): String {
     return try {
         val stdout = ByteArrayOutputStream()
@@ -52,11 +59,14 @@ android {
             }
         }
         ndk {
-            // Exclude x86 from default app packaging/build variants.
-            // x86 remains supported in dependency build scripts when explicitly requested.
+            // x86 is opt-in via -PenableX86=true for compatibility testing.
+            // Default app builds keep x86 excluded to reduce size/build time.
             abiFilters += "arm64-v8a"
             abiFilters += "armeabi-v7a"
             abiFilters += "x86_64"
+            if (parseBooleanGradleProperty(providers.gradleProperty("enableX86").orNull)) {
+                abiFilters += "x86"
+            }
         }
     }
 
@@ -262,7 +272,13 @@ fun register16kAlignTaskForVariant(variantName: String) {
 register16kAlignTaskForVariant("debug")
 register16kAlignTaskForVariant("optimizedDebug")
 
-val uadeRuntimeAssetAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+val enableX86 = parseBooleanGradleProperty(providers.gradleProperty("enableX86").orNull)
+val uadeRuntimeAssetAbis = buildList {
+    add("arm64-v8a")
+    add("armeabi-v7a")
+    add("x86_64")
+    if (enableX86) add("x86")
+}
 val syncUadeRuntimeAssets = tasks.register("syncUadeRuntimeAssets") {
     group = "build setup"
     description = "Sync ABI-specific UADE runtime files into generated assets."

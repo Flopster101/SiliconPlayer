@@ -25,6 +25,7 @@ add_library(
         AudioEngineCoreOptions.cpp
         AudioEngineMetadata.cpp
         AudioEngineTransport.cpp
+        AudioEnginePipeline.cpp
         AudioEngineEffects.cpp
         decoders/sid/ReSidBuilder.cpp
         decoders/sid/ReSidEmu.cpp

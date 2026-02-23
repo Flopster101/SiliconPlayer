@@ -60,10 +60,7 @@ bool AudioEngine::start() {
         streamNeedsRebuild.store(false);
     }
     if (stream != nullptr) {
-        aaudio_stream_state_t state = AAudioStream_getState(stream);
-        if (state == AAUDIO_STREAM_STATE_DISCONNECTED ||
-            state == AAUDIO_STREAM_STATE_CLOSING ||
-            state == AAUDIO_STREAM_STATE_CLOSED) {
+        if (isStreamDisconnectedOrClosed()) {
             closeStream();
             createStream();
         }
@@ -107,7 +104,7 @@ bool AudioEngine::start() {
         );
         int startupPrerollFrames = 0;
         if (streamStartupPrerollPending) {
-            int burstFrames = static_cast<int>(AAudioStream_getFramesPerBurst(stream));
+            int burstFrames = getStreamBurstFrames();
             if (burstFrames <= 0) {
                 burstFrames = startupChunkFrames;
             }
@@ -125,18 +122,15 @@ bool AudioEngine::start() {
             renderWorkerCv.notify_one();
         }
 
-        aaudio_result_t result = AAudioStream_requestStart(stream);
-        if (result != AAUDIO_OK) {
-            LOGE("Failed to start stream: %s", AAudio_convertResultToText(result));
+        if (!requestStreamStart()) {
             closeStream();
             createStream();
             if (stream == nullptr) {
                 isPlaying = false;
                 return false;
             }
-            result = AAudioStream_requestStart(stream);
-            if (result != AAUDIO_OK) {
-                LOGE("Retry start failed: %s", AAudio_convertResultToText(result));
+            if (!requestStreamStart()) {
+                LOGE("Retry start failed");
                 isPlaying = false;
                 return false;
             }
@@ -170,7 +164,7 @@ void AudioEngine::stop() {
 
     if (stream != nullptr) {
         resumeAfterRebuild.store(false);
-        AAudioStream_requestStop(stream);
+        requestStreamStop();
         isPlaying = false;
         naturalEndPending.store(false);
         clearRenderQueue();
@@ -486,7 +480,7 @@ void AudioEngine::seekWorkerLoop() {
 
         if (stopStreamAfterSeek.exchange(false) && stream != nullptr) {
             resumeAfterRebuild.store(false);
-            AAudioStream_requestStop(stream);
+            requestStreamStop();
         }
 
         {
@@ -572,7 +566,7 @@ void AudioEngine::setRepeatMode(int mode) {
 
     if (shouldStopForTerminalState) {
         if (stream != nullptr) {
-            AAudioStream_requestStop(stream);
+            requestStreamStop();
         }
         isPlaying.store(false);
     }

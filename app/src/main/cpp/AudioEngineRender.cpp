@@ -61,13 +61,6 @@ namespace {
     const char* outputResamplerName(int preference) {
         return preference == 2 ? "SoX" : "Built-in";
     }
-
-    constexpr int kRenderChunkFramesSmall = 512;
-    constexpr int kRenderChunkFramesMedium = 1024;
-    constexpr int kRenderChunkFramesLarge = 2048;
-    constexpr int kRenderTargetFramesSmall = 4096;
-    constexpr int kRenderTargetFramesMedium = 8192;
-    constexpr int kRenderTargetFramesLarge = 16384;
 }
 
 void AudioEngine::resetResamplerStateLocked(bool preserveBuffer) {
@@ -605,40 +598,13 @@ int AudioEngine::renderQueueFrames() const {
     return static_cast<int>(availableSamples / 2u);
 }
 
-void AudioEngine::updateRenderQueueTuning() {
-    int chunkFrames = kRenderChunkFramesMedium;
-    int targetFrames = kRenderTargetFramesMedium;
-    switch (outputBufferPreset) {
-        case 1:
-            chunkFrames = kRenderChunkFramesSmall;
-            targetFrames = kRenderTargetFramesSmall;
-            break;
-        case 3:
-            chunkFrames = kRenderChunkFramesLarge;
-            targetFrames = kRenderTargetFramesLarge;
-            break;
-        case 0:
-        case 2:
-        default:
-            chunkFrames = kRenderChunkFramesMedium;
-            targetFrames = kRenderTargetFramesMedium;
-            break;
-    }
-    if (targetFrames < chunkFrames * 2) {
-        targetFrames = chunkFrames * 2;
-    }
-    renderWorkerChunkFrames.store(chunkFrames, std::memory_order_relaxed);
-    renderWorkerTargetFrames.store(targetFrames, std::memory_order_relaxed);
-    LOGD("Render queue tuning: preset=%d chunk=%d target=%d", outputBufferPreset, chunkFrames, targetFrames);
-}
-
 void AudioEngine::renderWorkerLoop() {
     pthread_setname_np(pthread_self(), "sp_render");
     // Best effort: keep decoder/render worker responsive under UI/system load.
     promoteThreadForAudio("render-worker", -16);
 
     std::vector<float> localBuffer;
-    localBuffer.resize(static_cast<size_t>(kRenderChunkFramesMedium) * 2u);
+    localBuffer.resize(1024u * 2u);
 
     for (;;) {
         const int baseTargetFrames = std::max(
@@ -801,99 +767,4 @@ void AudioEngine::renderWorkerLoop() {
             continue;
         }
     }
-}
-
-aaudio_data_callback_result_t AudioEngine::dataCallback(
-        AAudioStream *stream,
-        void *userData,
-        void *audioData,
-        int32_t numFrames) {
-    (void)stream;
-    auto *engine = static_cast<AudioEngine *>(userData);
-    auto *outputData = static_cast<float *>(audioData);
-    if (engine->seekInProgress.load()) {
-        memset(outputData, 0, static_cast<size_t>(numFrames) * 2 * sizeof(float));
-        return AAUDIO_CALLBACK_RESULT_CONTINUE;
-    }
-    const int callbackRate = engine->streamSampleRate > 0
-            ? engine->streamSampleRate
-            : static_cast<int>(AAudioStream_getSampleRate(stream));
-    if (engine->pendingResumeFadeOnStart.exchange(false, std::memory_order_relaxed)) {
-        engine->beginPauseResumeFadeLocked(
-                true,
-                callbackRate > 0 ? callbackRate : 48000,
-                engine->pendingResumeFadeDurationMs.load(std::memory_order_relaxed),
-                engine->pendingResumeFadeAttenuationDb.load(std::memory_order_relaxed)
-        );
-    }
-    if (engine->pendingPauseFadeRequest.exchange(false, std::memory_order_relaxed)) {
-        engine->beginPauseResumeFadeLocked(
-                false,
-                callbackRate > 0 ? callbackRate : 48000,
-                engine->pendingPauseFadeDurationMs.load(std::memory_order_relaxed),
-                engine->pendingPauseFadeAttenuationDb.load(std::memory_order_relaxed)
-        );
-    }
-    engine->renderQueueCallbackCount.fetch_add(1, std::memory_order_relaxed);
-    const int framesCopied = engine->popRenderQueue(outputData, numFrames, 2);
-    if (framesCopied < numFrames) {
-        const uint64_t missingFrames = static_cast<uint64_t>(numFrames - framesCopied);
-        const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::steady_clock::now().time_since_epoch()
-        ).count();
-        // Hold a higher queue target briefly after underrun to absorb transient CPU spikes
-        // during app-switch/system UI animations.
-        engine->renderQueueRecoveryBoostUntilNs.store(
-                nowNs + 2500000000LL,
-                std::memory_order_relaxed
-        );
-        engine->renderQueueUnderrunCount.fetch_add(1, std::memory_order_relaxed);
-        engine->renderQueueUnderrunFrames.fetch_add(missingFrames, std::memory_order_relaxed);
-#ifndef NDEBUG
-        const int64_t previousLogNs = engine->renderQueueLastUnderrunLogNs.load(std::memory_order_relaxed);
-        if (nowNs - previousLogNs > 1000000000LL) {
-            const uint64_t underruns = engine->renderQueueUnderrunCount.load(std::memory_order_relaxed);
-            const uint64_t underrunFrames = engine->renderQueueUnderrunFrames.load(std::memory_order_relaxed);
-            const uint64_t callbacks = engine->renderQueueCallbackCount.load(std::memory_order_relaxed);
-            LOGD(
-                    "Render queue underrun: missing=%llu callbacks=%llu underruns=%llu totalMissingFrames=%llu bufferedFrames=%d",
-                    static_cast<unsigned long long>(missingFrames),
-                    static_cast<unsigned long long>(callbacks),
-                    static_cast<unsigned long long>(underruns),
-                    static_cast<unsigned long long>(underrunFrames),
-                    engine->renderQueueFrames()
-            );
-            engine->renderQueueLastUnderrunLogNs.store(nowNs, std::memory_order_relaxed);
-        }
-#endif
-        std::memset(
-                outputData + (static_cast<size_t>(framesCopied) * 2u),
-                0,
-                static_cast<size_t>(numFrames - framesCopied) * 2u * sizeof(float)
-        );
-    }
-    for (int frame = 0; frame < numFrames; ++frame) {
-        const float fadeGain = engine->nextPauseResumeFadeGainLocked();
-        if (fadeGain == 1.0f) continue;
-        const size_t base = static_cast<size_t>(frame) * 2u;
-        outputData[base] *= fadeGain;
-        outputData[base + 1u] *= fadeGain;
-    }
-    if (engine->pauseResumeFadeOutStopPending) {
-        engine->pauseResumeFadeOutStopPending = false;
-        engine->isPlaying.store(false);
-        engine->naturalEndPending.store(false);
-        engine->clearRenderQueue();
-        engine->renderWorkerCv.notify_all();
-        return AAUDIO_CALLBACK_RESULT_STOP;
-    }
-
-    if (engine->renderTerminalStopPending.load() && engine->renderQueueFrames() <= 0) {
-        engine->renderTerminalStopPending.store(false);
-        return AAUDIO_CALLBACK_RESULT_STOP;
-    }
-
-    engine->renderWorkerCv.notify_one();
-
-    return AAUDIO_CALLBACK_RESULT_CONTINUE;
 }

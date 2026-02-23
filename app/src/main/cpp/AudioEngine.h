@@ -325,6 +325,10 @@ private:
     int renderQueueFrames() const;
     void renderWorkerLoop();
     void updateRenderQueueTuning();
+    bool requestStreamStart();
+    void requestStreamStop();
+    bool isStreamDisconnectedOrClosed() const;
+    int getStreamBurstFrames() const;
 
     void createStream();
     void closeStream();

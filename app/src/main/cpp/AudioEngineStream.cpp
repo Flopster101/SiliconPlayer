@@ -2,16 +2,12 @@
 
 #include <android/log.h>
 #include <algorithm>
+#include <chrono>
+#include <cstring>
 
 #define LOG_TAG "AudioEngine"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
-
-namespace {
-    const char* outputResamplerName(int preference) {
-        return preference == 2 ? "SoX" : "Built-in";
-    }
-}
 
 void AudioEngine::createStream() {
     AAudioStreamBuilder *builder;
@@ -88,11 +84,45 @@ void AudioEngine::applyStreamBufferPreset() {
     );
 }
 
+bool AudioEngine::requestStreamStart() {
+    if (stream == nullptr) {
+        return false;
+    }
+    const aaudio_result_t result = AAudioStream_requestStart(stream);
+    if (result != AAUDIO_OK) {
+        LOGE("Failed to start stream: %s", AAudio_convertResultToText(result));
+        return false;
+    }
+    return true;
+}
+
+void AudioEngine::requestStreamStop() {
+    if (stream == nullptr) {
+        return;
+    }
+    AAudioStream_requestStop(stream);
+}
+
+bool AudioEngine::isStreamDisconnectedOrClosed() const {
+    if (stream == nullptr) {
+        return true;
+    }
+    const aaudio_stream_state_t state = AAudioStream_getState(stream);
+    return state == AAUDIO_STREAM_STATE_DISCONNECTED ||
+           state == AAUDIO_STREAM_STATE_CLOSING ||
+           state == AAUDIO_STREAM_STATE_CLOSED;
+}
+
+int AudioEngine::getStreamBurstFrames() const {
+    if (stream == nullptr) {
+        return 0;
+    }
+    return static_cast<int>(AAudioStream_getFramesPerBurst(stream));
+}
+
 void AudioEngine::reconfigureStream(bool resumePlayback) {
     const bool shouldResume = resumePlayback && isPlaying.load();
-    if (stream != nullptr) {
-        AAudioStream_requestStop(stream);
-    }
+    requestStreamStop();
     isPlaying.store(false);
 
     closeStream();
@@ -109,13 +139,8 @@ void AudioEngine::reconfigureStream(bool resumePlayback) {
         }
     }
 
-    if (shouldResume && stream != nullptr) {
-        const aaudio_result_t result = AAudioStream_requestStart(stream);
-        if (result == AAUDIO_OK) {
-            isPlaying.store(true);
-        } else {
-            LOGE("Failed to resume stream after reconfigure: %s", AAudio_convertResultToText(result));
-        }
+    if (shouldResume && requestStreamStart()) {
+        isPlaying.store(true);
     }
 }
 
@@ -159,53 +184,106 @@ void AudioEngine::recoverStreamIfNeeded() {
 
     if (resumeAfterRebuild.load()) {
         resumeAfterRebuild.store(false);
-        if (stream != nullptr) {
-            aaudio_result_t result = AAudioStream_requestStart(stream);
-            if (result == AAUDIO_OK) {
-                isPlaying.store(true);
-                return;
-            }
-            LOGE("Failed to auto-resume after stream rebuild: %s", AAudio_convertResultToText(result));
+        if (requestStreamStart()) {
+            isPlaying.store(true);
         }
     }
 }
 
-void AudioEngine::setAudioPipelineConfig(
-        int backendPreference,
-        int performanceMode,
-        int bufferPreset,
-        int resamplerPreference,
-        bool allowFallback) {
-    const int normalizedBackend = (backendPreference >= 0 && backendPreference <= 3) ? backendPreference : 0;
-    const int normalizedPerformance = (performanceMode >= 0 && performanceMode <= 3) ? performanceMode : 1;
-    const int normalizedBufferPreset = (bufferPreset >= 0 && bufferPreset <= 3) ? bufferPreset : 0;
-    const int normalizedResampler = (resamplerPreference >= 1 && resamplerPreference <= 2) ? resamplerPreference : 1;
+aaudio_data_callback_result_t AudioEngine::dataCallback(
+        AAudioStream *callbackStream,
+        void *userData,
+        void *audioData,
+        int32_t numFrames) {
+    auto *engine = static_cast<AudioEngine *>(userData);
+    auto *outputData = static_cast<float *>(audioData);
+    if (engine->seekInProgress.load()) {
+        std::memset(outputData, 0, static_cast<size_t>(numFrames) * 2u * sizeof(float));
+        return AAUDIO_CALLBACK_RESULT_CONTINUE;
+    }
 
-    const bool changed =
-            outputBackendPreference != normalizedBackend ||
-            outputPerformanceMode != normalizedPerformance ||
-            outputBufferPreset != normalizedBufferPreset ||
-            outputResamplerPreference != normalizedResampler ||
-            outputAllowFallback != allowFallback;
+    const int callbackRate = engine->streamSampleRate > 0
+            ? engine->streamSampleRate
+            : static_cast<int>(AAudioStream_getSampleRate(callbackStream));
+    if (engine->pendingResumeFadeOnStart.exchange(false, std::memory_order_relaxed)) {
+        engine->beginPauseResumeFadeLocked(
+                true,
+                callbackRate > 0 ? callbackRate : 48000,
+                engine->pendingResumeFadeDurationMs.load(std::memory_order_relaxed),
+                engine->pendingResumeFadeAttenuationDb.load(std::memory_order_relaxed)
+        );
+    }
+    if (engine->pendingPauseFadeRequest.exchange(false, std::memory_order_relaxed)) {
+        engine->beginPauseResumeFadeLocked(
+                false,
+                callbackRate > 0 ? callbackRate : 48000,
+                engine->pendingPauseFadeDurationMs.load(std::memory_order_relaxed),
+                engine->pendingPauseFadeAttenuationDb.load(std::memory_order_relaxed)
+        );
+    }
 
-    outputBackendPreference = normalizedBackend;
-    outputPerformanceMode = normalizedPerformance;
-    outputBufferPreset = normalizedBufferPreset;
-    outputResamplerPreference = normalizedResampler;
-    outputAllowFallback = allowFallback;
-    outputSoxrUnavailable = false;
-    updateRenderQueueTuning();
-    LOGD(
-            "Audio pipeline config: backend=%d perf=%d buffer=%d resampler=%s(%d) allowFallback=%d changed=%d",
-            outputBackendPreference,
-            outputPerformanceMode,
-            outputBufferPreset,
-            outputResamplerName(outputResamplerPreference),
-            outputResamplerPreference,
-            outputAllowFallback ? 1 : 0,
-            changed ? 1 : 0
-    );
+    engine->renderQueueCallbackCount.fetch_add(1, std::memory_order_relaxed);
+    const int framesCopied = engine->popRenderQueue(outputData, numFrames, 2);
+    if (framesCopied < numFrames) {
+        const uint64_t missingFrames = static_cast<uint64_t>(numFrames - framesCopied);
+        const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()
+        ).count();
+        // Hold a higher queue target briefly after underrun to absorb transient CPU spikes
+        // during app-switch/system UI animations.
+        engine->renderQueueRecoveryBoostUntilNs.store(
+                nowNs + 2500000000LL,
+                std::memory_order_relaxed
+        );
+        engine->renderQueueUnderrunCount.fetch_add(1, std::memory_order_relaxed);
+        engine->renderQueueUnderrunFrames.fetch_add(missingFrames, std::memory_order_relaxed);
+#ifndef NDEBUG
+        const int64_t previousLogNs = engine->renderQueueLastUnderrunLogNs.load(std::memory_order_relaxed);
+        if (nowNs - previousLogNs > 1000000000LL) {
+            const uint64_t underruns = engine->renderQueueUnderrunCount.load(std::memory_order_relaxed);
+            const uint64_t underrunFrames = engine->renderQueueUnderrunFrames.load(std::memory_order_relaxed);
+            const uint64_t callbacks = engine->renderQueueCallbackCount.load(std::memory_order_relaxed);
+            LOGD(
+                    "Render queue underrun: missing=%llu callbacks=%llu underruns=%llu totalMissingFrames=%llu bufferedFrames=%d",
+                    static_cast<unsigned long long>(missingFrames),
+                    static_cast<unsigned long long>(callbacks),
+                    static_cast<unsigned long long>(underruns),
+                    static_cast<unsigned long long>(underrunFrames),
+                    engine->renderQueueFrames()
+            );
+            engine->renderQueueLastUnderrunLogNs.store(nowNs, std::memory_order_relaxed);
+        }
+#endif
+        std::memset(
+                outputData + (static_cast<size_t>(framesCopied) * 2u),
+                0,
+                static_cast<size_t>(numFrames - framesCopied) * 2u * sizeof(float)
+        );
+    }
 
-    if (!changed) return;
-    reconfigureStream(true);
+    for (int frame = 0; frame < numFrames; ++frame) {
+        const float fadeGain = engine->nextPauseResumeFadeGainLocked();
+        if (fadeGain == 1.0f) continue;
+        const size_t base = static_cast<size_t>(frame) * 2u;
+        outputData[base] *= fadeGain;
+        outputData[base + 1u] *= fadeGain;
+    }
+
+    if (engine->pauseResumeFadeOutStopPending) {
+        engine->pauseResumeFadeOutStopPending = false;
+        engine->isPlaying.store(false);
+        engine->naturalEndPending.store(false);
+        engine->clearRenderQueue();
+        engine->renderWorkerCv.notify_all();
+        return AAUDIO_CALLBACK_RESULT_STOP;
+    }
+
+    if (engine->renderTerminalStopPending.load() && engine->renderQueueFrames() <= 0) {
+        engine->renderTerminalStopPending.store(false);
+        return AAUDIO_CALLBACK_RESULT_STOP;
+    }
+
+    engine->renderWorkerCv.notify_one();
+
+    return AAUDIO_CALLBACK_RESULT_CONTINUE;
 }

@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.widget.Toast
 import com.flopster101.siliconplayer.playback.ClearedPlaybackState
+import com.flopster101.siliconplayer.data.FileRepository
+import java.util.Locale
+import android.net.Uri
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -157,9 +160,11 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
     context: Context,
     openExpanded: Boolean,
     prefs: SharedPreferences,
+    repository: FileRepository,
     cacheRoot: File,
     onSelectedFileChanged: (File) -> Unit,
     onCurrentPlaybackSourceIdChanged: (String) -> Unit,
+    onVisiblePlayableFilesChanged: (List<File>) -> Unit,
     onPlayerSurfaceVisibleChanged: (Boolean) -> Unit,
     onPlayerExpandedChanged: (Boolean) -> Unit,
     loadSongVolumeForFile: (String) -> Unit,
@@ -178,6 +183,16 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
     ) ?: return
     onSelectedFileChanged(restoreTarget.displayFile)
     onCurrentPlaybackSourceIdChanged(restoreTarget.sourceId)
+    val sourceScheme = Uri.parse(restoreTarget.sourceId).scheme?.lowercase(Locale.ROOT)
+    val restoredContextualPlayableFiles = if (sourceScheme == "http" || sourceScheme == "https") {
+        emptyList()
+    } else {
+        loadContextualPlayableFilesForManualSelection(
+            repository = repository,
+            localFile = restoreTarget.displayFile
+        )
+    }
+    onVisiblePlayableFilesChanged(restoredContextualPlayableFiles)
     onPlayerSurfaceVisibleChanged(false)
     onPlayerExpandedChanged(openExpanded)
 

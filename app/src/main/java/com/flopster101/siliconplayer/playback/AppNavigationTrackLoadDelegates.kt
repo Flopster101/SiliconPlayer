@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.flopster101.siliconplayer.restorePlayerStateFromSessionAndNativeAction
 import com.flopster101.siliconplayer.playback.applyTrackSelectionAction
+import com.flopster101.siliconplayer.data.FileRepository
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -13,11 +14,13 @@ internal class AppNavigationTrackLoadDelegates(
     private val appScope: CoroutineScope,
     private val context: Context,
     private val prefs: SharedPreferences,
+    private val repository: FileRepository,
     private val cacheRootProvider: () -> File,
     private val lastBrowserLocationIdProvider: () -> String?,
     private val onResetPlayback: () -> Unit,
     private val onSelectedFileChanged: (File?) -> Unit,
     private val onCurrentPlaybackSourceIdChanged: (String?) -> Unit,
+    private val onVisiblePlayableFilesChanged: (List<File>) -> Unit,
     private val onPlayerSurfaceVisibleChanged: (Boolean) -> Unit,
     private val loadSongVolumeForFile: (String) -> Unit,
     private val onSongVolumeDbChanged: (Float) -> Unit,
@@ -108,9 +111,11 @@ internal class AppNavigationTrackLoadDelegates(
             context = context,
             openExpanded = openExpanded,
             prefs = prefs,
+            repository = repository,
             cacheRoot = cacheRootProvider(),
             onSelectedFileChanged = onSelectedFileChanged,
             onCurrentPlaybackSourceIdChanged = onCurrentPlaybackSourceIdChanged,
+            onVisiblePlayableFilesChanged = onVisiblePlayableFilesChanged,
             onPlayerSurfaceVisibleChanged = onPlayerSurfaceVisibleChanged,
             onPlayerExpandedChanged = onPlayerExpandedChanged,
             loadSongVolumeForFile = loadSongVolumeForFile,

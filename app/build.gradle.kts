@@ -37,7 +37,7 @@ android {
 
     defaultConfig {
         applicationId = "com.flopster101.siliconplayer"
-        minSdk = 26
+        minSdk = 24
         targetSdk = 34
         versionCode = 1000
         versionName = "0.1.0"

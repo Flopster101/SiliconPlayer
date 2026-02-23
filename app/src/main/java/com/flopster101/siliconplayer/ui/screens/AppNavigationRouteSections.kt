@@ -13,6 +13,9 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import java.io.File
 
@@ -105,6 +108,8 @@ internal fun AppNavigationMainScaffoldSection(
     currentView: MainView,
     canFocusMiniPlayer: Boolean,
     requestMiniPlayerFocus: () -> Unit,
+    onHardwareNavigationInput: () -> Unit,
+    onTouchInteraction: () -> Unit,
     onOpenPlayerSurface: () -> Unit,
     onHomeRequested: () -> Unit,
     onSettingsRequested: () -> Unit,
@@ -116,8 +121,33 @@ internal fun AppNavigationMainScaffoldSection(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                        if (event.type == PointerEventType.Press) {
+                            onTouchInteraction()
+                            focusManager.clearFocus(force = true)
+                        }
+                    }
+                }
+            }
             .onPreviewKeyEvent { keyEvent ->
-                if (!canFocusMiniPlayer || keyEvent.type != KeyEventType.KeyDown) {
+                if (keyEvent.type != KeyEventType.KeyDown) {
+                    return@onPreviewKeyEvent false
+                }
+                if (
+                    keyEvent.key == Key.DirectionLeft ||
+                    keyEvent.key == Key.DirectionRight ||
+                    keyEvent.key == Key.DirectionUp ||
+                    keyEvent.key == Key.DirectionDown ||
+                    keyEvent.key == Key.DirectionCenter ||
+                    keyEvent.key == Key.Enter ||
+                    keyEvent.key == Key.NumPadEnter
+                ) {
+                    onHardwareNavigationInput()
+                }
+                if (!canFocusMiniPlayer) {
                     return@onPreviewKeyEvent false
                 }
                 val moveDirection = when (keyEvent.key) {

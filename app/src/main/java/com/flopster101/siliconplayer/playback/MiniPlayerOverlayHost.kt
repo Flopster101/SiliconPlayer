@@ -102,6 +102,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
     playerArtworkCornerRadiusDp: Int,
     filenameDisplayMode: FilenameDisplayMode,
     filenameOnlyWhenTitleMissing: Boolean,
+    showMiniPlayerFocusHighlight: Boolean,
     onMiniPlayerExpandRequested: () -> Unit,
     canResumeStoppedTrack: Boolean,
     onHidePlayerSurface: () -> Unit,
@@ -197,7 +198,9 @@ internal fun BoxScope.MiniPlayerOverlayHost(
         visible = isPlayerSurfaceVisible && !isPlayerExpanded,
         enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn() + scaleIn(initialScale = 0.96f),
         exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(),
-        modifier = Modifier.align(Alignment.BottomCenter)
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
     ) {
         val previousButtonFocusRequester = remember { FocusRequester() }
         val stopButtonFocusRequester = remember { FocusRequester() }
@@ -207,7 +210,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
         val canNextMiniTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) in 0 until (visiblePlayableFiles.size - 1)
         var miniPlayerHasFocus by remember { mutableStateOf(false) }
         val miniPlayerFocusHighlight by animateFloatAsState(
-            targetValue = if (miniPlayerHasFocus) 1f else 0f,
+            targetValue = if (miniPlayerHasFocus && showMiniPlayerFocusHighlight) 1f else 0f,
             animationSpec = tween(durationMillis = 180, easing = LinearOutSlowInEasing),
             label = "miniPlayerFocusHighlight"
         )
@@ -269,7 +272,6 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.58f * miniPlayerFocusHighlight),
                 shape = MaterialTheme.shapes.large
             )
-            .padding(horizontal = 14.dp, vertical = 6.dp)
 
         val miniPlayerContent: @Composable () -> Unit = {
             MiniPlayerBar(

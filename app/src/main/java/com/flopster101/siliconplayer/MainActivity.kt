@@ -284,6 +284,8 @@ private fun AppNavigation(
     var tempForceMono by remember { mutableStateOf(false) }
 
     var currentView by remember { mutableStateOf(MainView.Home) }
+    val isTvDevice = remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) }
+    var showMiniPlayerFocusHighlight by remember { mutableStateOf(isTvDevice) }
     val miniPlayerFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.Root) }
     var settingsRouteHistory by remember { mutableStateOf<List<SettingsRoute>>(emptyList()) }
@@ -1440,7 +1442,17 @@ private fun AppNavigation(
             isPlayerExpanded = isPlayerExpanded,
             currentView = currentView,
             settingsLaunchedFromPlayer = settingsLaunchedFromPlayer,
-            onPlayerExpandedChanged = { isPlayerExpanded = it },
+            onPlayerExpandedChanged = { expanded ->
+                if (
+                    isPlayerExpanded &&
+                    !expanded &&
+                    isPlayerSurfaceVisible &&
+                    showMiniPlayerFocusHighlight
+                ) {
+                    restoreMiniPlayerFocusOnCollapse = true
+                }
+                isPlayerExpanded = expanded
+            },
             popSettingsRoute = popSettingsRoute,
             exitSettingsToReturnView = exitSettingsToReturnView
         )
@@ -1528,7 +1540,17 @@ private fun AppNavigation(
             onExpandFromMiniDragChanged = { expandFromMiniDrag = it },
             collapseFromSwipe = collapseFromSwipe,
             onCollapseFromSwipeChanged = { collapseFromSwipe = it },
-            onPlayerExpandedChanged = { isPlayerExpanded = it },
+            onPlayerExpandedChanged = { expanded ->
+                if (
+                    isPlayerExpanded &&
+                    !expanded &&
+                    isPlayerSurfaceVisible &&
+                    showMiniPlayerFocusHighlight
+                ) {
+                    restoreMiniPlayerFocusOnCollapse = true
+                }
+                isPlayerExpanded = expanded
+            },
             screenHeightPx = screenHeightPx,
             miniPreviewLiftPx = miniPreviewLiftPx,
             selectedFile = selectedFile,
@@ -1572,6 +1594,7 @@ private fun AppNavigation(
             playerArtworkCornerRadiusDp = playerArtworkCornerRadiusDp,
             filenameDisplayMode = filenameDisplayMode,
             filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
+            showMiniPlayerFocusHighlight = showMiniPlayerFocusHighlight,
             onMiniPlayerExpandRequested = { restoreMiniPlayerFocusOnCollapse = true },
             canResumeStoppedTrack = canResumeStoppedTrack,
             onHidePlayerSurface = { hidePlayerSurface() },
@@ -2317,6 +2340,8 @@ private fun AppNavigation(
             currentView = currentView,
             canFocusMiniPlayer = isPlayerSurfaceVisible && !isPlayerExpanded,
             requestMiniPlayerFocus = { miniPlayerFocusRequester.requestFocus() },
+            onHardwareNavigationInput = { showMiniPlayerFocusHighlight = true },
+            onTouchInteraction = { showMiniPlayerFocusHighlight = false },
             onOpenPlayerSurface = {
                 isPlayerSurfaceVisible = true
                 isPlayerExpanded = true

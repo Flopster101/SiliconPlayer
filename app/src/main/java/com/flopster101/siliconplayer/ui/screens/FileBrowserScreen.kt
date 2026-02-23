@@ -1038,21 +1038,23 @@ private fun detectStorageLocations(context: Context): List<StorageLocation> {
     )
     val volumeCandidates = mutableListOf<RemovableVolumeCandidate>()
 
-    storageManager?.storageVolumes.orEmpty().forEach { volume ->
-        if (!volume.isRemovable) return@forEach
-        val volumeRoot = resolveStorageVolumeRoot(volume) ?: return@forEach
-        val description = volume.getDescription(context).orEmpty().trim()
-        val detectionText = "${description.lowercase()} ${volumeRoot.absolutePath.lowercase()}"
-        volumeCandidates += RemovableVolumeCandidate(
-            root = volumeRoot,
-            description = description,
-            hasUsbMarker = detectionText.contains("usb") || detectionText.contains("otg"),
-            hasSdMarker = detectionText.contains("sd card") ||
-                detectionText.contains("sdcard") ||
-                detectionText.contains(" microsd") ||
-                detectionText.contains("sd "),
-            mountKindHint = detectMountKindHint(volumeRoot)
-        )
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        storageManager?.storageVolumes.orEmpty().forEach { volume ->
+            if (!volume.isRemovable) return@forEach
+            val volumeRoot = resolveStorageVolumeRoot(volume) ?: return@forEach
+            val description = volume.getDescription(context).orEmpty().trim()
+            val detectionText = "${description.lowercase()} ${volumeRoot.absolutePath.lowercase()}"
+            volumeCandidates += RemovableVolumeCandidate(
+                root = volumeRoot,
+                description = description,
+                hasUsbMarker = detectionText.contains("usb") || detectionText.contains("otg"),
+                hasSdMarker = detectionText.contains("sd card") ||
+                    detectionText.contains("sdcard") ||
+                    detectionText.contains(" microsd") ||
+                    detectionText.contains("sd "),
+                mountKindHint = detectMountKindHint(volumeRoot)
+            )
+        }
     }
 
     volumeCandidates.forEach { candidate ->

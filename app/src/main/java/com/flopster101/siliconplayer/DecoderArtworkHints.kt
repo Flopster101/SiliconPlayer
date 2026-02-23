@@ -56,7 +56,9 @@ internal fun buildDecoderExtensionArtworkHintMap(): Map<String, DecoderArtworkHi
     val extensionHints = LinkedHashMap<String, DecoderArtworkHint>()
     rules.forEach { rule ->
         rule.extensions.forEach { extension ->
-            extensionHints.putIfAbsent(extension, rule.hint)
+            if (!extensionHints.containsKey(extension)) {
+                extensionHints[extension] = rule.hint
+            }
         }
     }
     return extensionHints

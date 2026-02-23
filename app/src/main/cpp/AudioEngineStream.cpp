@@ -32,8 +32,10 @@ void AudioEngine::createStream() {
     // Open the stream
     aaudio_result_t result = AAudioStreamBuilder_openStream(builder, &stream);
     if (result != AAUDIO_OK) {
+        activeOutputBackend.store(0, std::memory_order_relaxed);
         LOGE("Failed to open stream: %s", AAudio_convertResultToText(result));
     } else {
+        activeOutputBackend.store(1, std::memory_order_relaxed);
         streamStartupPrerollPending = true;
         streamSampleRate = AAudioStream_getSampleRate(stream);
         streamChannelCount = AAudioStream_getChannelCount(stream);
@@ -120,6 +122,23 @@ int AudioEngine::getStreamBurstFrames() const {
     return static_cast<int>(AAudioStream_getFramesPerBurst(stream));
 }
 
+std::string AudioEngine::getAudioBackendLabel() const {
+    if (!isPlaying.load(std::memory_order_relaxed)) {
+        return "(inactive)";
+    }
+
+    switch (activeOutputBackend.load(std::memory_order_relaxed)) {
+        case 1:
+            return "AAudio";
+        case 2:
+            return "OpenSL ES";
+        case 3:
+            return "AudioTrack";
+        default:
+            return "Unknown";
+    }
+}
+
 void AudioEngine::reconfigureStream(bool resumePlayback) {
     const bool shouldResume = resumePlayback && isPlaying.load();
     requestStreamStop();
@@ -149,6 +168,7 @@ void AudioEngine::closeStream() {
         AAudioStream_close(stream);
         stream = nullptr;
     }
+    activeOutputBackend.store(0, std::memory_order_relaxed);
 }
 
 void AudioEngine::errorCallback(

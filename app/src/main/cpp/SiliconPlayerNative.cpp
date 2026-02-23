@@ -1851,6 +1851,14 @@ Java_com_flopster101_siliconplayer_NativeBridge_isTrackVBR(JNIEnv* env, jobject 
     return audioEngine->isTrackVBR() ? JNI_TRUE : JNI_FALSE;
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getAudioBackendLabel(JNIEnv* env, jobject thiz) {
+    if (audioEngine == nullptr) {
+        return toJString(env, "(inactive)");
+    }
+    return toJString(env, audioEngine->getAudioBackendLabel());
+}
+
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getVisualizationWaveformScope(
         JNIEnv* env, jobject, jint channelIndex, jint windowMs, jint triggerMode) {

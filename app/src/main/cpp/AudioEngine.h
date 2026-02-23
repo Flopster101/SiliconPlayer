@@ -216,6 +216,7 @@ public:
     // Bitrate information
     int64_t getTrackBitrate();
     bool isTrackVBR();
+    std::string getAudioBackendLabel() const;
 
     // Gain control
     void setMasterGain(float gainDb);
@@ -244,6 +245,7 @@ private:
     int streamSampleRate = 48000;
     int streamChannelCount = 2;
     bool streamStartupPrerollPending = true;
+    std::atomic<int> activeOutputBackend { 0 }; // 0 inactive, 1 AAudio, 2 OpenSL ES, 3 AudioTrack
     int outputBackendPreference = 0; // 0 auto, 1 aaudio, 2 opensl, 3 audiotrack
     int outputPerformanceMode = 2; // 0 auto, 1 low-latency, 2 none, 3 power-saving
     int outputBufferPreset = 0; // 0 auto, 1 small, 2 medium, 3 large

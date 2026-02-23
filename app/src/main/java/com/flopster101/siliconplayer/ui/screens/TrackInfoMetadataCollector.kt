@@ -186,6 +186,7 @@ internal data class UadeMetadata(
 internal data class TrackInfoLiveMetadata(
     val bitrate: Long = 0L,
     val isVbr: Boolean = false,
+    val audioBackendLabel: String = "(inactive)",
     val renderRateHz: Int = 0,
     val outputRateHz: Int = 0,
     val composer: String = "",
@@ -233,6 +234,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
     val common = TrackInfoLiveMetadata(
         bitrate = NativeBridge.getTrackBitrate(),
         isVbr = NativeBridge.isTrackVBR(),
+        audioBackendLabel = NativeBridge.getAudioBackendLabel(),
         renderRateHz = NativeBridge.getDecoderRenderSampleRateHz(),
         outputRateHz = NativeBridge.getOutputStreamSampleRateHz(),
         composer = NativeBridge.getTrackComposer(),

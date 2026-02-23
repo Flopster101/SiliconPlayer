@@ -1403,6 +1403,7 @@ private fun TrackInfoDetailsDialog(
     } else {
         "Unavailable"
     }
+    val audioBackendLabel = liveMetadata.audioBackendLabel.ifBlank { "(inactive)" }
     val lengthLabel = if (durationSeconds > 0.0) {
         if (hasReliableDuration) formatTime(durationSeconds) else "${formatTime(durationSeconds)}?"
     } else {
@@ -1439,6 +1440,7 @@ private fun TrackInfoDetailsDialog(
         row("Length", lengthLabel)
         row("Audio channels", channelsLabel)
         row("Bit depth", depthLabel)
+        row("Audio backend", audioBackendLabel)
         row("Path / URL", pathOrUrlLabel)
         appendCoreTrackInfoCopyRows(
             builder = this,
@@ -1507,6 +1509,7 @@ private fun TrackInfoDetailsDialog(
                             TrackInfoDetailsRow("Length", lengthLabel)
                             TrackInfoDetailsRow("Audio channels", channelsLabel)
                             TrackInfoDetailsRow("Bit depth", depthLabel)
+                            TrackInfoDetailsRow("Audio backend", audioBackendLabel)
                             TrackInfoDetailsRow("Path / URL", pathOrUrlLabel)
                             TrackInfoCoreSections(
                                 decoderName = decoderName,

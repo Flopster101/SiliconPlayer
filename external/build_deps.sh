@@ -2306,7 +2306,7 @@ build_furnace() {
 # -----------------------------------------------------------------------------
 usage() {
     echo "Usage: $0 <abi|all> <lib|all[,lib2,...]> [clean]"
-    echo "  ABI: all, arm64-v8a, armeabi-v7a, x86_64 (x86 supported only when explicitly requested)"
+    echo "  ABI: all, all_legacy, arm64-v8a, armeabi-v7a, x86_64 (x86 supported explicitly or via all_legacy)"
     echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68, libbinio, adplug, libzakalwe, bencodetools, vasm, uade, hivelytracker, klystrack, furnace"
     echo "  clean (optional): force rebuild (bypass already-built skip checks)"
     echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68, binio, libadplug, zakalwe, bencode, assembler/vasm, libuade, hvl/hively, kly/kt, fur"
@@ -2433,7 +2433,7 @@ target_has_lib() {
 is_valid_abi() {
     local abi="$1"
     case "$abi" in
-        all|arm64-v8a|armeabi-v7a|x86_64|x86)
+        all|all_legacy|arm64-v8a|armeabi-v7a|x86_64|x86)
             return 0
             ;;
         *)
@@ -2479,9 +2479,14 @@ fi
 
 # Resolve effective ABI list for this invocation.
 ABIS=("${DEFAULT_ABIS[@]}")
-if [ "$TARGET_ABI" = "x86" ]; then
-    ABIS=("x86")
-fi
+case "$TARGET_ABI" in
+    x86)
+        ABIS=("x86")
+        ;;
+    all_legacy)
+        ABIS=("arm64-v8a" "armeabi-v7a" "x86_64" "x86")
+        ;;
+esac
 
 # -----------------------------------------------------------------------------
 # Pre-build setup (Apply patches once)
@@ -2531,7 +2536,7 @@ fi
 # -----------------------------------------------------------------------------
 processed_abis=0
 for ABI in "${ABIS[@]}"; do
-    if [ "$TARGET_ABI" != "all" ] && [ "$TARGET_ABI" != "$ABI" ]; then
+    if [ "$TARGET_ABI" != "all" ] && [ "$TARGET_ABI" != "all_legacy" ] && [ "$TARGET_ABI" != "$ABI" ]; then
         continue
     fi
     processed_abis=$((processed_abis + 1))

@@ -508,39 +508,46 @@ class PlaybackService : Service() {
             this,
             100,
             launchIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            immutableUpdateCurrentPendingIntentFlags()
         )
         val stopIntent = PendingIntent.getService(
             this,
             101,
             Intent(this, PlaybackService::class.java).setAction(ACTION_STOP_CLEAR),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            immutableUpdateCurrentPendingIntentFlags()
         )
         val previousTrackIntent = PendingIntent.getService(
             this,
             102,
             Intent(this, PlaybackService::class.java).setAction(ACTION_PREVIOUS_TRACK),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            immutableUpdateCurrentPendingIntentFlags()
         )
         val toggleIntent = PendingIntent.getService(
             this,
             103,
             Intent(this, PlaybackService::class.java).setAction(ACTION_TOGGLE),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            immutableUpdateCurrentPendingIntentFlags()
         )
         val nextTrackIntent = PendingIntent.getService(
             this,
             104,
             Intent(this, PlaybackService::class.java).setAction(ACTION_NEXT_TRACK),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            immutableUpdateCurrentPendingIntentFlags()
         )
-        val notificationBuilder = Notification.Builder(this, CHANNEL_ID)
+        val notificationBuilder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, CHANNEL_ID)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this).setPriority(Notification.PRIORITY_LOW)
+        }
+        notificationBuilder
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setLargeIcon(currentArtwork ?: fallbackIconBitmap())
             .setContentTitle(currentTitle)
             .setContentText(currentArtist)
             .setContentIntent(launchPendingIntent)
             .setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_TRANSPORT)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setOngoing(isPlaying)
             .setStyle(
@@ -548,38 +555,43 @@ class PlaybackService : Service() {
                     .setMediaSession(mediaSession?.sessionToken)
                     .setShowActionsInCompactView(0, 1, 2)
             )
+            .addAction(buildNotificationAction(android.R.drawable.ic_media_previous, "Previous track", previousTrackIntent))
             .addAction(
-                Notification.Action.Builder(
-                    android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_media_previous),
-                    "Previous track",
-                    previousTrackIntent
-                ).build()
-            )
-            .addAction(
-                Notification.Action.Builder(
-                    android.graphics.drawable.Icon.createWithResource(
-                        this,
-                        if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
-                    ),
+                buildNotificationAction(
+                    if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
                     if (isPlaying) "Pause" else "Play",
                     toggleIntent
-                ).build()
+                )
             )
-            .addAction(
-                Notification.Action.Builder(
-                    android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_media_next),
-                    "Next track",
-                    nextTrackIntent
-                ).build()
-            )
-            .addAction(
-                Notification.Action.Builder(
-                    android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel),
-                    "Stop",
-                    stopIntent
-                ).build()
-            )
+            .addAction(buildNotificationAction(android.R.drawable.ic_media_next, "Next track", nextTrackIntent))
+            .addAction(buildNotificationAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopIntent))
         return notificationBuilder.build()
+    }
+
+    private fun immutableUpdateCurrentPendingIntentFlags(): Int {
+        val baseFlags = PendingIntent.FLAG_UPDATE_CURRENT
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            baseFlags or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            baseFlags
+        }
+    }
+
+    private fun buildNotificationAction(
+        iconResId: Int,
+        title: String,
+        pendingIntent: PendingIntent
+    ): Notification.Action {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Notification.Action.Builder(
+                android.graphics.drawable.Icon.createWithResource(this, iconResId),
+                title,
+                pendingIntent
+            ).build()
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Action.Builder(iconResId, title, pendingIntent).build()
+        }
     }
 
     private fun loadArtworkForPath(path: String?): Bitmap? {

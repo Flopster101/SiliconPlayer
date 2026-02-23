@@ -58,22 +58,34 @@ internal fun AppNavigationPlaybackEffects(
             .apply()
     }
 
-    LaunchedEffect(audioPerformanceMode) {
-        prefs.edit()
+    LaunchedEffect(audioBackendPreference, audioPerformanceMode) {
+        val editor = prefs.edit()
             .putString(
+                AppPreferenceKeys.audioPerformanceModeForBackend(audioBackendPreference),
+                audioPerformanceMode.storageValue
+            )
+        if (audioBackendPreference == AudioBackendPreference.AAudio) {
+            editor.putString(
                 AppPreferenceKeys.AUDIO_PERFORMANCE_MODE,
                 audioPerformanceMode.storageValue
             )
-            .apply()
+        }
+        editor.apply()
     }
 
-    LaunchedEffect(audioBufferPreset) {
-        prefs.edit()
+    LaunchedEffect(audioBackendPreference, audioBufferPreset) {
+        val editor = prefs.edit()
             .putString(
+                AppPreferenceKeys.audioBufferPresetForBackend(audioBackendPreference),
+                audioBufferPreset.storageValue
+            )
+        if (audioBackendPreference == AudioBackendPreference.AAudio) {
+            editor.putString(
                 AppPreferenceKeys.AUDIO_BUFFER_PRESET,
                 audioBufferPreset.storageValue
             )
-            .apply()
+        }
+        editor.apply()
     }
 
     LaunchedEffect(audioResamplerPreference) {

@@ -130,20 +130,47 @@ internal fun GeneralAudioRouteContent(
         selectedPreference = state.audioBackendPreference,
         onSelectedPreferenceChanged = actions.onAudioBackendPreferenceChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
-    AudioPerformanceModeSelectorCard(
-        selectedMode = state.audioPerformanceMode,
-        onSelectedModeChanged = actions.onAudioPerformanceModeChanged
-    )
-    Spacer(modifier = Modifier.height(10.dp))
-    AudioBufferPresetSelectorCard(
-        selectedPreset = state.audioBufferPreset,
-        onSelectedPresetChanged = actions.onAudioBufferPresetChanged
-    )
+    val selectedBackend = state.audioBackendPreference
+    when (selectedBackend) {
+        AudioBackendPreference.AAudio -> {
+            Spacer(modifier = Modifier.height(10.dp))
+            AudioPerformanceModeSelectorCard(
+                selectedMode = state.audioPerformanceMode,
+                onSelectedModeChanged = actions.onAudioPerformanceModeChanged,
+                description = "AAudio stream mode. Low latency is recommended for responsive playback."
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            AudioBufferPresetSelectorCard(
+                selectedPreset = state.audioBufferPreset,
+                onSelectedPresetChanged = actions.onAudioBufferPresetChanged,
+                title = "AAudio buffer preset",
+                description = "AAudio buffer sizing profile. Smaller lowers latency, larger improves underrun resistance."
+            )
+        }
+        AudioBackendPreference.OpenSLES -> {
+            Spacer(modifier = Modifier.height(10.dp))
+            AudioBufferPresetSelectorCard(
+                selectedPreset = state.audioBufferPreset,
+                onSelectedPresetChanged = actions.onAudioBufferPresetChanged,
+                title = "OpenSL ES buffer preset",
+                description = "OpenSL ES queue buffer profile. Medium is a good default for most devices."
+            )
+        }
+        AudioBackendPreference.AudioTrack -> {
+            Spacer(modifier = Modifier.height(10.dp))
+            AudioBufferPresetSelectorCard(
+                selectedPreset = state.audioBufferPreset,
+                onSelectedPresetChanged = actions.onAudioBufferPresetChanged,
+                title = "AudioTrack buffer preset",
+                description = "AudioTrack write buffer profile. Increase size if you hear underruns on older devices."
+            )
+        }
+    }
     Spacer(modifier = Modifier.height(10.dp))
     AudioResamplerSelectorCard(
         selectedPreference = state.audioResamplerPreference,
-        onSelectedPreferenceChanged = actions.onAudioResamplerPreferenceChanged
+        onSelectedPreferenceChanged = actions.onAudioResamplerPreferenceChanged,
+        description = "Applies before backend output. SoX is experimental and falls back to built-in for discontinuous timeline cores."
     )
     Spacer(modifier = Modifier.height(10.dp))
     PlayerSettingToggleCard(

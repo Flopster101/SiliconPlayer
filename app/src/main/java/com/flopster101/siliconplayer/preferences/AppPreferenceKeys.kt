@@ -138,4 +138,8 @@ internal object AppPreferenceKeys {
     fun decoderPriorityKey(decoderName: String) = "decoder_${decoderName}_priority"
     fun decoderEnabledExtensionsKey(decoderName: String) = "decoder_${decoderName}_enabled_extensions"
     fun decoderPluginVolumeDbKey(decoderName: String) = "decoder_${decoderName}_plugin_volume_db"
+    fun audioPerformanceModeForBackend(backend: AudioBackendPreference) =
+        "${AUDIO_PERFORMANCE_MODE}_${backend.storageValue}"
+    fun audioBufferPresetForBackend(backend: AudioBackendPreference) =
+        "${AUDIO_BUFFER_PRESET}_${backend.storageValue}"
 }

@@ -1936,7 +1936,61 @@ private fun AppNavigation(
                                 onAudioDuckingChanged = { audioDucking = it }
                             )
                         },
-                                    onAudioBackendPreferenceChanged = { audioBackendPreference = it },
+                                    onAudioBackendPreferenceChanged = { selectedBackend ->
+                            if (selectedBackend != audioBackendPreference) {
+                                val previousBackend = audioBackendPreference
+                                prefs.edit()
+                                    .putString(
+                                        AppPreferenceKeys.audioPerformanceModeForBackend(previousBackend),
+                                        audioPerformanceMode.storageValue
+                                    )
+                                    .putString(
+                                        AppPreferenceKeys.audioBufferPresetForBackend(previousBackend),
+                                        audioBufferPreset.storageValue
+                                    )
+                                    .apply()
+
+                                val performanceModeKey = AppPreferenceKeys.audioPerformanceModeForBackend(selectedBackend)
+                                val restoredPerformanceValue = when {
+                                    prefs.contains(performanceModeKey) -> {
+                                        prefs.getString(
+                                            performanceModeKey,
+                                            selectedBackend.defaultPerformanceMode().storageValue
+                                        )
+                                    }
+                                    selectedBackend == AudioBackendPreference.AAudio -> {
+                                        prefs.getString(
+                                            AppPreferenceKeys.AUDIO_PERFORMANCE_MODE,
+                                            selectedBackend.defaultPerformanceMode().storageValue
+                                        )
+                                    }
+                                    else -> selectedBackend.defaultPerformanceMode().storageValue
+                                }
+                                val restoredPerformanceMode = AudioPerformanceMode.fromStorage(restoredPerformanceValue)
+
+                                val bufferPresetKey = AppPreferenceKeys.audioBufferPresetForBackend(selectedBackend)
+                                val restoredBufferValue = when {
+                                    prefs.contains(bufferPresetKey) -> {
+                                        prefs.getString(
+                                            bufferPresetKey,
+                                            selectedBackend.defaultBufferPreset().storageValue
+                                        )
+                                    }
+                                    selectedBackend == AudioBackendPreference.AAudio -> {
+                                        prefs.getString(
+                                            AppPreferenceKeys.AUDIO_BUFFER_PRESET,
+                                            selectedBackend.defaultBufferPreset().storageValue
+                                        )
+                                    }
+                                    else -> selectedBackend.defaultBufferPreset().storageValue
+                                }
+                                val restoredBufferPreset = AudioBufferPreset.fromStorage(restoredBufferValue)
+
+                                audioBackendPreference = selectedBackend
+                                audioPerformanceMode = restoredPerformanceMode
+                                audioBufferPreset = restoredBufferPreset
+                            }
+                        },
                                     onAudioPerformanceModeChanged = { audioPerformanceMode = it },
                                     onAudioBufferPresetChanged = { audioBufferPreset = it },
                                     onAudioResamplerPreferenceChanged = {

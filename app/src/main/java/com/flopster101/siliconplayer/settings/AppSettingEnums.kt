@@ -24,6 +24,22 @@ enum class AudioBackendPreference(val storageValue: String, val label: String, v
     }
 }
 
+fun AudioBackendPreference.defaultPerformanceMode(): AudioPerformanceMode {
+    return when (this) {
+        AudioBackendPreference.AAudio -> AudioPerformanceMode.LowLatency
+        AudioBackendPreference.OpenSLES,
+        AudioBackendPreference.AudioTrack -> AudioPerformanceMode.None
+    }
+}
+
+fun AudioBackendPreference.defaultBufferPreset(): AudioBufferPreset {
+    return when (this) {
+        AudioBackendPreference.AAudio,
+        AudioBackendPreference.OpenSLES,
+        AudioBackendPreference.AudioTrack -> AudioBufferPreset.Medium
+    }
+}
+
 enum class AudioPerformanceMode(val storageValue: String, val label: String, val nativeValue: Int) {
     LowLatency("low_latency", "Low latency", 1),
     None("none", "None", 2),

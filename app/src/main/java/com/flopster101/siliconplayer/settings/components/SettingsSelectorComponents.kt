@@ -175,11 +175,13 @@ internal fun AudioBackendSelectorCard(
 @Composable
 internal fun AudioPerformanceModeSelectorCard(
     selectedMode: AudioPerformanceMode,
-    onSelectedModeChanged: (AudioPerformanceMode) -> Unit
+    onSelectedModeChanged: (AudioPerformanceMode) -> Unit,
+    title: String = "Audio performance mode",
+    description: String = "Tune output stream behavior for latency vs efficiency."
 ) {
     SettingsEnumSelectorCard(
-        title = "Audio performance mode",
-        description = "Tune output stream behavior for latency vs efficiency.",
+        title = title,
+        description = description,
         selectedValue = selectedMode,
         options = listOf(
             EnumChoice(AudioPerformanceMode.LowLatency, AudioPerformanceMode.LowLatency.label),
@@ -193,11 +195,13 @@ internal fun AudioPerformanceModeSelectorCard(
 @Composable
 internal fun AudioBufferPresetSelectorCard(
     selectedPreset: AudioBufferPreset,
-    onSelectedPresetChanged: (AudioBufferPreset) -> Unit
+    onSelectedPresetChanged: (AudioBufferPreset) -> Unit,
+    title: String = "Audio buffer preset",
+    description: String = "Choose output buffer sizing profile for stability vs latency."
 ) {
     SettingsEnumSelectorCard(
-        title = "Audio buffer preset",
-        description = "Choose output buffer sizing profile for stability vs latency.",
+        title = title,
+        description = description,
         selectedValue = selectedPreset,
         options = listOf(
             EnumChoice(AudioBufferPreset.Small, AudioBufferPreset.Small.label),
@@ -211,11 +215,12 @@ internal fun AudioBufferPresetSelectorCard(
 @Composable
 internal fun AudioResamplerSelectorCard(
     selectedPreference: AudioResamplerPreference,
-    onSelectedPreferenceChanged: (AudioResamplerPreference) -> Unit
+    onSelectedPreferenceChanged: (AudioResamplerPreference) -> Unit,
+    description: String = "Choose the output resampler. SoX is experimental and falls back to built-in for discontinuous timeline cores."
 ) {
     SettingsEnumSelectorCard(
         title = "Output resampler",
-        description = "Choose the output resampler. SoX is experimental and falls back to built-in for discontinuous timeline cores.",
+        description = description,
         selectedValue = selectedPreference,
         options = listOf(
             EnumChoice(AudioResamplerPreference.BuiltIn, AudioResamplerPreference.BuiltIn.label),

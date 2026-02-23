@@ -471,24 +471,41 @@ internal fun rememberAppNavigationSettingsStates(
     val pauseOnHeadphoneDisconnect = remember {
         mutableStateOf(prefs.getBoolean(AppPreferenceKeys.PAUSE_ON_HEADPHONE_DISCONNECT, true))
     }
-    val audioBackendPreference = remember {
-        mutableStateOf(
-            AudioBackendPreference.fromStorage(
-                prefs.getString(AppPreferenceKeys.AUDIO_BACKEND_PREFERENCE, AudioBackendPreference.AAudio.storageValue)
-            )
-        )
-    }
+    val initialAudioBackendPreference = AudioBackendPreference.fromStorage(
+        prefs.getString(AppPreferenceKeys.AUDIO_BACKEND_PREFERENCE, AudioBackendPreference.AAudio.storageValue)
+    )
+    val audioBackendPreference = remember { mutableStateOf(initialAudioBackendPreference) }
     val audioPerformanceMode = remember {
+        val backend = initialAudioBackendPreference
+        val backendKey = AppPreferenceKeys.audioPerformanceModeForBackend(backend)
+        val restoredValue = when {
+            prefs.contains(backendKey) -> prefs.getString(backendKey, backend.defaultPerformanceMode().storageValue)
+            backend == AudioBackendPreference.AAudio -> prefs.getString(
+                AppPreferenceKeys.AUDIO_PERFORMANCE_MODE,
+                backend.defaultPerformanceMode().storageValue
+            )
+            else -> backend.defaultPerformanceMode().storageValue
+        }
         mutableStateOf(
             AudioPerformanceMode.fromStorage(
-                prefs.getString(AppPreferenceKeys.AUDIO_PERFORMANCE_MODE, AudioPerformanceMode.None.storageValue)
+                restoredValue
             )
         )
     }
     val audioBufferPreset = remember {
+        val backend = initialAudioBackendPreference
+        val backendKey = AppPreferenceKeys.audioBufferPresetForBackend(backend)
+        val restoredValue = when {
+            prefs.contains(backendKey) -> prefs.getString(backendKey, backend.defaultBufferPreset().storageValue)
+            backend == AudioBackendPreference.AAudio -> prefs.getString(
+                AppPreferenceKeys.AUDIO_BUFFER_PRESET,
+                backend.defaultBufferPreset().storageValue
+            )
+            else -> backend.defaultBufferPreset().storageValue
+        }
         mutableStateOf(
             AudioBufferPreset.fromStorage(
-                prefs.getString(AppPreferenceKeys.AUDIO_BUFFER_PRESET, AudioBufferPreset.Medium.storageValue)
+                restoredValue
             )
         )
     }

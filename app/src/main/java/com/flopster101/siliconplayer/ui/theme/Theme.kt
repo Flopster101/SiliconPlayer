@@ -15,6 +15,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
+private const val LEGACY_SYSTEM_BAR_DARK = 0xFF202020.toInt()
+
 private val DarkColorScheme = darkColorScheme(
     primary = Purple80,
     secondary = PurpleGrey80,
@@ -46,11 +48,23 @@ fun SiliconPlayerTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.background.toArgb()
-            window.navigationBarColor = colorScheme.surface.toArgb()
+            val supportsDarkStatusIcons = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+            val supportsDarkNavIcons = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            val statusBarColor = if (!darkTheme && !supportsDarkStatusIcons) {
+                LEGACY_SYSTEM_BAR_DARK
+            } else {
+                colorScheme.background.toArgb()
+            }
+            val navigationBarColor = if (!darkTheme && !supportsDarkNavIcons) {
+                LEGACY_SYSTEM_BAR_DARK
+            } else {
+                colorScheme.surface.toArgb()
+            }
+            window.statusBarColor = statusBarColor
+            window.navigationBarColor = navigationBarColor
             WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = !darkTheme
-                isAppearanceLightNavigationBars = !darkTheme
+                isAppearanceLightStatusBars = !darkTheme && supportsDarkStatusIcons
+                isAppearanceLightNavigationBars = !darkTheme && supportsDarkNavIcons
             }
         }
     }

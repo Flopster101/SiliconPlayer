@@ -1,5 +1,7 @@
 package com.flopster101.siliconplayer
 
+import android.os.Build
+
 enum class ThemeMode(val storageValue: String, val label: String) {
     Auto("auto", "Auto"),
     Light("light", "Light"),
@@ -19,9 +21,23 @@ enum class AudioBackendPreference(val storageValue: String, val label: String, v
 
     companion object {
         fun fromStorage(value: String?): AudioBackendPreference {
-            return entries.firstOrNull { it.storageValue == value } ?: AAudio
+            val stored = entries.firstOrNull { it.storageValue == value } ?: defaultAudioBackendForCurrentApi()
+            return stored.coerceForCurrentApi()
         }
     }
+}
+
+fun AudioBackendPreference.coerceForCurrentApi(): AudioBackendPreference {
+    if (this == AudioBackendPreference.AAudio && !isAaudioAvailableOnDevice()) {
+        return AudioBackendPreference.OpenSLES
+    }
+    return this
+}
+
+fun isAaudioAvailableOnDevice(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+
+fun defaultAudioBackendForCurrentApi(): AudioBackendPreference {
+    return if (isAaudioAvailableOnDevice()) AudioBackendPreference.AAudio else AudioBackendPreference.OpenSLES
 }
 
 fun AudioBackendPreference.defaultPerformanceMode(): AudioPerformanceMode {

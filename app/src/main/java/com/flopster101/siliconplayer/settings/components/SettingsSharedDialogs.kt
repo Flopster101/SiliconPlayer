@@ -25,7 +25,8 @@ import androidx.compose.ui.unit.dp
 
 internal data class ChoiceDialogOption<T>(
     val value: T,
-    val label: String
+    val label: String,
+    val enabled: Boolean = true
 )
 
 internal data class SettingsActionDialogItem(
@@ -146,7 +147,7 @@ internal fun <T> SettingsSingleChoiceDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(42.dp)
-                                .clickable {
+                                .clickable(enabled = option.enabled) {
                                     onSelected(option.value)
                                     onDismiss()
                                 },
@@ -154,15 +155,23 @@ internal fun <T> SettingsSingleChoiceDialog(
                         ) {
                             RadioButton(
                                 selected = option.value == selectedValue,
+                                enabled = option.enabled,
                                 onClick = {
-                                    onSelected(option.value)
-                                    onDismiss()
+                                    if (option.enabled) {
+                                        onSelected(option.value)
+                                        onDismiss()
+                                    }
                                 }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = option.label,
-                                style = MaterialTheme.typography.bodyLarge
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (option.enabled) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
                             )
                         }
                     }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,14 +19,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import android.os.Build
 import java.util.Locale
 
 private val SelectorCardShape = RoundedCornerShape(16.dp)
 
 private data class SampleRateChoice(val hz: Int, val label: String)
 private data class ThemeModeChoice(val mode: ThemeMode, val label: String)
-private data class EnumChoice<T>(val value: T, val label: String)
+@Immutable
+private data class EnumChoice<T>(
+    val value: T,
+    val label: String,
+    val enabled: Boolean = true
+)
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,6 +42,7 @@ private fun <T> SettingsEnumSelectorCard(
     description: String,
     selectedValue: T,
     options: List<EnumChoice<T>>,
+    highlightedDescription: String? = null,
     onSelected: (T) -> Unit
 ) {
     val selectedLabel = options.firstOrNull { it.value == selectedValue }?.label
@@ -62,6 +71,15 @@ private fun <T> SettingsEnumSelectorCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (!highlightedDescription.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = highlightedDescription,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
             Spacer(modifier = Modifier.width(12.dp))
             Text(
@@ -75,7 +93,9 @@ private fun <T> SettingsEnumSelectorCard(
         SettingsSingleChoiceDialog(
             title = title,
             selectedValue = selectedValue,
-            options = options.map { ChoiceDialogOption(value = it.value, label = it.label) },
+            options = options.map {
+                ChoiceDialogOption(value = it.value, label = it.label, enabled = it.enabled)
+            },
             onSelected = onSelected,
             onDismiss = { dialogOpen = false }
         )
@@ -159,12 +179,22 @@ internal fun AudioBackendSelectorCard(
     selectedPreference: AudioBackendPreference,
     onSelectedPreferenceChanged: (AudioBackendPreference) -> Unit
 ) {
+    val isAaudioAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
     SettingsEnumSelectorCard(
         title = "Audio output backend",
         description = "Preferred output backend implementation.",
+        highlightedDescription = if (!isAaudioAvailable) {
+            "AAudio is only available on Android 8.0 (API 26) and up."
+        } else {
+            null
+        },
         selectedValue = selectedPreference,
         options = listOf(
-            EnumChoice(AudioBackendPreference.AAudio, AudioBackendPreference.AAudio.label),
+            EnumChoice(
+                AudioBackendPreference.AAudio,
+                AudioBackendPreference.AAudio.label,
+                enabled = isAaudioAvailable
+            ),
             EnumChoice(AudioBackendPreference.OpenSLES, AudioBackendPreference.OpenSLES.label),
             EnumChoice(AudioBackendPreference.AudioTrack, AudioBackendPreference.AudioTrack.label)
         ),

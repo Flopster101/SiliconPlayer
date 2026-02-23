@@ -51,11 +51,18 @@ target_compile_definitions(siliconplayer PRIVATE HAVE_SNDFILE)
 
 # Android 15+ prefers 16KB page-aligned native libraries.
 if (ANDROID)
+    target_compile_options(
+            siliconplayer
+            PRIVATE
+            "-fvisibility=hidden"
+            "-fvisibility-inlines-hidden"
+    )
     target_link_options(
             siliconplayer
             PRIVATE
             "-Wl,-z,max-page-size=16384"
             "-Wl,-z,common-page-size=16384"
+            "-Wl,--exclude-libs,ALL"
     )
 endif()
 
@@ -218,10 +225,12 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/furnace/extern/libs
             libbencodetools
             libhivelytracker
             libklystrack
-            libfurnace
+            "-Wl,--start-group"
             libsidplayfp
             libresidfp
             libresid
+            "-Wl,--end-group"
+            libfurnace
             z # zlib is needed for openmpt/ffmpeg/vgm
             m # libbinio can require libm symbols on some toolchains
     )

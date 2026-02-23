@@ -1,6 +1,7 @@
 package com.flopster101.siliconplayer.ui.screens
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.widget.Toast
 import com.flopster101.siliconplayer.NativeBridge
 import androidx.compose.animation.AnimatedContent
@@ -18,6 +19,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -25,6 +27,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
@@ -54,11 +57,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -76,6 +81,8 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.unit.IntOffset
@@ -119,6 +126,339 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.coroutineContext
 import androidx.compose.foundation.text.selection.SelectionContainer
+
+private const val PREF_KEY_VIS_OSC_WINDOW_MS = "visualization_osc_window_ms"
+private const val PREF_KEY_VIS_OSC_TRIGGER_MODE = "visualization_osc_trigger_mode"
+private const val PREF_KEY_VIS_OSC_LINE_WIDTH_DP = "visualization_osc_line_width_dp"
+private const val PREF_KEY_VIS_OSC_GRID_WIDTH_DP = "visualization_osc_grid_width_dp"
+private const val PREF_KEY_VIS_OSC_FPS_MODE = "visualization_osc_fps_mode"
+private const val PREF_KEY_VIS_OSC_RENDER_BACKEND = "visualization_osc_render_backend"
+private const val PREF_KEY_VIS_OSC_VERTICAL_GRID_ENABLED = "visualization_osc_vertical_grid_enabled"
+private const val PREF_KEY_VIS_OSC_CENTER_LINE_ENABLED = "visualization_osc_center_line_enabled"
+private const val PREF_KEY_VIS_OSC_LINE_COLOR_NO_ARTWORK = "visualization_osc_line_color_mode_no_artwork"
+private const val PREF_KEY_VIS_OSC_GRID_COLOR_NO_ARTWORK = "visualization_osc_grid_color_mode_no_artwork"
+private const val PREF_KEY_VIS_OSC_LINE_COLOR_WITH_ARTWORK = "visualization_osc_line_color_mode_with_artwork"
+private const val PREF_KEY_VIS_OSC_GRID_COLOR_WITH_ARTWORK = "visualization_osc_grid_color_mode_with_artwork"
+private const val PREF_KEY_VIS_OSC_CUSTOM_LINE_COLOR = "visualization_osc_custom_line_color_argb"
+private const val PREF_KEY_VIS_OSC_CUSTOM_GRID_COLOR = "visualization_osc_custom_grid_color_argb"
+private const val PREF_KEY_VIS_BAR_RENDER_BACKEND = "visualization_bar_render_backend"
+private const val PREF_KEY_VIS_BAR_COLOR_NO_ARTWORK = "visualization_bar_color_mode_no_artwork"
+private const val PREF_KEY_VIS_BAR_COLOR_WITH_ARTWORK = "visualization_bar_color_mode_with_artwork"
+private const val PREF_KEY_VIS_BAR_CUSTOM_COLOR = "visualization_bar_custom_color_argb"
+private const val PREF_KEY_VIS_VU_RENDER_BACKEND = "visualization_vu_render_backend"
+private const val PREF_KEY_VIS_VU_COLOR_NO_ARTWORK = "visualization_vu_color_mode_no_artwork"
+private const val PREF_KEY_VIS_VU_COLOR_WITH_ARTWORK = "visualization_vu_color_mode_with_artwork"
+private const val PREF_KEY_VIS_VU_CUSTOM_COLOR = "visualization_vu_custom_color_argb"
+
+private class PlayerVisualizationPreferenceState(
+    oscWindowMs: Int,
+    oscTriggerModeNative: Int,
+    oscFpsMode: VisualizationOscFpsMode,
+    oscRenderBackend: VisualizationRenderBackend,
+    oscLineWidthDp: Int,
+    oscGridWidthDp: Int,
+    oscVerticalGridEnabled: Boolean,
+    oscCenterLineEnabled: Boolean,
+    oscLineColorModeNoArtwork: VisualizationOscColorMode,
+    oscGridColorModeNoArtwork: VisualizationOscColorMode,
+    oscLineColorModeWithArtwork: VisualizationOscColorMode,
+    oscGridColorModeWithArtwork: VisualizationOscColorMode,
+    oscCustomLineColorArgb: Int,
+    oscCustomGridColorArgb: Int,
+    barColorModeNoArtwork: VisualizationOscColorMode,
+    barColorModeWithArtwork: VisualizationOscColorMode,
+    barCustomColorArgb: Int,
+    barRuntimeRenderBackend: VisualizationRenderBackend,
+    vuColorModeNoArtwork: VisualizationOscColorMode,
+    vuColorModeWithArtwork: VisualizationOscColorMode,
+    vuCustomColorArgb: Int,
+    vuRuntimeRenderBackend: VisualizationRenderBackend
+) {
+    var oscWindowMs by mutableIntStateOf(oscWindowMs)
+    var oscTriggerModeNative by mutableIntStateOf(oscTriggerModeNative)
+    var oscFpsMode by mutableStateOf(oscFpsMode)
+    var oscRenderBackend by mutableStateOf(oscRenderBackend)
+    var oscLineWidthDp by mutableIntStateOf(oscLineWidthDp)
+    var oscGridWidthDp by mutableIntStateOf(oscGridWidthDp)
+    var oscVerticalGridEnabled by mutableStateOf(oscVerticalGridEnabled)
+    var oscCenterLineEnabled by mutableStateOf(oscCenterLineEnabled)
+    var oscLineColorModeNoArtwork by mutableStateOf(oscLineColorModeNoArtwork)
+    var oscGridColorModeNoArtwork by mutableStateOf(oscGridColorModeNoArtwork)
+    var oscLineColorModeWithArtwork by mutableStateOf(oscLineColorModeWithArtwork)
+    var oscGridColorModeWithArtwork by mutableStateOf(oscGridColorModeWithArtwork)
+    var oscCustomLineColorArgb by mutableIntStateOf(oscCustomLineColorArgb)
+    var oscCustomGridColorArgb by mutableIntStateOf(oscCustomGridColorArgb)
+    var barColorModeNoArtwork by mutableStateOf(barColorModeNoArtwork)
+    var barColorModeWithArtwork by mutableStateOf(barColorModeWithArtwork)
+    var barCustomColorArgb by mutableIntStateOf(barCustomColorArgb)
+    var barRuntimeRenderBackend by mutableStateOf(barRuntimeRenderBackend)
+    var vuColorModeNoArtwork by mutableStateOf(vuColorModeNoArtwork)
+    var vuColorModeWithArtwork by mutableStateOf(vuColorModeWithArtwork)
+    var vuCustomColorArgb by mutableIntStateOf(vuCustomColorArgb)
+    var vuRuntimeRenderBackend by mutableStateOf(vuRuntimeRenderBackend)
+}
+
+private fun parseOscTriggerModeNative(value: String?): Int {
+    return when (value) {
+        "rising" -> 1
+        "falling" -> 2
+        else -> 0
+    }
+}
+
+@Composable
+private fun rememberPlayerVisualizationPreferenceState(
+    prefs: SharedPreferences,
+    defaultBarRenderBackend: VisualizationRenderBackend,
+    defaultVuRenderBackend: VisualizationRenderBackend
+): PlayerVisualizationPreferenceState {
+    val state = remember(prefs, defaultBarRenderBackend, defaultVuRenderBackend) {
+        PlayerVisualizationPreferenceState(
+            oscWindowMs = prefs.getInt(PREF_KEY_VIS_OSC_WINDOW_MS, 40).coerceIn(5, 200),
+            oscTriggerModeNative = parseOscTriggerModeNative(
+                prefs.getString(PREF_KEY_VIS_OSC_TRIGGER_MODE, "rising")
+            ),
+            oscFpsMode = VisualizationOscFpsMode.fromStorage(
+                prefs.getString(PREF_KEY_VIS_OSC_FPS_MODE, VisualizationOscFpsMode.Default.storageValue)
+            ),
+            oscRenderBackend = VisualizationRenderBackend.fromStorage(
+                prefs.getString(
+                    PREF_KEY_VIS_OSC_RENDER_BACKEND,
+                    AppDefaults.Visualization.Oscilloscope.renderBackend.storageValue
+                ),
+                AppDefaults.Visualization.Oscilloscope.renderBackend
+            ),
+            oscLineWidthDp = prefs.getInt(PREF_KEY_VIS_OSC_LINE_WIDTH_DP, 3).coerceIn(1, 12),
+            oscGridWidthDp = prefs.getInt(PREF_KEY_VIS_OSC_GRID_WIDTH_DP, 2).coerceIn(1, 8),
+            oscVerticalGridEnabled = prefs.getBoolean(PREF_KEY_VIS_OSC_VERTICAL_GRID_ENABLED, false),
+            oscCenterLineEnabled = prefs.getBoolean(PREF_KEY_VIS_OSC_CENTER_LINE_ENABLED, false),
+            oscLineColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                prefs.getString(
+                    PREF_KEY_VIS_OSC_LINE_COLOR_NO_ARTWORK,
+                    VisualizationOscColorMode.Monet.storageValue
+                ),
+                VisualizationOscColorMode.Monet
+            ),
+            oscGridColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                prefs.getString(
+                    PREF_KEY_VIS_OSC_GRID_COLOR_NO_ARTWORK,
+                    VisualizationOscColorMode.Monet.storageValue
+                ),
+                VisualizationOscColorMode.Monet
+            ),
+            oscLineColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                prefs.getString(
+                    PREF_KEY_VIS_OSC_LINE_COLOR_WITH_ARTWORK,
+                    VisualizationOscColorMode.Artwork.storageValue
+                ),
+                VisualizationOscColorMode.Artwork
+            ),
+            oscGridColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                prefs.getString(
+                    PREF_KEY_VIS_OSC_GRID_COLOR_WITH_ARTWORK,
+                    VisualizationOscColorMode.Artwork.storageValue
+                ),
+                VisualizationOscColorMode.Artwork
+            ),
+            oscCustomLineColorArgb = prefs.getInt(PREF_KEY_VIS_OSC_CUSTOM_LINE_COLOR, 0xFF6BD8FF.toInt()),
+            oscCustomGridColorArgb = prefs.getInt(PREF_KEY_VIS_OSC_CUSTOM_GRID_COLOR, 0x66FFFFFF),
+            barColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                prefs.getString(
+                    PREF_KEY_VIS_BAR_COLOR_NO_ARTWORK,
+                    VisualizationOscColorMode.Monet.storageValue
+                ),
+                VisualizationOscColorMode.Monet
+            ),
+            barColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                prefs.getString(
+                    PREF_KEY_VIS_BAR_COLOR_WITH_ARTWORK,
+                    VisualizationOscColorMode.Artwork.storageValue
+                ),
+                VisualizationOscColorMode.Artwork
+            ),
+            barCustomColorArgb = prefs.getInt(PREF_KEY_VIS_BAR_CUSTOM_COLOR, 0xFF6BD8FF.toInt()),
+            barRuntimeRenderBackend = VisualizationRenderBackend.fromStorage(
+                prefs.getString(PREF_KEY_VIS_BAR_RENDER_BACKEND, defaultBarRenderBackend.storageValue),
+                defaultBarRenderBackend
+            ),
+            vuColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                prefs.getString(
+                    PREF_KEY_VIS_VU_COLOR_NO_ARTWORK,
+                    VisualizationOscColorMode.Monet.storageValue
+                ),
+                VisualizationOscColorMode.Monet
+            ),
+            vuColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                prefs.getString(
+                    PREF_KEY_VIS_VU_COLOR_WITH_ARTWORK,
+                    VisualizationOscColorMode.Artwork.storageValue
+                ),
+                VisualizationOscColorMode.Artwork
+            ),
+            vuCustomColorArgb = prefs.getInt(PREF_KEY_VIS_VU_CUSTOM_COLOR, 0xFF6BD8FF.toInt()),
+            vuRuntimeRenderBackend = VisualizationRenderBackend.fromStorage(
+                prefs.getString(PREF_KEY_VIS_VU_RENDER_BACKEND, defaultVuRenderBackend.storageValue),
+                defaultVuRenderBackend
+            )
+        )
+    }
+    DisposableEffect(prefs, defaultBarRenderBackend, defaultVuRenderBackend) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, key ->
+            when (key) {
+                PREF_KEY_VIS_OSC_WINDOW_MS -> {
+                    state.oscWindowMs = sharedPrefs.getInt(PREF_KEY_VIS_OSC_WINDOW_MS, 40).coerceIn(5, 200)
+                }
+                PREF_KEY_VIS_OSC_TRIGGER_MODE -> {
+                    state.oscTriggerModeNative = parseOscTriggerModeNative(
+                        sharedPrefs.getString(PREF_KEY_VIS_OSC_TRIGGER_MODE, "rising")
+                    )
+                }
+                PREF_KEY_VIS_OSC_FPS_MODE -> {
+                    state.oscFpsMode = VisualizationOscFpsMode.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_OSC_FPS_MODE,
+                            VisualizationOscFpsMode.Default.storageValue
+                        )
+                    )
+                }
+                PREF_KEY_VIS_OSC_RENDER_BACKEND -> {
+                    state.oscRenderBackend = VisualizationRenderBackend.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_OSC_RENDER_BACKEND,
+                            AppDefaults.Visualization.Oscilloscope.renderBackend.storageValue
+                        ),
+                        AppDefaults.Visualization.Oscilloscope.renderBackend
+                    )
+                }
+                PREF_KEY_VIS_OSC_LINE_WIDTH_DP -> {
+                    state.oscLineWidthDp = sharedPrefs.getInt(PREF_KEY_VIS_OSC_LINE_WIDTH_DP, 3).coerceIn(1, 12)
+                }
+                PREF_KEY_VIS_OSC_GRID_WIDTH_DP -> {
+                    state.oscGridWidthDp = sharedPrefs.getInt(PREF_KEY_VIS_OSC_GRID_WIDTH_DP, 2).coerceIn(1, 8)
+                }
+                PREF_KEY_VIS_OSC_VERTICAL_GRID_ENABLED -> {
+                    state.oscVerticalGridEnabled =
+                        sharedPrefs.getBoolean(PREF_KEY_VIS_OSC_VERTICAL_GRID_ENABLED, false)
+                }
+                PREF_KEY_VIS_OSC_CENTER_LINE_ENABLED -> {
+                    state.oscCenterLineEnabled =
+                        sharedPrefs.getBoolean(PREF_KEY_VIS_OSC_CENTER_LINE_ENABLED, false)
+                }
+                PREF_KEY_VIS_OSC_LINE_COLOR_NO_ARTWORK -> {
+                    state.oscLineColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_OSC_LINE_COLOR_NO_ARTWORK,
+                            VisualizationOscColorMode.Monet.storageValue
+                        ),
+                        VisualizationOscColorMode.Monet
+                    )
+                }
+                PREF_KEY_VIS_OSC_GRID_COLOR_NO_ARTWORK -> {
+                    state.oscGridColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_OSC_GRID_COLOR_NO_ARTWORK,
+                            VisualizationOscColorMode.Monet.storageValue
+                        ),
+                        VisualizationOscColorMode.Monet
+                    )
+                }
+                PREF_KEY_VIS_OSC_LINE_COLOR_WITH_ARTWORK -> {
+                    state.oscLineColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_OSC_LINE_COLOR_WITH_ARTWORK,
+                            VisualizationOscColorMode.Artwork.storageValue
+                        ),
+                        VisualizationOscColorMode.Artwork
+                    )
+                }
+                PREF_KEY_VIS_OSC_GRID_COLOR_WITH_ARTWORK -> {
+                    state.oscGridColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_OSC_GRID_COLOR_WITH_ARTWORK,
+                            VisualizationOscColorMode.Artwork.storageValue
+                        ),
+                        VisualizationOscColorMode.Artwork
+                    )
+                }
+                PREF_KEY_VIS_OSC_CUSTOM_LINE_COLOR -> {
+                    state.oscCustomLineColorArgb =
+                        sharedPrefs.getInt(PREF_KEY_VIS_OSC_CUSTOM_LINE_COLOR, 0xFF6BD8FF.toInt())
+                }
+                PREF_KEY_VIS_OSC_CUSTOM_GRID_COLOR -> {
+                    state.oscCustomGridColorArgb =
+                        sharedPrefs.getInt(PREF_KEY_VIS_OSC_CUSTOM_GRID_COLOR, 0x66FFFFFF)
+                }
+                PREF_KEY_VIS_BAR_COLOR_NO_ARTWORK -> {
+                    state.barColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_BAR_COLOR_NO_ARTWORK,
+                            VisualizationOscColorMode.Monet.storageValue
+                        ),
+                        VisualizationOscColorMode.Monet
+                    )
+                }
+                PREF_KEY_VIS_BAR_COLOR_WITH_ARTWORK -> {
+                    state.barColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_BAR_COLOR_WITH_ARTWORK,
+                            VisualizationOscColorMode.Artwork.storageValue
+                        ),
+                        VisualizationOscColorMode.Artwork
+                    )
+                }
+                PREF_KEY_VIS_BAR_CUSTOM_COLOR -> {
+                    state.barCustomColorArgb =
+                        sharedPrefs.getInt(PREF_KEY_VIS_BAR_CUSTOM_COLOR, 0xFF6BD8FF.toInt())
+                }
+                PREF_KEY_VIS_BAR_RENDER_BACKEND -> {
+                    state.barRuntimeRenderBackend = VisualizationRenderBackend.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_BAR_RENDER_BACKEND,
+                            defaultBarRenderBackend.storageValue
+                        ),
+                        defaultBarRenderBackend
+                    )
+                }
+                PREF_KEY_VIS_VU_COLOR_NO_ARTWORK -> {
+                    state.vuColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_VU_COLOR_NO_ARTWORK,
+                            VisualizationOscColorMode.Monet.storageValue
+                        ),
+                        VisualizationOscColorMode.Monet
+                    )
+                }
+                PREF_KEY_VIS_VU_COLOR_WITH_ARTWORK -> {
+                    state.vuColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_VU_COLOR_WITH_ARTWORK,
+                            VisualizationOscColorMode.Artwork.storageValue
+                        ),
+                        VisualizationOscColorMode.Artwork
+                    )
+                }
+                PREF_KEY_VIS_VU_CUSTOM_COLOR -> {
+                    state.vuCustomColorArgb =
+                        sharedPrefs.getInt(PREF_KEY_VIS_VU_CUSTOM_COLOR, 0xFF6BD8FF.toInt())
+                }
+                PREF_KEY_VIS_VU_RENDER_BACKEND -> {
+                    state.vuRuntimeRenderBackend = VisualizationRenderBackend.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_VU_RENDER_BACKEND,
+                            defaultVuRenderBackend.storageValue
+                        ),
+                        defaultVuRenderBackend
+                    )
+                }
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
+    return state
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -206,331 +546,12 @@ fun PlayerScreen(
     val prefs = remember {
         context.getSharedPreferences("silicon_player_settings", Context.MODE_PRIVATE)
     }
-    val oscLineWidthKey = "visualization_osc_line_width_dp"
-    val oscGridWidthKey = "visualization_osc_grid_width_dp"
-    val oscFpsModeKey = "visualization_osc_fps_mode"
-    val oscRenderBackendKey = "visualization_osc_render_backend"
-    val oscVerticalGridEnabledKey = "visualization_osc_vertical_grid_enabled"
-    val oscCenterLineEnabledKey = "visualization_osc_center_line_enabled"
-    val oscLineNoArtworkColorModeKey = "visualization_osc_line_color_mode_no_artwork"
-    val oscGridNoArtworkColorModeKey = "visualization_osc_grid_color_mode_no_artwork"
-    val oscLineArtworkColorModeKey = "visualization_osc_line_color_mode_with_artwork"
-    val oscGridArtworkColorModeKey = "visualization_osc_grid_color_mode_with_artwork"
-    val oscCustomLineColorKey = "visualization_osc_custom_line_color_argb"
-    val oscCustomGridColorKey = "visualization_osc_custom_grid_color_argb"
-    val barRenderBackendKey = "visualization_bar_render_backend"
-    val barColorModeNoArtworkKey = "visualization_bar_color_mode_no_artwork"
-    val barColorModeWithArtworkKey = "visualization_bar_color_mode_with_artwork"
-    val barCustomColorKey = "visualization_bar_custom_color_argb"
-    val vuRenderBackendKey = "visualization_vu_render_backend"
-    val vuColorModeNoArtworkKey = "visualization_vu_color_mode_no_artwork"
-    val vuColorModeWithArtworkKey = "visualization_vu_color_mode_with_artwork"
-    val vuCustomColorKey = "visualization_vu_custom_color_argb"
-    var visualizationOscWindowMs by remember {
-        mutableIntStateOf(prefs.getInt("visualization_osc_window_ms", 40).coerceIn(5, 200))
-    }
-    var visualizationOscTriggerModeNative by remember {
-        mutableIntStateOf(
-            when (prefs.getString("visualization_osc_trigger_mode", "rising")) {
-                "rising" -> 1
-                "falling" -> 2
-                else -> 0
-            }
-        )
-    }
-    var visualizationOscFpsMode by remember {
-        mutableStateOf(
-            VisualizationOscFpsMode.fromStorage(
-                prefs.getString(oscFpsModeKey, VisualizationOscFpsMode.Default.storageValue)
-            )
-        )
-    }
-    var visualizationOscRenderBackend by remember {
-        mutableStateOf(
-            VisualizationRenderBackend.fromStorage(
-                prefs.getString(
-                    oscRenderBackendKey,
-                    AppDefaults.Visualization.Oscilloscope.renderBackend.storageValue
-                ),
-                AppDefaults.Visualization.Oscilloscope.renderBackend
-            )
-        )
-    }
-    var visualizationOscLineWidthDp by remember {
-        mutableIntStateOf(prefs.getInt(oscLineWidthKey, 3).coerceIn(1, 12))
-    }
-    var visualizationOscGridWidthDp by remember {
-        mutableIntStateOf(prefs.getInt(oscGridWidthKey, 2).coerceIn(1, 8))
-    }
-    var visualizationOscVerticalGridEnabled by remember {
-        mutableStateOf(prefs.getBoolean(oscVerticalGridEnabledKey, false))
-    }
-    var visualizationOscCenterLineEnabled by remember {
-        mutableStateOf(prefs.getBoolean(oscCenterLineEnabledKey, false))
-    }
-    var visualizationOscLineColorModeNoArtwork by remember {
-        mutableStateOf(
-            VisualizationOscColorMode.fromStorage(
-                prefs.getString(oscLineNoArtworkColorModeKey, VisualizationOscColorMode.Monet.storageValue),
-                VisualizationOscColorMode.Monet
-            )
-        )
-    }
-    var visualizationOscGridColorModeNoArtwork by remember {
-        mutableStateOf(
-            VisualizationOscColorMode.fromStorage(
-                prefs.getString(oscGridNoArtworkColorModeKey, VisualizationOscColorMode.Monet.storageValue),
-                VisualizationOscColorMode.Monet
-            )
-        )
-    }
-    var visualizationOscLineColorModeWithArtwork by remember {
-        mutableStateOf(
-            VisualizationOscColorMode.fromStorage(
-                prefs.getString(oscLineArtworkColorModeKey, VisualizationOscColorMode.Artwork.storageValue),
-                VisualizationOscColorMode.Artwork
-            )
-        )
-    }
-    var visualizationOscGridColorModeWithArtwork by remember {
-        mutableStateOf(
-            VisualizationOscColorMode.fromStorage(
-                prefs.getString(oscGridArtworkColorModeKey, VisualizationOscColorMode.Artwork.storageValue),
-                VisualizationOscColorMode.Artwork
-            )
-        )
-    }
-    var visualizationOscCustomLineColorArgb by remember {
-        mutableIntStateOf(prefs.getInt(oscCustomLineColorKey, 0xFF6BD8FF.toInt()))
-    }
-    var visualizationOscCustomGridColorArgb by remember {
-        mutableIntStateOf(prefs.getInt(oscCustomGridColorKey, 0x66FFFFFF))
-    }
-    var visualizationBarColorModeNoArtwork by remember {
-        mutableStateOf(
-            VisualizationOscColorMode.fromStorage(
-                prefs.getString(barColorModeNoArtworkKey, VisualizationOscColorMode.Monet.storageValue),
-                VisualizationOscColorMode.Monet
-            )
-        )
-    }
-    var visualizationBarColorModeWithArtwork by remember {
-        mutableStateOf(
-            VisualizationOscColorMode.fromStorage(
-                prefs.getString(barColorModeWithArtworkKey, VisualizationOscColorMode.Artwork.storageValue),
-                VisualizationOscColorMode.Artwork
-            )
-        )
-    }
-    var visualizationBarCustomColorArgb by remember {
-        mutableIntStateOf(prefs.getInt(barCustomColorKey, 0xFF6BD8FF.toInt()))
-    }
-    var visualizationBarRuntimeRenderBackend by remember {
-        mutableStateOf(
-            VisualizationRenderBackend.fromStorage(
-                prefs.getString(barRenderBackendKey, visualizationBarRenderBackend.storageValue),
-                visualizationBarRenderBackend
-            )
-        )
-    }
-    var visualizationVuColorModeNoArtwork by remember {
-        mutableStateOf(
-            VisualizationOscColorMode.fromStorage(
-                prefs.getString(vuColorModeNoArtworkKey, VisualizationOscColorMode.Monet.storageValue),
-                VisualizationOscColorMode.Monet
-            )
-        )
-    }
-    var visualizationVuColorModeWithArtwork by remember {
-        mutableStateOf(
-            VisualizationOscColorMode.fromStorage(
-                prefs.getString(vuColorModeWithArtworkKey, VisualizationOscColorMode.Artwork.storageValue),
-                VisualizationOscColorMode.Artwork
-            )
-        )
-    }
-    var visualizationVuCustomColorArgb by remember {
-        mutableIntStateOf(prefs.getInt(vuCustomColorKey, 0xFF6BD8FF.toInt()))
-    }
-    var visualizationVuRuntimeRenderBackend by remember {
-        mutableStateOf(
-            VisualizationRenderBackend.fromStorage(
-                prefs.getString(vuRenderBackendKey, visualizationVuRenderBackend.storageValue),
-                visualizationVuRenderBackend
-            )
-        )
-    }
+    val visualizationPrefsState = rememberPlayerVisualizationPreferenceState(
+        prefs = prefs,
+        defaultBarRenderBackend = visualizationBarRenderBackend,
+        defaultVuRenderBackend = visualizationVuRenderBackend
+    )
     val channelScopePrefs = rememberChannelScopePrefs(prefs)
-    DisposableEffect(prefs) {
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, key ->
-            when (key) {
-                "visualization_osc_window_ms" -> {
-                    visualizationOscWindowMs =
-                        sharedPrefs.getInt("visualization_osc_window_ms", 40).coerceIn(5, 200)
-                }
-
-                "visualization_osc_trigger_mode" -> {
-                    visualizationOscTriggerModeNative = when (
-                        sharedPrefs.getString("visualization_osc_trigger_mode", "rising")
-                    ) {
-                        "rising" -> 1
-                        "falling" -> 2
-                        else -> 0
-                    }
-                }
-                oscFpsModeKey -> {
-                    visualizationOscFpsMode = VisualizationOscFpsMode.fromStorage(
-                        sharedPrefs.getString(oscFpsModeKey, VisualizationOscFpsMode.Default.storageValue)
-                    )
-                }
-                oscRenderBackendKey -> {
-                    visualizationOscRenderBackend = VisualizationRenderBackend.fromStorage(
-                        sharedPrefs.getString(
-                            oscRenderBackendKey,
-                            AppDefaults.Visualization.Oscilloscope.renderBackend.storageValue
-                        ),
-                        AppDefaults.Visualization.Oscilloscope.renderBackend
-                    )
-                }
-
-                oscLineWidthKey -> {
-                    visualizationOscLineWidthDp =
-                        sharedPrefs.getInt(oscLineWidthKey, 3).coerceIn(1, 12)
-                }
-
-                oscGridWidthKey -> {
-                    visualizationOscGridWidthDp =
-                        sharedPrefs.getInt(oscGridWidthKey, 2).coerceIn(1, 8)
-                }
-
-                oscVerticalGridEnabledKey -> {
-                    visualizationOscVerticalGridEnabled =
-                        sharedPrefs.getBoolean(oscVerticalGridEnabledKey, false)
-                }
-                oscCenterLineEnabledKey -> {
-                    visualizationOscCenterLineEnabled =
-                        sharedPrefs.getBoolean(oscCenterLineEnabledKey, false)
-                }
-
-                oscLineNoArtworkColorModeKey -> {
-                    visualizationOscLineColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
-                        sharedPrefs.getString(
-                            oscLineNoArtworkColorModeKey,
-                            VisualizationOscColorMode.Monet.storageValue
-                        ),
-                        VisualizationOscColorMode.Monet
-                    )
-                }
-
-                oscGridNoArtworkColorModeKey -> {
-                    visualizationOscGridColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
-                        sharedPrefs.getString(
-                            oscGridNoArtworkColorModeKey,
-                            VisualizationOscColorMode.Monet.storageValue
-                        ),
-                        VisualizationOscColorMode.Monet
-                    )
-                }
-
-                oscLineArtworkColorModeKey -> {
-                    visualizationOscLineColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
-                        sharedPrefs.getString(
-                            oscLineArtworkColorModeKey,
-                            VisualizationOscColorMode.Artwork.storageValue
-                        ),
-                        VisualizationOscColorMode.Artwork
-                    )
-                }
-
-                oscGridArtworkColorModeKey -> {
-                    visualizationOscGridColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
-                        sharedPrefs.getString(
-                            oscGridArtworkColorModeKey,
-                            VisualizationOscColorMode.Artwork.storageValue
-                        ),
-                        VisualizationOscColorMode.Artwork
-                    )
-                }
-
-                oscCustomLineColorKey -> {
-                    visualizationOscCustomLineColorArgb =
-                        sharedPrefs.getInt(oscCustomLineColorKey, 0xFF6BD8FF.toInt())
-                }
-
-                oscCustomGridColorKey -> {
-                    visualizationOscCustomGridColorArgb =
-                        sharedPrefs.getInt(oscCustomGridColorKey, 0x66FFFFFF)
-                }
-
-                barColorModeNoArtworkKey -> {
-                    visualizationBarColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
-                        sharedPrefs.getString(
-                            barColorModeNoArtworkKey,
-                            VisualizationOscColorMode.Monet.storageValue
-                        ),
-                        VisualizationOscColorMode.Monet
-                    )
-                }
-
-                barColorModeWithArtworkKey -> {
-                    visualizationBarColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
-                        sharedPrefs.getString(
-                            barColorModeWithArtworkKey,
-                            VisualizationOscColorMode.Artwork.storageValue
-                        ),
-                        VisualizationOscColorMode.Artwork
-                    )
-                }
-
-                barCustomColorKey -> {
-                    visualizationBarCustomColorArgb =
-                        sharedPrefs.getInt(barCustomColorKey, 0xFF6BD8FF.toInt())
-                }
-                barRenderBackendKey -> {
-                    visualizationBarRuntimeRenderBackend = VisualizationRenderBackend.fromStorage(
-                        sharedPrefs.getString(barRenderBackendKey, visualizationBarRenderBackend.storageValue),
-                        visualizationBarRenderBackend
-                    )
-                }
-
-                vuColorModeNoArtworkKey -> {
-                    visualizationVuColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
-                        sharedPrefs.getString(
-                            vuColorModeNoArtworkKey,
-                            VisualizationOscColorMode.Monet.storageValue
-                        ),
-                        VisualizationOscColorMode.Monet
-                    )
-                }
-
-                vuColorModeWithArtworkKey -> {
-                    visualizationVuColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
-                        sharedPrefs.getString(
-                            vuColorModeWithArtworkKey,
-                            VisualizationOscColorMode.Artwork.storageValue
-                        ),
-                        VisualizationOscColorMode.Artwork
-                    )
-                }
-
-                vuCustomColorKey -> {
-                    visualizationVuCustomColorArgb =
-                        sharedPrefs.getInt(vuCustomColorKey, 0xFF6BD8FF.toInt())
-                }
-                vuRenderBackendKey -> {
-                    visualizationVuRuntimeRenderBackend = VisualizationRenderBackend.fromStorage(
-                        sharedPrefs.getString(vuRenderBackendKey, visualizationVuRenderBackend.storageValue),
-                        visualizationVuRenderBackend
-                    )
-                }
-
-            }
-        }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        onDispose {
-            prefs.unregisterOnSharedPreferenceChangeListener(listener)
-        }
-    }
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
@@ -555,6 +576,8 @@ fun PlayerScreen(
     val panelOffsetPx = if (isDraggingDown) downwardDragPx else animatedPanelOffsetPx
     val dragFadeProgress = (panelOffsetPx / (collapseThresholdPx * 1.4f)).coerceIn(0f, 1f)
     val panelAlpha = 1f - (0.22f * dragFadeProgress)
+    val topArrowFocusRequester = remember { FocusRequester() }
+    val infoChipsFocusRequester = remember { FocusRequester() }
 
     val hasTrack = file != null
     val displayTitle = title.ifBlank {
@@ -571,89 +594,39 @@ fun PlayerScreen(
         delay(1200)
         showVisualizationModeBadge = false
     }
-
-    // Focus management for keyboard input
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
+    val transportAnchorFocusRequester = remember { FocusRequester() }
+    val actionStripFirstFocusRequester = remember { FocusRequester() }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .focusRequester(focusRequester)
-            .focusable()
             .onPreviewKeyEvent { keyEvent ->
                 // Only handle key down events to avoid double-triggering
                 if (keyEvent.nativeKeyEvent.action != android.view.KeyEvent.ACTION_DOWN) {
                     return@onPreviewKeyEvent false
                 }
-
-                when (keyEvent.key) {
-                    // Spacebar: Play/Pause
-                    Key.Spacebar -> {
-                        if (hasTrack || canResumeStoppedTrack) {
-                            if (isPlaying) onPause() else onPlay()
-                            true
-                        } else false
-                    }
-                    // Left Arrow: Seek backward 5 seconds (without Ctrl)
-                    Key.DirectionLeft -> {
-                        if (keyEvent.isCtrlPressed && canPreviousSubtune) {
-                            onPreviousSubtune()
-                            true
-                        } else if (!keyEvent.isCtrlPressed && canSeek && durationSeconds > 0.0) {
-                            val newPosition = (positionSeconds - 5.0).coerceAtLeast(0.0)
-                            onSeek(newPosition)
-                            true
-                        } else false
-                    }
-                    // Right Arrow: Seek forward 5 seconds (without Ctrl)
-                    Key.DirectionRight -> {
-                        if (keyEvent.isCtrlPressed && canNextSubtune) {
-                            onNextSubtune()
-                            true
-                        } else if (!keyEvent.isCtrlPressed && canSeek && durationSeconds > 0.0) {
-                            val newPosition = (positionSeconds + 5.0).coerceAtMost(durationSeconds)
-                            onSeek(newPosition)
-                            true
-                        } else false
-                    }
-                    // Page Up: Previous track
-                    Key.PageUp -> {
-                        if (hasTrack && canPreviousTrack) {
-                            onPreviousTrack()
-                            true
-                        } else false
-                    }
-                    // Page Down: Next track
-                    Key.PageDown -> {
-                        if (hasTrack && canNextTrack) {
-                            onNextTrack()
-                            true
-                        } else false
-                    }
-                    // Home: Restart song (seek to 0)
-                    Key.MoveHome -> {
-                        if (canSeek && durationSeconds > 0.0) {
-                            onSeek(0.0)
-                            true
-                        } else false
-                    }
-                    // R: Cycle repeat mode
-                    Key.R -> {
-                        if (canCycleRepeatMode) {
-                            onCycleRepeatMode()
-                            true
-                        } else false
-                    }
-                    // Backspace: Stop
-                    Key.Backspace -> {
-                        onStopAndClear()
-                        true
-                    }
-                    else -> false
-                }
+                handlePlayerGlobalKeyDown(
+                    keyEvent = keyEvent,
+                    hasTrack = hasTrack,
+                    canResumeStoppedTrack = canResumeStoppedTrack,
+                    isPlaying = isPlaying,
+                    canPreviousSubtune = canPreviousSubtune,
+                    canNextSubtune = canNextSubtune,
+                    canPreviousTrack = canPreviousTrack,
+                    canNextTrack = canNextTrack,
+                    canSeek = canSeek,
+                    durationSeconds = durationSeconds,
+                    canCycleRepeatMode = canCycleRepeatMode,
+                    onPlay = onPlay,
+                    onPause = onPause,
+                    onPreviousSubtune = onPreviousSubtune,
+                    onNextSubtune = onNextSubtune,
+                    onPreviousTrack = onPreviousTrack,
+                    onNextTrack = onNextTrack,
+                    onSeek = onSeek,
+                    onCycleRepeatMode = onCycleRepeatMode,
+                    onStopAndClear = onStopAndClear
+                )
             }
             .offset { IntOffset(0, panelOffsetPx.roundToInt()) }
             .graphicsLayer(alpha = panelAlpha)
@@ -694,32 +667,14 @@ fun PlayerScreen(
     ) {
         Scaffold(
             topBar = {
-                val compactLandscapeHeader = isLandscape && !isTabletLike
-                val headerHeight = if (compactLandscapeHeader) 30.dp else 40.dp
-                val navButtonSize = if (compactLandscapeHeader) 28.dp else 32.dp
-                val navIconSize = if (compactLandscapeHeader) 22.dp else 24.dp
-                // Keep a minimal header so the player can use more vertical space on phones.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .height(headerHeight),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    IconButton(
-                        onClick = onBack,
-                        enabled = enableCollapseGesture,
-                        modifier = Modifier
-                            .padding(start = 4.dp)
-                            .size(navButtonSize)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Minimize player",
-                            modifier = Modifier.size(navIconSize)
-                        )
-                    }
-                }
+                PlayerTopBar(
+                    isLandscape = isLandscape,
+                    isTabletLike = isTabletLike,
+                    onBack = onBack,
+                    enableCollapseGesture = enableCollapseGesture,
+                    focusRequester = topArrowFocusRequester,
+                    downFocusRequester = infoChipsFocusRequester
+                )
             }
         ) { innerPadding ->
             Box(
@@ -753,6 +708,7 @@ fun PlayerScreen(
                     val timelineSpacer = lerpDp(4.dp, 10.dp, landscapeLayoutScale)
                     val actionStripSpacer = lerpDp(6.dp, 12.dp, landscapeLayoutScale)
                     val actionStripBottomPadding = lerpDp(2.dp, 4.dp, landscapeLayoutScale)
+                    val timelineFocusRequester = remember { FocusRequester() }
 
                     Row(
                         modifier = Modifier
@@ -779,37 +735,37 @@ fun PlayerScreen(
                                 showVisualizationModeBadge = showVisualizationModeBadge,
                                 visualizationMode = visualizationMode,
                                 visualizationShowDebugInfo = visualizationShowDebugInfo,
-                                visualizationOscWindowMs = visualizationOscWindowMs,
-                                visualizationOscTriggerModeNative = visualizationOscTriggerModeNative,
-                                visualizationOscFpsMode = visualizationOscFpsMode,
-                                visualizationOscRenderBackend = visualizationOscRenderBackend,
+                                visualizationOscWindowMs = visualizationPrefsState.oscWindowMs,
+                                visualizationOscTriggerModeNative = visualizationPrefsState.oscTriggerModeNative,
+                                visualizationOscFpsMode = visualizationPrefsState.oscFpsMode,
+                                visualizationOscRenderBackend = visualizationPrefsState.oscRenderBackend,
                                 visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
                                 visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
                                 barCount = visualizationBarCount,
                                 barRoundnessDp = visualizationBarRoundnessDp,
                                 barOverlayArtwork = visualizationBarOverlayArtwork,
                                 barUseThemeColor = visualizationBarUseThemeColor,
-                                barRenderBackend = visualizationBarRuntimeRenderBackend,
-                                barColorModeNoArtwork = visualizationBarColorModeNoArtwork,
-                                barColorModeWithArtwork = visualizationBarColorModeWithArtwork,
-                                barCustomColorArgb = visualizationBarCustomColorArgb,
+                                barRenderBackend = visualizationPrefsState.barRuntimeRenderBackend,
+                                barColorModeNoArtwork = visualizationPrefsState.barColorModeNoArtwork,
+                                barColorModeWithArtwork = visualizationPrefsState.barColorModeWithArtwork,
+                                barCustomColorArgb = visualizationPrefsState.barCustomColorArgb,
                                 oscStereo = visualizationOscStereo,
-                                oscLineWidthDp = visualizationOscLineWidthDp,
-                                oscGridWidthDp = visualizationOscGridWidthDp,
-                                oscVerticalGridEnabled = visualizationOscVerticalGridEnabled,
-                                oscCenterLineEnabled = visualizationOscCenterLineEnabled,
-                                oscLineColorModeNoArtwork = visualizationOscLineColorModeNoArtwork,
-                                oscGridColorModeNoArtwork = visualizationOscGridColorModeNoArtwork,
-                                oscLineColorModeWithArtwork = visualizationOscLineColorModeWithArtwork,
-                                oscGridColorModeWithArtwork = visualizationOscGridColorModeWithArtwork,
-                                oscCustomLineColorArgb = visualizationOscCustomLineColorArgb,
-                                oscCustomGridColorArgb = visualizationOscCustomGridColorArgb,
+                                oscLineWidthDp = visualizationPrefsState.oscLineWidthDp,
+                                oscGridWidthDp = visualizationPrefsState.oscGridWidthDp,
+                                oscVerticalGridEnabled = visualizationPrefsState.oscVerticalGridEnabled,
+                                oscCenterLineEnabled = visualizationPrefsState.oscCenterLineEnabled,
+                                oscLineColorModeNoArtwork = visualizationPrefsState.oscLineColorModeNoArtwork,
+                                oscGridColorModeNoArtwork = visualizationPrefsState.oscGridColorModeNoArtwork,
+                                oscLineColorModeWithArtwork = visualizationPrefsState.oscLineColorModeWithArtwork,
+                                oscGridColorModeWithArtwork = visualizationPrefsState.oscGridColorModeWithArtwork,
+                                oscCustomLineColorArgb = visualizationPrefsState.oscCustomLineColorArgb,
+                                oscCustomGridColorArgb = visualizationPrefsState.oscCustomGridColorArgb,
                                 vuAnchor = visualizationVuAnchor,
                                 vuUseThemeColor = visualizationVuUseThemeColor,
-                                vuRenderBackend = visualizationVuRuntimeRenderBackend,
-                                vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
-                                vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
-                                vuCustomColorArgb = visualizationVuCustomColorArgb,
+                                vuRenderBackend = visualizationPrefsState.vuRuntimeRenderBackend,
+                                vuColorModeNoArtwork = visualizationPrefsState.vuColorModeNoArtwork,
+                                vuColorModeWithArtwork = visualizationPrefsState.vuColorModeWithArtwork,
+                                vuCustomColorArgb = visualizationPrefsState.vuCustomColorArgb,
                                 channelScopePrefs = channelScopePrefs,
                                 artworkCornerRadiusDp = artworkCornerRadiusDp,
                                 modifier = Modifier
@@ -846,6 +802,13 @@ fun PlayerScreen(
                                     sampleRateHz = sampleRateHz,
                                     channelCount = channelCount,
                                     bitDepthLabel = bitDepthLabel,
+                                    focusRequester = infoChipsFocusRequester,
+                                    upFocusRequester = topArrowFocusRequester,
+                                    downFocusRequester = if (canSeek && durationSeconds > 0.0) {
+                                        timelineFocusRequester
+                                    } else {
+                                        transportAnchorFocusRequester
+                                    },
                                     layoutScale = landscapeLayoutScale,
                                     onClick = { showTrackInfoDialog = true }
                                 )
@@ -877,6 +840,8 @@ fun PlayerScreen(
                                         canSeek = canSeek,
                                         hasReliableDuration = hasReliableDuration,
                                         seekInProgress = seekInProgress,
+                                        focusRequester = timelineFocusRequester,
+                                        upFocusRequester = infoChipsFocusRequester,
                                         layoutScale = landscapeLayoutScale,
                                         onSeekInteractionChanged = { isTimelineTouchActive = it },
                                         onSliderValueChange = { value ->
@@ -920,7 +885,9 @@ fun PlayerScreen(
                                     canOpenSubtuneSelector = canOpenSubtuneSelector,
                                     onStopAndClear = onStopAndClear,
                                     onCycleRepeatMode = onCycleRepeatMode,
-                                    layoutScale = landscapeLayoutScale
+                                    layoutScale = landscapeLayoutScale,
+                                    transportAnchorFocusRequester = transportAnchorFocusRequester,
+                                    actionStripFirstFocusRequester = actionStripFirstFocusRequester
                                 )
 
                                 if (centerLandscapeContent) {
@@ -933,7 +900,9 @@ fun PlayerScreen(
                                         onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
                                         onOpenAudioEffects = onOpenAudioEffects,
                                         onOpenChannelControls = { showChannelControlDialog = true },
-                                        layoutScale = landscapeLayoutScale
+                                        layoutScale = landscapeLayoutScale,
+                                        actionStripFirstFocusRequester = actionStripFirstFocusRequester,
+                                        transportAnchorFocusRequester = transportAnchorFocusRequester
                                     )
                                 }
                             }
@@ -952,7 +921,9 @@ fun PlayerScreen(
                                     onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
                                     onOpenAudioEffects = onOpenAudioEffects,
                                     onOpenChannelControls = { showChannelControlDialog = true },
-                                    layoutScale = landscapeLayoutScale
+                                    layoutScale = landscapeLayoutScale,
+                                    actionStripFirstFocusRequester = actionStripFirstFocusRequester,
+                                    transportAnchorFocusRequester = transportAnchorFocusRequester
                                 )
                             }
                         }
@@ -992,6 +963,7 @@ fun PlayerScreen(
                     val topPaneWeight = lerpFloat(0.48f, 0.58f, portraitLayoutScale)
                     val bottomPaneWeight = (1f - topPaneWeight).coerceAtLeast(0.34f)
                     val metadataSplitGap = lerpDp(2.dp, 8.dp, portraitLayoutScale)
+                    val timelineFocusRequester = remember { FocusRequester() }
 
                     Box(
                         modifier = Modifier
@@ -1050,37 +1022,37 @@ fun PlayerScreen(
                                         showVisualizationModeBadge = showVisualizationModeBadge,
                                         visualizationMode = visualizationMode,
                                         visualizationShowDebugInfo = visualizationShowDebugInfo,
-                                        visualizationOscWindowMs = visualizationOscWindowMs,
-                                        visualizationOscTriggerModeNative = visualizationOscTriggerModeNative,
-                                        visualizationOscFpsMode = visualizationOscFpsMode,
-                                        visualizationOscRenderBackend = visualizationOscRenderBackend,
+                                        visualizationOscWindowMs = visualizationPrefsState.oscWindowMs,
+                                        visualizationOscTriggerModeNative = visualizationPrefsState.oscTriggerModeNative,
+                                        visualizationOscFpsMode = visualizationPrefsState.oscFpsMode,
+                                        visualizationOscRenderBackend = visualizationPrefsState.oscRenderBackend,
                                         visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
                                         visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
                                         barCount = visualizationBarCount,
                                         barRoundnessDp = visualizationBarRoundnessDp,
                                         barOverlayArtwork = visualizationBarOverlayArtwork,
                                         barUseThemeColor = visualizationBarUseThemeColor,
-                                        barRenderBackend = visualizationBarRuntimeRenderBackend,
-                                        barColorModeNoArtwork = visualizationBarColorModeNoArtwork,
-                                        barColorModeWithArtwork = visualizationBarColorModeWithArtwork,
-                                        barCustomColorArgb = visualizationBarCustomColorArgb,
+                                        barRenderBackend = visualizationPrefsState.barRuntimeRenderBackend,
+                                        barColorModeNoArtwork = visualizationPrefsState.barColorModeNoArtwork,
+                                        barColorModeWithArtwork = visualizationPrefsState.barColorModeWithArtwork,
+                                        barCustomColorArgb = visualizationPrefsState.barCustomColorArgb,
                                         oscStereo = visualizationOscStereo,
-                                        oscLineWidthDp = visualizationOscLineWidthDp,
-                                        oscGridWidthDp = visualizationOscGridWidthDp,
-                                        oscVerticalGridEnabled = visualizationOscVerticalGridEnabled,
-                                        oscCenterLineEnabled = visualizationOscCenterLineEnabled,
-                                        oscLineColorModeNoArtwork = visualizationOscLineColorModeNoArtwork,
-                                        oscGridColorModeNoArtwork = visualizationOscGridColorModeNoArtwork,
-                                        oscLineColorModeWithArtwork = visualizationOscLineColorModeWithArtwork,
-                                        oscGridColorModeWithArtwork = visualizationOscGridColorModeWithArtwork,
-                                        oscCustomLineColorArgb = visualizationOscCustomLineColorArgb,
-                                        oscCustomGridColorArgb = visualizationOscCustomGridColorArgb,
+                                        oscLineWidthDp = visualizationPrefsState.oscLineWidthDp,
+                                        oscGridWidthDp = visualizationPrefsState.oscGridWidthDp,
+                                        oscVerticalGridEnabled = visualizationPrefsState.oscVerticalGridEnabled,
+                                        oscCenterLineEnabled = visualizationPrefsState.oscCenterLineEnabled,
+                                        oscLineColorModeNoArtwork = visualizationPrefsState.oscLineColorModeNoArtwork,
+                                        oscGridColorModeNoArtwork = visualizationPrefsState.oscGridColorModeNoArtwork,
+                                        oscLineColorModeWithArtwork = visualizationPrefsState.oscLineColorModeWithArtwork,
+                                        oscGridColorModeWithArtwork = visualizationPrefsState.oscGridColorModeWithArtwork,
+                                        oscCustomLineColorArgb = visualizationPrefsState.oscCustomLineColorArgb,
+                                        oscCustomGridColorArgb = visualizationPrefsState.oscCustomGridColorArgb,
                                         vuAnchor = visualizationVuAnchor,
                                         vuUseThemeColor = visualizationVuUseThemeColor,
-                                        vuRenderBackend = visualizationVuRuntimeRenderBackend,
-                                        vuColorModeNoArtwork = visualizationVuColorModeNoArtwork,
-                                        vuColorModeWithArtwork = visualizationVuColorModeWithArtwork,
-                                        vuCustomColorArgb = visualizationVuCustomColorArgb,
+                                        vuRenderBackend = visualizationPrefsState.vuRuntimeRenderBackend,
+                                        vuColorModeNoArtwork = visualizationPrefsState.vuColorModeNoArtwork,
+                                        vuColorModeWithArtwork = visualizationPrefsState.vuColorModeWithArtwork,
+                                        vuCustomColorArgb = visualizationPrefsState.vuCustomColorArgb,
                                         channelScopePrefs = channelScopePrefs,
                                         artworkCornerRadiusDp = artworkCornerRadiusDp,
                                         modifier = Modifier.size(artworkSize)
@@ -1093,6 +1065,13 @@ fun PlayerScreen(
                                         sampleRateHz = sampleRateHz,
                                         channelCount = channelCount,
                                         bitDepthLabel = bitDepthLabel,
+                                        focusRequester = infoChipsFocusRequester,
+                                        upFocusRequester = topArrowFocusRequester,
+                                        downFocusRequester = if (canSeek && durationSeconds > 0.0) {
+                                            timelineFocusRequester
+                                        } else {
+                                            transportAnchorFocusRequester
+                                        },
                                         layoutScale = portraitLayoutScale,
                                         onClick = { showTrackInfoDialog = true },
                                         modifier = Modifier.fillMaxWidth()
@@ -1130,6 +1109,8 @@ fun PlayerScreen(
                                         canSeek = canSeek,
                                         hasReliableDuration = hasReliableDuration,
                                         seekInProgress = seekInProgress,
+                                        focusRequester = timelineFocusRequester,
+                                        upFocusRequester = infoChipsFocusRequester,
                                         layoutScale = portraitLayoutScale,
                                         onSeekInteractionChanged = { isTimelineTouchActive = it },
                                         onSliderValueChange = { value ->
@@ -1172,7 +1153,9 @@ fun PlayerScreen(
                                         canOpenSubtuneSelector = canOpenSubtuneSelector,
                                         onStopAndClear = onStopAndClear,
                                         onCycleRepeatMode = onCycleRepeatMode,
-                                        layoutScale = portraitLayoutScale
+                                        layoutScale = portraitLayoutScale,
+                                        transportAnchorFocusRequester = transportAnchorFocusRequester,
+                                        actionStripFirstFocusRequester = actionStripFirstFocusRequester
                                     )
                                 }
                             }
@@ -1191,7 +1174,9 @@ fun PlayerScreen(
                             onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
                             onOpenAudioEffects = onOpenAudioEffects,
                             onOpenChannelControls = { showChannelControlDialog = true },
-                            layoutScale = portraitLayoutScale
+                            layoutScale = portraitLayoutScale,
+                            actionStripFirstFocusRequester = actionStripFirstFocusRequester,
+                            transportAnchorFocusRequester = transportAnchorFocusRequester
                         )
                     }
                 }
@@ -1233,6 +1218,139 @@ fun PlayerScreen(
 }
 }
 
+private fun handlePlayerGlobalKeyDown(
+    keyEvent: androidx.compose.ui.input.key.KeyEvent,
+    hasTrack: Boolean,
+    canResumeStoppedTrack: Boolean,
+    isPlaying: Boolean,
+    canPreviousSubtune: Boolean,
+    canNextSubtune: Boolean,
+    canPreviousTrack: Boolean,
+    canNextTrack: Boolean,
+    canSeek: Boolean,
+    durationSeconds: Double,
+    canCycleRepeatMode: Boolean,
+    onPlay: () -> Unit,
+    onPause: () -> Unit,
+    onPreviousSubtune: () -> Unit,
+    onNextSubtune: () -> Unit,
+    onPreviousTrack: () -> Unit,
+    onNextTrack: () -> Unit,
+    onSeek: (Double) -> Unit,
+    onCycleRepeatMode: () -> Unit,
+    onStopAndClear: () -> Unit
+): Boolean {
+    return when (keyEvent.key) {
+        Key.Spacebar -> {
+            if (hasTrack || canResumeStoppedTrack) {
+                if (isPlaying) onPause() else onPlay()
+                true
+            } else false
+        }
+        Key.DirectionLeft -> {
+            if (keyEvent.isCtrlPressed && canPreviousSubtune) {
+                onPreviousSubtune()
+                true
+            } else false
+        }
+        Key.DirectionRight -> {
+            if (keyEvent.isCtrlPressed && canNextSubtune) {
+                onNextSubtune()
+                true
+            } else false
+        }
+        Key.PageUp -> {
+            if (hasTrack && canPreviousTrack) {
+                onPreviousTrack()
+                true
+            } else false
+        }
+        Key.PageDown -> {
+            if (hasTrack && canNextTrack) {
+                onNextTrack()
+                true
+            } else false
+        }
+        Key.MoveHome -> {
+            if (canSeek && durationSeconds > 0.0) {
+                onSeek(0.0)
+                true
+            } else false
+        }
+        Key.R -> {
+            if (canCycleRepeatMode) {
+                onCycleRepeatMode()
+                true
+            } else false
+        }
+        Key.Backspace -> {
+            onStopAndClear()
+            true
+        }
+        else -> false
+    }
+}
+
+@Composable
+private fun PlayerTopBar(
+    isLandscape: Boolean,
+    isTabletLike: Boolean,
+    onBack: () -> Unit,
+    enableCollapseGesture: Boolean,
+    focusRequester: FocusRequester? = null,
+    downFocusRequester: FocusRequester? = null
+) {
+    val compactLandscapeHeader = isLandscape && !isTabletLike
+    val headerHeight = if (compactLandscapeHeader) 30.dp else 40.dp
+    val navButtonSize = if (compactLandscapeHeader) 28.dp else 32.dp
+    val navIconSize = if (compactLandscapeHeader) 22.dp else 24.dp
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .height(headerHeight),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Box(
+            modifier = Modifier
+                .then(
+                    if (focusRequester != null) {
+                        Modifier.focusRequester(focusRequester)
+                    } else {
+                        Modifier
+                    }
+                )
+                .padding(start = 4.dp)
+                .size(navButtonSize)
+                .focusProperties {
+                    if (downFocusRequester != null) {
+                        down = downFocusRequester
+                    }
+                }
+                .clip(CircleShape)
+                .playerFocusHighlight(
+                    enabled = enableCollapseGesture,
+                    shape = CircleShape,
+                    activeAlpha = 0.14f
+                )
+                .clickable(
+                    enabled = enableCollapseGesture,
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onBack
+                )
+                .focusable(enabled = enableCollapseGesture),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = "Minimize player",
+                modifier = Modifier.size(navIconSize)
+            )
+        }
+    }
+}
+
 private fun toDisplayFilename(file: File): String {
     val name = file.name
     val path = file.absolutePath
@@ -1268,6 +1386,44 @@ private fun scaledDp(value: Dp, factor: Float): Dp {
     return (value.value * factor).dp
 }
 
+private fun Modifier.playerFocusHalo(
+    enabled: Boolean = true,
+    shape: Shape = CircleShape
+): Modifier = composed {
+    var isFocused by remember { mutableStateOf(false) }
+    val haloAlpha by animateFloatAsState(
+        targetValue = if (enabled && isFocused) 0.7f else 0f,
+        animationSpec = tween(durationMillis = 140),
+        label = "playerFocusHaloAlpha"
+    )
+    this
+        .onFocusChanged { isFocused = it.isFocused }
+        .border(
+            width = 2.dp,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = haloAlpha),
+            shape = shape
+        )
+}
+
+private fun Modifier.playerFocusHighlight(
+    enabled: Boolean = true,
+    shape: Shape = CircleShape,
+    activeAlpha: Float = 0.22f
+): Modifier = composed {
+    var isFocused by remember { mutableStateOf(false) }
+    val highlightAlpha by animateFloatAsState(
+        targetValue = if (enabled && isFocused) activeAlpha else 0f,
+        animationSpec = tween(durationMillis = 140),
+        label = "playerFocusHighlightAlpha"
+    )
+    this
+        .onFocusChanged { isFocused = it.isFocused }
+        .background(
+            color = MaterialTheme.colorScheme.primary.copy(alpha = highlightAlpha),
+            shape = shape
+        )
+}
+
 @Composable
 private fun TrackInfoChips(
     file: File?,
@@ -1277,6 +1433,9 @@ private fun TrackInfoChips(
     channelCount: Int,
     bitDepthLabel: String,
     onClick: () -> Unit,
+    focusRequester: FocusRequester? = null,
+    upFocusRequester: FocusRequester? = null,
+    downFocusRequester: FocusRequester? = null,
     layoutScale: Float = 1f,
     modifier: Modifier = Modifier
 ) {
@@ -1329,8 +1488,42 @@ private fun TrackInfoChips(
             ).coerceIn(0f, 1f)
         Row(
             modifier = Modifier
+                .then(
+                    if (focusRequester != null) {
+                        Modifier.focusRequester(focusRequester)
+                    } else {
+                        Modifier
+                    }
+                )
                 .wrapContentWidth()
-                .clickable(onClick = onClick),
+                .clip(RoundedCornerShape(999.dp))
+                .pointerInput(onClick) {
+                    detectTapGestures(onTap = { onClick() })
+                }
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.nativeKeyEvent.action != android.view.KeyEvent.ACTION_DOWN) {
+                        return@onPreviewKeyEvent false
+                    }
+                    when (keyEvent.key) {
+                        Key.Enter,
+                        Key.NumPadEnter,
+                        Key.DirectionCenter -> {
+                            onClick()
+                            true
+                        }
+                        else -> false
+                    }
+                }
+                .focusProperties {
+                    if (upFocusRequester != null) {
+                        up = upFocusRequester
+                    }
+                    if (downFocusRequester != null) {
+                        down = downFocusRequester
+                    }
+                }
+                .playerFocusHighlight(shape = RoundedCornerShape(999.dp))
+                .focusable(),
             horizontalArrangement = Arrangement.spacedBy(lerpDp(3.dp, 10.dp, visualChipScale))
         ) {
             TrackInfoChip(
@@ -1848,9 +2041,53 @@ private fun TransportControls(
     canOpenSubtuneSelector: Boolean,
     onStopAndClear: () -> Unit,
     onCycleRepeatMode: () -> Unit,
-    layoutScale: Float = 1f
+    layoutScale: Float = 1f,
+    transportAnchorFocusRequester: FocusRequester? = null,
+    actionStripFirstFocusRequester: FocusRequester? = null
 ) {
     val controlsBusy = seekInProgress || playbackStartInProgress
+    val canFocusPreviousTrack = hasTrack && canPreviousTrack
+    val canFocusRepeatMode = canCycleRepeatMode && !controlsBusy
+    val canFocusPlayPause = (hasTrack || canResumeStoppedTrack) && !controlsBusy
+    val canFocusStop = true
+    val canFocusNextTrack = hasTrack && canNextTrack
+    val canFocusPreviousSubtune = canPreviousSubtune
+    val canFocusSubtuneSelector = canOpenSubtuneSelector
+    val canFocusNextSubtune = canNextSubtune
+
+    val previousTrackFocusRequester = remember { FocusRequester() }
+    val repeatModeFocusRequester = remember { FocusRequester() }
+    val playPauseFocusRequester = transportAnchorFocusRequester ?: remember { FocusRequester() }
+    val stopFocusRequester = remember { FocusRequester() }
+    val nextTrackFocusRequester = remember { FocusRequester() }
+    val previousSubtuneFocusRequester = remember { FocusRequester() }
+    val subtuneSelectorFocusRequester = remember { FocusRequester() }
+    val nextSubtuneFocusRequester = remember { FocusRequester() }
+    var initialTransportFocusAssigned by remember { mutableStateOf(false) }
+    fun firstAvailableRequester(vararg options: Pair<Boolean, FocusRequester>): FocusRequester? {
+        return options.firstOrNull { it.first }?.second
+    }
+    LaunchedEffect(
+        canFocusPlayPause,
+        canFocusStop,
+        canFocusPreviousTrack,
+        canFocusRepeatMode,
+        canFocusNextTrack
+    ) {
+        if (initialTransportFocusAssigned) return@LaunchedEffect
+        delay(90)
+        val requester = firstAvailableRequester(
+            canFocusPlayPause to playPauseFocusRequester,
+            canFocusStop to stopFocusRequester,
+            canFocusPreviousTrack to previousTrackFocusRequester,
+            canFocusRepeatMode to repeatModeFocusRequester,
+            canFocusNextTrack to nextTrackFocusRequester
+        )
+        requester?.requestFocus()
+        if (requester != null) {
+            initialTransportFocusAssigned = true
+        }
+    }
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val tabletWidthScale = normalizedScale(maxWidth, compactDp = 560.dp, roomyDp = 980.dp)
         val heightBias = lerpFloat(0.90f, 1f, layoutScale)
@@ -1893,7 +2130,33 @@ private fun TransportControls(
                     FilledTonalIconButton(
                         onClick = onPreviousTrack,
                         enabled = hasTrack && canPreviousTrack,
-                        modifier = Modifier.size(sideButtonSize),
+                        modifier = Modifier
+                            .focusRequester(previousTrackFocusRequester)
+                            .size(sideButtonSize)
+                            .focusProperties {
+                                left = firstAvailableRequester(
+                                    canFocusNextTrack to nextTrackFocusRequester,
+                                    canFocusStop to stopFocusRequester,
+                                    canFocusPlayPause to playPauseFocusRequester,
+                                    canFocusRepeatMode to repeatModeFocusRequester,
+                                    canFocusPreviousTrack to previousTrackFocusRequester
+                                ) ?: previousTrackFocusRequester
+                                right = firstAvailableRequester(
+                                    canFocusRepeatMode to repeatModeFocusRequester,
+                                    canFocusPlayPause to playPauseFocusRequester,
+                                    canFocusStop to stopFocusRequester,
+                                    canFocusNextTrack to nextTrackFocusRequester,
+                                    canFocusPreviousTrack to previousTrackFocusRequester
+                                ) ?: previousTrackFocusRequester
+                                down = firstAvailableRequester(
+                                    canFocusPreviousSubtune to previousSubtuneFocusRequester,
+                                    canFocusSubtuneSelector to subtuneSelectorFocusRequester,
+                                    canFocusNextSubtune to nextSubtuneFocusRequester,
+                                    (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: previousTrackFocusRequester)
+                                ) ?: previousTrackFocusRequester
+                            }
+                            .playerFocusHalo(enabled = hasTrack && canPreviousTrack)
+                            .focusable(enabled = hasTrack && canPreviousTrack),
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -1910,7 +2173,33 @@ private fun TransportControls(
                     FilledTonalIconButton(
                         onClick = onCycleRepeatMode,
                         enabled = canCycleRepeatMode && !controlsBusy,
-                        modifier = Modifier.size(sideButtonSize),
+                        modifier = Modifier
+                            .focusRequester(repeatModeFocusRequester)
+                            .size(sideButtonSize)
+                            .focusProperties {
+                                left = firstAvailableRequester(
+                                    canFocusPreviousTrack to previousTrackFocusRequester,
+                                    canFocusNextTrack to nextTrackFocusRequester,
+                                    canFocusStop to stopFocusRequester,
+                                    canFocusPlayPause to playPauseFocusRequester,
+                                    canFocusRepeatMode to repeatModeFocusRequester
+                                ) ?: repeatModeFocusRequester
+                                right = firstAvailableRequester(
+                                    canFocusPlayPause to playPauseFocusRequester,
+                                    canFocusStop to stopFocusRequester,
+                                    canFocusNextTrack to nextTrackFocusRequester,
+                                    canFocusPreviousTrack to previousTrackFocusRequester,
+                                    canFocusRepeatMode to repeatModeFocusRequester
+                                ) ?: repeatModeFocusRequester
+                                down = firstAvailableRequester(
+                                    canFocusSubtuneSelector to subtuneSelectorFocusRequester,
+                                    canFocusPreviousSubtune to previousSubtuneFocusRequester,
+                                    canFocusNextSubtune to nextSubtuneFocusRequester,
+                                    (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: repeatModeFocusRequester)
+                                ) ?: repeatModeFocusRequester
+                            }
+                            .playerFocusHalo(enabled = canCycleRepeatMode && !controlsBusy)
+                            .focusable(enabled = canCycleRepeatMode && !controlsBusy),
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = if (repeatMode != RepeatMode.None) {
@@ -1967,7 +2256,33 @@ private fun TransportControls(
                 FilledIconButton(
                     onClick = onPlayPause,
                     enabled = (hasTrack || canResumeStoppedTrack) && !controlsBusy,
-                    modifier = Modifier.size(playButtonSize),
+                    modifier = Modifier
+                        .size(playButtonSize)
+                        .focusRequester(playPauseFocusRequester)
+                        .focusProperties {
+                            left = firstAvailableRequester(
+                                canFocusRepeatMode to repeatModeFocusRequester,
+                                canFocusPreviousTrack to previousTrackFocusRequester,
+                                canFocusNextTrack to nextTrackFocusRequester,
+                                canFocusStop to stopFocusRequester,
+                                canFocusPlayPause to playPauseFocusRequester
+                            ) ?: playPauseFocusRequester
+                            right = firstAvailableRequester(
+                                canFocusStop to stopFocusRequester,
+                                canFocusNextTrack to nextTrackFocusRequester,
+                                canFocusPreviousTrack to previousTrackFocusRequester,
+                                canFocusRepeatMode to repeatModeFocusRequester,
+                                canFocusPlayPause to playPauseFocusRequester
+                            ) ?: playPauseFocusRequester
+                            down = firstAvailableRequester(
+                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
+                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
+                                canFocusNextSubtune to nextSubtuneFocusRequester,
+                                (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: playPauseFocusRequester)
+                            ) ?: playPauseFocusRequester
+                        }
+                        .playerFocusHalo(enabled = (hasTrack || canResumeStoppedTrack) && !controlsBusy)
+                        .focusable(enabled = (hasTrack || canResumeStoppedTrack) && !controlsBusy),
                     shape = CircleShape,
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -2003,7 +2318,33 @@ private fun TransportControls(
                 ) {
                     FilledTonalIconButton(
                         onClick = onStopAndClear,
-                        modifier = Modifier.size(sideButtonSize),
+                        modifier = Modifier
+                            .focusRequester(stopFocusRequester)
+                            .size(sideButtonSize)
+                            .focusProperties {
+                                left = firstAvailableRequester(
+                                    canFocusPlayPause to playPauseFocusRequester,
+                                    canFocusRepeatMode to repeatModeFocusRequester,
+                                    canFocusPreviousTrack to previousTrackFocusRequester,
+                                    canFocusNextTrack to nextTrackFocusRequester,
+                                    canFocusStop to stopFocusRequester
+                                ) ?: stopFocusRequester
+                                right = firstAvailableRequester(
+                                    canFocusNextTrack to nextTrackFocusRequester,
+                                    canFocusPreviousTrack to previousTrackFocusRequester,
+                                    canFocusRepeatMode to repeatModeFocusRequester,
+                                    canFocusPlayPause to playPauseFocusRequester,
+                                    canFocusStop to stopFocusRequester
+                                ) ?: stopFocusRequester
+                                down = firstAvailableRequester(
+                                    canFocusSubtuneSelector to subtuneSelectorFocusRequester,
+                                    canFocusPreviousSubtune to previousSubtuneFocusRequester,
+                                    canFocusNextSubtune to nextSubtuneFocusRequester,
+                                    (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: stopFocusRequester)
+                                ) ?: stopFocusRequester
+                            }
+                            .playerFocusHalo()
+                            .focusable(),
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -2020,7 +2361,33 @@ private fun TransportControls(
                     FilledTonalIconButton(
                         onClick = onNextTrack,
                         enabled = hasTrack && canNextTrack,
-                        modifier = Modifier.size(sideButtonSize),
+                        modifier = Modifier
+                            .focusRequester(nextTrackFocusRequester)
+                            .size(sideButtonSize)
+                            .focusProperties {
+                                left = firstAvailableRequester(
+                                    canFocusStop to stopFocusRequester,
+                                    canFocusPlayPause to playPauseFocusRequester,
+                                    canFocusRepeatMode to repeatModeFocusRequester,
+                                    canFocusPreviousTrack to previousTrackFocusRequester,
+                                    canFocusNextTrack to nextTrackFocusRequester
+                                ) ?: nextTrackFocusRequester
+                                right = firstAvailableRequester(
+                                    canFocusPreviousTrack to previousTrackFocusRequester,
+                                    canFocusRepeatMode to repeatModeFocusRequester,
+                                    canFocusPlayPause to playPauseFocusRequester,
+                                    canFocusStop to stopFocusRequester,
+                                    canFocusNextTrack to nextTrackFocusRequester
+                                ) ?: nextTrackFocusRequester
+                                down = firstAvailableRequester(
+                                    canFocusNextSubtune to nextSubtuneFocusRequester,
+                                    canFocusSubtuneSelector to subtuneSelectorFocusRequester,
+                                    canFocusPreviousSubtune to previousSubtuneFocusRequester,
+                                    (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: nextTrackFocusRequester)
+                                ) ?: nextTrackFocusRequester
+                            }
+                            .playerFocusHalo(enabled = hasTrack && canNextTrack)
+                            .focusable(enabled = hasTrack && canNextTrack),
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -2052,7 +2419,33 @@ private fun TransportControls(
                 FilledTonalIconButton(
                     onClick = onPreviousSubtune,
                     enabled = canPreviousSubtune,
-                    modifier = Modifier.size(subtuneButtonSize),
+                    modifier = Modifier
+                        .focusRequester(previousSubtuneFocusRequester)
+                        .size(subtuneButtonSize)
+                        .focusProperties {
+                            left = firstAvailableRequester(
+                                canFocusNextSubtune to nextSubtuneFocusRequester,
+                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
+                                canFocusPreviousSubtune to previousSubtuneFocusRequester
+                            ) ?: previousSubtuneFocusRequester
+                            right = firstAvailableRequester(
+                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
+                                canFocusNextSubtune to nextSubtuneFocusRequester,
+                                canFocusPreviousSubtune to previousSubtuneFocusRequester
+                            ) ?: previousSubtuneFocusRequester
+                            up = firstAvailableRequester(
+                                canFocusPreviousTrack to previousTrackFocusRequester,
+                                canFocusRepeatMode to repeatModeFocusRequester,
+                                canFocusPlayPause to playPauseFocusRequester,
+                                canFocusStop to stopFocusRequester,
+                                canFocusNextTrack to nextTrackFocusRequester
+                            ) ?: previousSubtuneFocusRequester
+                            if (actionStripFirstFocusRequester != null) {
+                                down = actionStripFirstFocusRequester
+                            }
+                        }
+                        .playerFocusHalo(enabled = canPreviousSubtune)
+                        .focusable(enabled = canPreviousSubtune),
                     shape = CircleShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -2067,7 +2460,33 @@ private fun TransportControls(
                 FilledTonalIconButton(
                     onClick = onOpenSubtuneSelector,
                     enabled = canOpenSubtuneSelector,
-                    modifier = Modifier.size(subtuneButtonSize),
+                    modifier = Modifier
+                        .focusRequester(subtuneSelectorFocusRequester)
+                        .size(subtuneButtonSize)
+                        .focusProperties {
+                            left = firstAvailableRequester(
+                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
+                                canFocusNextSubtune to nextSubtuneFocusRequester,
+                                canFocusSubtuneSelector to subtuneSelectorFocusRequester
+                            ) ?: subtuneSelectorFocusRequester
+                            right = firstAvailableRequester(
+                                canFocusNextSubtune to nextSubtuneFocusRequester,
+                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
+                                canFocusSubtuneSelector to subtuneSelectorFocusRequester
+                            ) ?: subtuneSelectorFocusRequester
+                            up = firstAvailableRequester(
+                                canFocusPlayPause to playPauseFocusRequester,
+                                canFocusRepeatMode to repeatModeFocusRequester,
+                                canFocusStop to stopFocusRequester,
+                                canFocusPreviousTrack to previousTrackFocusRequester,
+                                canFocusNextTrack to nextTrackFocusRequester
+                            ) ?: subtuneSelectorFocusRequester
+                            if (actionStripFirstFocusRequester != null) {
+                                down = actionStripFirstFocusRequester
+                            }
+                        }
+                        .playerFocusHalo(enabled = canOpenSubtuneSelector)
+                        .focusable(enabled = canOpenSubtuneSelector),
                     shape = CircleShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -2082,7 +2501,33 @@ private fun TransportControls(
                 FilledTonalIconButton(
                     onClick = onNextSubtune,
                     enabled = canNextSubtune,
-                    modifier = Modifier.size(subtuneButtonSize),
+                    modifier = Modifier
+                        .focusRequester(nextSubtuneFocusRequester)
+                        .size(subtuneButtonSize)
+                        .focusProperties {
+                            left = firstAvailableRequester(
+                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
+                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
+                                canFocusNextSubtune to nextSubtuneFocusRequester
+                            ) ?: nextSubtuneFocusRequester
+                            right = firstAvailableRequester(
+                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
+                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
+                                canFocusNextSubtune to nextSubtuneFocusRequester
+                            ) ?: nextSubtuneFocusRequester
+                            up = firstAvailableRequester(
+                                canFocusNextTrack to nextTrackFocusRequester,
+                                canFocusStop to stopFocusRequester,
+                                canFocusPlayPause to playPauseFocusRequester,
+                                canFocusRepeatMode to repeatModeFocusRequester,
+                                canFocusPreviousTrack to previousTrackFocusRequester
+                            ) ?: nextSubtuneFocusRequester
+                            if (actionStripFirstFocusRequester != null) {
+                                down = actionStripFirstFocusRequester
+                            }
+                        }
+                        .playerFocusHalo(enabled = canNextSubtune)
+                        .focusable(enabled = canNextSubtune),
                     shape = CircleShape,
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -2108,8 +2553,21 @@ private fun FutureActionStrip(
     onOpenVisualizationPicker: () -> Unit,
     onOpenAudioEffects: () -> Unit,
     onOpenChannelControls: () -> Unit,
-    layoutScale: Float = 1f
+    layoutScale: Float = 1f,
+    actionStripFirstFocusRequester: FocusRequester? = null,
+    transportAnchorFocusRequester: FocusRequester? = null
 ) {
+    val visualizationModeFocusRequester = actionStripFirstFocusRequester ?: remember { FocusRequester() }
+    val coreSettingsFocusRequester = remember { FocusRequester() }
+    val audioEffectsFocusRequester = remember { FocusRequester() }
+    val channelControlsFocusRequester = remember { FocusRequester() }
+    val canFocusVisualizationMode = true
+    val canFocusCoreSettings = canOpenCoreSettings
+    val canFocusAudioEffects = true
+    val canFocusChannelControls = true
+    fun firstAvailableActionRequester(vararg options: Pair<Boolean, FocusRequester>): FocusRequester? {
+        return options.firstOrNull { it.first }?.second
+    }
     BoxWithConstraints(modifier = modifier) {
         val tabletWidthScale = normalizedScale(maxWidth, compactDp = 560.dp, roomyDp = 980.dp)
         val widthBias = lerpFloat(0.92f, 1.04f, layoutScale)
@@ -2140,7 +2598,27 @@ private fun FutureActionStrip(
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     modifier = Modifier
                         .size(iconButtonSize)
+                        .focusRequester(visualizationModeFocusRequester)
+                        .focusProperties {
+                            left = firstAvailableActionRequester(
+                                canFocusChannelControls to channelControlsFocusRequester,
+                                canFocusAudioEffects to audioEffectsFocusRequester,
+                                canFocusCoreSettings to coreSettingsFocusRequester,
+                                canFocusVisualizationMode to visualizationModeFocusRequester
+                            ) ?: visualizationModeFocusRequester
+                            right = firstAvailableActionRequester(
+                                canFocusCoreSettings to coreSettingsFocusRequester,
+                                canFocusAudioEffects to audioEffectsFocusRequester,
+                                canFocusChannelControls to channelControlsFocusRequester,
+                                canFocusVisualizationMode to visualizationModeFocusRequester
+                            ) ?: visualizationModeFocusRequester
+                            if (transportAnchorFocusRequester != null) {
+                                up = transportAnchorFocusRequester
+                            }
+                        }
                         .clip(CircleShape)
+                        .playerFocusHalo(shape = CircleShape)
+                        .focusable()
                         .combinedClickable(
                             onClick = onCycleVisualizationMode,
                             onLongClick = onOpenVisualizationPicker
@@ -2158,7 +2636,28 @@ private fun FutureActionStrip(
                 IconButton(
                     onClick = onOpenCoreSettings,
                     enabled = canOpenCoreSettings,
-                    modifier = Modifier.size(iconButtonSize)
+                    modifier = Modifier
+                        .size(iconButtonSize)
+                        .focusRequester(coreSettingsFocusRequester)
+                        .focusProperties {
+                            left = firstAvailableActionRequester(
+                                canFocusVisualizationMode to visualizationModeFocusRequester,
+                                canFocusChannelControls to channelControlsFocusRequester,
+                                canFocusAudioEffects to audioEffectsFocusRequester,
+                                canFocusCoreSettings to coreSettingsFocusRequester
+                            ) ?: coreSettingsFocusRequester
+                            right = firstAvailableActionRequester(
+                                canFocusAudioEffects to audioEffectsFocusRequester,
+                                canFocusChannelControls to channelControlsFocusRequester,
+                                canFocusVisualizationMode to visualizationModeFocusRequester,
+                                canFocusCoreSettings to coreSettingsFocusRequester
+                            ) ?: coreSettingsFocusRequester
+                            if (transportAnchorFocusRequester != null) {
+                                up = transportAnchorFocusRequester
+                            }
+                        }
+                        .playerFocusHalo(enabled = canOpenCoreSettings, shape = CircleShape)
+                        .focusable(enabled = canOpenCoreSettings)
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_settings_applications),
@@ -2169,7 +2668,28 @@ private fun FutureActionStrip(
                 IconButton(
                     onClick = onOpenAudioEffects,
                     enabled = true,
-                    modifier = Modifier.size(iconButtonSize)
+                    modifier = Modifier
+                        .size(iconButtonSize)
+                        .focusRequester(audioEffectsFocusRequester)
+                        .focusProperties {
+                            left = firstAvailableActionRequester(
+                                canFocusCoreSettings to coreSettingsFocusRequester,
+                                canFocusVisualizationMode to visualizationModeFocusRequester,
+                                canFocusChannelControls to channelControlsFocusRequester,
+                                canFocusAudioEffects to audioEffectsFocusRequester
+                            ) ?: audioEffectsFocusRequester
+                            right = firstAvailableActionRequester(
+                                canFocusChannelControls to channelControlsFocusRequester,
+                                canFocusVisualizationMode to visualizationModeFocusRequester,
+                                canFocusCoreSettings to coreSettingsFocusRequester,
+                                canFocusAudioEffects to audioEffectsFocusRequester
+                            ) ?: audioEffectsFocusRequester
+                            if (transportAnchorFocusRequester != null) {
+                                up = transportAnchorFocusRequester
+                            }
+                        }
+                        .playerFocusHalo(shape = CircleShape)
+                        .focusable()
                 ) {
                     Icon(
                         imageVector = Icons.Default.Tune,
@@ -2180,7 +2700,28 @@ private fun FutureActionStrip(
                 IconButton(
                     onClick = onOpenChannelControls,
                     enabled = true,
-                    modifier = Modifier.size(iconButtonSize)
+                    modifier = Modifier
+                        .size(iconButtonSize)
+                        .focusRequester(channelControlsFocusRequester)
+                        .focusProperties {
+                            left = firstAvailableActionRequester(
+                                canFocusAudioEffects to audioEffectsFocusRequester,
+                                canFocusCoreSettings to coreSettingsFocusRequester,
+                                canFocusVisualizationMode to visualizationModeFocusRequester,
+                                canFocusChannelControls to channelControlsFocusRequester
+                            ) ?: channelControlsFocusRequester
+                            right = firstAvailableActionRequester(
+                                canFocusVisualizationMode to visualizationModeFocusRequester,
+                                canFocusCoreSettings to coreSettingsFocusRequester,
+                                canFocusAudioEffects to audioEffectsFocusRequester,
+                                canFocusChannelControls to channelControlsFocusRequester
+                            ) ?: channelControlsFocusRequester
+                            if (transportAnchorFocusRequester != null) {
+                                up = transportAnchorFocusRequester
+                            }
+                        }
+                        .playerFocusHalo(shape = CircleShape)
+                        .focusable()
                 ) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_airwave),
@@ -2582,6 +3123,8 @@ private fun TimelineSection(
     canSeek: Boolean,
     hasReliableDuration: Boolean,
     seekInProgress: Boolean,
+    focusRequester: FocusRequester? = null,
+    upFocusRequester: FocusRequester? = null,
     layoutScale: Float = 1f,
     onSeekInteractionChanged: (Boolean) -> Unit,
     onSliderValueChange: (Float) -> Unit,
@@ -2611,6 +3154,18 @@ private fun TimelineSection(
             onValueChange = onSliderValueChange,
             onValueChangeFinished = onSliderValueChangeFinished,
             modifier = Modifier
+                .then(
+                    if (focusRequester != null) {
+                        Modifier.focusRequester(focusRequester)
+                    } else {
+                        Modifier
+                    }
+                )
+                .focusProperties {
+                    if (upFocusRequester != null) {
+                        up = upFocusRequester
+                    }
+                }
                 .fillMaxWidth()
                 .height(sliderHeight)
         )
@@ -2680,6 +3235,30 @@ private fun LineageStyleSeekBar(
 
     Canvas(
         modifier = modifier
+            .playerFocusHalo(enabled = true, shape = RoundedCornerShape(10.dp))
+            .focusable()
+            .onPreviewKeyEvent { keyEvent ->
+                if (
+                    !enabled ||
+                    maxValue <= 0f ||
+                    keyEvent.nativeKeyEvent.action != android.view.KeyEvent.ACTION_DOWN
+                ) {
+                    return@onPreviewKeyEvent false
+                }
+                when (keyEvent.key) {
+                    Key.DirectionLeft -> {
+                        onValueChange((value - 5f).coerceIn(0f, maxValue))
+                        onValueChangeFinished()
+                        true
+                    }
+                    Key.DirectionRight -> {
+                        onValueChange((value + 5f).coerceIn(0f, maxValue))
+                        onValueChangeFinished()
+                        true
+                    }
+                    else -> false
+                }
+            }
             .pointerInteropFilter { event ->
                 if (!enabled || barWidthPx <= 0f || maxValue <= 0f) return@pointerInteropFilter false
                 val centerY = barHeightPx / 2f

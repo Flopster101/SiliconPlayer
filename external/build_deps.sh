@@ -40,7 +40,7 @@ DEP_OPT_FLAGS="$DEP_WARN_FLAGS -Ofast"
 # Architecture independent variables
 # Default ABI pool for "all" targets.
 # Keep x86 support available when explicitly requested, but exclude it from "all".
-ABIS=("arm64-v8a" "armeabi-v7a" "x86_64")
+DEFAULT_ABIS=("arm64-v8a" "armeabi-v7a" "x86_64")
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 ABSOLUTE_PATH="$SCRIPT_DIR"
 PATCHES_DIR="$ABSOLUTE_PATH/patches/libopenmpt"
@@ -687,6 +687,16 @@ build_libopenmpt() {
 
     local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
     local PROJECT_PATH="$ABSOLUTE_PATH/libopenmpt"
+    local OPENMPT_LIB="$INSTALL_DIR/lib/$ABI/libopenmpt.a"
+    local OPENMPT_HEADER="$INSTALL_DIR/include/libopenmpt/libopenmpt.h"
+    local OPENMPT_STAMP="$INSTALL_DIR/lib/.libopenmpt_build_stamp"
+    local OPENMPT_STAMP_EXPECTED="api=$ANDROID_API"
+
+    if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$OPENMPT_LIB" ] && [ -f "$OPENMPT_HEADER" ] && \
+       [ -f "$OPENMPT_STAMP" ] && [ "$(cat "$OPENMPT_STAMP" 2>/dev/null)" = "$OPENMPT_STAMP_EXPECTED" ]; then
+        echo "libopenmpt already built for $ABI -> skipping"
+        return 0
+    fi
 
     mkdir -p "$INSTALL_DIR"
     mkdir -p "$INSTALL_DIR"
@@ -732,6 +742,9 @@ build_libopenmpt() {
     # Also stream callbacks?
     cp "$ABSOLUTE_PATH/libopenmpt/libopenmpt/libopenmpt_stream_callbacks_file.h" "$INSTALL_DIR/include/libopenmpt/" || true
     cp "$ABSOLUTE_PATH/libopenmpt/libopenmpt/libopenmpt_stream_callbacks_fd.h" "$INSTALL_DIR/include/libopenmpt/" || true
+
+    mkdir -p "$INSTALL_DIR/lib"
+    printf '%s\n' "$OPENMPT_STAMP_EXPECTED" > "$OPENMPT_STAMP"
 }
 
 # -----------------------------------------------------------------------------
@@ -1823,6 +1836,17 @@ build_uade() {
     local HOST_VASM_WRAPPER_DIR="$BUILD_DIR/.host-tools"
     local HOST_VASM_WRAPPER="$HOST_VASM_WRAPPER_DIR/vasm.vasmm68k-mot"
     local HOST_NATIVE_CC=""
+    local UADE_LIB="$INSTALL_DIR/lib/libuade.a"
+    local UADE_HEADER="$INSTALL_DIR/include/uade/uade.h"
+    local UADE_CORE="$INSTALL_DIR/lib/uade/uadecore"
+    local UADE_STAMP="$INSTALL_DIR/lib/.uade_build_stamp"
+    local UADE_STAMP_EXPECTED="api=$ANDROID_API"
+
+    if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$UADE_LIB" ] && [ -f "$UADE_HEADER" ] && [ -f "$UADE_CORE" ] && \
+       [ -f "$UADE_STAMP" ] && [ "$(cat "$UADE_STAMP" 2>/dev/null)" = "$UADE_STAMP_EXPECTED" ]; then
+        echo "uade already built for $ABI -> skipping"
+        return 0
+    fi
 
     if [ ! -d "$PROJECT_PATH" ]; then
         echo "uade source not found at $PROJECT_PATH (skipping)."
@@ -1950,6 +1974,9 @@ EOF
     cp "$PROJECT_PATH/eagleplayer.conf" "$INSTALL_DIR/share/uade/eagleplayer.conf"
     rm -rf "$INSTALL_DIR/share/uade/players"
     cp -R "$PROJECT_PATH/players" "$INSTALL_DIR/share/uade/players"
+
+    mkdir -p "$INSTALL_DIR/lib"
+    printf '%s\n' "$UADE_STAMP_EXPECTED" > "$UADE_STAMP"
 }
 
 # -----------------------------------------------------------------------------
@@ -2414,6 +2441,12 @@ if [ "$FORCE_CLEAN" -eq 1 ]; then
     echo "Clean mode enabled: forcing rebuilds (skip checks disabled)."
 fi
 
+# Resolve effective ABI list for this invocation.
+ABIS=("${DEFAULT_ABIS[@]}")
+if [ "$TARGET_ABI" = "x86" ]; then
+    ABIS=("x86")
+fi
+
 # -----------------------------------------------------------------------------
 # Pre-build setup (Apply patches once)
 # -----------------------------------------------------------------------------
@@ -2456,10 +2489,12 @@ fi
 # -----------------------------------------------------------------------------
 # Main Loop
 # -----------------------------------------------------------------------------
+processed_abis=0
 for ABI in "${ABIS[@]}"; do
     if [ "$TARGET_ABI" != "all" ] && [ "$TARGET_ABI" != "$ABI" ]; then
         continue
     fi
+    processed_abis=$((processed_abis + 1))
 
     echo "========================================"
     echo "Processing ABI: $ABI"
@@ -2591,5 +2626,10 @@ for ABI in "${ABIS[@]}"; do
         build_furnace "$ABI"
     fi
 done
+
+if [ "$processed_abis" -eq 0 ]; then
+    echo "Error: no ABI was processed for TARGET_ABI='$TARGET_ABI'."
+    exit 1
+fi
 
 echo "Build complete!"

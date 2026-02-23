@@ -1027,7 +1027,12 @@ private fun detectStorageLocations(context: Context): List<StorageLocation> {
             )
         }
 
-    val storageManager = context.getSystemService(StorageManager::class.java)
+    val storageManager: StorageManager? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        context.getSystemService(StorageManager::class.java)
+    } else {
+        @Suppress("DEPRECATION")
+        context.getSystemService(Context.STORAGE_SERVICE) as? StorageManager
+    }
     val removableFromVolumes = mutableSetOf<String>()
     data class RemovableVolumeCandidate(
         val root: File,

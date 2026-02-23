@@ -2,11 +2,13 @@ package com.flopster101.siliconplayer
 
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.ImageBitmap
 import java.io.File
 
 @Composable
 internal fun BoxScope.AppNavigationPlayerOverlaysSection(
+    miniPlayerFocusRequester: FocusRequester,
     isPlayerSurfaceVisible: Boolean,
     isPlayerExpanded: Boolean,
     miniExpandPreviewProgress: Float,
@@ -82,6 +84,7 @@ internal fun BoxScope.AppNavigationPlayerOverlaysSection(
     onCycleRepeatMode: () -> Unit
 ) {
     MiniPlayerOverlayHost(
+        miniPlayerFocusRequester = miniPlayerFocusRequester,
         isPlayerSurfaceVisible = isPlayerSurfaceVisible,
         isPlayerExpanded = isPlayerExpanded,
         miniExpandPreviewProgress = miniExpandPreviewProgress,

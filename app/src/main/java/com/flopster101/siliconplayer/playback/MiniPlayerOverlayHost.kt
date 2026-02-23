@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -9,20 +10,38 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.ui.screens.PlayerScreen
 import java.io.File
@@ -31,6 +50,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BoxScope.MiniPlayerOverlayHost(
+    miniPlayerFocusRequester: FocusRequester,
     isPlayerSurfaceVisible: Boolean,
     isPlayerExpanded: Boolean,
     miniExpandPreviewProgress: Float,
@@ -91,6 +111,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
     onOpenAudioEffects: () -> Unit
 ) {
     val uiScope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
 
     if (isPlayerSurfaceVisible && !isPlayerExpanded && miniExpandPreviewProgress > 0f) {
         val previewProgress = miniExpandPreviewProgress.coerceIn(0f, 1f)
@@ -177,6 +198,12 @@ internal fun BoxScope.MiniPlayerOverlayHost(
         exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(),
         modifier = Modifier.align(Alignment.BottomCenter)
     ) {
+        var miniPlayerHasFocus by remember { mutableStateOf(false) }
+        val miniPlayerFocusHighlight by animateFloatAsState(
+            targetValue = if (miniPlayerHasFocus) 1f else 0f,
+            animationSpec = tween(durationMillis = 180, easing = LinearOutSlowInEasing),
+            label = "miniPlayerFocusHighlight"
+        )
         val dismissState = rememberSwipeToDismissBoxState(
             positionalThreshold = { totalDistance -> totalDistance * 0.6f },
             confirmValueChange = { targetValue ->
@@ -198,6 +225,21 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 alpha = (1f - dragProgress).coerceIn(alphaFloor, 1f)
                 translationY = -miniPreviewLiftPx * dragProgress
             }
+            .onFocusChanged { state -> miniPlayerHasFocus = state.hasFocus }
+            .focusRequester(miniPlayerFocusRequester)
+            .focusable()
+            .onPreviewKeyEvent { keyEvent ->
+                if (keyEvent.type != KeyEventType.KeyDown || keyEvent.key != Key.DirectionUp) {
+                    return@onPreviewKeyEvent false
+                }
+                focusManager.moveFocus(FocusDirection.Up)
+            }
+            .clip(MaterialTheme.shapes.large)
+            .border(
+                width = (1.4f * miniPlayerFocusHighlight).dp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.58f * miniPlayerFocusHighlight),
+                shape = MaterialTheme.shapes.large
+            )
             .padding(horizontal = 14.dp, vertical = 6.dp)
 
         val miniPlayerContent: @Composable () -> Unit = {

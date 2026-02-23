@@ -277,6 +277,7 @@ private fun AppNavigation(
     var tempForceMono by remember { mutableStateOf(false) }
 
     var currentView by remember { mutableStateOf(MainView.Home) }
+    val miniPlayerFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.Root) }
     var settingsRouteHistory by remember { mutableStateOf<List<SettingsRoute>>(emptyList()) }
     var selectedPluginName by remember { mutableStateOf<String?>(null) }
@@ -1502,6 +1503,7 @@ private fun AppNavigation(
             onShowAudioEffectsDialogChanged = { showAudioEffectsDialog = it }
         )
         AppNavigationPlayerOverlaysSection(
+            miniPlayerFocusRequester = miniPlayerFocusRequester,
             isPlayerSurfaceVisible = isPlayerSurfaceVisible,
             isPlayerExpanded = isPlayerExpanded,
             miniExpandPreviewProgress = miniExpandPreviewProgress,
@@ -2296,6 +2298,8 @@ private fun AppNavigation(
     Box(modifier = Modifier.fillMaxSize()) {
         AppNavigationMainScaffoldSection(
             currentView = currentView,
+            canFocusMiniPlayer = isPlayerSurfaceVisible && !isPlayerExpanded,
+            requestMiniPlayerFocus = { miniPlayerFocusRequester.requestFocus() },
             onOpenPlayerSurface = {
                 isPlayerSurfaceVisible = true
                 isPlayerExpanded = true

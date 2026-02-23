@@ -6,6 +6,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import java.io.File
 
 @Composable
@@ -95,6 +103,8 @@ internal fun AppNavigationSettingsRouteSection(
 @Composable
 internal fun AppNavigationMainScaffoldSection(
     currentView: MainView,
+    canFocusMiniPlayer: Boolean,
+    requestMiniPlayerFocus: () -> Unit,
     onOpenPlayerSurface: () -> Unit,
     onHomeRequested: () -> Unit,
     onSettingsRequested: () -> Unit,
@@ -102,7 +112,31 @@ internal fun AppNavigationMainScaffoldSection(
     browserContent: @Composable (PaddingValues) -> Unit,
     settingsContent: @Composable (PaddingValues) -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
+    val focusManager = LocalFocusManager.current
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { keyEvent ->
+                if (!canFocusMiniPlayer || keyEvent.type != KeyEventType.KeyDown) {
+                    return@onPreviewKeyEvent false
+                }
+                val moveDirection = when (keyEvent.key) {
+                    Key.DirectionLeft -> FocusDirection.Left
+                    Key.DirectionRight -> FocusDirection.Right
+                    else -> null
+                }
+                if (moveDirection == null) {
+                    return@onPreviewKeyEvent false
+                }
+                val movedWithinMainContent = focusManager.moveFocus(moveDirection)
+                if (movedWithinMainContent) {
+                    true
+                } else {
+                    requestMiniPlayerFocus()
+                    true
+                }
+            }
+    ) {
         MainNavigationScaffold(
             currentView = currentView,
             onOpenPlayerSurface = onOpenPlayerSurface,

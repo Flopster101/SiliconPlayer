@@ -32,6 +32,40 @@ object NativeBridge {
         )
     }
 
+    @JvmStatic
+    fun createAudioTrackOutput(
+        sampleRate: Int,
+        bufferFrames: Int,
+        performanceMode: Int,
+        bufferPreset: Int
+    ): Boolean {
+        return AudioTrackOutputBackend.create(
+            sampleRate = sampleRate,
+            bufferFrames = bufferFrames,
+            performanceMode = performanceMode,
+            bufferPreset = bufferPreset
+        )
+    }
+
+    @JvmStatic
+    fun startAudioTrackOutput(): Boolean = AudioTrackOutputBackend.start()
+
+    @JvmStatic
+    fun stopAudioTrackOutput() {
+        AudioTrackOutputBackend.stop()
+    }
+
+    @JvmStatic
+    fun releaseAudioTrackOutput() {
+        AudioTrackOutputBackend.release()
+    }
+
+    @JvmStatic
+    fun writeAudioTrackOutput(pcmData: ShortArray, sampleCount: Int): Int {
+        val clampedSampleCount = sampleCount.coerceIn(0, pcmData.size)
+        return AudioTrackOutputBackend.writeBlocking(pcmData, clampedSampleCount)
+    }
+
     external fun startEngine()
     external fun startEngineWithPauseResumeFade()
     external fun stopEngine()

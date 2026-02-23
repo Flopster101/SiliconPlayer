@@ -104,16 +104,22 @@ bool AudioEngine::start() {
         clearRenderQueue();
         isPlaying = true;
         naturalEndPending.store(false);
-        const bool openSlActive = activeOutputBackend.load(std::memory_order_relaxed) == 2;
+        const int activeBackend = activeOutputBackend.load(std::memory_order_relaxed);
+        const bool openSlActive = activeBackend == 2;
+        const bool audioTrackActive = activeBackend == 3;
+        const bool bufferedNonAaudioActive = openSlActive || audioTrackActive;
         const int startupChunkFrames = std::max(256, renderWorkerChunkFrames.load(std::memory_order_relaxed));
         int startupBaseTargetFrames = std::max(
                 startupChunkFrames * 2,
                 std::min(renderWorkerTargetFrames.load(std::memory_order_relaxed), 4096)
         );
-        if (openSlActive) {
+        if (bufferedNonAaudioActive) {
+            const int backendTargetFrames = openSlActive
+                    ? (openSlBufferFrames * AudioEngine::kOpenSlBufferQueueCount * kOpenSlStartupQueueMultiplier)
+                    : (audioTrackBufferFrames * 3);
             startupBaseTargetFrames = std::max(
                     startupBaseTargetFrames,
-                    openSlBufferFrames * AudioEngine::kOpenSlBufferQueueCount * kOpenSlStartupQueueMultiplier
+                    backendTargetFrames
             );
         }
         int startupPrerollFrames = 0;
@@ -130,7 +136,7 @@ bool AudioEngine::start() {
         const int startupTargetFrames = startupBaseTargetFrames + startupPrerollFrames;
         renderWorkerCv.notify_one();
         const auto prefillDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(
-                openSlActive ? kStartupPrefillDeadlineOpenSlMs : kStartupPrefillDeadlineAaudioMs
+                bufferedNonAaudioActive ? kStartupPrefillDeadlineOpenSlMs : kStartupPrefillDeadlineAaudioMs
         );
         while (renderQueueFrames() < startupTargetFrames &&
                std::chrono::steady_clock::now() < prefillDeadline) {

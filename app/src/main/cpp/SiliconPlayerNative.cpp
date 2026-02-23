@@ -2,6 +2,7 @@
 #include <string>
 #include <cstdint>
 #include "AudioEngine.h"
+#include "AudioTrackJniBridge.h"
 #include "decoders/DecoderRegistry.h"
 #include "decoders/UadeDecoder.h"
 #include <vector>
@@ -88,7 +89,23 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     if (gResolveArchiveCompanionMethod == nullptr) {
         return JNI_ERR;
     }
+    if (!initAudioTrackJniBridge(vm, env)) {
+        return JNI_ERR;
+    }
     return JNI_VERSION_1_6;
+}
+
+extern "C" JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void*) {
+    JNIEnv* env = nullptr;
+    if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK || env == nullptr) {
+        return;
+    }
+    shutdownAudioTrackJniBridge(env);
+    if (gNativeBridgeClass != nullptr) {
+        env->DeleteGlobalRef(gNativeBridgeClass);
+        gNativeBridgeClass = nullptr;
+    }
+    gResolveArchiveCompanionMethod = nullptr;
 }
 
 static void ensureEngine() {

@@ -256,6 +256,11 @@ private:
     size_t openSlNextBufferIndex = 0;
     int openSlBufferFrames = 1024;
     std::atomic<bool> openSlStopAfterCurrentBuffer { false };
+    std::thread audioTrackWriteThread;
+    std::vector<float> audioTrackFloatBuffer;
+    std::vector<int16_t> audioTrackPcmBuffer;
+    int audioTrackBufferFrames = 2048;
+    std::atomic<bool> audioTrackStopRequested { false };
     int streamSampleRate = 48000;
     int streamChannelCount = 2;
     bool streamStartupPrerollPending = true;
@@ -348,10 +353,13 @@ private:
     int getStreamBurstFrames() const;
     bool createAaudioStream();
     bool createOpenSlStream();
+    bool createAudioTrackStream();
     void closeAaudioStream();
     void closeOpenSlStream();
+    void closeAudioTrackStream();
     bool renderOutputCallbackFrames(float* outputData, int32_t numFrames, int callbackRate);
     bool enqueueOpenSlBuffer(bool allowUnderrun = true);
+    void audioTrackRenderLoop();
 
     void createStream();
     void closeStream();

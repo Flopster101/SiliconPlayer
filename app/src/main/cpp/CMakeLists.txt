@@ -19,6 +19,7 @@ add_library(
         siliconplayer
         SHARED
         SiliconPlayerNative.cpp
+        AudioTrackJniBridge.cpp
         AudioEngine.cpp
         AudioEngineStream.cpp
         AudioEngineRender.cpp

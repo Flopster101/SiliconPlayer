@@ -1,4 +1,5 @@
 #include "AudioEngine.h"
+#include "AudioTrackJniBridge.h"
 
 #include <android/log.h>
 #include <algorithm>
@@ -13,8 +14,23 @@ namespace {
     constexpr int kOpenSlStartupReadyWaitMs = 420;
     constexpr int kOpenSlStartupStrictEnqueueWaitMs = 220;
     constexpr int kOpenSlStartupPollIntervalMs = 2;
+    constexpr int kAudioTrackStartupReadyWaitMs = 240;
+    constexpr int kAudioTrackStartupPollIntervalMs = 2;
 
     int openSlBufferFramesForPreset(int bufferPreset) {
+        switch (bufferPreset) {
+            case 1:
+                return 1024;
+            case 3:
+                return 4096;
+            case 0:
+            case 2:
+            default:
+                return 2048;
+        }
+    }
+
+    int audioTrackBufferFramesForPreset(int bufferPreset) {
         switch (bufferPreset) {
             case 1:
                 return 1024;
@@ -198,6 +214,41 @@ bool AudioEngine::createOpenSlStream() {
     return true;
 }
 
+bool AudioEngine::createAudioTrackStream() {
+    streamSampleRate = streamSampleRate > 0 ? streamSampleRate : 48000;
+    streamChannelCount = 2;
+    audioTrackBufferFrames = audioTrackBufferFramesForPreset(outputBufferPreset);
+    audioTrackFloatBuffer.assign(static_cast<size_t>(audioTrackBufferFrames) * 2u, 0.0f);
+    audioTrackPcmBuffer.assign(static_cast<size_t>(audioTrackBufferFrames) * 2u, 0);
+    audioTrackStopRequested.store(false, std::memory_order_relaxed);
+
+    if (!createAudioTrackOutput(
+            streamSampleRate,
+            audioTrackBufferFrames,
+            outputPerformanceMode,
+            outputBufferPreset
+    )) {
+        closeAudioTrackStream();
+        LOGE("AudioTrack output creation failed");
+        return false;
+    }
+
+    activeOutputBackend.store(3, std::memory_order_relaxed);
+    outputStreamReady.store(true, std::memory_order_relaxed);
+    streamStartupPrerollPending = true;
+    LOGD(
+            "AudioTrack stream opened: sampleRate=%d, channels=%d, backendPref=%d, perfMode=%d, bufferPreset=%d, frames=%d, allowFallback=%d",
+            streamSampleRate,
+            streamChannelCount,
+            outputBackendPreference,
+            outputPerformanceMode,
+            outputBufferPreset,
+            audioTrackBufferFrames,
+            outputAllowFallback ? 1 : 0
+    );
+    return true;
+}
+
 void AudioEngine::createStream() {
     closeStream();
 
@@ -209,8 +260,7 @@ void AudioEngine::createStream() {
             return createOpenSlStream();
         }
         if (backend == 3) {
-            LOGE("AudioTrack backend is not implemented yet");
-            return false;
+            return createAudioTrackStream();
         }
         return false;
     };
@@ -228,24 +278,33 @@ void AudioEngine::createStream() {
     switch (outputBackendPreference) {
         case 1:
             addAttempt(1);
-            if (outputAllowFallback) addAttempt(2);
+            if (outputAllowFallback) {
+                addAttempt(2);
+                addAttempt(3);
+            }
             break;
         case 2:
             addAttempt(2);
-            if (outputAllowFallback) addAttempt(1);
+            if (outputAllowFallback) {
+                addAttempt(1);
+                addAttempt(3);
+            }
             break;
         case 3:
             addAttempt(3);
             if (outputAllowFallback) {
-                addAttempt(1);
                 addAttempt(2);
+                addAttempt(1);
             }
             break;
         case 0:
         default:
-            // Auto: prefer AAudio, then OpenSL fallback.
+            // Auto: prefer AAudio, then OpenSL, then AudioTrack fallback.
             addAttempt(1);
-            if (outputAllowFallback) addAttempt(2);
+            if (outputAllowFallback) {
+                addAttempt(2);
+                addAttempt(3);
+            }
             break;
     }
 
@@ -269,6 +328,13 @@ void AudioEngine::applyStreamBufferPreset() {
             buffer.assign(static_cast<size_t>(openSlBufferFrames) * 2u, 0);
         }
         LOGD("OpenSL buffer preset applied: frames=%d", openSlBufferFrames);
+        return;
+    }
+    if (backend == 3) {
+        audioTrackBufferFrames = audioTrackBufferFramesForPreset(outputBufferPreset);
+        audioTrackFloatBuffer.assign(static_cast<size_t>(audioTrackBufferFrames) * 2u, 0.0f);
+        audioTrackPcmBuffer.assign(static_cast<size_t>(audioTrackBufferFrames) * 2u, 0);
+        LOGD("AudioTrack buffer preset applied: frames=%d", audioTrackBufferFrames);
         return;
     }
 
@@ -507,6 +573,36 @@ bool AudioEngine::requestStreamStart() {
         }
         return true;
     }
+    if (backend == 3) {
+        if (!outputStreamReady.load(std::memory_order_relaxed)) {
+            return false;
+        }
+
+        const int minStartupFrames = std::max(
+                audioTrackBufferFrames * 2,
+                renderWorkerChunkFrames.load(std::memory_order_relaxed) * 2
+        );
+        const auto readyDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(
+                kAudioTrackStartupReadyWaitMs
+        );
+        while (renderQueueFrames() < minStartupFrames &&
+               std::chrono::steady_clock::now() < readyDeadline) {
+            renderWorkerCv.notify_one();
+            std::this_thread::sleep_for(std::chrono::milliseconds(kAudioTrackStartupPollIntervalMs));
+        }
+
+        audioTrackStopRequested.store(false, std::memory_order_relaxed);
+        if (!startAudioTrackOutput()) {
+            LOGE("AudioTrack start request failed");
+            return false;
+        }
+
+        if (audioTrackWriteThread.joinable()) {
+            audioTrackWriteThread.join();
+        }
+        audioTrackWriteThread = std::thread([this]() { audioTrackRenderLoop(); });
+        return true;
+    }
 
     if (stream == nullptr) {
         return false;
@@ -531,6 +627,14 @@ void AudioEngine::requestStreamStop() {
         }
         return;
     }
+    if (backend == 3) {
+        audioTrackStopRequested.store(true, std::memory_order_relaxed);
+        stopAudioTrackOutput();
+        if (audioTrackWriteThread.joinable()) {
+            audioTrackWriteThread.join();
+        }
+        return;
+    }
 
     if (stream == nullptr) {
         return;
@@ -547,6 +651,12 @@ bool AudioEngine::isStreamDisconnectedOrClosed() const {
     if (backend == 2) {
         return openSlPlayerObject == nullptr || openSlPlayerPlay == nullptr || openSlBufferQueue == nullptr;
     }
+    if (backend == 3) {
+        if (!outputStreamReady.load(std::memory_order_relaxed)) {
+            return true;
+        }
+        return isPlaying.load(std::memory_order_relaxed) && !audioTrackWriteThread.joinable();
+    }
 
     if (stream == nullptr) {
         return true;
@@ -561,6 +671,9 @@ int AudioEngine::getStreamBurstFrames() const {
     const int backend = activeOutputBackend.load(std::memory_order_relaxed);
     if (backend == 2) {
         return openSlBufferFrames;
+    }
+    if (backend == 3) {
+        return audioTrackBufferFrames;
     }
 
     if (stream == nullptr) {
@@ -645,9 +758,61 @@ void AudioEngine::closeOpenSlStream() {
     openSlNextBufferIndex = 0;
 }
 
+void AudioEngine::audioTrackRenderLoop() {
+    int callbackRate = streamSampleRate > 0 ? streamSampleRate : 48000;
+    int callbackFrames = std::max(256, audioTrackBufferFrames);
+    const size_t sampleCount = static_cast<size_t>(callbackFrames) * 2u;
+    if (audioTrackFloatBuffer.size() != sampleCount) {
+        audioTrackFloatBuffer.assign(sampleCount, 0.0f);
+    }
+    if (audioTrackPcmBuffer.size() != sampleCount) {
+        audioTrackPcmBuffer.assign(sampleCount, 0);
+    }
+
+    while (!audioTrackStopRequested.load(std::memory_order_relaxed)) {
+        const bool shouldStop = renderOutputCallbackFrames(
+                audioTrackFloatBuffer.data(),
+                callbackFrames,
+                callbackRate
+        );
+        for (size_t i = 0; i < sampleCount; ++i) {
+            const float clamped = std::clamp(audioTrackFloatBuffer[i], -1.0f, 1.0f);
+            audioTrackPcmBuffer[i] = static_cast<int16_t>(clamped * 32767.0f);
+        }
+
+        if (!writeAudioTrackOutput(audioTrackPcmBuffer.data(), static_cast<int>(sampleCount))) {
+            LOGE("AudioTrack write failed");
+            break;
+        }
+
+        if (shouldStop) {
+            audioTrackStopRequested.store(true, std::memory_order_relaxed);
+            if (callbackRate > 0) {
+                const auto drainMs = std::max(1, (callbackFrames * 1000) / callbackRate);
+                std::this_thread::sleep_for(std::chrono::milliseconds(drainMs));
+            }
+            break;
+        }
+    }
+
+    stopAudioTrackOutput();
+}
+
+void AudioEngine::closeAudioTrackStream() {
+    audioTrackStopRequested.store(true, std::memory_order_relaxed);
+    stopAudioTrackOutput();
+    if (audioTrackWriteThread.joinable()) {
+        audioTrackWriteThread.join();
+    }
+    releaseAudioTrackOutput();
+    audioTrackFloatBuffer.clear();
+    audioTrackPcmBuffer.clear();
+}
+
 void AudioEngine::closeStream() {
     closeAaudioStream();
     closeOpenSlStream();
+    closeAudioTrackStream();
     activeOutputBackend.store(0, std::memory_order_relaxed);
     outputStreamReady.store(false, std::memory_order_relaxed);
 }

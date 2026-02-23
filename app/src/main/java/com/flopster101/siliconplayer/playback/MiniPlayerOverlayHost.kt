@@ -102,6 +102,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
     playerArtworkCornerRadiusDp: Int,
     filenameDisplayMode: FilenameDisplayMode,
     filenameOnlyWhenTitleMissing: Boolean,
+    onMiniPlayerExpandRequested: () -> Unit,
     canResumeStoppedTrack: Boolean,
     onHidePlayerSurface: () -> Unit,
     onPreviousTrack: () -> Boolean,
@@ -198,6 +199,12 @@ internal fun BoxScope.MiniPlayerOverlayHost(
         exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(),
         modifier = Modifier.align(Alignment.BottomCenter)
     ) {
+        val previousButtonFocusRequester = remember { FocusRequester() }
+        val stopButtonFocusRequester = remember { FocusRequester() }
+        val playPauseButtonFocusRequester = remember { FocusRequester() }
+        val nextButtonFocusRequester = remember { FocusRequester() }
+        val canPreviousMiniTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) > 0
+        val canNextMiniTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) in 0 until (visiblePlayableFiles.size - 1)
         var miniPlayerHasFocus by remember { mutableStateOf(false) }
         val miniPlayerFocusHighlight by animateFloatAsState(
             targetValue = if (miniPlayerHasFocus) 1f else 0f,
@@ -229,10 +236,32 @@ internal fun BoxScope.MiniPlayerOverlayHost(
             .focusRequester(miniPlayerFocusRequester)
             .focusable()
             .onPreviewKeyEvent { keyEvent ->
-                if (keyEvent.type != KeyEventType.KeyDown || keyEvent.key != Key.DirectionUp) {
+                if (keyEvent.type != KeyEventType.KeyDown) {
                     return@onPreviewKeyEvent false
                 }
-                focusManager.moveFocus(FocusDirection.Up)
+                when (keyEvent.key) {
+                    Key.DirectionUp -> {
+                        focusManager.moveFocus(FocusDirection.Up)
+                        true
+                    }
+                    Key.DirectionRight -> {
+                        if (canPreviousMiniTrack) {
+                            previousButtonFocusRequester.requestFocus()
+                        } else {
+                            stopButtonFocusRequester.requestFocus()
+                        }
+                        true
+                    }
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                        onMiniPlayerExpandRequested()
+                        onCollapseFromSwipeChanged(false)
+                        onExpandFromMiniDragChanged(miniExpandPreviewProgress > 0f)
+                        onMiniExpandPreviewProgressChanged(0f)
+                        onPlayerExpandedChanged(true)
+                        true
+                    }
+                    else -> false
+                }
             }
             .clip(MaterialTheme.shapes.large)
             .border(
@@ -262,9 +291,10 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 positionSeconds = positionSeconds,
                 durationSeconds = durationSeconds,
                 hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
-                canPreviousTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) > 0,
-                canNextTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) in 0 until (visiblePlayableFiles.size - 1),
+                canPreviousTrack = canPreviousMiniTrack,
+                canNextTrack = canNextMiniTrack,
                 onExpand = {
+                    onMiniPlayerExpandRequested()
                     onCollapseFromSwipeChanged(false)
                     onExpandFromMiniDragChanged(miniExpandPreviewProgress > 0f)
                     onMiniExpandPreviewProgressChanged(0f)
@@ -276,6 +306,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 onExpandDragCommit = {
                     val start = miniExpandPreviewProgress.coerceIn(0f, 1f)
                     uiScope.launch {
+                        onMiniPlayerExpandRequested()
                         onExpandFromMiniDragChanged(true)
                         val anim = Animatable(start)
                         anim.animateTo(
@@ -291,7 +322,12 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 onPreviousTrack = { onPreviousTrack(); Unit },
                 onNextTrack = { onNextTrack(); Unit },
                 onPlayPause = onPlayPause,
-                onStopAndClear = onStopAndClear
+                onStopAndClear = onStopAndClear,
+                miniContainerFocusRequester = miniPlayerFocusRequester,
+                previousButtonFocusRequester = previousButtonFocusRequester,
+                stopButtonFocusRequester = stopButtonFocusRequester,
+                playPauseButtonFocusRequester = playPauseButtonFocusRequester,
+                nextButtonFocusRequester = nextButtonFocusRequester
             )
         }
 

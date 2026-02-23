@@ -304,6 +304,7 @@ private fun AppNavigation(
     var seekRequestedAtMs by remember { mutableLongStateOf(0L) }
     var isPlayerExpanded by remember { mutableStateOf(false) }
     var isPlayerSurfaceVisible by remember { mutableStateOf(false) }
+    var restoreMiniPlayerFocusOnCollapse by remember { mutableStateOf(false) }
     var preferredRepeatMode by remember {
         mutableStateOf(
             RepeatMode.fromStorage(
@@ -1057,6 +1058,15 @@ private fun AppNavigation(
             deferredPlaybackSeek = null
         }
     }
+    LaunchedEffect(isPlayerExpanded, isPlayerSurfaceVisible, restoreMiniPlayerFocusOnCollapse) {
+        if (!isPlayerExpanded && restoreMiniPlayerFocusOnCollapse && isPlayerSurfaceVisible) {
+            withFrameNanos { }
+            miniPlayerFocusRequester.requestFocus()
+            restoreMiniPlayerFocusOnCollapse = false
+        } else if (!isPlayerSurfaceVisible && restoreMiniPlayerFocusOnCollapse) {
+            restoreMiniPlayerFocusOnCollapse = false
+        }
+    }
 
     val playbackSessionCoordinator = buildPlaybackSessionCoordinator(
         runtimeDelegates = runtimeDelegates,
@@ -1563,6 +1573,7 @@ private fun AppNavigation(
             playerArtworkCornerRadiusDp = playerArtworkCornerRadiusDp,
             filenameDisplayMode = filenameDisplayMode,
             filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
+            onMiniPlayerExpandRequested = { restoreMiniPlayerFocusOnCollapse = true },
             canResumeStoppedTrack = canResumeStoppedTrack,
             onHidePlayerSurface = { hidePlayerSurface() },
             onPreviousTrack = { trackNavDelegates.handlePreviousTrackAction() },

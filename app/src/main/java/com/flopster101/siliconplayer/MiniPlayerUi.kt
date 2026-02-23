@@ -44,8 +44,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
@@ -128,6 +135,11 @@ internal fun MiniPlayerBar(
     onNextTrack: () -> Unit,
     onPlayPause: () -> Unit,
     onStopAndClear: () -> Unit,
+    miniContainerFocusRequester: FocusRequester,
+    previousButtonFocusRequester: FocusRequester,
+    stopButtonFocusRequester: FocusRequester,
+    playPauseButtonFocusRequester: FocusRequester,
+    nextButtonFocusRequester: FocusRequester,
     modifier: Modifier = Modifier
 ) {
     val hasTrack = file != null
@@ -295,7 +307,20 @@ internal fun MiniPlayerBar(
                     IconButton(
                         onClick = onPreviousTrack,
                         enabled = hasTrack && canPreviousTrack,
-                        modifier = Modifier.size(controlButtonSize)
+                        modifier = Modifier
+                            .focusRequester(previousButtonFocusRequester)
+                            .onPreviewKeyEvent { keyEvent ->
+                                if (
+                                    keyEvent.type == KeyEventType.KeyDown &&
+                                    keyEvent.key == Key.DirectionLeft
+                                ) {
+                                    miniContainerFocusRequester.requestFocus()
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            .size(controlButtonSize)
                     ) {
                         Icon(
                             imageVector = Icons.Default.SkipPrevious,
@@ -305,7 +330,21 @@ internal fun MiniPlayerBar(
                     }
                     IconButton(
                         onClick = onStopAndClear,
-                        modifier = Modifier.size(controlButtonSize)
+                        modifier = Modifier
+                            .focusRequester(stopButtonFocusRequester)
+                            .onPreviewKeyEvent { keyEvent ->
+                                if (
+                                    !canPreviousTrack &&
+                                    keyEvent.type == KeyEventType.KeyDown &&
+                                    keyEvent.key == Key.DirectionLeft
+                                ) {
+                                    miniContainerFocusRequester.requestFocus()
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            .size(controlButtonSize)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Stop,
@@ -318,7 +357,9 @@ internal fun MiniPlayerBar(
                         enabled = (hasTrack || canResumeStoppedTrack) &&
                             !seekInProgress &&
                             !playbackStartInProgress,
-                        modifier = Modifier.size(controlButtonSize)
+                        modifier = Modifier
+                            .focusRequester(playPauseButtonFocusRequester)
+                            .size(controlButtonSize)
                     ) {
                         if (playbackStartInProgress) {
                             CircularProgressIndicator(
@@ -344,7 +385,9 @@ internal fun MiniPlayerBar(
                     IconButton(
                         onClick = onNextTrack,
                         enabled = hasTrack && canNextTrack,
-                        modifier = Modifier.size(controlButtonSize)
+                        modifier = Modifier
+                            .focusRequester(nextButtonFocusRequester)
+                            .size(controlButtonSize)
                     ) {
                         Icon(
                             imageVector = Icons.Default.SkipNext,

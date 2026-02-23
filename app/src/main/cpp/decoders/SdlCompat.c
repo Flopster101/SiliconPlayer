@@ -25,6 +25,7 @@ struct SDL2RWopsHead {
     void* size_fn;
     void* seek_fn;
     SDL2ReadFn read_fn;
+    void* write_fn;
 };
 
 static int is_probable_code_ptr(const void* ptr) {
@@ -62,10 +63,15 @@ int SDL_UnlockMutex(SDL_mutex* mutex) {
 size_t SDL_RWread(SDL_RWops* context, void* ptr, size_t size, size_t maxnum) {
     if (!context || !ptr || size == 0 || maxnum == 0) return 0;
 
-    // Detect SDL2-like RWops first when a valid code pointer exists at the
-    // SDL2 read callback slot.
+    // Detect SDL2-like RWops only when multiple callback slots look executable.
+    // This avoids misclassifying Klystron's custom RWops (read/close/fp/int),
+    // where the fp field may reside in libc data and confuse loose heuristics.
     const struct SDL2RWopsHead* sdl2 = (const struct SDL2RWopsHead*)context;
-    if (sdl2->read_fn && is_probable_code_ptr((const void*)sdl2->read_fn)) {
+    if (sdl2->read_fn &&
+        is_probable_code_ptr((const void*)sdl2->size_fn) &&
+        is_probable_code_ptr((const void*)sdl2->seek_fn) &&
+        is_probable_code_ptr((const void*)sdl2->read_fn) &&
+        is_probable_code_ptr((const void*)sdl2->write_fn)) {
         return sdl2->read_fn(context, ptr, size, maxnum);
     }
 

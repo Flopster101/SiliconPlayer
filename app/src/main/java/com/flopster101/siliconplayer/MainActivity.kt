@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.content.pm.PackageManager
 import android.media.MediaMetadataRetriever
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -162,8 +163,9 @@ class MainActivity : ComponentActivity() {
                     )
                 )
             }
+            val systemDarkTheme = isSystemInDarkTheme()
             val darkTheme = when (themeMode) {
-                ThemeMode.Auto -> isSystemInDarkTheme()
+                ThemeMode.Auto -> resolveAutoDarkThemePreference(this@MainActivity, systemDarkTheme)
                 ThemeMode.Light -> false
                 ThemeMode.Dark -> true
             }
@@ -241,6 +243,11 @@ class MainActivity : ComponentActivity() {
             System.loadLibrary("siliconplayer")
         }
     }
+}
+
+private fun resolveAutoDarkThemePreference(context: Context, systemDarkTheme: Boolean): Boolean {
+    val isTvDevice = context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+    return if (isTvDevice) true else systemDarkTheme
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -54,12 +54,12 @@ namespace {
 bool AudioEngine::start() {
     recoverStreamIfNeeded();
 
-    if (stream == nullptr || streamNeedsRebuild.load()) {
+    if (!outputStreamReady.load(std::memory_order_relaxed) || streamNeedsRebuild.load()) {
         closeStream();
         createStream();
         streamNeedsRebuild.store(false);
     }
-    if (stream != nullptr) {
+    if (outputStreamReady.load(std::memory_order_relaxed)) {
         if (isStreamDisconnectedOrClosed()) {
             closeStream();
             createStream();
@@ -125,7 +125,7 @@ bool AudioEngine::start() {
         if (!requestStreamStart()) {
             closeStream();
             createStream();
-            if (stream == nullptr) {
+            if (!outputStreamReady.load(std::memory_order_relaxed)) {
                 isPlaying = false;
                 return false;
             }
@@ -162,7 +162,7 @@ void AudioEngine::stop() {
         return;
     }
 
-    if (stream != nullptr) {
+    if (outputStreamReady.load(std::memory_order_relaxed)) {
         resumeAfterRebuild.store(false);
         requestStreamStop();
         isPlaying = false;
@@ -478,7 +478,7 @@ void AudioEngine::seekWorkerLoop() {
             }
         }
 
-        if (stopStreamAfterSeek.exchange(false) && stream != nullptr) {
+        if (stopStreamAfterSeek.exchange(false) && outputStreamReady.load(std::memory_order_relaxed)) {
             resumeAfterRebuild.store(false);
             requestStreamStop();
         }
@@ -565,7 +565,7 @@ void AudioEngine::setRepeatMode(int mode) {
     }
 
     if (shouldStopForTerminalState) {
-        if (stream != nullptr) {
+        if (outputStreamReady.load(std::memory_order_relaxed)) {
             requestStreamStop();
         }
         isPlaying.store(false);

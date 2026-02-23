@@ -2,6 +2,8 @@
 #define SILICONPLAYER_AUDIOENGINE_H
 
 #include <aaudio/AAudio.h>
+#include <SLES/OpenSLES.h>
+#include <SLES/OpenSLES_Android.h>
 #include <cstdint>
 #include <thread>
 #include <atomic>
@@ -242,9 +244,22 @@ public:
 
 private:
     AAudioStream *stream = nullptr;
+    SLObjectItf openSlEngineObject = nullptr;
+    SLEngineItf openSlEngine = nullptr;
+    SLObjectItf openSlOutputMixObject = nullptr;
+    SLObjectItf openSlPlayerObject = nullptr;
+    SLPlayItf openSlPlayerPlay = nullptr;
+    SLAndroidSimpleBufferQueueItf openSlBufferQueue = nullptr;
+    static constexpr int kOpenSlBufferQueueCount = 3;
+    std::array<std::vector<int16_t>, kOpenSlBufferQueueCount> openSlPcmBuffers {};
+    std::vector<float> openSlFloatBuffer;
+    size_t openSlNextBufferIndex = 0;
+    int openSlBufferFrames = 1024;
+    std::atomic<bool> openSlStopAfterCurrentBuffer { false };
     int streamSampleRate = 48000;
     int streamChannelCount = 2;
     bool streamStartupPrerollPending = true;
+    std::atomic<bool> outputStreamReady { false };
     std::atomic<int> activeOutputBackend { 0 }; // 0 inactive, 1 AAudio, 2 OpenSL ES, 3 AudioTrack
     int outputBackendPreference = 0; // 0 auto, 1 aaudio, 2 opensl, 3 audiotrack
     int outputPerformanceMode = 2; // 0 auto, 1 low-latency, 2 none, 3 power-saving
@@ -331,6 +346,12 @@ private:
     void requestStreamStop();
     bool isStreamDisconnectedOrClosed() const;
     int getStreamBurstFrames() const;
+    bool createAaudioStream();
+    bool createOpenSlStream();
+    void closeAaudioStream();
+    void closeOpenSlStream();
+    bool renderOutputCallbackFrames(float* outputData, int32_t numFrames, int callbackRate);
+    bool enqueueOpenSlBuffer();
 
     void createStream();
     void closeStream();
@@ -358,6 +379,7 @@ private:
             AAudioStream *stream,
             void *userData,
             aaudio_result_t error);
+    static void openSlBufferQueueCallback(SLAndroidSimpleBufferQueueItf bufferQueue, void *context);
 
     float phase = 0.0f;
     std::atomic<bool> streamNeedsRebuild { false };

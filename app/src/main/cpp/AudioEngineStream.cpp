@@ -9,7 +9,32 @@
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-void AudioEngine::createStream() {
+namespace {
+    constexpr int kOpenSlDefaultBufferFrames = 1024;
+
+    int openSlBufferFramesForPreset(int bufferPreset) {
+        switch (bufferPreset) {
+            case 1:
+                return 512;
+            case 3:
+                return 2048;
+            case 0:
+            case 2:
+            default:
+                return kOpenSlDefaultBufferFrames;
+        }
+    }
+
+    bool openSlOk(SLresult result, const char* step) {
+        if (result == SL_RESULT_SUCCESS) {
+            return true;
+        }
+        LOGE("OpenSL step failed (%s): result=%d", step, static_cast<int>(result));
+        return false;
+    }
+}
+
+bool AudioEngine::createAaudioStream() {
     AAudioStreamBuilder *builder;
     AAudio_createStreamBuilder(&builder);
 
@@ -33,9 +58,11 @@ void AudioEngine::createStream() {
     aaudio_result_t result = AAudioStreamBuilder_openStream(builder, &stream);
     if (result != AAUDIO_OK) {
         activeOutputBackend.store(0, std::memory_order_relaxed);
+        outputStreamReady.store(false, std::memory_order_relaxed);
         LOGE("Failed to open stream: %s", AAudio_convertResultToText(result));
     } else {
         activeOutputBackend.store(1, std::memory_order_relaxed);
+        outputStreamReady.store(true, std::memory_order_relaxed);
         streamStartupPrerollPending = true;
         streamSampleRate = AAudioStream_getSampleRate(stream);
         streamChannelCount = AAudioStream_getChannelCount(stream);
@@ -54,9 +81,195 @@ void AudioEngine::createStream() {
     }
 
     AAudioStreamBuilder_delete(builder);
+    return outputStreamReady.load(std::memory_order_relaxed);
+}
+
+bool AudioEngine::createOpenSlStream() {
+    streamSampleRate = streamSampleRate > 0 ? streamSampleRate : 48000;
+    streamChannelCount = 2;
+    openSlBufferFrames = openSlBufferFramesForPreset(outputBufferPreset);
+    openSlFloatBuffer.assign(static_cast<size_t>(openSlBufferFrames) * 2u, 0.0f);
+    for (auto& buffer : openSlPcmBuffers) {
+        buffer.assign(static_cast<size_t>(openSlBufferFrames) * 2u, 0);
+    }
+    openSlNextBufferIndex = 0;
+    openSlStopAfterCurrentBuffer.store(false, std::memory_order_relaxed);
+
+    if (!openSlOk(slCreateEngine(&openSlEngineObject, 0, nullptr, 0, nullptr, nullptr), "slCreateEngine")) {
+        closeOpenSlStream();
+        return false;
+    }
+    if (!openSlOk((*openSlEngineObject)->Realize(openSlEngineObject, SL_BOOLEAN_FALSE), "Realize(engine)")) {
+        closeOpenSlStream();
+        return false;
+    }
+    if (!openSlOk((*openSlEngineObject)->GetInterface(openSlEngineObject, SL_IID_ENGINE, &openSlEngine), "GetInterface(engine)")) {
+        closeOpenSlStream();
+        return false;
+    }
+
+    if (!openSlOk((*openSlEngine)->CreateOutputMix(openSlEngine, &openSlOutputMixObject, 0, nullptr, nullptr), "CreateOutputMix")) {
+        closeOpenSlStream();
+        return false;
+    }
+    if (!openSlOk((*openSlOutputMixObject)->Realize(openSlOutputMixObject, SL_BOOLEAN_FALSE), "Realize(outputMix)")) {
+        closeOpenSlStream();
+        return false;
+    }
+
+    SLDataLocator_AndroidSimpleBufferQueue bufferQueueLocator {
+            SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE,
+            static_cast<SLuint32>(kOpenSlBufferQueueCount)
+    };
+    SLDataFormat_PCM formatPcm {
+            SL_DATAFORMAT_PCM,
+            2,
+            static_cast<SLuint32>(streamSampleRate * 1000),
+            SL_PCMSAMPLEFORMAT_FIXED_16,
+            SL_PCMSAMPLEFORMAT_FIXED_16,
+            SL_SPEAKER_FRONT_LEFT | SL_SPEAKER_FRONT_RIGHT,
+            SL_BYTEORDER_LITTLEENDIAN
+    };
+    SLDataSource dataSource { &bufferQueueLocator, &formatPcm };
+
+    SLDataLocator_OutputMix outputMixLocator { SL_DATALOCATOR_OUTPUTMIX, openSlOutputMixObject };
+    SLDataSink dataSink { &outputMixLocator, nullptr };
+
+    const SLInterfaceID interfaceIds[] = { SL_IID_ANDROIDSIMPLEBUFFERQUEUE };
+    const SLboolean interfaceRequired[] = { SL_BOOLEAN_TRUE };
+
+    if (!openSlOk(
+            (*openSlEngine)->CreateAudioPlayer(
+                    openSlEngine,
+                    &openSlPlayerObject,
+                    &dataSource,
+                    &dataSink,
+                    1,
+                    interfaceIds,
+                    interfaceRequired
+            ),
+            "CreateAudioPlayer"
+    )) {
+        closeOpenSlStream();
+        return false;
+    }
+    if (!openSlOk((*openSlPlayerObject)->Realize(openSlPlayerObject, SL_BOOLEAN_FALSE), "Realize(player)")) {
+        closeOpenSlStream();
+        return false;
+    }
+    if (!openSlOk((*openSlPlayerObject)->GetInterface(openSlPlayerObject, SL_IID_PLAY, &openSlPlayerPlay), "GetInterface(play)")) {
+        closeOpenSlStream();
+        return false;
+    }
+    if (!openSlOk(
+            (*openSlPlayerObject)->GetInterface(
+                    openSlPlayerObject,
+                    SL_IID_ANDROIDSIMPLEBUFFERQUEUE,
+                    &openSlBufferQueue
+            ),
+            "GetInterface(bufferQueue)"
+    )) {
+        closeOpenSlStream();
+        return false;
+    }
+    if (!openSlOk(
+            (*openSlBufferQueue)->RegisterCallback(openSlBufferQueue, openSlBufferQueueCallback, this),
+            "RegisterCallback(bufferQueue)"
+    )) {
+        closeOpenSlStream();
+        return false;
+    }
+
+    (*openSlPlayerPlay)->SetPlayState(openSlPlayerPlay, SL_PLAYSTATE_STOPPED);
+    activeOutputBackend.store(2, std::memory_order_relaxed);
+    outputStreamReady.store(true, std::memory_order_relaxed);
+    streamStartupPrerollPending = true;
+    LOGD(
+            "OpenSL stream opened: sampleRate=%d, channels=%d, backendPref=%d, bufferPreset=%d, frames=%d, allowFallback=%d",
+            streamSampleRate,
+            streamChannelCount,
+            outputBackendPreference,
+            outputBufferPreset,
+            openSlBufferFrames,
+            outputAllowFallback ? 1 : 0
+    );
+    return true;
+}
+
+void AudioEngine::createStream() {
+    closeStream();
+
+    auto tryBackend = [this](int backend) -> bool {
+        if (backend == 1) {
+            return createAaudioStream();
+        }
+        if (backend == 2) {
+            return createOpenSlStream();
+        }
+        if (backend == 3) {
+            LOGE("AudioTrack backend is not implemented yet");
+            return false;
+        }
+        return false;
+    };
+
+    std::array<int, 3> attempts {};
+    int attemptCount = 0;
+    auto addAttempt = [&](int backend) {
+        if (backend <= 0) return;
+        for (int i = 0; i < attemptCount; ++i) {
+            if (attempts[i] == backend) return;
+        }
+        attempts[attemptCount++] = backend;
+    };
+
+    switch (outputBackendPreference) {
+        case 1:
+            addAttempt(1);
+            if (outputAllowFallback) addAttempt(2);
+            break;
+        case 2:
+            addAttempt(2);
+            if (outputAllowFallback) addAttempt(1);
+            break;
+        case 3:
+            addAttempt(3);
+            if (outputAllowFallback) {
+                addAttempt(1);
+                addAttempt(2);
+            }
+            break;
+        case 0:
+        default:
+            // Auto: prefer AAudio, then OpenSL fallback.
+            addAttempt(1);
+            if (outputAllowFallback) addAttempt(2);
+            break;
+    }
+
+    for (int i = 0; i < attemptCount; ++i) {
+        if (tryBackend(attempts[i])) {
+            return;
+        }
+    }
+
+    activeOutputBackend.store(0, std::memory_order_relaxed);
+    outputStreamReady.store(false, std::memory_order_relaxed);
+    LOGE("No audio backend could be created (pref=%d allowFallback=%d)", outputBackendPreference, outputAllowFallback ? 1 : 0);
 }
 
 void AudioEngine::applyStreamBufferPreset() {
+    const int backend = activeOutputBackend.load(std::memory_order_relaxed);
+    if (backend == 2) {
+        openSlBufferFrames = openSlBufferFramesForPreset(outputBufferPreset);
+        openSlFloatBuffer.assign(static_cast<size_t>(openSlBufferFrames) * 2u, 0.0f);
+        for (auto& buffer : openSlPcmBuffers) {
+            buffer.assign(static_cast<size_t>(openSlBufferFrames) * 2u, 0);
+        }
+        LOGD("OpenSL buffer preset applied: frames=%d", openSlBufferFrames);
+        return;
+    }
+
     if (stream == nullptr) return;
     if (outputBufferPreset == 0) return;
 
@@ -86,7 +299,173 @@ void AudioEngine::applyStreamBufferPreset() {
     );
 }
 
+bool AudioEngine::renderOutputCallbackFrames(float* outputData, int32_t numFrames, int callbackRate) {
+    if (!outputData || numFrames <= 0) {
+        return false;
+    }
+
+    if (seekInProgress.load()) {
+        std::memset(outputData, 0, static_cast<size_t>(numFrames) * 2u * sizeof(float));
+        return false;
+    }
+
+    if (pendingResumeFadeOnStart.exchange(false, std::memory_order_relaxed)) {
+        beginPauseResumeFadeLocked(
+                true,
+                callbackRate > 0 ? callbackRate : 48000,
+                pendingResumeFadeDurationMs.load(std::memory_order_relaxed),
+                pendingResumeFadeAttenuationDb.load(std::memory_order_relaxed)
+        );
+    }
+    if (pendingPauseFadeRequest.exchange(false, std::memory_order_relaxed)) {
+        beginPauseResumeFadeLocked(
+                false,
+                callbackRate > 0 ? callbackRate : 48000,
+                pendingPauseFadeDurationMs.load(std::memory_order_relaxed),
+                pendingPauseFadeAttenuationDb.load(std::memory_order_relaxed)
+        );
+    }
+
+    renderQueueCallbackCount.fetch_add(1, std::memory_order_relaxed);
+    const int framesCopied = popRenderQueue(outputData, numFrames, 2);
+    if (framesCopied < numFrames) {
+        const uint64_t missingFrames = static_cast<uint64_t>(numFrames - framesCopied);
+        const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()
+        ).count();
+        // Hold a higher queue target briefly after underrun to absorb transient CPU spikes
+        // during app-switch/system UI animations.
+        renderQueueRecoveryBoostUntilNs.store(
+                nowNs + 2500000000LL,
+                std::memory_order_relaxed
+        );
+        renderQueueUnderrunCount.fetch_add(1, std::memory_order_relaxed);
+        renderQueueUnderrunFrames.fetch_add(missingFrames, std::memory_order_relaxed);
+#ifndef NDEBUG
+        const int64_t previousLogNs = renderQueueLastUnderrunLogNs.load(std::memory_order_relaxed);
+        if (nowNs - previousLogNs > 1000000000LL) {
+            const uint64_t underruns = renderQueueUnderrunCount.load(std::memory_order_relaxed);
+            const uint64_t underrunFrames = renderQueueUnderrunFrames.load(std::memory_order_relaxed);
+            const uint64_t callbacks = renderQueueCallbackCount.load(std::memory_order_relaxed);
+            LOGD(
+                    "Render queue underrun: missing=%llu callbacks=%llu underruns=%llu totalMissingFrames=%llu bufferedFrames=%d",
+                    static_cast<unsigned long long>(missingFrames),
+                    static_cast<unsigned long long>(callbacks),
+                    static_cast<unsigned long long>(underruns),
+                    static_cast<unsigned long long>(underrunFrames),
+                    renderQueueFrames()
+            );
+            renderQueueLastUnderrunLogNs.store(nowNs, std::memory_order_relaxed);
+        }
+#endif
+        std::memset(
+                outputData + (static_cast<size_t>(framesCopied) * 2u),
+                0,
+                static_cast<size_t>(numFrames - framesCopied) * 2u * sizeof(float)
+        );
+    }
+
+    for (int frame = 0; frame < numFrames; ++frame) {
+        const float fadeGain = nextPauseResumeFadeGainLocked();
+        if (fadeGain == 1.0f) continue;
+        const size_t base = static_cast<size_t>(frame) * 2u;
+        outputData[base] *= fadeGain;
+        outputData[base + 1u] *= fadeGain;
+    }
+
+    if (pauseResumeFadeOutStopPending) {
+        pauseResumeFadeOutStopPending = false;
+        isPlaying.store(false);
+        naturalEndPending.store(false);
+        clearRenderQueue();
+        renderWorkerCv.notify_all();
+        return true;
+    }
+
+    if (renderTerminalStopPending.load() && renderQueueFrames() <= 0) {
+        renderTerminalStopPending.store(false);
+        return true;
+    }
+
+    renderWorkerCv.notify_one();
+    return false;
+}
+
+bool AudioEngine::enqueueOpenSlBuffer() {
+    if (openSlBufferQueue == nullptr || openSlBufferFrames <= 0) {
+        return false;
+    }
+
+    const size_t nextIndex = openSlNextBufferIndex % kOpenSlBufferQueueCount;
+    openSlNextBufferIndex++;
+
+    auto& pcmBuffer = openSlPcmBuffers[nextIndex];
+    const size_t sampleCount = static_cast<size_t>(openSlBufferFrames) * 2u;
+    if (pcmBuffer.size() != sampleCount) {
+        pcmBuffer.assign(sampleCount, 0);
+    }
+    if (openSlFloatBuffer.size() != sampleCount) {
+        openSlFloatBuffer.assign(sampleCount, 0.0f);
+    }
+
+    const bool shouldStop = renderOutputCallbackFrames(
+            openSlFloatBuffer.data(),
+            openSlBufferFrames,
+            streamSampleRate > 0 ? streamSampleRate : 48000
+    );
+
+    for (size_t i = 0; i < sampleCount; ++i) {
+        const float clamped = std::clamp(openSlFloatBuffer[i], -1.0f, 1.0f);
+        pcmBuffer[i] = static_cast<int16_t>(clamped * 32767.0f);
+    }
+
+    const SLresult enqueueResult = (*openSlBufferQueue)->Enqueue(
+            openSlBufferQueue,
+            pcmBuffer.data(),
+            static_cast<SLuint32>(pcmBuffer.size() * sizeof(int16_t))
+    );
+    if (!openSlOk(enqueueResult, "Enqueue")) {
+        return false;
+    }
+
+    if (shouldStop) {
+        openSlStopAfterCurrentBuffer.store(true, std::memory_order_relaxed);
+    }
+
+    return true;
+}
+
 bool AudioEngine::requestStreamStart() {
+    const int backend = activeOutputBackend.load(std::memory_order_relaxed);
+    if (backend == 2) {
+        if (!outputStreamReady.load(std::memory_order_relaxed) ||
+            openSlPlayerPlay == nullptr ||
+            openSlBufferQueue == nullptr) {
+            return false;
+        }
+
+        openSlStopAfterCurrentBuffer.store(false, std::memory_order_relaxed);
+        openSlNextBufferIndex = 0;
+        (*openSlBufferQueue)->Clear(openSlBufferQueue);
+
+        int queued = 0;
+        for (int i = 0; i < kOpenSlBufferQueueCount; ++i) {
+            if (!enqueueOpenSlBuffer()) {
+                break;
+            }
+            queued++;
+        }
+        if (queued <= 0) {
+            LOGE("OpenSL failed to enqueue startup buffers");
+            return false;
+        }
+
+        if (!openSlOk((*openSlPlayerPlay)->SetPlayState(openSlPlayerPlay, SL_PLAYSTATE_PLAYING), "SetPlayState(PLAYING)")) {
+            return false;
+        }
+        return true;
+    }
+
     if (stream == nullptr) {
         return false;
     }
@@ -99,6 +478,18 @@ bool AudioEngine::requestStreamStart() {
 }
 
 void AudioEngine::requestStreamStop() {
+    const int backend = activeOutputBackend.load(std::memory_order_relaxed);
+    if (backend == 2) {
+        openSlStopAfterCurrentBuffer.store(false, std::memory_order_relaxed);
+        if (openSlPlayerPlay != nullptr) {
+            (*openSlPlayerPlay)->SetPlayState(openSlPlayerPlay, SL_PLAYSTATE_STOPPED);
+        }
+        if (openSlBufferQueue != nullptr) {
+            (*openSlBufferQueue)->Clear(openSlBufferQueue);
+        }
+        return;
+    }
+
     if (stream == nullptr) {
         return;
     }
@@ -106,6 +497,15 @@ void AudioEngine::requestStreamStop() {
 }
 
 bool AudioEngine::isStreamDisconnectedOrClosed() const {
+    if (!outputStreamReady.load(std::memory_order_relaxed)) {
+        return true;
+    }
+
+    const int backend = activeOutputBackend.load(std::memory_order_relaxed);
+    if (backend == 2) {
+        return openSlPlayerObject == nullptr || openSlPlayerPlay == nullptr || openSlBufferQueue == nullptr;
+    }
+
     if (stream == nullptr) {
         return true;
     }
@@ -116,6 +516,11 @@ bool AudioEngine::isStreamDisconnectedOrClosed() const {
 }
 
 int AudioEngine::getStreamBurstFrames() const {
+    const int backend = activeOutputBackend.load(std::memory_order_relaxed);
+    if (backend == 2) {
+        return openSlBufferFrames;
+    }
+
     if (stream == nullptr) {
         return 0;
     }
@@ -163,12 +568,46 @@ void AudioEngine::reconfigureStream(bool resumePlayback) {
     }
 }
 
-void AudioEngine::closeStream() {
+void AudioEngine::closeAaudioStream() {
     if (stream != nullptr) {
         AAudioStream_close(stream);
         stream = nullptr;
     }
+}
+
+void AudioEngine::closeOpenSlStream() {
+    openSlStopAfterCurrentBuffer.store(false, std::memory_order_relaxed);
+
+    if (openSlPlayerObject != nullptr) {
+        (*openSlPlayerObject)->Destroy(openSlPlayerObject);
+        openSlPlayerObject = nullptr;
+    }
+    openSlPlayerPlay = nullptr;
+    openSlBufferQueue = nullptr;
+
+    if (openSlOutputMixObject != nullptr) {
+        (*openSlOutputMixObject)->Destroy(openSlOutputMixObject);
+        openSlOutputMixObject = nullptr;
+    }
+
+    if (openSlEngineObject != nullptr) {
+        (*openSlEngineObject)->Destroy(openSlEngineObject);
+        openSlEngineObject = nullptr;
+    }
+    openSlEngine = nullptr;
+
+    for (auto& buffer : openSlPcmBuffers) {
+        buffer.clear();
+    }
+    openSlFloatBuffer.clear();
+    openSlNextBufferIndex = 0;
+}
+
+void AudioEngine::closeStream() {
+    closeAaudioStream();
+    closeOpenSlStream();
     activeOutputBackend.store(0, std::memory_order_relaxed);
+    outputStreamReady.store(false, std::memory_order_relaxed);
 }
 
 void AudioEngine::errorCallback(
@@ -184,6 +623,11 @@ void AudioEngine::errorCallback(
 
 void AudioEngine::recoverStreamIfNeeded() {
     if (!streamNeedsRebuild.load()) {
+        return;
+    }
+
+    if (activeOutputBackend.load(std::memory_order_relaxed) != 1) {
+        streamNeedsRebuild.store(false);
         return;
     }
 
@@ -217,93 +661,28 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         int32_t numFrames) {
     auto *engine = static_cast<AudioEngine *>(userData);
     auto *outputData = static_cast<float *>(audioData);
-    if (engine->seekInProgress.load()) {
-        std::memset(outputData, 0, static_cast<size_t>(numFrames) * 2u * sizeof(float));
-        return AAUDIO_CALLBACK_RESULT_CONTINUE;
-    }
-
     const int callbackRate = engine->streamSampleRate > 0
             ? engine->streamSampleRate
             : static_cast<int>(AAudioStream_getSampleRate(callbackStream));
-    if (engine->pendingResumeFadeOnStart.exchange(false, std::memory_order_relaxed)) {
-        engine->beginPauseResumeFadeLocked(
-                true,
-                callbackRate > 0 ? callbackRate : 48000,
-                engine->pendingResumeFadeDurationMs.load(std::memory_order_relaxed),
-                engine->pendingResumeFadeAttenuationDb.load(std::memory_order_relaxed)
-        );
-    }
-    if (engine->pendingPauseFadeRequest.exchange(false, std::memory_order_relaxed)) {
-        engine->beginPauseResumeFadeLocked(
-                false,
-                callbackRate > 0 ? callbackRate : 48000,
-                engine->pendingPauseFadeDurationMs.load(std::memory_order_relaxed),
-                engine->pendingPauseFadeAttenuationDb.load(std::memory_order_relaxed)
-        );
-    }
 
-    engine->renderQueueCallbackCount.fetch_add(1, std::memory_order_relaxed);
-    const int framesCopied = engine->popRenderQueue(outputData, numFrames, 2);
-    if (framesCopied < numFrames) {
-        const uint64_t missingFrames = static_cast<uint64_t>(numFrames - framesCopied);
-        const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::steady_clock::now().time_since_epoch()
-        ).count();
-        // Hold a higher queue target briefly after underrun to absorb transient CPU spikes
-        // during app-switch/system UI animations.
-        engine->renderQueueRecoveryBoostUntilNs.store(
-                nowNs + 2500000000LL,
-                std::memory_order_relaxed
-        );
-        engine->renderQueueUnderrunCount.fetch_add(1, std::memory_order_relaxed);
-        engine->renderQueueUnderrunFrames.fetch_add(missingFrames, std::memory_order_relaxed);
-#ifndef NDEBUG
-        const int64_t previousLogNs = engine->renderQueueLastUnderrunLogNs.load(std::memory_order_relaxed);
-        if (nowNs - previousLogNs > 1000000000LL) {
-            const uint64_t underruns = engine->renderQueueUnderrunCount.load(std::memory_order_relaxed);
-            const uint64_t underrunFrames = engine->renderQueueUnderrunFrames.load(std::memory_order_relaxed);
-            const uint64_t callbacks = engine->renderQueueCallbackCount.load(std::memory_order_relaxed);
-            LOGD(
-                    "Render queue underrun: missing=%llu callbacks=%llu underruns=%llu totalMissingFrames=%llu bufferedFrames=%d",
-                    static_cast<unsigned long long>(missingFrames),
-                    static_cast<unsigned long long>(callbacks),
-                    static_cast<unsigned long long>(underruns),
-                    static_cast<unsigned long long>(underrunFrames),
-                    engine->renderQueueFrames()
-            );
-            engine->renderQueueLastUnderrunLogNs.store(nowNs, std::memory_order_relaxed);
-        }
-#endif
-        std::memset(
-                outputData + (static_cast<size_t>(framesCopied) * 2u),
-                0,
-                static_cast<size_t>(numFrames - framesCopied) * 2u * sizeof(float)
-        );
-    }
-
-    for (int frame = 0; frame < numFrames; ++frame) {
-        const float fadeGain = engine->nextPauseResumeFadeGainLocked();
-        if (fadeGain == 1.0f) continue;
-        const size_t base = static_cast<size_t>(frame) * 2u;
-        outputData[base] *= fadeGain;
-        outputData[base + 1u] *= fadeGain;
-    }
-
-    if (engine->pauseResumeFadeOutStopPending) {
-        engine->pauseResumeFadeOutStopPending = false;
-        engine->isPlaying.store(false);
-        engine->naturalEndPending.store(false);
-        engine->clearRenderQueue();
-        engine->renderWorkerCv.notify_all();
+    if (engine->renderOutputCallbackFrames(outputData, numFrames, callbackRate)) {
         return AAUDIO_CALLBACK_RESULT_STOP;
     }
-
-    if (engine->renderTerminalStopPending.load() && engine->renderQueueFrames() <= 0) {
-        engine->renderTerminalStopPending.store(false);
-        return AAUDIO_CALLBACK_RESULT_STOP;
-    }
-
-    engine->renderWorkerCv.notify_one();
-
     return AAUDIO_CALLBACK_RESULT_CONTINUE;
+}
+
+void AudioEngine::openSlBufferQueueCallback(SLAndroidSimpleBufferQueueItf /*bufferQueue*/, void *context) {
+    auto* engine = static_cast<AudioEngine*>(context);
+    if (engine == nullptr) {
+        return;
+    }
+
+    if (engine->openSlStopAfterCurrentBuffer.exchange(false, std::memory_order_relaxed)) {
+        engine->requestStreamStop();
+        return;
+    }
+
+    if (!engine->enqueueOpenSlBuffer()) {
+        engine->requestStreamStop();
+    }
 }

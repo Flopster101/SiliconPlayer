@@ -85,7 +85,25 @@ jobs:
       - name: Verify debug signing key
         run: test -f debug.keystore
 
+      - name: Compute native deps cache key
+        id: deps-cache-key
+        shell: bash
+        run: |
+          set -euo pipefail
+          SUBMODULE_STATE_HASH="$(git submodule status --recursive external | sha256sum | cut -d' ' -f1)"
+          BUILD_SCRIPT_HASH="$(sha256sum external/build_deps.sh | cut -d' ' -f1)"
+          PATCH_HASH="$(find external/patches -type f -name '*.patch' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
+          echo "key=native-deps-${{ runner.os }}-ndk29-api21-all_legacy-${SUBMODULE_STATE_HASH}-${BUILD_SCRIPT_HASH}-${PATCH_HASH}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore native deps cache
+        id: deps-cache
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/cpp/prebuilt
+          key: ${{ steps.deps-cache-key.outputs.key }}
+
       - name: Build native dependencies
+        if: steps.deps-cache.outputs.cache-hit != 'true'
         run: |
           chmod +x external/build_deps.sh
           ./external/build_deps.sh all_legacy all

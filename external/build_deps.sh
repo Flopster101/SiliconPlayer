@@ -5,7 +5,7 @@ set -e
 # Configuration
 # -----------------------------------------------------------------------------
 NDK_VERSION="29.0.14206865" # From local.properties/source.properties
-ANDROID_API=23 # minSdk
+ANDROID_API=21 # minSdk
 
 # Auto-detect NDK if not set
 if [ -z "$ANDROID_NDK_HOME" ]; then
@@ -480,7 +480,7 @@ build_openssl() {
     local OPENSSL_TARGET=""
     local OPENSSL_CROSS_PREFIX=""
     local OPENSSL_CLANG_BIN=""
-    local OPENSSL_BUILD_SIGNATURE="openssl-android-static-pic-noasm-v1"
+    local OPENSSL_BUILD_SIGNATURE="openssl-android-static-pic-noasm-v2"
     local OPENSSL_STAMP_FILE="$INSTALL_DIR/lib/.openssl_build_signature"
 
     if [ ! -d "$PROJECT_PATH" ]; then
@@ -558,8 +558,15 @@ EOF
     export ANDROID_API="$ANDROID_API"
     export PATH="$OPENSSL_COMPAT_BIN:$TOOLCHAIN/bin:$PATH"
 
-    export CFLAGS="-fPIC $DEP_OPT_FLAGS"
-    export CXXFLAGS="-fPIC $DEP_OPT_FLAGS"
+    local OPENSSL_API21_COMPAT_FLAGS=""
+    if [ "$ANDROID_API" -le 21 ]; then
+        # Keep OpenSSL static libs linkable against old bionic (API 21) where
+        # stdio globals are exposed via __sF instead of stderr/stdout symbols.
+        OPENSSL_API21_COMPAT_FLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Dstderr=__sF+2 -Dstdout=__sF+1"
+    fi
+
+    export CFLAGS="-fPIC $DEP_OPT_FLAGS $OPENSSL_API21_COMPAT_FLAGS"
+    export CXXFLAGS="-fPIC $DEP_OPT_FLAGS $OPENSSL_API21_COMPAT_FLAGS"
 
     perl ./Configure "$OPENSSL_TARGET" \
         --cross-compile-prefix="$OPENSSL_CROSS_PREFIX" \
@@ -1437,6 +1444,15 @@ build_sc68() {
     local PROJECT_PATH="$ABSOLUTE_PATH/sc68"
     local CONFIGURE_HOST=""
     local AS68_TOOL="$PROJECT_PATH/as68/as68"
+    local SC68_STAMP="$INSTALL_DIR/lib/.sc68_build_stamp"
+    local SC68_STAMP_EXPECTED="api=$ANDROID_API;compat=api21-stdio-v1"
+    local SC68_CFLAGS="-fPIC $DEP_OPT_FLAGS"
+    local SC68_CXXFLAGS="-fPIC $DEP_OPT_FLAGS"
+
+    if [ "$ANDROID_API" -le 21 ]; then
+        SC68_CFLAGS="$SC68_CFLAGS -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Dstderr=__sF+2 -Dstdout=__sF+1 -Dstdin=__sF+0"
+        SC68_CXXFLAGS="$SC68_CXXFLAGS -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Dstderr=__sF+2 -Dstdout=__sF+1 -Dstdin=__sF+0"
+    fi
 
     if [ ! -d "$PROJECT_PATH" ]; then
         echo "sc68 source not found at $PROJECT_PATH (skipping)."
@@ -1446,7 +1462,8 @@ build_sc68() {
     if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libsc68.a" ] && \
        [ -f "$INSTALL_DIR/lib/libfile68.a" ] && \
        [ -f "$INSTALL_DIR/lib/libunice68.a" ] && \
-       [ -f "$INSTALL_DIR/include/sc68/sc68.h" ]; then
+       [ -f "$INSTALL_DIR/include/sc68/sc68.h" ] && [ -f "$SC68_STAMP" ] && \
+       [ "$(cat "$SC68_STAMP" 2>/dev/null)" = "$SC68_STAMP_EXPECTED" ]; then
         echo "sc68 already built for $ABI -> skipping"
         return 0
     fi
@@ -1510,8 +1527,8 @@ build_sc68() {
             AR="$TOOLCHAIN/bin/llvm-ar" \
             RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
             STRIP="$TOOLCHAIN/bin/llvm-strip" \
-            CFLAGS="-fPIC $DEP_OPT_FLAGS" \
-            CXXFLAGS="-fPIC $DEP_OPT_FLAGS"
+            CFLAGS="$SC68_CFLAGS" \
+            CXXFLAGS="$SC68_CXXFLAGS"
         make -s -j"$NPROC"
         make -s install
     )
@@ -1540,8 +1557,8 @@ build_sc68() {
             AR="$TOOLCHAIN/bin/llvm-ar" \
             RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
             STRIP="$TOOLCHAIN/bin/llvm-strip" \
-            CFLAGS="-fPIC $DEP_OPT_FLAGS" \
-            CXXFLAGS="-fPIC $DEP_OPT_FLAGS"
+            CFLAGS="$SC68_CFLAGS" \
+            CXXFLAGS="$SC68_CXXFLAGS"
         make -s -j"$NPROC"
         make -s install
     )
@@ -1565,8 +1582,8 @@ build_sc68() {
             AR="$TOOLCHAIN/bin/llvm-ar" \
             RANLIB="$TOOLCHAIN/bin/llvm-ranlib" \
             STRIP="$TOOLCHAIN/bin/llvm-strip" \
-            CFLAGS="-fPIC $DEP_OPT_FLAGS" \
-            CXXFLAGS="-fPIC $DEP_OPT_FLAGS"
+            CFLAGS="$SC68_CFLAGS" \
+            CXXFLAGS="$SC68_CXXFLAGS"
 
         if grep -Eq '^TWEAK:[[:space:]]*=[[:space:]]*$' asm/version.s; then
             sed -i 's/^TWEAK:[[:space:]]*=.*/TWEAK:\t= 0/' asm/version.s
@@ -1579,6 +1596,8 @@ build_sc68() {
         make -s -j"$NPROC"
         make -s install
     )
+
+    printf '%s\n' "$SC68_STAMP_EXPECTED" > "$SC68_STAMP"
 }
 
 # -----------------------------------------------------------------------------
@@ -1740,14 +1759,22 @@ build_libzakalwe() {
 
     local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
     local PROJECT_PATH="$ABSOLUTE_PATH/libzakalwe"
+    local ZAKALWE_STAMP="$INSTALL_DIR/lib/.libzakalwe_build_stamp"
+    local ZAKALWE_STAMP_EXPECTED="api=$ANDROID_API;compat=api21-stdio-v1"
+    local ZAKALWE_CFLAGS="-fPIC $DEP_OPT_FLAGS"
 
     if [ ! -d "$PROJECT_PATH" ]; then
         echo "libzakalwe source not found at $PROJECT_PATH (skipping)."
         return 0
     fi
 
+    if [ "$ANDROID_API" -le 21 ]; then
+        ZAKALWE_CFLAGS="$ZAKALWE_CFLAGS -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Dstderr=__sF+2 -Dstdout=__sF+1"
+    fi
+
     if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libzakalwe.a" ] && \
-       [ -f "$INSTALL_DIR/include/zakalwe/string.h" ]; then
+       [ -f "$INSTALL_DIR/include/zakalwe/string.h" ] && [ -f "$ZAKALWE_STAMP" ] && \
+       [ "$(cat "$ZAKALWE_STAMP" 2>/dev/null)" = "$ZAKALWE_STAMP_EXPECTED" ]; then
         echo "libzakalwe already built for $ABI -> skipping"
         return 0
     fi
@@ -1759,7 +1786,7 @@ build_libzakalwe() {
         make clean >/dev/null 2>&1 || true
 
         CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang" \
-        CFLAGS="-fPIC $DEP_OPT_FLAGS" \
+        CFLAGS="$ZAKALWE_CFLAGS" \
         ./configure
 
         # Build static archive payload target from upstream Makefile.in.
@@ -1773,6 +1800,7 @@ build_libzakalwe() {
 
     cp "$PROJECT_PATH/static_pack.o" "$INSTALL_DIR/lib/libzakalwe.a"
     cp "$PROJECT_PATH/include/zakalwe/"*.h "$INSTALL_DIR/include/zakalwe/" 2>/dev/null || true
+    printf '%s\n' "$ZAKALWE_STAMP_EXPECTED" > "$ZAKALWE_STAMP"
 }
 
 # -----------------------------------------------------------------------------
@@ -1784,14 +1812,22 @@ build_bencodetools() {
 
     local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
     local PROJECT_PATH="$ABSOLUTE_PATH/bencodetools"
+    local BENCODE_STAMP="$INSTALL_DIR/lib/.bencodetools_build_stamp"
+    local BENCODE_STAMP_EXPECTED="api=$ANDROID_API;compat=api21-stdio-v1"
+    local BENCODE_CFLAGS="-fPIC $DEP_OPT_FLAGS"
 
     if [ ! -d "$PROJECT_PATH" ]; then
         echo "bencodetools source not found at $PROJECT_PATH (skipping)."
         return 0
     fi
 
+    if [ "$ANDROID_API" -le 21 ]; then
+        BENCODE_CFLAGS="$BENCODE_CFLAGS -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Dstderr=__sF+2 -Dstdout=__sF+1"
+    fi
+
     if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libbencodetools.a" ] && \
-       [ -f "$INSTALL_DIR/include/bencodetools/bencode.h" ]; then
+       [ -f "$INSTALL_DIR/include/bencodetools/bencode.h" ] && [ -f "$BENCODE_STAMP" ] && \
+       [ "$(cat "$BENCODE_STAMP" 2>/dev/null)" = "$BENCODE_STAMP_EXPECTED" ]; then
         echo "bencodetools already built for $ABI -> skipping"
         return 0
     fi
@@ -1802,7 +1838,7 @@ build_bencodetools() {
         cd "$PROJECT_PATH"
         make clean >/dev/null 2>&1 || true
 
-        CFLAGS="-fPIC $DEP_OPT_FLAGS" \
+        CFLAGS="$BENCODE_CFLAGS" \
         LDFLAGS="-L$INSTALL_DIR/lib" \
         ./configure \
             --prefix="$INSTALL_DIR" \
@@ -1819,6 +1855,7 @@ build_bencodetools() {
 
     "$TOOLCHAIN/bin/llvm-ar" rcs "$INSTALL_DIR/lib/libbencodetools.a" "$PROJECT_PATH/bencode.o"
     cp "$PROJECT_PATH/include/bencodetools/"*.h "$INSTALL_DIR/include/bencodetools/" 2>/dev/null || true
+    printf '%s\n' "$BENCODE_STAMP_EXPECTED" > "$BENCODE_STAMP"
 }
 
 # -----------------------------------------------------------------------------
@@ -2082,6 +2119,11 @@ build_klystrack() {
     local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
     local SDL_SHIM_DIR="$BUILD_DIR/sdl_compat"
     local TARGET_CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang"
+    local KLYSTRACK_COMMON_FLAGS="-fPIC $DEP_OPT_FLAGS"
+
+    if [ "$ANDROID_API" -le 21 ]; then
+        KLYSTRACK_COMMON_FLAGS="$KLYSTRACK_COMMON_FLAGS -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Dstderr=__sF+2 -Dstdout=__sF+1 -Dstdin=__sF+0"
+    fi
 
     if [ ! -d "$PROJECT_PATH" ]; then
         echo "klystrack source not found at $PROJECT_PATH (skipping)."
@@ -2181,7 +2223,7 @@ static inline Uint32 SDL_Swap32(Uint32 value) {
 EOF
 
     local common_flags
-    common_flags="-fPIC $DEP_OPT_FLAGS -DNOSDL_MIXER -DSTEREOOUTPUT -DUSESDLMUTEXES -I$SDL_SHIM_DIR -I$KLYSTRON_PATH/src"
+    common_flags="$KLYSTRACK_COMMON_FLAGS -DNOSDL_MIXER -DSTEREOOUTPUT -DUSESDLMUTEXES -I$SDL_SHIM_DIR -I$KLYSTRON_PATH/src"
 
     local src
     for src in "$KLYSTRON_PATH"/src/snd/*.c "$KLYSTRON_PATH"/src/lib/ksnd.c; do
@@ -2210,6 +2252,9 @@ build_furnace() {
     local MOBILE_FLAG_OLD="if (ANDROID AND NOT TERMUX)"
     local MOBILE_FLAG_NEW="if (ANDROID AND NOT TERMUX AND BUILD_GUI)"
     local BUILT_LIB=""
+    local FURNACE_C_FLAGS="$DEP_OPT_FLAGS"
+    local FURNACE_CXX_FLAGS="$DEP_OPT_FLAGS"
+    local FURNACE_LINKER_FLAGS="-lc"
 
     if [ ! -d "$PROJECT_PATH" ]; then
         echo "furnace source not found at $PROJECT_PATH (skipping)."
@@ -2230,6 +2275,15 @@ build_furnace() {
 
     mkdir -p "$BUILD_DIR" "$INSTALL_DIR/lib" "$INSTALL_DIR/include/furnace"
 
+    # API 21 bionic does not provide fortify checked stdio/write symbols used
+    # by newer headers. Force non-fortify calls and map stdio streams to __sF.
+    if [ "$ANDROID_API" -le 21 ]; then
+        # Use shell-safe macro expressions (no parentheses) to avoid /bin/sh
+        # parse errors in generated compile command lines.
+        FURNACE_C_FLAGS="$FURNACE_C_FLAGS -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Dstderr=__sF+2 -Dstdout=__sF+1"
+        FURNACE_CXX_FLAGS="$FURNACE_CXX_FLAGS -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -Dstderr=__sF+2 -Dstdout=__sF+1"
+    fi
+
     # Furnace defines IS_MOBILE on Android and then expects SDL2. For headless
     # builds we patch this define guard in source once (idempotent).
     if grep -Fq "$MOBILE_FLAG_NEW" "$CMAKE_FILE"; then
@@ -2248,10 +2302,11 @@ build_furnace() {
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DANDROID_ABI="$ABI" \
         -DANDROID_PLATFORM="android-$ANDROID_API" \
-        -DCMAKE_C_FLAGS="$DEP_OPT_FLAGS" \
-        -DCMAKE_CXX_FLAGS="$DEP_OPT_FLAGS" \
-        -DCMAKE_C_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
-        -DCMAKE_CXX_FLAGS_RELEASE="$DEP_OPT_FLAGS -DNDEBUG" \
+        -DCMAKE_C_FLAGS="$FURNACE_C_FLAGS" \
+        -DCMAKE_CXX_FLAGS="$FURNACE_CXX_FLAGS" \
+        -DCMAKE_C_FLAGS_RELEASE="$FURNACE_C_FLAGS -DNDEBUG" \
+        -DCMAKE_CXX_FLAGS_RELEASE="$FURNACE_CXX_FLAGS -DNDEBUG" \
+        -DCMAKE_SHARED_LINKER_FLAGS="$FURNACE_LINKER_FLAGS" \
         -DCMAKE_BUILD_TYPE=Release \
         -DBUILD_GUI=OFF \
         -DUSE_SDL2=OFF \

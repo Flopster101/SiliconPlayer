@@ -1724,10 +1724,12 @@ private fun TrackMetadataBlock(
                     softWrap = false,
                     overflow = TextOverflow.Clip,
                     textAlign = TextAlign.Start,
-                    modifier = Modifier.basicMarquee(
-                        iterations = 3,
-                        initialDelayMillis = 900
-                    )
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .basicMarquee(
+                            iterations = Int.MAX_VALUE,
+                            initialDelayMillis = 450
+                        )
                 )
             }
         } else {
@@ -1776,36 +1778,46 @@ private fun TrackMetadataBlock(
     }
     if (showFilename && shouldShowFilename) {
         Spacer(modifier = Modifier.height(artistFilenameSpacer))
-        val shouldMarqueeFilename = filename.length > 42
-        if (shouldMarqueeFilename) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clipToBounds()
-            ) {
-                Text(
-                    text = filename,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
+        val filenameTextStyle = MaterialTheme.typography.bodySmall
+        val filenameColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f)
+        val textMeasurer = rememberTextMeasurer()
+        val density = LocalDensity.current
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clipToBounds()
+        ) {
+            val maxWidthPx = with(density) { maxWidth.roundToPx().coerceAtLeast(1) }
+            val shouldMarqueeFilename = remember(filename, filenameTextStyle, maxWidthPx) {
+                textMeasurer.measure(
+                    text = AnnotatedString(filename),
+                    style = filenameTextStyle,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Clip,
-                    textAlign = TextAlign.Start,
-                    modifier = Modifier.basicMarquee(
-                        iterations = 3,
-                        initialDelayMillis = 1100
-                    )
-                )
+                    constraints = Constraints(maxWidth = maxWidthPx)
+                ).hasVisualOverflow
             }
-        } else {
             Text(
                 text = filename,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
+                style = filenameTextStyle,
+                color = filenameColor,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = if (centerSupportingMetadata) TextAlign.Center else TextAlign.Start,
-                modifier = if (centerSupportingMetadata) Modifier.fillMaxWidth() else Modifier
+                softWrap = false,
+                overflow = if (shouldMarqueeFilename) TextOverflow.Clip else TextOverflow.Ellipsis,
+                textAlign = if (shouldMarqueeFilename) TextAlign.Start else TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (shouldMarqueeFilename) {
+                            Modifier.basicMarquee(
+                                iterations = Int.MAX_VALUE,
+                                initialDelayMillis = 550
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
             )
         }
     }

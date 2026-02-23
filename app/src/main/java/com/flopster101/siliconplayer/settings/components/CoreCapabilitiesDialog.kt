@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -44,6 +45,11 @@ internal fun CoreCapabilitiesDialog(
     val scrollState = rememberScrollState()
     var viewportHeightPx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
+    val scrollbarAlpha = rememberDialogScrollbarAlpha(
+        enabled = true,
+        scrollState = scrollState,
+        label = "coreCapabilitiesScrollbarAlpha"
+    )
 
     AlertDialog(
         modifier = adaptiveDialogModifier(),
@@ -115,6 +121,7 @@ internal fun CoreCapabilitiesDialog(
                             .width(4.dp)
                             .height(viewportHeightDp)
                             .offset(x = (-2).dp)
+                            .graphicsLayer(alpha = scrollbarAlpha)
                     )
                 }
             }

@@ -107,6 +107,7 @@ import com.flopster101.siliconplayer.VisualizationVuAnchor
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
 import com.flopster101.siliconplayer.pluginNameForCoreName
+import com.flopster101.siliconplayer.rememberDialogScrollbarAlpha
 import com.flopster101.siliconplayer.ui.dialogs.VisualizationModePickerDialog
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
 import java.io.File
@@ -1388,6 +1389,11 @@ private fun TrackInfoDetailsDialog(
     )
     val detailsScrollState = rememberScrollState()
     var detailsViewportHeightPx by remember { mutableIntStateOf(0) }
+    val detailsScrollbarAlpha = rememberDialogScrollbarAlpha(
+        enabled = true,
+        scrollState = detailsScrollState,
+        label = "trackInfoDetailsScrollbarAlpha"
+    )
     val fileSizeBytes = file?.length() ?: 0L
     val filename = file?.name ?: "No file loaded"
     val extension = file?.name?.let(::inferredPrimaryExtensionForName)?.uppercase() ?: "UNKNOWN"
@@ -1518,6 +1524,7 @@ private fun TrackInfoDetailsDialog(
                             .align(Alignment.CenterEnd)
                             .fillMaxHeight()
                             .width(6.dp)
+                            .graphicsLayer(alpha = detailsScrollbarAlpha)
                     )
                 }
             }
@@ -2421,26 +2428,11 @@ private fun ChannelControlGrid(
     val rows = items.chunked(columns)
     val gridScrollState = rememberScrollState()
     var gridViewportHeightPx by remember { mutableIntStateOf(0) }
-    var scrollbarVisible by remember { mutableStateOf(false) }
     val density = LocalDensity.current
     val gridViewportHeightDp = with(density) { gridViewportHeightPx.toDp() }
-
-    LaunchedEffect(gridScrollState.isScrollInProgress, gridScrollState.maxValue) {
-        if (!showScrollbar || gridScrollState.maxValue <= 0) {
-            scrollbarVisible = false
-            return@LaunchedEffect
-        }
-        if (gridScrollState.isScrollInProgress) {
-            scrollbarVisible = true
-        } else {
-            delay(800)
-            scrollbarVisible = false
-        }
-    }
-
-    val scrollbarAlpha by animateFloatAsState(
-        targetValue = if (showScrollbar && scrollbarVisible && gridScrollState.maxValue > 0) 1f else 0f,
-        animationSpec = tween(durationMillis = 180),
+    val scrollbarAlpha = rememberDialogScrollbarAlpha(
+        enabled = showScrollbar,
+        scrollState = gridScrollState,
         label = "channelGridScrollbarAlpha"
     )
 

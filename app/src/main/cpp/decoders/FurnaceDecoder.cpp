@@ -107,6 +107,9 @@ bool FurnaceDecoder::open(const char* path) {
         return false;
     }
 
+    // Keep playback/render backend selection consistent even if loading touched config.
+    applyCoreOptionsLocked(localEngine.get());
+
     if (!localEngine->init()) {
         localEngine->quit(false);
         closeInternalLocked();
@@ -357,12 +360,19 @@ void FurnaceDecoder::applyCoreOptionsLocked(DivEngine* targetEngine) const {
         return;
     }
     targetEngine->setConf("ym2612Core", optionYm2612Core);
+    targetEngine->setConf("ym2612CoreRender", optionYm2612Core);
     targetEngine->setConf("snCore", optionSnCore);
+    targetEngine->setConf("snCoreRender", optionSnCore);
     targetEngine->setConf("nesCore", optionNesCore);
+    targetEngine->setConf("nesCoreRender", optionNesCore);
     targetEngine->setConf("c64Core", optionC64Core);
+    targetEngine->setConf("c64CoreRender", optionC64Core);
     targetEngine->setConf("gbQuality", optionGbQuality);
+    targetEngine->setConf("gbQualityRender", optionGbQuality);
     targetEngine->setConf("dsidQuality", optionDsidQuality);
+    targetEngine->setConf("dsidQualityRender", optionDsidQuality);
     targetEngine->setConf("ayCore", optionAyCore);
+    targetEngine->setConf("ayCoreRender", optionAyCore);
 }
 
 double FurnaceDecoder::normalizeTimelinePositionLocked(double seconds) const {

@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -86,6 +87,11 @@ private fun AboutEntityDialogContent(
     val scrollState = rememberScrollState()
     var viewportHeightPx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
+    val scrollbarAlpha = rememberDialogScrollbarAlpha(
+        enabled = true,
+        scrollState = scrollState,
+        label = "aboutEntityScrollbarAlpha"
+    )
 
     Box(
         modifier = Modifier
@@ -149,6 +155,7 @@ private fun AboutEntityDialogContent(
                     .width(4.dp)
                     .height(viewportHeightDp)
                     .offset(x = (-2).dp)
+                    .graphicsLayer(alpha = scrollbarAlpha)
             )
         }
     }

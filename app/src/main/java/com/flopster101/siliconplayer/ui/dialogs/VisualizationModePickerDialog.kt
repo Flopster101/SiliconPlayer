@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.VisualizationMode
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
+import com.flopster101.siliconplayer.rememberDialogScrollbarAlpha
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,6 +74,11 @@ internal fun VisualizationModePickerDialog(
         if (optionScrollState.maxValue <= 0) 0f
         else optionScrollState.value.toFloat() / optionScrollState.maxValue.toFloat()
     }
+    val scrollbarAlpha = rememberDialogScrollbarAlpha(
+        enabled = true,
+        scrollState = optionScrollState,
+        label = "visualizationModeScrollbarAlpha"
+    )
 
     AlertDialog(
         modifier = adaptiveDialogModifier(),
@@ -185,6 +192,7 @@ internal fun VisualizationModePickerDialog(
                                 .align(Alignment.CenterEnd)
                                 .width(4.dp)
                                 .fillMaxHeight()
+                                .graphicsLayer(alpha = scrollbarAlpha)
                                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f), RoundedCornerShape(999.dp))
                         )
                         Box(
@@ -193,6 +201,7 @@ internal fun VisualizationModePickerDialog(
                                 .offset(y = with(dialogDensity) { thumbOffsetPx.toDp() })
                                 .width(4.dp)
                                 .height(with(dialogDensity) { thumbHeightPx.toDp() })
+                                .graphicsLayer(alpha = scrollbarAlpha)
                                 .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f), RoundedCornerShape(999.dp))
                         )
                     }

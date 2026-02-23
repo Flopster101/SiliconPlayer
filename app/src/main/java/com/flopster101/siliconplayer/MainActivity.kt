@@ -1012,6 +1012,7 @@ private fun AppNavigation(
         repository = repository,
         cacheRootProvider = { File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR) },
         lastBrowserLocationIdProvider = { lastBrowserLocationId },
+        isPlayingProvider = { isPlaying },
         onResetPlayback = { playbackStateDelegates.resetAndOptionallyKeepLastTrack(keepLastTrack = false) },
         onSelectedFileChanged = { selectedFile = it },
         onCurrentPlaybackSourceIdChanged = { currentPlaybackSourceId = it },

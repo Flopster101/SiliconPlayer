@@ -23,6 +23,7 @@ internal suspend fun applyTrackSelectionAction(
     context: Context,
     file: File,
     autoStart: Boolean,
+    wasPlayingBeforeSelection: Boolean,
     expandOverride: Boolean?,
     sourceIdOverride: String?,
     locationIdOverride: String?,
@@ -49,6 +50,7 @@ internal suspend fun applyTrackSelectionAction(
     onPlayerExpandedChanged: (Boolean) -> Unit,
     syncPlaybackService: () -> Unit
 ) {
+    NativeBridge.setFastTrackSwitchStartupHint(wasPlayingBeforeSelection)
     onResetPlayback()
     val sourceId = sourceIdOverride ?: file.absolutePath
     val loadFile = resolveArchiveSourceToMountedFile(context, sourceId) ?: file

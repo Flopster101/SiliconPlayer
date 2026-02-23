@@ -41,6 +41,7 @@ public:
     int getTimelineMode();
     void setCoreOutputSampleRate(const std::string& coreName, int sampleRateHz);
     void setCoreOption(const std::string& coreName, const std::string& optionName, const std::string& optionValue);
+    void setFastTrackSwitchStartupHint(bool enabled);
     int getCoreOptionApplyPolicy(const std::string& coreName, const std::string& optionName);
     int getCoreCapabilities(const std::string& coreName);
     int getCoreRepeatModeCapabilities(const std::string& coreName);
@@ -264,6 +265,8 @@ private:
     int streamSampleRate = 48000;
     int streamChannelCount = 2;
     bool streamStartupPrerollPending = true;
+    std::atomic<int> openSlStartupProfile { 0 }; // 0 cold, 1 fast
+    std::atomic<bool> fastTrackSwitchStartupHint { false }; // one-shot hint from UI track switching
     std::atomic<bool> outputStreamReady { false };
     std::atomic<int> activeOutputBackend { 0 }; // 0 inactive, 1 AAudio, 2 OpenSL ES, 3 AudioTrack
     int outputBackendPreference = 0; // 0 auto, 1 aaudio, 2 opensl, 3 audiotrack

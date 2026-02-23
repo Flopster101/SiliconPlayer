@@ -11,9 +11,13 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 namespace {
-    constexpr int kOpenSlStartupReadyWaitMs = 420;
-    constexpr int kOpenSlStartupStrictEnqueueWaitMs = 220;
+    constexpr int kOpenSlStartupReadyWaitColdMs = 90;
+    constexpr int kOpenSlStartupReadyWaitFastMs = 40;
+    constexpr int kOpenSlStartupStrictEnqueueWaitColdMs = 40;
+    constexpr int kOpenSlStartupStrictEnqueueWaitFastMs = 16;
     constexpr int kOpenSlStartupPollIntervalMs = 2;
+    constexpr int kOpenSlStartupMinQueuedBuffersCold = 2;
+    constexpr int kOpenSlStartupMinQueuedBuffersFast = 1;
     constexpr int kAudioTrackStartupReadyWaitMs = 240;
     constexpr int kAudioTrackStartupPollIntervalMs = 2;
 
@@ -465,9 +469,11 @@ bool AudioEngine::enqueueOpenSlBuffer(bool allowUnderrun) {
     }
 
     if (!allowUnderrun) {
+        const bool fastStartup = openSlStartupProfile.load(std::memory_order_relaxed) == 1;
+        const int strictWaitMs = fastStartup ? kOpenSlStartupStrictEnqueueWaitFastMs : kOpenSlStartupStrictEnqueueWaitColdMs;
         int bufferedFrames = renderQueueFrames();
         const auto strictDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(
-                kOpenSlStartupStrictEnqueueWaitMs
+                strictWaitMs
         );
         while (bufferedFrames < openSlBufferFrames &&
                std::chrono::steady_clock::now() < strictDeadline) {
@@ -533,12 +539,15 @@ bool AudioEngine::requestStreamStart() {
             return false;
         }
 
+        const bool fastStartup = openSlStartupProfile.load(std::memory_order_relaxed) == 1;
+        const int minQueuedBuffers = fastStartup ? kOpenSlStartupMinQueuedBuffersFast : kOpenSlStartupMinQueuedBuffersCold;
+        const int readyWaitMs = fastStartup ? kOpenSlStartupReadyWaitFastMs : kOpenSlStartupReadyWaitColdMs;
         const int minStartupFrames = std::max(
-                openSlBufferFrames * kOpenSlBufferQueueCount,
+                openSlBufferFrames * minQueuedBuffers,
                 renderWorkerChunkFrames.load(std::memory_order_relaxed) * 2
         );
         const auto readyDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(
-                kOpenSlStartupReadyWaitMs
+                readyWaitMs
         );
         while (renderQueueFrames() < minStartupFrames &&
                std::chrono::steady_clock::now() < readyDeadline) {
@@ -551,18 +560,18 @@ bool AudioEngine::requestStreamStart() {
         (*openSlBufferQueue)->Clear(openSlBufferQueue);
 
         int queued = 0;
-        for (int i = 0; i < kOpenSlBufferQueueCount; ++i) {
+        for (int i = 0; i < minQueuedBuffers; ++i) {
             if (!enqueueOpenSlBuffer(false)) {
                 break;
             }
             queued++;
         }
-        if (queued < kOpenSlBufferQueueCount) {
+        if (queued < minQueuedBuffers) {
             const int bufferedFrames = renderQueueFrames();
             LOGE(
                     "OpenSL startup prequeue incomplete: queued=%d/%d buffered=%d",
                     queued,
-                    kOpenSlBufferQueueCount,
+                    minQueuedBuffers,
                     bufferedFrames
             );
             return false;
@@ -718,9 +727,27 @@ void AudioEngine::reconfigureStream(bool resumePlayback) {
         }
     }
 
-    if (shouldResume && requestStreamStart()) {
-        isPlaying.store(true);
+    if (!shouldResume) {
+        return;
     }
+
+    if (activeOutputBackend.load(std::memory_order_relaxed) == 2) {
+        // Backend reconfigure while playing should stay responsive.
+        openSlStartupProfile.store(1, std::memory_order_relaxed);
+    }
+
+    naturalEndPending.store(false);
+    isPlaying.store(true);
+    renderWorkerCv.notify_all();
+
+    if (requestStreamStart()) {
+        streamStartupPrerollPending = false;
+        renderWorkerCv.notify_all();
+        return;
+    }
+
+    LOGE("Reconfigure resume start failed");
+    isPlaying.store(false);
 }
 
 void AudioEngine::closeAaudioStream() {

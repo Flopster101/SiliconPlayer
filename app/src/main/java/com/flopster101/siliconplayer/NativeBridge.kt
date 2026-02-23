@@ -72,6 +72,7 @@ object NativeBridge {
     external fun stopEngineWithPauseResumeFade()
     external fun isEnginePlaying(): Boolean
     external fun loadAudio(path: String)
+    external fun setFastTrackSwitchStartupHint(enabled: Boolean)
     external fun getSupportedExtensions(): Array<String>
     external fun getDuration(): Double
     external fun getPosition(): Double

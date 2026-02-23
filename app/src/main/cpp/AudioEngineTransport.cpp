@@ -16,11 +16,15 @@
 
 namespace {
     constexpr int kStartupPrefillDeadlineAaudioMs = 220;
-    constexpr int kStartupPrefillDeadlineOpenSlMs = 760;
-    constexpr int kStartupRetryDeadlineOpenSlMs = 420;
+    constexpr int kStartupPrefillDeadlineOpenSlColdMs = 160;
+    constexpr int kStartupPrefillDeadlineOpenSlFastMs = 70;
+    constexpr int kStartupRetryDeadlineOpenSlColdMs = 120;
+    constexpr int kStartupRetryDeadlineOpenSlFastMs = 70;
     constexpr int kStartupPrefillPollIntervalMs = 2;
     constexpr int kStartupRetryPollIntervalMs = 4;
-    constexpr int kOpenSlStartupQueueMultiplier = 3;
+    constexpr int kOpenSlStartupPrimeBuffersCold = 2;
+    constexpr int kOpenSlStartupPrimeBuffersFast = 1;
+    constexpr int kAudioTrackStartupPrimeBuffers = 3;
 
     pid_t currentThreadId() {
 #ifdef SYS_gettid
@@ -107,6 +111,7 @@ bool AudioEngine::start() {
         const int activeBackend = activeOutputBackend.load(std::memory_order_relaxed);
         const bool openSlActive = activeBackend == 2;
         const bool audioTrackActive = activeBackend == 3;
+        const bool openSlFastStartup = openSlActive && openSlStartupProfile.load(std::memory_order_relaxed) == 1;
         const bool bufferedNonAaudioActive = openSlActive || audioTrackActive;
         const int startupChunkFrames = std::max(256, renderWorkerChunkFrames.load(std::memory_order_relaxed));
         int startupBaseTargetFrames = std::max(
@@ -115,8 +120,8 @@ bool AudioEngine::start() {
         );
         if (bufferedNonAaudioActive) {
             const int backendTargetFrames = openSlActive
-                    ? (openSlBufferFrames * AudioEngine::kOpenSlBufferQueueCount * kOpenSlStartupQueueMultiplier)
-                    : (audioTrackBufferFrames * 3);
+                    ? (openSlBufferFrames * (openSlFastStartup ? kOpenSlStartupPrimeBuffersFast : kOpenSlStartupPrimeBuffersCold))
+                    : (audioTrackBufferFrames * kAudioTrackStartupPrimeBuffers);
             startupBaseTargetFrames = std::max(
                     startupBaseTargetFrames,
                     backendTargetFrames
@@ -135,16 +140,16 @@ bool AudioEngine::start() {
         }
         const int startupTargetFrames = startupBaseTargetFrames + startupPrerollFrames;
         renderWorkerCv.notify_one();
-        const auto prefillDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(
-                bufferedNonAaudioActive ? kStartupPrefillDeadlineOpenSlMs : kStartupPrefillDeadlineAaudioMs
-        );
+        const auto prefillDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(openSlActive
+                ? (openSlFastStartup ? kStartupPrefillDeadlineOpenSlFastMs : kStartupPrefillDeadlineOpenSlColdMs)
+                : kStartupPrefillDeadlineAaudioMs);
         while (renderQueueFrames() < startupTargetFrames &&
                std::chrono::steady_clock::now() < prefillDeadline) {
             std::this_thread::sleep_for(std::chrono::milliseconds(kStartupPrefillPollIntervalMs));
             renderWorkerCv.notify_one();
         }
 
-        auto requestStartWithWarmupRetry = [this]() -> bool {
+        auto requestStartWithWarmupRetry = [this, openSlFastStartup]() -> bool {
             if (requestStreamStart()) {
                 return true;
             }
@@ -153,7 +158,7 @@ bool AudioEngine::start() {
             }
 
             const auto retryDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(
-                    kStartupRetryDeadlineOpenSlMs
+                    openSlFastStartup ? kStartupRetryDeadlineOpenSlFastMs : kStartupRetryDeadlineOpenSlColdMs
             );
             while (std::chrono::steady_clock::now() < retryDeadline) {
                 renderWorkerCv.notify_one();
@@ -179,10 +184,15 @@ bool AudioEngine::start() {
             }
         }
         streamStartupPrerollPending = false;
+        openSlStartupProfile.store(0, std::memory_order_relaxed);
         renderWorkerCv.notify_all();
         return true;
     }
     return false;
+}
+
+void AudioEngine::setFastTrackSwitchStartupHint(bool enabled) {
+    fastTrackSwitchStartupHint.store(enabled, std::memory_order_relaxed);
 }
 
 void AudioEngine::stop() {
@@ -242,6 +252,7 @@ bool AudioEngine::isEnginePlaying() const {
 
 void AudioEngine::setUrl(const char* url) {
     LOGD("URL set to: %s", url);
+    std::string previousDecoderName;
 
     // Ensure background seek work is fully quiesced before replacing decoder.
     // This prevents worker-thread reads from racing decoder teardown.
@@ -264,6 +275,9 @@ void AudioEngine::setUrl(const char* url) {
     // playback should not continue from stale decoder state.
     {
         std::lock_guard<std::mutex> lock(decoderMutex);
+        if (decoder) {
+            previousDecoderName = decoder->getName();
+        }
         decoder.reset();
         cachedDurationSeconds.store(0.0);
         resetResamplerStateLocked();
@@ -286,6 +300,19 @@ void AudioEngine::setUrl(const char* url) {
 
     auto newDecoder = DecoderRegistry::getInstance().createDecoder(url);
     if (newDecoder) {
+        const std::string newDecoderName = newDecoder->getName();
+        const bool sameCoreSwitch = !previousDecoderName.empty() && previousDecoderName == newDecoderName;
+        const bool fastSwitchHint = fastTrackSwitchStartupHint.exchange(false, std::memory_order_relaxed);
+        const bool useFastOpenSlStartup = fastSwitchHint && sameCoreSwitch;
+        openSlStartupProfile.store(useFastOpenSlStartup ? 1 : 0, std::memory_order_relaxed);
+        LOGD(
+                "OpenSL startup profile for next start: %s (hint=%d prevCore=%s nextCore=%s)",
+                useFastOpenSlStartup ? "fast" : "cold",
+                fastSwitchHint ? 1 : 0,
+                previousDecoderName.empty() ? "none" : previousDecoderName.c_str(),
+                newDecoderName.c_str()
+        );
+
         const int targetRate = resolveOutputSampleRateForCore(newDecoder->getName());
         std::unordered_map<std::string, std::string> optionsForDecoder;
         {
@@ -325,6 +352,8 @@ void AudioEngine::setUrl(const char* url) {
         naturalEndPending.store(false);
         renderWorkerCv.notify_one();
     } else {
+        fastTrackSwitchStartupHint.store(false, std::memory_order_relaxed);
+        openSlStartupProfile.store(0, std::memory_order_relaxed);
         LOGE("Failed to create decoder for file: %s", url);
     }
 }

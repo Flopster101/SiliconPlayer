@@ -1665,6 +1665,15 @@ Java_com_flopster101_siliconplayer_NativeBridge_loadAudio(JNIEnv* env, jobject t
     Java_com_flopster101_siliconplayer_MainActivity_loadAudio(env, thiz, path);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setFastTrackSwitchStartupHint(
+        JNIEnv*,
+        jobject,
+        jboolean enabled) {
+    ensureEngine();
+    audioEngine->setFastTrackSwitchStartupHint(enabled == JNI_TRUE);
+}
+
 extern "C" JNIEXPORT jobjectArray JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getSupportedExtensions(JNIEnv* env, jobject thiz) {
     return Java_com_flopster101_siliconplayer_MainActivity_getSupportedExtensions(env, thiz);

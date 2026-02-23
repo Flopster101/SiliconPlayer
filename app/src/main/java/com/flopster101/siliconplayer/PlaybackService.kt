@@ -199,7 +199,7 @@ class PlaybackService : Service() {
         persistResumeCheckpointIfNeeded(force = true)
 
         if (currentPath == null) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopForegroundCompat(removeNotification = true)
             notificationManager.cancel(NOTIFICATION_ID)
             stopSelf()
             return
@@ -266,10 +266,21 @@ class PlaybackService : Service() {
         positionSeconds = 0.0
         clearResumeCheckpoint()
         updateMediaSessionState()
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopForegroundCompat(removeNotification = true)
         notificationManager.cancel(NOTIFICATION_ID)
         sendBroadcast(Intent(ACTION_BROADCAST_CLEARED).setPackage(packageName))
         stopSelf()
+    }
+
+    private fun stopForegroundCompat(removeNotification: Boolean) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(
+                if (removeNotification) STOP_FOREGROUND_REMOVE else STOP_FOREGROUND_DETACH
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(removeNotification)
+        }
     }
 
     private fun createChannelIfNeeded() {

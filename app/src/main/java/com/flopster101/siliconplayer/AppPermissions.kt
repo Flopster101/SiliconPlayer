@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -77,14 +78,12 @@ internal fun rememberStoragePermissionState(context: Context): StoragePermission
 
     val requestStoragePermission: () -> Unit = {
         if (Build.VERSION.SDK_INT >= 30) {
-            openAllFilesAccessSettings(context)
+            val launchedAllFilesSettings = openAllFilesAccessSettings(context)
+            if (!launchedAllFilesSettings) {
+                storagePermissionLauncher.launch(storageRuntimePermissionsForCurrentApi())
+            }
         } else {
-            storagePermissionLauncher.launch(
-                arrayOf(
-                    android.Manifest.permission.READ_EXTERNAL_STORAGE,
-                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE
-                )
-            )
+            storagePermissionLauncher.launch(storageRuntimePermissionsForCurrentApi())
         }
     }
 
@@ -108,6 +107,24 @@ internal fun rememberStoragePermissionState(context: Context): StoragePermission
 
 @Composable
 internal fun StoragePermissionRequiredScreen(onRequestPermission: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isTvDevice = remember(context) {
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+    }
+    val showsSettingsFlow = isTvDevice && Build.VERSION.SDK_INT >= 30
+    val permissionBodyText = if (showsSettingsFlow) {
+        "Grant file access so Silicon Player can scan and play your audio library. " +
+            "On some Android TV versions, this opens App settings instead of a popup."
+    } else {
+        "Grant file access so Silicon Player can scan and play your audio library."
+    }
+    val permissionHintText = if (showsSettingsFlow) {
+        "If App settings opens, go to Permissions and allow Files and media (or All files access)."
+    } else {
+        null
+    }
+    val permissionButtonLabel = if (showsSettingsFlow) "Open permission settings" else "Grant permission"
+
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -162,17 +179,26 @@ internal fun StoragePermissionRequiredScreen(onRequestPermission: () -> Unit) {
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Grant file access so Silicon Player can scan and play your audio library.",
+                        text = permissionBodyText,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
                     )
+                    if (permissionHintText != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = permissionHintText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                     Spacer(modifier = Modifier.height(20.dp))
                     Button(
                         onClick = onRequestPermission,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Grant permission")
+                        Text(permissionButtonLabel)
                     }
                 }
             }
@@ -182,7 +208,29 @@ internal fun StoragePermissionRequiredScreen(onRequestPermission: () -> Unit) {
 
 private fun checkStoragePermission(context: Context): Boolean {
     return if (Build.VERSION.SDK_INT >= 30) {
-        Environment.isExternalStorageManager()
+        Environment.isExternalStorageManager() || hasRuntimeStorageReadPermission(context)
+    } else {
+        hasRuntimeStorageReadPermission(context)
+    }
+}
+
+private fun storageRuntimePermissionsForCurrentApi(): Array<String> {
+    return if (Build.VERSION.SDK_INT >= 33) {
+        arrayOf(android.Manifest.permission.READ_MEDIA_AUDIO)
+    } else {
+        arrayOf(
+            android.Manifest.permission.READ_EXTERNAL_STORAGE,
+            android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+        )
+    }
+}
+
+private fun hasRuntimeStorageReadPermission(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= 33) {
+        ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.READ_MEDIA_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
     } else {
         val hasRead = ContextCompat.checkSelfPermission(
             context,
@@ -196,18 +244,33 @@ private fun checkStoragePermission(context: Context): Boolean {
     }
 }
 
-private fun openAllFilesAccessSettings(context: Context) {
-    try {
-        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-            addCategory("android.intent.category.DEFAULT")
-            data = Uri.parse("package:${context.packageName}")
+private fun openAllFilesAccessSettings(context: Context): Boolean {
+    val packageUri = Uri.parse("package:${context.packageName}")
+    val fallbackIntents = listOf(
+        Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+            data = packageUri
+        },
+        Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION),
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = packageUri
         }
-        context.startActivity(intent)
+    )
+    for (intent in fallbackIntents) {
+        if (tryStartSettingsIntent(context, intent)) {
+            return true
+        }
+    }
+    return false
+}
+
+private fun tryStartSettingsIntent(context: Context, intent: Intent): Boolean {
+    val launchIntent = Intent(intent).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    return try {
+        context.startActivity(launchIntent)
+        true
     } catch (_: Exception) {
-        context.startActivity(
-            Intent().apply {
-                action = Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION
-            }
-        )
+        false
     }
 }

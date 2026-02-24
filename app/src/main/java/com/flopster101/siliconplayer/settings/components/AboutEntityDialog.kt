@@ -82,6 +82,7 @@ private fun AboutEntityDialogContent(
     entity: AboutEntity
 ) {
     val context = LocalContext.current
+    val versionLabel = remember(entity.id) { AboutCatalog.resolveVersion(entity.id) }
     val configuration = LocalConfiguration.current
     val maxHeight = configuration.screenHeightDp.dp * 0.60f
     val scrollState = rememberScrollState()
@@ -119,6 +120,12 @@ private fun AboutEntityDialogContent(
                 label = "License",
                 value = entity.license
             )
+            if (!versionLabel.isNullOrBlank()) {
+                AboutEntityInfoLine(
+                    label = "Version",
+                    value = versionLabel
+                )
+            }
             if (entity.links.isNotEmpty()) {
                 Text(
                     text = "Upstream links",

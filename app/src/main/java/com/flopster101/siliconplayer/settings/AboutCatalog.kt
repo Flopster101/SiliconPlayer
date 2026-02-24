@@ -336,6 +336,10 @@ internal object AboutCatalog {
     val libraries: List<AboutEntity>
         get() = libraryEntries
 
+    fun resolveVersion(entityId: String): String? {
+        return GeneratedAboutVersions.versionForId(entityId)
+    }
+
     fun resolveCoreForPlugin(pluginName: String): AboutEntity? {
         val id = pluginNameToCoreId[pluginName] ?: return null
         return entityById[id]

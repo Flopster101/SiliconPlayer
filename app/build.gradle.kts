@@ -13,6 +13,15 @@ fun parseBooleanGradleProperty(value: String?): Boolean {
     }
 }
 
+fun parseCsvGradleProperty(value: String?): Set<String> {
+    if (value.isNullOrBlank()) return emptySet()
+    return value
+        .split(',')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .toSet()
+}
+
 fun gitShortSha(): String {
     return try {
         val stdout = ByteArrayOutputStream()
@@ -24,6 +33,183 @@ fun gitShortSha(): String {
         stdout.toString().trim().ifBlank { "nogit" }
     } catch (_: Exception) {
         "nogit"
+    }
+}
+
+fun gitCommandOutput(workingDir: File, vararg args: String): String? {
+    return try {
+        val stdout = ByteArrayOutputStream()
+        val stderr = ByteArrayOutputStream()
+        val result = exec {
+            this.workingDir = workingDir
+            commandLine(*args)
+            standardOutput = stdout
+            errorOutput = stderr
+            isIgnoreExitValue = true
+        }
+        if (result.exitValue == 0) {
+            stdout.toString().trim().ifBlank { null }
+        } else {
+            null
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+fun resolveGitVersionString(repoDir: File): String? {
+    return resolveGitVersionString(repoDir, useTag = true, tagPatterns = listOf("*"))
+}
+
+fun resolveLatestTagByPattern(repoDir: File, patterns: List<String>): String? {
+    if (!repoDir.isDirectory) return null
+    val normalizedPatterns = patterns.map { it.trim() }.filter { it.isNotEmpty() }
+    val effectivePatterns = if (normalizedPatterns.isEmpty()) listOf("*") else normalizedPatterns
+    for (pattern in effectivePatterns) {
+        val listed = gitCommandOutput(
+            repoDir,
+            "git",
+            "tag",
+            "--list",
+            pattern,
+            "--sort=-version:refname"
+        ) ?: continue
+        val first = listed
+            .lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.isNotEmpty() }
+        if (!first.isNullOrBlank()) {
+            return first
+        }
+    }
+    return null
+}
+
+fun resolveGitVersionString(
+    repoDir: File,
+    useTag: Boolean,
+    tagPatterns: List<String>
+): String? {
+    if (!repoDir.isDirectory) return null
+    val shortSha = gitCommandOutput(repoDir, "git", "rev-parse", "--short=8", "HEAD") ?: return null
+    if (!useTag) {
+        return shortSha
+    }
+    val selectedTag = resolveLatestTagByPattern(repoDir, tagPatterns)
+    return if (selectedTag.isNullOrBlank()) shortSha else "$selectedTag-$shortSha"
+}
+
+fun escapeKotlinString(value: String): String {
+    return value
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+}
+
+val aboutVersionSources = linkedMapOf(
+    "core.ffmpeg" to "external/ffmpeg",
+    "core.libopenmpt" to "external/libopenmpt",
+    "core.vgmplay" to "external/libvgm",
+    "core.gme" to "external/libgme",
+    "core.libsidplayfp" to "external/libsidplayfp",
+    "core.lazyusf2" to "external/lazyusf2",
+    "core.vio2sf" to "external/2sf/vio2sf",
+    "core.sc68" to "external/sc68",
+    "core.adplug" to "external/adplug",
+    "core.uade" to "external/uade",
+    "core.hivelytracker" to "external/hivelytracker",
+    "core.klystrack" to "external/klystrack",
+    "core.furnace" to "external/furnace",
+    "lib.psflib" to "external/psflib",
+    "lib.libsoxr" to "external/libsoxr",
+    "lib.libresidfp" to "external/libresidfp",
+    "lib.resid" to "external/resid",
+    "lib.openssl" to "external/openssl",
+    "lib.libbinio" to "external/libbinio"
+)
+
+// Prefer dependency-specific release tag families where upstream uses multiple namespaces.
+val aboutVersionTagPatterns = mapOf(
+    "core.libopenmpt" to listOf("libopenmpt-*", "OpenMPT-*")
+)
+
+// Build-time toggle:
+//   -PaboutVersionDisableTagsFor=core.libopenmpt,core.lazyusf2
+// IDs not listed here continue using tag+hash when tags exist.
+val aboutVersionDisableTagsFor = parseCsvGradleProperty(
+    providers.gradleProperty("aboutVersionDisableTagsFor").orNull
+)
+
+val aboutVersionOverrides = mapOf(
+    "core.sc68" to "r713"
+)
+
+val generatedAboutVersionDir = layout.buildDirectory.dir("generated/source/aboutVersions/main")
+val generatedAboutVersionFile = generatedAboutVersionDir.map {
+    File(it.asFile, "com/flopster101/siliconplayer/GeneratedAboutVersions.kt")
+}
+
+val generateAboutVersions by tasks.registering {
+    group = "build setup"
+    description = "Generate About versions from submodule git metadata."
+    outputs.file(generatedAboutVersionFile)
+    inputs.property("aboutVersionDisableTagsFor", aboutVersionDisableTagsFor.toList().sorted().joinToString(","))
+    inputs.property(
+        "aboutVersionTagPatterns",
+        aboutVersionTagPatterns
+            .toSortedMap()
+            .entries
+            .joinToString("|") { (id, patterns) -> "$id=${patterns.joinToString(",")}" }
+    )
+    inputs.property(
+        "aboutVersionOverrides",
+        aboutVersionOverrides
+            .toSortedMap()
+            .entries
+            .joinToString("|") { (id, value) -> "$id=$value" }
+    )
+    inputs.property(
+        "aboutVersionSourceHeads",
+        aboutVersionSources
+            .entries
+            .joinToString("|") { (id, path) ->
+                val sourceDir = rootProject.file(path)
+                val head = gitCommandOutput(sourceDir, "git", "rev-parse", "HEAD") ?: "missing"
+                "$id=$head"
+            }
+    )
+    doLast {
+        val resolved = linkedMapOf<String, String>()
+        for ((id, path) in aboutVersionSources) {
+            val sourceDir = rootProject.file(path)
+            val useTag = id !in aboutVersionDisableTagsFor
+            val tagPatterns = aboutVersionTagPatterns[id] ?: listOf("*")
+            val gitVersion = resolveGitVersionString(
+                repoDir = sourceDir,
+                useTag = useTag,
+                tagPatterns = tagPatterns
+            )
+            val forcedVersion = aboutVersionOverrides[id]
+            resolved[id] = forcedVersion ?: gitVersion ?: "unknown"
+        }
+
+        val outFile = generatedAboutVersionFile.get()
+        outFile.parentFile.mkdirs()
+        val mapBody = resolved.entries.joinToString(",\n") { (id, version) ->
+            "        \"${escapeKotlinString(id)}\" to \"${escapeKotlinString(version)}\""
+        }
+        outFile.writeText(
+            """
+            |package com.flopster101.siliconplayer
+            |
+            |internal object GeneratedAboutVersions {
+            |    val byId: Map<String, String> = mapOf(
+            |$mapBody
+            |    )
+            |
+            |    fun versionForId(entityId: String): String? = byId[entityId]
+            |}
+            |""".trimMargin()
+        )
     }
 }
 
@@ -129,8 +315,13 @@ android {
         getByName("main") {
             assets.srcDir(layout.buildDirectory.dir("generated/uadeRuntimeAssets/main"))
             jniLibs.srcDir(layout.buildDirectory.dir("generated/uadeRuntimeJniLibs/main"))
+            java.srcDir(generatedAboutVersionDir)
         }
     }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(generateAboutVersions)
 }
 
 dependencies {

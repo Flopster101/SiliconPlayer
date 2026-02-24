@@ -27,6 +27,7 @@ object AppDefaults {
             const val count = 40
             const val smoothingPercent = 60
             const val roundnessDp = 6
+            val fpsMode = VisualizationOscFpsMode.Fps60
             const val overlayArtwork = true
             const val useThemeColor = true
             val renderBackend = VisualizationRenderBackend.OpenGlTexture
@@ -63,6 +64,7 @@ object AppDefaults {
             val anchor = VisualizationVuAnchor.Bottom
             const val useThemeColor = true
             const val smoothingPercent = 40
+            val fpsMode = VisualizationOscFpsMode.Fps60
             val renderBackend = VisualizationRenderBackend.OpenGlTexture
             val colorModeNoArtwork = VisualizationOscColorMode.Monet
             val colorModeWithArtwork = VisualizationOscColorMode.Artwork

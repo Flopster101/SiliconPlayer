@@ -354,6 +354,10 @@ internal fun resetVisualizationBarsSettingsAction(
     onBarRenderBackendChanged(AppDefaults.Visualization.Bars.renderBackend)
     prefs.edit()
         .putString(
+            AppPreferenceKeys.VISUALIZATION_BAR_FPS_MODE,
+            AppDefaults.Visualization.Bars.fpsMode.storageValue
+        )
+        .putString(
             AppPreferenceKeys.VISUALIZATION_BAR_RENDER_BACKEND,
             AppDefaults.Visualization.Bars.renderBackend.storageValue
         )
@@ -449,6 +453,10 @@ internal fun resetVisualizationVuSettingsAction(
     onVisualizationVuSmoothingPercentChanged(AppDefaults.Visualization.Vu.smoothingPercent)
     onVisualizationVuRenderBackendChanged(AppDefaults.Visualization.Vu.renderBackend)
     prefs.edit()
+        .putString(
+            AppPreferenceKeys.VISUALIZATION_VU_FPS_MODE,
+            AppDefaults.Visualization.Vu.fpsMode.storageValue
+        )
         .putString(
             AppPreferenceKeys.VISUALIZATION_VU_RENDER_BACKEND,
             AppDefaults.Visualization.Vu.renderBackend.storageValue

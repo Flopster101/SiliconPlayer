@@ -68,6 +68,7 @@ internal fun VisualizationBasicBarsRouteContent(
     val barColorModeNoArtworkKey = "visualization_bar_color_mode_no_artwork"
     val barColorModeWithArtworkKey = "visualization_bar_color_mode_with_artwork"
     val barCustomColorKey = "visualization_bar_custom_color_argb"
+    val barFpsModeKey = AppPreferenceKeys.VISUALIZATION_BAR_FPS_MODE
     val context = LocalContext.current
     val prefs = remember(context) {
         context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -99,10 +100,21 @@ internal fun VisualizationBasicBarsRouteContent(
             prefs.getInt(barCustomColorKey, AppDefaults.Visualization.Bars.customColorArgb)
         )
     }
+    var barFpsMode by remember {
+        mutableStateOf(
+            VisualizationOscFpsMode.fromStorage(
+                prefs.getString(
+                    barFpsModeKey,
+                    AppDefaults.Visualization.Bars.fpsMode.storageValue
+                )
+            )
+        )
+    }
     var showBarCountDialog by remember { mutableStateOf(false) }
     var showBarSmoothingDialog by remember { mutableStateOf(false) }
     var showBarRoundnessDialog by remember { mutableStateOf(false) }
     var showBarRenderBackendDialog by remember { mutableStateOf(false) }
+    var showBarFpsModeDialog by remember { mutableStateOf(false) }
     var showBarColorModeNoArtworkDialog by remember { mutableStateOf(false) }
     var showBarColorModeWithArtworkDialog by remember { mutableStateOf(false) }
     var showBarCustomColorDialog by remember { mutableStateOf(false) }
@@ -113,6 +125,13 @@ internal fun VisualizationBasicBarsRouteContent(
         description = "Choose Compose or OpenGL ES (TextureView) renderer.",
         value = visualizationBarRenderBackend.label,
         onClick = { showBarRenderBackendDialog = true }
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    SettingsValuePickerCard(
+        title = "Frame rate",
+        description = "Target update cadence for bars.",
+        value = barFpsMode.label,
+        onClick = { showBarFpsModeDialog = true }
     )
     Spacer(modifier = Modifier.height(10.dp))
     SettingsValuePickerCard(
@@ -234,6 +253,20 @@ internal fun VisualizationBasicBarsRouteContent(
             onDismiss = { showBarRenderBackendDialog = false }
         )
     }
+    if (showBarFpsModeDialog) {
+        SettingsSingleChoiceDialog(
+            title = "Bars frame rate",
+            selectedValue = barFpsMode,
+            options = VisualizationOscFpsMode.entries.map { mode ->
+                ChoiceDialogOption(value = mode, label = mode.label)
+            },
+            onSelected = { mode ->
+                barFpsMode = mode
+                prefs.edit().putString(barFpsModeKey, mode.storageValue).apply()
+            },
+            onDismiss = { showBarFpsModeDialog = false }
+        )
+    }
     if (showBarColorModeNoArtworkDialog) {
         VisualizationOscColorModeDialog(
             title = "Bar color (no artwork)",
@@ -301,6 +334,7 @@ internal fun VisualizationBasicVuMetersRouteContent(
     val vuColorModeNoArtworkKey = "visualization_vu_color_mode_no_artwork"
     val vuColorModeWithArtworkKey = "visualization_vu_color_mode_with_artwork"
     val vuCustomColorKey = "visualization_vu_custom_color_argb"
+    val vuFpsModeKey = AppPreferenceKeys.VISUALIZATION_VU_FPS_MODE
     val context = LocalContext.current
     val prefs = remember(context) {
         context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -332,9 +366,20 @@ internal fun VisualizationBasicVuMetersRouteContent(
             prefs.getInt(vuCustomColorKey, AppDefaults.Visualization.Vu.customColorArgb)
         )
     }
+    var vuFpsMode by remember {
+        mutableStateOf(
+            VisualizationOscFpsMode.fromStorage(
+                prefs.getString(
+                    vuFpsModeKey,
+                    AppDefaults.Visualization.Vu.fpsMode.storageValue
+                )
+            )
+        )
+    }
     var showVuAnchorDialog by remember { mutableStateOf(false) }
     var showVuRenderBackendDialog by remember { mutableStateOf(false) }
     var showVuSmoothingDialog by remember { mutableStateOf(false) }
+    var showVuFpsModeDialog by remember { mutableStateOf(false) }
     var showVuColorModeNoArtworkDialog by remember { mutableStateOf(false) }
     var showVuColorModeWithArtworkDialog by remember { mutableStateOf(false) }
     var showVuCustomColorDialog by remember { mutableStateOf(false) }
@@ -352,6 +397,13 @@ internal fun VisualizationBasicVuMetersRouteContent(
         description = "Where VU meter rows are aligned in the artwork area.",
         value = visualizationVuAnchor.label,
         onClick = { showVuAnchorDialog = true }
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    SettingsValuePickerCard(
+        title = "Frame rate",
+        description = "Target update cadence for VU meters.",
+        value = vuFpsMode.label,
+        onClick = { showVuFpsModeDialog = true }
     )
     Spacer(modifier = Modifier.height(10.dp))
     SettingsValuePickerCard(
@@ -408,6 +460,20 @@ internal fun VisualizationBasicVuMetersRouteContent(
             ),
             onSelected = onVisualizationVuRenderBackendChanged,
             onDismiss = { showVuRenderBackendDialog = false }
+        )
+    }
+    if (showVuFpsModeDialog) {
+        SettingsSingleChoiceDialog(
+            title = "VU frame rate",
+            selectedValue = vuFpsMode,
+            options = VisualizationOscFpsMode.entries.map { mode ->
+                ChoiceDialogOption(value = mode, label = mode.label)
+            },
+            onSelected = { mode ->
+                vuFpsMode = mode
+                prefs.edit().putString(vuFpsModeKey, mode.storageValue).apply()
+            },
+            onDismiss = { showVuFpsModeDialog = false }
         )
     }
 

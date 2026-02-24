@@ -144,10 +144,12 @@ private const val PREF_KEY_VIS_OSC_GRID_COLOR_WITH_ARTWORK = "visualization_osc_
 private const val PREF_KEY_VIS_OSC_CUSTOM_LINE_COLOR = "visualization_osc_custom_line_color_argb"
 private const val PREF_KEY_VIS_OSC_CUSTOM_GRID_COLOR = "visualization_osc_custom_grid_color_argb"
 private const val PREF_KEY_VIS_BAR_RENDER_BACKEND = "visualization_bar_render_backend"
+private const val PREF_KEY_VIS_BAR_FPS_MODE = "visualization_bar_fps_mode"
 private const val PREF_KEY_VIS_BAR_COLOR_NO_ARTWORK = "visualization_bar_color_mode_no_artwork"
 private const val PREF_KEY_VIS_BAR_COLOR_WITH_ARTWORK = "visualization_bar_color_mode_with_artwork"
 private const val PREF_KEY_VIS_BAR_CUSTOM_COLOR = "visualization_bar_custom_color_argb"
 private const val PREF_KEY_VIS_VU_RENDER_BACKEND = "visualization_vu_render_backend"
+private const val PREF_KEY_VIS_VU_FPS_MODE = "visualization_vu_fps_mode"
 private const val PREF_KEY_VIS_VU_COLOR_NO_ARTWORK = "visualization_vu_color_mode_no_artwork"
 private const val PREF_KEY_VIS_VU_COLOR_WITH_ARTWORK = "visualization_vu_color_mode_with_artwork"
 private const val PREF_KEY_VIS_VU_CUSTOM_COLOR = "visualization_vu_custom_color_argb"
@@ -170,10 +172,12 @@ private class PlayerVisualizationPreferenceState(
     barColorModeNoArtwork: VisualizationOscColorMode,
     barColorModeWithArtwork: VisualizationOscColorMode,
     barCustomColorArgb: Int,
+    barFpsMode: VisualizationOscFpsMode,
     barRuntimeRenderBackend: VisualizationRenderBackend,
     vuColorModeNoArtwork: VisualizationOscColorMode,
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
+    vuFpsMode: VisualizationOscFpsMode,
     vuRuntimeRenderBackend: VisualizationRenderBackend
 ) {
     var oscWindowMs by mutableIntStateOf(oscWindowMs)
@@ -193,10 +197,12 @@ private class PlayerVisualizationPreferenceState(
     var barColorModeNoArtwork by mutableStateOf(barColorModeNoArtwork)
     var barColorModeWithArtwork by mutableStateOf(barColorModeWithArtwork)
     var barCustomColorArgb by mutableIntStateOf(barCustomColorArgb)
+    var barFpsMode by mutableStateOf(barFpsMode)
     var barRuntimeRenderBackend by mutableStateOf(barRuntimeRenderBackend)
     var vuColorModeNoArtwork by mutableStateOf(vuColorModeNoArtwork)
     var vuColorModeWithArtwork by mutableStateOf(vuColorModeWithArtwork)
     var vuCustomColorArgb by mutableIntStateOf(vuCustomColorArgb)
+    var vuFpsMode by mutableStateOf(vuFpsMode)
     var vuRuntimeRenderBackend by mutableStateOf(vuRuntimeRenderBackend)
 }
 
@@ -279,6 +285,12 @@ private fun rememberPlayerVisualizationPreferenceState(
                 VisualizationOscColorMode.Artwork
             ),
             barCustomColorArgb = prefs.getInt(PREF_KEY_VIS_BAR_CUSTOM_COLOR, 0xFF6BD8FF.toInt()),
+            barFpsMode = VisualizationOscFpsMode.fromStorage(
+                prefs.getString(
+                    PREF_KEY_VIS_BAR_FPS_MODE,
+                    AppDefaults.Visualization.Bars.fpsMode.storageValue
+                )
+            ),
             barRuntimeRenderBackend = VisualizationRenderBackend.fromStorage(
                 prefs.getString(PREF_KEY_VIS_BAR_RENDER_BACKEND, defaultBarRenderBackend.storageValue),
                 defaultBarRenderBackend
@@ -298,6 +310,12 @@ private fun rememberPlayerVisualizationPreferenceState(
                 VisualizationOscColorMode.Artwork
             ),
             vuCustomColorArgb = prefs.getInt(PREF_KEY_VIS_VU_CUSTOM_COLOR, 0xFF6BD8FF.toInt()),
+            vuFpsMode = VisualizationOscFpsMode.fromStorage(
+                prefs.getString(
+                    PREF_KEY_VIS_VU_FPS_MODE,
+                    AppDefaults.Visualization.Vu.fpsMode.storageValue
+                )
+            ),
             vuRuntimeRenderBackend = VisualizationRenderBackend.fromStorage(
                 prefs.getString(PREF_KEY_VIS_VU_RENDER_BACKEND, defaultVuRenderBackend.storageValue),
                 defaultVuRenderBackend
@@ -412,6 +430,14 @@ private fun rememberPlayerVisualizationPreferenceState(
                     state.barCustomColorArgb =
                         sharedPrefs.getInt(PREF_KEY_VIS_BAR_CUSTOM_COLOR, 0xFF6BD8FF.toInt())
                 }
+                PREF_KEY_VIS_BAR_FPS_MODE -> {
+                    state.barFpsMode = VisualizationOscFpsMode.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_BAR_FPS_MODE,
+                            AppDefaults.Visualization.Bars.fpsMode.storageValue
+                        )
+                    )
+                }
                 PREF_KEY_VIS_BAR_RENDER_BACKEND -> {
                     state.barRuntimeRenderBackend = VisualizationRenderBackend.fromStorage(
                         sharedPrefs.getString(
@@ -442,6 +468,14 @@ private fun rememberPlayerVisualizationPreferenceState(
                 PREF_KEY_VIS_VU_CUSTOM_COLOR -> {
                     state.vuCustomColorArgb =
                         sharedPrefs.getInt(PREF_KEY_VIS_VU_CUSTOM_COLOR, 0xFF6BD8FF.toInt())
+                }
+                PREF_KEY_VIS_VU_FPS_MODE -> {
+                    state.vuFpsMode = VisualizationOscFpsMode.fromStorage(
+                        sharedPrefs.getString(
+                            PREF_KEY_VIS_VU_FPS_MODE,
+                            AppDefaults.Visualization.Vu.fpsMode.storageValue
+                        )
+                    )
                 }
                 PREF_KEY_VIS_VU_RENDER_BACKEND -> {
                     state.vuRuntimeRenderBackend = VisualizationRenderBackend.fromStorage(
@@ -740,6 +774,8 @@ fun PlayerScreen(
                                 visualizationOscWindowMs = visualizationPrefsState.oscWindowMs,
                                 visualizationOscTriggerModeNative = visualizationPrefsState.oscTriggerModeNative,
                                 visualizationOscFpsMode = visualizationPrefsState.oscFpsMode,
+                                visualizationBarFpsMode = visualizationPrefsState.barFpsMode,
+                                visualizationVuFpsMode = visualizationPrefsState.vuFpsMode,
                                 visualizationOscRenderBackend = visualizationPrefsState.oscRenderBackend,
                                 visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
                                 visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
@@ -1027,6 +1063,8 @@ fun PlayerScreen(
                                         visualizationOscWindowMs = visualizationPrefsState.oscWindowMs,
                                         visualizationOscTriggerModeNative = visualizationPrefsState.oscTriggerModeNative,
                                         visualizationOscFpsMode = visualizationPrefsState.oscFpsMode,
+                                        visualizationBarFpsMode = visualizationPrefsState.barFpsMode,
+                                        visualizationVuFpsMode = visualizationPrefsState.vuFpsMode,
                                         visualizationOscRenderBackend = visualizationPrefsState.oscRenderBackend,
                                         visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
                                         visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,

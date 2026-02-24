@@ -261,6 +261,8 @@ private fun computeVisualizationPollIntervalNs(
     isPlaying: Boolean,
     visualizationMode: VisualizationMode,
     visualizationOscFpsMode: VisualizationOscFpsMode,
+    visualizationBarFpsMode: VisualizationOscFpsMode,
+    visualizationVuFpsMode: VisualizationOscFpsMode,
     channelScopeFpsMode: VisualizationOscFpsMode,
     displayRefreshHz: Float
 ): Long {
@@ -282,7 +284,12 @@ private fun computeVisualizationPollIntervalNs(
         }
         VisualizationMode.Bars,
         VisualizationMode.VuMeters -> {
-            when (visualizationOscFpsMode) {
+            val fpsMode = if (visualizationMode == VisualizationMode.Bars) {
+                visualizationBarFpsMode
+            } else {
+                visualizationVuFpsMode
+            }
+            when (fpsMode) {
                 VisualizationOscFpsMode.Default -> 30f
                 VisualizationOscFpsMode.Fps60 -> 60f
                 VisualizationOscFpsMode.NativeRefresh -> displayRefreshHz.coerceAtLeast(30f)
@@ -999,6 +1006,8 @@ internal fun AlbumArtPlaceholder(
     visualizationOscWindowMs: Int,
     visualizationOscTriggerModeNative: Int,
     visualizationOscFpsMode: VisualizationOscFpsMode,
+    visualizationBarFpsMode: VisualizationOscFpsMode,
+    visualizationVuFpsMode: VisualizationOscFpsMode,
     visualizationOscRenderBackend: VisualizationRenderBackend,
     visualizationBarSmoothingPercent: Int,
     visualizationVuSmoothingPercent: Int,
@@ -1308,6 +1317,8 @@ internal fun AlbumArtPlaceholder(
                     isPlaying = isPlaying,
                     visualizationMode = visualizationMode,
                     visualizationOscFpsMode = visualizationOscFpsMode,
+                    visualizationBarFpsMode = visualizationBarFpsMode,
+                    visualizationVuFpsMode = visualizationVuFpsMode,
                     channelScopeFpsMode = channelScopePrefs.fpsMode,
                     displayRefreshHz = displayRefreshHz
                 )

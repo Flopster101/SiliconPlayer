@@ -43,7 +43,11 @@ object UadeRuntimeSupport {
 
             if (!alreadyPrepared) {
                 targetDir.deleteRecursively()
-                copyAssetTree(assetManager, "uade/$abi", targetDir)
+                targetDir.mkdirs()
+                if (!copyRuntimeAssets(assetManager, abi, targetDir)) {
+                    Log.e(UADE_RUNTIME_LOG_TAG, "Failed to materialize UADE runtime assets for ABI '$abi'")
+                    return null
+                }
                 if (!coreFile.setExecutable(true, false)) {
                     Log.w(
                         UADE_RUNTIME_LOG_TAG,
@@ -71,12 +75,48 @@ object UadeRuntimeSupport {
 
     private fun resolveBestAbi(assetManager: AssetManager): String? {
         return Build.SUPPORTED_ABIS.firstOrNull { abi ->
-            try {
-                val entries = assetManager.list("uade/$abi") ?: emptyArray()
-                entries.contains("uadecore")
-            } catch (_: Exception) {
-                false
+            val abiCoreAsset = "uade/$abi/uadecore"
+            val legacyAbiRuntimeAsset = "uade/$abi/uaerc"
+            val commonRuntimeAsset = "uade/common/uaerc"
+            assetExists(assetManager, abiCoreAsset) &&
+                (assetExists(assetManager, commonRuntimeAsset) || assetExists(assetManager, legacyAbiRuntimeAsset))
+        }
+    }
+
+    private fun copyRuntimeAssets(assetManager: AssetManager, abi: String, targetDir: File): Boolean {
+        val abiAssetRoot = "uade/$abi"
+        val commonAssetRoot = "uade/common"
+        val abiCoreAssetPath = "$abiAssetRoot/uadecore"
+
+        return try {
+            when {
+                assetExists(assetManager, commonAssetRoot) -> {
+                    copyAssetTree(assetManager, commonAssetRoot, targetDir)
+                    copyAssetTree(assetManager, abiCoreAssetPath, File(targetDir, "uadecore"))
+                }
+                assetExists(assetManager, abiAssetRoot) -> {
+                    // Backward-compat path for older builds where all assets were ABI-scoped.
+                    copyAssetTree(assetManager, abiAssetRoot, targetDir)
+                }
+                else -> return false
             }
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun assetExists(assetManager: AssetManager, assetPath: String): Boolean {
+        return try {
+            val entries = assetManager.list(assetPath)
+            if (entries != null && entries.isNotEmpty()) {
+                true
+            } else {
+                assetManager.open(assetPath).close()
+                true
+            }
+        } catch (_: Exception) {
+            false
         }
     }
 

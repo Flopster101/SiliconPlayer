@@ -281,7 +281,7 @@ val uadeRuntimeAssetAbis = buildList {
 }
 val syncUadeRuntimeAssets = tasks.register("syncUadeRuntimeAssets") {
     group = "build setup"
-    description = "Sync ABI-specific UADE runtime files into generated assets."
+    description = "Sync shared/per-ABI UADE runtime files into generated assets."
 
     doLast {
         val destinationRoot = layout.buildDirectory
@@ -290,20 +290,30 @@ val syncUadeRuntimeAssets = tasks.register("syncUadeRuntimeAssets") {
             .asFile
         delete(destinationRoot)
 
+        // UADE share assets (players/score/config) are architecture-independent.
+        // Keep a single common copy and only keep uadecore split by ABI.
+        val sourceCommonShareDir =
+            uadeRuntimeAssetAbis
+                .asSequence()
+                .map { abi -> File(file("src/main/cpp/prebuilt/$abi"), "share/uade") }
+                .firstOrNull { it.isDirectory }
+
+        if (sourceCommonShareDir == null) {
+            logger.lifecycle("UADE shared runtime assets missing (expected share/uade under any configured ABI)")
+        } else {
+            copy {
+                from(sourceCommonShareDir)
+                into(File(destinationRoot, "common"))
+            }
+        }
+
         uadeRuntimeAssetAbis.forEach { abi ->
-            val prebuiltRoot = file("src/main/cpp/prebuilt/$abi")
-            val sourceShareDir = File(prebuiltRoot, "share/uade")
-            val sourceUadeCore = File(prebuiltRoot, "lib/uade/uadecore")
-            if (!sourceShareDir.isDirectory || !sourceUadeCore.isFile) {
+            val sourceUadeCore = file("src/main/cpp/prebuilt/$abi/lib/uade/uadecore")
+            if (!sourceUadeCore.isFile) {
                 logger.lifecycle(
-                    "UADE runtime assets missing for $abi, skipping (expected: ${sourceShareDir.absolutePath}, ${sourceUadeCore.absolutePath})"
+                    "UADE runtime core missing for $abi, skipping (${sourceUadeCore.absolutePath})"
                 )
                 return@forEach
-            }
-
-            copy {
-                from(sourceShareDir)
-                into(File(destinationRoot, abi))
             }
             copy {
                 from(sourceUadeCore)

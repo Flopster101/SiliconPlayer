@@ -92,6 +92,7 @@ internal fun readSubtuneEntries(subtuneCount: Int): List<SubtuneEntry> {
     }
 }
 
+@Suppress("UNUSED_PARAMETER")
 internal fun resolveTrackRepeatMode(
     selectedFile: File?,
     durationSeconds: Double,
@@ -99,8 +100,8 @@ internal fun resolveTrackRepeatMode(
     preferredRepeatMode: RepeatMode,
     repeatModeCapabilitiesFlags: Int
 ): RepeatMode {
-    val allowTrackRepeat = selectedFile == null || durationSeconds > 0.0
-    val allowSubtuneRepeat = allowTrackRepeat && (selectedFile == null || subtuneCount > 1)
+    val allowTrackRepeat = true
+    val allowSubtuneRepeat = subtuneCount > 1
     return resolveActiveRepeatMode(
         preferredRepeatMode = preferredRepeatMode,
         repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags,
@@ -118,6 +119,7 @@ internal fun shouldApplyRepeatModeNow(
     return hasActiveSource && !seekInProgress
 }
 
+@Suppress("UNUSED_PARAMETER")
 internal fun resolveNextRepeatMode(
     playbackCapabilitiesFlags: Int,
     seekInProgress: Boolean,
@@ -129,8 +131,8 @@ internal fun resolveNextRepeatMode(
 ): RepeatMode? {
     if (!supportsLiveRepeatMode(playbackCapabilitiesFlags)) return null
     if (seekInProgress) return null
-    val allowTrackRepeat = selectedFile == null || durationSeconds > 0.0
-    val allowSubtuneRepeat = allowTrackRepeat && (selectedFile == null || subtuneCount > 1)
+    val allowTrackRepeat = true
+    val allowSubtuneRepeat = subtuneCount > 1
     return cycleRepeatModeValue(
         activeRepeatMode = activeRepeatMode,
         repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags,

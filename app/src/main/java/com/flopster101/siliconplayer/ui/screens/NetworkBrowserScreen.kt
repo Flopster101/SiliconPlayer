@@ -106,7 +106,13 @@ internal fun NetworkBrowserScreen(
             .asSequence()
             .filter { it.parentId == currentFolderId }
             .sortedWith(
-                compareBy<NetworkNode> { it.type != NetworkNodeType.Folder }
+                compareBy<NetworkNode> { entry ->
+                    when {
+                        entry.type == NetworkNodeType.Folder -> 0
+                        isSmbFolderLikeSource(entry, resolveNetworkNodeSourceId(entry).orEmpty()) -> 1
+                        else -> 2
+                    }
+                }
                     .thenBy { it.title.lowercase() }
             )
             .toList()
@@ -440,12 +446,17 @@ internal fun NetworkBrowserScreen(
                             } else {
                                 val sourceScheme = Uri.parse(sourceId).scheme?.lowercase(Locale.ROOT)
                                 val sourceTypeLabel = if (sourceScheme == "smb") "SMB" else null
+                                val formatLabel = if (isSmbFolderLikeSource) {
+                                    "Folder"
+                                } else {
+                                    inferNetworkSourceFormatLabel(sourceLabel)
+                                }
                                 buildString {
                                     sourceTypeLabel?.let {
                                         append(it)
                                         append(" • ")
                                     }
-                                    append(inferNetworkSourceFormatLabel(sourceLabel))
+                                    append(formatLabel)
                                     if (sourceLabel.isNotBlank()) {
                                         append(" • ")
                                         append(sourceLabel)

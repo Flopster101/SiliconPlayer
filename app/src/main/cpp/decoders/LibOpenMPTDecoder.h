@@ -109,9 +109,16 @@ private:
     std::vector<std::string> subtuneNames;
     std::vector<double> subtuneDurationsSeconds;
     std::vector<float> lastChannelScopeSnapshot;
+    std::vector<float> channelScopeInterpolatedPrev;
+    std::vector<float> channelScopeInterpolatedCurr;
     std::vector<std::uint8_t> channelScopeFrozenFrameCount;
     int lastChannelScopeChannels = 0;
     int lastChannelScopeSamplesPerChannel = 0;
+    uint64_t channelScopeSourceSerial = 0;
+    uint64_t channelScopeConsumedSerial = 0;
+    int channelScopeLastReadFrames = 0;
+    int64_t channelScopeLastReadNs = 0;
+    bool channelScopeInterpolationInitialized = false;
     std::vector<std::string> toggleChannelNames;
     std::vector<bool> toggleChannelMuted;
 

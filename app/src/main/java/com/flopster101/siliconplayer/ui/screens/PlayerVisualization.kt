@@ -68,14 +68,13 @@ import com.flopster101.siliconplayer.visualizationRenderBackendForMode
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
 import com.flopster101.siliconplayer.ui.visualization.channel.ChannelScopeChannelTextState
 import java.io.File
+import java.util.concurrent.locks.LockSupport
 import kotlin.coroutines.coroutineContext
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.yield
 
 private class VisualizationDebugAccumulator {
     var frameCount: Int = 0
@@ -83,6 +82,111 @@ private class VisualizationDebugAccumulator {
     var lastFrameNs: Long = 0L
     var latestFrameMs: Int = 0
     var lastUiPublishNs: Long = 0L
+}
+
+private class VisualizationSourceDebugAccumulator {
+    var lastSignature: Long = Long.MIN_VALUE
+    var updateCount: Int = 0
+    var uniqueCount: Int = 0
+    var windowStartNs: Long = 0L
+    var lastUniqueFrameNs: Long = 0L
+    var latestUniqueFrameMs: Int = 0
+    var lastUiPublishNs: Long = 0L
+}
+
+private fun mixSignature(hash: Long, value: Long): Long {
+    var h = hash xor value
+    h *= 1099511628211L
+    return h
+}
+
+private fun sampledFloatArraySignature(
+    values: FloatArray?,
+    maxSamples: Int = 48
+): Long {
+    if (values == null || values.isEmpty()) return -3750763034362895579L
+    var hash = mixSignature(1469598103934665603L, values.size.toLong())
+    val sampleCount = maxSamples.coerceIn(1, values.size)
+    val step = if (sampleCount <= 1) 0f else (values.size - 1).toFloat() / (sampleCount - 1).toFloat()
+    for (i in 0 until sampleCount) {
+        val idx = if (sampleCount <= 1) 0 else (i.toFloat() * step).toInt().coerceIn(0, values.lastIndex)
+        val bits = java.lang.Float.floatToRawIntBits(values[idx]).toLong() and 0xFFFF_FFFFL
+        hash = mixSignature(hash, bits)
+    }
+    return hash
+}
+
+private fun sampledIntArraySignature(
+    values: IntArray?,
+    maxSamples: Int = 24
+): Long {
+    if (values == null || values.isEmpty()) return 3827332896879027647L
+    var hash = mixSignature(1469598103934665603L, values.size.toLong())
+    val sampleCount = maxSamples.coerceIn(1, values.size)
+    val step = if (sampleCount <= 1) 0f else (values.size - 1).toFloat() / (sampleCount - 1).toFloat()
+    for (i in 0 until sampleCount) {
+        val idx = if (sampleCount <= 1) 0 else (i.toFloat() * step).toInt().coerceIn(0, values.lastIndex)
+        hash = mixSignature(hash, values[idx].toLong())
+    }
+    return hash
+}
+
+private fun sampledChannelScopeSignature(
+    histories: List<FloatArray>?,
+    triggerIndices: IntArray?
+): Long {
+    if (histories.isNullOrEmpty()) return -5442059136133378759L
+    var hash = mixSignature(1469598103934665603L, histories.size.toLong())
+    val sampleChannels = 8.coerceAtMost(histories.size)
+    val channelStep = if (sampleChannels <= 1) 0f else (histories.size - 1).toFloat() / (sampleChannels - 1).toFloat()
+    for (i in 0 until sampleChannels) {
+        val channel = if (sampleChannels <= 1) 0 else (i.toFloat() * channelStep).toInt().coerceIn(0, histories.lastIndex)
+        hash = mixSignature(hash, channel.toLong())
+        hash = mixSignature(hash, sampledFloatArraySignature(histories[channel], maxSamples = 24))
+        val trigger = triggerIndices?.getOrElse(channel) { -1 } ?: -1
+        hash = mixSignature(hash, trigger.toLong())
+    }
+    return hash
+}
+
+private fun snapshotSourceSignature(
+    mode: VisualizationMode,
+    snapshot: VisualizationSnapshot
+): Long? {
+    return when (mode) {
+        VisualizationMode.Off -> null
+        VisualizationMode.Oscilloscope -> {
+            var hash = mixSignature(1469598103934665603L, 1L)
+            hash = mixSignature(hash, sampledFloatArraySignature(snapshot.waveLeft, maxSamples = 64))
+            hash = mixSignature(hash, sampledFloatArraySignature(snapshot.waveRight, maxSamples = 64))
+            hash = mixSignature(hash, (snapshot.channelCount ?: 0).toLong())
+            hash
+        }
+        VisualizationMode.Bars -> {
+            mixSignature(
+                mixSignature(1469598103934665603L, 2L),
+                sampledFloatArraySignature(snapshot.bars, maxSamples = 48)
+            )
+        }
+        VisualizationMode.VuMeters -> {
+            var hash = mixSignature(1469598103934665603L, 3L)
+            hash = mixSignature(hash, sampledFloatArraySignature(snapshot.vu, maxSamples = 8))
+            hash = mixSignature(hash, (snapshot.channelCount ?: 0).toLong())
+            hash
+        }
+        VisualizationMode.ChannelScope -> {
+            var hash = mixSignature(1469598103934665603L, 4L)
+            hash = mixSignature(
+                hash,
+                sampledChannelScopeSignature(
+                    histories = snapshot.channelScopeHistories,
+                    triggerIndices = snapshot.channelScopeTriggerIndices
+                )
+            )
+            hash = mixSignature(hash, sampledIntArraySignature(snapshot.channelScopeTextRaw, maxSamples = 32))
+            hash
+        }
+    }
 }
 
 private fun contextDisplayRefreshRateHz(context: Context): Float {
@@ -172,9 +276,132 @@ private fun computeVisualizationPollIntervalNs(
                 VisualizationOscFpsMode.NativeRefresh -> displayRefreshHz.coerceAtLeast(30f)
             }
         }
+        VisualizationMode.Bars,
+        VisualizationMode.VuMeters -> {
+            when (visualizationOscFpsMode) {
+                VisualizationOscFpsMode.Default -> 30f
+                VisualizationOscFpsMode.Fps60 -> 60f
+                VisualizationOscFpsMode.NativeRefresh -> displayRefreshHz.coerceAtLeast(30f)
+            }
+        }
         else -> 30f
     }.coerceAtLeast(1f)
     return (1_000_000_000.0 / fps.toDouble()).roundToInt().toLong().coerceAtLeast(4_000_000L)
+}
+
+private data class VisualizationSnapshot(
+    val waveLeft: FloatArray? = null,
+    val waveRight: FloatArray? = null,
+    val bars: FloatArray? = null,
+    val vu: FloatArray? = null,
+    val channelCount: Int? = null,
+    val channelScopeHistories: List<FloatArray>? = null,
+    val channelScopeTriggerIndices: IntArray? = null,
+    val channelScopeLastChannelCount: Int? = null,
+    val channelScopeTextRaw: IntArray? = null
+)
+
+private fun readVisualizationSnapshot(
+    visualizationMode: VisualizationMode,
+    decoderName: String?,
+    visualizationOscWindowMs: Int,
+    visualizationOscTriggerModeNative: Int,
+    channelScopeWindowMs: Int,
+    channelScopeDcRemovalEnabled: Boolean,
+    channelScopeGainPercent: Int,
+    channelScopeTriggerModeNative: Int,
+    previousChannelScopeTriggerIndices: IntArray,
+    sampleRateHz: Int,
+    shouldPollChannelScopeText: Boolean
+): VisualizationSnapshot? {
+    if (NativeBridge.isSeekInProgress()) {
+        return null
+    }
+    return when (visualizationMode) {
+        VisualizationMode.Oscilloscope -> {
+            val channelCount = NativeBridge.getVisualizationChannelCount().coerceAtLeast(1)
+            VisualizationSnapshot(
+                waveLeft = NativeBridge.getVisualizationWaveformScope(
+                    0,
+                    visualizationOscWindowMs,
+                    visualizationOscTriggerModeNative
+                ),
+                waveRight = NativeBridge.getVisualizationWaveformScope(
+                    1,
+                    visualizationOscWindowMs,
+                    visualizationOscTriggerModeNative
+                ),
+                channelCount = channelCount
+            )
+        }
+        VisualizationMode.Bars -> {
+            VisualizationSnapshot(
+                bars = NativeBridge.getVisualizationBars()
+            )
+        }
+        VisualizationMode.VuMeters -> {
+            VisualizationSnapshot(
+                vu = NativeBridge.getVisualizationVuLevels(),
+                channelCount = NativeBridge.getVisualizationChannelCount().coerceAtLeast(1)
+            )
+        }
+        VisualizationMode.ChannelScope -> {
+            if (pluginNameForCoreName(decoderName) != "LibOpenMPT") {
+                VisualizationSnapshot()
+            } else {
+                val scopeSamples = computeChannelScopeSampleCount(
+                    windowMs = channelScopeWindowMs,
+                    sampleRateHz = sampleRateHz
+                )
+                val channelScopesFlat = NativeBridge.getChannelScopeSamples(scopeSamples)
+                val histories = if (scopeSamples > 0 && channelScopesFlat.size >= scopeSamples) {
+                    buildChannelScopeHistories(
+                        flatScopes = channelScopesFlat,
+                        points = scopeSamples,
+                        dcRemovalEnabled = channelScopeDcRemovalEnabled,
+                        gainPercent = channelScopeGainPercent
+                    )
+                } else {
+                    emptyList()
+                }
+                val triggerIndices = computeChannelScopeTriggerIndices(
+                    histories = histories,
+                    triggerModeNative = channelScopeTriggerModeNative,
+                    previousIndices = previousChannelScopeTriggerIndices
+                )
+                val lastChannelCount = histories.size.coerceIn(1, 64)
+                val scopeChannels = if (scopeSamples > 0) {
+                    (channelScopesFlat.size / scopeSamples).coerceIn(1, 64)
+                } else {
+                    NativeBridge.getVisualizationChannelCount().coerceAtLeast(1).coerceIn(1, 64)
+                }
+                VisualizationSnapshot(
+                    channelScopeHistories = histories,
+                    channelScopeTriggerIndices = triggerIndices,
+                    channelScopeLastChannelCount = lastChannelCount,
+                    channelScopeTextRaw = if (shouldPollChannelScopeText) {
+                        NativeBridge.getChannelScopeTextState(scopeChannels)
+                    } else {
+                        null
+                    }
+                )
+            }
+        }
+        VisualizationMode.Off -> VisualizationSnapshot()
+    }
+}
+
+private fun sleepUntilTickNs(targetTickNs: Long) {
+    while (true) {
+        val remainingNs = targetTickNs - System.nanoTime()
+        if (remainingNs <= 0L) return
+        if (remainingNs >= 2_000_000L) {
+            // Leave a short tail for fine-grained alignment.
+            LockSupport.parkNanos((remainingNs - 500_000L).coerceAtLeast(1_000L))
+        } else {
+            Thread.yield()
+        }
+    }
 }
 
 private fun normalizeChannelScopeChannel(
@@ -212,7 +439,7 @@ private fun normalizeChannelScopeChannel(
     return centered
 }
 
-private suspend fun buildChannelScopeHistoriesAsync(
+private fun buildChannelScopeHistories(
     flatScopes: FloatArray,
     points: Int,
     dcRemovalEnabled: Boolean,
@@ -221,28 +448,25 @@ private suspend fun buildChannelScopeHistoriesAsync(
     if (points <= 0 || flatScopes.size < points) {
         return emptyList()
     }
-    return withContext(Dispatchers.Default) {
-        val channels = (flatScopes.size / points).coerceIn(1, 64)
-        val histories = ArrayList<FloatArray>(channels)
-        for (index in 0 until channels) {
-            coroutineContext.ensureActive()
-            val start = index * points
-            val end = (start + points).coerceAtMost(flatScopes.size)
-            if (end - start < points) {
-                histories.add(FloatArray(points))
-            } else {
-                val normalized = normalizeChannelScopeChannel(
-                    flatScopes = flatScopes,
-                    start = start,
-                    points = points,
-                    dcRemovalEnabled = dcRemovalEnabled,
-                    gainPercent = gainPercent
-                )
-                histories.add(normalized)
-            }
+    val channels = (flatScopes.size / points).coerceIn(1, 64)
+    val histories = ArrayList<FloatArray>(channels)
+    for (index in 0 until channels) {
+        val start = index * points
+        val end = (start + points).coerceAtMost(flatScopes.size)
+        if (end - start < points) {
+            histories.add(FloatArray(points))
+        } else {
+            val normalized = normalizeChannelScopeChannel(
+                flatScopes = flatScopes,
+                start = start,
+                points = points,
+                dcRemovalEnabled = dcRemovalEnabled,
+                gainPercent = gainPercent
+            )
+            histories.add(normalized)
         }
-        histories
     }
+    return histories
 }
 
 private fun parseChannelScopeTextStates(
@@ -794,7 +1018,6 @@ internal fun AlbumArtPlaceholder(
     var visVu by remember { mutableStateOf(FloatArray(0)) }
     var visVuSmoothed by remember { mutableStateOf(FloatArray(0)) }
     var visChannelCount by remember { mutableIntStateOf(2) }
-    var visChannelScopesFlat by remember { mutableStateOf(FloatArray(0)) }
     var visChannelScopeHistories by remember { mutableStateOf<List<FloatArray>>(emptyList()) }
     var visChannelScopeLastChannelCount by remember { mutableIntStateOf(1) }
     var visChannelScopeTriggerIndices by remember { mutableStateOf(IntArray(0)) }
@@ -805,9 +1028,13 @@ internal fun AlbumArtPlaceholder(
     var visOpenMptSampleNamesByIndex by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
     var visDebugUpdateFps by remember { mutableIntStateOf(0) }
     var visDebugUpdateFrameMs by remember { mutableIntStateOf(0) }
+    var visDebugSourceUniqueFps by remember { mutableIntStateOf(0) }
+    var visDebugSourceUniqueFrameMs by remember { mutableIntStateOf(0) }
+    var visDebugSourceDuplicatePercent by remember { mutableIntStateOf(0) }
     var visDebugDrawFps by remember { mutableIntStateOf(0) }
     var visDebugDrawFrameMs by remember { mutableIntStateOf(0) }
     val visDebugAccumulator = remember { VisualizationDebugAccumulator() }
+    val visSourceDebugAccumulator = remember { VisualizationSourceDebugAccumulator() }
     var lastVisualizationBackend by remember {
         mutableStateOf(
             if (visualizationMode == VisualizationMode.ChannelScope) {
@@ -835,7 +1062,6 @@ internal fun AlbumArtPlaceholder(
         visVu = FloatArray(2)
         visVuSmoothed = FloatArray(2)
         visChannelCount = 2
-        visChannelScopesFlat = FloatArray(0)
         val points = computeChannelScopeSampleCount(
             windowMs = channelScopePrefs.windowMs,
             sampleRateHz = sampleRateHz
@@ -852,6 +1078,9 @@ internal fun AlbumArtPlaceholder(
         visOpenMptSampleNamesByIndex = emptyMap()
         visDebugUpdateFps = 0
         visDebugUpdateFrameMs = 0
+        visDebugSourceUniqueFps = 0
+        visDebugSourceUniqueFrameMs = 0
+        visDebugSourceDuplicatePercent = 0
         visDebugDrawFps = 0
         visDebugDrawFrameMs = 0
         visDebugAccumulator.frameCount = 0
@@ -859,6 +1088,13 @@ internal fun AlbumArtPlaceholder(
         visDebugAccumulator.lastFrameNs = 0L
         visDebugAccumulator.latestFrameMs = 0
         visDebugAccumulator.lastUiPublishNs = 0L
+        visSourceDebugAccumulator.lastSignature = Long.MIN_VALUE
+        visSourceDebugAccumulator.updateCount = 0
+        visSourceDebugAccumulator.uniqueCount = 0
+        visSourceDebugAccumulator.windowStartNs = 0L
+        visSourceDebugAccumulator.lastUniqueFrameNs = 0L
+        visSourceDebugAccumulator.latestUniqueFrameMs = 0
+        visSourceDebugAccumulator.lastUiPublishNs = 0L
     }
     LaunchedEffect(file?.absolutePath, decoderName) {
         if (file == null || pluginNameForCoreName(decoderName) != "LibOpenMPT") {
@@ -918,207 +1154,157 @@ internal fun AlbumArtPlaceholder(
         sampleRateHz,
         decoderName
     ) {
-        data class VisualizationSnapshot(
-            val waveLeft: FloatArray,
-            val waveRight: FloatArray,
-            val bars: FloatArray,
-            val vu: FloatArray,
-            val channelCount: Int,
-            val channelScopesFlat: FloatArray,
-            val channelScopeTextRaw: IntArray?
-        )
-        var nextFrameTickNs = 0L
-        var lastPollIntervalNs = 0L
-        while (true) {
-            val frameStartNs = System.nanoTime()
-            if (visualizationMode != VisualizationMode.Off && file != null && isPlaying) {
-                val textPollIntervalNs = 120_000_000L
-                val shouldPollText =
-                    visChannelScopeLastTextPollNs == 0L ||
-                        frameStartNs - visChannelScopeLastTextPollNs >= textPollIntervalNs
-                val snapshot = withContext(Dispatchers.Default) {
-                    if (NativeBridge.isSeekInProgress()) {
-                        null
-                    } else {
-                        val waveLeft = NativeBridge.getVisualizationWaveformScope(
-                            0,
-                            visualizationOscWindowMs,
-                            visualizationOscTriggerModeNative
-                        )
-                        val waveRight = NativeBridge.getVisualizationWaveformScope(
-                            1,
-                            visualizationOscWindowMs,
-                            visualizationOscTriggerModeNative
-                        )
-                        val bars = NativeBridge.getVisualizationBars()
-                        val vu = NativeBridge.getVisualizationVuLevels()
-                        val channelCount = NativeBridge.getVisualizationChannelCount().coerceAtLeast(1)
-                        var channelScopesFlat = FloatArray(0)
-                        var channelScopeTextRaw: IntArray? = null
-                        if (
-                            visualizationMode == VisualizationMode.ChannelScope &&
-                            pluginNameForCoreName(decoderName) == "LibOpenMPT"
-                        ) {
-                            val scopeSamples = computeChannelScopeSampleCount(
-                                windowMs = channelScopePrefs.windowMs,
-                                sampleRateHz = sampleRateHz
-                            )
-                            channelScopesFlat = NativeBridge.getChannelScopeSamples(scopeSamples)
-                            val scopeChannels = if (scopeSamples > 0) {
-                                (channelScopesFlat.size / scopeSamples).coerceIn(1, 64)
-                            } else {
-                                channelCount.coerceIn(1, 64)
+        val displayRefreshHz = contextDisplayRefreshRateHz(context)
+        withContext(Dispatchers.Default) {
+            var nextFrameTickNs = 0L
+            var lastPollIntervalNs = 0L
+            var localChannelScopeLastTextPollNs = 0L
+            var localChannelScopeTriggerIndices = visChannelScopeTriggerIndices
+            while (true) {
+                coroutineContext.ensureActive()
+                val frameStartNs = System.nanoTime()
+                if (visualizationMode != VisualizationMode.Off && file != null && isPlaying) {
+                    val textPollIntervalNs = 120_000_000L
+                    val shouldPollText =
+                        localChannelScopeLastTextPollNs == 0L ||
+                            frameStartNs - localChannelScopeLastTextPollNs >= textPollIntervalNs
+                    val snapshot = readVisualizationSnapshot(
+                        visualizationMode = visualizationMode,
+                        decoderName = decoderName,
+                        visualizationOscWindowMs = visualizationOscWindowMs,
+                        visualizationOscTriggerModeNative = visualizationOscTriggerModeNative,
+                        channelScopeWindowMs = channelScopePrefs.windowMs,
+                        channelScopeDcRemovalEnabled = channelScopePrefs.dcRemovalEnabled,
+                        channelScopeGainPercent = channelScopePrefs.gainPercent,
+                        channelScopeTriggerModeNative = channelScopePrefs.triggerModeNative,
+                        previousChannelScopeTriggerIndices = localChannelScopeTriggerIndices,
+                        sampleRateHz = sampleRateHz,
+                        shouldPollChannelScopeText = shouldPollText
+                    )
+                    if (snapshot == null) {
+                        val nowNs = System.nanoTime()
+                        nextFrameTickNs = nowNs + 90_000_000L
+                        lastPollIntervalNs = 90_000_000L
+                        sleepUntilTickNs(nextFrameTickNs)
+                        continue
+                    }
+                    val frameEndNs = System.nanoTime()
+                    if (snapshot.channelScopeTextRaw != null) {
+                        localChannelScopeLastTextPollNs = frameStartNs
+                    }
+                    val sourceSignature = snapshotSourceSignature(
+                        mode = visualizationMode,
+                        snapshot = snapshot
+                    )
+                    withContext(Dispatchers.Main.immediate) {
+                        snapshot.waveLeft?.let { visWaveLeft = it }
+                        snapshot.waveRight?.let { visWaveRight = it }
+                        snapshot.bars?.let { visBars = it }
+                        snapshot.vu?.let { visVu = it }
+                        snapshot.channelCount?.let { visChannelCount = it }
+                        snapshot.channelScopeHistories?.let { visChannelScopeHistories = it }
+                        snapshot.channelScopeTriggerIndices?.let {
+                            localChannelScopeTriggerIndices = it
+                            visChannelScopeTriggerIndices = it
+                        }
+                        snapshot.channelScopeLastChannelCount?.let { visChannelScopeLastChannelCount = it }
+                        snapshot.channelScopeTextRaw?.let { rawText ->
+                            if (!rawText.contentEquals(visChannelScopeTextRawCache)) {
+                                visChannelScopeTextRawCache = rawText.copyOf()
+                                visChannelScopeTextStates = parseChannelScopeTextStates(rawText)
                             }
-                            if (shouldPollText) {
-                                channelScopeTextRaw = NativeBridge.getChannelScopeTextState(scopeChannels)
+                            visChannelScopeLastTextPollNs = frameStartNs
+                        }
+                        if (visDebugAccumulator.windowStartNs == 0L) {
+                            visDebugAccumulator.windowStartNs = frameEndNs
+                        }
+                        if (visDebugAccumulator.lastFrameNs != 0L) {
+                            visDebugAccumulator.latestFrameMs =
+                                ((frameEndNs - visDebugAccumulator.lastFrameNs) / 1_000_000L).toInt().coerceAtLeast(0)
+                        }
+                        visDebugAccumulator.lastFrameNs = frameEndNs
+                        visDebugAccumulator.frameCount += 1
+                        val elapsedNs = frameEndNs - visDebugAccumulator.windowStartNs
+                        if (elapsedNs >= 1_000_000_000L) {
+                            visDebugUpdateFps = ((visDebugAccumulator.frameCount.toDouble() * 1_000_000_000.0) / elapsedNs.toDouble())
+                                .roundToInt()
+                                .coerceAtLeast(0)
+                            visDebugAccumulator.frameCount = 0
+                            visDebugAccumulator.windowStartNs = frameEndNs
+                        }
+                        // Throttle HUD state updates to reduce recomposition overhead.
+                        if (frameEndNs - visDebugAccumulator.lastUiPublishNs >= 350_000_000L) {
+                            visDebugUpdateFrameMs = visDebugAccumulator.latestFrameMs
+                            visDebugAccumulator.lastUiPublishNs = frameEndNs
+                        }
+                        if (sourceSignature != null) {
+                            if (visSourceDebugAccumulator.windowStartNs == 0L) {
+                                visSourceDebugAccumulator.windowStartNs = frameEndNs
+                            }
+                            visSourceDebugAccumulator.updateCount += 1
+                            val changed = sourceSignature != visSourceDebugAccumulator.lastSignature
+                            if (changed) {
+                                if (visSourceDebugAccumulator.lastUniqueFrameNs != 0L) {
+                                    visSourceDebugAccumulator.latestUniqueFrameMs =
+                                        ((frameEndNs - visSourceDebugAccumulator.lastUniqueFrameNs) / 1_000_000L)
+                                            .toInt()
+                                            .coerceAtLeast(0)
+                                }
+                                visSourceDebugAccumulator.lastUniqueFrameNs = frameEndNs
+                                visSourceDebugAccumulator.lastSignature = sourceSignature
+                                visSourceDebugAccumulator.uniqueCount += 1
+                            }
+                            val sourceElapsedNs = frameEndNs - visSourceDebugAccumulator.windowStartNs
+                            if (sourceElapsedNs >= 1_000_000_000L) {
+                                val updates = visSourceDebugAccumulator.updateCount.coerceAtLeast(1)
+                                val uniques = visSourceDebugAccumulator.uniqueCount.coerceAtLeast(0)
+                                visDebugSourceUniqueFps =
+                                    ((uniques.toDouble() * 1_000_000_000.0) / sourceElapsedNs.toDouble())
+                                        .roundToInt()
+                                        .coerceAtLeast(0)
+                                visDebugSourceDuplicatePercent =
+                                    (((updates - uniques).coerceAtLeast(0) * 100.0) / updates.toDouble())
+                                        .roundToInt()
+                                        .coerceIn(0, 100)
+                                visSourceDebugAccumulator.updateCount = 0
+                                visSourceDebugAccumulator.uniqueCount = 0
+                                visSourceDebugAccumulator.windowStartNs = frameEndNs
+                            }
+                            if (frameEndNs - visSourceDebugAccumulator.lastUiPublishNs >= 350_000_000L) {
+                                visDebugSourceUniqueFrameMs = visSourceDebugAccumulator.latestUniqueFrameMs
+                                visSourceDebugAccumulator.lastUiPublishNs = frameEndNs
                             }
                         }
-                        VisualizationSnapshot(
-                            waveLeft = waveLeft,
-                            waveRight = waveRight,
-                            bars = bars,
-                            vu = vu,
-                            channelCount = channelCount,
-                            channelScopesFlat = channelScopesFlat,
-                            channelScopeTextRaw = channelScopeTextRaw
-                        )
                     }
                 }
-                if (snapshot == null) {
-                    val delayMs = 90L
-                    delay(delayMs)
-                    nextFrameTickNs = 0L
-                    lastPollIntervalNs = 0L
-                    continue
-                }
-                visWaveLeft = snapshot.waveLeft
-                visWaveRight = snapshot.waveRight
-                visBars = snapshot.bars
-                visVu = snapshot.vu
-                visChannelCount = snapshot.channelCount
-                if (snapshot.channelScopesFlat.isNotEmpty()) {
-                    visChannelScopesFlat = snapshot.channelScopesFlat
-                }
-                snapshot.channelScopeTextRaw?.let { rawText ->
-                    if (!rawText.contentEquals(visChannelScopeTextRawCache)) {
-                        visChannelScopeTextRawCache = rawText.copyOf()
-                        visChannelScopeTextStates = parseChannelScopeTextStates(rawText)
+                val pollIntervalNs = computeVisualizationPollIntervalNs(
+                    isPlaying = isPlaying,
+                    visualizationMode = visualizationMode,
+                    visualizationOscFpsMode = visualizationOscFpsMode,
+                    channelScopeFpsMode = channelScopePrefs.fpsMode,
+                    displayRefreshHz = displayRefreshHz
+                )
+                val nowNs = System.nanoTime()
+                if (pollIntervalNs != lastPollIntervalNs || nextFrameTickNs == 0L) {
+                    nextFrameTickNs = nowNs + pollIntervalNs
+                    lastPollIntervalNs = pollIntervalNs
+                } else {
+                    while (nextFrameTickNs <= nowNs) {
+                        nextFrameTickNs += pollIntervalNs
                     }
-                    visChannelScopeLastTextPollNs = frameStartNs
                 }
-                val frameEndNs = System.nanoTime()
-                if (visDebugAccumulator.windowStartNs == 0L) {
-                    visDebugAccumulator.windowStartNs = frameEndNs
-                }
-                if (visDebugAccumulator.lastFrameNs != 0L) {
-                    visDebugAccumulator.latestFrameMs =
-                        ((frameEndNs - visDebugAccumulator.lastFrameNs) / 1_000_000L).toInt().coerceAtLeast(0)
-                }
-                visDebugAccumulator.lastFrameNs = frameEndNs
-                visDebugAccumulator.frameCount += 1
-                val elapsedNs = frameEndNs - visDebugAccumulator.windowStartNs
-                if (elapsedNs >= 1_000_000_000L) {
-                    visDebugUpdateFps = ((visDebugAccumulator.frameCount.toDouble() * 1_000_000_000.0) / elapsedNs.toDouble())
-                        .roundToInt()
-                        .coerceAtLeast(0)
-                    visDebugAccumulator.frameCount = 0
-                    visDebugAccumulator.windowStartNs = frameEndNs
-                }
-                // Throttle HUD state updates to reduce recomposition overhead.
-                if (frameEndNs - visDebugAccumulator.lastUiPublishNs >= 350_000_000L) {
-                    visDebugUpdateFrameMs = visDebugAccumulator.latestFrameMs
-                    visDebugAccumulator.lastUiPublishNs = frameEndNs
-                }
-            }
-            val pollIntervalNs = computeVisualizationPollIntervalNs(
-                isPlaying = isPlaying,
-                visualizationMode = visualizationMode,
-                visualizationOscFpsMode = visualizationOscFpsMode,
-                channelScopeFpsMode = channelScopePrefs.fpsMode,
-                displayRefreshHz = contextDisplayRefreshRateHz(context)
-            )
-            val nowNs = System.nanoTime()
-            if (pollIntervalNs != lastPollIntervalNs || nextFrameTickNs == 0L) {
-                nextFrameTickNs = nowNs + pollIntervalNs
-                lastPollIntervalNs = pollIntervalNs
-            } else {
-                while (nextFrameTickNs <= nowNs) {
-                    nextFrameTickNs += pollIntervalNs
-                }
-            }
-            val sleepNs = (nextFrameTickNs - nowNs).coerceAtLeast(0L)
-            if (sleepNs >= 1_000_000L) {
-                delay(sleepNs / 1_000_000L)
-            } else if (sleepNs > 0L) {
-                yield()
+                sleepUntilTickNs(nextFrameTickNs)
             }
         }
     }
-    LaunchedEffect(
-        visChannelScopesFlat,
-        visualizationMode,
-        channelScopePrefs.windowMs,
-        channelScopePrefs.triggerModeNative,
-        sampleRateHz,
-        isPlaying
-    ) {
+    LaunchedEffect(visualizationMode) {
         if (visualizationMode != VisualizationMode.ChannelScope) {
             visChannelScopeHistories = emptyList()
             visChannelScopeTriggerIndices = IntArray(0)
             visChannelScopeTextStates = emptyList()
             visChannelScopeTextRawCache = IntArray(0)
             visChannelScopeLastTextPollNs = 0L
-            return@LaunchedEffect
         }
-        val points = computeChannelScopeSampleCount(
-            windowMs = channelScopePrefs.windowMs,
-            sampleRateHz = sampleRateHz
-        )
-        if (visChannelScopesFlat.isEmpty()) {
-            if (!isPlaying) {
-                val channels = visChannelScopeHistories.size
-                    .takeIf { it > 0 }
-                    ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
-                visChannelScopeHistories = List(channels) { FloatArray(points) }
-                visChannelScopeTriggerIndices = IntArray(channels) { points / 2 }
-                return@LaunchedEffect
-            }
-            visChannelScopeHistories = emptyList()
-            visChannelScopeTriggerIndices = IntArray(0)
-            visChannelScopeTextStates = emptyList()
-            visChannelScopeTextRawCache = IntArray(0)
-            visChannelScopeLastTextPollNs = 0L
-            return@LaunchedEffect
-        }
-        if (visChannelScopesFlat.size < points) {
-            if (!isPlaying) {
-                val channels = visChannelScopeHistories.size
-                    .takeIf { it > 0 }
-                    ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
-                visChannelScopeHistories = List(channels) { FloatArray(points) }
-                visChannelScopeTriggerIndices = IntArray(channels) { points / 2 }
-                return@LaunchedEffect
-            }
-            visChannelScopeHistories = emptyList()
-            visChannelScopeTriggerIndices = IntArray(0)
-            visChannelScopeTextStates = emptyList()
-            visChannelScopeTextRawCache = IntArray(0)
-            visChannelScopeLastTextPollNs = 0L
-            return@LaunchedEffect
-        }
-        val histories = buildChannelScopeHistoriesAsync(
-            flatScopes = visChannelScopesFlat,
-            points = points,
-            dcRemovalEnabled = channelScopePrefs.dcRemovalEnabled,
-            gainPercent = channelScopePrefs.gainPercent
-        )
-        visChannelScopeLastChannelCount = histories.size.coerceIn(1, 64)
-        visChannelScopeHistories = histories
-        visChannelScopeTriggerIndices = computeChannelScopeTriggerIndices(
-            histories = histories,
-            triggerModeNative = channelScopePrefs.triggerModeNative,
-            previousIndices = visChannelScopeTriggerIndices
-        )
     }
     LaunchedEffect(visBars, visualizationBarSmoothingPercent, visualizationMode) {
         if (visualizationMode != VisualizationMode.Bars) {
@@ -1423,6 +1609,11 @@ internal fun AlbumArtPlaceholder(
                 )
             }
             if (visualizationShowDebugInfo && visualizationMode != VisualizationMode.Off) {
+                val drawLine = if (activeRenderBackend != VisualizationRenderBackend.Compose) {
+                    "${visDebugDrawFps} fps  (${visDebugDrawFrameMs} ms)"
+                } else {
+                    "N/A"
+                }
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -1431,13 +1622,12 @@ internal fun AlbumArtPlaceholder(
                     color = Color.Black.copy(alpha = 0.22f)
                 ) {
                     Text(
-                        text = "Mode: ${visualizationMode.label}\nBackend: ${activeRenderBackend.label}\nUpdate: ${visDebugUpdateFps} fps  (${visDebugUpdateFrameMs} ms)\nDraw: ${
-                            if (activeRenderBackend != VisualizationRenderBackend.Compose) {
-                                "${visDebugDrawFps} fps  (${visDebugDrawFrameMs} ms)"
-                            } else {
-                                "N/A"
-                            }
-                        }",
+                        text = "Mode: ${visualizationMode.label}\n" +
+                            "Backend: ${activeRenderBackend.label}\n" +
+                            "Update: ${visDebugUpdateFps} fps  (${visDebugUpdateFrameMs} ms)\n" +
+                            "Source unique: ${visDebugSourceUniqueFps} fps  (${visDebugSourceUniqueFrameMs} ms)\n" +
+                            "Source duplicates: ${visDebugSourceDuplicatePercent}%\n" +
+                            "Draw: $drawLine",
                         color = Color.White.copy(alpha = 0.78f),
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)

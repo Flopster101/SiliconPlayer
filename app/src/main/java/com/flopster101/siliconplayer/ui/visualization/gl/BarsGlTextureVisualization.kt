@@ -55,7 +55,7 @@ fun BarsGlTextureVisualization(
             view.onFrameStats = onFrameStats
             view.updateFrame(
                 BarsGlTextureFrame(
-                    bars = bars.copyOf(),
+                    bars = bars,
                     barCount = barCount.coerceIn(8, 96),
                     barOverlayArtwork = barOverlayArtwork,
                     barColorArgb = barColor.toArgb(),
@@ -176,7 +176,6 @@ private class BarsTextureRenderThread(
 ) : Thread("BarsGlTextureRenderThread") {
     private val lock = Object()
     private var running = true
-    private var pendingRender = false
     private var frameData: BarsGlTextureFrame? = null
     private var surfaceWidth = initialWidth
     private var surfaceHeight = initialHeight
@@ -186,6 +185,13 @@ private class BarsTextureRenderThread(
     private var eglContext: EGLContext = EGL14.EGL_NO_CONTEXT
     private var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
     private val renderer = BarsGlCoreRenderer()
+    private data class LoopState(
+        val frame: BarsGlTextureFrame?,
+        val width: Int,
+        val height: Int,
+        val surfaceSizeChanged: Boolean,
+        val shouldStop: Boolean
+    )
 
     override fun run() {
         if (!initEgl()) {
@@ -195,10 +201,34 @@ private class BarsTextureRenderThread(
         }
         try {
             while (true) {
-                val frame = waitForFrameOrStop() ?: break
-                if (surfaceSizeChanged) {
-                    renderer.onSurfaceChanged(surfaceWidth, surfaceHeight)
-                    surfaceSizeChanged = false
+                val state = synchronized(lock) {
+                    while (running && frameData == null) {
+                        lock.wait(8L)
+                    }
+                    if (!running) {
+                        LoopState(
+                            frame = null,
+                            width = 0,
+                            height = 0,
+                            surfaceSizeChanged = false,
+                            shouldStop = true
+                        )
+                    } else {
+                        LoopState(
+                            frame = frameData,
+                            width = surfaceWidth,
+                            height = surfaceHeight,
+                            surfaceSizeChanged = surfaceSizeChanged,
+                            shouldStop = false
+                        ).also {
+                            surfaceSizeChanged = false
+                        }
+                    }
+                }
+                if (state.shouldStop) break
+                val frame = state.frame ?: continue
+                if (state.surfaceSizeChanged) {
+                    renderer.onSurfaceChanged(state.width, state.height)
                 }
                 renderer.drawFrame(frame)
                 EGL14.eglSwapBuffers(eglDisplay, eglSurface)
@@ -212,7 +242,6 @@ private class BarsTextureRenderThread(
     fun setFrameData(frame: BarsGlTextureFrame) {
         synchronized(lock) {
             frameData = frame
-            pendingRender = true
             lock.notifyAll()
         }
     }
@@ -222,7 +251,6 @@ private class BarsTextureRenderThread(
             surfaceWidth = width.coerceAtLeast(1)
             surfaceHeight = height.coerceAtLeast(1)
             surfaceSizeChanged = true
-            pendingRender = true
             lock.notifyAll()
         }
     }
@@ -231,17 +259,6 @@ private class BarsTextureRenderThread(
         synchronized(lock) {
             running = false
             lock.notifyAll()
-        }
-    }
-
-    private fun waitForFrameOrStop(): BarsGlTextureFrame? {
-        synchronized(lock) {
-            while (running && !pendingRender) {
-                lock.wait()
-            }
-            if (!running) return null
-            pendingRender = false
-            return frameData
         }
     }
 
@@ -273,6 +290,7 @@ private class BarsTextureRenderThread(
         eglSurface = EGL14.eglCreateWindowSurface(eglDisplay, eglConfig, outputSurface, surfaceAttribs, 0)
         if (eglSurface == EGL14.EGL_NO_SURFACE) return false
         if (!EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)) return false
+        EGL14.eglSwapInterval(eglDisplay, 1)
 
         renderer.onSurfaceCreated(onFrameStats)
         renderer.onSurfaceChanged(surfaceWidth, surfaceHeight)

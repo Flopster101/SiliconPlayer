@@ -742,9 +742,6 @@ void AudioEngine::renderWorkerLoop() {
             applyMasterChannelRouting(localBuffer.data(), chunkFrames, channels);
             applyMonoDownmix(localBuffer.data(), chunkFrames, channels);
             applyOutputLimiter(localBuffer.data(), chunkFrames, channels);
-            if (shouldUpdateVisualization()) {
-                updateVisualizationDataLocked(localBuffer.data(), chunkFrames, channels);
-            }
 
             const int mode = repeatMode.load();
             if (reachedEnd && mode != 1 && mode != 3) {

@@ -74,6 +74,80 @@ namespace {
             }
         }
     }
+
+    std::array<float, kVisualizationSpectrumBins> buildVisualizationBarsFromMonoHistory(
+            const std::array<float, 4096>& monoHistory,
+            int monoWriteIndex,
+            int sampleRateHz
+    ) {
+        std::array<float, kVisualizationSpectrumBins> bars {};
+        std::array<float, kVisualizationFftSize> fftReal {};
+        std::array<float, kVisualizationFftSize> fftImag {};
+        constexpr int kMonoHistorySize = 4096;
+        const int safeWriteIndex =
+                ((monoWriteIndex % kMonoHistorySize) + kMonoHistorySize) % kMonoHistorySize;
+        for (int n = 0; n < kVisualizationFftSize; ++n) {
+            const int historyIndex =
+                    (safeWriteIndex - kVisualizationFftSize + n + kMonoHistorySize) % kMonoHistorySize;
+            fftReal[n] = monoHistory[historyIndex];
+        }
+
+        // Remove DC and apply Hann window before FFT.
+        double mean = 0.0;
+        for (float sample : fftReal) {
+            mean += sample;
+        }
+        mean /= static_cast<double>(kVisualizationFftSize);
+        const float invSizeMinusOne = 1.0f / static_cast<float>(kVisualizationFftSize - 1);
+        for (int n = 0; n < kVisualizationFftSize; ++n) {
+            const float centered = fftReal[n] - static_cast<float>(mean);
+            const float phase = static_cast<float>(n) * invSizeMinusOne;
+            const float hann = 0.5f - (0.5f * std::cos(2.0f * static_cast<float>(M_PI) * phase));
+            fftReal[n] = centered * hann;
+            fftImag[n] = 0.0f;
+        }
+
+        fftInPlace(fftReal, fftImag);
+
+        const int fftHalf = kVisualizationFftSize / 2;
+        const float sampleRate = static_cast<float>(std::max(sampleRateHz, 1));
+        const int minBin = std::clamp(
+                static_cast<int>(std::floor((35.0f / sampleRate) * static_cast<float>(kVisualizationFftSize))),
+                1,
+                fftHalf - 2
+        );
+        const int maxBin = fftHalf - 1;
+        const int usableBins = std::max(1, maxBin - minBin + 1);
+        for (int band = 0; band < kVisualizationSpectrumBins; ++band) {
+            const int startBin = minBin + ((band * usableBins) / kVisualizationSpectrumBins);
+            const int endBin = minBin + ((((band + 1) * usableBins) / kVisualizationSpectrumBins) - 1);
+            const int clampedStart = std::clamp(startBin, minBin, maxBin);
+            const int clampedEnd = std::clamp(std::max(endBin, clampedStart), clampedStart, maxBin);
+
+            double powerSum = 0.0;
+            int count = 0;
+            for (int bin = clampedStart; bin <= clampedEnd; ++bin) {
+                const double re = fftReal[bin];
+                const double im = fftImag[bin];
+                powerSum += (re * re) + (im * im);
+                count += 1;
+            }
+            if (count <= 0) {
+                bars[band] = 0.0f;
+                continue;
+            }
+
+            const double avgPower = powerSum / static_cast<double>(count);
+            const double magnitude = std::sqrt(avgPower) / static_cast<double>(kVisualizationFftSize);
+            const float freqNorm = static_cast<float>(clampedStart - minBin) / static_cast<float>(usableBins);
+            // High-band lift + low-band restraint to avoid first-bar dominance.
+            const float tiltCompensation = 0.45f + (0.95f * std::pow(std::clamp(freqNorm, 0.0f, 1.0f), 0.62f));
+            const double weighted = magnitude * static_cast<double>(90.0f * tiltCompensation);
+            // Soft knee prevents early saturation while preserving detail.
+            bars[band] = static_cast<float>(std::clamp(weighted / (1.0 + weighted), 0.0, 1.0));
+        }
+        return bars;
+    }
 }
 
 // Gain control implementation
@@ -371,6 +445,94 @@ void AudioEngine::applyOutputLimiter(float* buffer, int numFrames, int channels)
     }
 }
 
+void AudioEngine::updateVisualizationDataFromOutputCallback(const float* buffer, int numFrames, int channels) {
+    if (!buffer || numFrames <= 0 || channels <= 0) {
+        return;
+    }
+
+    std::array<float, 256> waveL {};
+    std::array<float, 256> waveR {};
+    double sumSqL = 0.0;
+    double sumSqR = 0.0;
+    for (int n = 0; n < kVisualizationWaveformSize; ++n) {
+        const int srcFrame = (n * numFrames) / kVisualizationWaveformSize;
+        const int frameIndex = std::min(srcFrame, numFrames - 1);
+        const int base = frameIndex * channels;
+        const float left = buffer[base];
+        const float right = channels > 1 ? buffer[base + 1] : left;
+        waveL[n] = std::clamp(left, -1.0f, 1.0f);
+        waveR[n] = std::clamp(right, -1.0f, 1.0f);
+    }
+    for (int frame = 0; frame < numFrames; ++frame) {
+        const int base = frame * channels;
+        const float left = buffer[base];
+        const float right = channels > 1 ? buffer[base + 1] : left;
+        sumSqL += static_cast<double>(left) * left;
+        sumSqR += static_cast<double>(right) * right;
+    }
+    const double invFrames = 1.0 / static_cast<double>(numFrames);
+    std::array<float, 2> vu {};
+    vu[0] = static_cast<float>(std::clamp(std::sqrt(sumSqL * invFrames), 0.0, 1.0));
+    vu[1] = static_cast<float>(std::clamp(std::sqrt(sumSqR * invFrames), 0.0, 1.0));
+
+    bool shouldAnalyzeSpectrum = false;
+    std::array<float, 4096> monoHistorySnapshot {};
+    int monoWriteIndexSnapshot = 0;
+    int sampleRateSnapshot = 48000;
+    const int64_t callbackNowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()
+    ).count();
+    {
+        std::lock_guard<std::mutex> visLock(visualizationMutex);
+        const int historySize = static_cast<int>(visualizationScopeHistoryLeft.size());
+        if (historySize <= 0) {
+            return;
+        }
+        const int safeChannels = std::clamp(channels, 1, 2);
+        for (int frame = 0; frame < numFrames; ++frame) {
+            const int base = frame * safeChannels;
+            const float left = buffer[base];
+            const float right = safeChannels > 1 ? buffer[base + 1] : left;
+            const float mono = 0.5f * (left + right);
+            visualizationScopeHistoryLeft[visualizationScopeWriteIndex] = std::clamp(left, -1.0f, 1.0f);
+            visualizationScopeHistoryRight[visualizationScopeWriteIndex] = std::clamp(right, -1.0f, 1.0f);
+            visualizationMonoHistory[visualizationMonoWriteIndex] = std::clamp(mono, -1.0f, 1.0f);
+            visualizationScopeWriteIndex = (visualizationScopeWriteIndex + 1) % historySize;
+            visualizationMonoWriteIndex =
+                    (visualizationMonoWriteIndex + 1) % static_cast<int>(visualizationMonoHistory.size());
+        }
+        visualizationWaveformLeft = waveL;
+        visualizationWaveformRight = waveR;
+        visualizationVuLevelsPrev = visualizationVuLevels;
+        visualizationVuLevels = vu;
+        visualizationChannelCount.store(safeChannels);
+        visualizationLastCallbackFrames = numFrames;
+        visualizationLastCallbackNs = callbackNowNs;
+
+        sampleRateSnapshot = std::max(streamSampleRate, 8000);
+        const int analysisHopFrames = std::clamp(sampleRateSnapshot / 60, 128, 4096);
+        visualizationFramesSinceAnalysis += numFrames;
+        if (visualizationFramesSinceAnalysis >= analysisHopFrames) {
+            visualizationFramesSinceAnalysis %= analysisHopFrames;
+            monoHistorySnapshot = visualizationMonoHistory;
+            monoWriteIndexSnapshot = visualizationMonoWriteIndex;
+            shouldAnalyzeSpectrum = true;
+        }
+    }
+    if (!shouldAnalyzeSpectrum) {
+        return;
+    }
+
+    const auto bars = buildVisualizationBarsFromMonoHistory(
+            monoHistorySnapshot,
+            monoWriteIndexSnapshot,
+            sampleRateSnapshot
+    );
+    std::lock_guard<std::mutex> visLock(visualizationMutex);
+    visualizationBarsPrev = visualizationBars;
+    visualizationBars = bars;
+}
+
 void AudioEngine::updateVisualizationDataLocked(const float* buffer, int numFrames, int channels) {
     if (!buffer || numFrames <= 0 || channels <= 0) {
         return;
@@ -398,10 +560,6 @@ void AudioEngine::updateVisualizationDataLocked(const float* buffer, int numFram
         const float left = buffer[base];
         const float right = channels > 1 ? buffer[base + 1] : left;
         const float mono = 0.5f * (left + right);
-        visualizationScopeHistoryLeft[visualizationScopeWriteIndex] = left;
-        visualizationScopeHistoryRight[visualizationScopeWriteIndex] = right;
-        visualizationScopeWriteIndex =
-                (visualizationScopeWriteIndex + 1) % static_cast<int>(visualizationScopeHistoryLeft.size());
         visualizationMonoHistory[visualizationMonoWriteIndex] = mono;
         visualizationMonoWriteIndex = (visualizationMonoWriteIndex + 1) % static_cast<int>(visualizationMonoHistory.size());
         sumSqL += static_cast<double>(left) * left;
@@ -524,7 +682,25 @@ std::vector<float> AudioEngine::getVisualizationWaveformScope(
     windowFrames = std::clamp(windowFrames, 128, historySize - 1);
 
     const int writeIndex = visualizationScopeWriteIndex;
-    int startIndex = (writeIndex - windowFrames + historySize) % historySize;
+    const int callbackFrames = std::max(visualizationLastCallbackFrames, 1);
+    const int64_t callbackNs = visualizationLastCallbackNs;
+    const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()
+    ).count();
+    const int64_t elapsedNs = std::max<int64_t>(0, nowNs - callbackNs);
+    const double elapsedFrames = std::clamp(
+            (static_cast<double>(elapsedNs) * static_cast<double>(sampleRate)) / 1.0e9,
+            0.0,
+            static_cast<double>(callbackFrames)
+    );
+    // Render with one-callback latency, then advance smoothly through the most recent
+    // callback block as wall time progresses. This avoids callback-rate stair-stepping.
+    const double virtualWriteExact =
+            static_cast<double>(writeIndex - callbackFrames) + elapsedFrames;
+    const int virtualWriteFloor = static_cast<int>(std::floor(virtualWriteExact));
+    const float virtualWriteFrac =
+            static_cast<float>(virtualWriteExact - static_cast<double>(virtualWriteFloor));
+    int startIndex = (virtualWriteFloor - windowFrames + historySize) % historySize;
 
     if (triggerMode == 1 || triggerMode == 2) {
         const bool rising = triggerMode == 1;
@@ -618,7 +794,7 @@ std::vector<float> AudioEngine::getVisualizationWaveformScope(
     std::vector<float> output(kOutputSize, 0.0f);
     const double scale = static_cast<double>(windowFrames - 1) / static_cast<double>(kOutputSize - 1);
     for (int i = 0; i < kOutputSize; ++i) {
-        const double frameOffset = static_cast<double>(i) * scale;
+        const double frameOffset = static_cast<double>(i) * scale + static_cast<double>(virtualWriteFrac);
         const int frameFloor = static_cast<int>(std::floor(frameOffset));
         const float frac = static_cast<float>(frameOffset - static_cast<double>(frameFloor));
         const int idx0 = (startIndex + frameFloor) % historySize;
@@ -634,13 +810,57 @@ std::vector<float> AudioEngine::getVisualizationWaveformScope(
 std::vector<float> AudioEngine::getVisualizationBars() const {
     markVisualizationRequested();
     std::lock_guard<std::mutex> lock(visualizationMutex);
-    return std::vector<float>(visualizationBars.begin(), visualizationBars.end());
+    const int callbackFrames = std::max(visualizationLastCallbackFrames, 1);
+    const int sampleRate = std::max(streamSampleRate, 8000);
+    const int64_t callbackNs = visualizationLastCallbackNs;
+    const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()
+    ).count();
+    const int64_t elapsedNs = std::max<int64_t>(0, nowNs - callbackNs);
+    const double callbackDurationNs =
+            (static_cast<double>(callbackFrames) * 1.0e9) / static_cast<double>(sampleRate);
+    const float alpha = static_cast<float>(
+            std::clamp(
+                    callbackDurationNs > 0.0 ? (static_cast<double>(elapsedNs) / callbackDurationNs) : 1.0,
+                    0.0,
+                    1.0
+            )
+    );
+    std::vector<float> out(visualizationBars.size(), 0.0f);
+    for (size_t i = 0; i < visualizationBars.size(); ++i) {
+        const float prev = visualizationBarsPrev[i];
+        const float curr = visualizationBars[i];
+        out[i] = std::clamp(prev + ((curr - prev) * alpha), 0.0f, 1.0f);
+    }
+    return out;
 }
 
 std::vector<float> AudioEngine::getVisualizationVuLevels() const {
     markVisualizationRequested();
     std::lock_guard<std::mutex> lock(visualizationMutex);
-    return std::vector<float>(visualizationVuLevels.begin(), visualizationVuLevels.end());
+    const int callbackFrames = std::max(visualizationLastCallbackFrames, 1);
+    const int sampleRate = std::max(streamSampleRate, 8000);
+    const int64_t callbackNs = visualizationLastCallbackNs;
+    const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()
+    ).count();
+    const int64_t elapsedNs = std::max<int64_t>(0, nowNs - callbackNs);
+    const double callbackDurationNs =
+            (static_cast<double>(callbackFrames) * 1.0e9) / static_cast<double>(sampleRate);
+    const float alpha = static_cast<float>(
+            std::clamp(
+                    callbackDurationNs > 0.0 ? (static_cast<double>(elapsedNs) / callbackDurationNs) : 1.0,
+                    0.0,
+                    1.0
+            )
+    );
+    std::vector<float> out(visualizationVuLevels.size(), 0.0f);
+    for (size_t i = 0; i < visualizationVuLevels.size(); ++i) {
+        const float prev = visualizationVuLevelsPrev[i];
+        const float curr = visualizationVuLevels[i];
+        out[i] = std::clamp(prev + ((curr - prev) * alpha), 0.0f, 1.0f);
+    }
+    return out;
 }
 
 int AudioEngine::getVisualizationChannelCount() const {

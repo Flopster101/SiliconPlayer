@@ -56,8 +56,8 @@ fun OscilloscopeGlTextureVisualization(
             view.onFrameStats = onFrameStats
             view.updateFrame(
                 OscilloscopeGlTextureFrame(
-                    waveformLeft = waveformLeft.copyOf(),
-                    waveformRight = waveformRight.copyOf(),
+                    waveformLeft = waveformLeft,
+                    waveformRight = waveformRight,
                     channelCount = channelCount,
                     stereo = oscStereo && channelCount > 1,
                     lineColorArgb = lineColor.toArgb(),
@@ -192,7 +192,6 @@ private class OscilloscopeTextureRenderThread(
 ) : Thread("OscilloscopeGlTextureRenderThread") {
     private val lock = Object()
     private var running = true
-    private var pendingRender = false
     private var frameData: OscilloscopeGlTextureFrame? = null
     private var surfaceWidth = initialWidth
     private var surfaceHeight = initialHeight
@@ -202,6 +201,13 @@ private class OscilloscopeTextureRenderThread(
     private var eglContext: EGLContext = EGL14.EGL_NO_CONTEXT
     private var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
     private val renderer = OscilloscopeGlCoreRenderer()
+    private data class LoopState(
+        val frame: OscilloscopeGlTextureFrame?,
+        val width: Int,
+        val height: Int,
+        val surfaceSizeChanged: Boolean,
+        val shouldStop: Boolean
+    )
 
     override fun run() {
         if (!initEgl()) {
@@ -211,10 +217,34 @@ private class OscilloscopeTextureRenderThread(
         }
         try {
             while (true) {
-                val frame = waitForFrameOrStop() ?: break
-                if (surfaceSizeChanged) {
-                    renderer.onSurfaceChanged(surfaceWidth, surfaceHeight)
-                    surfaceSizeChanged = false
+                val state = synchronized(lock) {
+                    while (running && frameData == null) {
+                        lock.wait(8L)
+                    }
+                    if (!running) {
+                        LoopState(
+                            frame = null,
+                            width = 0,
+                            height = 0,
+                            surfaceSizeChanged = false,
+                            shouldStop = true
+                        )
+                    } else {
+                        LoopState(
+                            frame = frameData,
+                            width = surfaceWidth,
+                            height = surfaceHeight,
+                            surfaceSizeChanged = surfaceSizeChanged,
+                            shouldStop = false
+                        ).also {
+                            surfaceSizeChanged = false
+                        }
+                    }
+                }
+                if (state.shouldStop) break
+                val frame = state.frame ?: continue
+                if (state.surfaceSizeChanged) {
+                    renderer.onSurfaceChanged(state.width, state.height)
                 }
                 renderer.drawFrame(frame)
                 EGL14.eglSwapBuffers(eglDisplay, eglSurface)
@@ -228,7 +258,6 @@ private class OscilloscopeTextureRenderThread(
     fun setFrameData(frame: OscilloscopeGlTextureFrame) {
         synchronized(lock) {
             frameData = frame
-            pendingRender = true
             lock.notifyAll()
         }
     }
@@ -238,7 +267,6 @@ private class OscilloscopeTextureRenderThread(
             surfaceWidth = width.coerceAtLeast(1)
             surfaceHeight = height.coerceAtLeast(1)
             surfaceSizeChanged = true
-            pendingRender = true
             lock.notifyAll()
         }
     }
@@ -247,17 +275,6 @@ private class OscilloscopeTextureRenderThread(
         synchronized(lock) {
             running = false
             lock.notifyAll()
-        }
-    }
-
-    private fun waitForFrameOrStop(): OscilloscopeGlTextureFrame? {
-        synchronized(lock) {
-            while (running && !pendingRender) {
-                lock.wait()
-            }
-            if (!running) return null
-            pendingRender = false
-            return frameData
         }
     }
 
@@ -292,6 +309,7 @@ private class OscilloscopeTextureRenderThread(
         if (eglSurface == EGL14.EGL_NO_SURFACE) return false
 
         if (!EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)) return false
+        EGL14.eglSwapInterval(eglDisplay, 1)
         renderer.onSurfaceCreated(onFrameStats)
         renderer.onSurfaceChanged(surfaceWidth, surfaceHeight)
         return true
@@ -327,6 +345,9 @@ private class OscilloscopeGlCoreRenderer {
     private var colorHandle = -1
     private var surfaceWidth = 1
     private var surfaceHeight = 1
+    private var lineBuffer: FloatBuffer? = null
+    private val gridBuilder = OscFloatLineBuilder(192)
+    private val waveBuilder = OscFloatLineBuilder(8_192)
     private var onFrameStats: ((fps: Int, frameMs: Int) -> Unit)? = null
     private var frameCount = 0
     private var frameWindowStartNs = 0L
@@ -377,38 +398,41 @@ private class OscilloscopeGlCoreRenderer {
         val stepX = width / (left.size - 1).coerceAtLeast(1).toFloat()
 
         if (frame.showVerticalGrid || frame.showCenterLine || stereo) {
-            val gridVertices = buildGridVertices(
-                    width = width,
-                    height = height,
-                    half = half,
+            val gridVertexCount = buildGridVertices(
+                width = width,
+                height = height,
+                half = half,
                 centerLeft = centerLeft,
                 centerRight = centerRight,
                 stereo = stereo,
                 showVerticalGrid = frame.showVerticalGrid,
                 showCenterLine = frame.showCenterLine
             )
-            if (gridVertices.isNotEmpty()) {
+            if (gridVertexCount > 0) {
                 drawLines(
-                    vertices = gridVertices,
+                    vertices = gridBuilder.data,
+                    vertexFloatCount = gridBuilder.size,
                     argb = frame.gridColorArgb,
                     widthPx = frame.gridWidthPx.coerceAtLeast(0.5f)
                 )
             }
         }
 
-        val leftVertices = buildWaveVertices(left, width, height, stepX, centerLeft, ampScale)
-        if (leftVertices.isNotEmpty()) {
+        val leftVertexCount = buildWaveVertices(left, width, height, stepX, centerLeft, ampScale)
+        if (leftVertexCount > 0) {
             drawLines(
-                vertices = leftVertices,
+                vertices = waveBuilder.data,
+                vertexFloatCount = waveBuilder.size,
                 argb = frame.lineColorArgb,
                 widthPx = frame.lineWidthPx.coerceAtLeast(1f)
             )
         }
         if (stereo) {
-            val rightVertices = buildWaveVertices(right, width, height, stepX, centerRight, ampScale)
-            if (rightVertices.isNotEmpty()) {
+            val rightVertexCount = buildWaveVertices(right, width, height, stepX, centerRight, ampScale)
+            if (rightVertexCount > 0) {
                 drawLines(
-                    vertices = rightVertices,
+                    vertices = waveBuilder.data,
+                    vertexFloatCount = waveBuilder.size,
                     argb = frame.rightLineColorArgb,
                     widthPx = frame.lineWidthPx.coerceAtLeast(1f)
                 )
@@ -426,13 +450,15 @@ private class OscilloscopeGlCoreRenderer {
         stereo: Boolean,
         showVerticalGrid: Boolean,
         showCenterLine: Boolean
-    ): FloatArray {
-        val segments = ArrayList<Float>(128)
+    ): Int {
+        gridBuilder.reset()
         fun appendLine(x0: Float, y0: Float, x1: Float, y1: Float) {
-            segments.add(toNdcX(x0, width))
-            segments.add(toNdcY(y0, height))
-            segments.add(toNdcX(x1, width))
-            segments.add(toNdcY(y1, height))
+            gridBuilder.addLine(
+                toNdcX(x0, width),
+                toNdcY(y0, height),
+                toNdcX(x1, width),
+                toNdcY(y1, height)
+            )
         }
         if (showVerticalGrid) {
             val verticalDivisions = 8
@@ -452,7 +478,7 @@ private class OscilloscopeGlCoreRenderer {
                 appendLine(0f, half, width, half)
             }
         }
-        return segments.toFloatArray()
+        return gridBuilder.size / 2
     }
 
     private fun buildWaveVertices(
@@ -462,30 +488,30 @@ private class OscilloscopeGlCoreRenderer {
         stepX: Float,
         center: Float,
         ampScale: Float
-    ): FloatArray {
-        if (wave.size < 2) return FloatArray(0)
-        val out = FloatArray((wave.size - 1) * 4)
-        var o = 0
+    ): Int {
+        waveBuilder.reset()
+        if (wave.size < 2) return 0
         for (i in 1 until wave.size) {
             val x0 = (i - 1) * stepX
             val x1 = i * stepX
             val y0 = center - (wave[i - 1].coerceIn(-1f, 1f) * ampScale)
             val y1 = center - (wave[i].coerceIn(-1f, 1f) * ampScale)
-            out[o++] = toNdcX(x0, width)
-            out[o++] = toNdcY(y0, height)
-            out[o++] = toNdcX(x1, width)
-            out[o++] = toNdcY(y1, height)
+            waveBuilder.addLine(
+                toNdcX(x0, width),
+                toNdcY(y0, height),
+                toNdcX(x1, width),
+                toNdcY(y1, height)
+            )
         }
-        return out
+        return waveBuilder.size / 2
     }
 
-    private fun drawLines(vertices: FloatArray, argb: Int, widthPx: Float) {
-        if (vertices.isEmpty() || positionHandle < 0 || colorHandle < 0) return
-        val buffer: FloatBuffer = ByteBuffer
-            .allocateDirect(vertices.size * 4)
-            .order(ByteOrder.nativeOrder())
-            .asFloatBuffer()
-            .put(vertices)
+    private fun drawLines(vertices: FloatArray, vertexFloatCount: Int, argb: Int, widthPx: Float) {
+        if (vertexFloatCount <= 0 || positionHandle < 0 || colorHandle < 0) return
+        val buffer = ensureBuffer(vertexFloatCount).apply {
+            clear()
+            put(vertices, 0, vertexFloatCount)
+        }
         buffer.position(0)
         GLES20.glVertexAttribPointer(positionHandle, 2, GLES20.GL_FLOAT, false, 0, buffer)
         GLES20.glEnableVertexAttribArray(positionHandle)
@@ -495,7 +521,27 @@ private class OscilloscopeGlCoreRenderer {
         val b = (argb and 0xFF) / 255f
         GLES20.glUniform4f(colorHandle, r, g, b, a)
         GLES20.glLineWidth(widthPx.coerceAtLeast(1f))
-        GLES20.glDrawArrays(GLES20.GL_LINES, 0, vertices.size / 2)
+        GLES20.glDrawArrays(GLES20.GL_LINES, 0, vertexFloatCount / 2)
+    }
+
+    private fun ensureBuffer(requiredFloats: Int): FloatBuffer {
+        if (requiredFloats <= 0) {
+            val existing = lineBuffer
+            if (existing != null) return existing
+            return ByteBuffer
+                .allocateDirect(4)
+                .order(ByteOrder.nativeOrder())
+                .asFloatBuffer().also { lineBuffer = it }
+        }
+        val existing = lineBuffer
+        if (existing != null && existing.capacity() >= requiredFloats) {
+            return existing
+        }
+        return ByteBuffer
+            .allocateDirect(requiredFloats * 4)
+            .order(ByteOrder.nativeOrder())
+            .asFloatBuffer()
+            .also { lineBuffer = it }
     }
 
     private fun reportFrameStats() {
@@ -566,5 +612,34 @@ private class OscilloscopeGlCoreRenderer {
                 gl_FragColor = uColor;
             }
         """
+    }
+}
+
+private class OscFloatLineBuilder(initialFloatCapacity: Int) {
+    var data = FloatArray(initialFloatCapacity.coerceAtLeast(16))
+        private set
+    var size = 0
+        private set
+
+    fun addLine(x0: Float, y0: Float, x1: Float, y1: Float) {
+        ensureCapacity(4)
+        data[size++] = x0
+        data[size++] = y0
+        data[size++] = x1
+        data[size++] = y1
+    }
+
+    fun reset() {
+        size = 0
+    }
+
+    private fun ensureCapacity(extra: Int) {
+        val needed = size + extra
+        if (needed <= data.size) return
+        var newSize = data.size
+        while (newSize < needed) {
+            newSize *= 2
+        }
+        data = data.copyOf(newSize)
     }
 }

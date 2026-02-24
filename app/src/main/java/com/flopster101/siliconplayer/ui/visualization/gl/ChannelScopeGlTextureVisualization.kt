@@ -60,7 +60,7 @@ fun ChannelScopeGlTextureVisualization(
             view.updateFrame(
                 ChannelScopeGlTextureFrame(
                     channelHistories = channelHistories,
-                    triggerIndices = triggerIndices.copyOf(),
+                    triggerIndices = triggerIndices,
                     triggerModeNative = triggerModeNative,
                     showVerticalGrid = showVerticalGrid,
                     showCenterLine = showCenterLine,
@@ -195,7 +195,6 @@ private class ChannelScopeTextureRenderThread(
 ) : Thread("ChannelScopeGlTextureRenderThread") {
     private val lock = Object()
     private var running = true
-    private var pendingRender = false
     private var frameData: ChannelScopeGlTextureFrame? = null
     private var surfaceWidth = initialWidth
     private var surfaceHeight = initialHeight
@@ -205,6 +204,13 @@ private class ChannelScopeTextureRenderThread(
     private var eglContext: EGLContext = EGL14.EGL_NO_CONTEXT
     private var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
     private val coreRenderer = ChannelScopeGlCoreRenderer()
+    private data class LoopState(
+        val frame: ChannelScopeGlTextureFrame?,
+        val width: Int,
+        val height: Int,
+        val surfaceSizeChanged: Boolean,
+        val shouldStop: Boolean
+    )
 
     override fun run() {
         if (!initEgl()) {
@@ -214,10 +220,34 @@ private class ChannelScopeTextureRenderThread(
         }
         try {
             while (true) {
-                val frame = waitForFrameOrStop() ?: break
-                if (surfaceSizeChanged) {
-                    coreRenderer.onSurfaceChanged(surfaceWidth, surfaceHeight)
-                    surfaceSizeChanged = false
+                val state = synchronized(lock) {
+                    while (running && frameData == null) {
+                        lock.wait(8L)
+                    }
+                    if (!running) {
+                        LoopState(
+                            frame = null,
+                            width = 0,
+                            height = 0,
+                            surfaceSizeChanged = false,
+                            shouldStop = true
+                        )
+                    } else {
+                        LoopState(
+                            frame = frameData,
+                            width = surfaceWidth,
+                            height = surfaceHeight,
+                            surfaceSizeChanged = surfaceSizeChanged,
+                            shouldStop = false
+                        ).also {
+                            surfaceSizeChanged = false
+                        }
+                    }
+                }
+                if (state.shouldStop) break
+                val frame = state.frame ?: continue
+                if (state.surfaceSizeChanged) {
+                    coreRenderer.onSurfaceChanged(state.width, state.height)
                 }
                 coreRenderer.drawFrame(frame)
                 EGL14.eglSwapBuffers(eglDisplay, eglSurface)
@@ -231,7 +261,6 @@ private class ChannelScopeTextureRenderThread(
     fun setFrameData(frame: ChannelScopeGlTextureFrame) {
         synchronized(lock) {
             frameData = frame
-            pendingRender = true
             lock.notifyAll()
         }
     }
@@ -241,7 +270,6 @@ private class ChannelScopeTextureRenderThread(
             surfaceWidth = width.coerceAtLeast(1)
             surfaceHeight = height.coerceAtLeast(1)
             surfaceSizeChanged = true
-            pendingRender = true
             lock.notifyAll()
         }
     }
@@ -250,17 +278,6 @@ private class ChannelScopeTextureRenderThread(
         synchronized(lock) {
             running = false
             lock.notifyAll()
-        }
-    }
-
-    private fun waitForFrameOrStop(): ChannelScopeGlTextureFrame? {
-        synchronized(lock) {
-            while (running && !pendingRender) {
-                lock.wait()
-            }
-            if (!running) return null
-            pendingRender = false
-            return frameData
         }
     }
 
@@ -295,6 +312,7 @@ private class ChannelScopeTextureRenderThread(
         if (eglSurface == EGL14.EGL_NO_SURFACE) return false
 
         if (!EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)) return false
+        EGL14.eglSwapInterval(eglDisplay, 1)
         coreRenderer.onSurfaceCreated(onFrameStats)
         coreRenderer.onSurfaceChanged(surfaceWidth, surfaceHeight)
         return true
@@ -477,13 +495,31 @@ private class ChannelScopeGlCoreRenderer {
             val visibleSamples = history.size - (edgeTrim * 2)
             if (visibleSamples < 2) continue
             val startIndex = (startIndexRaw + edgeTrim) % history.size
-            val stepX = cellWidth / (visibleSamples - 1).coerceAtLeast(1).toFloat()
-
-            val firstSample = history[startIndex].coerceIn(-1f, 1f)
+            val maxRenderSamples = cellWidth.toInt().coerceIn(96, 1024)
+            val renderSamples = visibleSamples.coerceIn(2, maxRenderSamples)
+            val sampleStep = if (renderSamples <= 1) {
+                0f
+            } else {
+                (visibleSamples - 1).toFloat() / (renderSamples - 1).toFloat()
+            }
+            val stepX = if (renderSamples <= 1) {
+                0f
+            } else {
+                cellWidth / (renderSamples - 1).toFloat()
+            }
+            val firstSample = sampleHistoryAtOffset(
+                history = history,
+                startIndex = startIndex,
+                sampleOffset = 0f
+            )
             var prevX = left
             var prevY = centerY - (firstSample * ampScale)
-            for (i in 1 until visibleSamples) {
-                val sample = history[(startIndex + i) % history.size].coerceIn(-1f, 1f)
+            for (i in 1 until renderSamples) {
+                val sample = sampleHistoryAtOffset(
+                    history = history,
+                    startIndex = startIndex,
+                    sampleOffset = i.toFloat() * sampleStep
+                )
                 val x = left + i * stepX
                 val y = centerY - (sample * ampScale)
                 waveformBuilder.addLine(prevX, prevY, x, y)
@@ -506,6 +542,23 @@ private class ChannelScopeGlCoreRenderer {
             put(gridBuilder.data, 0, gridSize)
             position(0)
         }
+    }
+
+    private fun sampleHistoryAtOffset(
+        history: FloatArray,
+        startIndex: Int,
+        sampleOffset: Float
+    ): Float {
+        if (history.isEmpty()) return 0f
+        val size = history.size
+        val clampedOffset = sampleOffset.coerceIn(0f, (size - 1).toFloat())
+        val base = clampedOffset.toInt().coerceIn(0, size - 1)
+        val frac = (clampedOffset - base.toFloat()).coerceIn(0f, 1f)
+        val idx0 = (startIndex + base) % size
+        val idx1 = (idx0 + 1) % size
+        val s0 = history[idx0].coerceIn(-1f, 1f)
+        val s1 = history[idx1].coerceIn(-1f, 1f)
+        return s0 + ((s1 - s0) * frac)
     }
 
     private fun addRoundedRectBorder(

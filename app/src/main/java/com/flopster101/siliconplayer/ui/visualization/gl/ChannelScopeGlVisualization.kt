@@ -114,7 +114,7 @@ private class ChannelScopeGlSurfaceView(context: Context) : GLSurfaceView(contex
     init {
         setEGLContextClientVersion(2)
         setRenderer(renderer)
-        renderMode = RENDERMODE_WHEN_DIRTY
+        renderMode = RENDERMODE_CONTINUOUSLY
         preserveEGLContextOnPause = true
     }
 
@@ -148,7 +148,6 @@ private class ChannelScopeGlSurfaceView(context: Context) : GLSurfaceView(contex
                 outerCornerRadiusPx = outerCornerRadiusPx.coerceAtLeast(0f)
             )
         )
-        requestRender()
     }
 
     fun dispatchFrameStats(fps: Int, frameMs: Int) {
@@ -331,13 +330,32 @@ private class ChannelScopeGlRenderer(
             val visibleSamples = history.size - (edgeTrim * 2)
             if (visibleSamples < 2) continue
             val startIndex = (startIndexRaw + edgeTrim) % history.size
-            val stepX = cellWidth / (visibleSamples - 1).coerceAtLeast(1).toFloat()
+            val maxRenderSamples = cellWidth.toInt().coerceIn(96, 1024)
+            val renderSamples = visibleSamples.coerceIn(2, maxRenderSamples)
+            val sampleStep = if (renderSamples <= 1) {
+                0f
+            } else {
+                (visibleSamples - 1).toFloat() / (renderSamples - 1).toFloat()
+            }
+            val stepX = if (renderSamples <= 1) {
+                0f
+            } else {
+                cellWidth / (renderSamples - 1).toFloat()
+            }
 
-            val firstSample = history[startIndex].coerceIn(-1f, 1f)
+            val firstSample = sampleHistoryAtOffset(
+                history = history,
+                startIndex = startIndex,
+                sampleOffset = 0f
+            )
             var prevX = left
             var prevY = centerY - (firstSample * ampScale)
-            for (i in 1 until visibleSamples) {
-                val sample = history[(startIndex + i) % history.size].coerceIn(-1f, 1f)
+            for (i in 1 until renderSamples) {
+                val sample = sampleHistoryAtOffset(
+                    history = history,
+                    startIndex = startIndex,
+                    sampleOffset = i.toFloat() * sampleStep
+                )
                 val x = left + i * stepX
                 val y = centerY - (sample * ampScale)
                 waveformBuilder.addLine(prevX, prevY, x, y)
@@ -360,6 +378,23 @@ private class ChannelScopeGlRenderer(
             put(gridData)
             position(0)
         }
+    }
+
+    private fun sampleHistoryAtOffset(
+        history: FloatArray,
+        startIndex: Int,
+        sampleOffset: Float
+    ): Float {
+        if (history.isEmpty()) return 0f
+        val size = history.size
+        val clampedOffset = sampleOffset.coerceIn(0f, (size - 1).toFloat())
+        val base = clampedOffset.toInt().coerceIn(0, size - 1)
+        val frac = (clampedOffset - base.toFloat()).coerceIn(0f, 1f)
+        val idx0 = (startIndex + base) % size
+        val idx1 = (idx0 + 1) % size
+        val s0 = history[idx0].coerceIn(-1f, 1f)
+        val s1 = history[idx1].coerceIn(-1f, 1f)
+        return s0 + ((s1 - s0) * frac)
     }
 
     private fun addRoundedRectBorder(

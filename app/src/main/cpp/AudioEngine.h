@@ -327,11 +327,15 @@ private:
     int visualizationScopeWriteIndex = 0;
     mutable std::array<int, 2> visualizationScopePrevTriggerIndex { -1, -1 };
     std::array<float, 256> visualizationBars {};
+    std::array<float, 256> visualizationBarsPrev {};
     std::array<float, 2> visualizationVuLevels {};
+    std::array<float, 2> visualizationVuLevelsPrev {};
     std::atomic<int> visualizationChannelCount { 2 };
     std::array<float, 4096> visualizationMonoHistory {};
     int visualizationMonoWriteIndex = 0;
-    int visualizationCallbacksSinceAnalysis = 0;
+    int visualizationFramesSinceAnalysis = 0;
+    int visualizationLastCallbackFrames = 0;
+    int64_t visualizationLastCallbackNs = 0;
     mutable std::atomic<int64_t> visualizationLastRequestNs { 0 };
 
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
@@ -376,6 +380,7 @@ private:
     void applyMasterChannelRouting(float* buffer, int numFrames, int channels);
     void applyMonoDownmix(float* buffer, int numFrames, int channels);
     void applyOutputLimiter(float* buffer, int numFrames, int channels);
+    void updateVisualizationDataFromOutputCallback(const float* buffer, int numFrames, int channels);
     void updateVisualizationDataLocked(const float* buffer, int numFrames, int channels);
     void markVisualizationRequested() const;
     bool shouldUpdateVisualization() const;

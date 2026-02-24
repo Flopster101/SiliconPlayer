@@ -79,7 +79,7 @@ fun VuMetersGlTextureVisualization(
                 view.onFrameStats = onFrameStats
                 view.updateFrame(
                     VuMetersGlTextureFrame(
-                        vuLevels = vuLevels.copyOf(),
+                        vuLevels = vuLevels,
                         channelCount = channelCount,
                         anchor = vuAnchor,
                         vuColorArgb = vuColor.toArgb(),
@@ -241,7 +241,6 @@ private class VuMetersTextureRenderThread(
 ) : Thread("VuMetersGlTextureRenderThread") {
     private val lock = Object()
     private var running = true
-    private var pendingRender = false
     private var frameData: VuMetersGlTextureFrame? = null
     private var surfaceWidth = initialWidth
     private var surfaceHeight = initialHeight
@@ -251,6 +250,13 @@ private class VuMetersTextureRenderThread(
     private var eglContext: EGLContext = EGL14.EGL_NO_CONTEXT
     private var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
     private val renderer = VuMetersGlCoreRenderer()
+    private data class LoopState(
+        val frame: VuMetersGlTextureFrame?,
+        val width: Int,
+        val height: Int,
+        val surfaceSizeChanged: Boolean,
+        val shouldStop: Boolean
+    )
 
     override fun run() {
         if (!initEgl()) {
@@ -260,10 +266,34 @@ private class VuMetersTextureRenderThread(
         }
         try {
             while (true) {
-                val frame = waitForFrameOrStop() ?: break
-                if (surfaceSizeChanged) {
-                    renderer.onSurfaceChanged(surfaceWidth, surfaceHeight)
-                    surfaceSizeChanged = false
+                val state = synchronized(lock) {
+                    while (running && frameData == null) {
+                        lock.wait(8L)
+                    }
+                    if (!running) {
+                        LoopState(
+                            frame = null,
+                            width = 0,
+                            height = 0,
+                            surfaceSizeChanged = false,
+                            shouldStop = true
+                        )
+                    } else {
+                        LoopState(
+                            frame = frameData,
+                            width = surfaceWidth,
+                            height = surfaceHeight,
+                            surfaceSizeChanged = surfaceSizeChanged,
+                            shouldStop = false
+                        ).also {
+                            surfaceSizeChanged = false
+                        }
+                    }
+                }
+                if (state.shouldStop) break
+                val frame = state.frame ?: continue
+                if (state.surfaceSizeChanged) {
+                    renderer.onSurfaceChanged(state.width, state.height)
                 }
                 renderer.drawFrame(frame)
                 EGL14.eglSwapBuffers(eglDisplay, eglSurface)
@@ -277,7 +307,6 @@ private class VuMetersTextureRenderThread(
     fun setFrameData(frame: VuMetersGlTextureFrame) {
         synchronized(lock) {
             frameData = frame
-            pendingRender = true
             lock.notifyAll()
         }
     }
@@ -287,7 +316,6 @@ private class VuMetersTextureRenderThread(
             surfaceWidth = width.coerceAtLeast(1)
             surfaceHeight = height.coerceAtLeast(1)
             surfaceSizeChanged = true
-            pendingRender = true
             lock.notifyAll()
         }
     }
@@ -296,15 +324,6 @@ private class VuMetersTextureRenderThread(
         synchronized(lock) {
             running = false
             lock.notifyAll()
-        }
-    }
-
-    private fun waitForFrameOrStop(): VuMetersGlTextureFrame? {
-        synchronized(lock) {
-            while (running && !pendingRender) lock.wait()
-            if (!running) return null
-            pendingRender = false
-            return frameData
         }
     }
 
@@ -333,6 +352,7 @@ private class VuMetersTextureRenderThread(
         eglSurface = EGL14.eglCreateWindowSurface(eglDisplay, eglConfig, outputSurface, surfaceAttribs, 0)
         if (eglSurface == EGL14.EGL_NO_SURFACE) return false
         if (!EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)) return false
+        EGL14.eglSwapInterval(eglDisplay, 1)
         renderer.onSurfaceCreated(onFrameStats)
         renderer.onSurfaceChanged(surfaceWidth, surfaceHeight)
         return true

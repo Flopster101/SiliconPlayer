@@ -549,6 +549,9 @@ bool AudioEngine::renderOutputCallbackFrames(float* outputData, int32_t numFrame
         outputData[base] *= fadeGain;
         outputData[base + 1u] *= fadeGain;
     }
+    if (shouldUpdateVisualization()) {
+        updateVisualizationDataFromOutputCallback(outputData, numFrames, 2);
+    }
 
     if (pauseResumeFadeOutStopPending) {
         pauseResumeFadeOutStopPending = false;

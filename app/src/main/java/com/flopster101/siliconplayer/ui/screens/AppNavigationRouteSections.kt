@@ -69,13 +69,19 @@ internal fun AppNavigationNetworkRouteSection(
     mainPadding: PaddingValues,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     backHandlingEnabled: Boolean,
-    onExitNetwork: () -> Unit
+    nodes: List<NetworkNode>,
+    onExitNetwork: () -> Unit,
+    onNodesChanged: (List<NetworkNode>) -> Unit,
+    onOpenRemoteSource: (String) -> Unit
 ) {
     MainNetworkRouteHost(
         mainPadding = mainPadding,
         bottomContentPadding = bottomContentPadding,
         backHandlingEnabled = backHandlingEnabled,
-        onExitNetwork = onExitNetwork
+        nodes = nodes,
+        onExitNetwork = onExitNetwork,
+        onNodesChanged = onNodesChanged,
+        onOpenRemoteSource = onOpenRemoteSource
     )
 }
 

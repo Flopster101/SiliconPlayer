@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Slideshow
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.runtime.Composable
@@ -23,6 +24,7 @@ internal data class RootRouteActions(
     val onOpenPlayer: () -> Unit,
     val onOpenHome: () -> Unit,
     val onOpenFileBrowser: () -> Unit,
+    val onOpenNetwork: () -> Unit,
     val onOpenVisualization: () -> Unit,
     val onOpenUrlCache: () -> Unit,
     val onOpenMisc: () -> Unit,
@@ -86,6 +88,7 @@ internal fun RootRouteContent(
     val onOpenPlayer = actions.onOpenPlayer
     val onOpenHome = actions.onOpenHome
     val onOpenFileBrowser = actions.onOpenFileBrowser
+    val onOpenNetwork = actions.onOpenNetwork
     val onOpenVisualization = actions.onOpenVisualization
     val onOpenUrlCache = actions.onOpenUrlCache
     val onOpenMisc = actions.onOpenMisc
@@ -127,6 +130,13 @@ internal fun RootRouteContent(
         description = "Sorting and behavior preferences for the library browser.",
         icon = Icons.Default.Folder,
         onClick = onOpenFileBrowser
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    SettingsItemCard(
+        title = "Network settings",
+        description = "Manage network source behavior and saved entries.",
+        icon = Icons.Default.Public,
+        onClick = onOpenNetwork
     )
     Spacer(modifier = Modifier.height(10.dp))
     SettingsItemCard(

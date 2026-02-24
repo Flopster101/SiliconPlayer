@@ -226,6 +226,7 @@ internal data class SettingsScreenActions(
     val onOpenGeneralAudio: () -> Unit,
     val onOpenHome: () -> Unit,
     val onOpenFileBrowser: () -> Unit,
+    val onOpenNetwork: () -> Unit,
     val onOpenAudioEffects: () -> Unit,
     val onClearAllAudioParameters: () -> Unit,
     val onClearPluginAudioParameters: () -> Unit,
@@ -309,6 +310,7 @@ internal data class SettingsScreenActions(
     val onResetVisualizationVuSettings: () -> Unit,
     val onResetVisualizationChannelScopeSettings: () -> Unit,
     val onClearRecentHistory: () -> Unit,
+    val onClearSavedNetworkSources: () -> Unit,
     val onClearAllSettings: () -> Unit,
     val onClearAllPluginSettings: () -> Unit,
     val onResetPluginSettings: (String) -> Unit

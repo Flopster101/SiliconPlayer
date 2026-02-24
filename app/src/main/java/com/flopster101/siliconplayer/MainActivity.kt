@@ -134,8 +134,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -371,6 +369,9 @@ private fun AppNavigation(
     }
     var recentPlayedFiles by remember {
         mutableStateOf(readRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, recentFilesLimit))
+    }
+    var networkNodes by remember {
+        mutableStateOf(readNetworkNodes(prefs))
     }
     AppNavigationStartupEffects(
         prefs = prefs,
@@ -1947,6 +1948,7 @@ private fun AppNavigation(
                                     onOpenGeneralAudio = { openSettingsRoute(SettingsRoute.GeneralAudio, false) },
                                     onOpenHome = { openSettingsRoute(SettingsRoute.Home, false) },
                                     onOpenFileBrowser = { openSettingsRoute(SettingsRoute.FileBrowser, false) },
+                                    onOpenNetwork = { openSettingsRoute(SettingsRoute.Network, false) },
                                     onOpenAudioEffects = {
                             tempMasterVolumeDb = masterVolumeDb
                             tempPluginVolumeDb = pluginVolumeDb
@@ -2313,6 +2315,11 @@ private fun AppNavigation(
                                 onRecentPlayedFilesChanged = { recentPlayedFiles = it }
                             )
                         },
+                                    onClearSavedNetworkSources = {
+                            networkNodes = emptyList()
+                            writeNetworkNodes(prefs, networkNodes)
+                            Toast.makeText(context, "Saved network sources cleared", Toast.LENGTH_SHORT).show()
+                        },
                                     onClearAllSettings = {
                             clearAllSettingsUsingStateHolders(
                                 context = context,
@@ -2362,6 +2369,8 @@ private fun AppNavigation(
                                 onVisualizationVuSmoothingPercentChanged = { visualizationVuSmoothingPercent = it },
                                 onVisualizationVuRenderBackendChanged = { visualizationVuRenderBackend = it }
                             )
+                            networkNodes = emptyList()
+                            writeNetworkNodes(prefs, networkNodes)
                         },
                                     onClearAllPluginSettings = {
                             clearAllPluginSettingsUsingStateHolders(
@@ -2520,7 +2529,15 @@ private fun AppNavigation(
                     mainPadding = mainPadding,
                     bottomContentPadding = miniPlayerListInset,
                     backHandlingEnabled = !isPlayerExpanded,
-                    onExitNetwork = { currentView = MainView.Home }
+                    nodes = networkNodes,
+                    onExitNetwork = { currentView = MainView.Home },
+                    onNodesChanged = { updatedNodes ->
+                        networkNodes = updatedNodes
+                        writeNetworkNodes(prefs, updatedNodes)
+                    },
+                    onOpenRemoteSource = { rawInput ->
+                        manualOpenDelegates.applyManualInputSelection(rawInput)
+                    }
                 )
             },
             browserContent = { mainPadding ->

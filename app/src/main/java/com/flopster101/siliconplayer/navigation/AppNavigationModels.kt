@@ -20,6 +20,7 @@ enum class SettingsRoute {
     GeneralAudio,
     Home,
     FileBrowser,
+    Network,
     Player,
     Visualization,
     VisualizationBasic,
@@ -53,6 +54,7 @@ internal fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {
     SettingsRoute.GeneralAudio -> 1
     SettingsRoute.Home -> 1
     SettingsRoute.FileBrowser -> 1
+    SettingsRoute.Network -> 1
     SettingsRoute.Player -> 1
     SettingsRoute.Visualization -> 1
     SettingsRoute.VisualizationBasic -> 2

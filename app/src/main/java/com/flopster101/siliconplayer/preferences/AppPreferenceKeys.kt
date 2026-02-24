@@ -51,6 +51,7 @@ internal object AppPreferenceKeys {
     const val URL_CACHE_CLEAR_ON_LAUNCH = "url_cache_clear_on_launch"
     const val URL_CACHE_MAX_TRACKS = "url_cache_max_tracks"
     const val URL_CACHE_MAX_BYTES = "url_cache_max_bytes"
+    const val NETWORK_SAVED_NODES = "network_saved_nodes"
     const val ARCHIVE_CACHE_CLEAR_ON_LAUNCH = "archive_cache_clear_on_launch"
     const val ARCHIVE_CACHE_MAX_MOUNTS = "archive_cache_max_mounts"
     const val ARCHIVE_CACHE_MAX_BYTES = "archive_cache_max_bytes"

@@ -107,6 +107,7 @@ internal fun SettingsRouteContentHost(
                                 onOpenPlayer = actions.onOpenPlayer,
                                 onOpenHome = actions.onOpenHome,
                                 onOpenFileBrowser = actions.onOpenFileBrowser,
+                                onOpenNetwork = actions.onOpenNetwork,
                                 onOpenVisualization = actions.onOpenVisualization,
                                 onOpenUrlCache = actions.onOpenUrlCache,
                                 onOpenMisc = actions.onOpenMisc,
@@ -268,6 +269,14 @@ internal fun SettingsRouteContentHost(
                                 onShowFileIconChipBackgroundChanged = actions.onShowFileIconChipBackgroundChanged,
                                 onSortArchivesBeforeFilesChanged = actions.onSortArchivesBeforeFilesChanged,
                                 onBrowserNameSortModeChanged = actions.onBrowserNameSortModeChanged
+                            )
+                        )
+                    }
+
+                    SettingsRoute.Network -> {
+                        NetworkRouteContent(
+                            actions = NetworkRouteActions(
+                                onClearSavedNetworkSources = actions.onClearSavedNetworkSources
                             )
                         )
                     }
@@ -477,6 +486,7 @@ internal fun settingsSecondaryTitle(route: SettingsRoute, selectedPluginName: St
         SettingsRoute.GeneralAudio -> "General audio"
         SettingsRoute.Home -> "Home settings"
         SettingsRoute.FileBrowser -> "File browser settings"
+        SettingsRoute.Network -> "Network settings"
         SettingsRoute.Player -> "Player settings"
         SettingsRoute.Visualization -> "Visualization settings"
         SettingsRoute.VisualizationBasic -> "Basic visualizations"

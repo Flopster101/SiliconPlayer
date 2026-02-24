@@ -3,9 +3,11 @@ package com.flopster101.siliconplayer
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +45,10 @@ internal data class FileBrowserRouteActions(
 
 internal data class MiscRouteActions(
     val onClearRecentHistory: () -> Unit
+)
+
+internal data class NetworkRouteActions(
+    val onClearSavedNetworkSources: () -> Unit
 )
 
 internal data class UiRouteState(
@@ -130,6 +136,38 @@ internal fun MiscRouteContent(
         icon = Icons.Default.MoreHoriz,
         onClick = actions.onClearRecentHistory
     )
+}
+
+@Composable
+internal fun NetworkRouteContent(
+    actions: NetworkRouteActions
+) {
+    var showClearSavedSourcesConfirm by remember { mutableStateOf(false) }
+
+    SettingsSectionLabel("Saved network sources")
+    SettingsItemCard(
+        title = "Clear saved sources",
+        description = "Remove all saved network folders and remote sources.",
+        icon = Icons.Default.DeleteForever,
+        onClick = { showClearSavedSourcesConfirm = true }
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    SettingsItemCard(
+        title = "Future examples and providers",
+        description = "Built-in examples and provider toggles will be added here later.",
+        icon = Icons.Default.Public,
+        onClick = {}
+    )
+
+    if (showClearSavedSourcesConfirm) {
+        SettingsConfirmDialog(
+            title = "Clear saved network sources?",
+            message = "This removes all user-saved network folders and remote sources.",
+            confirmLabel = "Clear",
+            onDismiss = { showClearSavedSourcesConfirm = false },
+            onConfirm = actions.onClearSavedNetworkSources
+        )
+    }
 }
 
 @Composable

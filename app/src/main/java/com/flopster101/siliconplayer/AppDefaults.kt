@@ -27,6 +27,7 @@ object AppDefaults {
             const val count = 40
             const val smoothingPercent = 60
             const val roundnessDp = 6
+            const val frequencyGridEnabled = false
             val fpsMode = VisualizationOscFpsMode.Fps60
             const val overlayArtwork = true
             const val useThemeColor = true

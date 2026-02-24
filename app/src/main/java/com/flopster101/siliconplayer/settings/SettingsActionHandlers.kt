@@ -353,6 +353,10 @@ internal fun resetVisualizationBarsSettingsAction(
     onBarUseThemeColorChanged(AppDefaults.Visualization.Bars.useThemeColor)
     onBarRenderBackendChanged(AppDefaults.Visualization.Bars.renderBackend)
     prefs.edit()
+        .putBoolean(
+            AppPreferenceKeys.VISUALIZATION_BAR_FREQUENCY_GRID_ENABLED,
+            AppDefaults.Visualization.Bars.frequencyGridEnabled
+        )
         .putString(
             AppPreferenceKeys.VISUALIZATION_BAR_FPS_MODE,
             AppDefaults.Visualization.Bars.fpsMode.storageValue

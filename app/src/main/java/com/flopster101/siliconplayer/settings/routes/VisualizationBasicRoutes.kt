@@ -69,6 +69,7 @@ internal fun VisualizationBasicBarsRouteContent(
     val barColorModeWithArtworkKey = "visualization_bar_color_mode_with_artwork"
     val barCustomColorKey = "visualization_bar_custom_color_argb"
     val barFpsModeKey = AppPreferenceKeys.VISUALIZATION_BAR_FPS_MODE
+    val barFrequencyGridEnabledKey = AppPreferenceKeys.VISUALIZATION_BAR_FREQUENCY_GRID_ENABLED
     val context = LocalContext.current
     val prefs = remember(context) {
         context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -107,6 +108,14 @@ internal fun VisualizationBasicBarsRouteContent(
                     barFpsModeKey,
                     AppDefaults.Visualization.Bars.fpsMode.storageValue
                 )
+            )
+        )
+    }
+    var barFrequencyGridEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                barFrequencyGridEnabledKey,
+                AppDefaults.Visualization.Bars.frequencyGridEnabled
             )
         )
     }
@@ -167,6 +176,16 @@ internal fun VisualizationBasicBarsRouteContent(
         description = "Use app theme color for bars instead of alternate accent.",
         checked = visualizationBarUseThemeColor,
         onCheckedChange = onVisualizationBarUseThemeColorChanged
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Show frequency grid (debug)",
+        description = "Draw a behind-bars frequency guide to inspect range distribution.",
+        checked = barFrequencyGridEnabled,
+        onCheckedChange = { enabled ->
+            barFrequencyGridEnabled = enabled
+            prefs.edit().putBoolean(barFrequencyGridEnabledKey, enabled).apply()
+        }
     )
     Spacer(modifier = Modifier.height(16.dp))
     SettingsSectionLabel("Colors (no artwork)")

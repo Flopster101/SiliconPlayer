@@ -145,6 +145,7 @@ private const val PREF_KEY_VIS_OSC_CUSTOM_LINE_COLOR = "visualization_osc_custom
 private const val PREF_KEY_VIS_OSC_CUSTOM_GRID_COLOR = "visualization_osc_custom_grid_color_argb"
 private const val PREF_KEY_VIS_BAR_RENDER_BACKEND = "visualization_bar_render_backend"
 private const val PREF_KEY_VIS_BAR_FPS_MODE = "visualization_bar_fps_mode"
+private const val PREF_KEY_VIS_BAR_FREQUENCY_GRID_ENABLED = "visualization_bar_frequency_grid_enabled"
 private const val PREF_KEY_VIS_BAR_COLOR_NO_ARTWORK = "visualization_bar_color_mode_no_artwork"
 private const val PREF_KEY_VIS_BAR_COLOR_WITH_ARTWORK = "visualization_bar_color_mode_with_artwork"
 private const val PREF_KEY_VIS_BAR_CUSTOM_COLOR = "visualization_bar_custom_color_argb"
@@ -172,6 +173,7 @@ private class PlayerVisualizationPreferenceState(
     barColorModeNoArtwork: VisualizationOscColorMode,
     barColorModeWithArtwork: VisualizationOscColorMode,
     barCustomColorArgb: Int,
+    barFrequencyGridEnabled: Boolean,
     barFpsMode: VisualizationOscFpsMode,
     barRuntimeRenderBackend: VisualizationRenderBackend,
     vuColorModeNoArtwork: VisualizationOscColorMode,
@@ -197,6 +199,7 @@ private class PlayerVisualizationPreferenceState(
     var barColorModeNoArtwork by mutableStateOf(barColorModeNoArtwork)
     var barColorModeWithArtwork by mutableStateOf(barColorModeWithArtwork)
     var barCustomColorArgb by mutableIntStateOf(barCustomColorArgb)
+    var barFrequencyGridEnabled by mutableStateOf(barFrequencyGridEnabled)
     var barFpsMode by mutableStateOf(barFpsMode)
     var barRuntimeRenderBackend by mutableStateOf(barRuntimeRenderBackend)
     var vuColorModeNoArtwork by mutableStateOf(vuColorModeNoArtwork)
@@ -285,6 +288,10 @@ private fun rememberPlayerVisualizationPreferenceState(
                 VisualizationOscColorMode.Artwork
             ),
             barCustomColorArgb = prefs.getInt(PREF_KEY_VIS_BAR_CUSTOM_COLOR, 0xFF6BD8FF.toInt()),
+            barFrequencyGridEnabled = prefs.getBoolean(
+                PREF_KEY_VIS_BAR_FREQUENCY_GRID_ENABLED,
+                AppDefaults.Visualization.Bars.frequencyGridEnabled
+            ),
             barFpsMode = VisualizationOscFpsMode.fromStorage(
                 prefs.getString(
                     PREF_KEY_VIS_BAR_FPS_MODE,
@@ -429,6 +436,12 @@ private fun rememberPlayerVisualizationPreferenceState(
                 PREF_KEY_VIS_BAR_CUSTOM_COLOR -> {
                     state.barCustomColorArgb =
                         sharedPrefs.getInt(PREF_KEY_VIS_BAR_CUSTOM_COLOR, 0xFF6BD8FF.toInt())
+                }
+                PREF_KEY_VIS_BAR_FREQUENCY_GRID_ENABLED -> {
+                    state.barFrequencyGridEnabled = sharedPrefs.getBoolean(
+                        PREF_KEY_VIS_BAR_FREQUENCY_GRID_ENABLED,
+                        AppDefaults.Visualization.Bars.frequencyGridEnabled
+                    )
                 }
                 PREF_KEY_VIS_BAR_FPS_MODE -> {
                     state.barFpsMode = VisualizationOscFpsMode.fromStorage(
@@ -783,6 +796,7 @@ fun PlayerScreen(
                                 barRoundnessDp = visualizationBarRoundnessDp,
                                 barOverlayArtwork = visualizationBarOverlayArtwork,
                                 barUseThemeColor = visualizationBarUseThemeColor,
+                                barFrequencyGridEnabled = visualizationPrefsState.barFrequencyGridEnabled,
                                 barRenderBackend = visualizationPrefsState.barRuntimeRenderBackend,
                                 barColorModeNoArtwork = visualizationPrefsState.barColorModeNoArtwork,
                                 barColorModeWithArtwork = visualizationPrefsState.barColorModeWithArtwork,
@@ -1072,6 +1086,7 @@ fun PlayerScreen(
                                         barRoundnessDp = visualizationBarRoundnessDp,
                                         barOverlayArtwork = visualizationBarOverlayArtwork,
                                         barUseThemeColor = visualizationBarUseThemeColor,
+                                        barFrequencyGridEnabled = visualizationPrefsState.barFrequencyGridEnabled,
                                         barRenderBackend = visualizationPrefsState.barRuntimeRenderBackend,
                                         barColorModeNoArtwork = visualizationPrefsState.barColorModeNoArtwork,
                                         barColorModeWithArtwork = visualizationPrefsState.barColorModeWithArtwork,

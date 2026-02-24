@@ -69,6 +69,8 @@ fun BasicVisualizationOverlay(
     barRoundnessDp: Int,
     barOverlayArtwork: Boolean,
     barUseThemeColor: Boolean,
+    barFrequencyGridEnabled: Boolean,
+    barSampleRateHz: Int,
     barRenderBackend: VisualizationRenderBackend,
     barColorModeNoArtwork: VisualizationOscColorMode,
     barColorModeWithArtwork: VisualizationOscColorMode,
@@ -230,28 +232,42 @@ fun BasicVisualizationOverlay(
 
     when (mode) {
         VisualizationMode.Bars -> {
-            when (barRenderBackend) {
-                VisualizationRenderBackend.OpenGlTexture -> {
-                    BarsGlTextureVisualization(
-                        bars = bars,
-                        barCount = barCount,
-                        barRoundnessDp = barRoundnessDp,
-                        barOverlayArtwork = barOverlayArtwork,
-                        barColor = barColor,
-                        backgroundColor = barBackgroundColor,
-                        onFrameStats = channelScopeOnFrameStats,
-                        modifier = modifier
-                    )
+            Box(modifier = modifier) {
+                when (barRenderBackend) {
+                    VisualizationRenderBackend.OpenGlTexture -> {
+                        BarsGlTextureVisualization(
+                            bars = bars,
+                            barCount = barCount,
+                            barRoundnessDp = barRoundnessDp,
+                            barOverlayArtwork = barOverlayArtwork,
+                            barFrequencyGridEnabled = barFrequencyGridEnabled,
+                            sampleRateHz = barSampleRateHz,
+                            barColor = barColor,
+                            backgroundColor = barBackgroundColor,
+                            onFrameStats = channelScopeOnFrameStats,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    else -> {
+                        BarsVisualization(
+                            bars = bars,
+                            barCount = barCount,
+                            barRoundnessDp = barRoundnessDp,
+                            barOverlayArtwork = barOverlayArtwork,
+                            barFrequencyGridEnabled = barFrequencyGridEnabled,
+                            sampleRateHz = barSampleRateHz,
+                            barColor = barColor,
+                            backgroundColor = barBackgroundColor,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
-                else -> {
-                    BarsVisualization(
-                        bars = bars,
-                        barCount = barCount,
-                        barRoundnessDp = barRoundnessDp,
-                        barOverlayArtwork = barOverlayArtwork,
-                        barColor = barColor,
-                        backgroundColor = barBackgroundColor,
-                        modifier = modifier
+                if (barFrequencyGridEnabled) {
+                    BarsFrequencyGridLabelOverlay(
+                        sampleRateHz = barSampleRateHz,
+                        sourceSize = if (bars.isNotEmpty()) bars.size else 256,
+                        textColor = barColor,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }

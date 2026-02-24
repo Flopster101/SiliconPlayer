@@ -67,6 +67,7 @@ internal object AppPreferenceKeys {
     const val VISUALIZATION_BAR_COUNT = "visualization_bar_count"
     const val VISUALIZATION_BAR_SMOOTHING_PERCENT = "visualization_bar_smoothing_percent"
     const val VISUALIZATION_BAR_ROUNDNESS_DP = "visualization_bar_roundness_dp"
+    const val VISUALIZATION_BAR_FREQUENCY_GRID_ENABLED = "visualization_bar_frequency_grid_enabled"
     const val VISUALIZATION_BAR_OVERLAY_ARTWORK = "visualization_bar_overlay_artwork"
     const val VISUALIZATION_BAR_USE_THEME_COLOR = "visualization_bar_use_theme_color"
     const val VISUALIZATION_BAR_FPS_MODE = "visualization_bar_fps_mode"

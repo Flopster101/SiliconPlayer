@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.flopster101.siliconplayer.ui.visualization.basic.computeBarsFrequencyGuideTicks
+import com.flopster101.siliconplayer.ui.visualization.basic.resolveBarsFrequencyMapping
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
@@ -34,6 +36,8 @@ fun BarsGlTextureVisualization(
     barCount: Int,
     barRoundnessDp: Int,
     barOverlayArtwork: Boolean,
+    barFrequencyGridEnabled: Boolean,
+    sampleRateHz: Int,
     barColor: Color,
     backgroundColor: Color,
     onFrameStats: ((fps: Int, frameMs: Int) -> Unit)? = null,
@@ -58,6 +62,8 @@ fun BarsGlTextureVisualization(
                     bars = bars,
                     barCount = barCount.coerceIn(8, 96),
                     barOverlayArtwork = barOverlayArtwork,
+                    barFrequencyGridEnabled = barFrequencyGridEnabled,
+                    sampleRateHz = sampleRateHz,
                     barColorArgb = barColor.toArgb(),
                     backgroundColorArgb = backgroundColor.toArgb(),
                     barRoundnessPx = roundnessPx,
@@ -94,6 +100,8 @@ private data class BarsGlTextureFrame(
     val bars: FloatArray,
     val barCount: Int,
     val barOverlayArtwork: Boolean,
+    val barFrequencyGridEnabled: Boolean,
+    val sampleRateHz: Int,
     val barColorArgb: Int,
     val backgroundColorArgb: Int,
     val barRoundnessPx: Float,
@@ -349,6 +357,23 @@ private class BarsGlCoreRenderer {
             GlSimplePrimitives.drawTriangles(bgVertices, frame.backgroundColorArgb, positionHandle, colorHandle)
         }
 
+        val source = if (frame.bars.isNotEmpty()) frame.bars else FloatArray(256)
+        val mapping = resolveBarsFrequencyMapping(
+            sampleRateHz = frame.sampleRateHz,
+            sourceSize = source.size
+        )
+        val usableMinIndex = 0
+        val usableMaxIndex = (source.size - 1).coerceAtLeast(usableMinIndex + 1)
+
+        if (frame.barFrequencyGridEnabled) {
+            drawBarsFrequencyGuide(
+                frame = frame,
+                width = width,
+                height = height,
+                sourceSize = source.size
+            )
+        }
+
         val count = frame.barCount.coerceIn(8, 96)
         val widthPx = (width - (frame.edgePadPx * 2f)).coerceAtLeast(1f)
         val heightPx = (height - frame.topHeadroomPx).coerceAtLeast(1f)
@@ -357,12 +382,6 @@ private class BarsGlCoreRenderer {
         val barWidth = ((widthPx - gapPx * (count - 1)) / count).coerceAtLeast(1f)
         val baselineY = height
 
-        val source = if (frame.bars.isNotEmpty()) frame.bars else FloatArray(256)
-        val usableMinIndex = 1
-        val usableMaxIndex = (source.size - 1).coerceAtLeast(usableMinIndex + 1)
-        val minForLog = usableMinIndex.toFloat()
-        val maxForLog = usableMaxIndex.toFloat()
-        val logBase = (maxForLog / minForLog).coerceAtLeast(1.001f)
         val midShiftBias = 0.80f
 
         for (i in 0 until count) {
@@ -370,8 +389,12 @@ private class BarsGlCoreRenderer {
             val t1 = (i + 1).toFloat() / count.toFloat()
             val t0Mapped = t0.pow(midShiftBias).coerceIn(0f, 1f)
             val t1Mapped = t1.pow(midShiftBias).coerceIn(0f, 1f)
-            val start = (minForLog * logBase.pow(t0Mapped)).roundToInt().coerceIn(usableMinIndex, usableMaxIndex)
-            val end = (minForLog * logBase.pow(t1Mapped)).roundToInt().coerceIn(start, usableMaxIndex)
+            val startFrequencyHz = mapping.logPositionToFrequencyHz(t0Mapped)
+            val endFrequencyHz = mapping.logPositionToFrequencyHz(t1Mapped)
+            val start = mapping.frequencyHzToSourceIndex(startFrequencyHz).roundToInt()
+                .coerceIn(usableMinIndex, usableMaxIndex)
+            val end = mapping.frequencyHzToSourceIndex(endFrequencyHz).roundToInt()
+                .coerceIn(start, usableMaxIndex)
 
             var sum = 0f
             var bandSumSq = 0.0
@@ -403,6 +426,74 @@ private class BarsGlCoreRenderer {
         }
 
         reportFrameStats()
+    }
+
+    private fun drawBarsFrequencyGuide(
+        frame: BarsGlTextureFrame,
+        width: Float,
+        height: Float,
+        sourceSize: Int
+    ) {
+        val widthPx = (width - (frame.edgePadPx * 2f)).coerceAtLeast(1f)
+        val heightPx = (height - frame.topHeadroomPx).coerceAtLeast(1f)
+        if (widthPx <= 0f || heightPx <= 0f || sourceSize < 2) return
+
+        val baselineY = height
+        val lineWidthPx = 1f
+        val horizontalMinorColor = scaleAlpha(frame.barColorArgb, 0.14f)
+        val horizontalMajorColor = scaleAlpha(frame.barColorArgb, 0.20f)
+        val verticalMinorColor = scaleAlpha(frame.barColorArgb, 0.18f)
+        val verticalMajorColor = scaleAlpha(frame.barColorArgb, 0.28f)
+
+        listOf(0.25f, 0.5f, 0.75f, 1f).forEach { level ->
+            val y = baselineY - (heightPx * level)
+            val yTop = (y - (lineWidthPx * 0.5f)).coerceIn(0f, height)
+            val vertices = GlSimplePrimitives.rectToTrianglesNdc(
+                x = frame.edgePadPx,
+                y = yTop,
+                w = widthPx,
+                h = lineWidthPx,
+                surfaceWidth = width,
+                surfaceHeight = height
+            )
+            GlSimplePrimitives.drawTriangles(
+                vertices,
+                if (level == 1f) horizontalMajorColor else horizontalMinorColor,
+                positionHandle,
+                colorHandle
+            )
+        }
+
+        val ticks = computeBarsFrequencyGuideTicks(
+            sampleRateHz = frame.sampleRateHz,
+            sourceSize = sourceSize,
+            midShiftBias = 0.80f,
+            minimumSpacingFraction = 0f
+        )
+        ticks.forEach { tick ->
+            val x = frame.edgePadPx + (tick.xFraction * widthPx)
+            val xLeft = (x - (lineWidthPx * 0.5f)).coerceIn(0f, width)
+            val vertices = GlSimplePrimitives.rectToTrianglesNdc(
+                x = xLeft,
+                y = baselineY - heightPx,
+                w = lineWidthPx,
+                h = heightPx,
+                surfaceWidth = width,
+                surfaceHeight = height
+            )
+            GlSimplePrimitives.drawTriangles(
+                vertices,
+                if (tick.isMajor) verticalMajorColor else verticalMinorColor,
+                positionHandle,
+                colorHandle
+            )
+        }
+    }
+
+    private fun scaleAlpha(argb: Int, alphaScale: Float): Int {
+        val baseAlpha = (argb ushr 24) and 0xFF
+        val scaledAlpha = (baseAlpha * alphaScale).roundToInt().coerceIn(0, 255)
+        return (argb and 0x00FF_FFFF) or (scaledAlpha shl 24)
     }
 
     private fun reportFrameStats() {

@@ -1,15 +1,17 @@
 plugins {
     alias(libs.plugins.androidApplication)
-    alias(libs.plugins.jetbrainsKotlinAndroid)
     alias(libs.plugins.kotlinCompose)
 }
 
 import java.io.File
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 data class ProcessCommandResult(
     val exitCode: Int,
     val output: String
 )
+
+val androidBuildToolsVersion = "36.1.0"
 
 fun runProcessAndCapture(
     command: List<String>,
@@ -243,10 +245,10 @@ val generateAboutVersions by tasks.registering {
     }
 }
 
-android {
+extensions.configure<com.android.build.api.dsl.ApplicationExtension>("android") {
     namespace = "com.flopster101.siliconplayer"
     compileSdk = 34
-    buildToolsVersion = "36.1.0"
+    buildToolsVersion = androidBuildToolsVersion
     ndkVersion = "29.0.14206865"
 
     signingConfigs {
@@ -321,9 +323,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -340,10 +339,16 @@ android {
     }
     sourceSets {
         getByName("main") {
-            assets.srcDir(layout.buildDirectory.dir("generated/uadeRuntimeAssets/main"))
-            jniLibs.srcDir(layout.buildDirectory.dir("generated/uadeRuntimeJniLibs/main"))
-            java.srcDir(generatedAboutVersionDir)
+            assets.directories.add("build/generated/uadeRuntimeAssets/main")
+            jniLibs.directories.add("build/generated/uadeRuntimeJniLibs/main")
+            java.directories.add("build/generated/source/aboutVersions/main")
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
@@ -381,8 +386,7 @@ fun resolveAndroidSdkDir(): File {
 }
 
 fun resolveBuildToolsDir(sdkDir: File): File {
-    val configured = android.buildToolsVersion
-    require(!configured.isNullOrBlank()) { "android.buildToolsVersion must be set" }
+    val configured = androidBuildToolsVersion
     val configuredDir = File(sdkDir, "build-tools/$configured")
     require(configuredDir.isDirectory) { "Configured build-tools directory not found: $configuredDir" }
     return configuredDir

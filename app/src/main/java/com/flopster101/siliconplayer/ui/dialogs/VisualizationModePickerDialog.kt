@@ -148,7 +148,7 @@ internal fun VisualizationModePickerDialog(
                             )
                             if (advancedModes.isEmpty()) {
                                 Text(
-                                    text = "No advanced visualizations available yet.",
+                                    text = "No advanced visualizations available for this core.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(vertical = 2.dp)

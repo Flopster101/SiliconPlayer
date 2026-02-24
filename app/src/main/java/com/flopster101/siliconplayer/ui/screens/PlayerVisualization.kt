@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer.ui.screens
 
 import android.content.Context
 import android.os.Build
+import android.os.Process
 import android.view.WindowManager
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
@@ -68,11 +69,14 @@ import com.flopster101.siliconplayer.visualizationRenderBackendForMode
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
 import com.flopster101.siliconplayer.ui.visualization.channel.ChannelScopeChannelTextState
 import java.io.File
+import java.util.concurrent.Executors
 import java.util.concurrent.locks.LockSupport
 import kotlin.coroutines.coroutineContext
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
@@ -395,13 +399,29 @@ private fun sleepUntilTickNs(targetTickNs: Long) {
     while (true) {
         val remainingNs = targetTickNs - System.nanoTime()
         if (remainingNs <= 0L) return
-        if (remainingNs >= 2_000_000L) {
-            // Leave a short tail for fine-grained alignment.
-            LockSupport.parkNanos((remainingNs - 500_000L).coerceAtLeast(1_000L))
-        } else {
-            Thread.yield()
-        }
+        val parkNs = when {
+            remainingNs >= 4_000_000L -> remainingNs - 1_000_000L
+            remainingNs >= 1_000_000L -> remainingNs - 200_000L
+            remainingNs >= 200_000L -> remainingNs - 50_000L
+            else -> remainingNs
+        }.coerceAtLeast(1_000L)
+        LockSupport.parkNanos(parkNs)
     }
+}
+
+private fun createVisualizationUpdateDispatcher(): ExecutorCoroutineDispatcher {
+    val executor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(
+            {
+                runCatching {
+                    Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY)
+                }
+                runnable.run()
+            },
+            "sp-vis-update"
+        )
+    }
+    return executor.asCoroutineDispatcher()
 }
 
 private fun normalizeChannelScopeChannel(
@@ -1052,6 +1072,13 @@ internal fun AlbumArtPlaceholder(
     }
     val backendTransitionBlackAlpha = remember { Animatable(0f) }
     val context = LocalContext.current
+    val visualizationUpdateDispatcher = remember { createVisualizationUpdateDispatcher() }
+
+    DisposableEffect(visualizationUpdateDispatcher) {
+        onDispose {
+            visualizationUpdateDispatcher.close()
+        }
+    }
 
     LaunchedEffect(file?.absolutePath, isPlaying, channelScopePrefs.windowMs, sampleRateHz) {
         if (file != null && isPlaying) return@LaunchedEffect
@@ -1155,7 +1182,7 @@ internal fun AlbumArtPlaceholder(
         decoderName
     ) {
         val displayRefreshHz = contextDisplayRefreshRateHz(context)
-        withContext(Dispatchers.Default) {
+        withContext(visualizationUpdateDispatcher) {
             var nextFrameTickNs = 0L
             var lastPollIntervalNs = 0L
             var localChannelScopeLastTextPollNs = 0L

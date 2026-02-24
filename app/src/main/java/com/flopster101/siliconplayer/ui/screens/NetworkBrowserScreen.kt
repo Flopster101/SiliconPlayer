@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeSpacing
 import androidx.compose.foundation.basicMarquee
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Link
@@ -42,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -53,6 +56,9 @@ import com.flopster101.siliconplayer.NetworkNodeType
 import com.flopster101.siliconplayer.nextNetworkNodeId
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import java.util.Locale
+
+private val NETWORK_ICON_BOX_SIZE = 38.dp
+private val NETWORK_ICON_GLYPH_SIZE = 26.dp
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -284,16 +290,39 @@ internal fun NetworkBrowserScreen(
                             .padding(horizontal = 14.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = if (entry.type == NetworkNodeType.Folder) {
-                                Icons.Default.Folder
-                            } else {
-                                Icons.Default.Link
-                            },
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
+                        val isFolder = entry.type == NetworkNodeType.Folder
+                        val chipShape = RoundedCornerShape(11.dp)
+                        val chipContainerColor = if (isFolder) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        }
+                        val chipContentColor = if (isFolder) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSecondaryContainer
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(NETWORK_ICON_BOX_SIZE)
+                                .background(
+                                    color = chipContainerColor,
+                                    shape = chipShape
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isFolder) {
+                                    Icons.Default.Folder
+                                } else {
+                                    Icons.Default.AudioFile
+                                },
+                                contentDescription = null,
+                                tint = chipContentColor,
+                                modifier = Modifier.size(NETWORK_ICON_GLYPH_SIZE)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             val isRemoteSource = entry.type == NetworkNodeType.RemoteSource
                             val sourceLabel = entry.source.orEmpty()

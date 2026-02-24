@@ -75,6 +75,7 @@ internal data class PlayerRouteState(
     val autoPlayOnTrackSelect: Boolean,
     val openPlayerOnTrackSelect: Boolean,
     val autoPlayNextTrackOnEnd: Boolean,
+    val playlistWrapNavigation: Boolean,
     val previousRestartsAfterThreshold: Boolean,
     val fadePauseResume: Boolean,
     val openPlayerFromNotification: Boolean,
@@ -93,6 +94,7 @@ internal data class PlayerRouteActions(
     val onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     val onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
     val onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
+    val onPlaylistWrapNavigationChanged: (Boolean) -> Unit,
     val onPreviousRestartsAfterThresholdChanged: (Boolean) -> Unit,
     val onFadePauseResumeChanged: (Boolean) -> Unit,
     val onOpenPlayerFromNotificationChanged: (Boolean) -> Unit,
@@ -146,6 +148,8 @@ internal fun PlayerRouteContent(
     val onOpenPlayerOnTrackSelectChanged = actions.onOpenPlayerOnTrackSelectChanged
     val autoPlayNextTrackOnEnd = state.autoPlayNextTrackOnEnd
     val onAutoPlayNextTrackOnEndChanged = actions.onAutoPlayNextTrackOnEndChanged
+    val playlistWrapNavigation = state.playlistWrapNavigation
+    val onPlaylistWrapNavigationChanged = actions.onPlaylistWrapNavigationChanged
     val previousRestartsAfterThreshold = state.previousRestartsAfterThreshold
     val onPreviousRestartsAfterThresholdChanged = actions.onPreviousRestartsAfterThresholdChanged
     val fadePauseResume = state.fadePauseResume
@@ -278,6 +282,13 @@ internal fun PlayerRouteContent(
         description = "Automatically start the next visible track after natural playback end.",
         checked = autoPlayNextTrackOnEnd,
         onCheckedChange = onAutoPlayNextTrackOnEndChanged
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Wrap prev/next across playlist",
+        description = "When enabled, Previous on first jumps to last and Next on last jumps to first.",
+        checked = playlistWrapNavigation,
+        onCheckedChange = onPlaylistWrapNavigationChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
     PlayerSettingToggleCard(

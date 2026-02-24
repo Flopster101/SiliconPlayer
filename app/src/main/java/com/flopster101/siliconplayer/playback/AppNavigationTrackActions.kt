@@ -5,7 +5,7 @@ import com.flopster101.siliconplayer.ManualSourceOpenOptions
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.PreviousTrackAction
 import com.flopster101.siliconplayer.ResumeTarget
-import com.flopster101.siliconplayer.adjacentTrackForOffset
+import com.flopster101.siliconplayer.currentTrackIndexForList
 import com.flopster101.siliconplayer.resolvePreviousTrackAction
 import com.flopster101.siliconplayer.resolveResumeTarget
 import com.flopster101.siliconplayer.data.resolveArchiveSourceToMountedFile
@@ -134,19 +134,38 @@ internal fun playAdjacentTrackAction(
     selectedFile: File?,
     visiblePlayableFiles: List<File>,
     offset: Int,
+    playlistWrapNavigation: Boolean,
+    onPlaylistWrapped: (Int) -> Unit,
     onApplyTrackSelection: (file: File, autoStart: Boolean, expandOverride: Boolean?) -> Unit
 ): Boolean {
-    val target = adjacentTrackForOffset(
+    val playlistSize = visiblePlayableFiles.size
+    if (playlistSize <= 0) return false
+    val currentIndex = currentTrackIndexForList(
         selectedFile = selectedFile,
-        visiblePlayableFiles = visiblePlayableFiles,
-        offset = offset
-    ) ?: return false
+        visiblePlayableFiles = visiblePlayableFiles
+    )
+    if (currentIndex < 0) return false
+
+    val rawTargetIndex = currentIndex + offset
+    val targetIndex = if (playlistWrapNavigation) {
+        val wrappedTargetIndex = ((rawTargetIndex % playlistSize) + playlistSize) % playlistSize
+        val wrapped = rawTargetIndex !in visiblePlayableFiles.indices && playlistSize > 1
+        if (wrapped) {
+            onPlaylistWrapped(offset)
+        }
+        wrappedTargetIndex
+    } else {
+        rawTargetIndex
+    }
+
+    val target = visiblePlayableFiles.getOrNull(targetIndex) ?: return false
     onApplyTrackSelection(target, true, null)
     return true
 }
 
 internal fun handlePreviousTrackAction(
     previousRestartsAfterThreshold: Boolean,
+    playlistWrapNavigation: Boolean,
     selectedFile: File?,
     visiblePlayableFiles: List<File>,
     positionSeconds: Double,
@@ -154,11 +173,15 @@ internal fun handlePreviousTrackAction(
     onPlayAdjacentTrack: (Int) -> Boolean
 ): Boolean {
     val hasTrackLoaded = selectedFile != null
-    val hasPreviousTrack = adjacentTrackForOffset(
+    val currentTrackIndex = currentTrackIndexForList(
         selectedFile = selectedFile,
-        visiblePlayableFiles = visiblePlayableFiles,
-        offset = -1
-    ) != null
+        visiblePlayableFiles = visiblePlayableFiles
+    )
+    val hasPreviousTrack = if (playlistWrapNavigation) {
+        currentTrackIndex >= 0 && visiblePlayableFiles.isNotEmpty()
+    } else {
+        currentTrackIndex > 0 && visiblePlayableFiles.isNotEmpty()
+    }
     return when (
         resolvePreviousTrackAction(
             previousRestartsAfterThreshold = previousRestartsAfterThreshold,
@@ -173,7 +196,15 @@ internal fun handlePreviousTrackAction(
         }
 
         PreviousTrackAction.PlayPreviousTrack -> {
-            onPlayAdjacentTrack(-1)
+            val moved = onPlayAdjacentTrack(-1)
+            if (moved) {
+                true
+            } else if (hasTrackLoaded) {
+                onRestartCurrent()
+                true
+            } else {
+                false
+            }
         }
 
         PreviousTrackAction.NoAction -> {

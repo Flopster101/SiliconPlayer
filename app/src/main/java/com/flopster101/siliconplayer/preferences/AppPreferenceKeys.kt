@@ -5,6 +5,7 @@ internal object AppPreferenceKeys {
     const val AUTO_PLAY_ON_TRACK_SELECT = "auto_play_on_track_select"
     const val OPEN_PLAYER_ON_TRACK_SELECT = "open_player_on_track_select"
     const val AUTO_PLAY_NEXT_TRACK_ON_END = "auto_play_next_track_on_end"
+    const val PLAYLIST_WRAP_NAVIGATION = "playlist_wrap_navigation"
     const val PREVIOUS_RESTART_AFTER_THRESHOLD = "previous_restart_after_threshold"
     const val REMEMBER_BROWSER_LOCATION = "remember_browser_location"
     const val BROWSER_SHOW_PARENT_DIRECTORY_ENTRY = "browser_show_parent_directory_entry"

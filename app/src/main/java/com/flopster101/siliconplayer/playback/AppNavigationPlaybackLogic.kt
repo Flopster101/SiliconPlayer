@@ -175,6 +175,32 @@ internal fun currentTrackListIndex(
     )
 }
 
+internal fun canNavigateToPreviousTrack(
+    selectedFile: File?,
+    visiblePlayableFiles: List<File>,
+    playlistWrapNavigation: Boolean
+): Boolean {
+    val currentIndex = currentTrackListIndex(selectedFile, visiblePlayableFiles)
+    return if (playlistWrapNavigation) {
+        currentIndex >= 0
+    } else {
+        currentIndex > 0
+    }
+}
+
+internal fun canNavigateToNextTrack(
+    selectedFile: File?,
+    visiblePlayableFiles: List<File>,
+    playlistWrapNavigation: Boolean
+): Boolean {
+    val currentIndex = currentTrackListIndex(selectedFile, visiblePlayableFiles)
+    return if (playlistWrapNavigation) {
+        currentIndex >= 0
+    } else {
+        currentIndex in 0 until visiblePlayableFiles.lastIndex
+    }
+}
+
 internal fun tryPlayAdjacentTrack(
     selectedFile: File?,
     visiblePlayableFiles: List<File>,

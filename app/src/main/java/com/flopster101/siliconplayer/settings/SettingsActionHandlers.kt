@@ -712,6 +712,7 @@ internal fun clearAllSettingsAction(
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
     onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
+    onPlaylistWrapNavigationChanged: (Boolean) -> Unit,
     onPreviousRestartsAfterThresholdChanged: (Boolean) -> Unit,
     onFadePauseResumeChanged: (Boolean) -> Unit,
     onRespondHeadphoneMediaButtonsChanged: (Boolean) -> Unit,
@@ -881,6 +882,7 @@ internal fun clearAllSettingsAction(
     onAutoPlayOnTrackSelectChanged(true)
     onOpenPlayerOnTrackSelectChanged(true)
     onAutoPlayNextTrackOnEndChanged(true)
+    onPlaylistWrapNavigationChanged(true)
     onPreviousRestartsAfterThresholdChanged(true)
     onFadePauseResumeChanged(AppDefaults.Player.fadePauseResume)
     onRespondHeadphoneMediaButtonsChanged(true)

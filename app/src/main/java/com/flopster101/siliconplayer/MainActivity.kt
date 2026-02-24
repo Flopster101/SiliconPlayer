@@ -406,6 +406,11 @@ private fun AppNavigation(
             prefs.getBoolean(AppPreferenceKeys.AUTO_PLAY_NEXT_TRACK_ON_END, true)
         )
     }
+    var playlistWrapNavigation by remember {
+        mutableStateOf(
+            prefs.getBoolean(AppPreferenceKeys.PLAYLIST_WRAP_NAVIGATION, true)
+        )
+    }
     var previousRestartsAfterThreshold by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.PREVIOUS_RESTART_AFTER_THRESHOLD, true)
@@ -1148,10 +1153,19 @@ private fun AppNavigation(
         isPlayerExpandedProvider = { isPlayerExpanded },
         selectedFileProvider = { selectedFile },
         visiblePlayableFilesProvider = { visiblePlayableFiles },
+        playlistWrapNavigationProvider = { playlistWrapNavigation },
         previousRestartsAfterThresholdProvider = { previousRestartsAfterThreshold },
         positionSecondsProvider = { position },
         onPositionChanged = { position = it },
         onSyncPlaybackService = playbackSessionCoordinator.syncPlaybackService,
+        onPlaylistWrapped = { offset ->
+            val message = if (offset < 0) {
+                "Wrapped to last track"
+            } else {
+                "Wrapped to first track"
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        },
         onApplyTrackSelection = { file, autoStart, expand ->
             trackLoadDelegates.applyTrackSelection(file = file, autoStart = autoStart, expandOverride = expand)
         },
@@ -1201,7 +1215,7 @@ private fun AppNavigation(
                 artist
             )
         },
-        onPlayAdjacentTrack = { trackNavDelegates.playAdjacentTrack(it) },
+        onPlayAdjacentTrack = { trackNavDelegates.playAdjacentTrack(it, notifyWrap = false) },
         isLocalPlayableFile = isLocalPlayableFile
     )
 
@@ -1215,6 +1229,7 @@ private fun AppNavigation(
         autoPlayOnTrackSelect = autoPlayOnTrackSelect,
         openPlayerOnTrackSelect = openPlayerOnTrackSelect,
         autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
+        playlistWrapNavigation = playlistWrapNavigation,
         previousRestartsAfterThreshold = previousRestartsAfterThreshold,
         fadePauseResume = fadePauseResume,
         rememberBrowserLocation = rememberBrowserLocation,
@@ -1560,7 +1575,6 @@ private fun AppNavigation(
             screenHeightPx = screenHeightPx,
             miniPreviewLiftPx = miniPreviewLiftPx,
             selectedFile = selectedFile,
-            visiblePlayableFiles = visiblePlayableFiles,
             isPlaying = isPlaying,
             playbackStartInProgress = playbackStartInProgress,
             seekUiBusy = seekUiBusy,
@@ -1642,8 +1656,12 @@ private fun AppNavigation(
                     playbackSessionCoordinator.syncPlaybackService()
                 }
             },
-            canPreviousTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) > 0,
-            canNextTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) in 0 until (visiblePlayableFiles.size - 1),
+            canPreviousTrack = selectedFile != null,
+            canNextTrack = canNavigateToNextTrack(
+                selectedFile = selectedFile,
+                visiblePlayableFiles = visiblePlayableFiles,
+                playlistWrapNavigation = playlistWrapNavigation
+            ),
             onSeek = { seconds ->
                 if (!seekInProgress) {
                     val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
@@ -1868,6 +1886,7 @@ private fun AppNavigation(
                                     autoPlayOnTrackSelect = autoPlayOnTrackSelect,
                                     openPlayerOnTrackSelect = openPlayerOnTrackSelect,
                                     autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
+                                    playlistWrapNavigation = playlistWrapNavigation,
                                     previousRestartsAfterThreshold = previousRestartsAfterThreshold,
                                     fadePauseResume = fadePauseResume,
                                     audioFocusInterrupt = audioFocusInterrupt,
@@ -1980,6 +1999,7 @@ private fun AppNavigation(
                                     onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
                                     onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
                                     onAutoPlayNextTrackOnEndChanged = { autoPlayNextTrackOnEnd = it },
+                                    onPlaylistWrapNavigationChanged = { playlistWrapNavigation = it },
                                     onPreviousRestartsAfterThresholdChanged = { previousRestartsAfterThreshold = it },
                                     onFadePauseResumeChanged = { fadePauseResume = it },
                                     onRespondHeadphoneMediaButtonsChanged = { respondHeadphoneMediaButtons = it },
@@ -2298,6 +2318,7 @@ private fun AppNavigation(
                                 onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
                                 onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
                                 onAutoPlayNextTrackOnEndChanged = { autoPlayNextTrackOnEnd = it },
+                                onPlaylistWrapNavigationChanged = { playlistWrapNavigation = it },
                                 onPreviousRestartsAfterThresholdChanged = { previousRestartsAfterThreshold = it },
                                 onFadePauseResumeChanged = { fadePauseResume = it },
                                 onPersistRepeatModeChanged = { persistRepeatMode = it },

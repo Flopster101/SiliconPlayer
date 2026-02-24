@@ -12,10 +12,12 @@ internal class AppNavigationTrackNavDelegates(
     private val isPlayerExpandedProvider: () -> Boolean,
     private val selectedFileProvider: () -> File?,
     private val visiblePlayableFilesProvider: () -> List<File>,
+    private val playlistWrapNavigationProvider: () -> Boolean,
     private val previousRestartsAfterThresholdProvider: () -> Boolean,
     private val positionSecondsProvider: () -> Double,
     private val onPositionChanged: (Double) -> Unit,
     private val onSyncPlaybackService: () -> Unit,
+    private val onPlaylistWrapped: (Int) -> Unit,
     private val onApplyTrackSelection: (file: File, autoStart: Boolean, expandOverride: Boolean?) -> Unit,
     private val onApplyManualInputSelection: (String, ManualSourceOpenOptions, Boolean?) -> Unit
 ) {
@@ -32,11 +34,13 @@ internal class AppNavigationTrackNavDelegates(
         )
     }
 
-    fun playAdjacentTrack(offset: Int): Boolean {
+    fun playAdjacentTrack(offset: Int, notifyWrap: Boolean = true): Boolean {
         return playAdjacentTrackAction(
             selectedFile = selectedFileProvider(),
             visiblePlayableFiles = visiblePlayableFilesProvider(),
             offset = offset,
+            playlistWrapNavigation = playlistWrapNavigationProvider(),
+            onPlaylistWrapped = if (notifyWrap) onPlaylistWrapped else { _ -> },
             onApplyTrackSelection = onApplyTrackSelection
         )
     }
@@ -44,6 +48,7 @@ internal class AppNavigationTrackNavDelegates(
     fun handlePreviousTrackAction(): Boolean {
         return handlePreviousTrackAction(
             previousRestartsAfterThreshold = previousRestartsAfterThresholdProvider(),
+            playlistWrapNavigation = playlistWrapNavigationProvider(),
             selectedFile = selectedFileProvider(),
             visiblePlayableFiles = visiblePlayableFilesProvider(),
             positionSeconds = positionSecondsProvider(),
@@ -52,7 +57,7 @@ internal class AppNavigationTrackNavDelegates(
                 onPositionChanged(0.0)
                 onSyncPlaybackService()
             },
-            onPlayAdjacentTrack = { offset -> playAdjacentTrack(offset) }
+            onPlayAdjacentTrack = { offset -> playAdjacentTrack(offset, notifyWrap = true) }
         )
     }
 }

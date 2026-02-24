@@ -21,7 +21,6 @@ internal fun BoxScope.AppNavigationPlayerOverlaysSection(
     screenHeightPx: Float,
     miniPreviewLiftPx: Float,
     selectedFile: File?,
-    visiblePlayableFiles: List<File>,
     isPlaying: Boolean,
     playbackStartInProgress: Boolean,
     seekUiBusy: Boolean,
@@ -99,7 +98,6 @@ internal fun BoxScope.AppNavigationPlayerOverlaysSection(
         screenHeightPx = screenHeightPx,
         miniPreviewLiftPx = miniPreviewLiftPx,
         selectedFile = selectedFile,
-        visiblePlayableFiles = visiblePlayableFiles,
         isPlaying = isPlaying,
         playbackStartInProgress = playbackStartInProgress,
         seekUiBusy = seekUiBusy,
@@ -148,7 +146,9 @@ internal fun BoxScope.AppNavigationPlayerOverlaysSection(
         onNextTrack = { onNextTrack() },
         onPlayPause = onPlayPause,
         onStopAndClear = onStopAndClear,
-        onOpenAudioEffects = onOpenAudioEffects
+        onOpenAudioEffects = onOpenAudioEffects,
+        canPreviousTrack = canPreviousTrack,
+        canNextTrack = canNextTrack
     )
     ExpandedPlayerOverlayHost(
         isPlayerSurfaceVisible = isPlayerSurfaceVisible,

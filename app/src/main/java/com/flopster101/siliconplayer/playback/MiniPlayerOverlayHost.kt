@@ -60,7 +60,6 @@ internal fun BoxScope.MiniPlayerOverlayHost(
     screenHeightPx: Float,
     miniPreviewLiftPx: Float,
     selectedFile: File?,
-    visiblePlayableFiles: List<File>,
     isPlaying: Boolean,
     playbackStartInProgress: Boolean,
     seekUiBusy: Boolean,
@@ -109,7 +108,9 @@ internal fun BoxScope.MiniPlayerOverlayHost(
     onNextTrack: () -> Boolean,
     onPlayPause: () -> Unit,
     onStopAndClear: () -> Unit,
-    onOpenAudioEffects: () -> Unit
+    onOpenAudioEffects: () -> Unit,
+    canPreviousTrack: Boolean,
+    canNextTrack: Boolean
 ) {
     val uiScope = rememberCoroutineScope()
 
@@ -136,8 +137,8 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 onStopAndClear = {},
                 durationSeconds = durationSeconds,
                 positionSeconds = positionSeconds,
-                canPreviousTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) > 0,
-                canNextTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) in 0 until (visiblePlayableFiles.size - 1),
+                canPreviousTrack = canPreviousTrack,
+                canNextTrack = canNextTrack,
                 title = metadataTitle,
                 artist = metadataArtist,
                 sampleRateHz = metadataSampleRate,
@@ -204,8 +205,6 @@ internal fun BoxScope.MiniPlayerOverlayHost(
         val stopButtonFocusRequester = remember { FocusRequester() }
         val playPauseButtonFocusRequester = remember { FocusRequester() }
         val nextButtonFocusRequester = remember { FocusRequester() }
-        val canPreviousMiniTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) > 0
-        val canNextMiniTrack = currentTrackIndexForList(selectedFile, visiblePlayableFiles) in 0 until (visiblePlayableFiles.size - 1)
         var miniPlayerHasFocus by remember { mutableStateOf(false) }
         val miniPlayerFocusHighlight by animateFloatAsState(
             targetValue = if (miniPlayerHasFocus && showMiniPlayerFocusHighlight) 1f else 0f,
@@ -246,7 +245,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                         true
                     }
                     Key.DirectionRight -> {
-                        if (canPreviousMiniTrack) {
+                        if (canPreviousTrack) {
                             previousButtonFocusRequester.requestFocus()
                         } else {
                             stopButtonFocusRequester.requestFocus()
@@ -291,8 +290,8 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 positionSeconds = positionSeconds,
                 durationSeconds = durationSeconds,
                 hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
-                canPreviousTrack = canPreviousMiniTrack,
-                canNextTrack = canNextMiniTrack,
+                canPreviousTrack = canPreviousTrack,
+                canNextTrack = canNextTrack,
                 onExpand = {
                     onMiniPlayerExpandRequested()
                     onCollapseFromSwipeChanged(false)

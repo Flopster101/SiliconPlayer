@@ -19,6 +19,7 @@ internal fun AppNavigationTrackPreferenceEffects(
     autoPlayOnTrackSelect: Boolean,
     openPlayerOnTrackSelect: Boolean,
     autoPlayNextTrackOnEnd: Boolean,
+    playlistWrapNavigation: Boolean,
     previousRestartsAfterThreshold: Boolean,
     fadePauseResume: Boolean,
     rememberBrowserLocation: Boolean,
@@ -71,6 +72,12 @@ internal fun AppNavigationTrackPreferenceEffects(
     LaunchedEffect(autoPlayNextTrackOnEnd) {
         prefs.edit()
             .putBoolean(AppPreferenceKeys.AUTO_PLAY_NEXT_TRACK_ON_END, autoPlayNextTrackOnEnd)
+            .apply()
+    }
+
+    LaunchedEffect(playlistWrapNavigation) {
+        prefs.edit()
+            .putBoolean(AppPreferenceKeys.PLAYLIST_WRAP_NAVIGATION, playlistWrapNavigation)
             .apply()
     }
 

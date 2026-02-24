@@ -289,8 +289,7 @@ private fun AppNavigation(
     var currentView by remember { mutableStateOf(MainView.Home) }
     val focusManager = LocalFocusManager.current
     var browserFocusRestoreRequestToken by remember { mutableIntStateOf(0) }
-    val isTvDevice = remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) }
-    var showMiniPlayerFocusHighlight by remember { mutableStateOf(isTvDevice) }
+    var showMiniPlayerFocusHighlight by remember { mutableStateOf(false) }
     val miniPlayerFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     val mainContentFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.Root) }
@@ -1615,6 +1614,11 @@ private fun AppNavigation(
             filenameDisplayMode = filenameDisplayMode,
             filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
             showMiniPlayerFocusHighlight = showMiniPlayerFocusHighlight,
+            onHardwareNavigationInput = { showMiniPlayerFocusHighlight = true },
+            onTouchInteraction = {
+                showMiniPlayerFocusHighlight = false
+                focusManager.clearFocus(force = true)
+            },
             onMiniPlayerNavigateUpRequested = {
                 if (currentView == MainView.Browser) {
                     mainContentFocusRequester.requestFocus()

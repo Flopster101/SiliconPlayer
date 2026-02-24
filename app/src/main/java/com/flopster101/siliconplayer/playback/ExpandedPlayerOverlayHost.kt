@@ -8,11 +8,25 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.ExperimentalComposeUiApi
 import com.flopster101.siliconplayer.ui.screens.PlayerScreen
+import com.flopster101.siliconplayer.ui.screens.LocalPlayerFocusIndicatorsEnabled
 import java.io.File
+import android.view.MotionEvent
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun ExpandedPlayerOverlayHost(
     isPlayerSurfaceVisible: Boolean,
@@ -80,7 +94,10 @@ internal fun ExpandedPlayerOverlayHost(
     artworkCornerRadiusDp: Int,
     onOpenAudioEffects: () -> Unit,
     filenameDisplayMode: FilenameDisplayMode,
-    filenameOnlyWhenTitleMissing: Boolean
+    filenameOnlyWhenTitleMissing: Boolean,
+    showFocusIndicators: Boolean,
+    onHardwareNavigationInput: () -> Unit,
+    onTouchInteraction: () -> Unit
 ) {
     AnimatedVisibility(
         visible = isPlayerSurfaceVisible && isPlayerExpanded,
@@ -95,79 +112,108 @@ internal fun ExpandedPlayerOverlayHost(
             slideOutVertically(targetOffsetY = { it / 3 }) + fadeOut()
         }
     ) {
-        PlayerScreen(
-            file = selectedFile,
-            onBack = {
-                onCollapseFromSwipeChanged(false)
-                onMiniExpandPreviewProgressChanged(0f)
-                onPlayerExpandedChanged(false)
-            },
-            onCollapseBySwipe = {
-                onCollapseFromSwipeChanged(true)
-                onMiniExpandPreviewProgressChanged(0f)
-                onPlayerExpandedChanged(false)
-            },
-            isPlaying = isPlaying,
-            canResumeStoppedTrack = canResumeStoppedTrack,
-            onPlay = onPlay,
-            onPause = onPause,
-            onStopAndClear = onStopAndClear,
-            durationSeconds = durationSeconds,
-            positionSeconds = positionSeconds,
-            canPreviousTrack = canPreviousTrack,
-            canNextTrack = canNextTrack,
-            title = title,
-            artist = artist,
-            sampleRateHz = sampleRateHz,
-            channelCount = channelCount,
-            bitDepthLabel = bitDepthLabel,
-            decoderName = decoderName,
-            playbackSourceLabel = playbackSourceLabel,
-            pathOrUrl = pathOrUrl,
-            artwork = artworkBitmap,
-            noArtworkIcon = placeholderArtworkIconForFile(selectedFile, decoderName),
-            repeatMode = repeatMode,
-            canCycleRepeatMode = supportsLiveRepeatMode(playbackCapabilitiesFlags),
-            canSeek = canSeekPlayback(playbackCapabilitiesFlags),
-            hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
-            playbackStartInProgress = playbackStartInProgress,
-            seekInProgress = seekInProgress,
-            onSeek = onSeek,
-            onPreviousTrack = onPreviousTrack,
-            onNextTrack = onNextTrack,
-            onPreviousSubtune = onPreviousSubtune,
-            onNextSubtune = onNextSubtune,
-            onOpenSubtuneSelector = onOpenSubtuneSelector,
-            canPreviousSubtune = canPreviousSubtune,
-            canNextSubtune = canNextSubtune,
-            canOpenSubtuneSelector = canOpenSubtuneSelector,
-            currentSubtuneIndex = currentSubtuneIndex,
-            subtuneCount = subtuneCount,
-            onCycleRepeatMode = onCycleRepeatMode,
-            canOpenCoreSettings = canOpenCoreSettings,
-            onOpenCoreSettings = onOpenCoreSettings,
-            visualizationMode = visualizationMode,
-            availableVisualizationModes = availableVisualizationModes,
-            onCycleVisualizationMode = onCycleVisualizationMode,
-            onSelectVisualizationMode = onSelectVisualizationMode,
-            onOpenVisualizationSettings = onOpenVisualizationSettings,
-            onOpenSelectedVisualizationSettings = onOpenSelectedVisualizationSettings,
-            visualizationBarCount = visualizationBarCount,
-            visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
-            visualizationBarRoundnessDp = visualizationBarRoundnessDp,
-            visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
-            visualizationBarUseThemeColor = visualizationBarUseThemeColor,
-            visualizationBarRenderBackend = visualizationBarRenderBackend,
-            visualizationOscStereo = visualizationOscStereo,
-            visualizationVuAnchor = visualizationVuAnchor,
-            visualizationVuUseThemeColor = visualizationVuUseThemeColor,
-            visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
-            visualizationVuRenderBackend = visualizationVuRenderBackend,
-            visualizationShowDebugInfo = visualizationShowDebugInfo,
-            artworkCornerRadiusDp = artworkCornerRadiusDp,
-            onOpenAudioEffects = onOpenAudioEffects,
-            filenameDisplayMode = filenameDisplayMode,
-            filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInteropFilter { event ->
+                    if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                        onTouchInteraction()
+                    }
+                    false
+                }
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    if (
+                        keyEvent.key == Key.DirectionLeft ||
+                        keyEvent.key == Key.DirectionRight ||
+                        keyEvent.key == Key.DirectionUp ||
+                        keyEvent.key == Key.DirectionDown ||
+                        keyEvent.key == Key.DirectionCenter ||
+                        keyEvent.key == Key.Enter ||
+                        keyEvent.key == Key.NumPadEnter ||
+                        keyEvent.key == Key.Tab
+                    ) {
+                        onHardwareNavigationInput()
+                    }
+                    false
+                }
+        ) {
+            CompositionLocalProvider(LocalPlayerFocusIndicatorsEnabled provides showFocusIndicators) {
+                PlayerScreen(
+                    file = selectedFile,
+                    onBack = {
+                        onCollapseFromSwipeChanged(false)
+                        onMiniExpandPreviewProgressChanged(0f)
+                        onPlayerExpandedChanged(false)
+                    },
+                    onCollapseBySwipe = {
+                        onCollapseFromSwipeChanged(true)
+                        onMiniExpandPreviewProgressChanged(0f)
+                        onPlayerExpandedChanged(false)
+                    },
+                    isPlaying = isPlaying,
+                    canResumeStoppedTrack = canResumeStoppedTrack,
+                    onPlay = onPlay,
+                    onPause = onPause,
+                    onStopAndClear = onStopAndClear,
+                    durationSeconds = durationSeconds,
+                    positionSeconds = positionSeconds,
+                    canPreviousTrack = canPreviousTrack,
+                    canNextTrack = canNextTrack,
+                    title = title,
+                    artist = artist,
+                    sampleRateHz = sampleRateHz,
+                    channelCount = channelCount,
+                    bitDepthLabel = bitDepthLabel,
+                    decoderName = decoderName,
+                    playbackSourceLabel = playbackSourceLabel,
+                    pathOrUrl = pathOrUrl,
+                    artwork = artworkBitmap,
+                    noArtworkIcon = placeholderArtworkIconForFile(selectedFile, decoderName),
+                    repeatMode = repeatMode,
+                    canCycleRepeatMode = supportsLiveRepeatMode(playbackCapabilitiesFlags),
+                    canSeek = canSeekPlayback(playbackCapabilitiesFlags),
+                    hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
+                    playbackStartInProgress = playbackStartInProgress,
+                    seekInProgress = seekInProgress,
+                    onSeek = onSeek,
+                    onPreviousTrack = onPreviousTrack,
+                    onNextTrack = onNextTrack,
+                    onPreviousSubtune = onPreviousSubtune,
+                    onNextSubtune = onNextSubtune,
+                    onOpenSubtuneSelector = onOpenSubtuneSelector,
+                    canPreviousSubtune = canPreviousSubtune,
+                    canNextSubtune = canNextSubtune,
+                    canOpenSubtuneSelector = canOpenSubtuneSelector,
+                    currentSubtuneIndex = currentSubtuneIndex,
+                    subtuneCount = subtuneCount,
+                    onCycleRepeatMode = onCycleRepeatMode,
+                    canOpenCoreSettings = canOpenCoreSettings,
+                    onOpenCoreSettings = onOpenCoreSettings,
+                    visualizationMode = visualizationMode,
+                    availableVisualizationModes = availableVisualizationModes,
+                    onCycleVisualizationMode = onCycleVisualizationMode,
+                    onSelectVisualizationMode = onSelectVisualizationMode,
+                    onOpenVisualizationSettings = onOpenVisualizationSettings,
+                    onOpenSelectedVisualizationSettings = onOpenSelectedVisualizationSettings,
+                    visualizationBarCount = visualizationBarCount,
+                    visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
+                    visualizationBarRoundnessDp = visualizationBarRoundnessDp,
+                    visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
+                    visualizationBarUseThemeColor = visualizationBarUseThemeColor,
+                    visualizationBarRenderBackend = visualizationBarRenderBackend,
+                    visualizationOscStereo = visualizationOscStereo,
+                    visualizationVuAnchor = visualizationVuAnchor,
+                    visualizationVuUseThemeColor = visualizationVuUseThemeColor,
+                    visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
+                    visualizationVuRenderBackend = visualizationVuRenderBackend,
+                    visualizationShowDebugInfo = visualizationShowDebugInfo,
+                    artworkCornerRadiusDp = artworkCornerRadiusDp,
+                    onOpenAudioEffects = onOpenAudioEffects,
+                    filenameDisplayMode = filenameDisplayMode,
+                    filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
+                )
+            }
+        }
     }
 }

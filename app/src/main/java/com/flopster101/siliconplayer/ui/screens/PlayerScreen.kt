@@ -127,6 +127,8 @@ import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.coroutineContext
 import androidx.compose.foundation.text.selection.SelectionContainer
 
+internal val LocalPlayerFocusIndicatorsEnabled = compositionLocalOf { true }
+
 private const val PREF_KEY_VIS_OSC_WINDOW_MS = "visualization_osc_window_ms"
 private const val PREF_KEY_VIS_OSC_TRIGGER_MODE = "visualization_osc_trigger_mode"
 private const val PREF_KEY_VIS_OSC_LINE_WIDTH_DP = "visualization_osc_line_width_dp"
@@ -1390,9 +1392,10 @@ private fun Modifier.playerFocusHalo(
     enabled: Boolean = true,
     shape: Shape = CircleShape
 ): Modifier = composed {
+    val focusIndicatorsEnabled = LocalPlayerFocusIndicatorsEnabled.current
     var isFocused by remember { mutableStateOf(false) }
     val haloAlpha by animateFloatAsState(
-        targetValue = if (enabled && isFocused) 0.7f else 0f,
+        targetValue = if (enabled && focusIndicatorsEnabled && isFocused) 0.7f else 0f,
         animationSpec = tween(durationMillis = 140),
         label = "playerFocusHaloAlpha"
     )
@@ -1410,9 +1413,10 @@ private fun Modifier.playerFocusHighlight(
     shape: Shape = CircleShape,
     activeAlpha: Float = 0.22f
 ): Modifier = composed {
+    val focusIndicatorsEnabled = LocalPlayerFocusIndicatorsEnabled.current
     var isFocused by remember { mutableStateOf(false) }
     val highlightAlpha by animateFloatAsState(
-        targetValue = if (enabled && isFocused) activeAlpha else 0f,
+        targetValue = if (enabled && focusIndicatorsEnabled && isFocused) activeAlpha else 0f,
         animationSpec = tween(durationMillis = 140),
         label = "playerFocusHighlightAlpha"
     )

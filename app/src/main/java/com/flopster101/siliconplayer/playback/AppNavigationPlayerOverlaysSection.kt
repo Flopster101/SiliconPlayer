@@ -61,6 +61,8 @@ internal fun BoxScope.AppNavigationPlayerOverlaysSection(
     filenameDisplayMode: FilenameDisplayMode,
     filenameOnlyWhenTitleMissing: Boolean,
     showMiniPlayerFocusHighlight: Boolean,
+    onHardwareNavigationInput: () -> Unit,
+    onTouchInteraction: () -> Unit,
     onMiniPlayerNavigateUpRequested: () -> Unit,
     onMiniPlayerExpandRequested: () -> Unit,
     canResumeStoppedTrack: Boolean,
@@ -216,6 +218,9 @@ internal fun BoxScope.AppNavigationPlayerOverlaysSection(
         artworkCornerRadiusDp = playerArtworkCornerRadiusDp,
         onOpenAudioEffects = onOpenAudioEffects,
         filenameDisplayMode = filenameDisplayMode,
-        filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
+        filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
+        showFocusIndicators = showMiniPlayerFocusHighlight,
+        onHardwareNavigationInput = onHardwareNavigationInput,
+        onTouchInteraction = onTouchInteraction
     )
 }

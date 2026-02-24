@@ -27,13 +27,19 @@ fun OscilloscopeVisualization(
         val right = if (waveformRight.isNotEmpty()) waveformRight else left
         if (left.isEmpty()) return@Canvas
 
-        val half = size.height / 2f
-        val centerLeft = if (stereo) size.height * 0.30f else half
-        val centerRight = if (stereo) size.height * 0.72f else half
-        val ampScale = if (stereo) size.height * 0.20f else size.height * 0.34f
-        val stepX = size.width / (left.size - 1).coerceAtLeast(1)
         val scopeLineWidth = lineWidthPx.coerceAtLeast(1f)
         val scopeGridWidth = gridWidthPx.coerceAtLeast(0.5f)
+        val half = size.height / 2f
+        val separatorHalfThickness = if (stereo) scopeGridWidth * 0.5f else 0f
+        val topLaneMin = 0f
+        val topLaneMax = (half - separatorHalfThickness).coerceAtLeast(0f)
+        val bottomLaneMin = (half + separatorHalfThickness).coerceAtMost(size.height)
+        val bottomLaneMax = size.height
+        val centerLeft = if (stereo) (topLaneMin + topLaneMax) * 0.5f else half
+        val centerRight = if (stereo) (bottomLaneMin + bottomLaneMax) * 0.5f else half
+        val stereoLaneHalfExtent = ((topLaneMax - topLaneMin) * 0.5f).coerceAtLeast(1f)
+        val ampScale = if (stereo) stereoLaneHalfExtent * 0.8f else size.height * 0.34f
+        val stepX = size.width / (left.size - 1).coerceAtLeast(1)
 
         // Vertical grid (optional)
         if (showVerticalGrid) {

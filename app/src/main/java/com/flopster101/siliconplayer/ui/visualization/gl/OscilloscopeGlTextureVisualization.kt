@@ -363,17 +363,24 @@ private class OscilloscopeGlCoreRenderer {
         if (left.size < 2) return
 
         val stereo = frame.stereo && frame.channelCount > 1
+        val gridWidth = frame.gridWidthPx.coerceAtLeast(0.5f)
         val half = height * 0.5f
-        val centerLeft = if (stereo) height * 0.30f else half
-        val centerRight = if (stereo) height * 0.72f else half
-        val ampScale = if (stereo) height * 0.20f else height * 0.34f
+        val separatorHalfThickness = if (stereo) gridWidth * 0.5f else 0f
+        val topLaneMin = 0f
+        val topLaneMax = (half - separatorHalfThickness).coerceAtLeast(0f)
+        val bottomLaneMin = (half + separatorHalfThickness).coerceAtMost(height)
+        val bottomLaneMax = height
+        val centerLeft = if (stereo) (topLaneMin + topLaneMax) * 0.5f else half
+        val centerRight = if (stereo) (bottomLaneMin + bottomLaneMax) * 0.5f else half
+        val stereoLaneHalfExtent = ((topLaneMax - topLaneMin) * 0.5f).coerceAtLeast(1f)
+        val ampScale = if (stereo) stereoLaneHalfExtent * 0.8f else height * 0.34f
         val stepX = width / (left.size - 1).coerceAtLeast(1).toFloat()
 
         if (frame.showVerticalGrid || frame.showCenterLine || stereo) {
             val gridVertices = buildGridVertices(
-                width = width,
-                height = height,
-                half = half,
+                    width = width,
+                    height = height,
+                    half = half,
                 centerLeft = centerLeft,
                 centerRight = centerRight,
                 stereo = stereo,
@@ -561,4 +568,3 @@ private class OscilloscopeGlCoreRenderer {
         """
     }
 }
-

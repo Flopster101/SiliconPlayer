@@ -38,7 +38,7 @@ internal fun resolveSessionRestoreTarget(
     val normalizedSource = normalizeSourceIdentity(sourcePath) ?: sourcePath
     val sourceUri = Uri.parse(normalizedSource)
     val sourceScheme = sourceUri.scheme?.lowercase(Locale.ROOT)
-    val isRemoteSource = sourceScheme == "http" || sourceScheme == "https"
+    val isRemoteSource = sourceScheme == "http" || sourceScheme == "https" || sourceScheme == "smb"
 
     val displayFile = if (isRemoteSource) {
         findExistingCachedFileForSource(cacheRoot, normalizedSource)

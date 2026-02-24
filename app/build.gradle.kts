@@ -369,6 +369,10 @@ tasks.named("preBuild").configure {
     dependsOn(generateAboutVersions)
 }
 
+configurations.configureEach {
+    exclude(group = "com.google.guava", module = "listenablefuture")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -380,6 +384,10 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material)
     implementation(libs.androidx.material.icons.extended)
+    implementation(libs.smbj)
+    implementation(libs.smbj.rpc) {
+        exclude(group = "org.bouncycastle", module = "bcprov-jdk15on")
+    }
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

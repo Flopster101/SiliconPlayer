@@ -70,20 +70,26 @@ internal fun AppNavigationNetworkRouteSection(
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     backHandlingEnabled: Boolean,
     nodes: List<NetworkNode>,
+    currentFolderId: Long?,
     onExitNetwork: () -> Unit,
+    onCurrentFolderIdChanged: (Long?) -> Unit,
     onNodesChanged: (List<NetworkNode>) -> Unit,
     onResolveRemoteSourceMetadata: (String) -> Unit,
-    onOpenRemoteSource: (String) -> Unit
+    onOpenRemoteSource: (String) -> Unit,
+    onBrowseSmbSource: (String) -> Unit
 ) {
     MainNetworkRouteHost(
         mainPadding = mainPadding,
         bottomContentPadding = bottomContentPadding,
         backHandlingEnabled = backHandlingEnabled,
         nodes = nodes,
+        currentFolderId = currentFolderId,
         onExitNetwork = onExitNetwork,
+        onCurrentFolderIdChanged = onCurrentFolderIdChanged,
         onNodesChanged = onNodesChanged,
         onResolveRemoteSourceMetadata = onResolveRemoteSourceMetadata,
-        onOpenRemoteSource = onOpenRemoteSource
+        onOpenRemoteSource = onOpenRemoteSource,
+        onBrowseSmbSource = onBrowseSmbSource
     )
 }
 
@@ -103,7 +109,8 @@ internal fun AppNavigationBrowserRouteSection(
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
     onExitBrowser: () -> Unit,
     onBrowserLocationChanged: (String?, String?) -> Unit,
-    onFileSelected: (File, String?) -> Unit
+    onFileSelected: (File, String?) -> Unit,
+    onOpenRemoteSource: (String) -> Unit
 ) {
     MainBrowserRouteHost(
         mainPadding = mainPadding,
@@ -120,7 +127,8 @@ internal fun AppNavigationBrowserRouteSection(
         onVisiblePlayableFilesChanged = onVisiblePlayableFilesChanged,
         onExitBrowser = onExitBrowser,
         onBrowserLocationChanged = onBrowserLocationChanged,
-        onFileSelected = onFileSelected
+        onFileSelected = onFileSelected,
+        onOpenRemoteSource = onOpenRemoteSource
     )
 }
 

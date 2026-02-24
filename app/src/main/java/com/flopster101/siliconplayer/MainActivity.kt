@@ -345,6 +345,8 @@ private fun AppNavigation(
     var visiblePlayableFiles by remember { mutableStateOf<List<File>>(emptyList()) }
     var browserLaunchLocationId by remember { mutableStateOf<String?>(null) }
     var browserLaunchDirectoryPath by remember { mutableStateOf<String?>(null) }
+    var networkCurrentFolderId by remember { mutableStateOf<Long?>(null) }
+    var returnToNetworkOnBrowserExit by remember { mutableStateOf(false) }
     val storageDescriptors = remember(context) { detectStorageDescriptors(context) }
     val appScope = rememberCoroutineScope()
 
@@ -2445,6 +2447,7 @@ private fun AppNavigation(
                     onOpenLibrary = {
                         browserLaunchLocationId = null
                         browserLaunchDirectoryPath = null
+                        returnToNetworkOnBrowserExit = false
                         currentView = MainView.Browser
                     },
                     onOpenNetwork = {
@@ -2457,6 +2460,7 @@ private fun AppNavigation(
                     onOpenRecentFolder = { entry ->
                         browserLaunchLocationId = entry.locationId
                         browserLaunchDirectoryPath = entry.path
+                        returnToNetworkOnBrowserExit = false
                         currentView = MainView.Browser
                     },
                     onPlayRecentFile = { entry ->
@@ -2512,6 +2516,7 @@ private fun AppNavigation(
                             onOpenInBrowser = { locationId, directoryPath ->
                                 browserLaunchLocationId = locationId
                                 browserLaunchDirectoryPath = directoryPath
+                                returnToNetworkOnBrowserExit = false
                                 currentView = MainView.Browser
                             }
                         )
@@ -2531,6 +2536,7 @@ private fun AppNavigation(
                             onOpenInBrowser = { locationId, directoryPath ->
                                 browserLaunchLocationId = locationId
                                 browserLaunchDirectoryPath = directoryPath
+                                returnToNetworkOnBrowserExit = false
                                 currentView = MainView.Browser
                             }
                         )
@@ -2546,7 +2552,9 @@ private fun AppNavigation(
                     bottomContentPadding = miniPlayerListInset,
                     backHandlingEnabled = !isPlayerExpanded,
                     nodes = networkNodes,
+                    currentFolderId = networkCurrentFolderId,
                     onExitNetwork = { currentView = MainView.Home },
+                    onCurrentFolderIdChanged = { networkCurrentFolderId = it },
                     onNodesChanged = { updatedNodes ->
                         networkNodes = updatedNodes
                         writeNetworkNodes(prefs, updatedNodes)
@@ -2561,7 +2569,14 @@ private fun AppNavigation(
                         )
                     },
                     onOpenRemoteSource = { rawInput ->
+                        returnToNetworkOnBrowserExit = false
                         manualOpenDelegates.applyManualInputSelection(rawInput)
+                    },
+                    onBrowseSmbSource = { rawInput ->
+                        browserLaunchLocationId = null
+                        browserLaunchDirectoryPath = rawInput
+                        returnToNetworkOnBrowserExit = true
+                        currentView = MainView.Browser
                     }
                 )
             },
@@ -2581,7 +2596,14 @@ private fun AppNavigation(
                     backHandlingEnabled = !isPlayerExpanded,
                     playingFile = selectedFile,
                     onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
-                    onExitBrowser = { currentView = MainView.Home },
+                    onExitBrowser = {
+                        currentView = if (returnToNetworkOnBrowserExit) {
+                            MainView.Network
+                        } else {
+                            MainView.Home
+                        }
+                        returnToNetworkOnBrowserExit = false
+                    },
                     onBrowserLocationChanged = { locationId, directoryPath ->
                         if (locationId != null && directoryPath != null) {
                             runtimeDelegates.addRecentFolder(directoryPath, locationId)
@@ -2605,6 +2627,9 @@ private fun AppNavigation(
                             expandOverride = openPlayerOnTrackSelect,
                             sourceIdOverride = sourceIdOverride
                         )
+                    },
+                    onOpenRemoteSource = { rawInput ->
+                        manualOpenDelegates.applyManualInputSelection(rawInput)
                     }
                 )
             },

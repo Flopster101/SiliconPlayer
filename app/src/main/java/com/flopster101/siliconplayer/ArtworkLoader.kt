@@ -25,10 +25,12 @@ internal fun loadArtworkForSource(
 ): ImageBitmap? {
     val normalized = sourceId?.trim()
     val scheme = normalized?.let { Uri.parse(it).scheme?.lowercase(Locale.ROOT) }
-    val isRemote = scheme == "http" || scheme == "https"
+    val isRemote = scheme == "http" || scheme == "https" || scheme == "smb"
 
     if (isRemote && !normalized.isNullOrBlank()) {
-        loadEmbeddedArtworkFromRemote(normalized)?.let { return it.asImageBitmap() }
+        if (scheme == "http" || scheme == "https") {
+            loadEmbeddedArtworkFromRemote(normalized)?.let { return it.asImageBitmap() }
+        }
         val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
         findExistingCachedFileForSource(cacheRoot, normalized)?.let { cached ->
             loadArtworkForFile(cached)?.let { return it }

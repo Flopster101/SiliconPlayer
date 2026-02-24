@@ -22,7 +22,7 @@ internal fun playRecentFileEntryAction(
     val normalized = normalizeSourceIdentity(entry.path)
     val uri = normalized?.let { Uri.parse(it) }
     val scheme = uri?.scheme?.lowercase(Locale.ROOT)
-    val isRemote = scheme == "http" || scheme == "https"
+    val isRemote = scheme == "http" || scheme == "https" || scheme == "smb"
     if (isRemote && !normalized.isNullOrBlank()) {
         val cached = findExistingCachedFileForSource(cacheRoot, normalized)
         if (cached != null) {
@@ -166,7 +166,7 @@ private fun resolveBrowserFolderForRecentSource(entry: RecentPathEntry): Pair<St
 
     val parsed = Uri.parse(entry.path)
     val scheme = parsed.scheme?.lowercase(Locale.ROOT)
-    if (scheme == "http" || scheme == "https") return null
+    if (scheme == "http" || scheme == "https" || scheme == "smb") return null
 
     val localPath = if (scheme == "file") {
         parsed.path

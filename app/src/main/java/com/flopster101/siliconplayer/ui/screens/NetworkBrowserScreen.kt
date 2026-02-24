@@ -1,22 +1,24 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeSpacing
-import androidx.compose.foundation.basicMarquee
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -44,17 +46,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.flopster101.siliconplayer.buildRecentTrackDisplay
-import com.flopster101.siliconplayer.formatNetworkFolderSummary
 import com.flopster101.siliconplayer.NetworkNode
 import com.flopster101.siliconplayer.NetworkNodeType
-import com.flopster101.siliconplayer.nextNetworkNodeId
+import com.flopster101.siliconplayer.NetworkSourceKind
+import com.flopster101.siliconplayer.buildRecentTrackDisplay
+import com.flopster101.siliconplayer.buildSmbSourceId
+import com.flopster101.siliconplayer.buildSmbSourceSpec
+import com.flopster101.siliconplayer.formatNetworkFolderSummary
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.nextNetworkNodeId
+import com.flopster101.siliconplayer.resolveNetworkNodeDisplaySource
+import com.flopster101.siliconplayer.resolveNetworkNodeOpenInput
+import com.flopster101.siliconplayer.resolveNetworkNodeSmbSpec
+import com.flopster101.siliconplayer.resolveNetworkNodeSourceId
 import java.util.Locale
 
 private val NETWORK_ICON_BOX_SIZE = 38.dp
@@ -66,18 +77,28 @@ internal fun NetworkBrowserScreen(
     bottomContentPadding: Dp,
     backHandlingEnabled: Boolean,
     nodes: List<NetworkNode>,
+    currentFolderId: Long?,
     onExitNetwork: () -> Unit,
+    onCurrentFolderIdChanged: (Long?) -> Unit,
     onNodesChanged: (List<NetworkNode>) -> Unit,
     onResolveRemoteSourceMetadata: (String) -> Unit,
-    onOpenRemoteSource: (String) -> Unit
+    onOpenRemoteSource: (String) -> Unit,
+    onBrowseSmbSource: (String) -> Unit
 ) {
-    var currentFolderId by remember { mutableStateOf<Long?>(null) }
     var showAddMenu by remember { mutableStateOf(false) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var showAddSourceDialog by remember { mutableStateOf(false) }
+    var showAddSmbSourceDialog by remember { mutableStateOf(false) }
+
     var newFolderName by remember { mutableStateOf("") }
     var newSourceName by remember { mutableStateOf("") }
     var newSourcePath by remember { mutableStateOf("") }
+    var newSmbSourceName by remember { mutableStateOf("") }
+    var newSmbHost by remember { mutableStateOf("") }
+    var newSmbShare by remember { mutableStateOf("") }
+    var newSmbPath by remember { mutableStateOf("") }
+    var newSmbUsername by remember { mutableStateOf("") }
+    var newSmbPassword by remember { mutableStateOf("") }
 
     val nodesById = remember(nodes, currentFolderId) { nodes.associateBy { it.id } }
     val currentEntries = remember(nodes, currentFolderId) {
@@ -117,7 +138,7 @@ internal fun NetworkBrowserScreen(
     }
 
     fun navigateUpOneFolder() {
-        currentFolderId = currentFolderId?.let { nodesById[it]?.parentId }
+        onCurrentFolderIdChanged(currentFolderId?.let { nodesById[it]?.parentId })
     }
 
     BackHandler(enabled = backHandlingEnabled) {
@@ -149,10 +170,52 @@ internal fun NetworkBrowserScreen(
             parentId = currentFolderId,
             type = NetworkNodeType.RemoteSource,
             title = title,
-            source = normalizedSource
+            source = normalizedSource,
+            sourceKind = NetworkSourceKind.Generic
         )
         onNodesChanged(updated)
         onResolveRemoteSourceMetadata(normalizedSource)
+    }
+
+    fun addSmbSource(
+        name: String,
+        host: String,
+        share: String,
+        path: String,
+        username: String,
+        password: String
+    ) {
+        val smbSpec = buildSmbSourceSpec(
+            host = host,
+            share = share,
+            path = path,
+            username = username,
+            password = password
+        ) ?: return
+        val sourceId = buildSmbSourceId(smbSpec)
+        val title = name.trim().ifBlank {
+            if (smbSpec.share.isBlank()) {
+                smbSpec.host
+            } else if (smbSpec.path.isNullOrBlank()) {
+                "${smbSpec.host}/${smbSpec.share}"
+            } else {
+                "${smbSpec.host}/${smbSpec.share}/${smbSpec.path}"
+            }
+        }
+        val updated = nodes + NetworkNode(
+            id = nextNetworkNodeId(nodes),
+            parentId = currentFolderId,
+            type = NetworkNodeType.RemoteSource,
+            title = title,
+            source = sourceId,
+            sourceKind = NetworkSourceKind.Smb,
+            smbHost = smbSpec.host,
+            smbShare = smbSpec.share,
+            smbPath = smbSpec.path,
+            smbUsername = smbSpec.username,
+            smbPassword = smbSpec.password
+        )
+        onNodesChanged(updated)
     }
 
     Column(
@@ -176,6 +239,7 @@ internal fun NetworkBrowserScreen(
                 }
                 Spacer(modifier = Modifier.width(4.dp))
             }
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Network",
@@ -191,6 +255,7 @@ internal fun NetworkBrowserScreen(
                     )
                 }
             }
+
             Box {
                 IconButton(onClick = { showAddMenu = true }) {
                     Icon(
@@ -231,15 +296,36 @@ internal fun NetworkBrowserScreen(
                             showAddSourceDialog = true
                         }
                     )
+                    DropdownMenuItem(
+                        text = { Text("SMB source") },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            showAddMenu = false
+                            newSmbSourceName = ""
+                            newSmbHost = ""
+                            newSmbShare = ""
+                            newSmbPath = ""
+                            newSmbUsername = ""
+                            newSmbPassword = ""
+                            showAddSmbSourceDialog = true
+                        }
+                    )
                 }
             }
         }
+
         Text(
             text = "Browse network shares and remote sources.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(2.dp))
+
         if (currentEntries.isEmpty()) {
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
@@ -274,13 +360,19 @@ internal fun NetworkBrowserScreen(
             }
         } else {
             currentEntries.forEach { entry ->
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        if (entry.type == NetworkNodeType.Folder) {
-                            currentFolderId = entry.id
-                        } else {
-                            entry.source?.let(onOpenRemoteSource)
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            if (entry.type == NetworkNodeType.Folder) {
+                                onCurrentFolderIdChanged(entry.id)
+                            } else {
+                                resolveNetworkNodeOpenInput(entry)?.let { openInput ->
+                                    if (entry.sourceKind == NetworkSourceKind.Smb) {
+                                        onBrowseSmbSource(openInput)
+                                    } else {
+                                    onOpenRemoteSource(openInput)
+                                }
+                            }
                         }
                     }
                 ) {
@@ -291,17 +383,25 @@ internal fun NetworkBrowserScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         val isFolder = entry.type == NetworkNodeType.Folder
+                        val sourceId = resolveNetworkNodeSourceId(entry).orEmpty()
+                        val isSmbFolderLikeSource = isSmbFolderLikeSource(entry, sourceId)
                         val chipShape = RoundedCornerShape(11.dp)
-                        val chipContainerColor = if (isFolder) {
+                        val chipContainerColor = if (isFolder || isSmbFolderLikeSource) {
                             MaterialTheme.colorScheme.primaryContainer
                         } else {
                             MaterialTheme.colorScheme.secondaryContainer
                         }
-                        val chipContentColor = if (isFolder) {
+                        val chipContentColor = if (isFolder || isSmbFolderLikeSource) {
                             MaterialTheme.colorScheme.onPrimaryContainer
                         } else {
                             MaterialTheme.colorScheme.onSecondaryContainer
                         }
+                        val leadingIcon = when {
+                            isFolder -> Icons.Default.Folder
+                            isSmbFolderLikeSource -> NetworkIcons.FolderData
+                            else -> Icons.Default.AudioFile
+                        }
+
                         Box(
                             modifier = Modifier
                                 .size(NETWORK_ICON_BOX_SIZE)
@@ -312,20 +412,18 @@ internal fun NetworkBrowserScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = if (isFolder) {
-                                    Icons.Default.Folder
-                                } else {
-                                    Icons.Default.AudioFile
-                                },
+                                imageVector = leadingIcon,
                                 contentDescription = null,
                                 tint = chipContentColor,
                                 modifier = Modifier.size(NETWORK_ICON_GLYPH_SIZE)
                             )
                         }
+
                         Spacer(modifier = Modifier.width(16.dp))
+
                         Column(modifier = Modifier.weight(1f)) {
                             val isRemoteSource = entry.type == NetworkNodeType.RemoteSource
-                            val sourceLabel = entry.source.orEmpty()
+                            val sourceLabel = resolveNetworkNodeDisplaySource(entry)
                             val fallbackTitle = entry.title.ifBlank { sourceLabel }
                             val remoteDisplay = buildRecentTrackDisplay(
                                 title = entry.metadataTitle.orEmpty(),
@@ -340,7 +438,13 @@ internal fun NetworkBrowserScreen(
                             val subtitle = if (!isRemoteSource) {
                                 folderSummariesById[entry.id].orEmpty()
                             } else {
+                                val sourceScheme = Uri.parse(sourceId).scheme?.lowercase(Locale.ROOT)
+                                val sourceTypeLabel = if (sourceScheme == "smb") "SMB" else null
                                 buildString {
+                                    sourceTypeLabel?.let {
+                                        append(it)
+                                        append(" • ")
+                                    }
                                     append(inferNetworkSourceFormatLabel(sourceLabel))
                                     if (sourceLabel.isNotBlank()) {
                                         append(" • ")
@@ -348,6 +452,7 @@ internal fun NetworkBrowserScreen(
                                     }
                                 }
                             }
+
                             val shouldMarqueePrimary = isRemoteSource && displayTitle.length > 28
                             if (shouldMarqueePrimary) {
                                 Box(
@@ -375,6 +480,7 @@ internal fun NetworkBrowserScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
+
                             if (subtitle.isNotBlank()) {
                                 if (isRemoteSource) {
                                     val shouldMarqueeSubtitle = subtitle.length > 44
@@ -439,7 +545,7 @@ internal fun NetworkBrowserScreen(
                     value = newFolderName,
                     onValueChange = { newFolderName = it },
                     singleLine = true,
-                    label = { Text("Folder name") }
+                    label = { RequiredFieldLabel("Folder name") }
                 )
             },
             confirmButton = {
@@ -477,7 +583,7 @@ internal fun NetworkBrowserScreen(
                         value = newSourcePath,
                         onValueChange = { newSourcePath = it },
                         singleLine = true,
-                        label = { Text("URL or path") }
+                        label = { RequiredFieldLabel("URL or path") }
                     )
                 }
             },
@@ -499,14 +605,116 @@ internal fun NetworkBrowserScreen(
             }
         )
     }
+
+    if (showAddSmbSourceDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddSmbSourceDialog = false },
+            title = { Text("Add SMB source") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = newSmbSourceName,
+                        onValueChange = { newSmbSourceName = it },
+                        singleLine = true,
+                        label = { Text("Name (optional)") }
+                    )
+                    OutlinedTextField(
+                        value = newSmbHost,
+                        onValueChange = { newSmbHost = it },
+                        singleLine = true,
+                        label = { RequiredFieldLabel("Host") }
+                    )
+                    OutlinedTextField(
+                        value = newSmbShare,
+                        onValueChange = { newSmbShare = it },
+                        singleLine = true,
+                        label = { Text("Share (optional)") }
+                    )
+                    OutlinedTextField(
+                        value = newSmbPath,
+                        onValueChange = { newSmbPath = it },
+                        singleLine = true,
+                        label = { Text("Path inside share (optional)") }
+                    )
+                    OutlinedTextField(
+                        value = newSmbUsername,
+                        onValueChange = { newSmbUsername = it },
+                        singleLine = true,
+                        label = { Text("Username (optional)") }
+                    )
+                    OutlinedTextField(
+                        value = newSmbPassword,
+                        onValueChange = { newSmbPassword = it },
+                        singleLine = true,
+                        label = { Text("Password (optional)") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        addSmbSource(
+                            name = newSmbSourceName,
+                            host = newSmbHost,
+                            share = newSmbShare,
+                            path = newSmbPath,
+                            username = newSmbUsername,
+                            password = newSmbPassword
+                        )
+                        showAddSmbSourceDialog = false
+                    },
+                    enabled = newSmbHost.trim().isNotEmpty()
+                ) {
+                    Text("Add")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddSmbSourceDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+private fun isSmbFolderLikeSource(entry: NetworkNode, sourceId: String): Boolean {
+    if (entry.type != NetworkNodeType.RemoteSource || entry.sourceKind != NetworkSourceKind.Smb) {
+        return false
+    }
+    val spec = resolveNetworkNodeSmbSpec(entry) ?: return false
+    if (spec.share.isBlank()) return true
+    val normalizedPath = spec.path?.trim().orEmpty()
+    if (normalizedPath.isBlank()) return true
+    val leaf = normalizedPath.substringAfterLast('/').trim()
+    if (leaf.isBlank()) return true
+    return inferredPrimaryExtensionForName(leaf) == null || sourceId.endsWith("/")
+}
+
+@Composable
+private fun RequiredFieldLabel(text: String) {
+    Text(
+        text = buildAnnotatedString {
+            append(text)
+            append(" ")
+            withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.error)) {
+                append("*")
+            }
+        }
+    )
 }
 
 private fun inferNetworkSourceFormatLabel(source: String): String {
     if (source.isBlank()) return "Unknown"
-    val leaf = source
-        .substringBefore('#')
-        .substringBefore('?')
-        .substringAfterLast('/')
+    val parsed = Uri.parse(source)
+    val leaf = if (!parsed.scheme.isNullOrBlank()) {
+        parsed.lastPathSegment.orEmpty()
+    } else {
+        source
+            .substringBefore('#')
+            .substringBefore('?')
+            .substringAfterLast('/')
+    }
+    if (leaf.isBlank()) return "Unknown"
     val ext = inferredPrimaryExtensionForName(leaf)
     return ext?.uppercase(Locale.ROOT) ?: "Unknown"
 }

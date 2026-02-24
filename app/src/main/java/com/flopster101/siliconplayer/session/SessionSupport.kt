@@ -18,6 +18,13 @@ import org.json.JSONObject
 import java.io.File
 import java.util.Locale
 
+private fun resolveCachedRemoteSourceId(localPath: String): String? {
+    val candidate = File(localPath)
+    val parent = candidate.parentFile ?: return null
+    if (parent.name != REMOTE_SOURCE_CACHE_DIR) return null
+    return sourceIdForCachedFileName(parent, candidate.name)
+}
+
 internal fun normalizeSourceIdentity(path: String?): String? {
     if (path.isNullOrBlank()) return null
     val trimmed = path.trim()
@@ -36,6 +43,9 @@ internal fun normalizeSourceIdentity(path: String?): String? {
         }
         "file" -> {
             val localPath = uri.path?.takeIf { it.isNotBlank() } ?: return null
+            resolveCachedRemoteSourceId(localPath)?.let { cachedSourceId ->
+                return normalizeSourceIdentity(cachedSourceId) ?: cachedSourceId
+            }
             try {
                 File(localPath).canonicalFile.absolutePath
             } catch (_: Exception) {
@@ -43,7 +53,15 @@ internal fun normalizeSourceIdentity(path: String?): String? {
             }
         }
 
+        "smb" -> {
+            val smbSpec = parseSmbSourceSpecFromInput(trimmed) ?: return null
+            buildSmbSourceId(smbSpec)
+        }
+
         else -> {
+            resolveCachedRemoteSourceId(trimmed)?.let { cachedSourceId ->
+                return normalizeSourceIdentity(cachedSourceId) ?: cachedSourceId
+            }
             try {
                 File(trimmed).canonicalFile.absolutePath
             } catch (_: Exception) {
@@ -62,7 +80,8 @@ internal fun samePath(a: String?, b: String?): Boolean {
 internal enum class ManualSourceType {
     LocalFile,
     LocalDirectory,
-    RemoteUrl
+    RemoteUrl,
+    Smb
 }
 
 internal data class ManualSourceResolution(
@@ -71,7 +90,8 @@ internal data class ManualSourceResolution(
     val requestUrl: String,
     val localFile: File?,
     val directoryPath: String?,
-    val displayFile: File?
+    val displayFile: File?,
+    val smbSpec: SmbSourceSpec? = null
 )
 
 internal data class ManualSourceOpenOptions(
@@ -86,7 +106,25 @@ internal fun resolvePlaybackSourceLabel(
     val normalizedSource = normalizeSourceIdentity(sourceId ?: selectedFile.absolutePath) ?: return "Local"
     val scheme = Uri.parse(normalizedSource).scheme?.lowercase(Locale.ROOT)
     val isRemote = scheme == "http" || scheme == "https"
+    val isSmb = scheme == "smb"
     if (scheme == "archive") return "Archive"
+    if (isSmb) {
+        val smbSpec = parseSmbSourceSpecFromInput(normalizedSource)
+        if (smbSpec != null) {
+            val suffix = if (selectedFile.absolutePath.contains("/cache/remote_sources/")) {
+                " (cached)"
+            } else {
+                ""
+            }
+            val smbTarget = if (smbSpec.share.isBlank()) {
+                smbSpec.host
+            } else {
+                "${smbSpec.host}/${smbSpec.share}"
+            }
+            return "SMB ($smbTarget)$suffix"
+        }
+        return "SMB"
+    }
     if (!isRemote) return "Local"
     return if (selectedFile.absolutePath.contains("/cache/remote_sources/")) {
         "Streamed (cached)"
@@ -112,7 +150,26 @@ internal fun resolveManualSourceInput(rawInput: String): ManualSourceResolution?
             requestUrl = requestUrl,
             localFile = null,
             directoryPath = null,
-            displayFile = File("/virtual/remote/$safeName")
+            displayFile = File("/virtual/remote/$safeName"),
+            smbSpec = null
+        )
+    }
+
+    if (scheme == "smb") {
+        val smbSpec = parseSmbSourceSpecFromInput(trimmed) ?: return null
+        val sourceId = buildSmbSourceId(smbSpec)
+        val requestUri = buildSmbRequestUri(smbSpec)
+        val safeName = sanitizeRemoteLeafName(smbSpec.path?.substringAfterLast('/'))
+            ?: sanitizeRemoteLeafName(smbSpec.share)
+            ?: "smb"
+        return ManualSourceResolution(
+            type = ManualSourceType.Smb,
+            sourceId = sourceId,
+            requestUrl = requestUri,
+            localFile = null,
+            directoryPath = null,
+            displayFile = File("/virtual/remote/$safeName"),
+            smbSpec = smbSpec
         )
     }
 
@@ -136,7 +193,8 @@ internal fun resolveManualSourceInput(rawInput: String): ManualSourceResolution?
                 requestUrl = sourceIdOverride ?: file.absolutePath,
                 localFile = file,
                 directoryPath = null,
-                displayFile = file
+                displayFile = file,
+                smbSpec = null
             )
         }
         return null
@@ -228,14 +286,34 @@ internal fun storagePresentationForEntry(
     entry: RecentPathEntry,
     descriptors: List<StorageDescriptor>
 ): StoragePresentation {
-    val parsed = Uri.parse(entry.path)
+    val normalizedPath = normalizeSourceIdentity(entry.path) ?: entry.path
+    val parsed = Uri.parse(normalizedPath)
     val scheme = parsed.scheme?.lowercase(Locale.ROOT)
     if (scheme == "http" || scheme == "https") {
         val hostLabel = parsed.host?.takeIf { it.isNotBlank() } ?: "unknown host"
         val protocolLabel = scheme.uppercase(Locale.ROOT)
-        val qualifier = if (isRemoteSourceCached(context, entry.path)) "Cached" else null
+        val qualifier = if (isRemoteSourceCached(context, normalizedPath)) "Cached" else null
         return StoragePresentation(
             label = "$protocolLabel ($hostLabel)",
+            icon = Icons.Default.Public,
+            qualifier = qualifier
+        )
+    }
+    if (scheme == "smb") {
+        val smbSpec = parseSmbSourceSpecFromInput(normalizedPath)
+        val qualifier = if (isRemoteSourceCached(context, normalizedPath)) "Cached" else null
+        val smbLabel = if (smbSpec == null) {
+            "SMB"
+        } else {
+            val smbTarget = if (smbSpec.share.isBlank()) {
+                smbSpec.host
+            } else {
+                "${smbSpec.host}/${smbSpec.share}"
+            }
+            "SMB ($smbTarget)"
+        }
+        return StoragePresentation(
+            label = smbLabel,
             icon = Icons.Default.Public,
             qualifier = qualifier
         )
@@ -252,8 +330,8 @@ internal fun storagePresentationForEntry(
     }
 
     val pathForMatching = when (scheme) {
-        "file" -> parsed.path?.takeIf { it.isNotBlank() } ?: entry.path
-        else -> entry.path
+        "file" -> parsed.path?.takeIf { it.isNotBlank() } ?: normalizedPath
+        else -> normalizedPath
     }
 
     entry.locationId?.let { locationId ->
@@ -279,27 +357,36 @@ internal fun readRecentEntries(
     val raw = prefs.getString(key, null) ?: return emptyList()
     return try {
         val array = JSONArray(raw)
-        buildList {
-            for (index in 0 until array.length()) {
-                val objectValue = array.optJSONObject(index) ?: continue
-                val path = objectValue.optString("path", "").trim()
-                if (path.isBlank()) continue
-                val locationId = objectValue.optString("locationId", "").ifBlank { null }
-                val title = objectValue.optString("title", "").ifBlank { null }
-                val artist = objectValue.optString("artist", "").ifBlank { null }
-                val decoderName = objectValue.optString("decoderName", "").ifBlank { null }
-                add(
-                    RecentPathEntry(
-                        path = path,
-                        locationId = locationId,
-                        title = title,
-                        artist = artist,
-                        decoderName = decoderName
-                    )
+        val deduped = mutableListOf<RecentPathEntry>()
+        for (index in 0 until array.length()) {
+            val objectValue = array.optJSONObject(index) ?: continue
+            val path = objectValue.optString("path", "").trim()
+            if (path.isBlank()) continue
+            val locationId = objectValue.optString("locationId", "").ifBlank { null }
+            val title = objectValue.optString("title", "").ifBlank { null }
+            val artist = objectValue.optString("artist", "").ifBlank { null }
+            val decoderName = objectValue.optString("decoderName", "").ifBlank { null }
+            val existingIndex = deduped.indexOfFirst { samePath(it.path, path) }
+            if (existingIndex >= 0) {
+                val existing = deduped[existingIndex]
+                deduped[existingIndex] = existing.copy(
+                    locationId = existing.locationId ?: locationId,
+                    title = existing.title ?: title,
+                    artist = existing.artist ?: artist,
+                    decoderName = existing.decoderName ?: decoderName
                 )
-                if (size >= maxItems) break
+                continue
             }
+            deduped += RecentPathEntry(
+                path = path,
+                locationId = locationId,
+                title = title,
+                artist = artist,
+                decoderName = decoderName
+            )
+            if (deduped.size >= maxItems) break
         }
+        deduped
     } catch (_: Exception) {
         emptyList()
     }
@@ -311,7 +398,22 @@ internal fun writeRecentEntries(
     entries: List<RecentPathEntry>,
     maxItems: Int
 ) {
-    val trimmed = entries.take(maxItems)
+    val deduped = mutableListOf<RecentPathEntry>()
+    entries.forEach { entry ->
+        val existingIndex = deduped.indexOfFirst { samePath(it.path, entry.path) }
+        if (existingIndex >= 0) {
+            val existing = deduped[existingIndex]
+            deduped[existingIndex] = existing.copy(
+                locationId = existing.locationId ?: entry.locationId,
+                title = existing.title ?: entry.title,
+                artist = existing.artist ?: entry.artist,
+                decoderName = existing.decoderName ?: entry.decoderName
+            )
+        } else {
+            deduped += entry
+        }
+    }
+    val trimmed = deduped.take(maxItems)
     val array = JSONArray()
     trimmed.forEach { entry ->
         array.put(
@@ -407,7 +509,7 @@ internal fun resolveShareableFileForRecentEntry(
     val uri = Uri.parse(normalized)
     val scheme = uri.scheme?.lowercase(Locale.ROOT)
     return when (scheme) {
-        "http", "https" -> {
+        "http", "https", "smb" -> {
             findExistingCachedFileForSource(File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR), normalized)
                 ?.takeIf { it.exists() && it.isFile }
         }

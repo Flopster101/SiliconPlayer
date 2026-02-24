@@ -6,10 +6,17 @@ import org.json.JSONObject
 
 private const val NETWORK_NODE_TYPE_FOLDER = "folder"
 private const val NETWORK_NODE_TYPE_REMOTE_SOURCE = "remote_source"
+private const val NETWORK_SOURCE_KIND_GENERIC = "generic"
+private const val NETWORK_SOURCE_KIND_SMB = "smb"
 
 internal enum class NetworkNodeType {
     Folder,
     RemoteSource
+}
+
+internal enum class NetworkSourceKind {
+    Generic,
+    Smb
 }
 
 internal data class NetworkNode(
@@ -18,6 +25,12 @@ internal data class NetworkNode(
     val type: NetworkNodeType,
     val title: String,
     val source: String? = null,
+    val sourceKind: NetworkSourceKind = NetworkSourceKind.Generic,
+    val smbHost: String? = null,
+    val smbShare: String? = null,
+    val smbPath: String? = null,
+    val smbUsername: String? = null,
+    val smbPassword: String? = null,
     val metadataTitle: String? = null,
     val metadataArtist: String? = null
 )
@@ -52,16 +65,50 @@ internal fun readNetworkNodes(prefs: SharedPreferences): List<NetworkNode> {
 
                     NETWORK_NODE_TYPE_REMOTE_SOURCE -> {
                         val source = objectValue.optString("source", "").trim()
-                        if (source.isBlank()) continue
+                        var sourceKind = when (objectValue.optString("sourceKind", "").trim()) {
+                            NETWORK_SOURCE_KIND_SMB -> NetworkSourceKind.Smb
+                            else -> NetworkSourceKind.Generic
+                        }
+                        if (sourceKind == NetworkSourceKind.Generic && parseSmbSourceSpecFromInput(source) != null) {
+                            sourceKind = NetworkSourceKind.Smb
+                        }
                         val metadataTitle = objectValue.optString("metadataTitle", "").trim().ifBlank { null }
                         val metadataArtist = objectValue.optString("metadataArtist", "").trim().ifBlank { null }
+                        val smbSpec = if (sourceKind == NetworkSourceKind.Smb) {
+                            val host = objectValue.optString("smbHost", "").trim()
+                            val share = objectValue.optString("smbShare", "").trim()
+                            val path = objectValue.optString("smbPath", "").trim().ifBlank { null }
+                            val username = objectValue.optString("smbUsername", "").trim().ifBlank { null }
+                            val password = objectValue.optString("smbPassword", "").trim().ifBlank { null }
+                            buildSmbSourceSpec(
+                                host = host,
+                                share = share,
+                                path = path,
+                                username = username,
+                                password = password
+                            ) ?: parseSmbSourceSpecFromInput(source)
+                        } else {
+                            null
+                        }
+                        val normalizedSource = if (sourceKind == NetworkSourceKind.Smb) {
+                            smbSpec?.let(::buildSmbSourceId)
+                        } else {
+                            source.takeIf { it.isNotBlank() }
+                        }
+                        if (normalizedSource.isNullOrBlank()) continue
                         add(
                             NetworkNode(
                                 id = id,
                                 parentId = parentId,
                                 type = NetworkNodeType.RemoteSource,
                                 title = title,
-                                source = source,
+                                source = normalizedSource,
+                                sourceKind = sourceKind,
+                                smbHost = smbSpec?.host,
+                                smbShare = smbSpec?.share,
+                                smbPath = smbSpec?.path,
+                                smbUsername = smbSpec?.username,
+                                smbPassword = smbSpec?.password,
                                 metadataTitle = metadataTitle,
                                 metadataArtist = metadataArtist
                             )
@@ -93,9 +140,38 @@ internal fun writeNetworkNodes(
             }
 
             NetworkNodeType.RemoteSource -> {
+                val resolvedSmbSpec = if (node.sourceKind == NetworkSourceKind.Smb) {
+                    buildSmbSourceSpec(
+                        host = node.smbHost.orEmpty(),
+                        share = node.smbShare.orEmpty(),
+                        path = node.smbPath,
+                        username = node.smbUsername,
+                        password = node.smbPassword
+                    ) ?: node.source?.let(::parseSmbSourceSpecFromInput)
+                } else {
+                    null
+                }
+                val sourceToWrite = if (node.sourceKind == NetworkSourceKind.Smb) {
+                    resolvedSmbSpec?.let(::buildSmbSourceId)
+                } else {
+                    node.source
+                }.orEmpty()
                 objectValue
                     .put("type", NETWORK_NODE_TYPE_REMOTE_SOURCE)
-                    .put("source", node.source.orEmpty())
+                    .put("source", sourceToWrite)
+                    .put(
+                        "sourceKind",
+                        if (node.sourceKind == NetworkSourceKind.Smb) {
+                            NETWORK_SOURCE_KIND_SMB
+                        } else {
+                            NETWORK_SOURCE_KIND_GENERIC
+                        }
+                    )
+                    .put("smbHost", resolvedSmbSpec?.host.orEmpty())
+                    .put("smbShare", resolvedSmbSpec?.share.orEmpty())
+                    .put("smbPath", resolvedSmbSpec?.path.orEmpty())
+                    .put("smbUsername", resolvedSmbSpec?.username.orEmpty())
+                    .put("smbPassword", resolvedSmbSpec?.password.orEmpty())
                     .put("metadataTitle", node.metadataTitle.orEmpty())
                     .put("metadataArtist", node.metadataArtist.orEmpty())
             }
@@ -116,7 +192,8 @@ internal fun mergeNetworkSourceMetadata(
     if (normalizedTitle == null && normalizedArtist == null) return nodes
     var changed = false
     val updated = nodes.map { node ->
-        if (node.type != NetworkNodeType.RemoteSource || !samePath(node.source, sourceId)) {
+        val nodeSourceId = resolveNetworkNodeSourceId(node)
+        if (node.type != NetworkNodeType.RemoteSource || !samePath(nodeSourceId, sourceId)) {
             return@map node
         }
         val resolvedTitle = normalizedTitle ?: node.metadataTitle
@@ -150,4 +227,41 @@ internal fun formatNetworkFolderSummary(
 private fun pluralizeNetworkCount(count: Int, singular: String): String {
     val word = if (count == 1) singular else "${singular}s"
     return "$count $word"
+}
+
+internal fun resolveNetworkNodeSmbSpec(node: NetworkNode): SmbSourceSpec? {
+    if (node.type != NetworkNodeType.RemoteSource || node.sourceKind != NetworkSourceKind.Smb) return null
+    return buildSmbSourceSpec(
+        host = node.smbHost.orEmpty(),
+        share = node.smbShare.orEmpty(),
+        path = node.smbPath,
+        username = node.smbUsername,
+        password = node.smbPassword
+    ) ?: node.source?.let(::parseSmbSourceSpecFromInput)
+}
+
+internal fun resolveNetworkNodeSourceId(node: NetworkNode): String? {
+    if (node.type != NetworkNodeType.RemoteSource) return null
+    return if (node.sourceKind == NetworkSourceKind.Smb) {
+        resolveNetworkNodeSmbSpec(node)?.let(::buildSmbSourceId)
+    } else {
+        node.source?.trim().takeUnless { it.isNullOrBlank() }
+    }
+}
+
+internal fun resolveNetworkNodeOpenInput(node: NetworkNode): String? {
+    if (node.type != NetworkNodeType.RemoteSource) return null
+    return if (node.sourceKind == NetworkSourceKind.Smb) {
+        resolveNetworkNodeSmbSpec(node)?.let(::buildSmbRequestUri)
+    } else {
+        node.source?.trim().takeUnless { it.isNullOrBlank() }
+    }
+}
+
+internal fun resolveNetworkNodeDisplaySource(node: NetworkNode): String {
+    return if (node.type == NetworkNodeType.RemoteSource && node.sourceKind == NetworkSourceKind.Smb) {
+        resolveNetworkNodeSmbSpec(node)?.let(::buildSmbDisplayUri).orEmpty()
+    } else {
+        node.source.orEmpty()
+    }
 }

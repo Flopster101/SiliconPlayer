@@ -8,6 +8,8 @@ espressoCore = "3.5.1"
 lifecycleRuntimeKtx = "2.7.0"
 activityCompose = "1.8.2"
 composeBom = "2024.02.00"
+smbj = "0.14.0"
+smbjRpc = "0.11.1.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -26,6 +28,8 @@ androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-material = { group = "androidx.compose.material", name = "material" }
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
+smbj = { group = "com.hierynomus", name = "smbj", version.ref = "smbj" }
+smbj-rpc = { group = "io.github.daveboy", name = "smbj-rpc", version.ref = "smbjRpc" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

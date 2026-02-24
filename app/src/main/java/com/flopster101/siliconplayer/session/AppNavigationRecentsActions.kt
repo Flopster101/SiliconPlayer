@@ -138,7 +138,7 @@ private fun readLocalTrackMetadata(sourceId: String): Pair<String, String>? {
     val localPath = when (scheme) {
         null -> normalized
         "file" -> uri.path ?: return null
-        "http", "https" -> return null
+        "http", "https", "smb" -> return null
         else -> normalized
     }
     val file = File(localPath)

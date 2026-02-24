@@ -587,11 +587,17 @@ internal fun HomeScreen(
                             val trackFile = if (archiveSource != null) {
                                 File(archiveSource.entryPath)
                             } else {
-                                val parsedSource = Uri.parse(entry.path)
+                                val normalizedSourcePath = normalizeSourceIdentity(entry.path) ?: entry.path
+                                val parsedSource = Uri.parse(normalizedSourcePath)
                                 if (parsedSource.scheme.equals("file", ignoreCase = true)) {
-                                    File(parsedSource.path ?: entry.path)
+                                    File(parsedSource.path ?: normalizedSourcePath)
+                                } else if (!parsedSource.scheme.isNullOrBlank()) {
+                                    val decodedLeaf = parsedSource.lastPathSegment
+                                        ?.trim()
+                                        ?.takeIf { it.isNotBlank() }
+                                    File(decodedLeaf ?: normalizedSourcePath)
                                 } else {
-                                    File(entry.path)
+                                    File(normalizedSourcePath)
                                 }
                             }
                             val storagePresentation = storagePresentationForEntry(entry)

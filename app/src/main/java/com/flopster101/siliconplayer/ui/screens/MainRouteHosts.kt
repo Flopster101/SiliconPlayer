@@ -4,9 +4,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import com.flopster101.siliconplayer.ui.screens.FileBrowserScreen
 import com.flopster101.siliconplayer.ui.screens.NetworkBrowserScreen
+import com.flopster101.siliconplayer.ui.screens.SmbFileBrowserScreen
 import java.io.File
 
 @Composable
@@ -57,20 +59,26 @@ internal fun MainNetworkRouteHost(
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     backHandlingEnabled: Boolean,
     nodes: List<NetworkNode>,
+    currentFolderId: Long?,
     onExitNetwork: () -> Unit,
+    onCurrentFolderIdChanged: (Long?) -> Unit,
     onNodesChanged: (List<NetworkNode>) -> Unit,
     onResolveRemoteSourceMetadata: (String) -> Unit,
-    onOpenRemoteSource: (String) -> Unit
+    onOpenRemoteSource: (String) -> Unit,
+    onBrowseSmbSource: (String) -> Unit
 ) {
     Box(modifier = Modifier.padding(mainPadding)) {
         NetworkBrowserScreen(
             bottomContentPadding = bottomContentPadding,
             backHandlingEnabled = backHandlingEnabled,
             nodes = nodes,
+            currentFolderId = currentFolderId,
             onExitNetwork = onExitNetwork,
+            onCurrentFolderIdChanged = onCurrentFolderIdChanged,
             onNodesChanged = onNodesChanged,
             onResolveRemoteSourceMetadata = onResolveRemoteSourceMetadata,
-            onOpenRemoteSource = onOpenRemoteSource
+            onOpenRemoteSource = onOpenRemoteSource,
+            onBrowseSmbSource = onBrowseSmbSource
         )
     }
 }
@@ -91,26 +99,41 @@ internal fun MainBrowserRouteHost(
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
     onExitBrowser: () -> Unit,
     onBrowserLocationChanged: (String?, String?) -> Unit,
-    onFileSelected: (File, String?) -> Unit
+    onFileSelected: (File, String?) -> Unit,
+    onOpenRemoteSource: (String) -> Unit
 ) {
+    val initialSmbSpec = initialDirectoryPath?.let(::parseSmbSourceSpecFromInput)
     Box(modifier = Modifier.padding(mainPadding)) {
-        FileBrowserScreen(
-            repository = repository,
-            decoderExtensionArtworkHints = decoderExtensionArtworkHints,
-            initialLocationId = initialLocationId,
-            initialDirectoryPath = initialDirectoryPath,
-            restoreFocusedItemRequestToken = restoreFocusedItemRequestToken,
-            onVisiblePlayableFilesChanged = onVisiblePlayableFilesChanged,
-            bottomContentPadding = bottomContentPadding,
-            showParentDirectoryEntry = showParentDirectoryEntry,
-            showFileIconChipBackground = showFileIconChipBackground,
-            backHandlingEnabled = backHandlingEnabled,
-            onExitBrowser = onExitBrowser,
-            onOpenSettings = null,
-            showPrimaryTopBar = false,
-            playingFile = playingFile,
-            onBrowserLocationChanged = onBrowserLocationChanged,
-            onFileSelected = onFileSelected
-        )
+        if (initialSmbSpec != null) {
+            LaunchedEffect(initialSmbSpec) {
+                onVisiblePlayableFilesChanged(emptyList())
+            }
+            SmbFileBrowserScreen(
+                sourceSpec = initialSmbSpec,
+                bottomContentPadding = bottomContentPadding,
+                backHandlingEnabled = backHandlingEnabled,
+                onExitBrowser = onExitBrowser,
+                onOpenRemoteSource = onOpenRemoteSource
+            )
+        } else {
+            FileBrowserScreen(
+                repository = repository,
+                decoderExtensionArtworkHints = decoderExtensionArtworkHints,
+                initialLocationId = initialLocationId,
+                initialDirectoryPath = initialDirectoryPath,
+                restoreFocusedItemRequestToken = restoreFocusedItemRequestToken,
+                onVisiblePlayableFilesChanged = onVisiblePlayableFilesChanged,
+                bottomContentPadding = bottomContentPadding,
+                showParentDirectoryEntry = showParentDirectoryEntry,
+                showFileIconChipBackground = showFileIconChipBackground,
+                backHandlingEnabled = backHandlingEnabled,
+                onExitBrowser = onExitBrowser,
+                onOpenSettings = null,
+                showPrimaryTopBar = false,
+                playingFile = playingFile,
+                onBrowserLocationChanged = onBrowserLocationChanged,
+                onFileSelected = onFileSelected
+            )
+        }
     }
 }

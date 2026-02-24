@@ -184,7 +184,11 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
     onSelectedFileChanged(restoreTarget.displayFile)
     onCurrentPlaybackSourceIdChanged(restoreTarget.sourceId)
     val sourceScheme = Uri.parse(restoreTarget.sourceId).scheme?.lowercase(Locale.ROOT)
-    val restoredContextualPlayableFiles = if (sourceScheme == "http" || sourceScheme == "https") {
+    val restoredContextualPlayableFiles = if (
+        sourceScheme == "http" ||
+        sourceScheme == "https" ||
+        sourceScheme == "smb"
+    ) {
         emptyList()
     } else {
         loadContextualPlayableFilesForManualSelection(

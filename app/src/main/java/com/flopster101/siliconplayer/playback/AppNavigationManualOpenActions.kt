@@ -109,25 +109,57 @@ internal fun launchManualRemoteSelectionAction(
     val launchedJob = appScope.launch {
         try {
             onPrimeManualRemoteOpenState(resolved)
-            when (
-                val remoteResult = executeManualRemoteOpen(
-                    resolved = resolved,
-                    forceCaching = options.forceCaching,
-                    cacheRoot = cacheRoot,
-                    selectedFileAbsolutePath = selectedFileAbsolutePathProvider(),
-                    urlCacheMaxTracks = urlCacheMaxTracks,
-                    urlCacheMaxBytes = urlCacheMaxBytes,
-                    onStatus = { state -> onRemoteLoadUiStateChanged(state) },
-                    downloadToCache = { sourceId, requestUrl, onStatus ->
-                        downloadRemoteUrlToCache(
-                            context = context,
-                            url = sourceId,
-                            requestUrl = requestUrl,
-                            onStatus = onStatus
+            val remoteResult = when (resolved.type) {
+                ManualSourceType.RemoteUrl -> {
+                    executeManualRemoteOpen(
+                        resolved = resolved,
+                        forceCaching = options.forceCaching,
+                        cacheRoot = cacheRoot,
+                        selectedFileAbsolutePath = selectedFileAbsolutePathProvider(),
+                        urlCacheMaxTracks = urlCacheMaxTracks,
+                        urlCacheMaxBytes = urlCacheMaxBytes,
+                        onStatus = { state -> onRemoteLoadUiStateChanged(state) },
+                        downloadToCache = { sourceId, requestUrl, onStatus ->
+                            downloadRemoteUrlToCache(
+                                context = context,
+                                url = sourceId,
+                                requestUrl = requestUrl,
+                                onStatus = onStatus
+                            )
+                        }
+                    )
+                }
+
+                ManualSourceType.Smb -> {
+                    val smbSpec = resolved.smbSpec
+                    if (smbSpec == null) {
+                        ManualRemoteOpenResult.Failed("Invalid SMB source configuration")
+                    } else {
+                        executeManualRemoteOpen(
+                            resolved = resolved,
+                            forceCaching = true,
+                            cacheRoot = cacheRoot,
+                            selectedFileAbsolutePath = selectedFileAbsolutePathProvider(),
+                            urlCacheMaxTracks = urlCacheMaxTracks,
+                            urlCacheMaxBytes = urlCacheMaxBytes,
+                            onStatus = { state -> onRemoteLoadUiStateChanged(state) },
+                            downloadToCache = { sourceId, _, onStatus ->
+                                downloadSmbSourceToCache(
+                                    context = context,
+                                    sourceId = sourceId,
+                                    spec = smbSpec,
+                                    onStatus = onStatus
+                                )
+                            }
                         )
                     }
-                )
-            ) {
+                }
+
+                else -> {
+                    ManualRemoteOpenResult.Failed("Unsupported manual source type")
+                }
+            }
+            when (remoteResult) {
                 is ManualRemoteOpenResult.Success -> {
                     onApplyManualRemoteOpenSuccess(remoteResult.value, expandOverride)
                 }

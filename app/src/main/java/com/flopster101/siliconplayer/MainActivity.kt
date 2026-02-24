@@ -1374,6 +1374,8 @@ private fun AppNavigation(
         return
     }
 
+    @Composable
+    fun AppNavigationMainContent() {
     val miniPlayerListInset = rememberMiniPlayerListInset(
         currentView = currentView,
         isPlayerSurfaceVisible = isPlayerSurfaceVisible
@@ -2557,4 +2559,7 @@ private fun AppNavigation(
         )
         PlayerOverlayAndDialogsSection()
     }
+    }
+
+    AppNavigationMainContent()
 }

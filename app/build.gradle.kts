@@ -3,8 +3,40 @@ plugins {
     alias(libs.plugins.jetbrainsKotlinAndroid)
 }
 
-import java.io.ByteArrayOutputStream
 import java.io.File
+
+data class ProcessCommandResult(
+    val exitCode: Int,
+    val output: String
+)
+
+fun runProcessAndCapture(
+    command: List<String>,
+    workingDir: File? = null
+): ProcessCommandResult {
+    val processBuilder = ProcessBuilder(command).redirectErrorStream(true)
+    if (workingDir != null) {
+        processBuilder.directory(workingDir)
+    }
+    val process = processBuilder.start()
+    val output = process.inputStream.bufferedReader().use { it.readText() }
+    val exitCode = process.waitFor()
+    return ProcessCommandResult(exitCode = exitCode, output = output)
+}
+
+fun runProcessWithInheritedIo(
+    command: List<String>,
+    workingDir: File? = null
+): Int {
+    val processBuilder = ProcessBuilder(command)
+    if (workingDir != null) {
+        processBuilder.directory(workingDir)
+    }
+    val process = processBuilder
+        .inheritIO()
+        .start()
+    return process.waitFor()
+}
 
 fun parseBooleanGradleProperty(value: String?): Boolean {
     return when (value?.trim()?.lowercase()) {
@@ -24,13 +56,15 @@ fun parseCsvGradleProperty(value: String?): Set<String> {
 
 fun gitShortSha(): String {
     return try {
-        val stdout = ByteArrayOutputStream()
-        exec {
-            commandLine("git", "rev-parse", "--short", "HEAD")
-            standardOutput = stdout
-            isIgnoreExitValue = true
+        val result = runProcessAndCapture(
+            command = listOf("git", "rev-parse", "--short", "HEAD"),
+            workingDir = rootProject.projectDir
+        )
+        if (result.exitCode == 0) {
+            result.output.trim().ifBlank { "nogit" }
+        } else {
+            "nogit"
         }
-        stdout.toString().trim().ifBlank { "nogit" }
     } catch (_: Exception) {
         "nogit"
     }
@@ -38,17 +72,12 @@ fun gitShortSha(): String {
 
 fun gitCommandOutput(workingDir: File, vararg args: String): String? {
     return try {
-        val stdout = ByteArrayOutputStream()
-        val stderr = ByteArrayOutputStream()
-        val result = exec {
-            this.workingDir = workingDir
-            commandLine(*args)
-            standardOutput = stdout
-            errorOutput = stderr
-            isIgnoreExitValue = true
-        }
-        if (result.exitValue == 0) {
-            stdout.toString().trim().ifBlank { null }
+        val result = runProcessAndCapture(
+            command = args.toList(),
+            workingDir = workingDir
+        )
+        if (result.exitCode == 0) {
+            result.output.trim().ifBlank { null }
         } else {
             null
         }
@@ -362,20 +391,12 @@ fun resolveBuildToolsDir(sdkDir: File): File {
 }
 
 fun zipalignSupports16k(zipalign: File): Boolean {
-    val out = ByteArrayOutputStream()
-    val err = ByteArrayOutputStream()
     try {
-        exec {
-            commandLine(zipalign.absolutePath)
-            standardOutput = out
-            errorOutput = err
-            isIgnoreExitValue = true
-        }
+        val result = runProcessAndCapture(listOf(zipalign.absolutePath))
+        return result.output.contains("-P")
     } catch (_: Exception) {
         return false
     }
-    val usage = out.toString() + "\n" + err.toString()
-    return usage.contains("-P")
 }
 
 fun register16kAlignTaskForVariant(variantName: String) {
@@ -416,8 +437,8 @@ fun register16kAlignTaskForVariant(variantName: String) {
             val alignedUnsigned = File(apk.parentFile, "app-$variantName-aligned-unsigned.apk")
             val alignedSigned = File(apk.parentFile, "app-$variantName-aligned-signed.apk")
 
-            exec {
-                commandLine(
+            val zipalignExitCode = runProcessWithInheritedIo(
+                command = listOf(
                     zipalign.absolutePath,
                     "-f",
                     "-P", "16",
@@ -425,13 +446,16 @@ fun register16kAlignTaskForVariant(variantName: String) {
                     apk.absolutePath,
                     alignedUnsigned.absolutePath
                 )
+            )
+            if (zipalignExitCode != 0) {
+                throw GradleException("zipalign failed with exit code $zipalignExitCode")
             }
 
             val debugKeystore = rootProject.file("debug.keystore")
             require(debugKeystore.exists()) { "Debug keystore not found at ${debugKeystore.absolutePath}" }
 
-            exec {
-                commandLine(
+            val apksignerExitCode = runProcessWithInheritedIo(
+                command = listOf(
                     apksigner.absolutePath,
                     "sign",
                     "--ks", debugKeystore.absolutePath,
@@ -441,6 +465,9 @@ fun register16kAlignTaskForVariant(variantName: String) {
                     "--out", alignedSigned.absolutePath,
                     alignedUnsigned.absolutePath
                 )
+            )
+            if (apksignerExitCode != 0) {
+                throw GradleException("apksigner failed with exit code $apksignerExitCode")
             }
 
             copy {

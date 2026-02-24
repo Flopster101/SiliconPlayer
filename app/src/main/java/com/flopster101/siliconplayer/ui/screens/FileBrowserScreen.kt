@@ -54,6 +54,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.alpha
@@ -124,6 +129,7 @@ fun FileBrowserScreen(
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint> = emptyMap(),
     initialLocationId: String? = null,
     initialDirectoryPath: String? = null,
+    restoreFocusedItemRequestToken: Int = 0,
     onFileSelected: (File, String?) -> Unit,
     onVisiblePlayableFilesChanged: (List<File>) -> Unit = {},
     onBrowserLocationChanged: (String?, String?) -> Unit = { _, _ -> },
@@ -153,6 +159,9 @@ fun FileBrowserScreen(
     var isPullRefreshing by remember { mutableStateOf(false) }
     var directoryAnimationEpoch by remember { mutableIntStateOf(0) }
     val archiveMountRoots = remember { mutableStateMapOf<String, ArchiveMountInfo>() }
+    val selectorButtonFocusRequester = remember { FocusRequester() }
+    var browserFocusedEntryKey by remember { mutableStateOf<String?>(null) }
+    val browserEntryFocusRequesters = remember { mutableStateMapOf<String, FocusRequester>() }
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val selectorIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
@@ -478,6 +487,32 @@ fun FileBrowserScreen(
         launchAutoScrollTargetKey = null
     }
 
+    LaunchedEffect(
+        restoreFocusedItemRequestToken,
+        selectedLocationId,
+        currentDirectory?.absolutePath,
+        fileList.size
+    ) {
+        if (restoreFocusedItemRequestToken <= 0 || selectedLocationId == null) return@LaunchedEffect
+        val focusedKey = browserFocusedEntryKey ?: return@LaunchedEffect
+        val requester = browserEntryFocusRequesters[focusedKey] ?: return@LaunchedEffect
+        val targetIndex = when {
+            focusedKey.startsWith("parent:") -> if (showParentDirectoryEntry) 0 else -1
+            else -> {
+                val fileIndex = fileList.indexOfFirst { it.file.absolutePath == focusedKey }
+                if (fileIndex < 0) -1 else fileIndex + if (showParentDirectoryEntry) 1 else 0
+            }
+        }
+        if (targetIndex >= 0) {
+            val isVisible = directoryListState.layoutInfo.visibleItemsInfo.any { it.index == targetIndex }
+            if (!isVisible) {
+                directoryListState.animateScrollToItem((targetIndex - 2).coerceAtLeast(0))
+                withFrameNanos { }
+            }
+        }
+        requester.requestFocus()
+    }
+
     val subtitle = if (selectedLocation == null) {
         "Storage locations"
     } else {
@@ -577,7 +612,10 @@ fun FileBrowserScreen(
                         }
 
                         Box(modifier = Modifier.padding(end = 6.dp)) {
-                            IconButton(onClick = { selectorExpanded = true }) {
+                            IconButton(
+                                onClick = { selectorExpanded = true },
+                                modifier = Modifier.focusRequester(selectorButtonFocusRequester)
+                            ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = selectorIcon,
@@ -774,13 +812,24 @@ fun FileBrowserScreen(
                         contentPadding = PaddingValues(bottom = bottomContentPadding)
                     ) {
                         if (showParentDirectoryEntry) {
-                            item(key = "parent:${state.currentDirectoryPath}") {
+                            val parentEntryKey = "parent:${state.currentDirectoryPath}"
+                            item(key = parentEntryKey) {
                                 AnimatedFileBrowserEntry(
-                                    itemKey = "parent:${state.currentDirectoryPath}",
+                                    itemKey = parentEntryKey,
                                     animationEpoch = directoryAnimationEpoch,
                                     animateOnFirstComposition = isLoadingDirectory
                                 ) {
-                                    ParentDirectoryItemRow(onClick = { navigateUpWithinLocation() })
+                                    val rowFocusRequester = remember(parentEntryKey) { FocusRequester() }
+                                    DisposableEffect(parentEntryKey) {
+                                        browserEntryFocusRequesters[parentEntryKey] = rowFocusRequester
+                                        onDispose { browserEntryFocusRequesters.remove(parentEntryKey) }
+                                    }
+                                    ParentDirectoryItemRow(
+                                        onClick = { navigateUpWithinLocation() },
+                                        rightFocusRequester = selectorButtonFocusRequester,
+                                        rowFocusRequester = rowFocusRequester,
+                                        onFocused = { browserFocusedEntryKey = parentEntryKey }
+                                    )
                                 }
                             }
                         }
@@ -788,16 +837,25 @@ fun FileBrowserScreen(
                             items = fileList,
                             key = { item -> item.file.absolutePath }
                         ) { item ->
+                            val entryKey = item.file.absolutePath
                             AnimatedFileBrowserEntry(
-                                itemKey = item.file.absolutePath,
+                                itemKey = entryKey,
                                 animationEpoch = directoryAnimationEpoch,
                                 animateOnFirstComposition = isLoadingDirectory
                             ) {
+                                val rowFocusRequester = remember(entryKey) { FocusRequester() }
+                                DisposableEffect(entryKey) {
+                                    browserEntryFocusRequesters[entryKey] = rowFocusRequester
+                                    onDispose { browserEntryFocusRequesters.remove(entryKey) }
+                                }
                                 FileItemRow(
                                     item = item,
                                     isPlaying = item.file == playingFile,
                                     showFileIconChipBackground = showFileIconChipBackground,
                                     decoderExtensionArtworkHints = decoderExtensionArtworkHints,
+                                    rightFocusRequester = selectorButtonFocusRequester,
+                                    rowFocusRequester = rowFocusRequester,
+                                    onFocused = { browserFocusedEntryKey = entryKey },
                                     onClick = {
                                         if (item.isArchive) {
                                             openArchive(item)
@@ -842,12 +900,23 @@ fun FileBrowserScreen(
 
 @Composable
 private fun ParentDirectoryItemRow(
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    rightFocusRequester: FocusRequester? = null,
+    rowFocusRequester: FocusRequester? = null,
+    onFocused: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusProperties {
+                if (rightFocusRequester != null) {
+                    right = rightFocusRequester
+                }
+            }
+            .then(if (rowFocusRequester != null) Modifier.focusRequester(rowFocusRequester) else Modifier)
+            .onFocusChanged { state -> if (state.isFocused) onFocused?.invoke() }
             .clickable(onClick = onClick)
+            .focusable()
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1200,6 +1269,9 @@ fun FileItemRow(
     isPlaying: Boolean,
     showFileIconChipBackground: Boolean,
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint> = emptyMap(),
+    rightFocusRequester: FocusRequester? = null,
+    rowFocusRequester: FocusRequester? = null,
+    onFocused: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
     val isVideoFile = !item.isDirectory && isLikelyVideoFile(item.file)
@@ -1232,7 +1304,15 @@ fun FileItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusProperties {
+                if (rightFocusRequester != null) {
+                    right = rightFocusRequester
+                }
+            }
+            .then(if (rowFocusRequester != null) Modifier.focusRequester(rowFocusRequester) else Modifier)
+            .onFocusChanged { state -> if (state.isFocused) onFocused?.invoke() }
             .clickable(onClick = onClick)
+            .focusable()
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

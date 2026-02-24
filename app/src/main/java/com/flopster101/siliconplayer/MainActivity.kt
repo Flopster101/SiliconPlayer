@@ -109,8 +109,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.ExperimentalComposeUiApi
 import com.flopster101.siliconplayer.playback.loadPlayableSiblingFilesForExternalIntent
 import com.flopster101.siliconplayer.playback.applyTrackSelectionAction
 import com.flopster101.siliconplayer.session.exportCachedFilesToTree
@@ -250,7 +253,7 @@ private fun resolveAutoDarkThemePreference(context: Context, systemDarkTheme: Bo
     return if (isTvDevice) true else systemDarkTheme
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
 @Composable
 private fun AppNavigation(
     themeMode: ThemeMode,
@@ -284,9 +287,12 @@ private fun AppNavigation(
     var tempForceMono by remember { mutableStateOf(false) }
 
     var currentView by remember { mutableStateOf(MainView.Home) }
+    val focusManager = LocalFocusManager.current
+    var browserFocusRestoreRequestToken by remember { mutableIntStateOf(0) }
     val isTvDevice = remember(context) { context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) }
     var showMiniPlayerFocusHighlight by remember { mutableStateOf(isTvDevice) }
     val miniPlayerFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val mainContentFocusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     var settingsRoute by remember { mutableStateOf(SettingsRoute.Root) }
     var settingsRouteHistory by remember { mutableStateOf<List<SettingsRoute>>(emptyList()) }
     var selectedPluginName by remember { mutableStateOf<String?>(null) }
@@ -1595,6 +1601,21 @@ private fun AppNavigation(
             filenameDisplayMode = filenameDisplayMode,
             filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
             showMiniPlayerFocusHighlight = showMiniPlayerFocusHighlight,
+            onMiniPlayerNavigateUpRequested = {
+                if (currentView == MainView.Browser) {
+                    mainContentFocusRequester.requestFocus()
+                    browserFocusRestoreRequestToken += 1
+                    return@AppNavigationPlayerOverlaysSection
+                }
+                mainContentFocusRequester.requestFocus()
+                val restored = mainContentFocusRequester.restoreFocusedChild()
+                if (!restored) {
+                    val moved = focusManager.moveFocus(FocusDirection.Up)
+                    if (!moved) {
+                        focusManager.moveFocus(FocusDirection.Up)
+                    }
+                }
+            },
             onMiniPlayerExpandRequested = { restoreMiniPlayerFocusOnCollapse = true },
             canResumeStoppedTrack = canResumeStoppedTrack,
             onHidePlayerSurface = { hidePlayerSurface() },
@@ -2338,6 +2359,7 @@ private fun AppNavigation(
     Box(modifier = Modifier.fillMaxSize()) {
         AppNavigationMainScaffoldSection(
             currentView = currentView,
+            mainContentFocusRequester = mainContentFocusRequester,
             canFocusMiniPlayer = isPlayerSurfaceVisible && !isPlayerExpanded,
             requestMiniPlayerFocus = { miniPlayerFocusRequester.requestFocus() },
             onHardwareNavigationInput = { showMiniPlayerFocusHighlight = true },
@@ -2472,6 +2494,7 @@ private fun AppNavigation(
                         ?: if (rememberBrowserLocation) lastBrowserLocationId else null,
                     initialDirectoryPath = browserLaunchDirectoryPath
                         ?: if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
+                    restoreFocusedItemRequestToken = browserFocusRestoreRequestToken,
                     bottomContentPadding = miniPlayerListInset,
                     showParentDirectoryEntry = showParentDirectoryEntry,
                     showFileIconChipBackground = showFileIconChipBackground,

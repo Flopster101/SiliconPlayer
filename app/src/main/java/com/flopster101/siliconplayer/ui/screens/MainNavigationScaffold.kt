@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -43,6 +44,7 @@ internal fun MainNavigationScaffold(
     onOpenPlayerSurface: () -> Unit,
     onHomeRequested: () -> Unit,
     onSettingsRequested: () -> Unit,
+    mainContentModifier: Modifier = Modifier,
     content: @Composable (mainPadding: PaddingValues, targetView: MainView) -> Unit
 ) {
     val shouldShowBrowserHomeAction = currentView == MainView.Browser
@@ -75,6 +77,7 @@ internal fun MainNavigationScaffold(
                                     text = "Silicon Player",
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier
+                                        .focusProperties { canFocus = false }
                                         .clip(RoundedCornerShape(999.dp))
                                         .clickable(onClick = onOpenPlayerSurface)
                                         .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -143,7 +146,7 @@ internal fun MainNavigationScaffold(
                     enter togetherWith exit
                 },
                 label = "mainViewTransition",
-                modifier = Modifier
+                modifier = mainContentModifier
             ) { targetView ->
                 val routePadding = if (targetView == MainView.Settings) {
                     PaddingValues(0.dp)

@@ -29,7 +29,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
@@ -41,7 +40,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.ui.screens.PlayerScreen
 import java.io.File
@@ -103,6 +101,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
     filenameDisplayMode: FilenameDisplayMode,
     filenameOnlyWhenTitleMissing: Boolean,
     showMiniPlayerFocusHighlight: Boolean,
+    onMiniPlayerNavigateUpRequested: () -> Unit,
     onMiniPlayerExpandRequested: () -> Unit,
     canResumeStoppedTrack: Boolean,
     onHidePlayerSurface: () -> Unit,
@@ -113,7 +112,6 @@ internal fun BoxScope.MiniPlayerOverlayHost(
     onOpenAudioEffects: () -> Unit
 ) {
     val uiScope = rememberCoroutineScope()
-    val focusManager = LocalFocusManager.current
 
     if (isPlayerSurfaceVisible && !isPlayerExpanded && miniExpandPreviewProgress > 0f) {
         val previewProgress = miniExpandPreviewProgress.coerceIn(0f, 1f)
@@ -244,7 +242,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 }
                 when (keyEvent.key) {
                     Key.DirectionUp -> {
-                        focusManager.moveFocus(FocusDirection.Up)
+                        onMiniPlayerNavigateUpRequested()
                         true
                     }
                     Key.DirectionRight -> {

@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -17,6 +20,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.ExperimentalComposeUiApi
 import java.io.File
 
 @Composable
@@ -65,6 +69,7 @@ internal fun AppNavigationBrowserRouteSection(
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint>,
     initialLocationId: String?,
     initialDirectoryPath: String?,
+    restoreFocusedItemRequestToken: Int,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     showParentDirectoryEntry: Boolean,
     showFileIconChipBackground: Boolean,
@@ -81,6 +86,7 @@ internal fun AppNavigationBrowserRouteSection(
         decoderExtensionArtworkHints = decoderExtensionArtworkHints,
         initialLocationId = initialLocationId,
         initialDirectoryPath = initialDirectoryPath,
+        restoreFocusedItemRequestToken = restoreFocusedItemRequestToken,
         bottomContentPadding = bottomContentPadding,
         showParentDirectoryEntry = showParentDirectoryEntry,
         showFileIconChipBackground = showFileIconChipBackground,
@@ -103,9 +109,11 @@ internal fun AppNavigationSettingsRouteSection(
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun AppNavigationMainScaffoldSection(
     currentView: MainView,
+    mainContentFocusRequester: FocusRequester,
     canFocusMiniPlayer: Boolean,
     requestMiniPlayerFocus: () -> Unit,
     onHardwareNavigationInput: () -> Unit,
@@ -162,6 +170,7 @@ internal fun AppNavigationMainScaffoldSection(
                 if (movedWithinMainContent) {
                     true
                 } else {
+                    mainContentFocusRequester.saveFocusedChild()
                     requestMiniPlayerFocus()
                     true
                 }
@@ -171,7 +180,10 @@ internal fun AppNavigationMainScaffoldSection(
             currentView = currentView,
             onOpenPlayerSurface = onOpenPlayerSurface,
             onHomeRequested = onHomeRequested,
-            onSettingsRequested = onSettingsRequested
+            onSettingsRequested = onSettingsRequested,
+            mainContentModifier = Modifier
+                .focusRequester(mainContentFocusRequester)
+                .focusRestorer()
         ) { mainPadding, targetView ->
             when (targetView) {
                 MainView.Home -> homeContent(mainPadding)

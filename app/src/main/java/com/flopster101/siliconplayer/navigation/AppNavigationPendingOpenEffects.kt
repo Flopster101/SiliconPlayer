@@ -3,6 +3,7 @@ package com.flopster101.siliconplayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
+import com.flopster101.siliconplayer.runWithNativeAudioSession
 import java.io.File
 import kotlinx.coroutines.launch
 
@@ -43,7 +44,9 @@ internal fun AppNavigationPendingOpenEffects(
 
                 if (autoPlayOnTrackSelect) {
                     onLoadSongVolumeForFile(file.absolutePath)
-                    NativeBridge.loadAudio(file.absolutePath)
+                    runWithNativeAudioSession {
+                        NativeBridge.loadAudio(file.absolutePath)
+                    }
                     onApplyRepeatModeToNative()
                     onStartEngine()
                     onIsPlayingChanged(true)

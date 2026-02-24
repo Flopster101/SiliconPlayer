@@ -237,8 +237,10 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
                 null
             } else {
                 loadSongVolumeForFile(restoreTarget.displayFile.absolutePath)
-                NativeBridge.loadAudio(restoreTarget.displayFile.absolutePath)
-                readNativeTrackSnapshot()
+                runWithNativeAudioSession {
+                    NativeBridge.loadAudio(restoreTarget.displayFile.absolutePath)
+                    readNativeTrackSnapshot()
+                }
             }
         }
         if (initialized != null) {
@@ -268,7 +270,9 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
     val snapshotAndState = withContext(Dispatchers.IO) {
         if (!isLoaded && restoreTarget.displayFile.exists() && restoreTarget.displayFile.isFile) {
             loadSongVolumeForFile(restoreTarget.displayFile.absolutePath)
-            NativeBridge.loadAudio(restoreTarget.displayFile.absolutePath)
+            runWithNativeAudioSession {
+                NativeBridge.loadAudio(restoreTarget.displayFile.absolutePath)
+            }
         }
         Triple(
             readNativeTrackSnapshot(),

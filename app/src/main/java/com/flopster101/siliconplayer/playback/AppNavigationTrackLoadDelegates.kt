@@ -79,7 +79,7 @@ internal class AppNavigationTrackLoadDelegates(
                     loadSongVolumeForFile = loadSongVolumeForFile,
                     onSongVolumeDbChanged = onSongVolumeDbChanged,
                     onSongGainChanged = onSongGainChanged,
-                    applyNativeTrackSnapshot = { applyNativeTrackSnapshot(readNativeTrackSnapshot()) },
+                    applyNativeTrackSnapshot = { snapshot -> applyNativeTrackSnapshot(snapshot) },
                     refreshSubtuneState = refreshSubtuneState,
                     onPositionChanged = onPositionChanged,
                     onArtworkBitmapCleared = onArtworkBitmapCleared,

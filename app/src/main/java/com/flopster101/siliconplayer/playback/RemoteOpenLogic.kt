@@ -31,8 +31,10 @@ internal suspend fun tryOpenDirectStreamForManualSource(
     return try {
         val snapshot = withContext(Dispatchers.IO) {
             withTimeout(timeoutMs) {
-                NativeBridge.loadAudio(requestUrl)
-                readNativeTrackSnapshot()
+                runWithNativeAudioSession {
+                    NativeBridge.loadAudio(requestUrl)
+                    readNativeTrackSnapshot()
+                }
             }
         }
         if (snapshotAppearsValid(snapshot)) {
@@ -142,8 +144,10 @@ internal suspend fun executeManualRemoteOpen(
 
     val cachedSnapshot = withContext(Dispatchers.IO) {
         withTimeout(20_000L) {
-            NativeBridge.loadAudio(cachedFile.absolutePath)
-            readNativeTrackSnapshot()
+            runWithNativeAudioSession {
+                NativeBridge.loadAudio(cachedFile.absolutePath)
+                readNativeTrackSnapshot()
+            }
         }
     }
     if (!snapshotAppearsValid(cachedSnapshot)) {

@@ -5,19 +5,16 @@ import com.flopster101.siliconplayer.ManualSourceOpenOptions
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.PreviousTrackAction
 import com.flopster101.siliconplayer.ResumeTarget
+import com.flopster101.siliconplayer.NativeTrackSnapshot
 import com.flopster101.siliconplayer.currentTrackIndexForList
+import com.flopster101.siliconplayer.readNativeTrackSnapshot
+import com.flopster101.siliconplayer.runWithNativeAudioSession
 import com.flopster101.siliconplayer.resolvePreviousTrackAction
 import com.flopster101.siliconplayer.resolveResumeTarget
 import com.flopster101.siliconplayer.data.resolveArchiveSourceToMountedFile
 import java.io.File
 import kotlin.coroutines.coroutineContext
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-
-private val trackSelectionLoadMutex = Mutex()
 
 internal suspend fun applyTrackSelectionAction(
     context: Context,
@@ -36,7 +33,7 @@ internal suspend fun applyTrackSelectionAction(
     loadSongVolumeForFile: (String) -> Unit,
     onSongVolumeDbChanged: (Float) -> Unit,
     onSongGainChanged: (Float) -> Unit,
-    applyNativeTrackSnapshot: () -> Unit,
+    applyNativeTrackSnapshot: (NativeTrackSnapshot) -> Unit,
     refreshSubtuneState: () -> Unit,
     onPositionChanged: (Double) -> Unit,
     onArtworkBitmapCleared: () -> Unit,
@@ -63,13 +60,12 @@ internal suspend fun applyTrackSelectionAction(
         onSongVolumeDbChanged(0f)
         onSongGainChanged(0f)
     }
-    withContext(Dispatchers.IO) {
-        trackSelectionLoadMutex.withLock {
-            NativeBridge.loadAudio(loadFile.absolutePath)
-        }
+    val nativeSnapshot = runWithNativeAudioSession {
+        NativeBridge.loadAudio(loadFile.absolutePath)
+        readNativeTrackSnapshot()
     }
     coroutineContext.ensureActive()
-    applyNativeTrackSnapshot()
+    applyNativeTrackSnapshot(nativeSnapshot)
     refreshSubtuneState()
     val loadedDurationSeconds = NativeBridge.getDuration().coerceAtLeast(0.0)
     val shouldApplyInitialSeek = initialSeekSeconds != null &&

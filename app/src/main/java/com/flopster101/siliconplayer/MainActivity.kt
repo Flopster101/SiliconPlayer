@@ -373,6 +373,18 @@ private fun AppNavigation(
     var networkNodes by remember {
         mutableStateOf(readNetworkNodes(prefs))
     }
+    val applyNetworkSourceMetadata: (String, String?, String?) -> Unit = { sourceId, title, artist ->
+        val updated = mergeNetworkSourceMetadata(
+            nodes = networkNodes,
+            sourceId = sourceId,
+            title = title,
+            artist = artist
+        )
+        if (updated != networkNodes) {
+            networkNodes = updated
+            writeNetworkNodes(prefs, updated)
+        }
+    }
     AppNavigationStartupEffects(
         prefs = prefs,
         defaultScopeTextSizeSp = defaultScopeTextSizeSp,
@@ -1367,6 +1379,10 @@ private fun AppNavigation(
         syncPlaybackService = playbackSessionCoordinator.syncPlaybackService,
         restorePlayerStateFromSessionAndNative = playbackSessionCoordinator.restorePlayerStateFromSessionAndNative
     )
+    LaunchedEffect(currentPlaybackSourceId, metadataTitle, metadataArtist) {
+        val sourceId = currentPlaybackSourceId ?: return@LaunchedEffect
+        applyNetworkSourceMetadata(sourceId, metadataTitle, metadataArtist)
+    }
 
     if (!storagePermissionState.hasPermission) {
         StoragePermissionRequiredScreen(
@@ -2534,6 +2550,15 @@ private fun AppNavigation(
                     onNodesChanged = { updatedNodes ->
                         networkNodes = updatedNodes
                         writeNetworkNodes(prefs, updatedNodes)
+                    },
+                    onResolveRemoteSourceMetadata = { sourceId ->
+                        scheduleNetworkSourceMetadataBackfill(
+                            scope = appScope,
+                            sourceId = sourceId,
+                            onResolved = { resolvedSource, resolvedTitle, resolvedArtist ->
+                                applyNetworkSourceMetadata(resolvedSource, resolvedTitle, resolvedArtist)
+                            }
+                        )
                     },
                     onOpenRemoteSource = { rawInput ->
                         manualOpenDelegates.applyManualInputSelection(rawInput)

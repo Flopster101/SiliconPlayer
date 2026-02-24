@@ -59,6 +59,7 @@ internal fun MainNetworkRouteHost(
     nodes: List<NetworkNode>,
     onExitNetwork: () -> Unit,
     onNodesChanged: (List<NetworkNode>) -> Unit,
+    onResolveRemoteSourceMetadata: (String) -> Unit,
     onOpenRemoteSource: (String) -> Unit
 ) {
     Box(modifier = Modifier.padding(mainPadding)) {
@@ -68,6 +69,7 @@ internal fun MainNetworkRouteHost(
             nodes = nodes,
             onExitNetwork = onExitNetwork,
             onNodesChanged = onNodesChanged,
+            onResolveRemoteSourceMetadata = onResolveRemoteSourceMetadata,
             onOpenRemoteSource = onOpenRemoteSource
         )
     }

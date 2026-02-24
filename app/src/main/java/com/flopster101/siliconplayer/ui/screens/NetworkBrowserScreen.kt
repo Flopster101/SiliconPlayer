@@ -1,10 +1,14 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.MarqueeSpacing
+import androidx.compose.foundation.basicMarquee
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,14 +41,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.buildRecentTrackDisplay
+import com.flopster101.siliconplayer.formatNetworkFolderSummary
 import com.flopster101.siliconplayer.NetworkNode
 import com.flopster101.siliconplayer.NetworkNodeType
 import com.flopster101.siliconplayer.nextNetworkNodeId
+import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import java.util.Locale
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun NetworkBrowserScreen(
     bottomContentPadding: Dp,
@@ -52,6 +62,7 @@ internal fun NetworkBrowserScreen(
     nodes: List<NetworkNode>,
     onExitNetwork: () -> Unit,
     onNodesChanged: (List<NetworkNode>) -> Unit,
+    onResolveRemoteSourceMetadata: (String) -> Unit,
     onOpenRemoteSource: (String) -> Unit
 ) {
     var currentFolderId by remember { mutableStateOf<Long?>(null) }
@@ -72,6 +83,20 @@ internal fun NetworkBrowserScreen(
                     .thenBy { it.title.lowercase() }
             )
             .toList()
+    }
+    val folderSummariesById = remember(nodes, currentEntries) {
+        currentEntries
+            .asSequence()
+            .filter { it.type == NetworkNodeType.Folder }
+            .associate { entry ->
+                val folderCount = nodes.count {
+                    it.parentId == entry.id && it.type == NetworkNodeType.Folder
+                }
+                val sourceCount = nodes.count {
+                    it.parentId == entry.id && it.type == NetworkNodeType.RemoteSource
+                }
+                entry.id to formatNetworkFolderSummary(folderCount, sourceCount)
+            }
     }
 
     val breadcrumbLabels = remember(nodes, currentFolderId) {
@@ -121,6 +146,7 @@ internal fun NetworkBrowserScreen(
             source = normalizedSource
         )
         onNodesChanged(updated)
+        onResolveRemoteSourceMetadata(normalizedSource)
     }
 
     Column(
@@ -269,20 +295,104 @@ internal fun NetworkBrowserScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = entry.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                            val isRemoteSource = entry.type == NetworkNodeType.RemoteSource
+                            val sourceLabel = entry.source.orEmpty()
+                            val fallbackTitle = entry.title.ifBlank { sourceLabel }
+                            val remoteDisplay = buildRecentTrackDisplay(
+                                title = entry.metadataTitle.orEmpty(),
+                                artist = entry.metadataArtist.orEmpty(),
+                                fallback = fallbackTitle
                             )
-                            if (entry.type == NetworkNodeType.RemoteSource) {
+                            val displayTitle = if (isRemoteSource) {
+                                remoteDisplay.primaryText
+                            } else {
+                                entry.title
+                            }.orEmpty()
+                            val subtitle = if (!isRemoteSource) {
+                                folderSummariesById[entry.id].orEmpty()
+                            } else {
+                                buildString {
+                                    append(inferNetworkSourceFormatLabel(sourceLabel))
+                                    if (sourceLabel.isNotBlank()) {
+                                        append(" • ")
+                                        append(sourceLabel)
+                                    }
+                                }
+                            }
+                            val shouldMarqueePrimary = isRemoteSource && displayTitle.length > 28
+                            if (shouldMarqueePrimary) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clipToBounds()
+                                ) {
+                                    Text(
+                                        text = displayTitle,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Clip,
+                                        modifier = Modifier.basicMarquee(
+                                            iterations = Int.MAX_VALUE,
+                                            initialDelayMillis = 900,
+                                            spacing = MarqueeSpacing(24.dp)
+                                        )
+                                    )
+                                }
+                            } else {
                                 Text(
-                                    text = entry.source.orEmpty(),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    text = displayTitle,
+                                    style = MaterialTheme.typography.titleSmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                            }
+                            if (subtitle.isNotBlank()) {
+                                if (isRemoteSource) {
+                                    val shouldMarqueeSubtitle = subtitle.length > 44
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Public,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clipToBounds()
+                                        ) {
+                                            Text(
+                                                text = subtitle,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = if (shouldMarqueeSubtitle) {
+                                                    TextOverflow.Clip
+                                                } else {
+                                                    TextOverflow.Ellipsis
+                                                },
+                                                modifier = if (shouldMarqueeSubtitle) {
+                                                    Modifier.basicMarquee(
+                                                        iterations = Int.MAX_VALUE,
+                                                        initialDelayMillis = 900,
+                                                        spacing = MarqueeSpacing(24.dp)
+                                                    )
+                                                } else {
+                                                    Modifier
+                                                }
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Text(
+                                        text = subtitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
                     }
@@ -360,4 +470,14 @@ internal fun NetworkBrowserScreen(
             }
         )
     }
+}
+
+private fun inferNetworkSourceFormatLabel(source: String): String {
+    if (source.isBlank()) return "Unknown"
+    val leaf = source
+        .substringBefore('#')
+        .substringBefore('?')
+        .substringAfterLast('/')
+    val ext = inferredPrimaryExtensionForName(leaf)
+    return ext?.uppercase(Locale.ROOT) ?: "Unknown"
 }

@@ -72,6 +72,7 @@ internal fun AppNavigationNetworkRouteSection(
     nodes: List<NetworkNode>,
     onExitNetwork: () -> Unit,
     onNodesChanged: (List<NetworkNode>) -> Unit,
+    onResolveRemoteSourceMetadata: (String) -> Unit,
     onOpenRemoteSource: (String) -> Unit
 ) {
     MainNetworkRouteHost(
@@ -81,6 +82,7 @@ internal fun AppNavigationNetworkRouteSection(
         nodes = nodes,
         onExitNetwork = onExitNetwork,
         onNodesChanged = onNodesChanged,
+        onResolveRemoteSourceMetadata = onResolveRemoteSourceMetadata,
         onOpenRemoteSource = onOpenRemoteSource
     )
 }

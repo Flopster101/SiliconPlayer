@@ -17,7 +17,9 @@ internal data class NetworkNode(
     val parentId: Long?,
     val type: NetworkNodeType,
     val title: String,
-    val source: String? = null
+    val source: String? = null,
+    val metadataTitle: String? = null,
+    val metadataArtist: String? = null
 )
 
 internal fun nextNetworkNodeId(nodes: List<NetworkNode>): Long {
@@ -51,13 +53,17 @@ internal fun readNetworkNodes(prefs: SharedPreferences): List<NetworkNode> {
                     NETWORK_NODE_TYPE_REMOTE_SOURCE -> {
                         val source = objectValue.optString("source", "").trim()
                         if (source.isBlank()) continue
+                        val metadataTitle = objectValue.optString("metadataTitle", "").trim().ifBlank { null }
+                        val metadataArtist = objectValue.optString("metadataArtist", "").trim().ifBlank { null }
                         add(
                             NetworkNode(
                                 id = id,
                                 parentId = parentId,
                                 type = NetworkNodeType.RemoteSource,
                                 title = title,
-                                source = source
+                                source = source,
+                                metadataTitle = metadataTitle,
+                                metadataArtist = metadataArtist
                             )
                         )
                     }
@@ -90,9 +96,58 @@ internal fun writeNetworkNodes(
                 objectValue
                     .put("type", NETWORK_NODE_TYPE_REMOTE_SOURCE)
                     .put("source", node.source.orEmpty())
+                    .put("metadataTitle", node.metadataTitle.orEmpty())
+                    .put("metadataArtist", node.metadataArtist.orEmpty())
             }
         }
         array.put(objectValue)
     }
     prefs.edit().putString(AppPreferenceKeys.NETWORK_SAVED_NODES, array.toString()).apply()
+}
+
+internal fun mergeNetworkSourceMetadata(
+    nodes: List<NetworkNode>,
+    sourceId: String,
+    title: String?,
+    artist: String?
+): List<NetworkNode> {
+    val normalizedTitle = title?.trim().takeUnless { it.isNullOrBlank() }
+    val normalizedArtist = artist?.trim().takeUnless { it.isNullOrBlank() }
+    if (normalizedTitle == null && normalizedArtist == null) return nodes
+    var changed = false
+    val updated = nodes.map { node ->
+        if (node.type != NetworkNodeType.RemoteSource || !samePath(node.source, sourceId)) {
+            return@map node
+        }
+        val resolvedTitle = normalizedTitle ?: node.metadataTitle
+        val resolvedArtist = normalizedArtist ?: node.metadataArtist
+        if (resolvedTitle == node.metadataTitle && resolvedArtist == node.metadataArtist) {
+            return@map node
+        }
+        changed = true
+        node.copy(
+            metadataTitle = resolvedTitle,
+            metadataArtist = resolvedArtist
+        )
+    }
+    return if (changed) updated else nodes
+}
+
+internal fun formatNetworkFolderSummary(
+    folderCount: Int,
+    sourceCount: Int
+): String {
+    val parts = mutableListOf<String>()
+    if (folderCount > 0) {
+        parts += pluralizeNetworkCount(folderCount, "folder")
+    }
+    if (sourceCount > 0 || folderCount == 0) {
+        parts += pluralizeNetworkCount(sourceCount, "source")
+    }
+    return parts.joinToString(" • ")
+}
+
+private fun pluralizeNetworkCount(count: Int, singular: String): String {
+    val word = if (count == 1) singular else "${singular}s"
+    return "$count $word"
 }

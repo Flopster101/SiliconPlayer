@@ -1,12 +1,14 @@
 package com.flopster101.siliconplayer.ui.visualization.basic
 
 import java.util.Locale
+import kotlin.math.ceil
 import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
 private const val VISUALIZATION_FFT_SIZE = 2048
 private const val VISUALIZATION_MIN_DISPLAY_HZ = 35f
+internal const val BARS_FREQUENCY_MID_SHIFT_BIAS = 0.96f
 
 internal data class BarsFrequencyMapping(
     val sourceSize: Int,
@@ -14,20 +16,19 @@ internal data class BarsFrequencyMapping(
     val maxFrequencyHz: Float
 ) {
     val maxSourceIndex: Int = (sourceSize - 1).coerceAtLeast(0)
-    private val frequencySpanHz: Float = (maxFrequencyHz - minFrequencyHz).coerceAtLeast(1f)
     private val ratio: Float = (maxFrequencyHz / minFrequencyHz).coerceAtLeast(1.001f)
     private val logRatio: Double = ln(ratio.toDouble())
 
     fun sourceIndexToFrequencyHz(index: Float): Float {
         val safeMax = maxSourceIndex.coerceAtLeast(1)
         val t = (index / safeMax.toFloat()).coerceIn(0f, 1f)
-        return minFrequencyHz + (t * frequencySpanHz)
+        return minFrequencyHz * ratio.pow(t)
     }
 
     fun frequencyHzToSourceIndex(frequencyHz: Float): Float {
         val safeMax = maxSourceIndex.coerceAtLeast(1)
         val clamped = frequencyHz.coerceIn(minFrequencyHz, maxFrequencyHz)
-        val t = ((clamped - minFrequencyHz) / frequencySpanHz).coerceIn(0f, 1f)
+        val t = (ln((clamped / minFrequencyHz).toDouble()) / logRatio).toFloat().coerceIn(0f, 1f)
         return t * safeMax.toFloat()
     }
 
@@ -61,7 +62,7 @@ internal fun resolveBarsFrequencyMapping(
     val fftHalf = VISUALIZATION_FFT_SIZE / 2
     val minBin = (
         (VISUALIZATION_MIN_DISPLAY_HZ / safeSampleRate.toFloat()) * VISUALIZATION_FFT_SIZE.toFloat()
-        ).toInt().coerceIn(1, fftHalf - 2)
+        ).let(::ceil).toInt().coerceIn(1, fftHalf - 2)
     val maxBin = fftHalf - 1
     val minFrequencyHz = (minBin.toFloat() * safeSampleRate.toFloat()) / VISUALIZATION_FFT_SIZE.toFloat()
     val maxFrequencyHz = (maxBin.toFloat() * safeSampleRate.toFloat()) / VISUALIZATION_FFT_SIZE.toFloat()
@@ -80,7 +81,8 @@ internal fun computeBarsFrequencyGuideTicks(
 ): List<BarsFrequencyGuideTick> {
     if (sourceSize < 2) return emptyList()
     val mapping = resolveBarsFrequencyMapping(sampleRateHz, sourceSize)
-    val invMidShiftBias = (1f / midShiftBias).coerceAtLeast(1f)
+    val safeMidShiftBias = midShiftBias.coerceIn(0.25f, 4f)
+    val invMidShiftBias = 1f / safeMidShiftBias
 
     var lastX = Float.NEGATIVE_INFINITY
     return buildList(BAR_FREQUENCY_GUIDE_HZ.size) {

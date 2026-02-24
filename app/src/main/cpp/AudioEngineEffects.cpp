@@ -14,6 +14,21 @@ namespace {
     constexpr int kVisualizationWaveformSize = 256;
     constexpr int kVisualizationFftSize = 2048;
     constexpr int kVisualizationSpectrumBins = 256;
+    constexpr float kVisualizationMinDisplayHz = 35.0f;
+
+    int computeVisualizationMinBin(int sampleRateHz) {
+        const int fftHalf = kVisualizationFftSize / 2;
+        const float sampleRate = static_cast<float>(std::max(sampleRateHz, 1));
+        const float rawBin = (kVisualizationMinDisplayHz / sampleRate) * static_cast<float>(kVisualizationFftSize);
+        return std::clamp(static_cast<int>(std::ceil(rawBin)), 1, fftHalf - 2);
+    }
+
+    float computeVisualizationTiltCompensation(float freqNorm) {
+        const float clamped = std::clamp(freqNorm, 0.0f, 1.0f);
+        const float shaped = std::pow(clamped, 0.85f);
+        // Attenuate low-end dominance while preserving high-band detail.
+        return 0.24f + (1.76f * shaped);
+    }
 
     void fftInPlace(std::array<float, kVisualizationFftSize>& real,
                     std::array<float, kVisualizationFftSize>& imag) {
@@ -111,16 +126,22 @@ namespace {
 
         const int fftHalf = kVisualizationFftSize / 2;
         const float sampleRate = static_cast<float>(std::max(sampleRateHz, 1));
-        const int minBin = std::clamp(
-                static_cast<int>(std::floor((35.0f / sampleRate) * static_cast<float>(kVisualizationFftSize))),
-                1,
-                fftHalf - 2
-        );
+        const int minBin = computeVisualizationMinBin(sampleRateHz);
         const int maxBin = fftHalf - 1;
-        const int usableBins = std::max(1, maxBin - minBin + 1);
+        const float minFrequencyHz =
+                (static_cast<float>(minBin) * sampleRate) / static_cast<float>(kVisualizationFftSize);
+        const float maxFrequencyHz =
+                (static_cast<float>(maxBin) * sampleRate) / static_cast<float>(kVisualizationFftSize);
+        const float frequencyRatio = std::max(maxFrequencyHz / std::max(minFrequencyHz, 1.0f), 1.001f);
         for (int band = 0; band < kVisualizationSpectrumBins; ++band) {
-            const int startBin = minBin + ((band * usableBins) / kVisualizationSpectrumBins);
-            const int endBin = minBin + ((((band + 1) * usableBins) / kVisualizationSpectrumBins) - 1);
+            const float t0 = static_cast<float>(band) / static_cast<float>(kVisualizationSpectrumBins);
+            const float t1 = static_cast<float>(band + 1) / static_cast<float>(kVisualizationSpectrumBins);
+            const float startFrequencyHz = minFrequencyHz * std::pow(frequencyRatio, t0);
+            const float endFrequencyHz = minFrequencyHz * std::pow(frequencyRatio, t1);
+            const int startBin = static_cast<int>(std::floor(
+                    (startFrequencyHz / sampleRate) * static_cast<float>(kVisualizationFftSize)));
+            const int endBin = static_cast<int>(std::ceil(
+                    (endFrequencyHz / sampleRate) * static_cast<float>(kVisualizationFftSize))) - 1;
             const int clampedStart = std::clamp(startBin, minBin, maxBin);
             const int clampedEnd = std::clamp(std::max(endBin, clampedStart), clampedStart, maxBin);
 
@@ -139,10 +160,9 @@ namespace {
 
             const double avgPower = powerSum / static_cast<double>(count);
             const double magnitude = std::sqrt(avgPower) / static_cast<double>(kVisualizationFftSize);
-            const float freqNorm = static_cast<float>(clampedStart - minBin) / static_cast<float>(usableBins);
-            // High-band lift + low-band restraint to avoid first-bar dominance.
-            const float tiltCompensation = 0.45f + (0.95f * std::pow(std::clamp(freqNorm, 0.0f, 1.0f), 0.62f));
-            const double weighted = magnitude * static_cast<double>(90.0f * tiltCompensation);
+            const float freqNorm = t0;
+            const float tiltCompensation = computeVisualizationTiltCompensation(freqNorm);
+            const double weighted = magnitude * static_cast<double>(68.0f * tiltCompensation);
             // Soft knee prevents early saturation while preserving detail.
             bars[band] = static_cast<float>(std::clamp(weighted / (1.0 + weighted), 0.0, 1.0));
         }
@@ -597,16 +617,22 @@ void AudioEngine::updateVisualizationDataLocked(const float* buffer, int numFram
 
     const int fftHalf = kVisualizationFftSize / 2;
     const float sampleRate = static_cast<float>(std::max(streamSampleRate, 1));
-    const int minBin = std::clamp(
-            static_cast<int>(std::floor((35.0f / sampleRate) * static_cast<float>(kVisualizationFftSize))),
-            1,
-            fftHalf - 2
-    );
+    const int minBin = computeVisualizationMinBin(streamSampleRate);
     const int maxBin = fftHalf - 1;
-    const int usableBins = std::max(1, maxBin - minBin + 1);
+    const float minFrequencyHz =
+            (static_cast<float>(minBin) * sampleRate) / static_cast<float>(kVisualizationFftSize);
+    const float maxFrequencyHz =
+            (static_cast<float>(maxBin) * sampleRate) / static_cast<float>(kVisualizationFftSize);
+    const float frequencyRatio = std::max(maxFrequencyHz / std::max(minFrequencyHz, 1.0f), 1.001f);
     for (int band = 0; band < kVisualizationSpectrumBins; ++band) {
-        const int startBin = minBin + ((band * usableBins) / kVisualizationSpectrumBins);
-        const int endBin = minBin + ((((band + 1) * usableBins) / kVisualizationSpectrumBins) - 1);
+        const float t0 = static_cast<float>(band) / static_cast<float>(kVisualizationSpectrumBins);
+        const float t1 = static_cast<float>(band + 1) / static_cast<float>(kVisualizationSpectrumBins);
+        const float startFrequencyHz = minFrequencyHz * std::pow(frequencyRatio, t0);
+        const float endFrequencyHz = minFrequencyHz * std::pow(frequencyRatio, t1);
+        const int startBin = static_cast<int>(std::floor(
+                (startFrequencyHz / sampleRate) * static_cast<float>(kVisualizationFftSize)));
+        const int endBin = static_cast<int>(std::ceil(
+                (endFrequencyHz / sampleRate) * static_cast<float>(kVisualizationFftSize))) - 1;
         const int clampedStart = std::clamp(startBin, minBin, maxBin);
         const int clampedEnd = std::clamp(std::max(endBin, clampedStart), clampedStart, maxBin);
 
@@ -625,10 +651,9 @@ void AudioEngine::updateVisualizationDataLocked(const float* buffer, int numFram
 
         const double avgPower = powerSum / static_cast<double>(count);
         const double magnitude = std::sqrt(avgPower) / static_cast<double>(kVisualizationFftSize);
-        const float freqNorm = static_cast<float>(clampedStart - minBin) / static_cast<float>(usableBins);
-        // High-band lift + low-band restraint to avoid first-bar dominance.
-        const float tiltCompensation = 0.45f + (0.95f * std::pow(std::clamp(freqNorm, 0.0f, 1.0f), 0.62f));
-        const double weighted = magnitude * static_cast<double>(90.0f * tiltCompensation);
+        const float freqNorm = t0;
+        const float tiltCompensation = computeVisualizationTiltCompensation(freqNorm);
+        const double weighted = magnitude * static_cast<double>(68.0f * tiltCompensation);
         // Soft knee prevents early saturation while preserving detail.
         bars[band] = static_cast<float>(std::clamp(weighted / (1.0 + weighted), 0.0, 1.0));
     }

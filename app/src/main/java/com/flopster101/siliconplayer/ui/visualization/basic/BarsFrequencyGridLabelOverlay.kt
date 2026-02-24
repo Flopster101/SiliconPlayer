@@ -42,7 +42,7 @@ internal fun BarsFrequencyGridLabelOverlay(
         val ticks = computeBarsFrequencyGuideTicks(
             sampleRateHz = sampleRateHz,
             sourceSize = max(2, sourceSize),
-            midShiftBias = 0.80f,
+            midShiftBias = BARS_FREQUENCY_MID_SHIFT_BIAS,
             minimumSpacingFraction = 0f
         )
         if (ticks.isEmpty()) return@Canvas

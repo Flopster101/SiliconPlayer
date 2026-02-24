@@ -45,7 +45,7 @@ fun BarsVisualization(
         )
         val usableMinIndex = 0
         val usableMaxIndex = (source.size - 1).coerceAtLeast(usableMinIndex + 1)
-        val midShiftBias = 0.80f
+        val midShiftBias = BARS_FREQUENCY_MID_SHIFT_BIAS
 
         if (barFrequencyGridEnabled) {
             drawBarsFrequencyGuide(

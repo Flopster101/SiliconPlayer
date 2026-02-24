@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.flopster101.siliconplayer.ui.visualization.basic.BARS_FREQUENCY_MID_SHIFT_BIAS
 import com.flopster101.siliconplayer.ui.visualization.basic.computeBarsFrequencyGuideTicks
 import com.flopster101.siliconplayer.ui.visualization.basic.resolveBarsFrequencyMapping
 import kotlin.math.pow
@@ -382,7 +383,7 @@ private class BarsGlCoreRenderer {
         val barWidth = ((widthPx - gapPx * (count - 1)) / count).coerceAtLeast(1f)
         val baselineY = height
 
-        val midShiftBias = 0.80f
+        val midShiftBias = BARS_FREQUENCY_MID_SHIFT_BIAS
 
         for (i in 0 until count) {
             val t0 = i.toFloat() / count.toFloat()
@@ -467,7 +468,7 @@ private class BarsGlCoreRenderer {
         val ticks = computeBarsFrequencyGuideTicks(
             sampleRateHz = frame.sampleRateHz,
             sourceSize = sourceSize,
-            midShiftBias = 0.80f,
+            midShiftBias = BARS_FREQUENCY_MID_SHIFT_BIAS,
             minimumSpacingFraction = 0f
         )
         ticks.forEach { tick ->

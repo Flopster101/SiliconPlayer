@@ -81,8 +81,8 @@ android {
             externalNativeBuild {
                 cmake {
                     // Apply aggressive native optimization for release-like builds.
-                    cFlags += "-Ofast"
-                    cppFlags += "-Ofast"
+                    cFlags += "-O3 -ffast-math"
+                    cppFlags += "-O3 -ffast-math"
                 }
             }
         }

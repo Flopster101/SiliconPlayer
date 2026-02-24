@@ -177,7 +177,7 @@ val aboutVersionOverrides = mapOf(
 
 val generatedAboutVersionDir = layout.buildDirectory.dir("generated/source/aboutVersions/main")
 val generatedAboutVersionFile = generatedAboutVersionDir.map {
-    File(it.asFile, "com/flopster101/siliconplayer/GeneratedAboutVersions.kt")
+    File(it.asFile, "com/flopster101/siliconplayer/GeneratedAboutVersions.java")
 }
 
 val generateAboutVersions by tasks.registering {
@@ -226,19 +226,32 @@ val generateAboutVersions by tasks.registering {
 
         val outFile = generatedAboutVersionFile.get()
         outFile.parentFile.mkdirs()
-        val mapBody = resolved.entries.joinToString(",\n") { (id, version) ->
-            "        \"${escapeKotlinString(id)}\" to \"${escapeKotlinString(version)}\""
+        val mapBody = resolved.entries.joinToString("\n") { (id, version) ->
+            "        map.put(\"${escapeKotlinString(id)}\", \"${escapeKotlinString(version)}\");"
         }
         outFile.writeText(
             """
-            |package com.flopster101.siliconplayer
+            |package com.flopster101.siliconplayer;
             |
-            |internal object GeneratedAboutVersions {
-            |    val byId: Map<String, String> = mapOf(
+            |import java.util.Collections;
+            |import java.util.LinkedHashMap;
+            |import java.util.Map;
+            |
+            |public final class GeneratedAboutVersions {
+            |    private static final Map<String, String> BY_ID;
+            |
+            |    static {
+            |        Map<String, String> map = new LinkedHashMap<>();
             |$mapBody
-            |    )
+            |        BY_ID = Collections.unmodifiableMap(map);
+            |    }
             |
-            |    fun versionForId(entityId: String): String? = byId[entityId]
+            |    private GeneratedAboutVersions() {
+            |    }
+            |
+            |    public static String versionForId(String entityId) {
+            |        return BY_ID.get(entityId);
+            |    }
             |}
             |""".trimMargin()
         )

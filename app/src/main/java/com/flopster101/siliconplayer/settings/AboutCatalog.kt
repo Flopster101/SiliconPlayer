@@ -336,8 +336,21 @@ internal object AboutCatalog {
     val libraries: List<AboutEntity>
         get() = libraryEntries
 
+    private val generatedVersionResolver: (String) -> String? by lazy {
+        try {
+            val generatedClass = Class.forName("com.flopster101.siliconplayer.GeneratedAboutVersions")
+            val versionMethod = generatedClass.getMethod("versionForId", String::class.java)
+            val resolver: (String) -> String? = { entityId ->
+                versionMethod.invoke(null, entityId) as? String
+            }
+            resolver
+        } catch (_: Throwable) {
+            { _: String -> null }
+        }
+    }
+
     fun resolveVersion(entityId: String): String? {
-        return GeneratedAboutVersions.versionForId(entityId)
+        return generatedVersionResolver(entityId)
     }
 
     fun resolveCoreForPlugin(pluginName: String): AboutEntity? {

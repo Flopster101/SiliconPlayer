@@ -1592,7 +1592,7 @@ private fun TrackInfoChips(
             if (bitrateOrSize != null) {
                 TrackInfoChip(
                     icon = if (decoderName.equals("FFmpeg", ignoreCase = true))
-                        PlayerChipIcons.ReadinessScore else PlayerChipIcons.HardDrive,
+                        PlayerChipIcons.WaveSawTool else PlayerChipIcons.HardDrive,
                     text = bitrateOrSize,
                     chipScale = visualChipScale,
                     tabletWidthScale = tabletWidthScale

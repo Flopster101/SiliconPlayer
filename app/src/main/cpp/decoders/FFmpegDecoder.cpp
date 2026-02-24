@@ -995,6 +995,25 @@ std::vector<std::string> FFmpegDecoder::getSupportedExtensions() {
             }
         }
 
+        // Keep formats reachable when enabled demuxers lack .p.extensions metadata.
+        // This list is intentionally "missing-only" and sourced from FFmpeg metadata audit.
+        static const std::initializer_list<const char*> kEssentialAudioExtensions = {
+                "aif", "aiff", "afc", "aifc",
+                "amr",
+                "asf", "wmv", "wma",
+                "caf",
+                "dsf",
+                "opus",
+                "qcp",
+                "voc",
+                "w64", "wav",
+                "wv",
+                "xwma"
+        };
+        for (const char* ext : kEssentialAudioExtensions) {
+            dedup.insert(ext);
+        }
+
         cached.assign(dedup.begin(), dedup.end());
         LOGD("FFmpeg demuxer extension discovery: %zu extensions", cached.size());
     });

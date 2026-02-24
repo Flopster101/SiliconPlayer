@@ -29,7 +29,7 @@ fun BarsVisualization(
             drawRect(color = backgroundColor)
         }
         val count = barCount.coerceIn(8, 96)
-        val edgePadPx = 8.dp.toPx()
+        val edgePadPx = 0f
         val topHeadroomPx = 8.dp.toPx()
         val widthPx = (size.width - (edgePadPx * 2f)).coerceAtLeast(1f)
         val heightPx = (size.height - topHeadroomPx).coerceAtLeast(1f)

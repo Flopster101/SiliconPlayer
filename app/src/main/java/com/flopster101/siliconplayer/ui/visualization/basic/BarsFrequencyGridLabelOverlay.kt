@@ -25,7 +25,7 @@ internal fun BarsFrequencyGridLabelOverlay(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    val edgePadPx = with(density) { 8.dp.toPx() }
+    val edgePadPx = 0f
     val minGapPx = with(density) { 3.dp.toPx() }
     val labelPadPx = with(density) { 2.dp.toPx() }
     val labelTopPx = with(density) { 3.dp.toPx() }

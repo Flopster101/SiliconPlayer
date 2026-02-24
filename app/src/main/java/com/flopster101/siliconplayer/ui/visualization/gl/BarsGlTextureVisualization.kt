@@ -46,7 +46,7 @@ fun BarsGlTextureVisualization(
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val density = LocalDensity.current
-    val edgePadPx = with(density) { 8.dp.toPx() }
+    val edgePadPx = 0f
     val topHeadroomPx = with(density) { 8.dp.toPx() }
     val roundnessPx = with(density) { barRoundnessDp.dp.toPx() }
     var glView by remember { mutableStateOf<BarsGlTextureView?>(null) }

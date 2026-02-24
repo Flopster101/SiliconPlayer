@@ -2422,6 +2422,9 @@ private fun AppNavigation(
                         browserLaunchDirectoryPath = null
                         currentView = MainView.Browser
                     },
+                    onOpenNetwork = {
+                        currentView = MainView.Network
+                    },
                     onOpenUrlOrPath = {
                         urlOrPathInput = ""
                         showUrlOrPathDialog = true
@@ -2510,6 +2513,14 @@ private fun AppNavigation(
                     canShareRecentFile = { entry ->
                         runtimeDelegates.resolveShareableFileForRecent(entry) != null
                     }
+                )
+            },
+            networkContent = { mainPadding ->
+                AppNavigationNetworkRouteSection(
+                    mainPadding = mainPadding,
+                    bottomContentPadding = miniPlayerListInset,
+                    backHandlingEnabled = !isPlayerExpanded,
+                    onExitNetwork = { currentView = MainView.Home }
                 )
             },
             browserContent = { mainPadding ->

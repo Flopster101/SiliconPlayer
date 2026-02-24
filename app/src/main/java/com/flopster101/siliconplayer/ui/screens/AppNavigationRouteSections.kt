@@ -34,6 +34,7 @@ internal fun AppNavigationHomeRouteSection(
     storagePresentationForEntry: (RecentPathEntry) -> StoragePresentation,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     onOpenLibrary: () -> Unit,
+    onOpenNetwork: () -> Unit,
     onOpenUrlOrPath: () -> Unit,
     onOpenRecentFolder: (RecentPathEntry) -> Unit,
     onPlayRecentFile: (RecentPathEntry) -> Unit,
@@ -52,6 +53,7 @@ internal fun AppNavigationHomeRouteSection(
         storagePresentationForEntry = storagePresentationForEntry,
         bottomContentPadding = bottomContentPadding,
         onOpenLibrary = onOpenLibrary,
+        onOpenNetwork = onOpenNetwork,
         onOpenUrlOrPath = onOpenUrlOrPath,
         onOpenRecentFolder = onOpenRecentFolder,
         onPlayRecentFile = onPlayRecentFile,
@@ -59,6 +61,21 @@ internal fun AppNavigationHomeRouteSection(
         onRecentFolderAction = onRecentFolderAction,
         onRecentFileAction = onRecentFileAction,
         canShareRecentFile = canShareRecentFile
+    )
+}
+
+@Composable
+internal fun AppNavigationNetworkRouteSection(
+    mainPadding: PaddingValues,
+    bottomContentPadding: androidx.compose.ui.unit.Dp,
+    backHandlingEnabled: Boolean,
+    onExitNetwork: () -> Unit
+) {
+    MainNetworkRouteHost(
+        mainPadding = mainPadding,
+        bottomContentPadding = bottomContentPadding,
+        backHandlingEnabled = backHandlingEnabled,
+        onExitNetwork = onExitNetwork
     )
 }
 
@@ -122,6 +139,7 @@ internal fun AppNavigationMainScaffoldSection(
     onHomeRequested: () -> Unit,
     onSettingsRequested: () -> Unit,
     homeContent: @Composable (PaddingValues) -> Unit,
+    networkContent: @Composable (PaddingValues) -> Unit,
     browserContent: @Composable (PaddingValues) -> Unit,
     settingsContent: @Composable (PaddingValues) -> Unit
 ) {
@@ -187,6 +205,7 @@ internal fun AppNavigationMainScaffoldSection(
         ) { mainPadding, targetView ->
             when (targetView) {
                 MainView.Home -> homeContent(mainPadding)
+                MainView.Network -> networkContent(mainPadding)
                 MainView.Browser -> browserContent(mainPadding)
                 MainView.Settings -> settingsContent(mainPadding)
             }

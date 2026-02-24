@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -141,6 +142,7 @@ internal fun HomeScreen(
     storagePresentationForEntry: (RecentPathEntry) -> StoragePresentation,
     bottomContentPadding: Dp = 0.dp,
     onOpenLibrary: () -> Unit,
+    onOpenNetwork: () -> Unit,
     onOpenUrlOrPath: () -> Unit,
     onOpenRecentFolder: (RecentPathEntry) -> Unit,
     onPlayRecentFile: (RecentPathEntry) -> Unit,
@@ -165,7 +167,7 @@ internal fun HomeScreen(
     val recentFolderAnimationState = rememberRecentAnimationState(recentFolderKeys)
     var runHomeIntroAnimation by rememberSaveable { mutableStateOf(true) }
     val introAnimatedItemCount = remember(recentFolders.size, recentPlayedFiles.size) {
-        2 + recentFolders.size + recentPlayedFiles.size
+        3 + recentFolders.size + recentPlayedFiles.size
     }
 
     LaunchedEffect(runHomeIntroAnimation, introAnimatedItemCount) {
@@ -370,6 +372,58 @@ internal fun HomeScreen(
                 }
             }
         }
+        Spacer(modifier = Modifier.height(10.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(86.dp)
+        ) {
+            AnimatedHomeIntroItem(
+                itemKey = "home_intro_network_button",
+                order = 2,
+                enabled = runHomeIntroAnimation
+            ) {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxSize(),
+                    onClick = onOpenNetwork
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(38.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.tertiaryContainer
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Public,
+                                    contentDescription = null
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Network",
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1
+                            )
+                            Text(
+                                text = "Open network shares and remote sources",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
         if (recentFolders.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
@@ -381,7 +435,7 @@ internal fun HomeScreen(
                 val itemKey = "${entry.locationId.orEmpty()}|${entry.path}"
                 AnimatedHomeIntroItem(
                     itemKey = "home_intro_folder_$itemKey",
-                    order = 2 + index,
+                    order = 3 + index,
                     enabled = runHomeIntroAnimation
                 ) {
                     AnimatedRecentCardInsertion(
@@ -517,7 +571,7 @@ internal fun HomeScreen(
                 key(animationIdentity) {
                     AnimatedHomeIntroItem(
                         itemKey = "home_intro_played_$animationIdentity",
-                        order = 2 + recentFolders.size + index,
+                        order = 3 + recentFolders.size + index,
                         enabled = runHomeIntroAnimation
                     ) {
                         AnimatedRecentCardInsertion(

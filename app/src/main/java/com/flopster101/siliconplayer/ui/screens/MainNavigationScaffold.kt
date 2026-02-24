@@ -47,7 +47,7 @@ internal fun MainNavigationScaffold(
     mainContentModifier: Modifier = Modifier,
     content: @Composable (mainPadding: PaddingValues, targetView: MainView) -> Unit
 ) {
-    val shouldShowBrowserHomeAction = currentView == MainView.Browser
+    val shouldShowBrowserHomeAction = currentView == MainView.Browser || currentView == MainView.Network
     val shouldShowSettingsAction = currentView != MainView.Settings
 
     Box(modifier = Modifier.fillMaxSize()) {

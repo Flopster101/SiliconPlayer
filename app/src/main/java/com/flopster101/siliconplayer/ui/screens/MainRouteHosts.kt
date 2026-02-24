@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.flopster101.siliconplayer.ui.screens.FileBrowserScreen
+import com.flopster101.siliconplayer.ui.screens.NetworkBrowserScreen
 import java.io.File
 
 @Composable
@@ -19,6 +20,7 @@ internal fun MainHomeRouteHost(
     storagePresentationForEntry: (RecentPathEntry) -> StoragePresentation,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     onOpenLibrary: () -> Unit,
+    onOpenNetwork: () -> Unit,
     onOpenUrlOrPath: () -> Unit,
     onOpenRecentFolder: (RecentPathEntry) -> Unit,
     onPlayRecentFile: (RecentPathEntry) -> Unit,
@@ -37,6 +39,7 @@ internal fun MainHomeRouteHost(
             storagePresentationForEntry = storagePresentationForEntry,
             bottomContentPadding = bottomContentPadding,
             onOpenLibrary = onOpenLibrary,
+            onOpenNetwork = onOpenNetwork,
             onOpenUrlOrPath = onOpenUrlOrPath,
             onOpenRecentFolder = onOpenRecentFolder,
             onPlayRecentFile = onPlayRecentFile,
@@ -44,6 +47,22 @@ internal fun MainHomeRouteHost(
             onRecentFolderAction = onRecentFolderAction,
             onRecentFileAction = onRecentFileAction,
             canShareRecentFile = canShareRecentFile
+        )
+    }
+}
+
+@Composable
+internal fun MainNetworkRouteHost(
+    mainPadding: PaddingValues,
+    bottomContentPadding: androidx.compose.ui.unit.Dp,
+    backHandlingEnabled: Boolean,
+    onExitNetwork: () -> Unit
+) {
+    Box(modifier = Modifier.padding(mainPadding)) {
+        NetworkBrowserScreen(
+            bottomContentPadding = bottomContentPadding,
+            backHandlingEnabled = backHandlingEnabled,
+            onExitNetwork = onExitNetwork
         )
     }
 }

@@ -12,6 +12,7 @@ internal fun rememberMiniPlayerListInset(
 ): Dp {
     val target = when {
         currentView == MainView.Browser && isPlayerSurfaceVisible -> 108.dp
+        currentView == MainView.Network && isPlayerSurfaceVisible -> 108.dp
         currentView == MainView.Home && isPlayerSurfaceVisible -> 108.dp
         currentView == MainView.Settings && isPlayerSurfaceVisible -> 108.dp
         else -> 0.dp

@@ -120,6 +120,7 @@ import com.flopster101.siliconplayer.RemoteLoadPhase
 import com.flopster101.siliconplayer.RemoteLoadUiState
 import com.flopster101.siliconplayer.RemoteLoadUiStateHolder
 import com.flopster101.siliconplayer.rememberDialogScrollbarAlpha
+import com.flopster101.siliconplayer.sanitizeRemoteCachedMetadataTitle
 import com.flopster101.siliconplayer.stripRemoteCacheHashPrefix
 import com.flopster101.siliconplayer.ui.dialogs.VisualizationModePickerDialog
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
@@ -636,7 +637,8 @@ internal fun PlayerScreen(
 
     val hasTrack = file != null
     val remoteLoadUiState = RemoteLoadUiStateHolder.current
-    val displayTitle = title.ifBlank {
+    val sanitizedTitle = sanitizeRemoteCachedMetadataTitle(title, file)
+    val displayTitle = sanitizedTitle.ifBlank {
         if (file != null) inferredDisplayTitleForName(file.name) else "No track selected"
     }
     val displayArtist = artist.ifBlank { if (hasTrack) "Unknown Artist" else "Tap a file to play" }

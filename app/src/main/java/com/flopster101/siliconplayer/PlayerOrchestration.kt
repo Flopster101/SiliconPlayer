@@ -41,10 +41,11 @@ internal fun syncPlaybackServiceForState(
     positionSeconds: Double,
     isPlaying: Boolean
 ) {
+    val sanitizedTitle = sanitizeRemoteCachedMetadataTitle(metadataTitle, selectedFile)
     PlaybackService.syncFromUi(
         context = context,
         path = sourceId ?: selectedFile?.absolutePath,
-        title = metadataTitle.ifBlank {
+        title = sanitizedTitle.ifBlank {
             selectedFile?.name?.let(::inferredDisplayTitleForName).orEmpty()
         },
         artist = metadataArtist.ifBlank { "Unknown Artist" },

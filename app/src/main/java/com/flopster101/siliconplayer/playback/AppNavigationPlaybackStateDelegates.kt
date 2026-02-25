@@ -70,6 +70,7 @@ internal class AppNavigationPlaybackStateDelegates(
     fun applyNativeTrackSnapshot(snapshot: NativeTrackSnapshot) {
         applyNativeTrackSnapshotAction(
             snapshot = snapshot,
+            selectedFile = selectedFileProvider(),
             prefs = prefs,
             ignoreCoreVolumeForCurrentSong = ignoreCoreVolumeForCurrentSongProvider(),
             onLastUsedCoreNameChanged = onLastUsedCoreNameChanged,

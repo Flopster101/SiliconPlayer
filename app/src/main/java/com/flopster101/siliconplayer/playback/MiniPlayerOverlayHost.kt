@@ -275,9 +275,10 @@ internal fun BoxScope.MiniPlayerOverlayHost(
             )
 
         val miniPlayerContent: @Composable () -> Unit = {
+            val sanitizedTitle = sanitizeRemoteCachedMetadataTitle(metadataTitle, selectedFile)
             MiniPlayerBar(
                 file = selectedFile,
-                title = metadataTitle.ifBlank {
+                title = sanitizedTitle.ifBlank {
                     selectedFile?.name?.let(::inferredDisplayTitleForName)
                         ?: "No track selected"
                 },

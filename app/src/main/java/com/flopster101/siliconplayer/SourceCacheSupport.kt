@@ -60,6 +60,20 @@ internal fun stripRemoteCacheHashPrefix(rawName: String): String {
         ?: normalized
 }
 
+internal fun sanitizeRemoteCachedMetadataTitle(
+    rawTitle: String,
+    selectedFile: File?
+): String {
+    val normalizedTitle = rawTitle.trim()
+    if (normalizedTitle.isBlank()) return rawTitle
+    val file = selectedFile ?: return rawTitle
+    if (file.parentFile?.name != REMOTE_SOURCE_CACHE_DIR) return rawTitle
+
+    val strippedHashPrefix = stripRemoteCacheHashPrefix(normalizedTitle)
+    if (strippedHashPrefix == normalizedTitle) return rawTitle
+    return inferredDisplayTitleForName(strippedHashPrefix)
+}
+
 internal fun stripUrlFragment(url: String): String {
     val parsed = Uri.parse(url)
     if (parsed.fragment.isNullOrBlank()) return url

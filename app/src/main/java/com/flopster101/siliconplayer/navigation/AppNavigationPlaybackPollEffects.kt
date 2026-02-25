@@ -133,7 +133,10 @@ internal fun AppNavigationPlaybackPollEffects(
                 val currentMetadataArtist = metadataArtistProvider()
                 if (shouldPollTrackMetadata(metadataPollElapsedMs, currentMetadataTitle, currentMetadataArtist)) {
                     metadataPollElapsedMs = 0L
-                    val nextTitle = NativeBridge.getTrackTitle()
+                    val nextTitle = sanitizeRemoteCachedMetadataTitle(
+                        rawTitle = NativeBridge.getTrackTitle(),
+                        selectedFile = currentFile
+                    )
                     val nextArtist = NativeBridge.getTrackArtist()
                     val titleChanged = nextTitle != currentMetadataTitle
                     val artistChanged = nextArtist != currentMetadataArtist

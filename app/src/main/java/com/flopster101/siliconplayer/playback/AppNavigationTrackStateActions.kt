@@ -13,6 +13,7 @@ import kotlinx.coroutines.withContext
 
 internal fun applyNativeTrackSnapshotAction(
     snapshot: NativeTrackSnapshot,
+    selectedFile: File?,
     prefs: SharedPreferences,
     ignoreCoreVolumeForCurrentSong: Boolean,
     onLastUsedCoreNameChanged: (String) -> Unit,
@@ -28,6 +29,7 @@ internal fun applyNativeTrackSnapshotAction(
     onDurationChanged: (Double) -> Unit
 ) {
     val applied = buildSnapshotApplicationResult(snapshot, prefs)
+    val sanitizedTitle = sanitizeRemoteCachedMetadataTitle(applied.title, selectedFile)
     applied.decoderName?.let { decoderName ->
         onLastUsedCoreNameChanged(decoderName)
         applied.pluginVolumeDb?.let { decoderPluginVolumeDb ->
@@ -35,7 +37,7 @@ internal fun applyNativeTrackSnapshotAction(
             onPluginGainChanged(if (ignoreCoreVolumeForCurrentSong) 0f else decoderPluginVolumeDb)
         }
     }
-    onMetadataTitleChanged(applied.title)
+    onMetadataTitleChanged(sanitizedTitle)
     onMetadataArtistChanged(applied.artist)
     onMetadataSampleRateChanged(applied.sampleRateHz)
     onMetadataChannelCountChanged(applied.channelCount)

@@ -2539,6 +2539,21 @@ private fun AppNavigation(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        val openBrowser: (
+            locationId: String?,
+            directoryPath: String?,
+            smbSourceNodeId: Long?,
+            httpSourceNodeId: Long?,
+            httpRootPath: String?,
+            returnToNetworkOnExit: Boolean
+        ) -> Unit = { locationId, directoryPath, smbSourceNodeId, httpSourceNodeId, httpRootPath, returnToNetworkOnExit ->
+            browserLaunchLocationId = locationId
+            browserLaunchDirectoryPath = directoryPath
+            browserLaunchSmbSourceNodeId = smbSourceNodeId
+            browserLaunchHttpSourceNodeId = httpSourceNodeId
+            browserLaunchHttpRootPath = httpRootPath
+            returnToNetworkOnBrowserExit = returnToNetworkOnExit
+        }
         AppNavigationMainScaffoldSection(
             currentView = currentView,
             mainContentFocusRequester = mainContentFocusRequester,
@@ -2561,162 +2576,46 @@ private fun AppNavigation(
                 currentView = MainView.Settings
             },
             homeContent = { mainPadding ->
-                AppNavigationHomeRouteSection(
+                AppNavigationHomeContentSection(
                     mainPadding = mainPadding,
+                    context = context,
+                    prefs = prefs,
                     currentTrackPath = currentPlaybackSourceId ?: selectedFile?.absolutePath,
-                    currentTrackTitle = metadataTitle,
-                    currentTrackArtist = metadataArtist,
+                    metadataTitle = metadataTitle,
+                    metadataArtist = metadataArtist,
+                    isPlaying = isPlaying,
                     recentFolders = recentFolders,
                     recentPlayedFiles = recentPlayedFiles,
-                    storagePresentationForEntry = { entry ->
-                        storagePresentationForEntry(context, entry, storageDescriptors)
-                    },
+                    recentFoldersLimit = recentFoldersLimit,
+                    recentFilesLimit = recentFilesLimit,
+                    networkNodes = networkNodes,
+                    storageDescriptors = storageDescriptors,
                     bottomContentPadding = miniPlayerListInset,
-                    onOpenLibrary = {
-                        browserLaunchLocationId = null
-                        browserLaunchDirectoryPath = null
-                        browserLaunchSmbSourceNodeId = null
-                        browserLaunchHttpSourceNodeId = null
-                        browserLaunchHttpRootPath = null
-                        returnToNetworkOnBrowserExit = false
-                        currentView = MainView.Browser
-                    },
-                    onOpenNetwork = {
-                        currentView = MainView.Network
-                    },
-                    onOpenUrlOrPath = {
+                    openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                    trackLoadDelegates = trackLoadDelegates,
+                    manualOpenDelegates = manualOpenDelegates,
+                    runtimeDelegates = runtimeDelegates,
+                    onRecentFoldersChanged = { recentFolders = it },
+                    onRecentPlayedFilesChanged = { recentPlayedFiles = it },
+                    onOpenBrowser = openBrowser,
+                    onCurrentViewChanged = { currentView = it },
+                    onOpenUrlOrPathDialog = {
                         urlOrPathInput = ""
                         showUrlOrPathDialog = true
-                    },
-                    onOpenRecentFolder = { entry ->
-                        val smbSpec = parseSmbSourceSpecFromInput(entry.path)
-                        if (smbSpec != null) {
-                            val smbTarget = resolveSmbRecentOpenTarget(
-                                targetSpec = smbSpec,
-                                networkNodes = networkNodes
-                            )
-                            browserLaunchLocationId = null
-                            browserLaunchDirectoryPath = smbTarget.requestUri
-                            browserLaunchSmbSourceNodeId = smbTarget.sourceNodeId
-                            browserLaunchHttpSourceNodeId = null
-                            browserLaunchHttpRootPath = null
-                        } else if (parseHttpSourceSpecFromInput(entry.path) != null) {
-                            browserLaunchLocationId = null
-                            browserLaunchDirectoryPath = entry.path
-                            browserLaunchSmbSourceNodeId = null
-                            browserLaunchHttpSourceNodeId = null
-                            browserLaunchHttpRootPath = null
-                        } else {
-                            browserLaunchLocationId = entry.locationId
-                            browserLaunchDirectoryPath = entry.path
-                            browserLaunchSmbSourceNodeId = null
-                            browserLaunchHttpSourceNodeId = null
-                            browserLaunchHttpRootPath = null
-                        }
-                        returnToNetworkOnBrowserExit = false
-                        currentView = MainView.Browser
-                    },
-                    onPlayRecentFile = { entry ->
-                        playRecentFileEntryAction(
-                            cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
-                            entry = entry,
-                            openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                            onApplyTrackSelection = { file, autoStart, expandOverride, sourceIdOverride, locationIdOverride, useSongVolumeLookup ->
-                                trackLoadDelegates.applyTrackSelection(
-                                    file,
-                                    autoStart,
-                                    expandOverride,
-                                    sourceIdOverride,
-                                    locationIdOverride,
-                                    useSongVolumeLookup = useSongVolumeLookup
-                                )
-                            },
-                            onApplyManualInputSelection = { rawInput ->
-                                manualOpenDelegates.applyManualInputSelection(rawInput)
-                            }
-                        )
-                    },
-                    onPersistRecentFileMetadata = { entry, title, artist ->
-                        if (!isPlaying) return@AppNavigationHomeRouteSection
-                        val decoderName = NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() }
-                        val updatedRecentPlayed = buildUpdatedRecentPlayedTracks(
-                            current = recentPlayedFiles,
-                            newPath = entry.path,
-                            locationId = entry.locationId,
-                            title = title,
-                            artist = artist,
-                            decoderName = decoderName,
-                            clearBlankMetadataOnUpdate = true,
-                            limit = recentFilesLimit
-                        )
-                        recentPlayedFiles = updatedRecentPlayed
-                        writeRecentEntries(
-                            prefs,
-                            AppPreferenceKeys.RECENT_PLAYED_FILES,
-                            updatedRecentPlayed,
-                            recentFilesLimit
-                        )
-                    },
-                    onRecentFolderAction = { entry, action ->
-                        applyRecentFolderAction(
-                            context = context,
-                            prefs = prefs,
-                            entry = entry,
-                            action = action,
-                            recentFolders = recentFolders,
-                            recentFoldersLimit = recentFoldersLimit,
-                            networkNodes = networkNodes,
-                            onRecentFoldersChanged = { recentFolders = it },
-                            onOpenInBrowser = { locationId, directoryPath, smbSourceNodeId ->
-                                browserLaunchLocationId = locationId
-                                browserLaunchDirectoryPath = directoryPath
-                                browserLaunchSmbSourceNodeId = smbSourceNodeId
-                                browserLaunchHttpSourceNodeId = null
-                                browserLaunchHttpRootPath = null
-                                returnToNetworkOnBrowserExit = false
-                                currentView = MainView.Browser
-                            }
-                        )
-                    },
-                    onRecentFileAction = { entry, action ->
-                        applyRecentSourceAction(
-                            context = context,
-                            prefs = prefs,
-                            entry = entry,
-                            action = action,
-                            recentPlayedFiles = recentPlayedFiles,
-                            recentFilesLimit = recentFilesLimit,
-                            networkNodes = networkNodes,
-                            onRecentPlayedFilesChanged = { recentPlayedFiles = it },
-                            resolveShareableFileForRecent = { recent ->
-                                runtimeDelegates.resolveShareableFileForRecent(recent)
-                            },
-                            onOpenInBrowser = { locationId, directoryPath, smbSourceNodeId ->
-                                browserLaunchLocationId = locationId
-                                browserLaunchDirectoryPath = directoryPath
-                                browserLaunchSmbSourceNodeId = smbSourceNodeId
-                                browserLaunchHttpSourceNodeId = null
-                                browserLaunchHttpRootPath = null
-                                returnToNetworkOnBrowserExit = false
-                                currentView = MainView.Browser
-                            }
-                        )
-                    },
-                    canShareRecentFile = { entry ->
-                        runtimeDelegates.resolveShareableFileForRecent(entry) != null
                     }
                 )
             },
             networkContent = { mainPadding ->
-                AppNavigationNetworkRouteSection(
+                AppNavigationNetworkContentSection(
                     mainPadding = mainPadding,
                     bottomContentPadding = miniPlayerListInset,
-                    backHandlingEnabled = !isPlayerExpanded,
-                    nodes = networkNodes,
-                    currentFolderId = networkCurrentFolderId,
-                    onExitNetwork = { currentView = MainView.Home },
-                    onCurrentFolderIdChanged = { networkCurrentFolderId = it },
-                    onNodesChanged = { updatedNodes ->
+                    isPlayerExpanded = isPlayerExpanded,
+                    networkNodes = networkNodes,
+                    networkCurrentFolderId = networkCurrentFolderId,
+                    manualOpenDelegates = manualOpenDelegates,
+                    onCurrentViewChanged = { currentView = it },
+                    onNetworkCurrentFolderIdChanged = { networkCurrentFolderId = it },
+                    onNetworkNodesChanged = { updatedNodes ->
                         networkNodes = updatedNodes
                         writeNetworkNodes(prefs, updatedNodes)
                     },
@@ -2728,68 +2627,52 @@ private fun AppNavigation(
                             onResolved = { resolvedSource, resolvedTitle, resolvedArtist ->
                                 applyNetworkSourceMetadata(resolvedSource, resolvedTitle, resolvedArtist)
                             },
-                            onSettled = {
-                                onSettled()
-                            }
+                            onSettled = { onSettled() }
                         )
                     },
                     onCancelPendingMetadataBackfill = {
                         cancelPendingNetworkSourceMetadataBackfillJobs()
                     },
-                    onOpenRemoteSource = { rawInput ->
-                        returnToNetworkOnBrowserExit = false
-                        manualOpenDelegates.applyManualInputSelection(rawInput)
-                    },
-                    onBrowseSmbSource = { rawInput, sourceNodeId ->
-                        browserLaunchLocationId = null
-                        browserLaunchDirectoryPath = rawInput
-                        browserLaunchSmbSourceNodeId = sourceNodeId
-                        browserLaunchHttpSourceNodeId = null
-                        browserLaunchHttpRootPath = null
-                        returnToNetworkOnBrowserExit = true
-                        currentView = MainView.Browser
-                    },
-                    onBrowseHttpSource = { rawInput, sourceNodeId, rootPath ->
-                        browserLaunchLocationId = null
-                        browserLaunchDirectoryPath = rawInput
-                        browserLaunchSmbSourceNodeId = null
-                        browserLaunchHttpSourceNodeId = sourceNodeId
-                        browserLaunchHttpRootPath = rootPath
-                        returnToNetworkOnBrowserExit = true
-                        currentView = MainView.Browser
-                    }
+                    onOpenBrowser = openBrowser
                 )
             },
             browserContent = { mainPadding ->
-                AppNavigationBrowserRouteSection(
+                AppNavigationBrowserContentSection(
                     mainPadding = mainPadding,
+                    prefs = prefs,
                     repository = repository,
                     decoderExtensionArtworkHints = decoderExtensionArtworkHints,
-                    initialLocationId = browserLaunchLocationId
-                        ?: if (rememberBrowserLocation) lastBrowserLocationId else null,
-                    initialDirectoryPath = browserLaunchDirectoryPath
-                        ?: if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
-                    initialSmbSourceNodeId = browserLaunchSmbSourceNodeId,
-                    initialHttpSourceNodeId = browserLaunchHttpSourceNodeId,
-                    initialHttpRootPath = browserLaunchHttpRootPath,
-                    restoreFocusedItemRequestToken = browserFocusRestoreRequestToken,
+                    rememberBrowserLocation = rememberBrowserLocation,
+                    lastBrowserLocationId = lastBrowserLocationId,
+                    lastBrowserDirectoryPath = lastBrowserDirectoryPath,
+                    browserLaunchLocationId = browserLaunchLocationId,
+                    browserLaunchDirectoryPath = browserLaunchDirectoryPath,
+                    browserLaunchSmbSourceNodeId = browserLaunchSmbSourceNodeId,
+                    browserLaunchHttpSourceNodeId = browserLaunchHttpSourceNodeId,
+                    browserLaunchHttpRootPath = browserLaunchHttpRootPath,
+                    browserFocusRestoreRequestToken = browserFocusRestoreRequestToken,
                     bottomContentPadding = miniPlayerListInset,
                     showParentDirectoryEntry = showParentDirectoryEntry,
                     showFileIconChipBackground = showFileIconChipBackground,
-                    backHandlingEnabled = !isPlayerExpanded,
-                    playingFile = selectedFile,
+                    isPlayerExpanded = isPlayerExpanded,
+                    selectedFile = selectedFile,
+                    networkNodes = networkNodes,
+                    autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+                    openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                    trackLoadDelegates = trackLoadDelegates,
+                    manualOpenDelegates = manualOpenDelegates,
+                    runtimeDelegates = runtimeDelegates,
+                    onCurrentViewChanged = { currentView = it },
                     onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
-                    onExitBrowser = {
-                        currentView = if (returnToNetworkOnBrowserExit) {
-                            MainView.Network
-                        } else {
-                            MainView.Home
-                        }
-                        returnToNetworkOnBrowserExit = false
-                        browserLaunchSmbSourceNodeId = null
-                        browserLaunchHttpSourceNodeId = null
-                        browserLaunchHttpRootPath = null
-                    },
+                    onBrowserLaunchLocationIdChanged = { browserLaunchLocationId = it },
+                    onBrowserLaunchDirectoryPathChanged = { browserLaunchDirectoryPath = it },
+                    onBrowserLaunchSmbSourceNodeIdChanged = { browserLaunchSmbSourceNodeId = it },
+                    onBrowserLaunchHttpSourceNodeIdChanged = { browserLaunchHttpSourceNodeId = it },
+                    onBrowserLaunchHttpRootPathChanged = { browserLaunchHttpRootPath = it },
+                    onReturnToNetworkOnBrowserExitChanged = { returnToNetworkOnBrowserExit = it },
+                    returnToNetworkOnBrowserExit = returnToNetworkOnBrowserExit,
+                    onLastBrowserLocationIdChanged = { lastBrowserLocationId = it },
+                    onLastBrowserDirectoryPathChanged = { lastBrowserDirectoryPath = it },
                     onBrowserLocationChanged = { locationId, directoryPath ->
                         if (
                             directoryPath != null &&
@@ -2817,7 +2700,7 @@ private fun AppNavigation(
                         }
                         val shouldRememberBrowserLocation = !isNetworkBrowserDirectoryPath(directoryPath)
                         if (!rememberBrowserLocation || !shouldRememberBrowserLocation) {
-                            return@AppNavigationBrowserRouteSection
+                            return@AppNavigationBrowserContentSection
                         }
                         lastBrowserLocationId = locationId
                         lastBrowserDirectoryPath = directoryPath
@@ -2825,17 +2708,6 @@ private fun AppNavigation(
                             .putString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, locationId)
                             .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, directoryPath)
                             .apply()
-                    },
-                    onFileSelected = { file, sourceIdOverride ->
-                        trackLoadDelegates.applyTrackSelection(
-                            file = file,
-                            autoStart = autoPlayOnTrackSelect,
-                            expandOverride = openPlayerOnTrackSelect,
-                            sourceIdOverride = sourceIdOverride
-                        )
-                    },
-                    onOpenRemoteSource = { rawInput ->
-                        manualOpenDelegates.applyManualInputSelection(rawInput)
                     },
                     onRememberSmbCredentials = { sourceNodeId, sourceId, username, password ->
                         rememberNetworkSmbCredentials(sourceNodeId, sourceId, username, password)

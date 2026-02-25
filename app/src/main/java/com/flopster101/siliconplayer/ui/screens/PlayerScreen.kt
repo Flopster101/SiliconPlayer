@@ -1520,20 +1520,20 @@ private fun TrackInfoChips(
 
     val sampleRateLabel = if (sampleRateHz > 0) {
         if (sampleRateHz % 1000 == 0) {
-            "${sampleRateHz / 1000}kHz"
+            "${sampleRateHz / 1000} kHz"
         } else {
-            String.format("%.1fkHz", sampleRateHz / 1000.0)
+            String.format(java.util.Locale.US, "%.1f kHz", sampleRateHz / 1000.0)
         }
     } else {
-        "--kHz"
+        "-- kHz"
     }
     val showBitDepth = decoderName.equals(DecoderNames.FFMPEG, ignoreCase = true)
     val depthDisplay = bitDepthLabel.ifBlank { "Unknown" }
     val channelsAndDepth = when {
-        channelCount > 0 && showBitDepth -> "${channelCount}ch/$depthDisplay"
-        channelCount > 0 -> "${channelCount}ch"
+        channelCount > 0 && showBitDepth -> "${channelCount} ch / $depthDisplay"
+        channelCount > 0 -> "${channelCount} ch"
         showBitDepth -> depthDisplay
-        else -> "--ch"
+        else -> "-- ch"
     }
 
     BoxWithConstraints(

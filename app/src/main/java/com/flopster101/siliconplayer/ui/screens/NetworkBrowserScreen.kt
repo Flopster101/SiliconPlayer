@@ -48,6 +48,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -454,6 +455,9 @@ internal fun NetworkBrowserScreen(
         showSelectionToggleMenu = false
     }
 
+    val toolbarActionButtonModifier = Modifier.size(40.dp)
+    val toolbarActionIconModifier = Modifier.size(20.dp)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -462,231 +466,263 @@ internal fun NetworkBrowserScreen(
             .padding(bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = RoundedCornerShape(24.dp),
+            tonalElevation = 2.dp,
+            shadowElevation = 1.dp
         ) {
-            if (currentFolderId != null) {
-                IconButton(onClick = { navigateUpOneFolder() }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Go to parent folder"
-                    )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(70.dp)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (currentFolderId != null) {
+                    IconButton(
+                        onClick = { navigateUpOneFolder() },
+                        modifier = toolbarActionButtonModifier
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Go to parent folder",
+                            modifier = toolbarActionIconModifier
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier.size(40.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Public,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.width(4.dp))
-            }
 
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Network",
-                    style = MaterialTheme.typography.headlineSmall
-                )
-                if (breadcrumbLabels.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 6.dp)
+                ) {
                     Text(
-                        text = breadcrumbLabels.joinToString(" / "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = "Network",
+                        style = MaterialTheme.typography.titleMedium
                     )
                 }
-            }
 
-            if (isSelectionMode) {
-                Box {
-                    IconButton(onClick = { showSelectionActionsMenu = true }) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Selection actions"
-                        )
+                if (isSelectionMode) {
+                    Box {
+                        IconButton(
+                            onClick = { showSelectionActionsMenu = true },
+                            modifier = toolbarActionButtonModifier
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "Selection actions",
+                                modifier = toolbarActionIconModifier
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showSelectionActionsMenu,
+                            onDismissRequest = { showSelectionActionsMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Copy") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = null
+                                    )
+                                },
+                                enabled = selectedNodeIds.isNotEmpty(),
+                                onClick = {
+                                    beginClipboardMode(NetworkClipboardMode.Copy, selectedNodeIds)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Move") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
+                                        contentDescription = null
+                                    )
+                                },
+                                enabled = selectedNodeIds.isNotEmpty(),
+                                onClick = {
+                                    beginClipboardMode(NetworkClipboardMode.Move, selectedNodeIds)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Delete") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null
+                                    )
+                                },
+                                enabled = selectedNodeIds.isNotEmpty(),
+                                onClick = { beginDeleteConfirmation(selectedNodeIds) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Refresh") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = null
+                                    )
+                                },
+                                enabled = selectedNodeIds.isNotEmpty(),
+                                onClick = { beginRefreshPlaceholder(selectedNodeIds) }
+                            )
+                        }
                     }
-                    DropdownMenu(
-                        expanded = showSelectionActionsMenu,
-                        onDismissRequest = { showSelectionActionsMenu = false }
+                    Box {
+                        IconButton(
+                            onClick = { showSelectionToggleMenu = true },
+                            modifier = toolbarActionButtonModifier
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SelectAll,
+                                contentDescription = "Selection toggles",
+                                modifier = toolbarActionIconModifier
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showSelectionToggleMenu,
+                            onDismissRequest = { showSelectionToggleMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Select all") },
+                                onClick = {
+                                    selectedNodeIds = currentEntries.mapTo(LinkedHashSet()) { it.id }
+                                    showSelectionToggleMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Deselect all") },
+                                onClick = {
+                                    selectedNodeIds = emptySet()
+                                    showSelectionToggleMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                clipboardState?.let { activeClipboard ->
+                    IconButton(
+                        onClick = { applyPasteFromClipboard() },
+                        modifier = toolbarActionButtonModifier
                     ) {
-                        DropdownMenuItem(
-                            text = { Text("Copy") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.ContentCopy,
-                                    contentDescription = null
-                                )
-                            },
-                            enabled = selectedNodeIds.isNotEmpty(),
-                            onClick = {
-                                beginClipboardMode(NetworkClipboardMode.Copy, selectedNodeIds)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Move") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
-                                    contentDescription = null
-                                )
-                            },
-                            enabled = selectedNodeIds.isNotEmpty(),
-                            onClick = {
-                                beginClipboardMode(NetworkClipboardMode.Move, selectedNodeIds)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Delete") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = null
-                                )
-                            },
-                            enabled = selectedNodeIds.isNotEmpty(),
-                            onClick = { beginDeleteConfirmation(selectedNodeIds) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Refresh") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = null
-                                )
-                            },
-                            enabled = selectedNodeIds.isNotEmpty(),
-                            onClick = { beginRefreshPlaceholder(selectedNodeIds) }
+                        Icon(
+                            imageVector = Icons.Default.ContentPaste,
+                            contentDescription = "Paste ${activeClipboard.mode.name.lowercase(Locale.ROOT)}",
+                            modifier = toolbarActionIconModifier
                         )
                     }
                 }
-                Box {
-                    IconButton(onClick = { showSelectionToggleMenu = true }) {
-                        Icon(
-                            imageVector = Icons.Default.SelectAll,
-                            contentDescription = "Selection toggles"
-                        )
+
+                if (isSelectionMode || clipboardState != null) {
+                    val cancelLabel = when {
+                        isSelectionMode -> "Cancel selection mode"
+                        clipboardState != null -> "Cancel ${clipboardState?.mode?.name?.lowercase(Locale.ROOT)} mode"
+                        else -> "Cancel"
                     }
-                    DropdownMenu(
-                        expanded = showSelectionToggleMenu,
-                        onDismissRequest = { showSelectionToggleMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Select all") },
-                            onClick = {
-                                selectedNodeIds = currentEntries.mapTo(LinkedHashSet()) { it.id }
-                                showSelectionToggleMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Deselect all") },
-                            onClick = {
+                    IconButton(
+                        onClick = {
+                            if (isSelectionMode) {
                                 selectedNodeIds = emptySet()
+                                selectionModeEnabled = false
+                                showSelectionActionsMenu = false
                                 showSelectionToggleMenu = false
                             }
+                            clipboardState = null
+                        },
+                        modifier = toolbarActionButtonModifier
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = cancelLabel,
+                            modifier = toolbarActionIconModifier
                         )
                     }
                 }
-            }
 
-            clipboardState?.let { activeClipboard ->
-                IconButton(onClick = { applyPasteFromClipboard() }) {
-                    Icon(
-                        imageVector = Icons.Default.ContentPaste,
-                        contentDescription = "Paste ${activeClipboard.mode.name.lowercase(Locale.ROOT)}"
-                    )
-                }
-            }
-
-            if (isSelectionMode || clipboardState != null) {
-                val cancelLabel = when {
-                    isSelectionMode -> "Cancel selection mode"
-                    clipboardState != null -> "Cancel ${clipboardState?.mode?.name?.lowercase(Locale.ROOT)} mode"
-                    else -> "Cancel"
-                }
-                IconButton(
-                    onClick = {
-                        if (isSelectionMode) {
-                            selectedNodeIds = emptySet()
-                            selectionModeEnabled = false
-                            showSelectionActionsMenu = false
-                            showSelectionToggleMenu = false
-                        }
-                        clipboardState = null
+                Box {
+                    IconButton(
+                        onClick = { showAddMenu = true },
+                        modifier = toolbarActionButtonModifier
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Add folder or source",
+                            modifier = toolbarActionIconModifier
+                        )
                     }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = cancelLabel
-                    )
-                }
-            }
-
-            Box {
-                IconButton(onClick = { showAddMenu = true }) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add folder or source"
-                    )
-                }
-                DropdownMenu(
-                    expanded = showAddMenu,
-                    onDismissRequest = { showAddMenu = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Folder") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.CreateNewFolder,
-                                contentDescription = null
-                            )
-                        },
-                        onClick = {
-                            showAddMenu = false
-                            editingFolderNodeId = null
-                            newFolderName = ""
-                            showCreateFolderDialog = true
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Remote source") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Link,
-                                contentDescription = null
-                            )
-                        },
-                        onClick = {
-                            showAddMenu = false
-                            editingSourceNodeId = null
-                            newSourceName = ""
-                            newSourcePath = ""
-                            showAddSourceDialog = true
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("SMB source") },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Public,
-                                contentDescription = null
-                            )
-                        },
-                        onClick = {
-                            showAddMenu = false
-                            editingSmbNodeId = null
-                            newSmbSourceName = ""
-                            newSmbHost = ""
-                            newSmbShare = ""
-                            newSmbPath = ""
-                            newSmbUsername = ""
-                            newSmbPassword = ""
-                            showAddSmbSourceDialog = true
-                        }
-                    )
+                    DropdownMenu(
+                        expanded = showAddMenu,
+                        onDismissRequest = { showAddMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Folder") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.CreateNewFolder,
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                showAddMenu = false
+                                editingFolderNodeId = null
+                                newFolderName = ""
+                                showCreateFolderDialog = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Remote source") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Link,
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                showAddMenu = false
+                                editingSourceNodeId = null
+                                newSourceName = ""
+                                newSourcePath = ""
+                                showAddSourceDialog = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("SMB source") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Public,
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                showAddMenu = false
+                                editingSmbNodeId = null
+                                newSmbSourceName = ""
+                                newSmbHost = ""
+                                newSmbShare = ""
+                                newSmbPath = ""
+                                newSmbUsername = ""
+                                newSmbPassword = ""
+                                showAddSmbSourceDialog = true
+                            }
+                        )
+                    }
                 }
             }
         }
-
-        Text(
-            text = "Browse network shares and remote sources.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
         if (isSelectionMode) {
             Text(
                 text = "${selectedNodeIds.size} selected",

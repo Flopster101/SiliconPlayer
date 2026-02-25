@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer
 
+import android.net.Uri
 import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
@@ -33,6 +34,7 @@ internal data class NetworkNode(
     val smbPassword: String? = null,
     val httpRootPath: String? = null,
     val smbDiscoveredHostName: String? = null,
+    val httpDiscoveredSiteName: String? = null,
     val metadataTitle: String? = null,
     val metadataArtist: String? = null
 )
@@ -81,6 +83,10 @@ internal fun readNetworkNodes(prefs: SharedPreferences): List<NetworkNode> {
                             .optString("smbDiscoveredHostName", "")
                             .trim()
                             .ifBlank { null }
+                        val httpDiscoveredSiteName = objectValue
+                            .optString("httpDiscoveredSiteName", "")
+                            .trim()
+                            .ifBlank { null }
                         val smbSpec = if (sourceKind == NetworkSourceKind.Smb) {
                             val host = objectValue.optString("smbHost", "").trim()
                             val share = objectValue.optString("smbShare", "").trim()
@@ -118,6 +124,7 @@ internal fun readNetworkNodes(prefs: SharedPreferences): List<NetworkNode> {
                                 smbPassword = smbSpec?.password,
                                 httpRootPath = httpRootPath,
                                 smbDiscoveredHostName = smbDiscoveredHostName,
+                                httpDiscoveredSiteName = httpDiscoveredSiteName,
                                 metadataTitle = metadataTitle,
                                 metadataArtist = metadataArtist
                             )
@@ -183,6 +190,7 @@ internal fun writeNetworkNodes(
                     .put("smbPassword", resolvedSmbSpec?.password.orEmpty())
                     .put("httpRootPath", node.httpRootPath.orEmpty())
                     .put("smbDiscoveredHostName", node.smbDiscoveredHostName.orEmpty())
+                    .put("httpDiscoveredSiteName", node.httpDiscoveredSiteName.orEmpty())
                     .put("metadataTitle", node.metadataTitle.orEmpty())
                     .put("metadataArtist", node.metadataArtist.orEmpty())
             }
@@ -302,12 +310,20 @@ internal fun resolveNetworkNodeDisplayTitle(node: NetworkNode): String {
     if (node.type == NetworkNodeType.Folder) return node.title
     if (node.type != NetworkNodeType.RemoteSource) return node.title
     if (node.sourceKind != NetworkSourceKind.Smb) {
-        return node.title.ifBlank {
-            val source = node.source.orEmpty()
-            parseHttpSourceSpecFromInput(source)
-                ?.let(::buildHttpDisplayUri)
-                ?: source
+        val source = node.source.orEmpty()
+        val httpSpec = parseHttpSourceSpecFromInput(source)
+        val explicitTitle = node.title.trim()
+        val hasExplicitTitle = explicitTitle.isNotBlank() && !isLegacyAutoHttpTitle(explicitTitle, httpSpec)
+        if (hasExplicitTitle) {
+            return explicitTitle
         }
+        val discoveredSiteName = node.httpDiscoveredSiteName
+            ?.trim()
+            .takeUnless { it.isNullOrBlank() }
+        if (!discoveredSiteName.isNullOrBlank()) {
+            return discoveredSiteName
+        }
+        return httpSpec?.let(::buildHttpDisplayUri) ?: source
     }
 
     val spec = resolveNetworkNodeSmbSpec(node)
@@ -387,6 +403,21 @@ private fun isLegacyAutoSmbTitle(title: String, spec: SmbSourceSpec?): Boolean {
     return autoCandidates.any { candidate ->
         normalizedTitle.equals(candidate, ignoreCase = true)
     }
+}
+
+private fun isLegacyAutoHttpTitle(title: String, spec: HttpSourceSpec?): Boolean {
+    if (spec == null) return false
+    val normalizedTitle = title.trim()
+    if (normalizedTitle.isBlank()) return false
+    val displayUri = buildHttpDisplayUri(spec)
+    val decodedDisplayUri = Uri.decode(displayUri)
+    val normalizedTitleNoSlash = normalizedTitle.removeSuffix("/")
+    val displayUriNoSlash = displayUri.removeSuffix("/")
+    val decodedDisplayUriNoSlash = decodedDisplayUri.removeSuffix("/")
+    return normalizedTitle.equals(displayUri, ignoreCase = true) ||
+        normalizedTitle.equals(decodedDisplayUri, ignoreCase = true) ||
+        normalizedTitleNoSlash.equals(displayUriNoSlash, ignoreCase = true) ||
+        normalizedTitleNoSlash.equals(decodedDisplayUriNoSlash, ignoreCase = true)
 }
 
 private fun normalizeSmbHostDisplayLabel(rawHost: String): String {

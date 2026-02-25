@@ -126,6 +126,7 @@ import com.flopster101.siliconplayer.httpBasicAuthorizationHeader
 import com.flopster101.siliconplayer.formatByteCount
 import com.flopster101.siliconplayer.sourceLeafNameForDisplay
 import java.io.File
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Date
@@ -227,6 +228,7 @@ internal fun NetworkBrowserScreen(
     val refreshTimeoutJobs = remember { LinkedHashMap<String, Job>() }
     val refreshSettledSources = remember { LinkedHashSet<String>() }
     val smbHostResolveJobs = remember { LinkedHashMap<String, Job>() }
+    val httpSiteResolveJobs = remember { LinkedHashMap<String, Job>() }
     val latestNodes by rememberUpdatedState(nodes)
     val latestOnNodesChanged by rememberUpdatedState(onNodesChanged)
 
@@ -237,6 +239,8 @@ internal fun NetworkBrowserScreen(
             refreshSettledSources.clear()
             smbHostResolveJobs.values.forEach { it.cancel() }
             smbHostResolveJobs.clear()
+            httpSiteResolveJobs.values.forEach { it.cancel() }
+            httpSiteResolveJobs.clear()
             infoFetchJob?.cancel()
             onCancelPendingMetadataBackfill()
         }
@@ -348,7 +352,12 @@ internal fun NetworkBrowserScreen(
             isHttpFolderLikeSource(entry, sourceId) -> {
                 val httpSpec = parseHttpSourceSpecFromInput(sourceId)
                 editingHttpNodeId = entry.id
-                newHttpSourceName = entry.title
+                val currentTitle = entry.title.trim()
+                val isLegacyAutoTitle = httpSpec?.let {
+                    currentTitle.isNotBlank() &&
+                        currentTitle.equals(buildHttpDisplayUri(it), ignoreCase = true)
+                } == true
+                newHttpSourceName = if (isLegacyAutoTitle) "" else entry.title
                 newHttpUrl = httpSpec
                     ?.copy(username = null, password = null)
                     ?.let(::buildHttpDisplayUri)
@@ -475,6 +484,79 @@ internal fun NetworkBrowserScreen(
         }
     }
 
+    fun requestHttpSiteDisplayName(
+        sourceId: String,
+        nodeIds: Set<Long>,
+        specOverride: HttpSourceSpec? = null,
+        onSettled: (() -> Unit)? = null
+    ) {
+        if (nodeIds.isEmpty()) {
+            onSettled?.invoke()
+            return
+        }
+        val httpSpec = specOverride
+            ?: latestNodes
+                .asSequence()
+                .filter { nodeIds.contains(it.id) }
+                .firstNotNullOfOrNull { node ->
+                    if (node.type == NetworkNodeType.RemoteSource && node.sourceKind != NetworkSourceKind.Smb) {
+                        parseHttpSourceSpecFromInput(resolveNetworkNodeSourceId(node).orEmpty())
+                    } else {
+                        null
+                    }
+                }
+            ?: parseHttpSourceSpecFromInput(sourceId)
+        if (httpSpec == null || httpSpec.host.isBlank()) {
+            onSettled?.invoke()
+            return
+        }
+
+        httpSiteResolveJobs.remove(sourceId)?.cancel()
+        val job = uiScope.launch {
+            try {
+                val resolvedSiteName = resolveHttpSiteDisplayName(httpSpec)
+                    .getOrNull()
+                    ?.trim()
+                    .takeUnless { it.isNullOrBlank() }
+                    ?: return@launch
+                val updated = latestNodes.map { node ->
+                    if (node.type != NetworkNodeType.RemoteSource || node.sourceKind == NetworkSourceKind.Smb) {
+                        return@map node
+                    }
+                    val nodeHttpSpec = parseHttpSourceSpecFromInput(resolveNetworkNodeSourceId(node).orEmpty())
+                    val isDirectTarget = nodeIds.contains(node.id)
+                    val isSameHost = isSameHttpHost(nodeHttpSpec, httpSpec)
+                    if (!isDirectTarget && !isSameHost) {
+                        return@map node
+                    }
+                    val currentTitle = node.title.trim()
+                    val isLegacyAutoTitle = currentTitle.isNotBlank() && nodeHttpSpec?.let {
+                        currentTitle.equals(buildHttpDisplayUri(it), ignoreCase = true)
+                    } == true
+                    val normalizedTitle = if (isLegacyAutoTitle) "" else node.title
+                    if (node.httpDiscoveredSiteName == resolvedSiteName && normalizedTitle == node.title) {
+                        return@map node
+                    }
+                    node.copy(
+                        httpDiscoveredSiteName = resolvedSiteName,
+                        title = normalizedTitle
+                    )
+                }
+                if (updated != latestNodes) {
+                    latestOnNodesChanged(updated)
+                }
+            } finally {
+                onSettled?.invoke()
+            }
+        }
+        httpSiteResolveJobs[sourceId] = job
+        job.invokeOnCompletion {
+            if (httpSiteResolveJobs[sourceId] == job) {
+                httpSiteResolveJobs.remove(sourceId)
+            }
+        }
+    }
+
     fun requestRemoteSourceMetadata(entry: NetworkNode) {
         if (entry.type != NetworkNodeType.RemoteSource) return
         val sourceId = resolveNetworkNodeSourceId(entry).orEmpty()
@@ -502,8 +584,26 @@ internal fun NetworkBrowserScreen(
             onResolveRemoteSourceMetadata(smbRequestSourceId, ::settleOne)
             return
         }
-        if (isHttpFolderLikeSource(entry, sourceId)) {
-            metadataLoadingNodeIds = metadataLoadingNodeIds - entry.id
+        val httpSpec = parseHttpSourceSpecFromInput(sourceId)
+        if (httpSpec != null) {
+            val isHttpFolderLike = isHttpFolderLikeSource(entry, sourceId)
+            var pendingSettleCount = if (isHttpFolderLike) 1 else 2
+            fun settleOne() {
+                pendingSettleCount -= 1
+                if (pendingSettleCount <= 0) {
+                    metadataLoadingNodeIds = metadataLoadingNodeIds - entry.id
+                }
+            }
+            requestHttpSiteDisplayName(
+                sourceId = sourceId,
+                nodeIds = setOf(entry.id),
+                specOverride = httpSpec,
+                onSettled = ::settleOne
+            )
+            if (isHttpFolderLike) {
+                return
+            }
+            onResolveRemoteSourceMetadata(sourceId, ::settleOne)
             return
         }
         onResolveRemoteSourceMetadata(sourceId) {
@@ -594,6 +694,12 @@ internal fun NetworkBrowserScreen(
                 sourceId = sourceId,
                 nodeIds = targetNodeIdsForSource,
                 specOverride = representativeSmbSpec
+            )
+            val representativeHttpSpec = parseHttpSourceSpecFromInput(sourceId)
+            requestHttpSiteDisplayName(
+                sourceId = sourceId,
+                nodeIds = targetNodeIdsForSource,
+                specOverride = representativeHttpSpec
             )
             onResolveRemoteSourceMetadata(metadataRequestSourceId) {
                 settleBatchRefreshSource(sourceId, success = true)
@@ -916,9 +1022,7 @@ internal fun NetworkBrowserScreen(
         } else {
             null
         }
-        val title = name.trim().ifBlank {
-            buildHttpDisplayUri(finalSpec.copy(username = null, password = null))
-        }
+        val title = name.trim()
         val upsertedNodeId: Long
         val updated = if (editingHttpNodeId == null) {
             val newNodeId = nextNetworkNodeId(nodes)
@@ -935,7 +1039,8 @@ internal fun NetworkBrowserScreen(
                 smbPath = null,
                 smbUsername = null,
                 smbPassword = null,
-                httpRootPath = normalizedRootPath
+                httpRootPath = normalizedRootPath,
+                httpDiscoveredSiteName = null
             )
         } else {
             upsertedNodeId = editingHttpNodeId ?: return
@@ -952,6 +1057,7 @@ internal fun NetworkBrowserScreen(
                         smbUsername = null,
                         smbPassword = null,
                         httpRootPath = normalizedRootPath,
+                        httpDiscoveredSiteName = if (sourceChanged) null else node.httpDiscoveredSiteName,
                         metadataTitle = if (sourceChanged) null else node.metadataTitle,
                         metadataArtist = if (sourceChanged) null else node.metadataArtist
                     )
@@ -962,12 +1068,21 @@ internal fun NetworkBrowserScreen(
         }
         onNodesChanged(updated)
         metadataLoadingNodeIds = metadataLoadingNodeIds + upsertedNodeId
-        if (isDirectoryLike) {
-            metadataLoadingNodeIds = metadataLoadingNodeIds - upsertedNodeId
-            return
+        var pendingSettleCount = if (isDirectoryLike) 1 else 2
+        fun settleOne() {
+            pendingSettleCount -= 1
+            if (pendingSettleCount <= 0) {
+                metadataLoadingNodeIds = metadataLoadingNodeIds - upsertedNodeId
+            }
         }
-        onResolveRemoteSourceMetadata(sourceId) {
-            metadataLoadingNodeIds = metadataLoadingNodeIds - upsertedNodeId
+        requestHttpSiteDisplayName(
+            sourceId = sourceId,
+            nodeIds = setOf(upsertedNodeId),
+            specOverride = finalSpec,
+            onSettled = ::settleOne
+        )
+        if (!isDirectoryLike) {
+            onResolveRemoteSourceMetadata(sourceId, ::settleOne)
         }
     }
 
@@ -2397,6 +2512,105 @@ private fun normalizeSmbHostLabelForUi(rawHost: String?): String? {
     return withoutLocal.ifBlank { host }
 }
 
+private fun isSameHttpHost(left: HttpSourceSpec?, right: HttpSourceSpec?): Boolean {
+    if (left == null || right == null) return false
+    if (!left.scheme.equals(right.scheme, ignoreCase = true)) return false
+    if (!left.host.equals(right.host, ignoreCase = true)) return false
+    val leftPort = left.port ?: if (left.scheme.equals("https", ignoreCase = true)) 443 else 80
+    val rightPort = right.port ?: if (right.scheme.equals("https", ignoreCase = true)) 443 else 80
+    return leftPort == rightPort
+}
+
+private suspend fun resolveHttpSiteDisplayName(spec: HttpSourceSpec): Result<String?> =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            val normalizedSpec = spec.copy(query = null)
+            val rootSpec = normalizedSpec.copy(path = "/", query = null)
+            resolveHttpSiteDisplayNameForSpec(normalizedSpec)
+                ?: resolveHttpSiteDisplayNameForSpec(rootSpec)
+        }
+    }
+
+private fun resolveHttpSiteDisplayNameForSpec(spec: HttpSourceSpec): String? {
+    val requestUrl = buildHttpRequestUri(spec)
+    val connection = (URL(requestUrl).openConnection() as HttpURLConnection).apply {
+        connectTimeout = 15_000
+        readTimeout = 20_000
+        instanceFollowRedirects = true
+        requestMethod = "GET"
+        setRequestProperty("User-Agent", "SiliconPlayer/1.0 (Android)")
+        setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        setRequestProperty("Connection", "close")
+        httpBasicAuthorizationHeader(spec.username, spec.password)?.let { header ->
+            setRequestProperty("Authorization", header)
+        }
+    }
+    return try {
+        val responseCode = connection.responseCode
+        if (responseCode !in 200..299) return null
+        val contentType = connection.contentType.orEmpty()
+        if (!contentType.contains("text/html", ignoreCase = true) &&
+            !contentType.contains("application/xhtml", ignoreCase = true)
+        ) {
+            return null
+        }
+        val htmlSnippet = connection.inputStream.use { input ->
+            readLimitedUtf8Text(input, maxBytes = 24 * 1024)
+        }
+        parseHttpSiteNameFromHtml(htmlSnippet)
+    } finally {
+        connection.disconnect()
+    }
+}
+
+private fun readLimitedUtf8Text(
+    input: InputStream,
+    maxBytes: Int
+): String {
+    val buffer = ByteArray(maxBytes)
+    var totalRead = 0
+    while (totalRead < maxBytes) {
+        val read = input.read(buffer, totalRead, maxBytes - totalRead)
+        if (read <= 0) break
+        totalRead += read
+    }
+    return buffer.copyOf(totalRead).toString(Charsets.UTF_8)
+}
+
+private val HTTP_META_SITE_NAME_REGEX = Regex(
+    "<meta[^>]+(?:property|name)\\s*=\\s*[\"'](?:og:site_name|application-name)[\"'][^>]*content\\s*=\\s*[\"']([^\"']+)[\"'][^>]*>",
+    RegexOption.IGNORE_CASE
+)
+private val HTTP_META_SITE_NAME_ALT_REGEX = Regex(
+    "<meta[^>]*content\\s*=\\s*[\"']([^\"']+)[\"'][^>]+(?:property|name)\\s*=\\s*[\"'](?:og:site_name|application-name)[\"'][^>]*>",
+    RegexOption.IGNORE_CASE
+)
+private val HTTP_TITLE_REGEX = Regex(
+    "<title[^>]*>(.*?)</title>",
+    setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+)
+
+private fun parseHttpSiteNameFromHtml(html: String): String? {
+    fun normalizeCandidate(raw: String?): String? {
+        val normalized = raw
+            ?.replace(Regex("\\s+"), " ")
+            ?.trim()
+            ?.let(Uri::decode)
+            .orEmpty()
+        if (normalized.isBlank()) return null
+        return normalized
+    }
+
+    val fromMeta = HTTP_META_SITE_NAME_REGEX.find(html)?.groupValues?.getOrNull(1)
+        ?: HTTP_META_SITE_NAME_ALT_REGEX.find(html)?.groupValues?.getOrNull(1)
+    normalizeCandidate(fromMeta)?.let { return it }
+
+    val fromTitle = HTTP_TITLE_REGEX.find(html)?.groupValues?.getOrNull(1)
+    normalizeCandidate(fromTitle)?.let { return it }
+
+    return null
+}
+
 private fun buildCurrentNetworkInfoFields(entry: NetworkNode): List<NetworkInfoField> {
     val sourceId = resolveNetworkNodeSourceId(entry).orEmpty()
     val scheme = Uri.parse(sourceId).scheme?.lowercase(Locale.ROOT)
@@ -2459,6 +2673,10 @@ private fun buildCurrentNetworkInfoFields(entry: NetworkNode): List<NetworkInfoF
                         fields += NetworkInfoField("Username", it.username.orEmpty())
                     }
                 }
+                entry.httpDiscoveredSiteName
+                    ?.trim()
+                    .takeUnless { it.isNullOrBlank() }
+                    ?.let { fields += NetworkInfoField("Resolved site", it) }
             }
 
             else -> {
@@ -2516,6 +2734,9 @@ private suspend fun fetchSmbRemoteInfoFields(
 
 private suspend fun fetchHttpRemoteInfoFields(spec: HttpSourceSpec): List<NetworkInfoField> {
     return withContext(Dispatchers.IO) {
+        val resolvedSiteName = resolveHttpSiteDisplayName(spec).getOrNull()
+            ?.trim()
+            .takeUnless { it.isNullOrBlank() }
         val connection = (URL(buildHttpRequestUri(spec)).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 20_000
@@ -2541,6 +2762,7 @@ private suspend fun fetchHttpRemoteInfoFields(spec: HttpSourceSpec): List<Networ
             }
 
             buildList {
+                resolvedSiteName?.let { add(NetworkInfoField("Resolved site", it)) }
                 val statusLabel = if (responseMessage.isBlank()) {
                     responseCode.toString()
                 } else {

@@ -96,6 +96,7 @@ import com.flopster101.siliconplayer.NetworkNode
 import com.flopster101.siliconplayer.NetworkNodeType
 import com.flopster101.siliconplayer.NetworkSourceKind
 import com.flopster101.siliconplayer.SmbSourceSpec
+import com.flopster101.siliconplayer.HttpSourceSpec
 import com.flopster101.siliconplayer.buildRecentTrackDisplay
 import com.flopster101.siliconplayer.buildHttpDisplayUri
 import com.flopster101.siliconplayer.buildHttpRequestUri
@@ -106,6 +107,8 @@ import com.flopster101.siliconplayer.buildSmbSourceSpec
 import com.flopster101.siliconplayer.formatNetworkFolderSummary
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.isLikelyHttpDirectorySource
+import com.flopster101.siliconplayer.listSmbDirectoryEntries
+import com.flopster101.siliconplayer.listSmbHostShareEntries
 import com.flopster101.siliconplayer.normalizeHttpDirectoryPath
 import com.flopster101.siliconplayer.normalizeHttpPath
 import com.flopster101.siliconplayer.nextNetworkNodeId
@@ -119,12 +122,20 @@ import com.flopster101.siliconplayer.resolveNetworkNodeOpenInput
 import com.flopster101.siliconplayer.resolveNetworkNodeSmbSpec
 import com.flopster101.siliconplayer.resolveNetworkNodeSourceId
 import com.flopster101.siliconplayer.resolveSmbHostDisplayName
+import com.flopster101.siliconplayer.httpBasicAuthorizationHeader
+import com.flopster101.siliconplayer.formatByteCount
 import com.flopster101.siliconplayer.sourceLeafNameForDisplay
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val NETWORK_ICON_BOX_SIZE = 38.dp
 private val NETWORK_ICON_GLYPH_SIZE = 26.dp
@@ -141,6 +152,11 @@ private enum class NetworkClipboardMode {
 private data class NetworkClipboardState(
     val mode: NetworkClipboardMode,
     val nodeIds: Set<Long>
+)
+
+private data class NetworkInfoField(
+    val label: String,
+    val value: String
 )
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -183,6 +199,12 @@ internal fun NetworkBrowserScreen(
     var refreshPopupHidden by remember { mutableStateOf(false) }
     var refreshSourceNodeMap by remember { mutableStateOf<Map<String, Set<Long>>>(emptyMap()) }
     var metadataLoadingNodeIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var infoDialogNodeId by remember { mutableStateOf<Long?>(null) }
+    var infoCurrentFields by remember { mutableStateOf<List<NetworkInfoField>>(emptyList()) }
+    var infoRemoteFields by remember { mutableStateOf<List<NetworkInfoField>>(emptyList()) }
+    var infoRemoteFetchInProgress by remember { mutableStateOf(false) }
+    var infoRemoteError by remember { mutableStateOf<String?>(null) }
+    var infoFetchJob by remember { mutableStateOf<Job?>(null) }
 
     var newFolderName by remember { mutableStateOf("") }
     var newSourceName by remember { mutableStateOf("") }
@@ -215,6 +237,7 @@ internal fun NetworkBrowserScreen(
             refreshSettledSources.clear()
             smbHostResolveJobs.values.forEach { it.cancel() }
             smbHostResolveJobs.clear()
+            infoFetchJob?.cancel()
             onCancelPendingMetadataBackfill()
         }
     }
@@ -607,6 +630,75 @@ internal fun NetworkBrowserScreen(
             }
         }
         beginRefreshConfirmation(targetRootIds.toSet())
+    }
+
+    fun dismissInfoDialog() {
+        infoFetchJob?.cancel()
+        infoFetchJob = null
+        infoDialogNodeId = null
+        infoCurrentFields = emptyList()
+        infoRemoteFields = emptyList()
+        infoRemoteFetchInProgress = false
+        infoRemoteError = null
+    }
+
+    fun beginInfoDialog(entry: NetworkNode) {
+        expandedEntryMenuNodeId = null
+        showSelectionActionsMenu = false
+        val sourceId = resolveNetworkNodeSourceId(entry).orEmpty()
+        infoFetchJob?.cancel()
+        infoDialogNodeId = entry.id
+        infoCurrentFields = buildCurrentNetworkInfoFields(entry)
+        infoRemoteFields = emptyList()
+        infoRemoteError = null
+
+        if (entry.type != NetworkNodeType.RemoteSource || sourceId.isBlank()) {
+            infoRemoteFetchInProgress = false
+            return
+        }
+
+        infoRemoteFetchInProgress = true
+        val targetNodeId = entry.id
+        val job = uiScope.launch {
+            try {
+                val fields = fetchRemoteNetworkInfoFields(entry)
+                if (infoDialogNodeId == targetNodeId) {
+                    infoRemoteFields = fields
+                    infoRemoteError = null
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (throwable: Throwable) {
+                if (infoDialogNodeId == targetNodeId) {
+                    infoRemoteFields = emptyList()
+                    infoRemoteError = throwable.message
+                        ?.trim()
+                        .takeUnless { it.isNullOrBlank() }
+                        ?: "Failed to fetch remote info."
+                }
+            } finally {
+                if (infoDialogNodeId == targetNodeId) {
+                    infoRemoteFetchInProgress = false
+                }
+            }
+        }
+        infoFetchJob = job
+        job.invokeOnCompletion {
+            if (infoFetchJob == job) {
+                infoFetchJob = null
+            }
+        }
+    }
+
+    fun requestInfo(nodeIds: Set<Long>) {
+        if (nodeIds.isEmpty()) return
+        if (nodeIds.size != 1) {
+            showSelectionActionsMenu = false
+            blockedOperationMessage = "Info is available for one entry at a time."
+            return
+        }
+        val entry = nodesById[nodeIds.first()] ?: return
+        beginInfoDialog(entry)
     }
 
     fun toggleSelection(nodeId: Long) {
@@ -1020,6 +1112,17 @@ internal fun NetworkBrowserScreen(
                                 expanded = showSelectionActionsMenu,
                                 onDismissRequest = { showSelectionActionsMenu = false }
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text("Info") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Visibility,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    enabled = selectedNodeIds.isNotEmpty(),
+                                    onClick = { requestInfo(selectedNodeIds) }
+                                )
                                 DropdownMenuItem(
                                     text = { Text("Copy") },
                                     leadingIcon = {
@@ -1632,6 +1735,16 @@ internal fun NetworkBrowserScreen(
                                         onClick = { beginEntryEdit(entry) }
                                     )
                                     DropdownMenuItem(
+                                        text = { Text("Info") },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Visibility,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        onClick = { beginInfoDialog(entry) }
+                                    )
+                                    DropdownMenuItem(
                                         text = { Text("Copy") },
                                         leadingIcon = {
                                             Icon(
@@ -1928,6 +2041,109 @@ internal fun NetworkBrowserScreen(
         )
     }
 
+    if (infoDialogNodeId != null) {
+        val infoEntry = infoDialogNodeId?.let(nodesById::get)
+        if (infoEntry == null) {
+            LaunchedEffect(infoDialogNodeId) {
+                dismissInfoDialog()
+            }
+        } else {
+            AlertDialog(
+                onDismissRequest = { dismissInfoDialog() },
+                title = { Text("Info") },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = resolveNetworkNodeDisplayTitle(infoEntry),
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        infoCurrentFields.forEach { field ->
+                            Text(
+                                text = buildAnnotatedString {
+                                    withStyle(style = SpanStyle(fontWeight = FontWeight.SemiBold)) {
+                                        append("${field.label}: ")
+                                    }
+                                    append(field.value)
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+                        )
+                        Text(
+                            text = "Remote",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        when {
+                            infoRemoteFetchInProgress -> {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Text(
+                                        text = "Fetching additional info...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+
+                            infoRemoteError != null -> {
+                                Text(
+                                    text = infoRemoteError.orEmpty(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+
+                            infoRemoteFields.isEmpty() -> {
+                                Text(
+                                    text = "No additional remote info available.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            else -> {
+                                infoRemoteFields.forEach { field ->
+                                    Text(
+                                        text = buildAnnotatedString {
+                                            withStyle(style = SpanStyle(fontWeight = FontWeight.SemiBold)) {
+                                                append("${field.label}: ")
+                                            }
+                                            append(field.value)
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { dismissInfoDialog() }) {
+                        Text("Close")
+                    }
+                }
+            )
+        }
+    }
+
     blockedOperationMessage?.let { message ->
         AlertDialog(
             onDismissRequest = { blockedOperationMessage = null },
@@ -2179,4 +2395,186 @@ private fun normalizeSmbHostLabelForUi(rawHost: String?): String? {
     val host = rawHost?.trim().takeUnless { it.isNullOrBlank() } ?: return null
     val withoutLocal = host.removeSuffix(".local").removeSuffix(".LOCAL").trimEnd('.')
     return withoutLocal.ifBlank { host }
+}
+
+private fun buildCurrentNetworkInfoFields(entry: NetworkNode): List<NetworkInfoField> {
+    val sourceId = resolveNetworkNodeSourceId(entry).orEmpty()
+    val scheme = Uri.parse(sourceId).scheme?.lowercase(Locale.ROOT)
+    val fields = mutableListOf<NetworkInfoField>()
+    fields += NetworkInfoField(
+        label = "Entry type",
+        value = if (entry.type == NetworkNodeType.Folder) "Folder" else "Remote source"
+    )
+
+    if (entry.type == NetworkNodeType.RemoteSource) {
+        val sourceKindLabel = when {
+            entry.sourceKind == NetworkSourceKind.Smb -> "SMB"
+            scheme == "http" -> "HTTP"
+            scheme == "https" -> "HTTPS"
+            else -> "Generic"
+        }
+        fields += NetworkInfoField("Source kind", sourceKindLabel)
+        val displaySource = resolveNetworkNodeDisplaySource(entry).trim()
+        if (displaySource.isNotBlank()) {
+            fields += NetworkInfoField("Source", Uri.decode(displaySource))
+        }
+
+        when {
+            entry.sourceKind == NetworkSourceKind.Smb -> {
+                val spec = resolveNetworkNodeSmbSpec(entry) ?: parseSmbSourceSpecFromInput(sourceId)
+                fields += NetworkInfoField(
+                    "Uses password",
+                    if (spec?.password?.isNotBlank() == true) "Yes" else "No"
+                )
+                spec?.let {
+                    fields += NetworkInfoField("Host", it.host)
+                    if (it.share.isNotBlank()) {
+                        fields += NetworkInfoField("Share", Uri.decode(it.share))
+                    }
+                    val normalizedPath = it.path?.trim().orEmpty().trim('/')
+                    fields += NetworkInfoField(
+                        "Path",
+                        if (normalizedPath.isBlank()) "/" else Uri.decode("/$normalizedPath")
+                    )
+                    if (!it.username.isNullOrBlank()) {
+                        fields += NetworkInfoField("Username", it.username.orEmpty())
+                    }
+                }
+                entry.smbDiscoveredHostName
+                    ?.trim()
+                    .takeUnless { it.isNullOrBlank() }
+                    ?.let { fields += NetworkInfoField("Resolved host", it) }
+            }
+
+            scheme == "http" || scheme == "https" -> {
+                val spec = parseHttpSourceSpecFromInput(sourceId)
+                fields += NetworkInfoField(
+                    "Uses password",
+                    if (spec?.password?.isNotBlank() == true) "Yes" else "No"
+                )
+                spec?.let {
+                    fields += NetworkInfoField("Host", it.host)
+                    fields += NetworkInfoField("Path", Uri.decode(normalizeHttpPath(it.path)))
+                    if (!it.username.isNullOrBlank()) {
+                        fields += NetworkInfoField("Username", it.username.orEmpty())
+                    }
+                }
+            }
+
+            else -> {
+                fields += NetworkInfoField("Uses password", "No")
+            }
+        }
+    }
+    return fields
+}
+
+private suspend fun fetchRemoteNetworkInfoFields(entry: NetworkNode): List<NetworkInfoField> {
+    if (entry.type != NetworkNodeType.RemoteSource) return emptyList()
+    val sourceId = resolveNetworkNodeSourceId(entry).orEmpty()
+    if (sourceId.isBlank()) return emptyList()
+    return when {
+        entry.sourceKind == NetworkSourceKind.Smb -> fetchSmbRemoteInfoFields(entry, sourceId)
+        parseHttpSourceSpecFromInput(sourceId) != null ->
+            fetchHttpRemoteInfoFields(parseHttpSourceSpecFromInput(sourceId) ?: return emptyList())
+        else -> emptyList()
+    }
+}
+
+private suspend fun fetchSmbRemoteInfoFields(
+    entry: NetworkNode,
+    sourceId: String
+): List<NetworkInfoField> {
+    val spec = resolveNetworkNodeSmbSpec(entry) ?: parseSmbSourceSpecFromInput(sourceId) ?: return emptyList()
+    val fields = mutableListOf<NetworkInfoField>()
+    resolveSmbHostDisplayName(spec)
+        .getOrThrow()
+        ?.trim()
+        .takeUnless { it.isNullOrBlank() }
+        ?.let { fields += NetworkInfoField("Resolved host", it) }
+
+    if (spec.share.isBlank()) {
+        val shares = listSmbHostShareEntries(spec).getOrThrow()
+        fields += NetworkInfoField("Shares found", shares.size.toString())
+        val sampleShares = shares
+            .take(6)
+            .joinToString(", ") { it.name }
+            .trim()
+        if (sampleShares.isNotBlank()) {
+            fields += NetworkInfoField("Sample shares", sampleShares)
+        }
+    } else {
+        val entries = listSmbDirectoryEntries(spec, spec.path).getOrThrow()
+        val folders = entries.count { it.isDirectory }
+        val files = entries.size - folders
+        fields += NetworkInfoField("Remote entries", entries.size.toString())
+        fields += NetworkInfoField("Folders", folders.toString())
+        fields += NetworkInfoField("Files", files.toString())
+    }
+    return fields
+}
+
+private suspend fun fetchHttpRemoteInfoFields(spec: HttpSourceSpec): List<NetworkInfoField> {
+    return withContext(Dispatchers.IO) {
+        val connection = (URL(buildHttpRequestUri(spec)).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000
+            readTimeout = 20_000
+            instanceFollowRedirects = true
+            requestMethod = "HEAD"
+            setRequestProperty("User-Agent", "SiliconPlayer/1.0 (Android)")
+            httpBasicAuthorizationHeader(spec.username, spec.password)?.let { header ->
+                setRequestProperty("Authorization", header)
+            }
+        }
+
+        try {
+            val responseCode = connection.responseCode
+            val responseMessage = connection.responseMessage.orEmpty()
+            if (responseCode !in 200..399) {
+                throw IllegalStateException(
+                    if (responseMessage.isBlank()) {
+                        "HTTP $responseCode"
+                    } else {
+                        "HTTP $responseCode: $responseMessage"
+                    }
+                )
+            }
+
+            buildList {
+                val statusLabel = if (responseMessage.isBlank()) {
+                    responseCode.toString()
+                } else {
+                    "$responseCode $responseMessage"
+                }
+                add(NetworkInfoField("HTTP status", statusLabel))
+
+                connection.getHeaderField("Server")
+                    ?.trim()
+                    .takeUnless { it.isNullOrBlank() }
+                    ?.let { add(NetworkInfoField("Server", it)) }
+
+                connection.getHeaderField("Content-Type")
+                    ?.trim()
+                    .takeUnless { it.isNullOrBlank() }
+                    ?.let { add(NetworkInfoField("Content type", it)) }
+
+                val contentLength = connection.getHeaderFieldLong("Content-Length", -1L)
+                if (contentLength >= 0L) {
+                    add(NetworkInfoField("Content length", formatByteCount(contentLength)))
+                }
+
+                val lastModified = connection.lastModified
+                if (lastModified > 0L) {
+                    add(NetworkInfoField("Last modified", Date(lastModified).toString()))
+                }
+
+                connection.getHeaderField("Accept-Ranges")
+                    ?.trim()
+                    .takeUnless { it.isNullOrBlank() }
+                    ?.let { add(NetworkInfoField("Accept-Ranges", it)) }
+            }
+        } finally {
+            connection.disconnect()
+        }
+    }
 }

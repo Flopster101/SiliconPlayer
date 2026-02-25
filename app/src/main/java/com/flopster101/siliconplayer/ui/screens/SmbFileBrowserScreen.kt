@@ -113,6 +113,7 @@ internal fun SmbFileBrowserScreen(
     onBrowserLocationChanged: (String) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val allowCredentialRemember = sourceNodeId != null
     val launchShare = remember(sourceSpec.share) { sourceSpec.share.trim() }
     val canBrowseHostShares = launchShare.isBlank()
     val sourceId = remember(sourceSpec) { buildSmbSourceId(sourceSpec) }
@@ -132,7 +133,7 @@ internal fun SmbFileBrowserScreen(
     var authDialogUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username.orEmpty()) }
     var authDialogPassword by remember(sourceSpec) { mutableStateOf("") }
     var authDialogPasswordVisible by remember(sourceSpec) { mutableStateOf(false) }
-    var authRememberPassword by remember(sourceSpec) { mutableStateOf(true) }
+    var authRememberPassword by remember(sourceSpec, sourceNodeId) { mutableStateOf(allowCredentialRemember) }
     var sessionUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username) }
     var sessionPassword by remember(sourceSpec) { mutableStateOf(sourceSpec.password) }
     var loadRequestSequence by remember(sourceSpec) { mutableStateOf(0) }
@@ -269,7 +270,7 @@ internal fun SmbFileBrowserScreen(
                         authDialogUsername = credentialsSpec.username.orEmpty()
                         authDialogPassword = ""
                         authDialogPasswordVisible = false
-                        authRememberPassword = true
+                        authRememberPassword = allowCredentialRemember
                     }
                     authDialogVisible = true
                     errorMessage = authMessage
@@ -320,7 +321,7 @@ internal fun SmbFileBrowserScreen(
         authDialogUsername = sourceSpec.username.orEmpty()
         authDialogPassword = ""
         authDialogPasswordVisible = false
-        authRememberPassword = true
+        authRememberPassword = allowCredentialRemember
         sessionUsername = sourceSpec.username
         sessionPassword = sourceSpec.password
         browserNavDirection = BrowserPageNavDirection.Neutral
@@ -696,20 +697,22 @@ internal fun SmbFileBrowserScreen(
                         shape = MaterialTheme.shapes.extraLarge,
                         colors = remoteAuthDialogTextFieldColors()
                     )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { authRememberPassword = !authRememberPassword },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = authRememberPassword,
-                            onCheckedChange = { checked -> authRememberPassword = checked }
-                        )
-                        Text(
-                            text = "Remember password",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                    if (allowCredentialRemember) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { authRememberPassword = !authRememberPassword },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = authRememberPassword,
+                                onCheckedChange = { checked -> authRememberPassword = checked }
+                            )
+                            Text(
+                                text = "Remember password",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
             },
@@ -722,7 +725,7 @@ internal fun SmbFileBrowserScreen(
                         val normalizedPassword = authDialogPassword.trim().ifBlank { null }
                         sessionUsername = normalizedUsername
                         sessionPassword = normalizedPassword
-                        if (authRememberPassword) {
+                        if (allowCredentialRemember && authRememberPassword) {
                             onRememberSmbCredentials(
                                 sourceNodeId,
                                 sourceId,

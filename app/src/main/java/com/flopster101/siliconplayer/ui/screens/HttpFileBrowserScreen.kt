@@ -128,6 +128,7 @@ internal fun HttpFileBrowserScreen(
     onBrowserLocationChanged: (String) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val allowCredentialRemember = sourceNodeId != null
     var currentSpec by remember(sourceSpec) { mutableStateOf(sourceSpec) }
     var entries by remember(sourceSpec) { mutableStateOf<List<HttpBrowserEntry>>(emptyList()) }
     var isLoading by remember(sourceSpec) { mutableStateOf(false) }
@@ -139,7 +140,7 @@ internal fun HttpFileBrowserScreen(
     var authDialogUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username.orEmpty()) }
     var authDialogPassword by remember(sourceSpec) { mutableStateOf("") }
     var authDialogPasswordVisible by remember(sourceSpec) { mutableStateOf(false) }
-    var authRememberPassword by remember(sourceSpec) { mutableStateOf(true) }
+    var authRememberPassword by remember(sourceSpec, sourceNodeId) { mutableStateOf(allowCredentialRemember) }
     var sessionUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username) }
     var sessionPassword by remember(sourceSpec) { mutableStateOf(sourceSpec.password) }
     var loadRequestSequence by remember(sourceSpec) { mutableStateOf(0) }
@@ -295,7 +296,7 @@ internal fun HttpFileBrowserScreen(
                         authDialogUsername = requestSpec.username.orEmpty()
                         authDialogPassword = ""
                         authDialogPasswordVisible = false
-                        authRememberPassword = true
+                        authRememberPassword = allowCredentialRemember
                     }
                     authDialogVisible = true
                     errorMessage = authMessage
@@ -400,7 +401,7 @@ internal fun HttpFileBrowserScreen(
         authDialogUsername = sourceSpec.username.orEmpty()
         authDialogPassword = ""
         authDialogPasswordVisible = false
-        authRememberPassword = true
+        authRememberPassword = allowCredentialRemember
         sessionUsername = sourceSpec.username
         sessionPassword = sourceSpec.password
         openDirectory(
@@ -815,20 +816,22 @@ internal fun HttpFileBrowserScreen(
                         shape = MaterialTheme.shapes.extraLarge,
                         colors = remoteAuthDialogTextFieldColors()
                     )
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { authRememberPassword = !authRememberPassword },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = authRememberPassword,
-                            onCheckedChange = { checked -> authRememberPassword = checked }
-                        )
-                        Text(
-                            text = "Remember password",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                    if (allowCredentialRemember) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { authRememberPassword = !authRememberPassword },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = authRememberPassword,
+                                onCheckedChange = { checked -> authRememberPassword = checked }
+                            )
+                            Text(
+                                text = "Remember password",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
             },
@@ -841,7 +844,7 @@ internal fun HttpFileBrowserScreen(
                         val normalizedPassword = authDialogPassword.trim().ifBlank { null }
                         sessionUsername = normalizedUsername
                         sessionPassword = normalizedPassword
-                        if (authRememberPassword) {
+                        if (allowCredentialRemember && authRememberPassword) {
                             onRememberHttpCredentials(
                                 sourceNodeId,
                                 currentDirectorySourceId(),

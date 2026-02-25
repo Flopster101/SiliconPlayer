@@ -24,6 +24,7 @@ internal fun addRecentFolderEntry(
     current: List<RecentPathEntry>,
     path: String,
     locationId: String?,
+    sourceNodeId: Long?,
     limit: Int,
     update: (List<RecentPathEntry>) -> Unit,
     write: (List<RecentPathEntry>, Int) -> Unit
@@ -32,6 +33,7 @@ internal fun addRecentFolderEntry(
         current = current,
         newPath = path,
         locationId = locationId,
+        sourceNodeId = sourceNodeId,
         limit = limit
     )
     update(next)
@@ -42,6 +44,7 @@ internal fun addRecentPlayedTrackEntry(
     current: List<RecentPathEntry>,
     path: String,
     locationId: String?,
+    sourceNodeId: Long? = null,
     title: String?,
     artist: String?,
     decoderName: String?,
@@ -53,6 +56,7 @@ internal fun addRecentPlayedTrackEntry(
         current = current,
         newPath = path,
         locationId = locationId,
+        sourceNodeId = sourceNodeId,
         title = title,
         artist = artist,
         decoderName = decoderName,

@@ -193,7 +193,7 @@ private fun handleBrowserLocationChangedAction(
     currentSmbSourceNodeId: Long?,
     currentHttpSourceNodeId: Long?,
     networkNodes: List<NetworkNode>,
-    addRecentFolder: (String, String?) -> Unit,
+    addRecentFolder: (String, String?, Long?) -> Unit,
     setBrowserLaunchLocationId: (String?) -> Unit,
     setBrowserLaunchDirectoryPath: (String?) -> Unit,
     setLastBrowserLocationId: (String?) -> Unit,
@@ -208,7 +208,12 @@ private fun handleBrowserLocationChangedAction(
                 parseHttpSourceSpecFromInput(directoryPath) != null
             )
     ) {
-        addRecentFolder(directoryPath, locationId)
+        val sourceNodeId = when {
+            parseSmbSourceSpecFromInput(directoryPath) != null -> currentSmbSourceNodeId
+            parseHttpSourceSpecFromInput(directoryPath) != null -> currentHttpSourceNodeId
+            else -> null
+        }
+        addRecentFolder(directoryPath, locationId, sourceNodeId)
     }
     if (directoryPath != null) {
         if (isNetworkBrowserDirectoryPath(directoryPath)) {
@@ -1318,8 +1323,8 @@ private fun AppNavigation(
             browserLaunchHttpRootPath = null
         },
         onCurrentViewChanged = { currentView = it },
-        onAddRecentFolder = { path, locationId ->
-            runtimeDelegates.addRecentFolder(path, locationId)
+        onAddRecentFolder = { path, locationId, sourceNodeId ->
+            runtimeDelegates.addRecentFolder(path, locationId, sourceNodeId)
         },
         onApplyTrackSelection = { file, autoStart, expandOverride, sourceIdOverride ->
             trackLoadDelegates.applyTrackSelection(
@@ -2699,8 +2704,8 @@ private fun AppNavigation(
                     currentSmbSourceNodeId = browserLaunchSmbSourceNodeId,
                     currentHttpSourceNodeId = browserLaunchHttpSourceNodeId,
                     networkNodes = networkNodes,
-                    addRecentFolder = { path, targetLocationId ->
-                        runtimeDelegates.addRecentFolder(path, targetLocationId)
+                    addRecentFolder = { path, targetLocationId, sourceNodeId ->
+                        runtimeDelegates.addRecentFolder(path, targetLocationId, sourceNodeId)
                     },
                     setBrowserLaunchLocationId = { browserLaunchLocationId = it },
                     setBrowserLaunchDirectoryPath = { browserLaunchDirectoryPath = it },

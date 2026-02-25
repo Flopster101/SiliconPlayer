@@ -65,6 +65,7 @@ internal fun addRecentFolderAction(
     current: List<RecentPathEntry>,
     path: String,
     locationId: String?,
+    sourceNodeId: Long?,
     limit: Int,
     onRecentFoldersChanged: (List<RecentPathEntry>) -> Unit,
     prefs: SharedPreferences
@@ -73,6 +74,7 @@ internal fun addRecentFolderAction(
         current = current,
         path = path,
         locationId = locationId,
+        sourceNodeId = sourceNodeId,
         limit = limit,
         update = onRecentFoldersChanged,
         write = { entries, max ->
@@ -85,6 +87,7 @@ internal fun addRecentPlayedTrackAction(
     current: List<RecentPathEntry>,
     path: String,
     locationId: String?,
+    sourceNodeId: Long? = null,
     title: String?,
     artist: String?,
     decoderName: String?,
@@ -96,6 +99,7 @@ internal fun addRecentPlayedTrackAction(
         current = current,
         path = path,
         locationId = locationId,
+        sourceNodeId = sourceNodeId,
         title = title,
         artist = artist,
         decoderName = decoderName,

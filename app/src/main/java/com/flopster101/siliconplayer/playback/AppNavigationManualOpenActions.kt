@@ -199,7 +199,7 @@ internal fun applyManualInputSelectionAction(
     openPlayerOnTrackSelect: Boolean,
     onBrowserLaunchTargetChanged: (String?, String?) -> Unit,
     onCurrentViewChanged: (MainView) -> Unit,
-    onAddRecentFolder: (String, String?) -> Unit,
+    onAddRecentFolder: (String, String?, Long?) -> Unit,
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
     onApplyTrackSelection: (File, Boolean, Boolean?, String?) -> Unit,
     onLaunchManualRemoteSelection: (ManualSourceResolution, ManualSourceOpenOptions, Boolean?) -> Unit
@@ -226,7 +226,7 @@ internal fun applyManualInputSelectionAction(
         is ManualInputAction.OpenDirectory -> {
             onBrowserLaunchTargetChanged(action.locationId, action.directoryPath)
             onCurrentViewChanged(MainView.Browser)
-            onAddRecentFolder(action.directoryPath, action.locationId)
+            onAddRecentFolder(action.directoryPath, action.locationId, null)
             return
         }
 

@@ -51,7 +51,7 @@ internal fun applyRecentFolderAction(
     recentFoldersLimit: Int,
     networkNodes: List<NetworkNode>,
     onRecentFoldersChanged: (List<RecentPathEntry>) -> Unit,
-    onOpenInBrowser: (locationId: String?, directoryPath: String, smbSourceNodeId: Long?) -> Unit
+    onOpenInBrowser: (locationId: String?, directoryPath: String, smbSourceNodeId: Long?, httpSourceNodeId: Long?) -> Unit
 ) {
     when (action) {
         FolderEntryAction.OpenInBrowser -> {
@@ -59,7 +59,12 @@ internal fun applyRecentFolderAction(
             if (target == null) {
                 Toast.makeText(context, "Unable to open folder in browser", Toast.LENGTH_SHORT).show()
             } else {
-                onOpenInBrowser(target.locationId, target.directoryPath, target.smbSourceNodeId)
+                onOpenInBrowser(
+                    target.locationId,
+                    target.directoryPath,
+                    target.smbSourceNodeId,
+                    target.httpSourceNodeId
+                )
             }
         }
 
@@ -93,7 +98,7 @@ internal fun applyRecentSourceAction(
     networkNodes: List<NetworkNode>,
     onRecentPlayedFilesChanged: (List<RecentPathEntry>) -> Unit,
     resolveShareableFileForRecent: (RecentPathEntry) -> File?,
-    onOpenInBrowser: (locationId: String?, directoryPath: String, smbSourceNodeId: Long?) -> Unit
+    onOpenInBrowser: (locationId: String?, directoryPath: String, smbSourceNodeId: Long?, httpSourceNodeId: Long?) -> Unit
 ) {
     when (action) {
         SourceEntryAction.OpenInBrowser -> {
@@ -101,7 +106,12 @@ internal fun applyRecentSourceAction(
             if (target == null) {
                 Toast.makeText(context, "This source cannot be opened in file browser", Toast.LENGTH_SHORT).show()
             } else {
-                onOpenInBrowser(target.locationId, target.directoryPath, target.smbSourceNodeId)
+                onOpenInBrowser(
+                    target.locationId,
+                    target.directoryPath,
+                    target.smbSourceNodeId,
+                    target.httpSourceNodeId
+                )
             }
         }
 
@@ -155,7 +165,8 @@ internal fun applyRecentSourceAction(
 private data class BrowserOpenTarget(
     val locationId: String?,
     val directoryPath: String,
-    val smbSourceNodeId: Long?
+    val smbSourceNodeId: Long?,
+    val httpSourceNodeId: Long?
 )
 
 internal data class SmbTargetResolution(
@@ -180,7 +191,8 @@ private fun resolveBrowserFolderForRecentSource(
         return BrowserOpenTarget(
             locationId = entry.locationId,
             directoryPath = logicalDirectory,
-            smbSourceNodeId = null
+            smbSourceNodeId = null,
+            httpSourceNodeId = null
         )
     }
 
@@ -200,12 +212,14 @@ private fun resolveBrowserFolderForRecentSource(
         }
         val smbTarget = resolveSmbRecentOpenTarget(
             targetSpec = parentSpec,
-            networkNodes = networkNodes
+            networkNodes = networkNodes,
+            preferredSourceNodeId = entry.sourceNodeId
         )
         return BrowserOpenTarget(
             locationId = null,
             directoryPath = smbTarget.requestUri,
-            smbSourceNodeId = smbTarget.sourceNodeId
+            smbSourceNodeId = smbTarget.sourceNodeId,
+            httpSourceNodeId = null
         )
     }
     if (scheme == "http" || scheme == "https") {
@@ -222,7 +236,8 @@ private fun resolveBrowserFolderForRecentSource(
         return BrowserOpenTarget(
             locationId = null,
             directoryPath = buildHttpRequestUri(parentSpec),
-            smbSourceNodeId = null
+            smbSourceNodeId = null,
+            httpSourceNodeId = entry.sourceNodeId
         )
     }
 
@@ -241,7 +256,8 @@ private fun resolveBrowserFolderForRecentSource(
     return BrowserOpenTarget(
         locationId = entry.locationId,
         directoryPath = directory,
-        smbSourceNodeId = null
+        smbSourceNodeId = null,
+        httpSourceNodeId = null
     )
 }
 
@@ -255,7 +271,8 @@ private fun resolveBrowserParentForRecentFolder(
             return BrowserOpenTarget(
                 locationId = entry.locationId,
                 directoryPath = archiveParent,
-                smbSourceNodeId = null
+                smbSourceNodeId = null,
+                httpSourceNodeId = null
             )
         }
         val parentInArchive = entryPath
@@ -271,7 +288,8 @@ private fun resolveBrowserParentForRecentFolder(
         return BrowserOpenTarget(
             locationId = entry.locationId,
             directoryPath = logicalParent,
-            smbSourceNodeId = null
+            smbSourceNodeId = null,
+            httpSourceNodeId = null
         )
     }
 
@@ -290,12 +308,14 @@ private fun resolveBrowserParentForRecentFolder(
         }
         val smbTarget = resolveSmbRecentOpenTarget(
             targetSpec = parentSpec,
-            networkNodes = networkNodes
+            networkNodes = networkNodes,
+            preferredSourceNodeId = entry.sourceNodeId
         )
         return BrowserOpenTarget(
             locationId = null,
             directoryPath = smbTarget.requestUri,
-            smbSourceNodeId = smbTarget.sourceNodeId
+            smbSourceNodeId = smbTarget.sourceNodeId,
+            httpSourceNodeId = null
         )
     }
     val httpSpec = parseHttpSourceSpecFromInput(rawPath)
@@ -313,7 +333,8 @@ private fun resolveBrowserParentForRecentFolder(
         return BrowserOpenTarget(
             locationId = null,
             directoryPath = buildHttpRequestUri(parentSpec),
-            smbSourceNodeId = null
+            smbSourceNodeId = null,
+            httpSourceNodeId = entry.sourceNodeId
         )
     }
 
@@ -322,18 +343,41 @@ private fun resolveBrowserParentForRecentFolder(
     return BrowserOpenTarget(
         locationId = entry.locationId,
         directoryPath = parentPath,
-        smbSourceNodeId = null
+        smbSourceNodeId = null,
+        httpSourceNodeId = null
     )
 }
 
 internal fun resolveSmbRecentOpenTarget(
     targetSpec: SmbSourceSpec,
-    networkNodes: List<NetworkNode>
+    networkNodes: List<NetworkNode>,
+    preferredSourceNodeId: Long? = null
 ): SmbTargetResolution {
     if (!targetSpec.password.isNullOrBlank()) {
         return SmbTargetResolution(
             sourceNodeId = null,
             requestUri = buildSmbRequestUri(targetSpec)
+        )
+    }
+
+    val preferredNodeSpec = preferredSourceNodeId
+        ?.let { sourceNodeId ->
+            networkNodes.firstOrNull { node ->
+                node.id == sourceNodeId &&
+                    node.type == NetworkNodeType.RemoteSource &&
+                    node.sourceKind == NetworkSourceKind.Smb
+            }
+        }
+        ?.let(::resolveNetworkNodeSmbSpec)
+
+    if (preferredNodeSpec != null) {
+        val exactSpec = targetSpec.copy(
+            username = preferredNodeSpec.username,
+            password = preferredNodeSpec.password
+        )
+        return SmbTargetResolution(
+            sourceNodeId = preferredSourceNodeId,
+            requestUri = buildSmbRequestUri(exactSpec)
         )
     }
 

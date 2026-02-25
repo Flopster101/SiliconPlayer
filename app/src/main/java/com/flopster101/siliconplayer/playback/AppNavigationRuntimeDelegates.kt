@@ -10,7 +10,7 @@ internal data class AppNavigationRuntimeDelegates(
     val refreshSubtuneState: () -> Unit,
     val refreshSubtuneEntries: () -> Unit,
     val resolveShareableFileForRecent: (RecentPathEntry) -> File?,
-    val addRecentFolder: (String, String?) -> Unit,
+    val addRecentFolder: (String, String?, Long?) -> Unit,
     val addRecentPlayedTrack: (String, String?, String?, String?) -> Unit,
     val scheduleRecentTrackMetadataRefresh: (String, String?) -> Unit,
     val scheduleRecentPlayedMetadataBackfill: () -> Unit,
@@ -95,11 +95,12 @@ internal fun buildAppNavigationRuntimeDelegates(
         resolveShareableFileForRecent = { entry ->
             resolveShareableFileForRecentEntry(context, entry)
         },
-        addRecentFolder = { path, locationId ->
+        addRecentFolder = { path, locationId, sourceNodeId ->
             addRecentFolderAction(
                 current = recentFoldersProvider(),
                 path = path,
                 locationId = locationId,
+                sourceNodeId = sourceNodeId,
                 limit = recentFoldersLimitProvider(),
                 onRecentFoldersChanged = onRecentFoldersChanged,
                 prefs = prefs

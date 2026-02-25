@@ -42,7 +42,7 @@ internal class AppNavigationManualOpenDelegates(
     private val syncPlaybackService: () -> Unit,
     private val onBrowserLaunchTargetChanged: (locationId: String?, directoryPath: String?) -> Unit,
     private val onCurrentViewChanged: (MainView) -> Unit,
-    private val onAddRecentFolder: (String, String?) -> Unit,
+    private val onAddRecentFolder: (String, String?, Long?) -> Unit,
     private val onApplyTrackSelection: (file: File, autoStart: Boolean, expandOverride: Boolean?, sourceIdOverride: String?) -> Unit
 ) {
     fun primeManualRemoteOpenState(resolved: ManualSourceResolution) {

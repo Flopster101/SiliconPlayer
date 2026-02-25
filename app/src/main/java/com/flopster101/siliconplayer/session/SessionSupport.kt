@@ -229,7 +229,8 @@ internal data class RecentPathEntry(
     val locationId: String?,
     val title: String? = null,
     val artist: String? = null,
-    val decoderName: String? = null
+    val decoderName: String? = null,
+    val sourceNodeId: Long? = null
 )
 
 internal data class StorageDescriptor(
@@ -373,6 +374,14 @@ internal fun readRecentEntries(
             val title = objectValue.optString("title", "").ifBlank { null }
             val artist = objectValue.optString("artist", "").ifBlank { null }
             val decoderName = objectValue.optString("decoderName", "").ifBlank { null }
+            val sourceNodeId = if (
+                objectValue.has("sourceNodeId") &&
+                !objectValue.isNull("sourceNodeId")
+            ) {
+                objectValue.optLong("sourceNodeId").takeIf { it > 0L }
+            } else {
+                null
+            }
             val existingIndex = deduped.indexOfFirst { samePath(it.path, path) }
             if (existingIndex >= 0) {
                 val existing = deduped[existingIndex]
@@ -380,7 +389,8 @@ internal fun readRecentEntries(
                     locationId = existing.locationId ?: locationId,
                     title = existing.title ?: title,
                     artist = existing.artist ?: artist,
-                    decoderName = existing.decoderName ?: decoderName
+                    decoderName = existing.decoderName ?: decoderName,
+                    sourceNodeId = existing.sourceNodeId ?: sourceNodeId
                 )
                 continue
             }
@@ -389,7 +399,8 @@ internal fun readRecentEntries(
                 locationId = locationId,
                 title = title,
                 artist = artist,
-                decoderName = decoderName
+                decoderName = decoderName,
+                sourceNodeId = sourceNodeId
             )
             if (deduped.size >= maxItems) break
         }
@@ -414,7 +425,8 @@ internal fun writeRecentEntries(
                 locationId = existing.locationId ?: entry.locationId,
                 title = existing.title ?: entry.title,
                 artist = existing.artist ?: entry.artist,
-                decoderName = existing.decoderName ?: entry.decoderName
+                decoderName = existing.decoderName ?: entry.decoderName,
+                sourceNodeId = existing.sourceNodeId ?: entry.sourceNodeId
             )
         } else {
             deduped += entry
@@ -430,6 +442,7 @@ internal fun writeRecentEntries(
                 .put("title", entry.title ?: "")
                 .put("artist", entry.artist ?: "")
                 .put("decoderName", entry.decoderName ?: "")
+                .put("sourceNodeId", entry.sourceNodeId)
         )
     }
     prefs.edit().putString(key, array.toString()).apply()
@@ -439,11 +452,19 @@ internal fun buildUpdatedRecentFolders(
     current: List<RecentPathEntry>,
     newPath: String,
     locationId: String?,
+    sourceNodeId: Long? = null,
     limit: Int
 ): List<RecentPathEntry> {
     val normalized = normalizeSourceIdentity(newPath) ?: newPath
+    val existing = current.firstOrNull { samePath(it.path, normalized) }
     val updated = listOf(
-        RecentPathEntry(path = normalized, locationId = locationId, title = null, artist = null)
+        RecentPathEntry(
+            path = normalized,
+            locationId = locationId ?: existing?.locationId,
+            title = null,
+            artist = null,
+            sourceNodeId = sourceNodeId ?: existing?.sourceNodeId
+        )
     ) + current.filterNot { samePath(it.path, normalized) }
     return updated.take(limit)
 }
@@ -452,6 +473,7 @@ internal fun buildUpdatedRecentPlayedTracks(
     current: List<RecentPathEntry>,
     newPath: String,
     locationId: String?,
+    sourceNodeId: Long? = null,
     title: String? = null,
     artist: String? = null,
     decoderName: String? = null,
@@ -477,7 +499,8 @@ internal fun buildUpdatedRecentPlayedTracks(
             locationId = locationId ?: existing?.locationId,
             title = resolvedTitle,
             artist = resolvedArtist,
-            decoderName = resolvedDecoderName
+            decoderName = resolvedDecoderName,
+            sourceNodeId = sourceNodeId ?: existing?.sourceNodeId
         )
     ) + current.filterNot { samePath(it.path, normalized) }
     return updated.take(limit)

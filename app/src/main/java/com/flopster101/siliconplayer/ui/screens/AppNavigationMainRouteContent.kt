@@ -59,7 +59,8 @@ internal fun AppNavigationHomeContentSection(
             if (smbSpec != null) {
                 val smbTarget = resolveSmbRecentOpenTarget(
                     targetSpec = smbSpec,
-                    networkNodes = networkNodes
+                    networkNodes = networkNodes,
+                    preferredSourceNodeId = entry.sourceNodeId
                 )
                 onOpenBrowser(
                     null,
@@ -70,7 +71,7 @@ internal fun AppNavigationHomeContentSection(
                     false
                 )
             } else if (parseHttpSourceSpecFromInput(entry.path) != null) {
-                onOpenBrowser(null, entry.path, null, null, null, false)
+                onOpenBrowser(null, entry.path, null, entry.sourceNodeId, null, false)
             } else {
                 onOpenBrowser(entry.locationId, entry.path, null, null, null, false)
             }
@@ -103,6 +104,7 @@ internal fun AppNavigationHomeContentSection(
                 current = recentPlayedFiles,
                 newPath = entry.path,
                 locationId = entry.locationId,
+                sourceNodeId = entry.sourceNodeId,
                 title = title,
                 artist = artist,
                 decoderName = decoderName,
@@ -127,8 +129,8 @@ internal fun AppNavigationHomeContentSection(
                 recentFoldersLimit = recentFoldersLimit,
                 networkNodes = networkNodes,
                 onRecentFoldersChanged = onRecentFoldersChanged,
-                onOpenInBrowser = { locationId, directoryPath, smbSourceNodeId ->
-                    onOpenBrowser(locationId, directoryPath, smbSourceNodeId, null, null, false)
+                onOpenInBrowser = { locationId, directoryPath, smbSourceNodeId, httpSourceNodeId ->
+                    onOpenBrowser(locationId, directoryPath, smbSourceNodeId, httpSourceNodeId, null, false)
                     onCurrentViewChanged(MainView.Browser)
                 }
             )
@@ -146,8 +148,8 @@ internal fun AppNavigationHomeContentSection(
                 resolveShareableFileForRecent = { recent ->
                     runtimeDelegates.resolveShareableFileForRecent(recent)
                 },
-                onOpenInBrowser = { locationId, directoryPath, smbSourceNodeId ->
-                    onOpenBrowser(locationId, directoryPath, smbSourceNodeId, null, null, false)
+                onOpenInBrowser = { locationId, directoryPath, smbSourceNodeId, httpSourceNodeId ->
+                    onOpenBrowser(locationId, directoryPath, smbSourceNodeId, httpSourceNodeId, null, false)
                     onCurrentViewChanged(MainView.Browser)
                 }
             )

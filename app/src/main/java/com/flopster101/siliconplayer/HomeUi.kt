@@ -60,7 +60,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.data.isArchiveLogicalFolderPath
@@ -1001,8 +1005,13 @@ internal fun RecentTrackSummaryText(
             modifier = Modifier.graphicsLayer { alpha = metadataAlpha.value }
         )
     }
-    val subtitleText = buildString {
-        append(storagePresentation.label)
+    val isNetworkSource = storagePresentation.icon == Icons.Default.Public
+    val subtitleText = buildAnnotatedString {
+        if (isNetworkSource) {
+            appendBoldSourceTypeToken(storagePresentation.label)
+        } else {
+            append(storagePresentation.label)
+        }
         storagePresentation.qualifier?.takeIf { it.isNotBlank() }?.let {
             append(" • ")
             append(it)
@@ -1056,4 +1065,18 @@ internal fun RecentTrackSummaryText(
             )
         }
     }
+}
+
+private fun androidx.compose.ui.text.AnnotatedString.Builder.appendBoldSourceTypeToken(label: String) {
+    val trimmed = label.trim()
+    if (trimmed.isBlank()) return
+    val splitIndex = trimmed.indexOfFirst { it == ' ' || it == '(' }.let { idx ->
+        if (idx < 0) trimmed.length else idx
+    }
+    val token = trimmed.substring(0, splitIndex)
+    val suffix = trimmed.substring(splitIndex)
+    withStyle(style = SpanStyle(fontWeight = FontWeight.SemiBold)) {
+        append(token)
+    }
+    append(suffix)
 }

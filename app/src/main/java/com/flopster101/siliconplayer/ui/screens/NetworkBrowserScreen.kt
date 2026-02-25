@@ -84,8 +84,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -1302,7 +1304,9 @@ internal fun NetworkBrowserScreen(
                                 entry.title
                             }.orEmpty()
                             val subtitle = if (!isRemoteSource) {
-                                folderSummariesById[entry.id].orEmpty()
+                                buildAnnotatedString {
+                                    append(folderSummariesById[entry.id].orEmpty())
+                                }
                             } else {
                                 val sourceScheme = Uri.parse(sourceId).scheme?.lowercase(Locale.ROOT)
                                 val sourceTypeLabel = if (sourceScheme == "smb") {
@@ -1320,17 +1324,11 @@ internal fun NetworkBrowserScreen(
                                 } else {
                                     inferNetworkSourceFormatLabel(sourceLabel)
                                 }
-                                buildString {
-                                    sourceTypeLabel?.let {
-                                        append(it)
-                                        append(" • ")
-                                    }
-                                    append(formatLabel)
-                                    if (sourceLabel.isNotBlank()) {
-                                        append(" • ")
-                                        append(sourceLabel)
-                                    }
-                                }
+                                buildNetworkEntrySubtitle(
+                                    sourceTypeLabel = sourceTypeLabel,
+                                    formatLabel = formatLabel,
+                                    sourceLabel = sourceLabel
+                                )
                             }
 
                             val shouldMarqueePrimary = isRemoteSource && displayTitle.length > 28
@@ -2020,6 +2018,38 @@ private fun isSmbFolderLikeSource(entry: NetworkNode, sourceId: String): Boolean
     val leaf = normalizedPath.substringAfterLast('/').trim()
     if (leaf.isBlank()) return true
     return inferredPrimaryExtensionForName(leaf) == null || sourceId.endsWith("/")
+}
+
+private fun buildNetworkEntrySubtitle(
+    sourceTypeLabel: String?,
+    formatLabel: String,
+    sourceLabel: String
+): AnnotatedString {
+    return buildAnnotatedString {
+        sourceTypeLabel?.let { label ->
+            appendBoldSourceTypeToken(label)
+            append(" • ")
+        }
+        append(formatLabel)
+        if (sourceLabel.isNotBlank()) {
+            append(" • ")
+            append(sourceLabel)
+        }
+    }
+}
+
+private fun AnnotatedString.Builder.appendBoldSourceTypeToken(label: String) {
+    val trimmed = label.trim()
+    if (trimmed.isBlank()) return
+    val splitIndex = trimmed.indexOfFirst { it == ' ' || it == '(' }.let { idx ->
+        if (idx < 0) trimmed.length else idx
+    }
+    val token = trimmed.substring(0, splitIndex)
+    val suffix = trimmed.substring(splitIndex)
+    withStyle(style = SpanStyle(fontWeight = FontWeight.SemiBold)) {
+        append(token)
+    }
+    append(suffix)
 }
 
 @Composable

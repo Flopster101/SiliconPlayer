@@ -1,7 +1,10 @@
 package com.flopster101.siliconplayer.ui.screens
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -33,6 +36,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
@@ -64,6 +70,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -72,7 +79,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.HttpAuthenticationFailureReason
 import com.flopster101.siliconplayer.HttpBrowserEntry
+import com.flopster101.siliconplayer.HttpRemoteExportRequest
 import com.flopster101.siliconplayer.HttpSourceSpec
+import com.flopster101.siliconplayer.RemoteExportCancelledException
 import com.flopster101.siliconplayer.buildHttpDisplayUri
 import com.flopster101.siliconplayer.buildHttpRequestUri
 import com.flopster101.siliconplayer.buildHttpSourceId
@@ -85,17 +94,27 @@ import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.normalizeHttpDirectoryPath
 import com.flopster101.siliconplayer.normalizeHttpPath
 import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
+import com.flopster101.siliconplayer.prepareRemoteExportFile
 import com.flopster101.siliconplayer.resolveHttpAuthenticationFailureReason
 import com.flopster101.siliconplayer.rememberDialogLazyListScrollbarAlpha
+import com.flopster101.siliconplayer.stripUrlFragment
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
 import com.flopster101.siliconplayer.RemotePlayableSourceIdsHolder
+import com.flopster101.siliconplayer.session.exportFilesToTree
+import com.flopster101.siliconplayer.session.ExportConflictDecision
+import com.flopster101.siliconplayer.session.ExportNameConflict
 import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
 
 private val HTTP_ICON_BOX_SIZE = 38.dp
 private val HTTP_ICON_GLYPH_SIZE = 26.dp
@@ -127,10 +146,12 @@ internal fun HttpFileBrowserScreen(
     backHandlingEnabled: Boolean,
     onExitBrowser: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
+    onOpenRemoteSourceAsCached: (String) -> Unit,
     onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit,
     sourceNodeId: Long?,
     onBrowserLocationChanged: (String) -> Unit
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val allowCredentialRemember = sourceNodeId != null
     var currentSpec by remember(sourceSpec) { mutableStateOf(sourceSpec) }
@@ -172,6 +193,10 @@ internal fun HttpFileBrowserScreen(
     val browserSelectionController = rememberBrowserSelectionController<String>()
     var browserInfoFields by remember(sourceSpec) { mutableStateOf<List<BrowserInfoField>>(emptyList()) }
     var showBrowserInfoDialog by remember(sourceSpec) { mutableStateOf(false) }
+    var pendingExportTargets by remember(sourceSpec) { mutableStateOf<List<HttpSelectionFileTarget>>(emptyList()) }
+    var exportConflictDialogState by remember(sourceSpec) { mutableStateOf<BrowserExportConflictDialogState?>(null) }
+    var exportDownloadProgressState by remember(sourceSpec) { mutableStateOf<BrowserRemoteExportProgressState?>(null) }
+    var exportDownloadJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
 
     fun updatePlayableRemoteSources(entriesForNavigation: List<HttpBrowserEntry>) {
         RemotePlayableSourceIdsHolder.current = entriesForNavigation
@@ -395,6 +420,7 @@ internal fun HttpFileBrowserScreen(
     DisposableEffect(Unit) {
         onDispose {
             listJob?.cancel()
+            exportDownloadJob?.cancel()
         }
     }
 
@@ -502,6 +528,32 @@ internal fun HttpFileBrowserScreen(
         label = "httpBrowserDirectoryScrollbarAlpha"
     )
 
+    fun selectedFileTargets(): List<HttpSelectionFileTarget> {
+        val selectedEntries = entries.filter { entry ->
+            browserSelectionController.selectedKeys.contains(entrySelectionKeyFor(entry))
+        }
+        return selectedEntries
+            .asSequence()
+            .filter { !it.isDirectory }
+            .mapNotNull { entry ->
+                val parsedSpec = parseHttpSourceSpecFromInput(entry.requestUrl) ?: return@mapNotNull null
+                val authSpec = parsedSpec.copy(
+                    username = sessionUsername,
+                    password = sessionPassword
+                )
+                HttpSelectionFileTarget(
+                    sourceId = buildHttpSourceId(authSpec),
+                    requestUrl = stripUrlFragment(buildHttpRequestUri(authSpec)),
+                    openInput = appendHttpDisplayNameFragment(
+                        sourceUrl = entry.requestUrl,
+                        displayName = entry.name
+                    ),
+                    displayName = decodePercentEncodedForDisplay(entry.name) ?: entry.name
+                )
+            }
+            .toList()
+    }
+
     fun showSelectionInfoDialog() {
         val selectedEntries = entries.filter { entry ->
             browserSelectionController.selectedKeys.contains(entrySelectionKeyFor(entry))
@@ -530,9 +582,132 @@ internal fun HttpFileBrowserScreen(
         showBrowserInfoDialog = true
     }
 
+    suspend fun requestExportConflictDecision(
+        conflict: ExportNameConflict
+    ): ExportConflictDecision = withContext(Dispatchers.Main.immediate) {
+        suspendCancellableCoroutine { continuation ->
+            var applyToAll = false
+            fun finish(decision: ExportConflictDecision) {
+                exportConflictDialogState = null
+                if (continuation.isActive) {
+                    continuation.resume(decision)
+                }
+            }
+            exportConflictDialogState = BrowserExportConflictDialogState(
+                fileName = conflict.fileName,
+                applyToAll = applyToAll,
+                onApplyToAllChange = { checked ->
+                    applyToAll = checked
+                    exportConflictDialogState = exportConflictDialogState?.copy(applyToAll = checked)
+                },
+                onResolve = { action, applyAll ->
+                    finish(
+                        ExportConflictDecision(
+                            action = action,
+                            applyToAll = applyAll
+                        )
+                    )
+                }
+            )
+            continuation.invokeOnCancellation {
+                exportConflictDialogState = null
+            }
+        }
+    }
+
+    val exportDirectoryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri ->
+        val targets = pendingExportTargets
+        pendingExportTargets = emptyList()
+        if (targets.isEmpty()) return@rememberLauncherForActivityResult
+        if (treeUri == null) {
+            Toast.makeText(context, "Download cancelled", Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+        exportDownloadJob?.cancel()
+        exportDownloadJob = coroutineScope.launch {
+            var preparationFailed = 0
+            val exportItems = mutableListOf<com.flopster101.siliconplayer.session.ExportFileItem>()
+            for ((index, target) in targets.withIndex()) {
+                if (!isActive) break
+                exportDownloadProgressState = BrowserRemoteExportProgressState(
+                    currentIndex = index + 1,
+                    totalCount = targets.size,
+                    currentFileName = target.displayName,
+                    loadState = null
+                )
+                val prepared = prepareRemoteExportFile(
+                    context = context,
+                    request = HttpRemoteExportRequest(
+                        sourceId = target.sourceId,
+                        requestUrl = target.requestUrl,
+                        preferredFileName = target.displayName
+                    ),
+                    onStatus = { loadState ->
+                        exportDownloadProgressState = BrowserRemoteExportProgressState(
+                            currentIndex = index + 1,
+                            totalCount = targets.size,
+                            currentFileName = target.displayName,
+                            loadState = loadState
+                        )
+                    }
+                )
+                val preparedItem = prepared.getOrNull()
+                if (preparedItem != null) {
+                    exportItems += preparedItem
+                } else {
+                    val error = prepared.exceptionOrNull()
+                    if (error is RemoteExportCancelledException || error is CancellationException) {
+                        exportDownloadProgressState = null
+                        Toast.makeText(context, "Download cancelled", Toast.LENGTH_SHORT).show()
+                        return@launch
+                    }
+                    preparationFailed++
+                }
+            }
+            exportDownloadProgressState = null
+
+            val result = exportFilesToTree(
+                context = context,
+                treeUri = treeUri,
+                exportItems = exportItems,
+                onNameConflict = { conflict ->
+                    requestExportConflictDecision(conflict)
+                }
+            )
+            val totalFailed = preparationFailed + result.failedCount
+            Toast.makeText(
+                context,
+                when {
+                    result.cancelled -> "Download cancelled"
+                    else -> {
+                        "Downloaded ${result.exportedCount} file(s)" +
+                            buildString {
+                                if (result.skippedCount > 0) {
+                                    append(" (${result.skippedCount} skipped)")
+                                }
+                                if (totalFailed > 0) {
+                                    append(" ($totalFailed failed)")
+                                }
+                            }
+                    }
+                },
+                Toast.LENGTH_SHORT
+            ).show()
+            if (!result.cancelled) {
+                browserSelectionController.exitSelectionMode()
+            }
+        }
+    }
+
     LaunchedEffect(currentSpec.path) {
+        exportDownloadJob?.cancel()
+        exportDownloadProgressState = null
+        exportConflictDialogState = null
         browserSelectionController.exitSelectionMode()
         showBrowserInfoDialog = false
+        pendingExportTargets = emptyList()
     }
 
     Scaffold(
@@ -619,6 +794,46 @@ internal fun HttpFileBrowserScreen(
                             },
                             onDeselectAll = { browserSelectionController.deselectAll() },
                             actionItems = listOf(
+                                BrowserSelectionActionItem(
+                                    label = "Play",
+                                    icon = Icons.Default.PlayArrow,
+                                    enabled = selectedFileTargets().size == 1,
+                                    onClick = {
+                                        val target = selectedFileTargets().singleOrNull()
+                                        if (target != null) {
+                                            browserSelectionController.exitSelectionMode()
+                                            onOpenRemoteSource(target.openInput)
+                                        }
+                                    }
+                                ),
+                                BrowserSelectionActionItem(
+                                    label = "Play as cached",
+                                    icon = Icons.Default.Save,
+                                    enabled = selectedFileTargets().size == 1,
+                                    onClick = {
+                                        val target = selectedFileTargets().singleOrNull()
+                                        if (target != null) {
+                                            browserSelectionController.exitSelectionMode()
+                                            onOpenRemoteSourceAsCached(target.openInput)
+                                        }
+                                    }
+                                ),
+                                BrowserSelectionActionItem(
+                                    label = if (selectedFileTargets().size == 1) {
+                                        "Download file"
+                                    } else {
+                                        "Download files"
+                                    },
+                                    icon = Icons.Default.Link,
+                                    enabled = selectedFileTargets().isNotEmpty(),
+                                    onClick = {
+                                        val targets = selectedFileTargets()
+                                        if (targets.isNotEmpty()) {
+                                            pendingExportTargets = targets
+                                            exportDirectoryLauncher.launch(null)
+                                        }
+                                    }
+                                ),
                                 BrowserSelectionActionItem(
                                     label = "Info",
                                     icon = Icons.Default.Info,
@@ -1010,7 +1225,27 @@ internal fun HttpFileBrowserScreen(
             onDismiss = { showBrowserInfoDialog = false }
         )
     }
+
+    exportConflictDialogState?.let { state ->
+        BrowserExportConflictDialog(state = state)
+    }
+
+    exportDownloadProgressState?.let { state ->
+        BrowserRemoteExportProgressDialog(
+            state = state,
+            onCancel = {
+                exportDownloadJob?.cancel()
+            }
+        )
+    }
 }
+
+private data class HttpSelectionFileTarget(
+    val sourceId: String,
+    val requestUrl: String,
+    val openInput: String,
+    val displayName: String
+)
 
 @Composable
 private fun remoteAuthDialogTextFieldColors() = OutlinedTextFieldDefaults.colors(

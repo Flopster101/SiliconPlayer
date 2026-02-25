@@ -278,6 +278,12 @@ internal fun AppNavigationBrowserContentSection(
         onOpenRemoteSource = { rawInput ->
             manualOpenDelegates.applyManualInputSelection(rawInput)
         },
+        onOpenRemoteSourceAsCached = { rawInput ->
+            manualOpenDelegates.applyManualInputSelection(
+                rawInput,
+                options = ManualSourceOpenOptions(forceCaching = true)
+            )
+        },
         onRememberSmbCredentials = onRememberSmbCredentials,
         onRememberHttpCredentials = onRememberHttpCredentials
     )

@@ -7,7 +7,10 @@ import android.os.Environment
 import android.os.storage.StorageManager
 import android.os.storage.StorageVolume
 import android.webkit.MimeTypeMap
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -26,9 +29,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
@@ -72,6 +77,10 @@ import com.flopster101.siliconplayer.data.FileItem
 import com.flopster101.siliconplayer.data.FileRepository
 import com.flopster101.siliconplayer.data.ensureArchiveMounted
 import com.flopster101.siliconplayer.data.resolveArchiveLogicalDirectory
+import com.flopster101.siliconplayer.session.ExportFileItem
+import com.flopster101.siliconplayer.session.ExportConflictDecision
+import com.flopster101.siliconplayer.session.ExportNameConflict
+import com.flopster101.siliconplayer.session.exportFilesToTree
 import java.io.File
 import java.util.Locale
 import java.util.zip.ZipFile
@@ -83,6 +92,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 import kotlin.math.min
 
 private const val BROWSER_PAGE_DURATION_MS = 280
@@ -165,6 +176,9 @@ fun FileBrowserScreen(
     val browserSelectionController = rememberBrowserSelectionController<String>()
     var browserInfoFields by remember { mutableStateOf<List<BrowserInfoField>>(emptyList()) }
     var showBrowserInfoDialog by remember { mutableStateOf(false) }
+    var pendingExportFiles by remember { mutableStateOf<List<ExportFileItem>>(emptyList()) }
+    var exportConflictDialogState by remember { mutableStateOf<BrowserExportConflictDialogState?>(null) }
+    var pendingDeleteFilePaths by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val subtitleIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
@@ -480,6 +494,119 @@ fun FileBrowserScreen(
         showBrowserInfoDialog = true
     }
 
+    fun selectedRegularFileItems(): List<FileItem> {
+        return fileList.filter { item ->
+            browserSelectionController.selectedKeys.contains(item.file.absolutePath) &&
+                !item.isDirectory &&
+                item.file.exists() &&
+                item.file.isFile
+        }
+    }
+
+    fun openFileItem(item: FileItem) {
+        if (item.isArchive) {
+            openArchive(item)
+            return
+        }
+        if (item.isDirectory) {
+            navigateTo(item.file)
+            return
+        }
+        val mounted = findArchiveMount(item.file.absolutePath)
+        val sourceIdOverride = if (mounted != null) {
+            val mountRoot = mounted.first
+            val archivePath = mounted.second.archivePath
+            val relativePath = item.file.absolutePath
+                .removePrefix(mountRoot)
+                .trimStart('/')
+                .replace('\\', '/')
+            if (relativePath.isBlank()) {
+                null
+            } else {
+                buildArchiveSourceId(archivePath, relativePath)
+            }
+        } else {
+            null
+        }
+        onFileSelected(item.file, sourceIdOverride)
+    }
+
+    suspend fun requestExportConflictDecision(
+        conflict: ExportNameConflict
+    ): ExportConflictDecision = withContext(Dispatchers.Main.immediate) {
+        suspendCancellableCoroutine { continuation ->
+            var applyToAll = false
+            fun finish(decision: ExportConflictDecision) {
+                exportConflictDialogState = null
+                if (continuation.isActive) {
+                    continuation.resume(decision)
+                }
+            }
+            exportConflictDialogState = BrowserExportConflictDialogState(
+                fileName = conflict.fileName,
+                applyToAll = applyToAll,
+                onApplyToAllChange = { checked ->
+                    applyToAll = checked
+                    exportConflictDialogState = exportConflictDialogState?.copy(applyToAll = checked)
+                },
+                onResolve = { action, applyAll ->
+                    finish(
+                        ExportConflictDecision(
+                            action = action,
+                            applyToAll = applyAll
+                        )
+                    )
+                }
+            )
+            continuation.invokeOnCancellation {
+                exportConflictDialogState = null
+            }
+        }
+    }
+
+    val exportDirectoryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { treeUri ->
+        val targets = pendingExportFiles
+        pendingExportFiles = emptyList()
+        if (targets.isEmpty()) return@rememberLauncherForActivityResult
+        if (treeUri == null) {
+            Toast.makeText(context, "Save cancelled", Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+        coroutineScope.launch {
+            val result = exportFilesToTree(
+                context = context,
+                treeUri = treeUri,
+                exportItems = targets,
+                onNameConflict = { conflict ->
+                    requestExportConflictDecision(conflict)
+                }
+            )
+            Toast.makeText(
+                context,
+                when {
+                    result.cancelled -> "Save cancelled"
+                    else -> {
+                        "Saved ${result.exportedCount} file(s)" +
+                            buildString {
+                                if (result.skippedCount > 0) {
+                                    append(" (${result.skippedCount} skipped)")
+                                }
+                                if (result.failedCount > 0) {
+                                    append(" (${result.failedCount} failed)")
+                                }
+                            }
+                    }
+                },
+                Toast.LENGTH_SHORT
+            ).show()
+            if (!result.cancelled) {
+                browserSelectionController.exitSelectionMode()
+            }
+        }
+    }
+
     LaunchedEffect(storageLocations, initialLocationId, initialDirectoryPath) {
         if (hasRestoredInitialNavigation) return@LaunchedEffect
         hasRestoredInitialNavigation = true
@@ -528,6 +655,8 @@ fun FileBrowserScreen(
     LaunchedEffect(selectedLocationId, currentDirectory?.absolutePath) {
         browserSelectionController.exitSelectionMode()
         showBrowserInfoDialog = false
+        pendingExportFiles = emptyList()
+        pendingDeleteFilePaths = emptyList()
     }
 
     BackHandler(
@@ -732,6 +861,48 @@ fun FileBrowserScreen(
                                 },
                                 onDeselectAll = { browserSelectionController.deselectAll() },
                                 actionItems = listOf(
+                                    BrowserSelectionActionItem(
+                                        label = "Play",
+                                        icon = Icons.Default.PlayArrow,
+                                        enabled = selectedRegularFileItems().size == 1,
+                                        onClick = {
+                                            val selectedItem = selectedRegularFileItems().singleOrNull()
+                                            if (selectedItem != null) {
+                                                browserSelectionController.exitSelectionMode()
+                                                openFileItem(selectedItem)
+                                            }
+                                        }
+                                    ),
+                                    BrowserSelectionActionItem(
+                                        label = if (selectedRegularFileItems().size == 1) {
+                                            "Save file"
+                                        } else {
+                                            "Save files"
+                                        },
+                                        icon = Icons.Default.Save,
+                                        enabled = selectedRegularFileItems().isNotEmpty(),
+                                        onClick = {
+                                            val exportItems = selectedRegularFileItems().map { item ->
+                                                ExportFileItem(
+                                                    sourceFile = item.file,
+                                                    displayNameOverride = item.file.name
+                                                )
+                                            }
+                                            if (exportItems.isNotEmpty()) {
+                                                pendingExportFiles = exportItems
+                                                exportDirectoryLauncher.launch(null)
+                                            }
+                                        }
+                                    ),
+                                    BrowserSelectionActionItem(
+                                        label = "Delete",
+                                        icon = Icons.Default.Delete,
+                                        enabled = selectedRegularFileItems().isNotEmpty(),
+                                        onClick = {
+                                            pendingDeleteFilePaths = selectedRegularFileItems()
+                                                .map { it.file.absolutePath }
+                                        }
+                                    ),
                                     BrowserSelectionActionItem(
                                         label = "Info",
                                         icon = Icons.Default.Info,
@@ -962,29 +1133,7 @@ fun FileBrowserScreen(
                                                 browserSelectionController.toggleSelection(entryKey)
                                                 return@FileItemRow
                                             }
-                                            if (item.isArchive) {
-                                                openArchive(item)
-                                            } else if (item.isDirectory) {
-                                                navigateTo(item.file)
-                                            } else {
-                                                val mounted = findArchiveMount(item.file.absolutePath)
-                                                val sourceIdOverride = if (mounted != null) {
-                                                    val mountRoot = mounted.first
-                                                    val archivePath = mounted.second.archivePath
-                                                    val relativePath = item.file.absolutePath
-                                                        .removePrefix(mountRoot)
-                                                        .trimStart('/')
-                                                        .replace('\\', '/')
-                                                    if (relativePath.isBlank()) {
-                                                        null
-                                                    } else {
-                                                        buildArchiveSourceId(archivePath, relativePath)
-                                                    }
-                                                } else {
-                                                    null
-                                                }
-                                                onFileSelected(item.file, sourceIdOverride)
-                                            }
+                                            openFileItem(item)
                                         }
                                     )
                                 }
@@ -1023,6 +1172,59 @@ fun FileBrowserScreen(
             title = "Info",
             fields = browserInfoFields,
             onDismiss = { showBrowserInfoDialog = false }
+        )
+    }
+
+    exportConflictDialogState?.let { state ->
+        BrowserExportConflictDialog(state = state)
+    }
+
+    if (pendingDeleteFilePaths.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { pendingDeleteFilePaths = emptyList() },
+            title = { Text("Delete files") },
+            text = {
+                Text(
+                    text = "Delete ${pendingDeleteFilePaths.size} selected file(s)?",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val pathsToDelete = pendingDeleteFilePaths
+                        pendingDeleteFilePaths = emptyList()
+                        coroutineScope.launch {
+                            val deletedCount = withContext(Dispatchers.IO) {
+                                pathsToDelete.count { path ->
+                                    runCatching {
+                                        File(path).takeIf { it.exists() && it.isFile }?.delete() == true
+                                    }.getOrDefault(false)
+                                }
+                            }
+                            Toast.makeText(
+                                context,
+                                "Deleted $deletedCount file(s)" +
+                                    if (deletedCount < pathsToDelete.size) {
+                                        " (${pathsToDelete.size - deletedCount} failed)"
+                                    } else {
+                                        ""
+                                    },
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            browserSelectionController.exitSelectionMode()
+                            currentDirectory?.let { loadDirectoryAsync(it) }
+                        }
+                    }
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteFilePaths = emptyList() }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }

@@ -111,6 +111,7 @@ internal fun MainBrowserRouteHost(
     onBrowserLocationChanged: (String?, String?) -> Unit,
     onFileSelected: (File, String?) -> Unit,
     onOpenRemoteSource: (String) -> Unit,
+    onOpenRemoteSourceAsCached: (String) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
     onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit
 ) {
@@ -129,6 +130,7 @@ internal fun MainBrowserRouteHost(
                 backHandlingEnabled = backHandlingEnabled,
                 onExitBrowser = onExitBrowser,
                 onOpenRemoteSource = onOpenRemoteSource,
+                onOpenRemoteSourceAsCached = onOpenRemoteSourceAsCached,
                 onRememberSmbCredentials = onRememberSmbCredentials,
                 sourceNodeId = initialSmbSourceNodeId,
                 onBrowserLocationChanged = { smbSourceId ->
@@ -146,6 +148,7 @@ internal fun MainBrowserRouteHost(
                 backHandlingEnabled = backHandlingEnabled,
                 onExitBrowser = onExitBrowser,
                 onOpenRemoteSource = onOpenRemoteSource,
+                onOpenRemoteSourceAsCached = onOpenRemoteSourceAsCached,
                 onRememberHttpCredentials = onRememberHttpCredentials,
                 sourceNodeId = initialHttpSourceNodeId,
                 onBrowserLocationChanged = { httpSourceId ->

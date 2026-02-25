@@ -48,12 +48,14 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -85,7 +87,10 @@ import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.extensionCandidatesForName
 import com.flopster101.siliconplayer.formatByteCount
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.RemoteLoadPhase
+import com.flopster101.siliconplayer.RemoteLoadUiState
 import kotlinx.coroutines.delay
+import com.flopster101.siliconplayer.session.ExportConflictAction
 import java.util.Locale
 
 internal enum class BrowserPageNavDirection {
@@ -168,6 +173,20 @@ internal data class BrowserSelectionActionItem(
     val icon: ImageVector? = null,
     val enabled: Boolean = true,
     val onClick: () -> Unit
+)
+
+internal data class BrowserExportConflictDialogState(
+    val fileName: String,
+    val applyToAll: Boolean,
+    val onApplyToAllChange: (Boolean) -> Unit,
+    val onResolve: (ExportConflictAction, Boolean) -> Unit
+)
+
+internal data class BrowserRemoteExportProgressState(
+    val currentIndex: Int,
+    val totalCount: Int,
+    val currentFileName: String,
+    val loadState: RemoteLoadUiState?
 )
 
 internal data class BrowserInfoEntry(
@@ -352,6 +371,137 @@ internal fun BrowserInfoDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+internal fun BrowserExportConflictDialog(
+    state: BrowserExportConflictDialogState
+) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("File already exists") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "\"${state.fileName}\" already exists in the destination folder.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { state.onApplyToAllChange(!state.applyToAll) },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = state.applyToAll,
+                        onCheckedChange = state.onApplyToAllChange
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Apply to all",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    state.onResolve(ExportConflictAction.Overwrite, state.applyToAll)
+                }
+            ) {
+                Text("Overwrite")
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(
+                    onClick = {
+                        state.onResolve(ExportConflictAction.Skip, state.applyToAll)
+                    }
+                ) {
+                    Text("Skip")
+                }
+                TextButton(
+                    onClick = {
+                        state.onResolve(ExportConflictAction.Cancel, state.applyToAll)
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        }
+    )
+}
+
+@Composable
+internal fun BrowserRemoteExportProgressDialog(
+    state: BrowserRemoteExportProgressState,
+    onCancel: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Downloading files") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "File ${state.currentIndex} of ${state.totalCount}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = decodePercentEncodedForDisplay(state.currentFileName) ?: state.currentFileName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val loadState = state.loadState
+                val phaseText = when (loadState?.phase) {
+                    RemoteLoadPhase.Connecting -> "Connecting..."
+                    RemoteLoadPhase.Downloading -> "Downloading..."
+                    RemoteLoadPhase.Opening -> "Preparing..."
+                    null -> "Preparing..."
+                }
+                Text(phaseText)
+                if (loadState == null || loadState.indeterminate) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                } else {
+                    val progress = (loadState.percent ?: 0).coerceIn(0, 100) / 100f
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                loadState?.let { progressState ->
+                    val downloadedLabel = formatByteCount(progressState.downloadedBytes)
+                    val sizeLabel = progressState.totalBytes?.let { total ->
+                        "$downloadedLabel / ${formatByteCount(total)}"
+                    } ?: downloadedLabel
+                    Text(
+                        text = sizeLabel,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    progressState.percent?.let { percent ->
+                        Text(
+                            text = "$percent%",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    progressState.bytesPerSecond?.takeIf { it > 0L }?.let { speed ->
+                        Text(
+                            text = "${formatByteCount(speed)}/s",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onCancel) {
+                Text("Cancel")
             }
         }
     )

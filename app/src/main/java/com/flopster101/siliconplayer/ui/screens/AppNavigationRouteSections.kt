@@ -118,6 +118,7 @@ internal fun AppNavigationBrowserRouteSection(
     onBrowserLocationChanged: (String?, String?) -> Unit,
     onFileSelected: (File, String?) -> Unit,
     onOpenRemoteSource: (String) -> Unit,
+    onOpenRemoteSourceAsCached: (String) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
     onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit
 ) {
@@ -141,6 +142,7 @@ internal fun AppNavigationBrowserRouteSection(
         onBrowserLocationChanged = onBrowserLocationChanged,
         onFileSelected = onFileSelected,
         onOpenRemoteSource = onOpenRemoteSource,
+        onOpenRemoteSourceAsCached = onOpenRemoteSourceAsCached,
         onRememberSmbCredentials = onRememberSmbCredentials,
         onRememberHttpCredentials = onRememberHttpCredentials
     )

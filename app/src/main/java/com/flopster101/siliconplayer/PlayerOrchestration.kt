@@ -135,20 +135,5 @@ internal fun shouldRestartCurrentTrackOnPrevious(
 }
 
 internal fun pluginNameForCoreName(coreName: String?): String? {
-    return when (coreName?.trim()?.lowercase()) {
-        "ffmpeg" -> "FFmpeg"
-        "libopenmpt", "openmpt" -> "LibOpenMPT"
-        "vgmplay" -> "VGMPlay"
-        "game music emu", "libgme", "gme" -> "Game Music Emu"
-        "libsidplayfp", "sidplayfp", "sid" -> "LibSIDPlayFP"
-        "lazyusf2", "lazyusf", "usf" -> "LazyUSF2"
-        "vio2sf", "2sf", "mini2sf" -> "Vio2SF"
-        "sc68", "sndh" -> "SC68"
-        "adplug", "opl" -> "AdPlug"
-        "hivelytracker", "hively", "hvl", "ahx" -> "HivelyTracker"
-        "klystrack", "kly", "kt" -> "Klystrack"
-        "furnace", "fur", "dmf" -> "Furnace"
-        "uade", "amiga" -> "UADE"
-        else -> null
-    }
+    return canonicalDecoderNameForAlias(coreName)
 }

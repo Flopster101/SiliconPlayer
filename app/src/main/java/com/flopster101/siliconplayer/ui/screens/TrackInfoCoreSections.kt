@@ -9,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.DecoderNames
 import java.util.Locale
 
 @Composable
@@ -34,7 +35,7 @@ internal fun TrackInfoCoreSections(
     metadata: TrackInfoLiveMetadata
 ) {
     when {
-        decoderName.equals("LibOpenMPT", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.LIB_OPEN_MPT, ignoreCase = true) -> {
             TrackInfoSectionHeader("OpenMPT")
             if (metadata.openMpt.typeLong.isNotBlank()) TrackInfoDetailsRow("Module type", metadata.openMpt.typeLong)
             if (metadata.openMpt.tracker.isNotBlank()) TrackInfoDetailsRow("Tracker", metadata.openMpt.tracker)
@@ -47,8 +48,8 @@ internal fun TrackInfoCoreSections(
             if (metadata.openMpt.sampleNames.isNotBlank()) TrackInfoDetailsRow("Sample names", metadata.openMpt.sampleNames)
         }
 
-        decoderName.equals("VGMPlay", ignoreCase = true) -> {
-            TrackInfoSectionHeader("VGMPlay")
+        decoderName.equals(DecoderNames.VGM_PLAY, ignoreCase = true) -> {
+            TrackInfoSectionHeader(DecoderNames.VGM_PLAY)
             if (metadata.vgmPlay.gameName.isNotBlank()) TrackInfoDetailsRow("Game", metadata.vgmPlay.gameName)
             if (metadata.vgmPlay.systemName.isNotBlank()) TrackInfoDetailsRow("System", metadata.vgmPlay.systemName)
             if (metadata.vgmPlay.releaseDate.isNotBlank()) TrackInfoDetailsRow("Release date", metadata.vgmPlay.releaseDate)
@@ -60,8 +61,8 @@ internal fun TrackInfoCoreSections(
             if (metadata.vgmPlay.notes.isNotBlank()) TrackInfoDetailsRow("Notes", metadata.vgmPlay.notes)
         }
 
-        decoderName.equals("FFmpeg", ignoreCase = true) -> {
-            TrackInfoSectionHeader("FFmpeg")
+        decoderName.equals(DecoderNames.FFMPEG, ignoreCase = true) -> {
+            TrackInfoSectionHeader(DecoderNames.FFMPEG)
             if (metadata.ffmpeg.codecName.isNotBlank()) TrackInfoDetailsRow("Codec", metadata.ffmpeg.codecName)
             if (metadata.ffmpeg.containerName.isNotBlank()) TrackInfoDetailsRow("Container", metadata.ffmpeg.containerName)
             if (metadata.ffmpeg.sampleFormatName.isNotBlank()) TrackInfoDetailsRow("Sample format", metadata.ffmpeg.sampleFormatName)
@@ -69,8 +70,8 @@ internal fun TrackInfoCoreSections(
             if (metadata.ffmpeg.encoderName.isNotBlank()) TrackInfoDetailsRow("Encoder", metadata.ffmpeg.encoderName)
         }
 
-        decoderName.equals("Game Music Emu", ignoreCase = true) -> {
-            TrackInfoSectionHeader("Game Music Emu")
+        decoderName.equals(DecoderNames.GAME_MUSIC_EMU, ignoreCase = true) -> {
+            TrackInfoSectionHeader(DecoderNames.GAME_MUSIC_EMU)
             if (metadata.gme.systemName.isNotBlank()) TrackInfoDetailsRow("System", metadata.gme.systemName)
             if (metadata.gme.gameName.isNotBlank()) TrackInfoDetailsRow("Game", metadata.gme.gameName)
             if (metadata.gme.trackCount > 0) TrackInfoDetailsRow("Track count", metadata.gme.trackCount.toString())
@@ -83,8 +84,8 @@ internal fun TrackInfoCoreSections(
             if (metadata.gme.comment.isNotBlank()) TrackInfoDetailsRow("Comment", metadata.gme.comment)
         }
 
-        decoderName.equals("LazyUSF2", ignoreCase = true) -> {
-            TrackInfoSectionHeader("LazyUSF2")
+        decoderName.equals(DecoderNames.LAZY_USF2, ignoreCase = true) -> {
+            TrackInfoSectionHeader(DecoderNames.LAZY_USF2)
             if (metadata.lazyUsf2.gameName.isNotBlank()) TrackInfoDetailsRow("Game", metadata.lazyUsf2.gameName)
             if (metadata.lazyUsf2.year.isNotBlank()) TrackInfoDetailsRow("Year", metadata.lazyUsf2.year)
             if (metadata.lazyUsf2.usfBy.isNotBlank()) TrackInfoDetailsRow("USF ripper", metadata.lazyUsf2.usfBy)
@@ -95,8 +96,8 @@ internal fun TrackInfoCoreSections(
             TrackInfoDetailsRow("FIFO full hack", if (metadata.lazyUsf2.enableFifoFull) "Enabled" else "Disabled")
         }
 
-        decoderName.equals("Vio2SF", ignoreCase = true) -> {
-            TrackInfoSectionHeader("Vio2SF")
+        decoderName.equals(DecoderNames.VIO2_SF, ignoreCase = true) -> {
+            TrackInfoSectionHeader(DecoderNames.VIO2_SF)
             if (metadata.vio2sf.gameName.isNotBlank()) TrackInfoDetailsRow("Game", metadata.vio2sf.gameName)
             if (metadata.vio2sf.year.isNotBlank()) TrackInfoDetailsRow("Year", metadata.vio2sf.year)
             if (metadata.vio2sf.copyright.isNotBlank()) TrackInfoDetailsRow("Copyright", metadata.vio2sf.copyright)
@@ -105,8 +106,8 @@ internal fun TrackInfoCoreSections(
             if (metadata.vio2sf.comment.isNotBlank()) TrackInfoDetailsRow("Comment", metadata.vio2sf.comment)
         }
 
-        decoderName.equals("LibSIDPlayFP", ignoreCase = true) -> {
-            TrackInfoSectionHeader("LibSIDPlayFP")
+        decoderName.equals(DecoderNames.LIB_SID_PLAY_FP, ignoreCase = true) -> {
+            TrackInfoSectionHeader(DecoderNames.LIB_SID_PLAY_FP)
             if (metadata.sid.backendName.isNotBlank()) TrackInfoDetailsRow("Engine", metadata.sid.backendName)
             if (metadata.sid.formatName.isNotBlank()) TrackInfoDetailsRow("Format name", metadata.sid.formatName)
             if (metadata.sid.clockName.isNotBlank()) TrackInfoDetailsRow("Declared clock", metadata.sid.clockName)
@@ -119,8 +120,8 @@ internal fun TrackInfoCoreSections(
             if (metadata.sid.commentSummary.isNotBlank()) TrackInfoDetailsRow("Comments", metadata.sid.commentSummary)
         }
 
-        decoderName.equals("SC68", ignoreCase = true) -> {
-            TrackInfoSectionHeader("SC68")
+        decoderName.equals(DecoderNames.SC68, ignoreCase = true) -> {
+            TrackInfoSectionHeader(DecoderNames.SC68)
             if (metadata.sc68.formatName.isNotBlank()) TrackInfoDetailsRow("Format name", metadata.sc68.formatName)
             if (metadata.sc68.hardwareName.isNotBlank()) TrackInfoDetailsRow("Hardware", metadata.sc68.hardwareName)
             if (metadata.sc68.platformName.isNotBlank()) TrackInfoDetailsRow("Platform", metadata.sc68.platformName)
@@ -139,8 +140,8 @@ internal fun TrackInfoCoreSections(
             TrackInfoDetailsRow("Uses Amiga Paula", if (metadata.sc68.usesAmiga) "Yes" else "No")
         }
 
-        decoderName.equals("AdPlug", ignoreCase = true) -> {
-            TrackInfoSectionHeader("AdPlug")
+        decoderName.equals(DecoderNames.AD_PLUG, ignoreCase = true) -> {
+            TrackInfoSectionHeader(DecoderNames.AD_PLUG)
             if (metadata.adplug.description.isNotBlank()) TrackInfoDetailsRow("Description", metadata.adplug.description)
             if (metadata.adplug.orderCount > 0) TrackInfoDetailsRow("Orders", metadata.adplug.orderCount.toString())
             if (metadata.adplug.orderCount > 0) TrackInfoDetailsRow("Current order", metadata.adplug.currentOrder.toString())
@@ -152,8 +153,8 @@ internal fun TrackInfoCoreSections(
             if (metadata.adplug.instrumentNames.isNotBlank()) TrackInfoDetailsRow("Instrument names", metadata.adplug.instrumentNames)
         }
 
-        decoderName.equals("HivelyTracker", ignoreCase = true) -> {
-            TrackInfoSectionHeader("HivelyTracker")
+        decoderName.equals(DecoderNames.HIVELY_TRACKER, ignoreCase = true) -> {
+            TrackInfoSectionHeader(DecoderNames.HIVELY_TRACKER)
             if (metadata.hivelyTracker.formatName.isNotBlank()) TrackInfoDetailsRow("Format", metadata.hivelyTracker.formatName)
             if (metadata.hivelyTracker.formatVersion > 0) TrackInfoDetailsRow("Format version", metadata.hivelyTracker.formatVersion.toString())
             if (metadata.hivelyTracker.positionCount > 0) TrackInfoDetailsRow("Positions", metadata.hivelyTracker.positionCount.toString())
@@ -169,8 +170,8 @@ internal fun TrackInfoCoreSections(
             if (metadata.hivelyTracker.instrumentNames.isNotBlank()) TrackInfoDetailsRow("Instrument names", metadata.hivelyTracker.instrumentNames)
         }
 
-        decoderName.equals("Klystrack", ignoreCase = true) -> {
-            TrackInfoSectionHeader("Klystrack")
+        decoderName.equals(DecoderNames.KLYSTRACK, ignoreCase = true) -> {
+            TrackInfoSectionHeader(DecoderNames.KLYSTRACK)
             if (metadata.klystrack.formatName.isNotBlank()) TrackInfoDetailsRow("Format", metadata.klystrack.formatName)
             if (metadata.klystrack.trackCount > 0) TrackInfoDetailsRow("Tracks", metadata.klystrack.trackCount.toString())
             if (metadata.klystrack.instrumentCount > 0) TrackInfoDetailsRow("Instruments", metadata.klystrack.instrumentCount.toString())
@@ -179,8 +180,8 @@ internal fun TrackInfoCoreSections(
             if (metadata.klystrack.instrumentNames.isNotBlank()) TrackInfoDetailsRow("Instrument names", metadata.klystrack.instrumentNames)
         }
 
-        decoderName.equals("Furnace", ignoreCase = true) -> {
-            TrackInfoSectionHeader("Furnace")
+        decoderName.equals(DecoderNames.FURNACE, ignoreCase = true) -> {
+            TrackInfoSectionHeader(DecoderNames.FURNACE)
             if (metadata.furnace.formatName.isNotBlank()) TrackInfoDetailsRow("Format", metadata.furnace.formatName)
             if (metadata.furnace.songVersion > 0) TrackInfoDetailsRow("Song format version", metadata.furnace.songVersion.toString())
             if (metadata.furnace.systemNames.isNotBlank()) TrackInfoDetailsRow("Systems", metadata.furnace.systemNames)
@@ -200,8 +201,8 @@ internal fun TrackInfoCoreSections(
             }
         }
 
-        decoderName.equals("UADE", ignoreCase = true) -> {
-            TrackInfoSectionHeader("UADE")
+        decoderName.equals(DecoderNames.UADE, ignoreCase = true) -> {
+            TrackInfoSectionHeader(DecoderNames.UADE)
             if (metadata.uade.formatName.isNotBlank()) TrackInfoDetailsRow("Format name", metadata.uade.formatName)
             if (metadata.uade.moduleName.isNotBlank()) TrackInfoDetailsRow("Module name", metadata.uade.moduleName)
             if (metadata.uade.playerName.isNotBlank()) TrackInfoDetailsRow("Player name", metadata.uade.playerName)
@@ -236,7 +237,7 @@ internal fun appendCoreTrackInfoCopyRows(
     }
 
     when {
-        decoderName.equals("LibOpenMPT", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.LIB_OPEN_MPT, ignoreCase = true) -> {
             builder.append('\n').append("[OpenMPT]").append('\n')
             if (metadata.openMpt.typeLong.isNotBlank()) row("Module type", metadata.openMpt.typeLong)
             if (metadata.openMpt.tracker.isNotBlank()) row("Tracker", metadata.openMpt.tracker)
@@ -249,7 +250,7 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.openMpt.sampleNames.isNotBlank()) row("Sample names", metadata.openMpt.sampleNames)
         }
 
-        decoderName.equals("VGMPlay", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.VGM_PLAY, ignoreCase = true) -> {
             builder.append('\n').append("[VGMPlay]").append('\n')
             if (metadata.vgmPlay.gameName.isNotBlank()) row("Game", metadata.vgmPlay.gameName)
             if (metadata.vgmPlay.systemName.isNotBlank()) row("System", metadata.vgmPlay.systemName)
@@ -262,7 +263,7 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.vgmPlay.notes.isNotBlank()) row("Notes", metadata.vgmPlay.notes)
         }
 
-        decoderName.equals("FFmpeg", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.FFMPEG, ignoreCase = true) -> {
             builder.append('\n').append("[FFmpeg]").append('\n')
             if (metadata.ffmpeg.codecName.isNotBlank()) row("Codec", metadata.ffmpeg.codecName)
             if (metadata.ffmpeg.containerName.isNotBlank()) row("Container", metadata.ffmpeg.containerName)
@@ -271,7 +272,7 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.ffmpeg.encoderName.isNotBlank()) row("Encoder", metadata.ffmpeg.encoderName)
         }
 
-        decoderName.equals("Game Music Emu", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.GAME_MUSIC_EMU, ignoreCase = true) -> {
             builder.append('\n').append("[Game Music Emu]").append('\n')
             if (metadata.gme.systemName.isNotBlank()) row("System", metadata.gme.systemName)
             if (metadata.gme.gameName.isNotBlank()) row("Game", metadata.gme.gameName)
@@ -285,7 +286,7 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.gme.comment.isNotBlank()) row("Comment", metadata.gme.comment)
         }
 
-        decoderName.equals("LazyUSF2", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.LAZY_USF2, ignoreCase = true) -> {
             builder.append('\n').append("[LazyUSF2]").append('\n')
             if (metadata.lazyUsf2.gameName.isNotBlank()) row("Game", metadata.lazyUsf2.gameName)
             if (metadata.lazyUsf2.year.isNotBlank()) row("Year", metadata.lazyUsf2.year)
@@ -297,7 +298,7 @@ internal fun appendCoreTrackInfoCopyRows(
             row("FIFO full hack", if (metadata.lazyUsf2.enableFifoFull) "Enabled" else "Disabled")
         }
 
-        decoderName.equals("Vio2SF", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.VIO2_SF, ignoreCase = true) -> {
             builder.append('\n').append("[Vio2SF]").append('\n')
             if (metadata.vio2sf.gameName.isNotBlank()) row("Game", metadata.vio2sf.gameName)
             if (metadata.vio2sf.year.isNotBlank()) row("Year", metadata.vio2sf.year)
@@ -307,7 +308,7 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.vio2sf.comment.isNotBlank()) row("Comment", metadata.vio2sf.comment)
         }
 
-        decoderName.equals("LibSIDPlayFP", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.LIB_SID_PLAY_FP, ignoreCase = true) -> {
             builder.append('\n').append("[LibSIDPlayFP]").append('\n')
             if (metadata.sid.backendName.isNotBlank()) row("Engine", metadata.sid.backendName)
             if (metadata.sid.formatName.isNotBlank()) row("Format name", metadata.sid.formatName)
@@ -321,7 +322,7 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.sid.commentSummary.isNotBlank()) row("Comments", metadata.sid.commentSummary)
         }
 
-        decoderName.equals("SC68", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.SC68, ignoreCase = true) -> {
             builder.append('\n').append("[SC68]").append('\n')
             if (metadata.sc68.formatName.isNotBlank()) row("Format name", metadata.sc68.formatName)
             if (metadata.sc68.hardwareName.isNotBlank()) row("Hardware", metadata.sc68.hardwareName)
@@ -341,7 +342,7 @@ internal fun appendCoreTrackInfoCopyRows(
             row("Uses Amiga Paula", if (metadata.sc68.usesAmiga) "Yes" else "No")
         }
 
-        decoderName.equals("AdPlug", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.AD_PLUG, ignoreCase = true) -> {
             builder.append('\n').append("[AdPlug]").append('\n')
             if (metadata.adplug.description.isNotBlank()) row("Description", metadata.adplug.description)
             if (metadata.adplug.orderCount > 0) row("Orders", metadata.adplug.orderCount.toString())
@@ -354,7 +355,7 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.adplug.instrumentNames.isNotBlank()) row("Instrument names", metadata.adplug.instrumentNames)
         }
 
-        decoderName.equals("HivelyTracker", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.HIVELY_TRACKER, ignoreCase = true) -> {
             builder.append('\n').append("[HivelyTracker]").append('\n')
             if (metadata.hivelyTracker.formatName.isNotBlank()) row("Format", metadata.hivelyTracker.formatName)
             if (metadata.hivelyTracker.formatVersion > 0) row("Format version", metadata.hivelyTracker.formatVersion.toString())
@@ -371,7 +372,7 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.hivelyTracker.instrumentNames.isNotBlank()) row("Instrument names", metadata.hivelyTracker.instrumentNames)
         }
 
-        decoderName.equals("Klystrack", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.KLYSTRACK, ignoreCase = true) -> {
             builder.append('\n').append("[Klystrack]").append('\n')
             if (metadata.klystrack.formatName.isNotBlank()) row("Format", metadata.klystrack.formatName)
             if (metadata.klystrack.trackCount > 0) row("Tracks", metadata.klystrack.trackCount.toString())
@@ -381,7 +382,7 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.klystrack.instrumentNames.isNotBlank()) row("Instrument names", metadata.klystrack.instrumentNames)
         }
 
-        decoderName.equals("Furnace", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.FURNACE, ignoreCase = true) -> {
             builder.append('\n').append("[Furnace]").append('\n')
             if (metadata.furnace.formatName.isNotBlank()) row("Format", metadata.furnace.formatName)
             if (metadata.furnace.songVersion > 0) row("Song format version", metadata.furnace.songVersion.toString())
@@ -400,7 +401,7 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.furnace.currentHz > 0.0f) row("Current Hz", String.format(Locale.US, "%.2f Hz", metadata.furnace.currentHz))
         }
 
-        decoderName.equals("UADE", ignoreCase = true) -> {
+        decoderName.equals(DecoderNames.UADE, ignoreCase = true) -> {
             builder.append('\n').append("[UADE]").append('\n')
             if (metadata.uade.formatName.isNotBlank()) row("Format name", metadata.uade.formatName)
             if (metadata.uade.moduleName.isNotBlank()) row("Module name", metadata.uade.moduleName)

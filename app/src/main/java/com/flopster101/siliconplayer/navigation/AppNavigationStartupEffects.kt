@@ -38,9 +38,9 @@ internal fun AppNavigationStartupEffects(
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            onFfmpegCapabilitiesChanged(NativeBridge.getCoreCapabilities("FFmpeg"))
-            onOpenMptCapabilitiesChanged(NativeBridge.getCoreCapabilities("LibOpenMPT"))
-            onVgmPlayCapabilitiesChanged(NativeBridge.getCoreCapabilities("VGMPlay"))
+            onFfmpegCapabilitiesChanged(NativeBridge.getCoreCapabilities(DecoderNames.FFMPEG))
+            onOpenMptCapabilitiesChanged(NativeBridge.getCoreCapabilities(DecoderNames.LIB_OPEN_MPT))
+            onVgmPlayCapabilitiesChanged(NativeBridge.getCoreCapabilities(DecoderNames.VGM_PLAY))
         }
     }
 

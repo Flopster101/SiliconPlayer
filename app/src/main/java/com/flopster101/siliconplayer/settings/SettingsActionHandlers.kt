@@ -1301,11 +1301,11 @@ internal fun resetPluginSettingsAction(
     onSidPlayFpReSidFpCombinedWaveformsStrengthChanged: (Int) -> Unit
 ) {
     val optionNamesForReset = when (pluginName) {
-        "FFmpeg" -> listOf(
+        DecoderNames.FFMPEG -> listOf(
             FfmpegOptionKeys.GAPLESS_REPEAT_TRACK
         )
 
-        "LibOpenMPT" -> listOf(
+        DecoderNames.LIB_OPEN_MPT -> listOf(
             "openmpt.stereo_separation_percent",
             "openmpt.stereo_separation_amiga_percent",
             "openmpt.interpolation_filter_length",
@@ -1317,7 +1317,7 @@ internal fun resetPluginSettingsAction(
             "openmpt.surround_enabled"
         )
 
-        "VGMPlay" -> buildList {
+        DecoderNames.VGM_PLAY -> buildList {
             add(VgmPlayOptionKeys.LOOP_COUNT)
             add(VgmPlayOptionKeys.ALLOW_NON_LOOPING_LOOP)
             add(VgmPlayOptionKeys.VSYNC_RATE_HZ)
@@ -1329,7 +1329,7 @@ internal fun resetPluginSettingsAction(
             }
         }
 
-        "Game Music Emu" -> listOf(
+        DecoderNames.GAME_MUSIC_EMU -> listOf(
             GmeOptionKeys.TEMPO,
             GmeOptionKeys.STEREO_SEPARATION,
             GmeOptionKeys.ECHO_ENABLED,
@@ -1341,7 +1341,7 @@ internal fun resetPluginSettingsAction(
             GmeOptionKeys.SPC_USE_NATIVE_SAMPLE_RATE
         )
 
-        "LibSIDPlayFP" -> listOf(
+        DecoderNames.LIB_SID_PLAY_FP -> listOf(
             SidPlayFpOptionKeys.BACKEND,
             SidPlayFpOptionKeys.CLOCK_MODE,
             SidPlayFpOptionKeys.SID_MODEL_MODE,
@@ -1351,19 +1351,19 @@ internal fun resetPluginSettingsAction(
             SidPlayFpOptionKeys.RESIDFP_COMBINED_WAVEFORMS_STRENGTH
         )
 
-        "LazyUSF2" -> listOf(
+        DecoderNames.LAZY_USF2 -> listOf(
             LazyUsf2OptionKeys.USE_HLE_AUDIO
         )
 
-        "AdPlug" -> listOf(
+        DecoderNames.AD_PLUG -> listOf(
             AdPlugOptionKeys.OPL_ENGINE
         )
 
-        "Vio2SF" -> listOf(
+        DecoderNames.VIO2_SF -> listOf(
             Vio2sfOptionKeys.INTERPOLATION_QUALITY
         )
 
-        "SC68" -> listOf(
+        DecoderNames.SC68 -> listOf(
             Sc68OptionKeys.ASID,
             Sc68OptionKeys.DEFAULT_TIME_SECONDS,
             Sc68OptionKeys.YM_ENGINE,
@@ -1373,22 +1373,22 @@ internal fun resetPluginSettingsAction(
             Sc68OptionKeys.AMIGA_CLOCK
         )
 
-        "UADE" -> listOf(
+        DecoderNames.UADE -> listOf(
             UadeOptionKeys.FILTER_ENABLED,
             UadeOptionKeys.NTSC_MODE,
             UadeOptionKeys.PANNING_MODE
         )
 
-        "HivelyTracker" -> listOf(
+        DecoderNames.HIVELY_TRACKER -> listOf(
             HivelyTrackerOptionKeys.PANNING_MODE,
             HivelyTrackerOptionKeys.MIX_GAIN_PERCENT
         )
 
-        "Klystrack" -> listOf(
+        DecoderNames.KLYSTRACK -> listOf(
             KlystrackOptionKeys.PLAYER_QUALITY
         )
 
-        "Furnace" -> listOf(
+        DecoderNames.FURNACE -> listOf(
             FurnaceOptionKeys.YM2612_CORE,
             FurnaceOptionKeys.SN_CORE,
             FurnaceOptionKeys.NES_CORE,
@@ -1408,7 +1408,7 @@ internal fun resetPluginSettingsAction(
         }
     }
     when (pluginName) {
-        "FFmpeg" -> {
+        DecoderNames.FFMPEG -> {
             onFfmpegCoreSampleRateHzChanged(FfmpegDefaults.coreSampleRateHz)
             onFfmpegGaplessRepeatTrackChanged(FfmpegDefaults.gaplessRepeatTrack)
             prefs.edit()
@@ -1417,7 +1417,7 @@ internal fun resetPluginSettingsAction(
                 .apply()
         }
 
-        "LibOpenMPT" -> {
+        DecoderNames.LIB_OPEN_MPT -> {
             onOpenMptCoreSampleRateHzChanged(OpenMptDefaults.coreSampleRateHz)
             onOpenMptStereoSeparationPercentChanged(OpenMptDefaults.stereoSeparationPercent)
             onOpenMptStereoSeparationAmigaPercentChanged(OpenMptDefaults.stereoSeparationAmigaPercent)
@@ -1443,7 +1443,7 @@ internal fun resetPluginSettingsAction(
             }
         }
 
-        "VGMPlay" -> {
+        DecoderNames.VGM_PLAY -> {
             onVgmPlayCoreSampleRateHzChanged(VgmPlayDefaults.coreSampleRateHz)
             onVgmPlayLoopCountChanged(VgmPlayDefaults.loopCount)
             onVgmPlayAllowNonLoopingLoopChanged(VgmPlayDefaults.allowNonLoopingLoop)
@@ -1467,7 +1467,7 @@ internal fun resetPluginSettingsAction(
             }
         }
 
-        "Game Music Emu" -> {
+        DecoderNames.GAME_MUSIC_EMU -> {
             onGmeCoreSampleRateHzChanged(GmeDefaults.coreSampleRateHz)
             onGmeTempoPercentChanged(GmeDefaults.tempoPercent)
             onGmeStereoSeparationPercentChanged(GmeDefaults.stereoSeparationPercent)
@@ -1493,7 +1493,7 @@ internal fun resetPluginSettingsAction(
             }
         }
 
-        "LazyUSF2" -> {
+        DecoderNames.LAZY_USF2 -> {
             onLazyUsf2CoreSampleRateHzChanged(LazyUsf2Defaults.coreSampleRateHz)
             onLazyUsf2UseHleAudioChanged(LazyUsf2Defaults.useHleAudio)
             prefs.edit()
@@ -1502,7 +1502,7 @@ internal fun resetPluginSettingsAction(
                 .apply()
         }
 
-        "AdPlug" -> {
+        DecoderNames.AD_PLUG -> {
             onAdPlugCoreSampleRateHzChanged(AdPlugDefaults.coreSampleRateHz)
             onAdPlugOplEngineChanged(AdPlugDefaults.oplEngine)
             prefs.edit()
@@ -1511,7 +1511,7 @@ internal fun resetPluginSettingsAction(
                 .apply()
         }
 
-        "HivelyTracker" -> {
+        DecoderNames.HIVELY_TRACKER -> {
             onHivelyTrackerCoreSampleRateHzChanged(HivelyTrackerDefaults.coreSampleRateHz)
             onHivelyTrackerPanningModeChanged(HivelyTrackerDefaults.panningMode)
             onHivelyTrackerMixGainPercentChanged(HivelyTrackerDefaults.mixGainPercent)
@@ -1522,7 +1522,7 @@ internal fun resetPluginSettingsAction(
                 .apply()
         }
 
-        "Klystrack" -> {
+        DecoderNames.KLYSTRACK -> {
             onKlystrackCoreSampleRateHzChanged(KlystrackDefaults.coreSampleRateHz)
             onKlystrackPlayerQualityChanged(KlystrackDefaults.playerQuality)
             prefs.edit()
@@ -1531,7 +1531,7 @@ internal fun resetPluginSettingsAction(
                 .apply()
         }
 
-        "Furnace" -> {
+        DecoderNames.FURNACE -> {
             onFurnaceCoreSampleRateHzChanged(FurnaceDefaults.coreSampleRateHz)
             onFurnaceYm2612CoreChanged(FurnaceDefaults.ym2612Core)
             onFurnaceSnCoreChanged(FurnaceDefaults.snCore)
@@ -1553,7 +1553,7 @@ internal fun resetPluginSettingsAction(
             }
         }
 
-        "UADE" -> {
+        DecoderNames.UADE -> {
             onUadeCoreSampleRateHzChanged(UadeDefaults.coreSampleRateHz)
             onUadeFilterEnabledChanged(UadeDefaults.filterEnabled)
             onUadeNtscModeChanged(UadeDefaults.ntscMode)
@@ -1566,14 +1566,14 @@ internal fun resetPluginSettingsAction(
                 .apply()
         }
 
-        "Vio2SF" -> {
+        DecoderNames.VIO2_SF -> {
             onVio2sfInterpolationQualityChanged(Vio2sfDefaults.interpolationQuality)
             prefs.edit()
                 .remove(CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY)
                 .apply()
         }
 
-        "SC68" -> {
+        DecoderNames.SC68 -> {
             onSc68SamplingRateHzChanged(Sc68Defaults.coreSampleRateHz)
             onSc68AsidChanged(Sc68Defaults.asid)
             onSc68DefaultTimeSecondsChanged(Sc68Defaults.defaultTimeSeconds)
@@ -1595,7 +1595,7 @@ internal fun resetPluginSettingsAction(
             }
         }
 
-        "LibSIDPlayFP" -> {
+        DecoderNames.LIB_SID_PLAY_FP -> {
             onSidPlayFpCoreSampleRateHzChanged(SidPlayFpDefaults.coreSampleRateHz)
             onSidPlayFpBackendChanged(SidPlayFpDefaults.backend)
             onSidPlayFpClockModeChanged(SidPlayFpDefaults.clockMode)

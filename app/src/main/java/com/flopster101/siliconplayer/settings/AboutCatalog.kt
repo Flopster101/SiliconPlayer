@@ -26,7 +26,7 @@ internal object AboutCatalog {
         AboutEntity(
             id = "core.ffmpeg",
             kind = AboutEntityKind.Core,
-            name = "FFmpeg",
+            name = DecoderNames.FFMPEG,
             description = "General-purpose decoding backend used for mainstream audio containers and codecs.",
             author = "FFmpeg Project contributors",
             license = "LGPL-2.1+ (can become GPL when GPL components are enabled)",
@@ -42,7 +42,7 @@ internal object AboutCatalog {
         AboutEntity(
             id = "core.libopenmpt",
             kind = AboutEntityKind.Core,
-            name = "LibOpenMPT",
+            name = DecoderNames.LIB_OPEN_MPT,
             description = "Tracker module playback library for MOD/XM/S3M/IT and related formats.",
             author = "OpenMPT Project developers and contributors",
             license = "BSD-3-Clause",
@@ -58,7 +58,7 @@ internal object AboutCatalog {
         AboutEntity(
             id = "core.vgmplay",
             kind = AboutEntityKind.Core,
-            name = "VGMPlay",
+            name = DecoderNames.VGM_PLAY,
             description = "Chip-focused VGM playback stack based on libvgm.",
             author = "Valley Bell and libvgm contributors",
             license = "Mixed per-chip licenses (BSD/LGPL/GPL and others; see upstream sources)",
@@ -73,7 +73,7 @@ internal object AboutCatalog {
         AboutEntity(
             id = "core.gme",
             kind = AboutEntityKind.Core,
-            name = "Game Music Emu",
+            name = DecoderNames.GAME_MUSIC_EMU,
             description = "Multi-system game music emulator for formats like NSF, SPC, GBS, HES, and others.",
             author = "Shay Green, libgme maintainers, and contributors",
             license = "LGPL-2.1+ (some optional emulation paths are GPL-2.0+)",
@@ -87,7 +87,7 @@ internal object AboutCatalog {
         AboutEntity(
             id = "core.libsidplayfp",
             kind = AboutEntityKind.Core,
-            name = "LibSIDPlayFP",
+            name = DecoderNames.LIB_SID_PLAY_FP,
             description = "Cycle-based Commodore 64 SID playback library with high quality SID emulation backends.",
             author = "Simon White, Antti Lankila, Leandro Nini, and contributors",
             license = "GPL-2.0-or-later",
@@ -102,7 +102,7 @@ internal object AboutCatalog {
         AboutEntity(
             id = "core.lazyusf2",
             kind = AboutEntityKind.Core,
-            name = "LazyUSF2",
+            name = DecoderNames.LAZY_USF2,
             description = "Nintendo 64 USF playback core derived from Mupen64plus-era audio emulation code.",
             author = "lazyusf2 and Mupen64plus contributors",
             license = "GPL-2.0-or-later",
@@ -117,7 +117,7 @@ internal object AboutCatalog {
         AboutEntity(
             id = "core.vio2sf",
             kind = AboutEntityKind.Core,
-            name = "Vio2SF",
+            name = DecoderNames.VIO2_SF,
             description = "Nintendo DS 2SF playback core built around a DeSmuME-based audio state renderer.",
             author = "Christopher Snowhill and DeSmuME contributors",
             license = "GPL-2.0-or-later",
@@ -133,7 +133,7 @@ internal object AboutCatalog {
         AboutEntity(
             id = "core.sc68",
             kind = AboutEntityKind.Core,
-            name = "SC68",
+            name = DecoderNames.SC68,
             description = "Atari ST/Amiga music playback core for SC68 and SNDH tracks.",
             author = "Benjamin Gerard and sc68 contributors",
             license = "GPL-3.0-or-later",
@@ -149,7 +149,7 @@ internal object AboutCatalog {
         AboutEntity(
             id = "core.adplug",
             kind = AboutEntityKind.Core,
-            name = "AdPlug",
+            name = DecoderNames.AD_PLUG,
             description = "OPL2/OPL3 replayer core for many DOS-era AdLib and OPL music formats.",
             author = "Simon Peter and AdPlug contributors",
             license = "LGPL-2.1-or-later",
@@ -165,7 +165,7 @@ internal object AboutCatalog {
         AboutEntity(
             id = "core.uade",
             kind = AboutEntityKind.Core,
-            name = "UADE",
+            name = DecoderNames.UADE,
             description = "Amiga music playback core using Unix Amiga Delitracker Emulator format handlers.",
             author = "UADE contributors",
             license = "GPL-2.0-or-later",
@@ -181,7 +181,7 @@ internal object AboutCatalog {
         AboutEntity(
             id = "core.hivelytracker",
             kind = AboutEntityKind.Core,
-            name = "HivelyTracker",
+            name = DecoderNames.HIVELY_TRACKER,
             description = "AHX/HVL tracker replayer core for Amiga-style chiptune modules.",
             author = "Xeron, Xigh, and HivelyTracker contributors",
             license = "BSD-3-Clause",
@@ -196,7 +196,7 @@ internal object AboutCatalog {
         AboutEntity(
             id = "core.klystrack",
             kind = AboutEntityKind.Core,
-            name = "Klystrack",
+            name = DecoderNames.KLYSTRACK,
             description = "Klystrack module replay core using the klystron audio engine.",
             author = "Tero Lindeman (kometbomb) and Klystrack/Klystron contributors",
             license = "zlib License",
@@ -212,7 +212,7 @@ internal object AboutCatalog {
         AboutEntity(
             id = "core.furnace",
             kind = AboutEntityKind.Core,
-            name = "Furnace",
+            name = DecoderNames.FURNACE,
             description = "Furnace Tracker playback core for .fur/.dmf modules using the upstream headless engine.",
             author = "tildearrow and Furnace contributors",
             license = "GPL-2.0-or-later",
@@ -313,19 +313,19 @@ internal object AboutCatalog {
     )
 
     private val pluginNameToCoreId: Map<String, String> = mapOf(
-        "FFmpeg" to "core.ffmpeg",
-        "LibOpenMPT" to "core.libopenmpt",
-        "VGMPlay" to "core.vgmplay",
-        "Game Music Emu" to "core.gme",
-        "LibSIDPlayFP" to "core.libsidplayfp",
-        "LazyUSF2" to "core.lazyusf2",
-        "Vio2SF" to "core.vio2sf",
-        "SC68" to "core.sc68",
-        "AdPlug" to "core.adplug",
-        "UADE" to "core.uade",
-        "HivelyTracker" to "core.hivelytracker",
-        "Klystrack" to "core.klystrack",
-        "Furnace" to "core.furnace"
+        DecoderNames.FFMPEG to "core.ffmpeg",
+        DecoderNames.LIB_OPEN_MPT to "core.libopenmpt",
+        DecoderNames.VGM_PLAY to "core.vgmplay",
+        DecoderNames.GAME_MUSIC_EMU to "core.gme",
+        DecoderNames.LIB_SID_PLAY_FP to "core.libsidplayfp",
+        DecoderNames.LAZY_USF2 to "core.lazyusf2",
+        DecoderNames.VIO2_SF to "core.vio2sf",
+        DecoderNames.SC68 to "core.sc68",
+        DecoderNames.AD_PLUG to "core.adplug",
+        DecoderNames.UADE to "core.uade",
+        DecoderNames.HIVELY_TRACKER to "core.hivelytracker",
+        DecoderNames.KLYSTRACK to "core.klystrack",
+        DecoderNames.FURNACE to "core.furnace"
     )
 
     private val entityById: Map<String, AboutEntity> = (coreEntries + libraryEntries).associateBy { it.id }

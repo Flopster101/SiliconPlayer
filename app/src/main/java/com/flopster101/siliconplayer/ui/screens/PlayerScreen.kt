@@ -101,6 +101,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import android.view.MotionEvent
 import com.flopster101.siliconplayer.AppDefaults
+import com.flopster101.siliconplayer.DecoderNames
 import com.flopster101.siliconplayer.inferredDisplayTitleForName
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.R
@@ -1496,7 +1497,7 @@ private fun TrackInfoChips(
     // Bitrate or file size based on decoder
     val bitrateOrSize = remember(file, decoderName, fileSizeBytes) {
         when {
-            decoderName.equals("FFmpeg", ignoreCase = true) -> {
+            decoderName.equals(DecoderNames.FFMPEG, ignoreCase = true) -> {
                 val bitrate = NativeBridge.getTrackBitrate()
                 val isVBR = NativeBridge.isTrackVBR()
                 if (bitrate > 0) {
@@ -1517,7 +1518,7 @@ private fun TrackInfoChips(
     } else {
         "--kHz"
     }
-    val showBitDepth = decoderName.equals("FFmpeg", ignoreCase = true)
+    val showBitDepth = decoderName.equals(DecoderNames.FFMPEG, ignoreCase = true)
     val depthDisplay = bitDepthLabel.ifBlank { "Unknown" }
     val channelsAndDepth = when {
         channelCount > 0 && showBitDepth -> "${channelCount}ch/$depthDisplay"
@@ -1586,7 +1587,7 @@ private fun TrackInfoChips(
             )
             if (bitrateOrSize != null) {
                 TrackInfoChip(
-                    icon = if (decoderName.equals("FFmpeg", ignoreCase = true))
+                    icon = if (decoderName.equals(DecoderNames.FFMPEG, ignoreCase = true))
                         PlayerChipIcons.WaveSawTool else PlayerChipIcons.HardDrive,
                     text = bitrateOrSize,
                     chipScale = visualChipScale,

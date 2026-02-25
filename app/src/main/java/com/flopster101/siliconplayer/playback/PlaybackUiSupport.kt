@@ -110,7 +110,7 @@ internal fun isVisualizationModeSupported(
 ): Boolean {
     return when (mode) {
         VisualizationMode.ChannelScope ->
-            pluginNameForCoreName(coreNameForUi) == "LibOpenMPT"
+            pluginNameForCoreName(coreNameForUi) == DecoderNames.LIB_OPEN_MPT
 
         else -> true
     }

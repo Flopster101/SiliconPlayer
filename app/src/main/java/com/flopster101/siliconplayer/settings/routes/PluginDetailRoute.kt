@@ -251,33 +251,33 @@ internal fun PluginDetailRouteContent(
     val supportsLiveRateChange = supportsLiveSampleRateChange(selectedCoreCapabilities)
     val hasFixedRate = hasFixedSampleRate(selectedCoreCapabilities) && fixedSampleRateHz > 0
     val selectedRateHz = when (pluginName) {
-        "FFmpeg" -> state.ffmpegSampleRateHz
-        "LibOpenMPT" -> state.openMptSampleRateHz
-        "VGMPlay" -> state.vgmPlaySampleRateHz
-        "Game Music Emu" -> state.gmeSampleRateHz
-        "LibSIDPlayFP" -> state.sidPlayFpSampleRateHz
-        "LazyUSF2" -> state.lazyUsf2SampleRateHz
-        "AdPlug" -> state.adPlugSampleRateHz
-        "HivelyTracker" -> state.hivelyTrackerSampleRateHz
-        "Klystrack" -> state.klystrackSampleRateHz
-        "Furnace" -> state.furnaceSampleRateHz
-        "UADE" -> state.uadeSampleRateHz
-        "SC68" -> state.sc68SamplingRateHz
+        DecoderNames.FFMPEG -> state.ffmpegSampleRateHz
+        DecoderNames.LIB_OPEN_MPT -> state.openMptSampleRateHz
+        DecoderNames.VGM_PLAY -> state.vgmPlaySampleRateHz
+        DecoderNames.GAME_MUSIC_EMU -> state.gmeSampleRateHz
+        DecoderNames.LIB_SID_PLAY_FP -> state.sidPlayFpSampleRateHz
+        DecoderNames.LAZY_USF2 -> state.lazyUsf2SampleRateHz
+        DecoderNames.AD_PLUG -> state.adPlugSampleRateHz
+        DecoderNames.HIVELY_TRACKER -> state.hivelyTrackerSampleRateHz
+        DecoderNames.KLYSTRACK -> state.klystrackSampleRateHz
+        DecoderNames.FURNACE -> state.furnaceSampleRateHz
+        DecoderNames.UADE -> state.uadeSampleRateHz
+        DecoderNames.SC68 -> state.sc68SamplingRateHz
         else -> fixedSampleRateHz
     }
     val onSampleRateSelected: ((Int) -> Unit)? = when (pluginName) {
-        "FFmpeg" -> actions.onFfmpegSampleRateChanged
-        "LibOpenMPT" -> actions.onOpenMptSampleRateChanged
-        "VGMPlay" -> actions.onVgmPlaySampleRateChanged
-        "Game Music Emu" -> actions.onGmeSampleRateChanged
-        "LibSIDPlayFP" -> actions.onSidPlayFpSampleRateChanged
-        "LazyUSF2" -> actions.onLazyUsf2SampleRateChanged
-        "AdPlug" -> actions.onAdPlugSampleRateChanged
-        "HivelyTracker" -> actions.onHivelyTrackerSampleRateChanged
-        "Klystrack" -> actions.onKlystrackSampleRateChanged
-        "Furnace" -> actions.onFurnaceSampleRateChanged
-        "UADE" -> actions.onUadeSampleRateChanged
-        "SC68" -> actions.onSc68SamplingRateHzChanged
+        DecoderNames.FFMPEG -> actions.onFfmpegSampleRateChanged
+        DecoderNames.LIB_OPEN_MPT -> actions.onOpenMptSampleRateChanged
+        DecoderNames.VGM_PLAY -> actions.onVgmPlaySampleRateChanged
+        DecoderNames.GAME_MUSIC_EMU -> actions.onGmeSampleRateChanged
+        DecoderNames.LIB_SID_PLAY_FP -> actions.onSidPlayFpSampleRateChanged
+        DecoderNames.LAZY_USF2 -> actions.onLazyUsf2SampleRateChanged
+        DecoderNames.AD_PLUG -> actions.onAdPlugSampleRateChanged
+        DecoderNames.HIVELY_TRACKER -> actions.onHivelyTrackerSampleRateChanged
+        DecoderNames.KLYSTRACK -> actions.onKlystrackSampleRateChanged
+        DecoderNames.FURNACE -> actions.onFurnaceSampleRateChanged
+        DecoderNames.UADE -> actions.onUadeSampleRateChanged
+        DecoderNames.SC68 -> actions.onSc68SamplingRateHzChanged
         else -> null
     }
     val fixedRateLabel = if (fixedSampleRateHz > 0) {
@@ -301,7 +301,7 @@ internal fun PluginDetailRouteContent(
     }
 
     val pluginSettings: PluginSettings? = when (pluginName) {
-        "FFmpeg" -> FfmpegSettings(
+        DecoderNames.FFMPEG -> FfmpegSettings(
             sampleRateHz = state.ffmpegSampleRateHz,
             capabilities = selectedCoreCapabilities,
             gaplessRepeatTrack = state.ffmpegGaplessRepeatTrack,
@@ -309,7 +309,7 @@ internal fun PluginDetailRouteContent(
             onGaplessRepeatTrackChanged = actions.onFfmpegGaplessRepeatTrackChanged
         )
 
-        "LibOpenMPT" -> OpenMptSettings(
+        DecoderNames.LIB_OPEN_MPT -> OpenMptSettings(
             sampleRateHz = state.openMptSampleRateHz,
             capabilities = state.openMptCapabilities,
             stereoSeparationPercent = state.openMptStereoSeparationPercent,
@@ -334,7 +334,7 @@ internal fun PluginDetailRouteContent(
             includeSampleRateControl = false
         )
 
-        "VGMPlay" -> VgmPlaySettings(
+        DecoderNames.VGM_PLAY -> VgmPlaySettings(
             sampleRateHz = state.vgmPlaySampleRateHz,
             capabilities = state.vgmPlayCapabilities,
             loopCount = state.vgmPlayLoopCount,
@@ -354,7 +354,7 @@ internal fun PluginDetailRouteContent(
             includeSampleRateControl = false
         )
 
-        "Game Music Emu" -> GmeSettings(
+        DecoderNames.GAME_MUSIC_EMU -> GmeSettings(
             tempoPercent = state.gmeTempoPercent,
             stereoSeparationPercent = state.gmeStereoSeparationPercent,
             echoEnabled = state.gmeEchoEnabled,
@@ -375,7 +375,7 @@ internal fun PluginDetailRouteContent(
             onSpcUseNativeSampleRateChanged = actions.onGmeSpcUseNativeSampleRateChanged
         )
 
-        "LibSIDPlayFP" -> SidPlayFpSettings(
+        DecoderNames.LIB_SID_PLAY_FP -> SidPlayFpSettings(
             backend = state.sidPlayFpBackend,
             clockMode = state.sidPlayFpClockMode,
             sidModelMode = state.sidPlayFpSidModelMode,
@@ -400,22 +400,22 @@ internal fun PluginDetailRouteContent(
             onReSidFpCombinedWaveformsStrengthChanged = actions.onSidPlayFpReSidFpCombinedWaveformsStrengthChanged
         )
 
-        "LazyUSF2" -> LazyUsf2Settings(
+        DecoderNames.LAZY_USF2 -> LazyUsf2Settings(
             useHleAudio = state.lazyUsf2UseHleAudio,
             onUseHleAudioChanged = actions.onLazyUsf2UseHleAudioChanged
         )
 
-        "AdPlug" -> AdPlugSettings(
+        DecoderNames.AD_PLUG -> AdPlugSettings(
             oplEngine = state.adPlugOplEngine,
             onOplEngineChanged = actions.onAdPlugOplEngineChanged
         )
 
-        "Vio2SF" -> Vio2sfSettings(
+        DecoderNames.VIO2_SF -> Vio2sfSettings(
             interpolationQuality = state.vio2sfInterpolationQuality,
             onInterpolationQualityChanged = actions.onVio2sfInterpolationQualityChanged
         )
 
-        "SC68" -> Sc68Settings(
+        DecoderNames.SC68 -> Sc68Settings(
             asid = state.sc68Asid,
             ymEngine = state.sc68YmEngine,
             ymVolModel = state.sc68YmVolModel,
@@ -430,7 +430,7 @@ internal fun PluginDetailRouteContent(
             onAmigaClockChanged = actions.onSc68AmigaClockChanged
         )
 
-        "UADE" -> UadeSettings(
+        DecoderNames.UADE -> UadeSettings(
             filterEnabled = state.uadeFilterEnabled,
             ntscMode = state.uadeNtscMode,
             panningMode = state.uadePanningMode,
@@ -439,19 +439,19 @@ internal fun PluginDetailRouteContent(
             onPanningModeChanged = actions.onUadePanningModeChanged
         )
 
-        "HivelyTracker" -> HivelyTrackerSettings(
+        DecoderNames.HIVELY_TRACKER -> HivelyTrackerSettings(
             panningMode = state.hivelyTrackerPanningMode,
             mixGainPercent = state.hivelyTrackerMixGainPercent,
             onPanningModeChanged = actions.onHivelyTrackerPanningModeChanged,
             onMixGainPercentChanged = actions.onHivelyTrackerMixGainPercentChanged
         )
 
-        "Klystrack" -> KlystrackSettings(
+        DecoderNames.KLYSTRACK -> KlystrackSettings(
             playerQuality = state.klystrackPlayerQuality,
             onPlayerQualityChanged = actions.onKlystrackPlayerQualityChanged
         )
 
-        "Furnace" -> FurnaceSettings(
+        DecoderNames.FURNACE -> FurnaceSettings(
             ym2612Core = state.furnaceYm2612Core,
             snCore = state.furnaceSnCore,
             nesCore = state.furnaceNesCore,

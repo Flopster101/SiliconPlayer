@@ -52,6 +52,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.AppDefaults
+import com.flopster101.siliconplayer.DecoderNames
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
 import com.flopster101.siliconplayer.VisualizationChannelScopeTextAnchor
@@ -357,7 +358,7 @@ private fun readVisualizationSnapshot(
             )
         }
         VisualizationMode.ChannelScope -> {
-            if (pluginNameForCoreName(decoderName) != "LibOpenMPT") {
+            if (pluginNameForCoreName(decoderName) != DecoderNames.LIB_OPEN_MPT) {
                 VisualizationSnapshot()
             } else {
                 val scopeSamples = computeChannelScopeSampleCount(
@@ -1134,7 +1135,7 @@ internal fun AlbumArtPlaceholder(
         visSourceDebugAccumulator.lastUiPublishNs = 0L
     }
     LaunchedEffect(file?.absolutePath, decoderName) {
-        if (file == null || pluginNameForCoreName(decoderName) != "LibOpenMPT") {
+        if (file == null || pluginNameForCoreName(decoderName) != DecoderNames.LIB_OPEN_MPT) {
             visOpenMptInstrumentNamesByIndex = emptyMap()
             visOpenMptSampleNamesByIndex = emptyMap()
             return@LaunchedEffect

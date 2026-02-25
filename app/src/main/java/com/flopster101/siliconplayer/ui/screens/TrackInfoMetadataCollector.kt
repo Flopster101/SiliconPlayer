@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.flopster101.siliconplayer.DecoderNames
 import com.flopster101.siliconplayer.NativeBridge
 import kotlinx.coroutines.delay
 
@@ -247,7 +248,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
     )
 
     return when {
-        decoderName.equals("LibOpenMPT", ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.LIB_OPEN_MPT, ignoreCase = true) -> common.copy(
             openMpt = OpenMptMetadata(
                 typeLong = NativeBridge.getOpenMptModuleTypeLong(),
                 tracker = NativeBridge.getOpenMptTracker(),
@@ -261,7 +262,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals("VGMPlay", ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.VGM_PLAY, ignoreCase = true) -> common.copy(
             vgmPlay = VgmPlayMetadata(
                 gameName = NativeBridge.getVgmGameName(),
                 systemName = NativeBridge.getVgmSystemName(),
@@ -275,7 +276,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals("FFmpeg", ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.FFMPEG, ignoreCase = true) -> common.copy(
             ffmpeg = FfmpegMetadata(
                 codecName = NativeBridge.getFfmpegCodecName(),
                 containerName = NativeBridge.getFfmpegContainerName(),
@@ -285,7 +286,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals("Game Music Emu", ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.GAME_MUSIC_EMU, ignoreCase = true) -> common.copy(
             gme = GmeMetadata(
                 systemName = NativeBridge.getGmeSystemName(),
                 gameName = NativeBridge.getGmeGameName(),
@@ -300,7 +301,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals("LazyUSF2", ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.LAZY_USF2, ignoreCase = true) -> common.copy(
             lazyUsf2 = LazyUsf2Metadata(
                 gameName = NativeBridge.getLazyUsf2GameName(),
                 copyright = NativeBridge.getLazyUsf2Copyright(),
@@ -313,7 +314,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals("Vio2SF", ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.VIO2_SF, ignoreCase = true) -> common.copy(
             vio2sf = Vio2sfMetadata(
                 gameName = NativeBridge.getVio2sfGameName(),
                 copyright = NativeBridge.getVio2sfCopyright(),
@@ -324,7 +325,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals("LibSIDPlayFP", ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.LIB_SID_PLAY_FP, ignoreCase = true) -> common.copy(
             sid = SidMetadata(
                 formatName = NativeBridge.getSidFormatName(),
                 clockName = NativeBridge.getSidClockName(),
@@ -339,7 +340,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals("SC68", ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.SC68, ignoreCase = true) -> common.copy(
             sc68 = Sc68Metadata(
                 formatName = NativeBridge.getSc68FormatName(),
                 hardwareName = NativeBridge.getSc68HardwareName(),
@@ -359,7 +360,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals("AdPlug", ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.AD_PLUG, ignoreCase = true) -> common.copy(
             adplug = AdplugMetadata(
                 description = NativeBridge.getAdplugDescription(),
                 patternCount = NativeBridge.getAdplugPatternCount(),
@@ -373,7 +374,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals("HivelyTracker", ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.HIVELY_TRACKER, ignoreCase = true) -> common.copy(
             hivelyTracker = HivelyTrackerMetadata(
                 formatName = NativeBridge.getHivelyFormatName(),
                 formatVersion = NativeBridge.getHivelyFormatVersion(),
@@ -391,7 +392,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals("Klystrack", ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.KLYSTRACK, ignoreCase = true) -> common.copy(
             klystrack = KlystrackMetadata(
                 formatName = NativeBridge.getKlystrackFormatName(),
                 trackCount = NativeBridge.getKlystrackTrackCount(),
@@ -402,7 +403,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals("Furnace", ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.FURNACE, ignoreCase = true) -> common.copy(
             furnace = FurnaceMetadata(
                 formatName = NativeBridge.getFurnaceFormatName(),
                 songVersion = NativeBridge.getFurnaceSongVersion(),
@@ -424,7 +425,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals("UADE", ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.UADE, ignoreCase = true) -> common.copy(
             uade = UadeMetadata(
                 formatName = NativeBridge.getUadeFormatName(),
                 moduleName = NativeBridge.getUadeModuleName(),

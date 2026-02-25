@@ -101,13 +101,13 @@ internal fun AppNavigationCoreEffects(
 
     LaunchedEffect(ffmpegCoreSampleRateHz) {
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_FFMPEG, ffmpegCoreSampleRateHz).apply()
-        NativeBridge.setCoreOutputSampleRate("FFmpeg", ffmpegCoreSampleRateHz)
+        NativeBridge.setCoreOutputSampleRate(DecoderNames.FFMPEG, ffmpegCoreSampleRateHz)
     }
 
     LaunchedEffect(ffmpegGaplessRepeatTrack) {
         prefs.edit().putBoolean(CorePreferenceKeys.FFMPEG_GAPLESS_REPEAT_TRACK, ffmpegGaplessRepeatTrack).apply()
         applyCoreOptionWithPolicy(
-            coreName = "FFmpeg",
+            coreName = DecoderNames.FFMPEG,
             optionName = FfmpegOptionKeys.GAPLESS_REPEAT_TRACK,
             optionValue = ffmpegGaplessRepeatTrack.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -117,35 +117,35 @@ internal fun AppNavigationCoreEffects(
 
     LaunchedEffect(openMptCoreSampleRateHz) {
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_OPENMPT, openMptCoreSampleRateHz).apply()
-        NativeBridge.setCoreOutputSampleRate("LibOpenMPT", openMptCoreSampleRateHz)
+        NativeBridge.setCoreOutputSampleRate(DecoderNames.LIB_OPEN_MPT, openMptCoreSampleRateHz)
     }
 
     LaunchedEffect(vgmPlayCoreSampleRateHz) {
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_VGMPLAY, vgmPlayCoreSampleRateHz).apply()
-        NativeBridge.setCoreOutputSampleRate("VGMPlay", vgmPlayCoreSampleRateHz)
+        NativeBridge.setCoreOutputSampleRate(DecoderNames.VGM_PLAY, vgmPlayCoreSampleRateHz)
     }
 
     LaunchedEffect(gmeCoreSampleRateHz) {
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_GME, gmeCoreSampleRateHz).apply()
-        NativeBridge.setCoreOutputSampleRate("Game Music Emu", gmeCoreSampleRateHz)
+        NativeBridge.setCoreOutputSampleRate(DecoderNames.GAME_MUSIC_EMU, gmeCoreSampleRateHz)
     }
 
     LaunchedEffect(sidPlayFpCoreSampleRateHz) {
         val normalized = if (sidPlayFpCoreSampleRateHz <= 0) 0 else sidPlayFpCoreSampleRateHz
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_SIDPLAYFP, normalized).apply()
-        NativeBridge.setCoreOutputSampleRate("LibSIDPlayFP", normalized)
+        NativeBridge.setCoreOutputSampleRate(DecoderNames.LIB_SID_PLAY_FP, normalized)
     }
 
     LaunchedEffect(lazyUsf2CoreSampleRateHz) {
         val normalized = if (lazyUsf2CoreSampleRateHz <= 0) 0 else lazyUsf2CoreSampleRateHz
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_LAZYUSF2, normalized).apply()
-        NativeBridge.setCoreOutputSampleRate("LazyUSF2", normalized)
+        NativeBridge.setCoreOutputSampleRate(DecoderNames.LAZY_USF2, normalized)
     }
 
     LaunchedEffect(adPlugCoreSampleRateHz) {
         val normalized = if (adPlugCoreSampleRateHz <= 0) 0 else adPlugCoreSampleRateHz.coerceIn(8000, 192000)
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_ADPLUG, normalized).apply()
-        NativeBridge.setCoreOutputSampleRate("AdPlug", normalized)
+        NativeBridge.setCoreOutputSampleRate(DecoderNames.AD_PLUG, normalized)
     }
 
     LaunchedEffect(hivelyTrackerCoreSampleRateHz) {
@@ -155,7 +155,7 @@ internal fun AppNavigationCoreEffects(
             hivelyTrackerCoreSampleRateHz.coerceIn(8000, 192000)
         }
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_HIVELYTRACKER, normalized).apply()
-        NativeBridge.setCoreOutputSampleRate("HivelyTracker", normalized)
+        NativeBridge.setCoreOutputSampleRate(DecoderNames.HIVELY_TRACKER, normalized)
     }
 
     LaunchedEffect(klystrackCoreSampleRateHz) {
@@ -165,7 +165,7 @@ internal fun AppNavigationCoreEffects(
             klystrackCoreSampleRateHz.coerceIn(8000, 192000)
         }
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_KLYSTRACK, normalized).apply()
-        NativeBridge.setCoreOutputSampleRate("Klystrack", normalized)
+        NativeBridge.setCoreOutputSampleRate(DecoderNames.KLYSTRACK, normalized)
     }
 
     LaunchedEffect(furnaceCoreSampleRateHz) {
@@ -175,20 +175,20 @@ internal fun AppNavigationCoreEffects(
             furnaceCoreSampleRateHz.coerceIn(8000, 192000)
         }
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_FURNACE, normalized).apply()
-        NativeBridge.setCoreOutputSampleRate("Furnace", normalized)
+        NativeBridge.setCoreOutputSampleRate(DecoderNames.FURNACE, normalized)
     }
 
     LaunchedEffect(uadeCoreSampleRateHz) {
         val normalized = if (uadeCoreSampleRateHz <= 0) 0 else uadeCoreSampleRateHz.coerceIn(8000, 192000)
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_UADE, normalized).apply()
-        NativeBridge.setCoreOutputSampleRate("UADE", normalized)
+        NativeBridge.setCoreOutputSampleRate(DecoderNames.UADE, normalized)
     }
 
     LaunchedEffect(adPlugOplEngine) {
         val normalized = adPlugOplEngine.coerceIn(0, 3)
         prefs.edit().putInt(CorePreferenceKeys.ADPLUG_OPL_ENGINE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "AdPlug",
+            coreName = DecoderNames.AD_PLUG,
             optionName = AdPlugOptionKeys.OPL_ENGINE,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -199,7 +199,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(lazyUsf2UseHleAudio) {
         prefs.edit().putBoolean(CorePreferenceKeys.LAZYUSF2_USE_HLE_AUDIO, lazyUsf2UseHleAudio).apply()
         applyCoreOptionWithPolicy(
-            coreName = "LazyUSF2",
+            coreName = DecoderNames.LAZY_USF2,
             optionName = LazyUsf2OptionKeys.USE_HLE_AUDIO,
             optionValue = lazyUsf2UseHleAudio.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -211,7 +211,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = vio2sfInterpolationQuality.coerceIn(0, 4)
         prefs.edit().putInt(CorePreferenceKeys.VIO2SF_INTERPOLATION_QUALITY, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Vio2SF",
+            coreName = DecoderNames.VIO2_SF,
             optionName = Vio2sfOptionKeys.INTERPOLATION_QUALITY,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -222,14 +222,14 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(sc68SamplingRateHz) {
         val normalized = if (sc68SamplingRateHz <= 0) 0 else sc68SamplingRateHz.coerceIn(8000, 192000)
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_SC68, normalized).apply()
-        NativeBridge.setCoreOutputSampleRate("SC68", normalized)
+        NativeBridge.setCoreOutputSampleRate(DecoderNames.SC68, normalized)
     }
 
     LaunchedEffect(sc68Asid) {
         val normalized = sc68Asid.coerceIn(0, 2)
         prefs.edit().putInt(CorePreferenceKeys.SC68_ASID, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "SC68",
+            coreName = DecoderNames.SC68,
             optionName = Sc68OptionKeys.ASID,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -241,7 +241,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = sc68DefaultTimeSeconds.coerceIn(0, 24 * 60 * 60 - 1)
         prefs.edit().putInt(CorePreferenceKeys.SC68_DEFAULT_TIME_SECONDS, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "SC68",
+            coreName = DecoderNames.SC68,
             optionName = Sc68OptionKeys.DEFAULT_TIME_SECONDS,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -253,7 +253,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = sc68YmEngine.coerceIn(0, 1)
         prefs.edit().putInt(CorePreferenceKeys.SC68_YM_ENGINE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "SC68",
+            coreName = DecoderNames.SC68,
             optionName = Sc68OptionKeys.YM_ENGINE,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -265,7 +265,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = sc68YmVolModel.coerceIn(0, 1)
         prefs.edit().putInt(CorePreferenceKeys.SC68_YM_VOLMODEL, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "SC68",
+            coreName = DecoderNames.SC68,
             optionName = Sc68OptionKeys.YM_VOLMODEL,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -276,7 +276,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(sc68AmigaFilter) {
         prefs.edit().putBoolean(CorePreferenceKeys.SC68_AMIGA_FILTER, sc68AmigaFilter).apply()
         applyCoreOptionWithPolicy(
-            coreName = "SC68",
+            coreName = DecoderNames.SC68,
             optionName = Sc68OptionKeys.AMIGA_FILTER,
             optionValue = sc68AmigaFilter.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -288,7 +288,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = sc68AmigaBlend.coerceIn(0, 255)
         prefs.edit().putInt(CorePreferenceKeys.SC68_AMIGA_BLEND, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "SC68",
+            coreName = DecoderNames.SC68,
             optionName = Sc68OptionKeys.AMIGA_BLEND,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -300,7 +300,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = sc68AmigaClock.coerceIn(0, 1)
         prefs.edit().putInt(CorePreferenceKeys.SC68_AMIGA_CLOCK, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "SC68",
+            coreName = DecoderNames.SC68,
             optionName = Sc68OptionKeys.AMIGA_CLOCK,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -311,7 +311,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(uadeFilterEnabled) {
         prefs.edit().putBoolean(CorePreferenceKeys.UADE_FILTER_ENABLED, uadeFilterEnabled).apply()
         applyCoreOptionWithPolicy(
-            coreName = "UADE",
+            coreName = DecoderNames.UADE,
             optionName = UadeOptionKeys.FILTER_ENABLED,
             optionValue = uadeFilterEnabled.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -322,7 +322,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(uadeNtscMode) {
         prefs.edit().putBoolean(CorePreferenceKeys.UADE_NTSC_MODE, uadeNtscMode).apply()
         applyCoreOptionWithPolicy(
-            coreName = "UADE",
+            coreName = DecoderNames.UADE,
             optionName = UadeOptionKeys.NTSC_MODE,
             optionValue = uadeNtscMode.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -334,7 +334,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = uadePanningMode.coerceIn(0, 4)
         prefs.edit().putInt(CorePreferenceKeys.UADE_PANNING_MODE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "UADE",
+            coreName = DecoderNames.UADE,
             optionName = UadeOptionKeys.PANNING_MODE,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -346,7 +346,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = hivelyTrackerPanningMode.coerceIn(-1, 4)
         prefs.edit().putInt(CorePreferenceKeys.HIVELYTRACKER_PANNING_MODE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "HivelyTracker",
+            coreName = DecoderNames.HIVELY_TRACKER,
             optionName = HivelyTrackerOptionKeys.PANNING_MODE,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -362,7 +362,7 @@ internal fun AppNavigationCoreEffects(
         }
         prefs.edit().putInt(CorePreferenceKeys.HIVELYTRACKER_MIX_GAIN_PERCENT, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "HivelyTracker",
+            coreName = DecoderNames.HIVELY_TRACKER,
             optionName = HivelyTrackerOptionKeys.MIX_GAIN_PERCENT,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -374,7 +374,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = klystrackPlayerQuality.coerceIn(0, 4)
         prefs.edit().putInt(CorePreferenceKeys.KLYSTRACK_PLAYER_QUALITY, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Klystrack",
+            coreName = DecoderNames.KLYSTRACK,
             optionName = KlystrackOptionKeys.PLAYER_QUALITY,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -386,7 +386,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = furnaceYm2612Core.coerceIn(0, 2)
         prefs.edit().putInt(CorePreferenceKeys.FURNACE_YM2612_CORE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Furnace",
+            coreName = DecoderNames.FURNACE,
             optionName = FurnaceOptionKeys.YM2612_CORE,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -398,7 +398,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = furnaceSnCore.coerceIn(0, 1)
         prefs.edit().putInt(CorePreferenceKeys.FURNACE_SN_CORE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Furnace",
+            coreName = DecoderNames.FURNACE,
             optionName = FurnaceOptionKeys.SN_CORE,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -410,7 +410,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = furnaceNesCore.coerceIn(0, 1)
         prefs.edit().putInt(CorePreferenceKeys.FURNACE_NES_CORE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Furnace",
+            coreName = DecoderNames.FURNACE,
             optionName = FurnaceOptionKeys.NES_CORE,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -422,7 +422,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = furnaceC64Core.coerceIn(0, 2)
         prefs.edit().putInt(CorePreferenceKeys.FURNACE_C64_CORE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Furnace",
+            coreName = DecoderNames.FURNACE,
             optionName = FurnaceOptionKeys.C64_CORE,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -434,7 +434,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = furnaceGbQuality.coerceIn(0, 5)
         prefs.edit().putInt(CorePreferenceKeys.FURNACE_GB_QUALITY, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Furnace",
+            coreName = DecoderNames.FURNACE,
             optionName = FurnaceOptionKeys.GB_QUALITY,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -446,7 +446,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = furnaceDsidQuality.coerceIn(0, 5)
         prefs.edit().putInt(CorePreferenceKeys.FURNACE_DSID_QUALITY, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Furnace",
+            coreName = DecoderNames.FURNACE,
             optionName = FurnaceOptionKeys.DSID_QUALITY,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -458,7 +458,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = furnaceAyCore.coerceIn(0, 1)
         prefs.edit().putInt(CorePreferenceKeys.FURNACE_AY_CORE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Furnace",
+            coreName = DecoderNames.FURNACE,
             optionName = FurnaceOptionKeys.AY_CORE,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -470,7 +470,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = sidPlayFpBackend.coerceIn(0, 2)
         prefs.edit().putInt(CorePreferenceKeys.SIDPLAYFP_BACKEND, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "LibSIDPlayFP",
+            coreName = DecoderNames.LIB_SID_PLAY_FP,
             optionName = SidPlayFpOptionKeys.BACKEND,
             optionValue = when (normalized) {
                 1 -> "sidlite"
@@ -486,7 +486,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = sidPlayFpClockMode.coerceIn(0, 2)
         prefs.edit().putInt(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "LibSIDPlayFP",
+            coreName = DecoderNames.LIB_SID_PLAY_FP,
             optionName = SidPlayFpOptionKeys.CLOCK_MODE,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -498,7 +498,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = sidPlayFpSidModelMode.coerceIn(0, 2)
         prefs.edit().putInt(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "LibSIDPlayFP",
+            coreName = DecoderNames.LIB_SID_PLAY_FP,
             optionName = SidPlayFpOptionKeys.SID_MODEL_MODE,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -509,7 +509,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(sidPlayFpFilter6581Enabled) {
         prefs.edit().putBoolean(CorePreferenceKeys.SIDPLAYFP_FILTER_6581_ENABLED, sidPlayFpFilter6581Enabled).apply()
         applyCoreOptionWithPolicy(
-            coreName = "LibSIDPlayFP",
+            coreName = DecoderNames.LIB_SID_PLAY_FP,
             optionName = SidPlayFpOptionKeys.FILTER_6581_ENABLED,
             optionValue = sidPlayFpFilter6581Enabled.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -520,7 +520,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(sidPlayFpFilter8580Enabled) {
         prefs.edit().putBoolean(CorePreferenceKeys.SIDPLAYFP_FILTER_8580_ENABLED, sidPlayFpFilter8580Enabled).apply()
         applyCoreOptionWithPolicy(
-            coreName = "LibSIDPlayFP",
+            coreName = DecoderNames.LIB_SID_PLAY_FP,
             optionName = SidPlayFpOptionKeys.FILTER_8580_ENABLED,
             optionValue = sidPlayFpFilter8580Enabled.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -531,7 +531,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(sidPlayFpDigiBoost8580) {
         prefs.edit().putBoolean(CorePreferenceKeys.SIDPLAYFP_DIGI_BOOST_8580, sidPlayFpDigiBoost8580).apply()
         applyCoreOptionWithPolicy(
-            coreName = "LibSIDPlayFP",
+            coreName = DecoderNames.LIB_SID_PLAY_FP,
             optionName = SidPlayFpOptionKeys.DIGI_BOOST_8580,
             optionValue = sidPlayFpDigiBoost8580.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -543,7 +543,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = sidPlayFpFilterCurve6581Percent.coerceIn(0, 100)
         prefs.edit().putInt(CorePreferenceKeys.SIDPLAYFP_FILTER_CURVE_6581, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "LibSIDPlayFP",
+            coreName = DecoderNames.LIB_SID_PLAY_FP,
             optionName = SidPlayFpOptionKeys.FILTER_CURVE_6581,
             optionValue = String.format(Locale.US, "%.2f", normalized / 100.0),
             policy = CoreOptionApplyPolicy.Live,
@@ -555,7 +555,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = sidPlayFpFilterRange6581Percent.coerceIn(0, 100)
         prefs.edit().putInt(CorePreferenceKeys.SIDPLAYFP_FILTER_RANGE_6581, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "LibSIDPlayFP",
+            coreName = DecoderNames.LIB_SID_PLAY_FP,
             optionName = SidPlayFpOptionKeys.FILTER_RANGE_6581,
             optionValue = String.format(Locale.US, "%.2f", normalized / 100.0),
             policy = CoreOptionApplyPolicy.Live,
@@ -567,7 +567,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = sidPlayFpFilterCurve8580Percent.coerceIn(0, 100)
         prefs.edit().putInt(CorePreferenceKeys.SIDPLAYFP_FILTER_CURVE_8580, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "LibSIDPlayFP",
+            coreName = DecoderNames.LIB_SID_PLAY_FP,
             optionName = SidPlayFpOptionKeys.FILTER_CURVE_8580,
             optionValue = String.format(Locale.US, "%.2f", normalized / 100.0),
             policy = CoreOptionApplyPolicy.Live,
@@ -578,7 +578,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(sidPlayFpReSidFpFastSampling) {
         prefs.edit().putBoolean(CorePreferenceKeys.SIDPLAYFP_RESIDFP_FAST_SAMPLING, sidPlayFpReSidFpFastSampling).apply()
         applyCoreOptionWithPolicy(
-            coreName = "LibSIDPlayFP",
+            coreName = DecoderNames.LIB_SID_PLAY_FP,
             optionName = SidPlayFpOptionKeys.RESIDFP_FAST_SAMPLING,
             optionValue = sidPlayFpReSidFpFastSampling.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -590,7 +590,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = sidPlayFpReSidFpCombinedWaveformsStrength.coerceIn(0, 2)
         prefs.edit().putInt(CorePreferenceKeys.SIDPLAYFP_RESIDFP_COMBINED_WAVEFORMS_STRENGTH, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "LibSIDPlayFP",
+            coreName = DecoderNames.LIB_SID_PLAY_FP,
             optionName = SidPlayFpOptionKeys.RESIDFP_COMBINED_WAVEFORMS_STRENGTH,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -602,7 +602,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = gmeTempoPercent.coerceIn(50, 200)
         prefs.edit().putInt(CorePreferenceKeys.GME_TEMPO_PERCENT, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Game Music Emu",
+            coreName = DecoderNames.GAME_MUSIC_EMU,
             optionName = GmeOptionKeys.TEMPO,
             optionValue = String.format(Locale.US, "%.2f", normalized / 100.0),
             policy = CoreOptionApplyPolicy.Live,
@@ -614,7 +614,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = gmeStereoSeparationPercent.coerceIn(0, 100)
         prefs.edit().putInt(CorePreferenceKeys.GME_STEREO_SEPARATION_PERCENT, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Game Music Emu",
+            coreName = DecoderNames.GAME_MUSIC_EMU,
             optionName = GmeOptionKeys.STEREO_SEPARATION,
             optionValue = String.format(Locale.US, "%.2f", normalized / 100.0),
             policy = CoreOptionApplyPolicy.Live,
@@ -625,7 +625,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(gmeEchoEnabled) {
         prefs.edit().putBoolean(CorePreferenceKeys.GME_ECHO_ENABLED, gmeEchoEnabled).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Game Music Emu",
+            coreName = DecoderNames.GAME_MUSIC_EMU,
             optionName = GmeOptionKeys.ECHO_ENABLED,
             optionValue = gmeEchoEnabled.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -636,7 +636,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(gmeAccuracyEnabled) {
         prefs.edit().putBoolean(CorePreferenceKeys.GME_ACCURACY_ENABLED, gmeAccuracyEnabled).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Game Music Emu",
+            coreName = DecoderNames.GAME_MUSIC_EMU,
             optionName = GmeOptionKeys.ACCURACY_ENABLED,
             optionValue = gmeAccuracyEnabled.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -648,7 +648,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = gmeEqTrebleDecibel.coerceIn(-50, 5)
         prefs.edit().putInt(CorePreferenceKeys.GME_EQ_TREBLE_DECIBEL, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Game Music Emu",
+            coreName = DecoderNames.GAME_MUSIC_EMU,
             optionName = GmeOptionKeys.EQ_TREBLE_DB,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -660,7 +660,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = gmeEqBassHz.coerceIn(1, 1000)
         prefs.edit().putInt(CorePreferenceKeys.GME_EQ_BASS_HZ, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Game Music Emu",
+            coreName = DecoderNames.GAME_MUSIC_EMU,
             optionName = GmeOptionKeys.EQ_BASS_HZ,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -671,7 +671,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(gmeSpcUseBuiltInFade) {
         prefs.edit().putBoolean(CorePreferenceKeys.GME_SPC_USE_BUILTIN_FADE, gmeSpcUseBuiltInFade).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Game Music Emu",
+            coreName = DecoderNames.GAME_MUSIC_EMU,
             optionName = GmeOptionKeys.SPC_USE_BUILTIN_FADE,
             optionValue = gmeSpcUseBuiltInFade.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -683,7 +683,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = gmeSpcInterpolation.coerceIn(-2, 2)
         prefs.edit().putInt(CorePreferenceKeys.GME_SPC_INTERPOLATION, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Game Music Emu",
+            coreName = DecoderNames.GAME_MUSIC_EMU,
             optionName = GmeOptionKeys.SPC_INTERPOLATION,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -694,7 +694,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(gmeSpcUseNativeSampleRate) {
         prefs.edit().putBoolean(CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE, gmeSpcUseNativeSampleRate).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Game Music Emu",
+            coreName = DecoderNames.GAME_MUSIC_EMU,
             optionName = GmeOptionKeys.SPC_USE_NATIVE_SAMPLE_RATE,
             optionValue = gmeSpcUseNativeSampleRate.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -706,21 +706,21 @@ internal fun AppNavigationCoreEffects(
         val normalized = unknownTrackDurationSeconds.coerceIn(1, 86400)
         prefs.edit().putInt(AppPreferenceKeys.UNKNOWN_TRACK_DURATION_SECONDS, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "Game Music Emu",
+            coreName = DecoderNames.GAME_MUSIC_EMU,
             optionName = GmeOptionKeys.UNKNOWN_DURATION_SECONDS,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
             optionLabel = "Unknown track duration"
         )
         applyCoreOptionWithPolicy(
-            coreName = "LibSIDPlayFP",
+            coreName = DecoderNames.LIB_SID_PLAY_FP,
             optionName = SidPlayFpOptionKeys.UNKNOWN_DURATION_SECONDS,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
             optionLabel = "Unknown track duration"
         )
         applyCoreOptionWithPolicy(
-            coreName = "UADE",
+            coreName = DecoderNames.UADE,
             optionName = UadeOptionKeys.UNKNOWN_DURATION_SECONDS,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -732,7 +732,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = vgmPlayLoopCount.coerceIn(1, 99)
         prefs.edit().putInt(CorePreferenceKeys.VGMPLAY_LOOP_COUNT, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "VGMPlay",
+            coreName = DecoderNames.VGM_PLAY,
             optionName = VgmPlayOptionKeys.LOOP_COUNT,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -743,7 +743,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(vgmPlayAllowNonLoopingLoop) {
         prefs.edit().putBoolean(CorePreferenceKeys.VGMPLAY_ALLOW_NON_LOOPING_LOOP, vgmPlayAllowNonLoopingLoop).apply()
         applyCoreOptionWithPolicy(
-            coreName = "VGMPlay",
+            coreName = DecoderNames.VGM_PLAY,
             optionName = VgmPlayOptionKeys.ALLOW_NON_LOOPING_LOOP,
             optionValue = vgmPlayAllowNonLoopingLoop.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -755,7 +755,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = if (vgmPlayVsyncRate == 50 || vgmPlayVsyncRate == 60) vgmPlayVsyncRate else 0
         prefs.edit().putInt(CorePreferenceKeys.VGMPLAY_VSYNC_RATE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "VGMPlay",
+            coreName = DecoderNames.VGM_PLAY,
             optionName = VgmPlayOptionKeys.VSYNC_RATE_HZ,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -767,7 +767,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = vgmPlayResampleMode.coerceIn(0, 2)
         prefs.edit().putInt(CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "VGMPlay",
+            coreName = DecoderNames.VGM_PLAY,
             optionName = VgmPlayOptionKeys.RESAMPLE_MODE,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -779,7 +779,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = vgmPlayChipSampleMode.coerceIn(0, 2)
         prefs.edit().putInt(CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_MODE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "VGMPlay",
+            coreName = DecoderNames.VGM_PLAY,
             optionName = VgmPlayOptionKeys.CHIP_SAMPLE_MODE,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -791,7 +791,7 @@ internal fun AppNavigationCoreEffects(
         val normalized = vgmPlayChipSampleRate.coerceIn(8000, 192000)
         prefs.edit().putInt(CorePreferenceKeys.VGMPLAY_CHIP_SAMPLE_RATE, normalized).apply()
         applyCoreOptionWithPolicy(
-            coreName = "VGMPlay",
+            coreName = DecoderNames.VGM_PLAY,
             optionName = VgmPlayOptionKeys.CHIP_SAMPLE_RATE_HZ,
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -807,7 +807,7 @@ internal fun AppNavigationCoreEffects(
         editor.apply()
         vgmPlayChipCoreSelections.forEach { (chipKey, selectedValue) ->
             applyCoreOptionWithPolicy(
-                coreName = "VGMPlay",
+                coreName = DecoderNames.VGM_PLAY,
                 optionName = "${VgmPlayOptionKeys.CHIP_CORE_PREFIX}$chipKey",
                 optionValue = selectedValue.toString(),
                 policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
@@ -819,7 +819,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(openMptStereoSeparationPercent) {
         prefs.edit().putInt(CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_PERCENT, openMptStereoSeparationPercent).apply()
         applyCoreOptionWithPolicy(
-            "LibOpenMPT",
+            DecoderNames.LIB_OPEN_MPT,
             "openmpt.stereo_separation_percent",
             openMptStereoSeparationPercent.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -830,7 +830,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(openMptStereoSeparationAmigaPercent) {
         prefs.edit().putInt(CorePreferenceKeys.OPENMPT_STEREO_SEPARATION_AMIGA_PERCENT, openMptStereoSeparationAmigaPercent).apply()
         applyCoreOptionWithPolicy(
-            "LibOpenMPT",
+            DecoderNames.LIB_OPEN_MPT,
             "openmpt.stereo_separation_amiga_percent",
             openMptStereoSeparationAmigaPercent.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -841,7 +841,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(openMptInterpolationFilterLength) {
         prefs.edit().putInt(CorePreferenceKeys.OPENMPT_INTERPOLATION_FILTER_LENGTH, openMptInterpolationFilterLength).apply()
         applyCoreOptionWithPolicy(
-            "LibOpenMPT",
+            DecoderNames.LIB_OPEN_MPT,
             "openmpt.interpolation_filter_length",
             openMptInterpolationFilterLength.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -852,7 +852,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(openMptAmigaResamplerMode) {
         prefs.edit().putInt(CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_MODE, openMptAmigaResamplerMode).apply()
         applyCoreOptionWithPolicy(
-            "LibOpenMPT",
+            DecoderNames.LIB_OPEN_MPT,
             "openmpt.amiga_resampler_mode",
             openMptAmigaResamplerMode.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -863,7 +863,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(openMptAmigaResamplerApplyAllModules) {
         prefs.edit().putBoolean(CorePreferenceKeys.OPENMPT_AMIGA_RESAMPLER_APPLY_ALL_MODULES, openMptAmigaResamplerApplyAllModules).apply()
         applyCoreOptionWithPolicy(
-            "LibOpenMPT",
+            DecoderNames.LIB_OPEN_MPT,
             "openmpt.amiga_resampler_apply_all_modules",
             openMptAmigaResamplerApplyAllModules.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -874,7 +874,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(openMptVolumeRampingStrength) {
         prefs.edit().putInt(CorePreferenceKeys.OPENMPT_VOLUME_RAMPING_STRENGTH, openMptVolumeRampingStrength).apply()
         applyCoreOptionWithPolicy(
-            "LibOpenMPT",
+            DecoderNames.LIB_OPEN_MPT,
             "openmpt.volume_ramping_strength",
             openMptVolumeRampingStrength.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -885,7 +885,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(openMptFt2XmVolumeRamping) {
         prefs.edit().putBoolean(CorePreferenceKeys.OPENMPT_FT2_XM_VOLUME_RAMPING, openMptFt2XmVolumeRamping).apply()
         applyCoreOptionWithPolicy(
-            "LibOpenMPT",
+            DecoderNames.LIB_OPEN_MPT,
             "openmpt.ft2_xm_volume_ramping",
             openMptFt2XmVolumeRamping.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -896,7 +896,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(openMptMasterGainMilliBel) {
         prefs.edit().putInt(CorePreferenceKeys.OPENMPT_MASTER_GAIN_MILLIBEL, openMptMasterGainMilliBel).apply()
         applyCoreOptionWithPolicy(
-            "LibOpenMPT",
+            DecoderNames.LIB_OPEN_MPT,
             "openmpt.master_gain_millibel",
             openMptMasterGainMilliBel.toString(),
             policy = CoreOptionApplyPolicy.Live,
@@ -907,7 +907,7 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(openMptSurroundEnabled) {
         prefs.edit().putBoolean(CorePreferenceKeys.OPENMPT_SURROUND_ENABLED, openMptSurroundEnabled).apply()
         applyCoreOptionWithPolicy(
-            "LibOpenMPT",
+            DecoderNames.LIB_OPEN_MPT,
             "openmpt.surround_enabled",
             openMptSurroundEnabled.toString(),
             policy = CoreOptionApplyPolicy.Live,

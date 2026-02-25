@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -69,6 +70,8 @@ import com.flopster101.siliconplayer.listSmbHostShareEntries
 import com.flopster101.siliconplayer.normalizeSmbPathForShare
 import com.flopster101.siliconplayer.resolveSmbAuthenticationFailureReason
 import com.flopster101.siliconplayer.smbAuthenticationFailureMessage
+import com.flopster101.siliconplayer.adaptiveDialogModifier
+import com.flopster101.siliconplayer.adaptiveDialogProperties
 import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -516,6 +519,8 @@ internal fun SmbFileBrowserScreen(
 
     if (authDialogVisible) {
         AlertDialog(
+            modifier = adaptiveDialogModifier(),
+            properties = adaptiveDialogProperties(),
             onDismissRequest = {
                 authDialogVisible = false
                 authDialogPasswordVisible = false
@@ -552,7 +557,9 @@ internal fun SmbFileBrowserScreen(
                         onValueChange = { authDialogUsername = it },
                         singleLine = true,
                         label = { Text("Username") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = remoteAuthDialogTextFieldColors()
                     )
                     OutlinedTextField(
                         value = authDialogPassword,
@@ -580,7 +587,9 @@ internal fun SmbFileBrowserScreen(
                                 )
                             }
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = remoteAuthDialogTextFieldColors()
                     )
                     Row(
                         modifier = Modifier
@@ -635,6 +644,15 @@ internal fun SmbFileBrowserScreen(
         )
     }
 }
+
+@Composable
+private fun remoteAuthDialogTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+)
 
 @Composable
 private fun SmbParentDirectoryRow(

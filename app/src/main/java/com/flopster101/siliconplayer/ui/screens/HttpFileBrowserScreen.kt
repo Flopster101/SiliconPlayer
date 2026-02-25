@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -74,6 +75,8 @@ import com.flopster101.siliconplayer.normalizeHttpDirectoryPath
 import com.flopster101.siliconplayer.normalizeHttpPath
 import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
 import com.flopster101.siliconplayer.resolveHttpAuthenticationFailureReason
+import com.flopster101.siliconplayer.adaptiveDialogModifier
+import com.flopster101.siliconplayer.adaptiveDialogProperties
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -658,6 +661,8 @@ internal fun HttpFileBrowserScreen(
 
     if (authDialogVisible) {
         androidx.compose.material3.AlertDialog(
+            modifier = adaptiveDialogModifier(),
+            properties = adaptiveDialogProperties(),
             onDismissRequest = {
                 authDialogVisible = false
                 authDialogPasswordVisible = false
@@ -694,7 +699,9 @@ internal fun HttpFileBrowserScreen(
                         onValueChange = { authDialogUsername = it },
                         singleLine = true,
                         label = { Text("Username") },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = remoteAuthDialogTextFieldColors()
                     )
                     OutlinedTextField(
                         value = authDialogPassword,
@@ -722,7 +729,9 @@ internal fun HttpFileBrowserScreen(
                                 )
                             }
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = remoteAuthDialogTextFieldColors()
                     )
                     Row(
                         modifier = Modifier
@@ -783,6 +792,15 @@ internal fun HttpFileBrowserScreen(
         )
     }
 }
+
+@Composable
+private fun remoteAuthDialogTextFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+    focusedBorderColor = MaterialTheme.colorScheme.primary,
+    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+)
 
 @Composable
 private fun HttpParentDirectoryRow(

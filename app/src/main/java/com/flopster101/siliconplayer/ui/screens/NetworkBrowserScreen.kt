@@ -20,6 +20,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeSpacing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,9 +64,7 @@ import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -90,8 +89,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -984,14 +981,14 @@ internal fun NetworkBrowserScreen(
                         }
                     } else {
                         Box(
-                            modifier = Modifier.size(40.dp),
+                            modifier = Modifier.size(width = 50.dp, height = 40.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Public,
+                                imageVector = NetworkIcons.WorldCode,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(24.dp)
+                                tint = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(26.dp)
                             )
                         }
                     }
@@ -1695,209 +1692,86 @@ internal fun NetworkBrowserScreen(
 
     if (showCreateFolderDialog) {
         val isEditing = editingFolderNodeId != null
-        AlertDialog(
-            onDismissRequest = {
+        NetworkCreateFolderDialog(
+            isEditing = isEditing,
+            folderName = newFolderName,
+            onFolderNameChange = { newFolderName = it },
+            onDismiss = {
                 showCreateFolderDialog = false
                 editingFolderNodeId = null
             },
-            title = {
-                Text(if (isEditing) "Edit folder" else "Create folder")
-            },
-            text = {
-                OutlinedTextField(
-                    value = newFolderName,
-                    onValueChange = { newFolderName = it },
-                    singleLine = true,
-                    label = { RequiredFieldLabel("Folder name") }
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        upsertFolder(newFolderName)
-                        showCreateFolderDialog = false
-                        editingFolderNodeId = null
-                        newFolderName = ""
-                    },
-                    enabled = newFolderName.trim().isNotEmpty()
-                ) {
-                    Text(if (isEditing) "Save" else "Create")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showCreateFolderDialog = false
-                        editingFolderNodeId = null
-                    }
-                ) {
-                    Text("Cancel")
-                }
+            onConfirm = {
+                upsertFolder(newFolderName)
+                showCreateFolderDialog = false
+                editingFolderNodeId = null
+                newFolderName = ""
             }
         )
     }
 
     if (showAddSourceDialog) {
         val isEditing = editingSourceNodeId != null
-        AlertDialog(
-            onDismissRequest = {
+        NetworkRemoteSourceDialog(
+            isEditing = isEditing,
+            sourceName = newSourceName,
+            onSourceNameChange = { newSourceName = it },
+            sourcePath = newSourcePath,
+            onSourcePathChange = { newSourcePath = it },
+            onDismiss = {
                 showAddSourceDialog = false
                 editingSourceNodeId = null
             },
-            title = {
-                Text(if (isEditing) "Edit remote source" else "Add remote source")
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = newSourceName,
-                        onValueChange = { newSourceName = it },
-                        singleLine = true,
-                        label = { Text("Name (optional)") }
-                    )
-                    OutlinedTextField(
-                        value = newSourcePath,
-                        onValueChange = { newSourcePath = it },
-                        singleLine = true,
-                        label = { RequiredFieldLabel("URL or path") }
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        upsertRemoteSource(newSourceName, newSourcePath)
-                        showAddSourceDialog = false
-                        editingSourceNodeId = null
-                        newSourceName = ""
-                        newSourcePath = ""
-                    },
-                    enabled = newSourcePath.trim().isNotEmpty()
-                ) {
-                    Text(if (isEditing) "Save" else "Add")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showAddSourceDialog = false
-                        editingSourceNodeId = null
-                    }
-                ) {
-                    Text("Cancel")
-                }
+            onConfirm = {
+                upsertRemoteSource(newSourceName, newSourcePath)
+                showAddSourceDialog = false
+                editingSourceNodeId = null
+                newSourceName = ""
+                newSourcePath = ""
             }
         )
     }
 
     if (showAddSmbSourceDialog) {
         val isEditing = editingSmbNodeId != null
-        AlertDialog(
-            onDismissRequest = {
+        NetworkSmbSourceDialog(
+            isEditing = isEditing,
+            sourceName = newSmbSourceName,
+            onSourceNameChange = { newSmbSourceName = it },
+            host = newSmbHost,
+            onHostChange = { newSmbHost = it },
+            share = newSmbShare,
+            onShareChange = { newSmbShare = it },
+            path = newSmbPath,
+            onPathChange = { newSmbPath = it },
+            username = newSmbUsername,
+            onUsernameChange = { newSmbUsername = it },
+            password = newSmbPassword,
+            onPasswordChange = { newSmbPassword = it },
+            passwordVisible = newSmbPasswordVisible,
+            onPasswordVisibleChange = { newSmbPasswordVisible = it },
+            onDismiss = {
                 showAddSmbSourceDialog = false
                 editingSmbNodeId = null
                 newSmbPasswordVisible = false
             },
-            title = {
-                Text(if (isEditing) "Edit SMB share" else "Add SMB share")
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = newSmbSourceName,
-                        onValueChange = { newSmbSourceName = it },
-                        singleLine = true,
-                        label = { Text("Name (optional)") }
-                    )
-                    OutlinedTextField(
-                        value = newSmbHost,
-                        onValueChange = { newSmbHost = it },
-                        singleLine = true,
-                        label = { RequiredFieldLabel("Host") }
-                    )
-                    OutlinedTextField(
-                        value = newSmbShare,
-                        onValueChange = { newSmbShare = it },
-                        singleLine = true,
-                        label = { Text("Share (optional)") }
-                    )
-                    OutlinedTextField(
-                        value = newSmbPath,
-                        onValueChange = { newSmbPath = it },
-                        singleLine = true,
-                        label = { Text("Path inside share (optional)") }
-                    )
-                    OutlinedTextField(
-                        value = newSmbUsername,
-                        onValueChange = { newSmbUsername = it },
-                        singleLine = true,
-                        label = { Text("Username (optional)") }
-                    )
-                    OutlinedTextField(
-                        value = newSmbPassword,
-                        onValueChange = { newSmbPassword = it },
-                        singleLine = true,
-                        label = { Text("Password (optional)") },
-                        visualTransformation = if (newSmbPasswordVisible) {
-                            VisualTransformation.None
-                        } else {
-                            PasswordVisualTransformation()
-                        },
-                        trailingIcon = {
-                            IconButton(onClick = { newSmbPasswordVisible = !newSmbPasswordVisible }) {
-                                Icon(
-                                    imageVector = if (newSmbPasswordVisible) {
-                                        Icons.Default.VisibilityOff
-                                    } else {
-                                        Icons.Default.Visibility
-                                    },
-                                    contentDescription = if (newSmbPasswordVisible) {
-                                        "Hide password"
-                                    } else {
-                                        "Show password"
-                                    }
-                                )
-                            }
-                        }
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        upsertSmbSource(
-                            name = newSmbSourceName,
-                            host = newSmbHost,
-                            share = newSmbShare,
-                            path = newSmbPath,
-                            username = newSmbUsername,
-                            password = newSmbPassword
-                        )
-                        showAddSmbSourceDialog = false
-                        editingSmbNodeId = null
-                        newSmbSourceName = ""
-                        newSmbHost = ""
-                        newSmbShare = ""
-                        newSmbPath = ""
-                        newSmbUsername = ""
-                        newSmbPassword = ""
-                        newSmbPasswordVisible = false
-                    },
-                    enabled = newSmbHost.trim().isNotEmpty()
-                ) {
-                    Text(if (isEditing) "Save" else "Add")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showAddSmbSourceDialog = false
-                        editingSmbNodeId = null
-                        newSmbPasswordVisible = false
-                    }
-                ) {
-                    Text("Cancel")
-                }
+            onConfirm = {
+                upsertSmbSource(
+                    name = newSmbSourceName,
+                    host = newSmbHost,
+                    share = newSmbShare,
+                    path = newSmbPath,
+                    username = newSmbUsername,
+                    password = newSmbPassword
+                )
+                showAddSmbSourceDialog = false
+                editingSmbNodeId = null
+                newSmbSourceName = ""
+                newSmbHost = ""
+                newSmbShare = ""
+                newSmbPath = ""
+                newSmbUsername = ""
+                newSmbPassword = ""
+                newSmbPasswordVisible = false
             }
         )
     }
@@ -1905,119 +1779,43 @@ internal fun NetworkBrowserScreen(
     if (showAddHttpSourceDialog) {
         val isEditing = editingHttpNodeId != null
         val parsedHttpSpec = parseHttpSourceSpecFromInput(newHttpUrl)
-        AlertDialog(
-            onDismissRequest = {
+        NetworkHttpSourceDialog(
+            isEditing = isEditing,
+            sourceName = newHttpSourceName,
+            onSourceNameChange = { newHttpSourceName = it },
+            url = newHttpUrl,
+            onUrlChange = { newHttpUrl = it },
+            username = newHttpUsername,
+            onUsernameChange = { newHttpUsername = it },
+            password = newHttpPassword,
+            onPasswordChange = { newHttpPassword = it },
+            passwordVisible = newHttpPasswordVisible,
+            onPasswordVisibleChange = { newHttpPasswordVisible = it },
+            treatAsRoot = newHttpTreatAsRoot,
+            onTreatAsRootChange = { newHttpTreatAsRoot = it },
+            isUrlValid = parsedHttpSpec != null,
+            showUrlError = parsedHttpSpec == null && newHttpUrl.trim().isNotEmpty(),
+            onDismiss = {
                 showAddHttpSourceDialog = false
                 editingHttpNodeId = null
                 newHttpPasswordVisible = false
             },
-            title = {
-                Text(if (isEditing) "Edit HTTP/HTTPS server" else "Add HTTP/HTTPS server")
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = newHttpSourceName,
-                        onValueChange = { newHttpSourceName = it },
-                        singleLine = true,
-                        label = { Text("Name (optional)") }
-                    )
-                    OutlinedTextField(
-                        value = newHttpUrl,
-                        onValueChange = { newHttpUrl = it },
-                        singleLine = true,
-                        label = { RequiredFieldLabel("Server URL") }
-                    )
-                    OutlinedTextField(
-                        value = newHttpUsername,
-                        onValueChange = { newHttpUsername = it },
-                        singleLine = true,
-                        label = { Text("Username (optional)") }
-                    )
-                    OutlinedTextField(
-                        value = newHttpPassword,
-                        onValueChange = { newHttpPassword = it },
-                        singleLine = true,
-                        label = { Text("Password (optional)") },
-                        visualTransformation = if (newHttpPasswordVisible) {
-                            VisualTransformation.None
-                        } else {
-                            PasswordVisualTransformation()
-                        },
-                        trailingIcon = {
-                            IconButton(onClick = { newHttpPasswordVisible = !newHttpPasswordVisible }) {
-                                Icon(
-                                    imageVector = if (newHttpPasswordVisible) {
-                                        Icons.Default.VisibilityOff
-                                    } else {
-                                        Icons.Default.Visibility
-                                    },
-                                    contentDescription = if (newHttpPasswordVisible) {
-                                        "Hide password"
-                                    } else {
-                                        "Show password"
-                                    }
-                                )
-                            }
-                        }
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Switch(
-                            checked = newHttpTreatAsRoot,
-                            onCheckedChange = { checked -> newHttpTreatAsRoot = checked }
-                        )
-                        Text(
-                            text = "Treat URL directory as browser root",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                    if (parsedHttpSpec == null && newHttpUrl.trim().isNotEmpty()) {
-                        Text(
-                            text = "Enter a valid http:// or https:// URL.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        upsertHttpSource(
-                            name = newHttpSourceName,
-                            url = newHttpUrl,
-                            username = newHttpUsername,
-                            password = newHttpPassword,
-                            treatUrlDirectoryAsRoot = newHttpTreatAsRoot
-                        )
-                        showAddHttpSourceDialog = false
-                        editingHttpNodeId = null
-                        newHttpSourceName = ""
-                        newHttpUrl = ""
-                        newHttpUsername = ""
-                        newHttpPassword = ""
-                        newHttpPasswordVisible = false
-                        newHttpTreatAsRoot = true
-                    },
-                    enabled = parsedHttpSpec != null
-                ) {
-                    Text(if (isEditing) "Save" else "Add")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showAddHttpSourceDialog = false
-                        editingHttpNodeId = null
-                        newHttpPasswordVisible = false
-                    }
-                ) {
-                    Text("Cancel")
-                }
+            onConfirm = {
+                upsertHttpSource(
+                    name = newHttpSourceName,
+                    url = newHttpUrl,
+                    username = newHttpUsername,
+                    password = newHttpPassword,
+                    treatUrlDirectoryAsRoot = newHttpTreatAsRoot
+                )
+                showAddHttpSourceDialog = false
+                editingHttpNodeId = null
+                newHttpSourceName = ""
+                newHttpUrl = ""
+                newHttpUsername = ""
+                newHttpPassword = ""
+                newHttpPasswordVisible = false
+                newHttpTreatAsRoot = true
             }
         )
     }
@@ -2390,19 +2188,6 @@ private fun AnnotatedString.Builder.appendBoldSourceTypeToken(label: String) {
         append(token)
     }
     append(suffix)
-}
-
-@Composable
-private fun RequiredFieldLabel(text: String) {
-    Text(
-        text = buildAnnotatedString {
-            append(text)
-            append(" ")
-            withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.error)) {
-                append("*")
-            }
-        }
-    )
 }
 
 private fun inferNetworkSourceFormatLabel(source: String): String {

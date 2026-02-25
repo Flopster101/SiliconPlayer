@@ -1,6 +1,7 @@
 package com.flopster101.siliconplayer.ui.screens
 
 import android.net.Uri
+import android.view.KeyEvent as AndroidKeyEvent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -22,6 +23,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,6 +74,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -82,6 +85,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -277,6 +284,24 @@ internal fun NetworkBrowserScreen(
                 }
                 entry.id to formatNetworkFolderSummary(folderCount, sourceCount)
             }
+    }
+    val entryRowFocusRequesters = remember { mutableStateMapOf<Long, FocusRequester>() }
+    val entryMenuFocusRequesters = remember { mutableStateMapOf<Long, FocusRequester>() }
+    val currentEntryIds = remember(currentEntries) { currentEntries.map { it.id } }
+    val currentEntryIdSet = remember(currentEntryIds) { currentEntryIds.toSet() }
+    currentEntryIds.forEach { entryId ->
+        if (!entryRowFocusRequesters.containsKey(entryId)) {
+            entryRowFocusRequesters[entryId] = FocusRequester()
+        }
+        if (!entryMenuFocusRequesters.containsKey(entryId)) {
+            entryMenuFocusRequesters[entryId] = FocusRequester()
+        }
+    }
+    (entryRowFocusRequesters.keys - currentEntryIdSet).forEach { staleId ->
+        entryRowFocusRequesters.remove(staleId)
+    }
+    (entryMenuFocusRequesters.keys - currentEntryIdSet).forEach { staleId ->
+        entryMenuFocusRequesters.remove(staleId)
     }
 
     val breadcrumbLabels = remember(nodes, currentFolderId) {
@@ -1562,7 +1587,7 @@ internal fun NetworkBrowserScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    currentEntries.forEach { entry ->
+                    currentEntries.forEachIndexed { entryIndex, entry ->
                         key(entry.id) {
                             AnimatedNetworkEntry(
                                 itemKey = entry.id,
@@ -1573,6 +1598,24 @@ internal fun NetworkBrowserScreen(
                 val isSmbFolderLikeSource = isSmbFolderLikeSource(entry, sourceId)
                 val isHttpFolderLikeSource = isHttpFolderLikeSource(entry, sourceId)
                 val isSelected = selectedNodeIds.contains(entry.id)
+                val rowFocusRequester = entryRowFocusRequesters.getOrPut(entry.id) { FocusRequester() }
+                val menuFocusRequester = entryMenuFocusRequesters.getOrPut(entry.id) { FocusRequester() }
+                val previousRowFocusRequester = currentEntries
+                    .getOrNull(entryIndex - 1)
+                    ?.id
+                    ?.let(entryRowFocusRequesters::get)
+                val nextRowFocusRequester = currentEntries
+                    .getOrNull(entryIndex + 1)
+                    ?.id
+                    ?.let(entryRowFocusRequesters::get)
+                val previousMenuFocusRequester = currentEntries
+                    .getOrNull(entryIndex - 1)
+                    ?.id
+                    ?.let(entryMenuFocusRequesters::get)
+                val nextMenuFocusRequester = currentEntries
+                    .getOrNull(entryIndex + 1)
+                    ?.id
+                    ?.let(entryMenuFocusRequesters::get)
                 val cardContainerColor by animateColorAsState(
                     targetValue = if (isSelected) {
                         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
@@ -1587,11 +1630,20 @@ internal fun NetworkBrowserScreen(
                 )
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
                     colors = CardDefaults.elevatedCardColors(containerColor = cardContainerColor)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .focusProperties {
+                                if (!isSelectionMode) {
+                                    right = menuFocusRequester
+                                }
+                                previousRowFocusRequester?.let { up = it }
+                                nextRowFocusRequester?.let { down = it }
+                            }
+                            .focusRequester(rowFocusRequester)
                             .combinedClickable(
                                 onClick = {
                                     when {
@@ -1629,6 +1681,7 @@ internal fun NetworkBrowserScreen(
                                     selectedNodeIds = selectedNodeIds + entry.id
                                 }
                             )
+                            .focusable()
                             .padding(start = 14.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1828,7 +1881,29 @@ internal fun NetworkBrowserScreen(
                         if (!isSelectionMode) {
                             Box {
                                 IconButton(
-                                    onClick = { expandedEntryMenuNodeId = entry.id }
+                                    onClick = { expandedEntryMenuNodeId = entry.id },
+                                    modifier = Modifier
+                                        .focusRequester(menuFocusRequester)
+                                .focusProperties {
+                                            left = rowFocusRequester
+                                            previousMenuFocusRequester?.let { up = it }
+                                            nextMenuFocusRequester?.let { down = it }
+                                        }
+                                        .onPreviewKeyEvent { event ->
+                                            val nativeEvent = event.nativeKeyEvent
+                                            if (nativeEvent.action == AndroidKeyEvent.ACTION_DOWN && (
+                                                    nativeEvent.keyCode == AndroidKeyEvent.KEYCODE_ENTER ||
+                                                        nativeEvent.keyCode == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER ||
+                                                        nativeEvent.keyCode == AndroidKeyEvent.KEYCODE_DPAD_CENTER ||
+                                                        nativeEvent.keyCode == AndroidKeyEvent.KEYCODE_SPACE
+                                                    )
+                                            ) {
+                                                expandedEntryMenuNodeId = entry.id
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        }
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.MoreVert,

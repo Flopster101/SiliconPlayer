@@ -224,27 +224,6 @@ internal fun HttpFileBrowserScreen(
         onBrowserLocationChanged(currentDirectorySourceId())
     }
 
-    fun cancelCurrentLoadAndGoBack() {
-        val cancelStateSnapshot = loadCancelState
-        abortActiveLoad()
-        loadingPartialEntries = emptyList()
-        loadingLoadedCount = 0
-        loadCancelState = null
-        if (cancelStateSnapshot?.previousSpec == null) {
-            onExitBrowser()
-            return
-        }
-        browserNavDirection = BrowserPageNavDirection.Backward
-        currentSpec = cancelStateSnapshot.previousSpec.copy(
-            username = sessionUsername,
-            password = sessionPassword
-        )
-        entries = cancelStateSnapshot.previousEntries
-        updatePlayableRemoteSources(cancelStateSnapshot.previousEntries)
-        errorMessage = cancelStateSnapshot.previousErrorMessage
-        onBrowserLocationChanged(currentDirectorySourceId())
-    }
-
     fun loadCurrentDirectory(cancelState: HttpLoadingCancelState?) {
         listJob?.cancel()
         loadRequestSequence += 1
@@ -392,6 +371,16 @@ internal fun HttpFileBrowserScreen(
             navigationDirection = BrowserPageNavDirection.Backward
         )
         return true
+    }
+
+    fun cancelCurrentLoadAndGoBack() {
+        abortActiveLoad()
+        loadingPartialEntries = emptyList()
+        loadingLoadedCount = 0
+        loadCancelState = null
+        if (!navigateUpWithinBrowser()) {
+            onExitBrowser()
+        }
     }
 
     DisposableEffect(Unit) {

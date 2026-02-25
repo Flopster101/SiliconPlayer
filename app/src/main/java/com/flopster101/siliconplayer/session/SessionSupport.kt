@@ -6,7 +6,6 @@ import android.os.Environment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.TabletAndroid
 import androidx.compose.material.icons.filled.Usb
@@ -296,7 +295,7 @@ internal fun storagePresentationForEntry(
         val qualifier = if (isRemoteSourceCached(context, normalizedPath)) "Cached" else null
         return StoragePresentation(
             label = "$protocolLabel ($hostLabel)",
-            icon = Icons.Default.Public,
+            icon = NetworkIcons.WorldCode,
             qualifier = qualifier
         )
     }
@@ -315,7 +314,7 @@ internal fun storagePresentationForEntry(
         }
         return StoragePresentation(
             label = smbLabel,
-            icon = NetworkIcons.FolderData,
+            icon = NetworkIcons.SmbShare,
             qualifier = qualifier
         )
     }

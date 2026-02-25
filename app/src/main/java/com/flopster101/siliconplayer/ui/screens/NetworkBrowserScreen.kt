@@ -40,7 +40,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
@@ -105,14 +104,17 @@ import com.flopster101.siliconplayer.buildSmbSourceId
 import com.flopster101.siliconplayer.buildSmbSourceSpec
 import com.flopster101.siliconplayer.formatNetworkFolderSummary
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.normalizeSourceIdentity
 import com.flopster101.siliconplayer.nextNetworkNodeId
 import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
+import com.flopster101.siliconplayer.placeholderArtworkIconForFile
 import com.flopster101.siliconplayer.resolveNetworkNodeDisplaySource
 import com.flopster101.siliconplayer.resolveNetworkNodeDisplayTitle
 import com.flopster101.siliconplayer.resolveNetworkNodeOpenInput
 import com.flopster101.siliconplayer.resolveNetworkNodeSmbSpec
 import com.flopster101.siliconplayer.resolveNetworkNodeSourceId
 import com.flopster101.siliconplayer.resolveSmbHostDisplayName
+import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
@@ -1057,7 +1059,7 @@ internal fun NetworkBrowserScreen(
                                 text = { Text("SMB share") },
                                 leadingIcon = {
                                     Icon(
-                                        imageVector = Icons.Default.Public,
+                                        imageVector = NetworkIcons.SmbShare,
                                         contentDescription = null
                                     )
                                 },
@@ -1196,6 +1198,7 @@ internal fun NetworkBrowserScreen(
                                 parentFolderId = currentFolderId
                             ) {
                 val sourceId = resolveNetworkNodeSourceId(entry).orEmpty()
+                val sourceScheme = Uri.parse(sourceId).scheme?.lowercase(Locale.ROOT)
                 val isSmbFolderLikeSource = isSmbFolderLikeSource(entry, sourceId)
                 val isSelected = selectedNodeIds.contains(entry.id)
                 val cardContainerColor by animateColorAsState(
@@ -1263,10 +1266,19 @@ internal fun NetworkBrowserScreen(
                         } else {
                             MaterialTheme.colorScheme.onSecondaryContainer
                         }
+                        val remoteSourceIconFile = if (!isFolder && !isSmbFolderLikeSource) {
+                            resolveNetworkRemoteIconFile(sourceId)
+                        } else {
+                            null
+                        }
                         val leadingIcon = when {
                             isFolder -> Icons.Default.Folder
-                            isSmbFolderLikeSource -> NetworkIcons.FolderData
-                            else -> Icons.Default.AudioFile
+                            isSmbFolderLikeSource -> NetworkIcons.SmbShare
+                            else -> placeholderArtworkIconForFile(
+                                file = remoteSourceIconFile,
+                                decoderName = null,
+                                allowCurrentDecoderFallback = false
+                            )
                         }
 
                         Box(
@@ -1308,7 +1320,6 @@ internal fun NetworkBrowserScreen(
                                     append(folderSummariesById[entry.id].orEmpty())
                                 }
                             } else {
-                                val sourceScheme = Uri.parse(sourceId).scheme?.lowercase(Locale.ROOT)
                                 val sourceTypeLabel = if (sourceScheme == "smb") {
                                     val smbHostLabel = entry.smbDiscoveredHostName
                                         ?.trim()
@@ -1380,9 +1391,14 @@ internal fun NetworkBrowserScreen(
                             if (subtitle.isNotBlank()) {
                                 if (isRemoteSource) {
                                     val shouldMarqueeSubtitle = subtitle.length > 44
+                                    val subtitleIcon = when (sourceScheme) {
+                                        "smb" -> NetworkIcons.SmbShare
+                                        "http", "https" -> NetworkIcons.WorldCode
+                                        else -> Icons.Default.Public
+                                    }
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
-                                            imageVector = Icons.Default.Public,
+                                            imageVector = subtitleIcon,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(14.dp)
@@ -2018,6 +2034,36 @@ private fun isSmbFolderLikeSource(entry: NetworkNode, sourceId: String): Boolean
     val leaf = normalizedPath.substringAfterLast('/').trim()
     if (leaf.isBlank()) return true
     return inferredPrimaryExtensionForName(leaf) == null || sourceId.endsWith("/")
+}
+
+private fun resolveNetworkRemoteIconFile(sourceId: String): File? {
+    if (sourceId.isBlank()) return null
+    val normalizedSource = normalizeSourceIdentity(sourceId) ?: sourceId
+    val parsed = Uri.parse(normalizedSource)
+    val leafName = when {
+        parsed.scheme.equals("file", ignoreCase = true) -> {
+            parsed.path
+                ?.substringAfterLast('/')
+                ?.trim()
+                .orEmpty()
+        }
+
+        !parsed.scheme.isNullOrBlank() -> {
+            parsed.lastPathSegment
+                ?.trim()
+                .orEmpty()
+        }
+
+        else -> {
+            normalizedSource
+                .substringBefore('#')
+                .substringBefore('?')
+                .substringAfterLast('/')
+                .trim()
+        }
+    }
+    if (leafName.isBlank()) return null
+    return File(leafName)
 }
 
 private fun buildNetworkEntrySubtitle(

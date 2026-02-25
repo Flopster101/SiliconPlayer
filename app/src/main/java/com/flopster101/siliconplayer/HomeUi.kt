@@ -479,7 +479,7 @@ internal fun HomeScreen(
                                         )
                                     } else if (isSmbRecentFolder) {
                                         Icon(
-                                            imageVector = NetworkIcons.FolderData,
+                                            imageVector = NetworkIcons.SmbShare,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary
                                         )
@@ -1013,7 +1013,9 @@ internal fun RecentTrackSummaryText(
             modifier = Modifier.graphicsLayer { alpha = metadataAlpha.value }
         )
     }
-    val isNetworkSource = storagePresentation.icon == Icons.Default.Public
+    val isNetworkSource = storagePresentation.icon == Icons.Default.Public ||
+        storagePresentation.icon == NetworkIcons.WorldCode ||
+        storagePresentation.icon == NetworkIcons.SmbShare
     val subtitleText = buildAnnotatedString {
         if (isNetworkSource) {
             appendBoldSourceTypeToken(storagePresentation.label)

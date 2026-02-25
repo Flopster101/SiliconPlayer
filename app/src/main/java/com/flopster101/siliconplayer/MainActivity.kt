@@ -2497,9 +2497,20 @@ private fun AppNavigation(
                         showUrlOrPathDialog = true
                     },
                     onOpenRecentFolder = { entry ->
-                        browserLaunchLocationId = entry.locationId
-                        browserLaunchDirectoryPath = entry.path
-                        browserLaunchSmbSourceNodeId = null
+                        val smbSpec = parseSmbSourceSpecFromInput(entry.path)
+                        if (smbSpec != null) {
+                            val smbTarget = resolveSmbRecentOpenTarget(
+                                targetSpec = smbSpec,
+                                networkNodes = networkNodes
+                            )
+                            browserLaunchLocationId = null
+                            browserLaunchDirectoryPath = smbTarget.requestUri
+                            browserLaunchSmbSourceNodeId = smbTarget.sourceNodeId
+                        } else {
+                            browserLaunchLocationId = entry.locationId
+                            browserLaunchDirectoryPath = entry.path
+                            browserLaunchSmbSourceNodeId = null
+                        }
                         returnToNetworkOnBrowserExit = false
                         currentView = MainView.Browser
                     },
@@ -2552,11 +2563,12 @@ private fun AppNavigation(
                             action = action,
                             recentFolders = recentFolders,
                             recentFoldersLimit = recentFoldersLimit,
+                            networkNodes = networkNodes,
                             onRecentFoldersChanged = { recentFolders = it },
-                            onOpenInBrowser = { locationId, directoryPath ->
+                            onOpenInBrowser = { locationId, directoryPath, smbSourceNodeId ->
                                 browserLaunchLocationId = locationId
                                 browserLaunchDirectoryPath = directoryPath
-                                browserLaunchSmbSourceNodeId = null
+                                browserLaunchSmbSourceNodeId = smbSourceNodeId
                                 returnToNetworkOnBrowserExit = false
                                 currentView = MainView.Browser
                             }
@@ -2570,14 +2582,15 @@ private fun AppNavigation(
                             action = action,
                             recentPlayedFiles = recentPlayedFiles,
                             recentFilesLimit = recentFilesLimit,
+                            networkNodes = networkNodes,
                             onRecentPlayedFilesChanged = { recentPlayedFiles = it },
                             resolveShareableFileForRecent = { recent ->
                                 runtimeDelegates.resolveShareableFileForRecent(recent)
                             },
-                            onOpenInBrowser = { locationId, directoryPath ->
+                            onOpenInBrowser = { locationId, directoryPath, smbSourceNodeId ->
                                 browserLaunchLocationId = locationId
                                 browserLaunchDirectoryPath = directoryPath
-                                browserLaunchSmbSourceNodeId = null
+                                browserLaunchSmbSourceNodeId = smbSourceNodeId
                                 returnToNetworkOnBrowserExit = false
                                 currentView = MainView.Browser
                             }

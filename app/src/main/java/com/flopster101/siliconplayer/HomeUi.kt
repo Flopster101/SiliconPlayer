@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.data.isArchiveLogicalFolderPath
 import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
 import com.flopster101.siliconplayer.data.parseArchiveSourceId
+import com.flopster101.siliconplayer.ui.screens.NetworkIcons
 import java.io.File
 import kotlinx.coroutines.delay
 
@@ -469,9 +470,16 @@ internal fun HomeScreen(
                                         .padding(horizontal = 14.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    val isSmbRecentFolder = parseSmbSourceSpecFromInput(entry.path) != null
                                     if (isArchiveLogicalFolderPath(entry.path)) {
                                         Icon(
                                             painter = painterResource(id = R.drawable.ic_folder_zip),
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    } else if (isSmbRecentFolder) {
+                                        Icon(
+                                            imageVector = NetworkIcons.FolderData,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary
                                         )

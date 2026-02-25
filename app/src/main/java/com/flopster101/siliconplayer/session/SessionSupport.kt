@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Usb
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.flopster101.siliconplayer.data.buildArchiveSourceId
 import com.flopster101.siliconplayer.data.parseArchiveSourceId
+import com.flopster101.siliconplayer.ui.screens.NetworkIcons
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -314,7 +315,7 @@ internal fun storagePresentationForEntry(
         }
         return StoragePresentation(
             label = smbLabel,
-            icon = Icons.Default.Public,
+            icon = NetworkIcons.FolderData,
             qualifier = qualifier
         )
     }

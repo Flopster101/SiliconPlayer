@@ -145,6 +145,47 @@ private fun isNetworkBrowserDirectoryPath(path: String?): Boolean {
     return scheme == "smb" || scheme == "http" || scheme == "https"
 }
 
+private fun resolveNetworkBrowserLaunchPathForRestore(
+    directoryPath: String,
+    smbSourceNodeId: Long?,
+    httpSourceNodeId: Long?,
+    networkNodes: List<NetworkNode>
+): String {
+    val smbPathSpec = parseSmbSourceSpecFromInput(directoryPath)
+    if (smbPathSpec != null) {
+        val nodeSpec = smbSourceNodeId
+            ?.let { sourceNodeId ->
+                networkNodes.firstOrNull { it.id == sourceNodeId }
+            }
+            ?.let(::resolveNetworkNodeSmbSpec)
+        return if (nodeSpec != null) {
+            buildSmbRequestUri(
+                smbPathSpec.copy(
+                    username = nodeSpec.username ?: smbPathSpec.username,
+                    password = nodeSpec.password
+                )
+            )
+        } else {
+            directoryPath
+        }
+    }
+
+    val httpPathSpec = parseHttpSourceSpecFromInput(directoryPath) ?: return directoryPath
+    val nodeHttpSpec = httpSourceNodeId
+        ?.let { sourceNodeId ->
+            networkNodes.firstOrNull { it.id == sourceNodeId }
+        }
+        ?.let(::resolveNetworkNodeSourceId)
+        ?.let(::parseHttpSourceSpecFromInput)
+        ?: return directoryPath
+    return buildHttpRequestUri(
+        httpPathSpec.copy(
+            username = nodeHttpSpec.username ?: httpPathSpec.username,
+            password = nodeHttpSpec.password ?: httpPathSpec.password
+        )
+    )
+}
+
 class MainActivity : ComponentActivity() {
     private var initialFileToOpen: File? = null
     private var initialFileFromExternalIntent: Boolean = false
@@ -2756,9 +2797,19 @@ private fun AppNavigation(
                         ) {
                             runtimeDelegates.addRecentFolder(directoryPath, locationId)
                         }
-                        if (browserLaunchLocationId != null || browserLaunchDirectoryPath != null) {
-                            browserLaunchLocationId = null
-                            browserLaunchDirectoryPath = null
+                        if (directoryPath != null) {
+                            if (isNetworkBrowserDirectoryPath(directoryPath)) {
+                                browserLaunchLocationId = null
+                                browserLaunchDirectoryPath = resolveNetworkBrowserLaunchPathForRestore(
+                                    directoryPath = directoryPath,
+                                    smbSourceNodeId = browserLaunchSmbSourceNodeId,
+                                    httpSourceNodeId = browserLaunchHttpSourceNodeId,
+                                    networkNodes = networkNodes
+                                )
+                            } else {
+                                browserLaunchLocationId = locationId
+                                browserLaunchDirectoryPath = directoryPath
+                            }
                         }
                         val shouldRememberBrowserLocation = !isNetworkBrowserDirectoryPath(directoryPath)
                         if (!rememberBrowserLocation || !shouldRememberBrowserLocation) {

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -64,15 +65,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.SmbBrowserEntry
 import com.flopster101.siliconplayer.SmbSourceSpec
+import com.flopster101.siliconplayer.SmbAuthenticationFailureReason
 import com.flopster101.siliconplayer.buildSmbEntrySourceSpec
 import com.flopster101.siliconplayer.buildSmbRequestUri
 import com.flopster101.siliconplayer.buildSmbSourceId
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
-import com.flopster101.siliconplayer.isSmbAuthenticationFailure
 import com.flopster101.siliconplayer.joinSmbRelativePath
 import com.flopster101.siliconplayer.listSmbDirectoryEntries
 import com.flopster101.siliconplayer.listSmbHostShareEntries
 import com.flopster101.siliconplayer.normalizeSmbPathForShare
+import com.flopster101.siliconplayer.resolveSmbAuthenticationFailureReason
+import com.flopster101.siliconplayer.smbAuthenticationFailureMessage
 import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -202,13 +205,20 @@ internal fun SmbFileBrowserScreen(
                 appendLoadingLog("Load finished")
             }.onFailure { throwable ->
                 entries = emptyList()
-                val authFailed = isSmbAuthenticationFailure(throwable)
-                if (authFailed) {
-                    authDialogErrorMessage = if (credentialsSpec.password.isNullOrBlank()) {
-                        "This SMB source requires authentication."
+                val authFailureReason = resolveSmbAuthenticationFailureReason(throwable)?.let { reason ->
+                    if (
+                        reason == SmbAuthenticationFailureReason.Unknown &&
+                        credentialsSpec.username.isNullOrBlank() &&
+                        credentialsSpec.password.isNullOrBlank()
+                    ) {
+                        SmbAuthenticationFailureReason.AuthenticationRequired
                     } else {
-                        "Authentication failed. Check username and password."
+                        reason
                     }
+                }
+                if (authFailureReason != null) {
+                    val authMessage = smbAuthenticationFailureMessage(authFailureReason)
+                    authDialogErrorMessage = authMessage
                     if (!authDialogVisible) {
                         authDialogUsername = credentialsSpec.username.orEmpty()
                         authDialogPassword = ""
@@ -216,7 +226,7 @@ internal fun SmbFileBrowserScreen(
                         authRememberPassword = true
                     }
                     authDialogVisible = true
-                    errorMessage = "Authentication required."
+                    errorMessage = authMessage
                 } else {
                     errorMessage = throwable.message ?: if (share.isBlank()) {
                         "Unable to list SMB shares"
@@ -392,20 +402,38 @@ internal fun SmbFileBrowserScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Text(
-                                    text = if (sharePickerMode) {
-                                        "Unable to list SMB shares"
-                                    } else {
-                                        "Unable to open SMB directory"
-                                    },
-                                    style = MaterialTheme.typography.titleSmall
-                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(MaterialTheme.colorScheme.errorContainer)
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.WarningAmber,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(
+                                        text = if (sharePickerMode) {
+                                            "Unable to list SMB shares"
+                                        } else {
+                                            "Unable to open SMB directory"
+                                        },
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                                 Text(
                                     text = errorMessage.orEmpty(),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error
                                 )
                                 TextButton(onClick = { loadCurrentDirectory() }) {
                                     Text("Retry")
@@ -465,19 +493,37 @@ internal fun SmbFileBrowserScreen(
             },
             title = { Text("SMB authentication required") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     authDialogErrorMessage?.let { message ->
-                        Text(
-                            text = message,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.errorContainer)
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.WarningAmber,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                     OutlinedTextField(
                         value = authDialogUsername,
                         onValueChange = { authDialogUsername = it },
                         singleLine = true,
-                        label = { Text("Username") }
+                        label = { Text("Username") },
+                        modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = authDialogPassword,
@@ -504,7 +550,8 @@ internal fun SmbFileBrowserScreen(
                                     }
                                 )
                             }
-                        }
+                        },
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Row(
                         modifier = Modifier

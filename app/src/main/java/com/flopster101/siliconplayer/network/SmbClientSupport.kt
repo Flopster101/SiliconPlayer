@@ -4,6 +4,15 @@ import com.hierynomus.smbj.connection.Connection
 import com.hierynomus.smbj.auth.AuthenticationContext
 import com.hierynomus.smbj.session.Session
 
+internal enum class SmbAuthenticationFailureReason {
+    WrongPassword,
+    WrongCredentials,
+    AccessDenied,
+    AccountRestricted,
+    AuthenticationRequired,
+    Unknown
+}
+
 internal fun authenticateSmbSession(connection: Connection, spec: SmbSourceSpec): Session {
     val attempts = buildList {
         val username = spec.username?.trim().orEmpty()
@@ -27,25 +36,56 @@ internal fun authenticateSmbSession(connection: Connection, spec: SmbSourceSpec)
 }
 
 internal fun isSmbAuthenticationFailure(throwable: Throwable?): Boolean {
-    if (throwable == null) return false
+    return resolveSmbAuthenticationFailureReason(throwable) != null
+}
+
+internal fun resolveSmbAuthenticationFailureReason(
+    throwable: Throwable?
+): SmbAuthenticationFailureReason? {
+    if (throwable == null) return null
     var current: Throwable? = throwable
     while (current != null) {
         val message = current.message.orEmpty()
-        if (
-            message.contains("Authentication failed", ignoreCase = true) ||
-            message.contains("STATUS_LOGON_FAILURE", ignoreCase = true) ||
-            message.contains("STATUS_WRONG_PASSWORD", ignoreCase = true) ||
-            message.contains("STATUS_ACCESS_DENIED", ignoreCase = true) ||
-            message.contains("STATUS_ACCOUNT_RESTRICTION", ignoreCase = true)
-        ) {
-            return true
+        if (message.contains("STATUS_WRONG_PASSWORD", ignoreCase = true)) {
+            return SmbAuthenticationFailureReason.WrongPassword
+        }
+        if (message.contains("STATUS_LOGON_FAILURE", ignoreCase = true)) {
+            return SmbAuthenticationFailureReason.WrongCredentials
+        }
+        if (message.contains("STATUS_ACCESS_DENIED", ignoreCase = true)) {
+            return SmbAuthenticationFailureReason.AccessDenied
+        }
+        if (message.contains("STATUS_ACCOUNT_RESTRICTION", ignoreCase = true)) {
+            return SmbAuthenticationFailureReason.AccountRestricted
+        }
+        if (message.contains("Authentication failed", ignoreCase = true)) {
+            return SmbAuthenticationFailureReason.Unknown
         }
         if (current.message == "Unable to authenticate SMB session") {
-            return true
+            return SmbAuthenticationFailureReason.AuthenticationRequired
         }
         current = current.cause
     }
-    return false
+    return null
+}
+
+internal fun smbAuthenticationFailureMessage(
+    reason: SmbAuthenticationFailureReason
+): String {
+    return when (reason) {
+        SmbAuthenticationFailureReason.WrongPassword ->
+            "Wrong password. Check it and try again."
+        SmbAuthenticationFailureReason.WrongCredentials ->
+            "Wrong username or password. Check credentials and try again."
+        SmbAuthenticationFailureReason.AccessDenied ->
+            "Access denied for this account on the selected SMB source."
+        SmbAuthenticationFailureReason.AccountRestricted ->
+            "This SMB account is restricted and cannot access this source."
+        SmbAuthenticationFailureReason.AuthenticationRequired ->
+            "This SMB source requires authentication."
+        SmbAuthenticationFailureReason.Unknown ->
+            "Authentication failed. Check credentials and try again."
+    }
 }
 
 internal fun normalizeSmbPathForShare(rawPath: String?): String? {

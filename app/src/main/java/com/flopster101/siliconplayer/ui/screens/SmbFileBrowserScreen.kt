@@ -153,6 +153,7 @@ internal fun SmbFileBrowserScreen(
             .filter { it.isNotBlank() }
             .toSet()
     }
+    val browserSearchController = rememberBrowserSearchController()
 
     fun appendLoadingLog(message: String) {
         val lineNumber = loadingLogLines.size + 1
@@ -314,6 +315,7 @@ internal fun SmbFileBrowserScreen(
     }
 
     LaunchedEffect(sourceSpec) {
+        browserSearchController.hide()
         currentShare = launchShare
         currentSubPath = ""
         authDialogVisible = false
@@ -336,6 +338,15 @@ internal fun SmbFileBrowserScreen(
 
     val canNavigateUp = currentSubPath.isNotBlank() || (canBrowseHostShares && currentShare.isNotBlank())
     val sharePickerMode = isSharePickerMode()
+    val filteredEntries = remember(entries, browserSearchController.debouncedQuery) {
+        if (browserSearchController.debouncedQuery.isBlank()) {
+            entries
+        } else {
+            entries.filter { entry ->
+                matchesBrowserSearchQuery(entry.name, browserSearchController.debouncedQuery)
+            }
+        }
+    }
     val browserContentState = remember(currentShare, currentSubPath, isLoading, errorMessage, entries.isEmpty()) {
         val key = "$currentShare|$currentSubPath"
         SmbBrowserContentState(
@@ -354,7 +365,7 @@ internal fun SmbFileBrowserScreen(
     val directoryScrollbarAlpha = rememberDialogLazyListScrollbarAlpha(
         enabled = browserContentState.pane == SmbBrowserPane.Entries,
         listState = entriesListState,
-        flashKey = "${browserContentState.pathKey}|${entries.size}",
+        flashKey = "${browserContentState.pathKey}|${filteredEntries.size}|${browserSearchController.debouncedQuery}",
         label = "smbBrowserDirectoryScrollbarAlpha"
     )
     val subtitle = buildString {
@@ -448,8 +459,23 @@ internal fun SmbFileBrowserScreen(
                                 subtitle = subtitle
                             )
                         }
+                        BrowserToolbarSearchButton(
+                            onClick = {
+                                if (browserSearchController.isVisible) {
+                                    browserSearchController.hide()
+                                } else {
+                                    browserSearchController.show()
+                                }
+                            }
+                        )
                     }
                 }
+                BrowserSearchToolbarRow(
+                    visible = browserSearchController.isVisible,
+                    queryInput = browserSearchController.input,
+                    onQueryInputChanged = browserSearchController::onInputChange,
+                    onClose = browserSearchController::hide
+                )
                 HorizontalDivider()
             }
         }
@@ -577,30 +603,36 @@ internal fun SmbFileBrowserScreen(
                         )
                     }
                 } else {
-                    items(entries, key = { entry -> "${entry.isDirectory}:${entry.name}" }) { entry ->
-                        SmbEntryRow(
-                            entry = entry,
-                            showAsShare = sharePickerMode,
-                            onClick = {
-                                if (sharePickerMode) {
-                                    browserNavDirection = BrowserPageNavDirection.Forward
-                                    currentShare = entry.name
-                                    currentSubPath = ""
-                                    loadCurrentDirectory()
-                                } else if (entry.isDirectory) {
-                                    browserNavDirection = BrowserPageNavDirection.Forward
-                                    currentSubPath = joinSmbRelativePath(currentSubPath, entry.name)
-                                    loadCurrentDirectory()
-                                } else {
-                                    val targetPath = joinSmbRelativePath(effectivePath().orEmpty(), entry.name)
-                                    val targetSpec = buildSmbEntrySourceSpec(
-                                        credentialsSpec.copy(share = currentShare),
-                                        targetPath
-                                    )
-                                    onOpenRemoteSource(buildSmbRequestUri(targetSpec))
+                    if (filteredEntries.isEmpty() && browserSearchController.debouncedQuery.isNotBlank()) {
+                        item("search-empty") {
+                            BrowserSearchNoResultsCard(query = browserSearchController.debouncedQuery)
+                        }
+                    } else {
+                        items(filteredEntries, key = { entry -> "${entry.isDirectory}:${entry.name}" }) { entry ->
+                            SmbEntryRow(
+                                entry = entry,
+                                showAsShare = sharePickerMode,
+                                onClick = {
+                                    if (sharePickerMode) {
+                                        browserNavDirection = BrowserPageNavDirection.Forward
+                                        currentShare = entry.name
+                                        currentSubPath = ""
+                                        loadCurrentDirectory()
+                                    } else if (entry.isDirectory) {
+                                        browserNavDirection = BrowserPageNavDirection.Forward
+                                        currentSubPath = joinSmbRelativePath(currentSubPath, entry.name)
+                                        loadCurrentDirectory()
+                                    } else {
+                                        val targetPath = joinSmbRelativePath(effectivePath().orEmpty(), entry.name)
+                                        val targetSpec = buildSmbEntrySourceSpec(
+                                            credentialsSpec.copy(share = currentShare),
+                                            targetPath
+                                        )
+                                        onOpenRemoteSource(buildSmbRequestUri(targetSpec))
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }

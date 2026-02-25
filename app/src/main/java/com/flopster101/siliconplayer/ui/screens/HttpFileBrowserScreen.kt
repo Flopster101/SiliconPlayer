@@ -164,6 +164,7 @@ internal fun HttpFileBrowserScreen(
             .filter { it.isNotBlank() }
             .toSet()
     }
+    val browserSearchController = rememberBrowserSearchController()
 
     fun updatePlayableRemoteSources(entriesForNavigation: List<HttpBrowserEntry>) {
         RemotePlayableSourceIdsHolder.current = entriesForNavigation
@@ -391,6 +392,7 @@ internal fun HttpFileBrowserScreen(
     }
 
     LaunchedEffect(sourceSpec) {
+        browserSearchController.hide()
         currentSpec = sourceSpec
         entries = emptyList()
         loadingPartialEntries = emptyList()
@@ -440,6 +442,15 @@ internal fun HttpFileBrowserScreen(
             path = normalizeHttpDirectoryPath(currentSpec.path)
         )
     }
+    val filteredEntries = remember(entries, browserSearchController.debouncedQuery) {
+        if (browserSearchController.debouncedQuery.isBlank()) {
+            entries
+        } else {
+            entries.filter { entry ->
+                matchesBrowserSearchQuery(entry.name, browserSearchController.debouncedQuery)
+            }
+        }
+    }
     val rawSubtitle = buildHttpDisplayUri(browserSpec())
     val subtitle = decodePercentEncodedForDisplay(rawSubtitle) ?: rawSubtitle
     val protocolLabel = browserSpec().scheme.uppercase(Locale.ROOT)
@@ -473,7 +484,7 @@ internal fun HttpFileBrowserScreen(
     val directoryScrollbarAlpha = rememberDialogLazyListScrollbarAlpha(
         enabled = browserContentState.pane == HttpBrowserPane.Entries,
         listState = entriesListState,
-        flashKey = "${browserContentState.path}|${entries.size}",
+        flashKey = "${browserContentState.path}|${filteredEntries.size}|${browserSearchController.debouncedQuery}",
         label = "httpBrowserDirectoryScrollbarAlpha"
     )
 
@@ -553,8 +564,23 @@ internal fun HttpFileBrowserScreen(
                                 subtitle = subtitle
                             )
                         }
+                        BrowserToolbarSearchButton(
+                            onClick = {
+                                if (browserSearchController.isVisible) {
+                                    browserSearchController.hide()
+                                } else {
+                                    browserSearchController.show()
+                                }
+                            }
+                        )
                     }
                 }
+                BrowserSearchToolbarRow(
+                    visible = browserSearchController.isVisible,
+                    queryInput = browserSearchController.input,
+                    onQueryInputChanged = browserSearchController::onInputChange,
+                    onClose = browserSearchController::hide
+                )
                 HorizontalDivider()
             }
         }
@@ -683,36 +709,42 @@ internal fun HttpFileBrowserScreen(
                             )
                         }
                     } else {
-                        items(entries, key = { entry -> entry.sourceId }) { entry ->
-                            HttpEntryRow(
-                                entry = entry,
-                                onClick = {
-                                    if (entry.isDirectory) {
-                                        val nextSpec = parseHttpSourceSpecFromInput(entry.requestUrl)
-                                            ?: return@HttpEntryRow
-                                        val cancelSnapshot = HttpLoadingCancelState(
-                                            previousSpec = currentSpec,
-                                            previousEntries = entries,
-                                            previousErrorMessage = errorMessage
-                                        )
-                                        openDirectory(
-                                            targetSpec = nextSpec.copy(
-                                                username = sessionUsername,
-                                                password = sessionPassword
-                                            ),
-                                            cancelState = cancelSnapshot,
-                                            navigationDirection = BrowserPageNavDirection.Forward
-                                        )
-                                    } else {
-                                        onOpenRemoteSource(
-                                            appendHttpDisplayNameFragment(
-                                                sourceUrl = entry.requestUrl,
-                                                displayName = entry.name
+                        if (filteredEntries.isEmpty() && browserSearchController.debouncedQuery.isNotBlank()) {
+                            item("search-empty") {
+                                BrowserSearchNoResultsCard(query = browserSearchController.debouncedQuery)
+                            }
+                        } else {
+                            items(filteredEntries, key = { entry -> entry.sourceId }) { entry ->
+                                HttpEntryRow(
+                                    entry = entry,
+                                    onClick = {
+                                        if (entry.isDirectory) {
+                                            val nextSpec = parseHttpSourceSpecFromInput(entry.requestUrl)
+                                                ?: return@HttpEntryRow
+                                            val cancelSnapshot = HttpLoadingCancelState(
+                                                previousSpec = currentSpec,
+                                                previousEntries = entries,
+                                                previousErrorMessage = errorMessage
                                             )
-                                        )
+                                            openDirectory(
+                                                targetSpec = nextSpec.copy(
+                                                    username = sessionUsername,
+                                                    password = sessionPassword
+                                                ),
+                                                cancelState = cancelSnapshot,
+                                                navigationDirection = BrowserPageNavDirection.Forward
+                                            )
+                                        } else {
+                                            onOpenRemoteSource(
+                                                appendHttpDisplayNameFragment(
+                                                    sourceUrl = entry.requestUrl,
+                                                    displayName = entry.name
+                                                )
+                                            )
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }

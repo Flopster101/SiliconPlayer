@@ -1,9 +1,12 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -36,15 +39,23 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,15 +63,68 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 
 internal enum class BrowserPageNavDirection {
     Forward,
     Backward,
     Neutral
+}
+
+private const val BROWSER_SEARCH_DEBOUNCE_MS = 1_000L
+
+internal class BrowserSearchController {
+    var isVisible by mutableStateOf(false)
+        private set
+    var input by mutableStateOf("")
+        private set
+    var debouncedQuery by mutableStateOf("")
+        private set
+
+    fun show() {
+        isVisible = true
+    }
+
+    fun hide() {
+        isVisible = false
+        input = ""
+        debouncedQuery = ""
+    }
+
+    fun onInputChange(value: String) {
+        input = value
+    }
+
+    internal fun setDebouncedQuery(value: String) {
+        debouncedQuery = value
+    }
+}
+
+@Composable
+internal fun rememberBrowserSearchController(): BrowserSearchController {
+    val controller = androidx.compose.runtime.remember { BrowserSearchController() }
+    LaunchedEffect(controller.isVisible, controller.input) {
+        if (!controller.isVisible) {
+            controller.setDebouncedQuery("")
+            return@LaunchedEffect
+        }
+        delay(BROWSER_SEARCH_DEBOUNCE_MS)
+        controller.setDebouncedQuery(controller.input.trim())
+    }
+    return controller
+}
+
+internal fun matchesBrowserSearchQuery(
+    candidate: String,
+    query: String
+): Boolean {
+    if (query.isBlank()) return true
+    return candidate.contains(query, ignoreCase = true)
 }
 
 internal fun browserPageContentTransform(
@@ -362,6 +426,100 @@ internal fun BrowserToolbarSelectorLabel(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(18.dp)
         )
+    }
+}
+
+@Composable
+internal fun BrowserToolbarSearchButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = modifier.size(40.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.Search,
+            contentDescription = "Search this folder",
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+internal fun BrowserSearchToolbarRow(
+    visible: Boolean,
+    queryInput: String,
+    onQueryInputChanged: (String) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = expandVertically() + fadeIn(),
+        exit = shrinkVertically() + fadeOut()
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            modifier = modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = queryInput,
+                    onValueChange = onQueryInputChanged,
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    label = { Text("Search this folder") }
+                )
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier
+                        .padding(start = 6.dp)
+                        .size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close search",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun BrowserSearchNoResultsCard(
+    query: String,
+    modifier: Modifier = Modifier
+) {
+    ElevatedCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "No results",
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                text = "No entries match \"$query\"",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Start
+            )
+        }
     }
 }
 

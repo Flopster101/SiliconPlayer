@@ -157,6 +157,7 @@ fun FileBrowserScreen(
     val selectorButtonFocusRequester = remember { FocusRequester() }
     var browserFocusedEntryKey by remember { mutableStateOf<String?>(null) }
     val browserEntryFocusRequesters = remember { mutableStateMapOf<String, FocusRequester>() }
+    val browserSearchController = rememberBrowserSearchController()
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val subtitleIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
@@ -540,6 +541,17 @@ fun FileBrowserScreen(
     } else {
         resolveLogicalArchivePath(currentDirectory) ?: (currentDirectory?.absolutePath ?: selectedLocation.name)
     }
+    val filteredFileList by remember(browserSearchController.debouncedQuery) {
+        derivedStateOf {
+            if (browserSearchController.debouncedQuery.isBlank()) {
+                fileList.toList()
+            } else {
+                fileList.filter { item ->
+                    matchesBrowserSearchQuery(item.name, browserSearchController.debouncedQuery)
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -666,12 +678,34 @@ fun FileBrowserScreen(
                                 subtitle = subtitle
                             )
                         }
+                        if (selectedLocationId != null) {
+                            BrowserToolbarSearchButton(
+                                onClick = {
+                                    if (browserSearchController.isVisible) {
+                                        browserSearchController.hide()
+                                    } else {
+                                        browserSearchController.show()
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
+                BrowserSearchToolbarRow(
+                    visible = selectedLocationId != null && browserSearchController.isVisible,
+                    queryInput = browserSearchController.input,
+                    onQueryInputChanged = browserSearchController::onInputChange,
+                    onClose = browserSearchController::hide
+                )
                 HorizontalDivider()
             }
         }
     ) { paddingValues ->
+        LaunchedEffect(selectedLocationId) {
+            if (selectedLocationId == null) {
+                browserSearchController.hide()
+            }
+        }
         fun triggerPullRefresh() {
             if (isPullRefreshing) return
             coroutineScope.launch {
@@ -700,7 +734,7 @@ fun FileBrowserScreen(
         val directoryScrollbarAlpha = rememberDialogLazyListScrollbarAlpha(
             enabled = browserContentState.pane == BrowserPane.DirectoryEntries,
             listState = directoryListState,
-            flashKey = browserContentState.currentDirectoryPath,
+            flashKey = "${browserContentState.currentDirectoryPath}|${filteredFileList.size}|${browserSearchController.debouncedQuery}",
             label = "fileBrowserDirectoryScrollbarAlpha"
         )
 
@@ -810,55 +844,61 @@ fun FileBrowserScreen(
                                 }
                             }
                         }
-                        items(
-                            items = fileList,
-                            key = { item -> item.file.absolutePath }
-                        ) { item ->
-                            val entryKey = item.file.absolutePath
-                            AnimatedFileBrowserEntry(
-                                itemKey = entryKey,
-                                animationEpoch = directoryAnimationEpoch,
-                                animateOnFirstComposition = isLoadingDirectory
-                            ) {
-                                val rowFocusRequester = remember(entryKey) { FocusRequester() }
-                                DisposableEffect(entryKey) {
-                                    browserEntryFocusRequesters[entryKey] = rowFocusRequester
-                                    onDispose { browserEntryFocusRequesters.remove(entryKey) }
-                                }
-                                FileItemRow(
-                                    item = item,
-                                    isPlaying = item.file == playingFile,
-                                    showFileIconChipBackground = showFileIconChipBackground,
-                                    decoderExtensionArtworkHints = decoderExtensionArtworkHints,
-                                    rightFocusRequester = selectorButtonFocusRequester,
-                                    rowFocusRequester = rowFocusRequester,
-                                    onFocused = { browserFocusedEntryKey = entryKey },
-                                    onClick = {
-                                        if (item.isArchive) {
-                                            openArchive(item)
-                                        } else if (item.isDirectory) {
-                                            navigateTo(item.file)
-                                        } else {
-                                            val mounted = findArchiveMount(item.file.absolutePath)
-                                            val sourceIdOverride = if (mounted != null) {
-                                                val mountRoot = mounted.first
-                                                val archivePath = mounted.second.archivePath
-                                                val relativePath = item.file.absolutePath
-                                                    .removePrefix(mountRoot)
-                                                    .trimStart('/')
-                                                    .replace('\\', '/')
-                                                if (relativePath.isBlank()) {
-                                                    null
-                                                } else {
-                                                    buildArchiveSourceId(archivePath, relativePath)
-                                                }
-                                            } else {
-                                                null
-                                            }
-                                            onFileSelected(item.file, sourceIdOverride)
-                                        }
+                        if (filteredFileList.isEmpty() && browserSearchController.debouncedQuery.isNotBlank()) {
+                            item(key = "search-empty") {
+                                BrowserSearchNoResultsCard(query = browserSearchController.debouncedQuery)
+                            }
+                        } else {
+                            items(
+                                items = filteredFileList,
+                                key = { item -> item.file.absolutePath }
+                            ) { item ->
+                                val entryKey = item.file.absolutePath
+                                AnimatedFileBrowserEntry(
+                                    itemKey = entryKey,
+                                    animationEpoch = directoryAnimationEpoch,
+                                    animateOnFirstComposition = isLoadingDirectory
+                                ) {
+                                    val rowFocusRequester = remember(entryKey) { FocusRequester() }
+                                    DisposableEffect(entryKey) {
+                                        browserEntryFocusRequesters[entryKey] = rowFocusRequester
+                                        onDispose { browserEntryFocusRequesters.remove(entryKey) }
                                     }
-                                )
+                                    FileItemRow(
+                                        item = item,
+                                        isPlaying = item.file == playingFile,
+                                        showFileIconChipBackground = showFileIconChipBackground,
+                                        decoderExtensionArtworkHints = decoderExtensionArtworkHints,
+                                        rightFocusRequester = selectorButtonFocusRequester,
+                                        rowFocusRequester = rowFocusRequester,
+                                        onFocused = { browserFocusedEntryKey = entryKey },
+                                        onClick = {
+                                            if (item.isArchive) {
+                                                openArchive(item)
+                                            } else if (item.isDirectory) {
+                                                navigateTo(item.file)
+                                            } else {
+                                                val mounted = findArchiveMount(item.file.absolutePath)
+                                                val sourceIdOverride = if (mounted != null) {
+                                                    val mountRoot = mounted.first
+                                                    val archivePath = mounted.second.archivePath
+                                                    val relativePath = item.file.absolutePath
+                                                        .removePrefix(mountRoot)
+                                                        .trimStart('/')
+                                                        .replace('\\', '/')
+                                                    if (relativePath.isBlank()) {
+                                                        null
+                                                    } else {
+                                                        buildArchiveSourceId(archivePath, relativePath)
+                                                    }
+                                                } else {
+                                                    null
+                                                }
+                                                onFileSelected(item.file, sourceIdOverride)
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
                     }

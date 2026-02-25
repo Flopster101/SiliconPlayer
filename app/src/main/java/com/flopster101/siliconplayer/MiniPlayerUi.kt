@@ -143,6 +143,9 @@ internal fun MiniPlayerBar(
     modifier: Modifier = Modifier
 ) {
     val hasTrack = file != null
+    val remoteLoadUiState = RemoteLoadUiStateHolder.current
+    val remoteLoadActive = remoteLoadUiState != null
+    val showLoadingIndicator = playbackStartInProgress || remoteLoadActive
     val formatLabel = file?.name?.let(::inferredPrimaryExtensionForName)?.uppercase(Locale.ROOT) ?: "EMPTY"
     val positionLabel = formatTimeForMini(positionSeconds)
     val durationLabel = if (durationSeconds > 0.0) {
@@ -295,7 +298,11 @@ internal fun MiniPlayerBar(
                         )
                     }
                     Text(
-                        text = "$formatLabel • $positionLabel / $durationLabel",
+                        text = if (remoteLoadActive) {
+                            miniRemoteLoadProgressLabel(remoteLoadUiState)
+                        } else {
+                            "$formatLabel • $positionLabel / $durationLabel"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -356,12 +363,12 @@ internal fun MiniPlayerBar(
                         onClick = onPlayPause,
                         enabled = (hasTrack || canResumeStoppedTrack) &&
                             !seekInProgress &&
-                            !playbackStartInProgress,
+                            !showLoadingIndicator,
                         modifier = Modifier
                             .focusRequester(playPauseButtonFocusRequester)
                             .size(controlButtonSize)
                     ) {
-                        if (playbackStartInProgress) {
+                        if (showLoadingIndicator) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size((controlIconSize.value + 2f).dp),
                                 strokeWidth = 2.dp
@@ -398,7 +405,33 @@ internal fun MiniPlayerBar(
                 }
             }
 
-            if (playbackStartInProgress) {
+            if (remoteLoadActive) {
+                val remotePercent = remoteLoadUiState
+                    ?.percent
+                    ?.takeIf { it in 0..100 }
+                    ?.div(100f)
+                val remoteDeterminate = remoteLoadUiState?.phase != RemoteLoadPhase.Connecting &&
+                    remoteLoadUiState?.indeterminate != true &&
+                    remotePercent != null
+                if (remoteDeterminate) {
+                    LinearProgressIndicator(
+                        progress = { remotePercent ?: 0f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
+            } else if (playbackStartInProgress) {
                 LinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -418,6 +451,26 @@ internal fun MiniPlayerBar(
             }
         }
     }
+}
+
+private fun miniRemoteLoadProgressLabel(remoteLoadUiState: RemoteLoadUiState?): String {
+    if (remoteLoadUiState == null) return "Loading track..."
+    val phaseLabel = when (remoteLoadUiState.phase) {
+        RemoteLoadPhase.Connecting -> "Connecting..."
+        RemoteLoadPhase.Downloading -> "Downloading..."
+        RemoteLoadPhase.Opening -> "Opening..."
+    }
+    if (remoteLoadUiState.phase == RemoteLoadPhase.Connecting) return phaseLabel
+    val downloadedLabel = formatByteCount(remoteLoadUiState.downloadedBytes)
+    val sizeLabel = remoteLoadUiState.totalBytes
+        ?.takeIf { it > 0L }
+        ?.let { total -> "$downloadedLabel / ${formatByteCount(total)}" }
+        ?: downloadedLabel
+    val percentLabel = remoteLoadUiState.percent
+        ?.takeIf { it in 0..100 }
+        ?.let { percent -> " • $percent%" }
+        .orEmpty()
+    return "$phaseLabel $sizeLabel$percentLabel"
 }
 
 internal fun formatTimeForMini(seconds: Double): String {

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -51,6 +53,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,6 +74,7 @@ import com.flopster101.siliconplayer.listSmbHostShareEntries
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.normalizeSmbPathForShare
 import com.flopster101.siliconplayer.resolveSmbAuthenticationFailureReason
+import com.flopster101.siliconplayer.rememberDialogLazyListScrollbarAlpha
 import com.flopster101.siliconplayer.smbAuthenticationFailureMessage
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
@@ -341,6 +345,14 @@ internal fun SmbFileBrowserScreen(
             pathKey = key
         )
     }
+    val entriesListState = rememberLazyListState()
+    val nonEntriesListState = rememberLazyListState()
+    val directoryScrollbarAlpha = rememberDialogLazyListScrollbarAlpha(
+        enabled = browserContentState.pane == SmbBrowserPane.Entries,
+        listState = entriesListState,
+        flashKey = "${browserContentState.pathKey}|${entries.size}",
+        label = "smbBrowserDirectoryScrollbarAlpha"
+    )
     val subtitle = buildString {
         append("smb://")
         append(credentialsSpec.host)
@@ -404,26 +416,34 @@ internal fun SmbFileBrowserScreen(
             }
         }
     ) { paddingValues ->
-        AnimatedContent(
-            targetState = browserContentState,
-            transitionSpec = {
-                val loadingTransition =
-                    initialState.pane == SmbBrowserPane.Loading ||
-                        targetState.pane == SmbBrowserPane.Loading
-                browserContentTransform(
-                    navDirection = browserNavDirection,
-                    loadingTransition = loadingTransition
-                )
-            },
-            label = "smbBrowserLoadingTransition",
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-        ) { state ->
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = bottomContentPadding)
-            ) {
+        ) {
+            AnimatedContent(
+                targetState = browserContentState,
+                transitionSpec = {
+                    val loadingTransition =
+                        initialState.pane == SmbBrowserPane.Loading ||
+                            targetState.pane == SmbBrowserPane.Loading
+                    browserContentTransform(
+                        navDirection = browserNavDirection,
+                        loadingTransition = loadingTransition
+                    )
+                },
+                label = "smbBrowserLoadingTransition",
+                modifier = Modifier.fillMaxSize()
+            ) { state ->
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    state = if (state.pane == SmbBrowserPane.Entries) {
+                        entriesListState
+                    } else {
+                        nonEntriesListState
+                    },
+                    contentPadding = PaddingValues(bottom = bottomContentPadding)
+                ) {
                 if (canNavigateUp && state.pane != SmbBrowserPane.Loading) {
                     item("parent") {
                         SmbParentDirectoryRow(
@@ -545,6 +565,22 @@ internal fun SmbFileBrowserScreen(
                         )
                     }
                 }
+            }
+            }
+            if (browserContentState.pane == SmbBrowserPane.Entries) {
+                BrowserLazyListScrollbar(
+                    listState = entriesListState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(
+                            top = 8.dp,
+                            end = 2.dp,
+                            bottom = bottomContentPadding + 8.dp
+                        )
+                        .fillMaxHeight()
+                        .width(4.dp)
+                        .graphicsLayer(alpha = directoryScrollbarAlpha)
+                )
             }
         }
     }

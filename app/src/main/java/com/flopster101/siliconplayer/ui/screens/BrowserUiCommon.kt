@@ -15,14 +15,17 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -245,5 +248,50 @@ internal fun BrowserLoadingCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+internal fun BrowserLazyListScrollbar(
+    listState: LazyListState,
+    modifier: Modifier = Modifier
+) {
+    val layoutInfo = listState.layoutInfo
+    val visibleItems = layoutInfo.visibleItemsInfo
+    val totalItems = layoutInfo.totalItemsCount
+    if (visibleItems.isEmpty() || totalItems <= 0) return
+
+    val visibleCount = visibleItems.size
+    if (!listState.canScrollBackward && !listState.canScrollForward && visibleCount >= totalItems) {
+        return
+    }
+
+    val averageItemSizePx = (visibleItems.sumOf { it.size }.toFloat() / visibleCount.toFloat())
+        .coerceAtLeast(1f)
+    val fractionalFirstIndex = listState.firstVisibleItemIndex.toFloat() +
+        (listState.firstVisibleItemScrollOffset.toFloat() / averageItemSizePx)
+    val maxFirstIndex = (totalItems - visibleCount).coerceAtLeast(1).toFloat()
+    val offsetFraction = (fractionalFirstIndex / maxFirstIndex).coerceIn(0f, 1f)
+    val thumbHeightFraction = (visibleCount.toFloat() / totalItems.toFloat()).coerceIn(0.08f, 1f)
+
+    BoxWithConstraints(
+        modifier = modifier.background(
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+            shape = RoundedCornerShape(999.dp)
+        )
+    ) {
+        val thumbHeight = (maxHeight * thumbHeightFraction).coerceAtLeast(18.dp)
+        val thumbMaxOffset = (maxHeight - thumbHeight).coerceAtLeast(0.dp)
+        val thumbOffset = thumbMaxOffset * offsetFraction
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(thumbHeight)
+                .offset(y = thumbOffset)
+                .background(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                    shape = RoundedCornerShape(999.dp)
+                )
+        )
     }
 }

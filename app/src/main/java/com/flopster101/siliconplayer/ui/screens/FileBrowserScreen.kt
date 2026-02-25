@@ -54,6 +54,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,6 +64,7 @@ import com.flopster101.siliconplayer.extensionCandidatesForName
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.DecoderArtworkHint
 import com.flopster101.siliconplayer.R
+import com.flopster101.siliconplayer.rememberDialogLazyListScrollbarAlpha
 import com.flopster101.siliconplayer.resolveDecoderArtworkHintForFileName
 import com.flopster101.siliconplayer.data.buildArchiveSourceId
 import com.flopster101.siliconplayer.data.FileItem
@@ -734,6 +736,12 @@ fun FileBrowserScreen(
             refreshing = isPullRefreshing,
             onRefresh = { triggerPullRefresh() }
         )
+        val directoryScrollbarAlpha = rememberDialogLazyListScrollbarAlpha(
+            enabled = browserContentState.pane == BrowserPane.DirectoryEntries,
+            listState = directoryListState,
+            flashKey = browserContentState.currentDirectoryPath,
+            label = "fileBrowserDirectoryScrollbarAlpha"
+        )
 
         Box(
             modifier = Modifier
@@ -902,6 +910,21 @@ fun FileBrowserScreen(
                 backgroundColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                 contentColor = MaterialTheme.colorScheme.primary
             )
+            if (browserContentState.pane == BrowserPane.DirectoryEntries) {
+                BrowserLazyListScrollbar(
+                    listState = directoryListState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(
+                            top = 8.dp,
+                            end = 2.dp,
+                            bottom = bottomContentPadding + 8.dp
+                    )
+                        .fillMaxHeight()
+                        .width(4.dp)
+                        .graphicsLayer(alpha = directoryScrollbarAlpha)
+                )
+            }
         }
     }
 }

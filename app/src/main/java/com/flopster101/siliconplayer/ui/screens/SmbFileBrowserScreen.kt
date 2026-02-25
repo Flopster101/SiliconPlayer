@@ -1,5 +1,9 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,11 +21,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -35,12 +42,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -57,6 +67,7 @@ import com.flopster101.siliconplayer.normalizeSmbPathForShare
 import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.tween
 
 private val SMB_ICON_BOX_SIZE = 38.dp
 private val SMB_ICON_GLYPH_SIZE = 26.dp
@@ -83,6 +94,18 @@ internal fun SmbFileBrowserScreen(
     var isLoading by remember(sourceSpec) { mutableStateOf(false) }
     var errorMessage by remember(sourceSpec) { mutableStateOf<String?>(null) }
     var listJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
+    val loadingLogLines = remember(sourceSpec) { mutableStateListOf<String>() }
+
+    fun appendLoadingLog(message: String) {
+        val lineNumber = loadingLogLines.size + 1
+        loadingLogLines += "[${lineNumber.toString().padStart(2, '0')}] $message"
+        val maxLines = 80
+        if (loadingLogLines.size > maxLines) {
+            repeat(loadingLogLines.size - maxLines) {
+                loadingLogLines.removeAt(0)
+            }
+        }
+    }
 
     fun effectivePath(): String? {
         val sub = normalizeSmbPathForShare(currentSubPath).orEmpty()
@@ -100,8 +123,22 @@ internal fun SmbFileBrowserScreen(
         listJob?.cancel()
         isLoading = true
         errorMessage = null
+        loadingLogLines.clear()
         val share = currentShare
         val pathInsideShare = effectivePath()
+        appendLoadingLog("Connecting to smb://${credentialsSpec.host}")
+        if (share.isBlank()) {
+            appendLoadingLog("Enumerating host shares")
+        } else {
+            appendLoadingLog("Opening share '$share'")
+            appendLoadingLog(
+                if (pathInsideShare.isNullOrBlank()) {
+                    "Listing share root directory"
+                } else {
+                    "Listing '$pathInsideShare'"
+                }
+            )
+        }
         listJob = coroutineScope.launch {
             val result = if (share.isBlank()) {
                 listSmbHostShareEntries(credentialsSpec)
@@ -114,6 +151,11 @@ internal fun SmbFileBrowserScreen(
             result.onSuccess { resolved ->
                 entries = resolved
                 errorMessage = null
+                val folders = resolved.count { it.isDirectory }
+                val files = resolved.size - folders
+                appendLoadingLog("Found ${resolved.size} entries")
+                appendLoadingLog("$folders folders, $files files")
+                appendLoadingLog("Load finished")
             }.onFailure { throwable ->
                 entries = emptyList()
                 errorMessage = throwable.message ?: if (share.isBlank()) {
@@ -121,6 +163,9 @@ internal fun SmbFileBrowserScreen(
                 } else {
                     "Unable to list SMB directory"
                 }
+                appendLoadingLog(
+                    "Load failed: ${throwable.message ?: throwable.javaClass.simpleName ?: "Unknown error"}"
+                )
             }
             isLoading = false
             listJob = null
@@ -225,41 +270,49 @@ internal fun SmbFileBrowserScreen(
             }
         }
     ) { paddingValues ->
-        LazyColumn(
+        val showLoadingCard = isLoading && entries.isEmpty()
+        AnimatedContent(
+            targetState = showLoadingCard,
+            transitionSpec = {
+                fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
+                    fadeOut(animationSpec = tween(durationMillis = 170))
+            },
+            label = "smbBrowserLoadingTransition",
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(bottom = bottomContentPadding)
-        ) {
-            if (canNavigateUp) {
-                item("parent") {
-                    SmbParentDirectoryRow(
-                        onClick = {
-                            navigateUpWithinBrowser()
-                        }
-                    )
+                .padding(paddingValues)
+        ) { showLoading ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = bottomContentPadding)
+            ) {
+                if (canNavigateUp) {
+                    item("parent") {
+                        SmbParentDirectoryRow(
+                            onClick = {
+                                navigateUpWithinBrowser()
+                            }
+                        )
+                    }
                 }
-            }
 
-            when {
-                isLoading && entries.isEmpty() -> {
+                if (showLoading) {
                     item("loading") {
-                        SmbInfoCard(
+                        SmbLoadingCard(
                             title = if (sharePickerMode) {
                                 "Loading SMB shares..."
                             } else {
                                 "Loading SMB directory..."
                             },
                             subtitle = if (sharePickerMode) {
-                                "Fetching shares from host"
+                                "Fetching available shares from host"
                             } else {
                                 "Fetching folder entries"
-                            }
+                            },
+                            logLines = loadingLogLines
                         )
                     }
-                }
-
-                !errorMessage.isNullOrBlank() -> {
+                } else if (!errorMessage.isNullOrBlank()) {
                     item("error") {
                         ElevatedCard(
                             modifier = Modifier
@@ -291,9 +344,7 @@ internal fun SmbFileBrowserScreen(
                             }
                         }
                     }
-                }
-
-                entries.isEmpty() -> {
+                } else if (entries.isEmpty()) {
                     item("empty") {
                         SmbInfoCard(
                             title = if (sharePickerMode) {
@@ -308,9 +359,7 @@ internal fun SmbFileBrowserScreen(
                             }
                         )
                     }
-                }
-
-                else -> {
+                } else {
                     items(entries, key = { entry -> "${entry.isDirectory}:${entry.name}" }) { entry ->
                         SmbEntryRow(
                             entry = entry,
@@ -480,6 +529,111 @@ private fun SmbInfoCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+@Composable
+private fun SmbLoadingCard(
+    title: String,
+    subtitle: String,
+    logLines: List<String>
+) {
+    val logListState = rememberLazyListState()
+    LaunchedEffect(logLines.size) {
+        if (logLines.isNotEmpty()) {
+            logListState.animateScrollToItem(logLines.lastIndex)
+        }
+    }
+
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(12.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Public,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(108.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                if (logLines.isEmpty()) {
+                    Text(
+                        text = "[00] Waiting for SMB response...",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        state = logListState,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(logLines.size, key = { index -> "$index:${logLines[index]}" }) { index ->
+                            Text(
+                                text = logLines[index],
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontFamily = FontFamily.Monospace
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

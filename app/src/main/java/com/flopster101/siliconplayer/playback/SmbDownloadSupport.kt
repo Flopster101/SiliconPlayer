@@ -40,7 +40,7 @@ internal suspend fun downloadSmbSourceToCache(
     if (remotePath.isBlank()) {
         return@withContext RemoteDownloadResult(
             file = null,
-            errorMessage = "SMB source must point to a file path inside the share"
+            errorMessage = "SMB share must point to a file path inside the share"
         )
     }
 
@@ -111,7 +111,7 @@ internal suspend fun downloadSmbSourceToCache(
             temp.delete()
             return@withContext RemoteDownloadResult(
                 file = null,
-                errorMessage = "Downloaded 0 bytes from SMB source"
+                errorMessage = "Downloaded 0 bytes from SMB share"
             )
         }
         if (!temp.renameTo(target)) {

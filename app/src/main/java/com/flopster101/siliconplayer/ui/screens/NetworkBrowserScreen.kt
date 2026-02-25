@@ -1046,7 +1046,7 @@ internal fun NetworkBrowserScreen(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("SMB source") },
+                                text = { Text("SMB share") },
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.Public,
@@ -1610,7 +1610,7 @@ internal fun NetworkBrowserScreen(
                 editingSmbNodeId = null
             },
             title = {
-                Text(if (isEditing) "Edit SMB source" else "Add SMB source")
+                Text(if (isEditing) "Edit SMB share" else "Add SMB share")
             },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

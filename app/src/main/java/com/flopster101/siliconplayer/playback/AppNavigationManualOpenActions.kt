@@ -133,7 +133,7 @@ internal fun launchManualRemoteSelectionAction(
                 ManualSourceType.Smb -> {
                     val smbSpec = resolved.smbSpec
                     if (smbSpec == null) {
-                        ManualRemoteOpenResult.Failed("Invalid SMB source configuration")
+                        ManualRemoteOpenResult.Failed("Invalid SMB share configuration")
                     } else {
                         executeManualRemoteOpen(
                             resolved = resolved,

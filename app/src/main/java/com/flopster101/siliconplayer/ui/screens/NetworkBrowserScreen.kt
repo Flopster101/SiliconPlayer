@@ -2,6 +2,19 @@ package com.flopster101.siliconplayer.ui.screens
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.MarqueeSpacing
 import androidx.compose.foundation.background
@@ -15,6 +28,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -54,11 +68,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -86,6 +103,9 @@ import kotlinx.coroutines.delay
 private val NETWORK_ICON_BOX_SIZE = 38.dp
 private val NETWORK_ICON_GLYPH_SIZE = 26.dp
 private const val NETWORK_REFRESH_PLACEHOLDER_DELAY_MS = 1200L
+private const val NETWORK_ENTRY_ANIM_DURATION_MS = 190
+private const val NETWORK_STATUS_ANIM_DURATION_MS = 170
+private const val NETWORK_SELECTION_COLOR_ANIM_DURATION_MS = 140
 
 private enum class NetworkClipboardMode {
     Copy,
@@ -457,6 +477,18 @@ internal fun NetworkBrowserScreen(
 
     val toolbarActionButtonModifier = Modifier.size(40.dp)
     val toolbarActionIconModifier = Modifier.size(20.dp)
+    val statusMessage = when {
+        isSelectionMode -> "${selectedNodeIds.size} selected"
+        clipboardState != null -> {
+            val modeLabel = if (clipboardState?.mode == NetworkClipboardMode.Copy) {
+                "Copy"
+            } else {
+                "Move"
+            }
+            "$modeLabel mode active. Open destination folder and tap Paste."
+        }
+        else -> null
+    }
 
     Column(
         modifier = Modifier
@@ -466,330 +498,409 @@ internal fun NetworkBrowserScreen(
             .padding(bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = RoundedCornerShape(24.dp),
-            tonalElevation = 2.dp,
-            shadowElevation = 1.dp
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(
+                    animationSpec = tween(
+                        durationMillis = NETWORK_STATUS_ANIM_DURATION_MS,
+                        easing = FastOutSlowInEasing
+                    )
+                ),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(70.dp)
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                shape = RoundedCornerShape(24.dp),
+                tonalElevation = 2.dp,
+                shadowElevation = 1.dp
             ) {
-                if (currentFolderId != null) {
-                    IconButton(
-                        onClick = { navigateUpOneFolder() },
-                        modifier = toolbarActionButtonModifier
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(70.dp)
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (currentFolderId != null) {
+                        IconButton(
+                            onClick = { navigateUpOneFolder() },
+                            modifier = toolbarActionButtonModifier
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Go to parent folder",
+                                modifier = toolbarActionIconModifier
+                            )
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier.size(40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Public,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 6.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Go to parent folder",
-                            modifier = toolbarActionIconModifier
+                        Text(
+                            text = "Network",
+                            style = MaterialTheme.typography.titleMedium
                         )
                     }
+
+                    if (isSelectionMode) {
+                        Box {
+                            IconButton(
+                                onClick = { showSelectionActionsMenu = true },
+                                modifier = toolbarActionButtonModifier
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "Selection actions",
+                                    modifier = toolbarActionIconModifier
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showSelectionActionsMenu,
+                                onDismissRequest = { showSelectionActionsMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Copy") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.ContentCopy,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    enabled = selectedNodeIds.isNotEmpty(),
+                                    onClick = {
+                                        beginClipboardMode(NetworkClipboardMode.Copy, selectedNodeIds)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Move") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    enabled = selectedNodeIds.isNotEmpty(),
+                                    onClick = {
+                                        beginClipboardMode(NetworkClipboardMode.Move, selectedNodeIds)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Delete") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    enabled = selectedNodeIds.isNotEmpty(),
+                                    onClick = { beginDeleteConfirmation(selectedNodeIds) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Refresh") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    enabled = selectedNodeIds.isNotEmpty(),
+                                    onClick = { beginRefreshPlaceholder(selectedNodeIds) }
+                                )
+                            }
+                        }
+                        Box {
+                            IconButton(
+                                onClick = { showSelectionToggleMenu = true },
+                                modifier = toolbarActionButtonModifier
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SelectAll,
+                                    contentDescription = "Selection toggles",
+                                    modifier = toolbarActionIconModifier
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showSelectionToggleMenu,
+                                onDismissRequest = { showSelectionToggleMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Select all") },
+                                    onClick = {
+                                        selectedNodeIds = currentEntries.mapTo(LinkedHashSet()) { it.id }
+                                        showSelectionToggleMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Deselect all") },
+                                    onClick = {
+                                        selectedNodeIds = emptySet()
+                                        showSelectionToggleMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    clipboardState?.let { activeClipboard ->
+                        IconButton(
+                            onClick = { applyPasteFromClipboard() },
+                            modifier = toolbarActionButtonModifier
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentPaste,
+                                contentDescription = "Paste ${activeClipboard.mode.name.lowercase(Locale.ROOT)}",
+                                modifier = toolbarActionIconModifier
+                            )
+                        }
+                    }
+
+                    if (isSelectionMode || clipboardState != null) {
+                        val cancelLabel = when {
+                            isSelectionMode -> "Cancel selection mode"
+                            clipboardState != null -> "Cancel ${clipboardState?.mode?.name?.lowercase(Locale.ROOT)} mode"
+                            else -> "Cancel"
+                        }
+                        IconButton(
+                            onClick = {
+                                if (isSelectionMode) {
+                                    selectedNodeIds = emptySet()
+                                    selectionModeEnabled = false
+                                    showSelectionActionsMenu = false
+                                    showSelectionToggleMenu = false
+                                }
+                                clipboardState = null
+                            },
+                            modifier = toolbarActionButtonModifier
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = cancelLabel,
+                                modifier = toolbarActionIconModifier
+                            )
+                        }
+                    }
+
+                    Box {
+                        IconButton(
+                            onClick = { showAddMenu = true },
+                            modifier = toolbarActionButtonModifier
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Add folder or source",
+                                modifier = toolbarActionIconModifier
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showAddMenu,
+                            onDismissRequest = { showAddMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Folder") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.CreateNewFolder,
+                                        contentDescription = null
+                                    )
+                                },
+                                onClick = {
+                                    showAddMenu = false
+                                    editingFolderNodeId = null
+                                    newFolderName = ""
+                                    showCreateFolderDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Remote source") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Link,
+                                        contentDescription = null
+                                    )
+                                },
+                                onClick = {
+                                    showAddMenu = false
+                                    editingSourceNodeId = null
+                                    newSourceName = ""
+                                    newSourcePath = ""
+                                    showAddSourceDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("SMB source") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Public,
+                                        contentDescription = null
+                                    )
+                                },
+                                onClick = {
+                                    showAddMenu = false
+                                    editingSmbNodeId = null
+                                    newSmbSourceName = ""
+                                    newSmbHost = ""
+                                    newSmbShare = ""
+                                    newSmbPath = ""
+                                    newSmbUsername = ""
+                                    newSmbPassword = ""
+                                    showAddSmbSourceDialog = true
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            AnimatedContent(
+                targetState = statusMessage,
+                transitionSpec = {
+                    (
+                        fadeIn(
+                            animationSpec = tween(
+                                durationMillis = NETWORK_STATUS_ANIM_DURATION_MS,
+                                easing = LinearOutSlowInEasing
+                            )
+                        ) + slideInVertically(
+                            initialOffsetY = { fullHeight -> fullHeight / 2 },
+                            animationSpec = tween(
+                                durationMillis = NETWORK_STATUS_ANIM_DURATION_MS,
+                                easing = FastOutSlowInEasing
+                            )
+                        )
+                    ) togetherWith (
+                        fadeOut(
+                            animationSpec = tween(
+                                durationMillis = NETWORK_STATUS_ANIM_DURATION_MS / 2,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) + slideOutVertically(
+                            targetOffsetY = { fullHeight -> -(fullHeight / 3) },
+                            animationSpec = tween(
+                                durationMillis = NETWORK_STATUS_ANIM_DURATION_MS / 2,
+                                easing = FastOutSlowInEasing
+                            )
+                        )
+                    )
+                },
+                label = "networkStatusTransition",
+                modifier = Modifier.fillMaxWidth()
+            ) { message ->
+                if (message == null) {
+                    Spacer(modifier = Modifier.height(2.dp))
                 } else {
-                    Box(
-                        modifier = Modifier.size(40.dp),
-                        contentAlignment = Alignment.Center
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+
+        AnimatedContent(
+            targetState = currentEntries.isEmpty(),
+            transitionSpec = {
+                (
+                    fadeIn(
+                        animationSpec = tween(
+                            durationMillis = NETWORK_STATUS_ANIM_DURATION_MS,
+                            easing = LinearOutSlowInEasing
+                        )
+                    ) + slideInVertically(
+                        initialOffsetY = { fullHeight -> fullHeight / 10 },
+                        animationSpec = tween(
+                            durationMillis = NETWORK_STATUS_ANIM_DURATION_MS,
+                            easing = FastOutSlowInEasing
+                        )
+                    )
+                ) togetherWith (
+                    fadeOut(
+                        animationSpec = tween(
+                            durationMillis = NETWORK_STATUS_ANIM_DURATION_MS / 2,
+                            easing = FastOutSlowInEasing
+                        )
+                    )
+                )
+            },
+            label = "networkListState",
+            modifier = Modifier.fillMaxWidth()
+        ) { isEmpty ->
+            if (isEmpty) {
+                ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Public,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(24.dp)
+                            tint = MaterialTheme.colorScheme.primary
                         )
-                    }
-                }
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 6.dp)
-                ) {
-                    Text(
-                        text = "Network",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-
-                if (isSelectionMode) {
-                    Box {
-                        IconButton(
-                            onClick = { showSelectionActionsMenu = true },
-                            modifier = toolbarActionButtonModifier
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "Selection actions",
-                                modifier = toolbarActionIconModifier
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showSelectionActionsMenu,
-                            onDismissRequest = { showSelectionActionsMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Copy") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.ContentCopy,
-                                        contentDescription = null
-                                    )
-                                },
-                                enabled = selectedNodeIds.isNotEmpty(),
-                                onClick = {
-                                    beginClipboardMode(NetworkClipboardMode.Copy, selectedNodeIds)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Move") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
-                                        contentDescription = null
-                                    )
-                                },
-                                enabled = selectedNodeIds.isNotEmpty(),
-                                onClick = {
-                                    beginClipboardMode(NetworkClipboardMode.Move, selectedNodeIds)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Delete") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = null
-                                    )
-                                },
-                                enabled = selectedNodeIds.isNotEmpty(),
-                                onClick = { beginDeleteConfirmation(selectedNodeIds) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Refresh") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = null
-                                    )
-                                },
-                                enabled = selectedNodeIds.isNotEmpty(),
-                                onClick = { beginRefreshPlaceholder(selectedNodeIds) }
-                            )
-                        }
-                    }
-                    Box {
-                        IconButton(
-                            onClick = { showSelectionToggleMenu = true },
-                            modifier = toolbarActionButtonModifier
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SelectAll,
-                                contentDescription = "Selection toggles",
-                                modifier = toolbarActionIconModifier
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showSelectionToggleMenu,
-                            onDismissRequest = { showSelectionToggleMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Select all") },
-                                onClick = {
-                                    selectedNodeIds = currentEntries.mapTo(LinkedHashSet()) { it.id }
-                                    showSelectionToggleMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Deselect all") },
-                                onClick = {
-                                    selectedNodeIds = emptySet()
-                                    showSelectionToggleMenu = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                clipboardState?.let { activeClipboard ->
-                    IconButton(
-                        onClick = { applyPasteFromClipboard() },
-                        modifier = toolbarActionButtonModifier
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentPaste,
-                            contentDescription = "Paste ${activeClipboard.mode.name.lowercase(Locale.ROOT)}",
-                            modifier = toolbarActionIconModifier
-                        )
-                    }
-                }
-
-                if (isSelectionMode || clipboardState != null) {
-                    val cancelLabel = when {
-                        isSelectionMode -> "Cancel selection mode"
-                        clipboardState != null -> "Cancel ${clipboardState?.mode?.name?.lowercase(Locale.ROOT)} mode"
-                        else -> "Cancel"
-                    }
-                    IconButton(
-                        onClick = {
-                            if (isSelectionMode) {
-                                selectedNodeIds = emptySet()
-                                selectionModeEnabled = false
-                                showSelectionActionsMenu = false
-                                showSelectionToggleMenu = false
-                            }
-                            clipboardState = null
-                        },
-                        modifier = toolbarActionButtonModifier
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = cancelLabel,
-                            modifier = toolbarActionIconModifier
-                        )
-                    }
-                }
-
-                Box {
-                    IconButton(
-                        onClick = { showAddMenu = true },
-                        modifier = toolbarActionButtonModifier
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Add folder or source",
-                            modifier = toolbarActionIconModifier
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showAddMenu,
-                        onDismissRequest = { showAddMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Folder") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.CreateNewFolder,
-                                    contentDescription = null
-                                )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = if (currentFolderId == null) {
+                                "No network shares yet"
+                            } else {
+                                "This folder is empty"
                             },
-                            onClick = {
-                                showAddMenu = false
-                                editingFolderNodeId = null
-                                newFolderName = ""
-                                showCreateFolderDialog = true
-                            }
+                            style = MaterialTheme.typography.titleMedium
                         )
-                        DropdownMenuItem(
-                            text = { Text("Remote source") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Link,
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                showAddMenu = false
-                                editingSourceNodeId = null
-                                newSourceName = ""
-                                newSourcePath = ""
-                                showAddSourceDialog = true
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("SMB source") },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.Public,
-                                    contentDescription = null
-                                )
-                            },
-                            onClick = {
-                                showAddMenu = false
-                                editingSmbNodeId = null
-                                newSmbSourceName = ""
-                                newSmbHost = ""
-                                newSmbShare = ""
-                                newSmbPath = ""
-                                newSmbUsername = ""
-                                newSmbPassword = ""
-                                showAddSmbSourceDialog = true
-                            }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Use + to add folders and remote sources.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
-            }
-        }
-        if (isSelectionMode) {
-            Text(
-                text = "${selectedNodeIds.size} selected",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        clipboardState?.let { activeClipboard ->
-            val modeLabel = if (activeClipboard.mode == NetworkClipboardMode.Copy) {
-                "Copy"
             } else {
-                "Move"
-            }
-            Text(
-                text = "$modeLabel mode active. Open destination folder and tap Paste.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        Spacer(modifier = Modifier.height(2.dp))
-
-        if (currentEntries.isEmpty()) {
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 22.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Public,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = if (currentFolderId == null) {
-                            "No network shares yet"
-                        } else {
-                            "This folder is empty"
-                        },
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "Use + to add folders and remote sources.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-        } else {
-            currentEntries.forEach { entry ->
+                    currentEntries.forEach { entry ->
+                        key(entry.id) {
+                            AnimatedNetworkEntry(
+                                itemKey = entry.id,
+                                parentFolderId = currentFolderId
+                            ) {
                 val sourceId = resolveNetworkNodeSourceId(entry).orEmpty()
                 val isSmbFolderLikeSource = isSmbFolderLikeSource(entry, sourceId)
                 val isSelected = selectedNodeIds.contains(entry.id)
+                val cardContainerColor by animateColorAsState(
+                    targetValue = if (isSelected) {
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerLow
+                    },
+                    animationSpec = tween(
+                        durationMillis = NETWORK_SELECTION_COLOR_ANIM_DURATION_MS,
+                        easing = FastOutSlowInEasing
+                    ),
+                    label = "networkEntrySelectionColor"
+                )
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = if (isSelected) {
-                        CardDefaults.elevatedCardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
-                        )
-                    } else {
-                        CardDefaults.elevatedCardColors()
-                    }
+                    colors = CardDefaults.elevatedCardColors(containerColor = cardContainerColor)
                 ) {
                     Row(
                         modifier = Modifier
@@ -1052,6 +1163,10 @@ internal fun NetworkBrowserScreen(
                             }
                         } else {
                             Spacer(modifier = Modifier.size(48.dp))
+                        }
+                    }
+                }
+                            }
                         }
                     }
                 }
@@ -1328,6 +1443,45 @@ internal fun NetworkBrowserScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun AnimatedNetworkEntry(
+    itemKey: Long,
+    parentFolderId: Long?,
+    content: @Composable () -> Unit
+) {
+    var visible by remember(itemKey, parentFolderId) { mutableStateOf(false) }
+    LaunchedEffect(itemKey, parentFolderId) {
+        visible = false
+        withFrameNanos { }
+        visible = true
+    }
+
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = NETWORK_ENTRY_ANIM_DURATION_MS,
+            easing = LinearOutSlowInEasing
+        ),
+        label = "networkEntryAlpha"
+    )
+    val offsetY by animateDpAsState(
+        targetValue = if (visible) 0.dp else 8.dp,
+        animationSpec = tween(
+            durationMillis = NETWORK_ENTRY_ANIM_DURATION_MS,
+            easing = LinearOutSlowInEasing
+        ),
+        label = "networkEntryOffset"
+    )
+
+    Box(
+        modifier = Modifier
+            .offset(y = offsetY)
+            .alpha(alpha)
+    ) {
+        content()
     }
 }
 

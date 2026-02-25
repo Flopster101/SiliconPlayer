@@ -136,38 +136,6 @@ internal fun buildRecentTrackDisplay(
     }
 }
 
-private fun decodeRecentDisplaySegment(raw: String): String {
-    val trimmed = raw.trim()
-    if (trimmed.isBlank()) return trimmed
-    if (!trimmed.contains('%')) return trimmed
-    return Uri.decode(trimmed).trim().ifBlank { trimmed }
-}
-
-private fun resolveRecentFolderDisplayName(path: String): String {
-    parseSmbSourceSpecFromInput(path)?.let { smbSpec ->
-        val leaf = when {
-            !smbSpec.path.isNullOrBlank() -> smbSpec.path.substringAfterLast('/')
-            smbSpec.share.isNotBlank() -> smbSpec.share
-            else -> smbSpec.host
-        }
-        return decodeRecentDisplaySegment(leaf).ifBlank { path }
-    }
-
-    parseHttpSourceSpecFromInput(path)?.let { httpSpec ->
-        val normalizedPath = normalizeHttpPath(httpSpec.path)
-        if (normalizedPath == "/") {
-            return decodeRecentDisplaySegment(httpSpec.host).ifBlank { path }
-        }
-        val leaf = normalizedPath
-            .trimEnd('/')
-            .substringAfterLast('/')
-        return decodeRecentDisplaySegment(leaf).ifBlank { path }
-    }
-
-    val folderName = File(path).name
-    return decodeRecentDisplaySegment(folderName).ifBlank { path }
-}
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun HomeScreen(
@@ -524,7 +492,7 @@ internal fun HomeScreen(
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = resolveRecentFolderDisplayName(entry.path),
+                                            text = folderTitleForDisplay(entry.path),
                                             style = MaterialTheme.typography.titleSmall,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
@@ -635,8 +603,7 @@ internal fun HomeScreen(
                                 if (parsedSource.scheme.equals("file", ignoreCase = true)) {
                                     File(parsedSource.path ?: normalizedSourcePath)
                                 } else if (!parsedSource.scheme.isNullOrBlank()) {
-                                    val decodedLeaf = parsedSource.lastPathSegment
-                                        ?.let(::decodeRecentDisplaySegment)
+                                    val decodedLeaf = sourceLeafNameForDisplay(normalizedSourcePath)
                                         ?.trim()
                                         ?.takeIf { it.isNotBlank() }
                                     File(decodedLeaf ?: normalizedSourcePath)

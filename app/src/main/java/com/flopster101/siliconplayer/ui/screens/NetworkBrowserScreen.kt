@@ -108,7 +108,6 @@ import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.isLikelyHttpDirectorySource
 import com.flopster101.siliconplayer.normalizeHttpDirectoryPath
 import com.flopster101.siliconplayer.normalizeHttpPath
-import com.flopster101.siliconplayer.normalizeSourceIdentity
 import com.flopster101.siliconplayer.nextNetworkNodeId
 import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
 import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
@@ -120,6 +119,7 @@ import com.flopster101.siliconplayer.resolveNetworkNodeOpenInput
 import com.flopster101.siliconplayer.resolveNetworkNodeSmbSpec
 import com.flopster101.siliconplayer.resolveNetworkNodeSourceId
 import com.flopster101.siliconplayer.resolveSmbHostDisplayName
+import com.flopster101.siliconplayer.sourceLeafNameForDisplay
 import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.delay
@@ -2130,30 +2130,7 @@ private fun isHttpFolderLikeSource(entry: NetworkNode, sourceId: String): Boolea
 
 private fun resolveNetworkRemoteIconFile(sourceId: String): File? {
     if (sourceId.isBlank()) return null
-    val normalizedSource = normalizeSourceIdentity(sourceId) ?: sourceId
-    val parsed = Uri.parse(normalizedSource)
-    val leafName = when {
-        parsed.scheme.equals("file", ignoreCase = true) -> {
-            parsed.path
-                ?.substringAfterLast('/')
-                ?.trim()
-                .orEmpty()
-        }
-
-        !parsed.scheme.isNullOrBlank() -> {
-            parsed.lastPathSegment
-                ?.trim()
-                .orEmpty()
-        }
-
-        else -> {
-            normalizedSource
-                .substringBefore('#')
-                .substringBefore('?')
-                .substringAfterLast('/')
-                .trim()
-        }
-    }
+    val leafName = sourceLeafNameForDisplay(sourceId).orEmpty()
     if (leafName.isBlank()) return null
     return File(leafName)
 }
@@ -2192,15 +2169,7 @@ private fun AnnotatedString.Builder.appendBoldSourceTypeToken(label: String) {
 
 private fun inferNetworkSourceFormatLabel(source: String): String {
     if (source.isBlank()) return "Unknown"
-    val parsed = Uri.parse(source)
-    val leaf = if (!parsed.scheme.isNullOrBlank()) {
-        parsed.lastPathSegment.orEmpty()
-    } else {
-        source
-            .substringBefore('#')
-            .substringBefore('?')
-            .substringAfterLast('/')
-    }
+    val leaf = sourceLeafNameForDisplay(source).orEmpty()
     if (leaf.isBlank()) return "Unknown"
     val ext = inferredPrimaryExtensionForName(leaf)
     return ext?.uppercase(Locale.ROOT) ?: "Unknown"

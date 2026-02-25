@@ -88,7 +88,8 @@ internal fun SmbFileBrowserScreen(
     backHandlingEnabled: Boolean,
     onExitBrowser: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
-    onRememberSmbCredentials: (String, String?, String?) -> Unit,
+    onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
+    sourceNodeId: Long?,
     onBrowserLocationChanged: (String) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -114,6 +115,7 @@ internal fun SmbFileBrowserScreen(
     var authRememberPassword by remember(sourceSpec) { mutableStateOf(true) }
     var sessionUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username) }
     var sessionPassword by remember(sourceSpec) { mutableStateOf(sourceSpec.password) }
+    var loadRequestSequence by remember(sourceSpec) { mutableStateOf(0) }
     val credentialsSpec = remember(sourceSpec, sessionUsername, sessionPassword) {
         sourceSpec.copy(
             share = "",
@@ -157,6 +159,8 @@ internal fun SmbFileBrowserScreen(
 
     fun loadCurrentDirectory() {
         listJob?.cancel()
+        loadRequestSequence += 1
+        val requestSequence = loadRequestSequence
         isLoading = true
         errorMessage = null
         loadingLogLines.clear()
@@ -184,6 +188,9 @@ internal fun SmbFileBrowserScreen(
                     pathInsideShare
                 )
             }
+            if (requestSequence != loadRequestSequence) {
+                return@launch
+            }
             result.onSuccess { resolved ->
                 entries = resolved
                 errorMessage = null
@@ -197,14 +204,16 @@ internal fun SmbFileBrowserScreen(
                 entries = emptyList()
                 val authFailed = isSmbAuthenticationFailure(throwable)
                 if (authFailed) {
-                    authDialogUsername = credentialsSpec.username.orEmpty()
-                    authDialogPassword = ""
-                    authDialogPasswordVisible = false
-                    authRememberPassword = true
                     authDialogErrorMessage = if (credentialsSpec.password.isNullOrBlank()) {
                         "This SMB source requires authentication."
                     } else {
                         "Authentication failed. Check username and password."
+                    }
+                    if (!authDialogVisible) {
+                        authDialogUsername = credentialsSpec.username.orEmpty()
+                        authDialogPassword = ""
+                        authDialogPasswordVisible = false
+                        authRememberPassword = true
                     }
                     authDialogVisible = true
                     errorMessage = "Authentication required."
@@ -525,6 +534,7 @@ internal fun SmbFileBrowserScreen(
                         sessionPassword = normalizedPassword
                         if (authRememberPassword) {
                             onRememberSmbCredentials(
+                                sourceNodeId,
                                 sourceId,
                                 normalizedUsername,
                                 normalizedPassword

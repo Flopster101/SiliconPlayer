@@ -77,7 +77,7 @@ internal fun AppNavigationNetworkRouteSection(
     onResolveRemoteSourceMetadata: (String, () -> Unit) -> Unit,
     onCancelPendingMetadataBackfill: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
-    onBrowseSmbSource: (String) -> Unit
+    onBrowseSmbSource: (String, Long?) -> Unit
 ) {
     MainNetworkRouteHost(
         mainPadding = mainPadding,
@@ -102,6 +102,7 @@ internal fun AppNavigationBrowserRouteSection(
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint>,
     initialLocationId: String?,
     initialDirectoryPath: String?,
+    initialSmbSourceNodeId: Long?,
     restoreFocusedItemRequestToken: Int,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     showParentDirectoryEntry: Boolean,
@@ -113,7 +114,7 @@ internal fun AppNavigationBrowserRouteSection(
     onBrowserLocationChanged: (String?, String?) -> Unit,
     onFileSelected: (File, String?) -> Unit,
     onOpenRemoteSource: (String) -> Unit,
-    onRememberSmbCredentials: (String, String?, String?) -> Unit
+    onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit
 ) {
     MainBrowserRouteHost(
         mainPadding = mainPadding,
@@ -121,6 +122,7 @@ internal fun AppNavigationBrowserRouteSection(
         decoderExtensionArtworkHints = decoderExtensionArtworkHints,
         initialLocationId = initialLocationId,
         initialDirectoryPath = initialDirectoryPath,
+        initialSmbSourceNodeId = initialSmbSourceNodeId,
         restoreFocusedItemRequestToken = restoreFocusedItemRequestToken,
         bottomContentPadding = bottomContentPadding,
         showParentDirectoryEntry = showParentDirectoryEntry,

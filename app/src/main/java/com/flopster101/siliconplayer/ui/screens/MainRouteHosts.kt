@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.flopster101.siliconplayer.ui.screens.FileBrowserScreen
 import com.flopster101.siliconplayer.ui.screens.NetworkBrowserScreen
@@ -66,7 +67,7 @@ internal fun MainNetworkRouteHost(
     onResolveRemoteSourceMetadata: (String, () -> Unit) -> Unit,
     onCancelPendingMetadataBackfill: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
-    onBrowseSmbSource: (String) -> Unit
+    onBrowseSmbSource: (String, Long?) -> Unit
 ) {
     Box(modifier = Modifier.padding(mainPadding)) {
         NetworkBrowserScreen(
@@ -92,6 +93,7 @@ internal fun MainBrowserRouteHost(
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint>,
     initialLocationId: String?,
     initialDirectoryPath: String?,
+    initialSmbSourceNodeId: Long?,
     restoreFocusedItemRequestToken: Int,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     showParentDirectoryEntry: Boolean,
@@ -103,9 +105,9 @@ internal fun MainBrowserRouteHost(
     onBrowserLocationChanged: (String?, String?) -> Unit,
     onFileSelected: (File, String?) -> Unit,
     onOpenRemoteSource: (String) -> Unit,
-    onRememberSmbCredentials: (String, String?, String?) -> Unit
+    onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit
 ) {
-    val initialSmbSpec = initialDirectoryPath?.let(::parseSmbSourceSpecFromInput)
+    val initialSmbSpec = remember { initialDirectoryPath?.let(::parseSmbSourceSpecFromInput) }
     Box(modifier = Modifier.padding(mainPadding)) {
         if (initialSmbSpec != null) {
             LaunchedEffect(initialSmbSpec) {
@@ -118,6 +120,7 @@ internal fun MainBrowserRouteHost(
                 onExitBrowser = onExitBrowser,
                 onOpenRemoteSource = onOpenRemoteSource,
                 onRememberSmbCredentials = onRememberSmbCredentials,
+                sourceNodeId = initialSmbSourceNodeId,
                 onBrowserLocationChanged = { smbSourceId ->
                     onBrowserLocationChanged(null, smbSourceId)
                 }

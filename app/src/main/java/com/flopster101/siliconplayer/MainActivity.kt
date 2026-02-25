@@ -345,6 +345,7 @@ private fun AppNavigation(
     var visiblePlayableFiles by remember { mutableStateOf<List<File>>(emptyList()) }
     var browserLaunchLocationId by remember { mutableStateOf<String?>(null) }
     var browserLaunchDirectoryPath by remember { mutableStateOf<String?>(null) }
+    var browserLaunchSmbSourceNodeId by remember { mutableStateOf<Long?>(null) }
     var networkCurrentFolderId by remember { mutableStateOf<Long?>(null) }
     var returnToNetworkOnBrowserExit by remember { mutableStateOf(false) }
     val storageDescriptors = remember(context) { detectStorageDescriptors(context) }
@@ -387,7 +388,7 @@ private fun AppNavigation(
             writeNetworkNodes(prefs, updated)
         }
     }
-    val rememberNetworkSmbCredentials: (String, String?, String?) -> Unit = { sourceId, username, password ->
+    val rememberNetworkSmbCredentials: (Long?, String, String?, String?) -> Unit = { sourceNodeId, _, username, password ->
         val normalizedUsername = username?.trim().takeUnless { it.isNullOrBlank() }
         val normalizedPassword = password?.trim().takeUnless { it.isNullOrBlank() }
         var changed = false
@@ -395,11 +396,10 @@ private fun AppNavigation(
             if (node.type != NetworkNodeType.RemoteSource || node.sourceKind != NetworkSourceKind.Smb) {
                 return@map node
             }
-            val nodeSourceId = resolveNetworkNodeSourceId(node)
-            if (!samePath(nodeSourceId, sourceId)) {
+            val nodeSpec = resolveNetworkNodeSmbSpec(node) ?: return@map node
+            if (node.id != sourceNodeId) {
                 return@map node
             }
-            val nodeSpec = resolveNetworkNodeSmbSpec(node) ?: return@map node
             val updatedSpec = nodeSpec.copy(
                 username = normalizedUsername,
                 password = normalizedPassword
@@ -408,7 +408,7 @@ private fun AppNavigation(
             if (
                 node.smbUsername == normalizedUsername &&
                 node.smbPassword == normalizedPassword &&
-                samePath(node.source, updatedSourceId)
+                samePath(resolveNetworkNodeSourceId(node), updatedSourceId)
             ) {
                 return@map node
             }
@@ -1178,6 +1178,7 @@ private fun AppNavigation(
         onBrowserLaunchTargetChanged = { locationId, directoryPath ->
             browserLaunchLocationId = locationId
             browserLaunchDirectoryPath = directoryPath
+            browserLaunchSmbSourceNodeId = null
         },
         onCurrentViewChanged = { currentView = it },
         onAddRecentFolder = { path, locationId ->
@@ -2484,6 +2485,7 @@ private fun AppNavigation(
                     onOpenLibrary = {
                         browserLaunchLocationId = null
                         browserLaunchDirectoryPath = null
+                        browserLaunchSmbSourceNodeId = null
                         returnToNetworkOnBrowserExit = false
                         currentView = MainView.Browser
                     },
@@ -2497,6 +2499,7 @@ private fun AppNavigation(
                     onOpenRecentFolder = { entry ->
                         browserLaunchLocationId = entry.locationId
                         browserLaunchDirectoryPath = entry.path
+                        browserLaunchSmbSourceNodeId = null
                         returnToNetworkOnBrowserExit = false
                         currentView = MainView.Browser
                     },
@@ -2553,6 +2556,7 @@ private fun AppNavigation(
                             onOpenInBrowser = { locationId, directoryPath ->
                                 browserLaunchLocationId = locationId
                                 browserLaunchDirectoryPath = directoryPath
+                                browserLaunchSmbSourceNodeId = null
                                 returnToNetworkOnBrowserExit = false
                                 currentView = MainView.Browser
                             }
@@ -2573,6 +2577,7 @@ private fun AppNavigation(
                             onOpenInBrowser = { locationId, directoryPath ->
                                 browserLaunchLocationId = locationId
                                 browserLaunchDirectoryPath = directoryPath
+                                browserLaunchSmbSourceNodeId = null
                                 returnToNetworkOnBrowserExit = false
                                 currentView = MainView.Browser
                             }
@@ -2616,9 +2621,10 @@ private fun AppNavigation(
                         returnToNetworkOnBrowserExit = false
                         manualOpenDelegates.applyManualInputSelection(rawInput)
                     },
-                    onBrowseSmbSource = { rawInput ->
+                    onBrowseSmbSource = { rawInput, sourceNodeId ->
                         browserLaunchLocationId = null
                         browserLaunchDirectoryPath = rawInput
+                        browserLaunchSmbSourceNodeId = sourceNodeId
                         returnToNetworkOnBrowserExit = true
                         currentView = MainView.Browser
                     }
@@ -2633,6 +2639,7 @@ private fun AppNavigation(
                         ?: if (rememberBrowserLocation) lastBrowserLocationId else null,
                     initialDirectoryPath = browserLaunchDirectoryPath
                         ?: if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
+                    initialSmbSourceNodeId = browserLaunchSmbSourceNodeId,
                     restoreFocusedItemRequestToken = browserFocusRestoreRequestToken,
                     bottomContentPadding = miniPlayerListInset,
                     showParentDirectoryEntry = showParentDirectoryEntry,
@@ -2647,6 +2654,7 @@ private fun AppNavigation(
                             MainView.Home
                         }
                         returnToNetworkOnBrowserExit = false
+                        browserLaunchSmbSourceNodeId = null
                     },
                     onBrowserLocationChanged = { locationId, directoryPath ->
                         if (
@@ -2678,8 +2686,8 @@ private fun AppNavigation(
                     onOpenRemoteSource = { rawInput ->
                         manualOpenDelegates.applyManualInputSelection(rawInput)
                     },
-                    onRememberSmbCredentials = { sourceId, username, password ->
-                        rememberNetworkSmbCredentials(sourceId, username, password)
+                    onRememberSmbCredentials = { sourceNodeId, sourceId, username, password ->
+                        rememberNetworkSmbCredentials(sourceNodeId, sourceId, username, password)
                     }
                 )
             },

@@ -268,12 +268,7 @@ internal fun resolveNetworkNodeOpenInput(node: NetworkNode): String? {
 internal fun resolveNetworkNodeDisplaySource(node: NetworkNode): String {
     return if (node.type == NetworkNodeType.RemoteSource && node.sourceKind == NetworkSourceKind.Smb) {
         resolveNetworkNodeSmbSpec(node)
-            ?.let { spec ->
-                val displayHost = normalizeSmbHostDisplayLabel(
-                    node.smbDiscoveredHostName?.trim().takeUnless { it.isNullOrBlank() } ?: spec.host
-                )
-                buildSmbDisplayUri(spec.copy(host = displayHost))
-            }
+            ?.let(::buildSmbDisplayUri)
             .orEmpty()
     } else {
         node.source.orEmpty()

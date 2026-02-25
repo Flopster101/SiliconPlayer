@@ -148,7 +148,7 @@ internal fun NetworkBrowserScreen(
     onResolveRemoteSourceMetadata: (String, () -> Unit) -> Unit,
     onCancelPendingMetadataBackfill: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
-    onBrowseSmbSource: (String) -> Unit
+    onBrowseSmbSource: (String, Long?) -> Unit
 ) {
     var showAddMenu by remember { mutableStateOf(false) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
@@ -1232,7 +1232,7 @@ internal fun NetworkBrowserScreen(
                                         else -> {
                                             resolveNetworkNodeOpenInput(entry)?.let { openInput ->
                                                 if (entry.sourceKind == NetworkSourceKind.Smb) {
-                                                    onBrowseSmbSource(openInput)
+                                                    onBrowseSmbSource(openInput, entry.id)
                                                 } else {
                                                     onOpenRemoteSource(openInput)
                                                 }

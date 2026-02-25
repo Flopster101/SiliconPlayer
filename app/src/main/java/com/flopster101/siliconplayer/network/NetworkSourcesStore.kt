@@ -31,6 +31,7 @@ internal data class NetworkNode(
     val smbPath: String? = null,
     val smbUsername: String? = null,
     val smbPassword: String? = null,
+    val smbDiscoveredHostName: String? = null,
     val metadataTitle: String? = null,
     val metadataArtist: String? = null
 )
@@ -50,9 +51,9 @@ internal fun readNetworkNodes(prefs: SharedPreferences): List<NetworkNode> {
                 if (id < 0L) continue
                 val parentId = objectValue.optLong("parentId", -1L).takeIf { it >= 0L }
                 val title = objectValue.optString("title", "").trim()
-                if (title.isBlank()) continue
                 when (objectValue.optString("type", "")) {
                     NETWORK_NODE_TYPE_FOLDER -> {
+                        if (title.isBlank()) continue
                         add(
                             NetworkNode(
                                 id = id,
@@ -74,6 +75,10 @@ internal fun readNetworkNodes(prefs: SharedPreferences): List<NetworkNode> {
                         }
                         val metadataTitle = objectValue.optString("metadataTitle", "").trim().ifBlank { null }
                         val metadataArtist = objectValue.optString("metadataArtist", "").trim().ifBlank { null }
+                        val smbDiscoveredHostName = objectValue
+                            .optString("smbDiscoveredHostName", "")
+                            .trim()
+                            .ifBlank { null }
                         val smbSpec = if (sourceKind == NetworkSourceKind.Smb) {
                             val host = objectValue.optString("smbHost", "").trim()
                             val share = objectValue.optString("smbShare", "").trim()
@@ -109,6 +114,7 @@ internal fun readNetworkNodes(prefs: SharedPreferences): List<NetworkNode> {
                                 smbPath = smbSpec?.path,
                                 smbUsername = smbSpec?.username,
                                 smbPassword = smbSpec?.password,
+                                smbDiscoveredHostName = smbDiscoveredHostName,
                                 metadataTitle = metadataTitle,
                                 metadataArtist = metadataArtist
                             )
@@ -172,6 +178,7 @@ internal fun writeNetworkNodes(
                     .put("smbPath", resolvedSmbSpec?.path.orEmpty())
                     .put("smbUsername", resolvedSmbSpec?.username.orEmpty())
                     .put("smbPassword", resolvedSmbSpec?.password.orEmpty())
+                    .put("smbDiscoveredHostName", node.smbDiscoveredHostName.orEmpty())
                     .put("metadataTitle", node.metadataTitle.orEmpty())
                     .put("metadataArtist", node.metadataArtist.orEmpty())
             }
@@ -260,8 +267,68 @@ internal fun resolveNetworkNodeOpenInput(node: NetworkNode): String? {
 
 internal fun resolveNetworkNodeDisplaySource(node: NetworkNode): String {
     return if (node.type == NetworkNodeType.RemoteSource && node.sourceKind == NetworkSourceKind.Smb) {
-        resolveNetworkNodeSmbSpec(node)?.let(::buildSmbDisplayUri).orEmpty()
+        resolveNetworkNodeSmbSpec(node)
+            ?.let { spec ->
+                val displayHost = normalizeSmbHostDisplayLabel(
+                    node.smbDiscoveredHostName?.trim().takeUnless { it.isNullOrBlank() } ?: spec.host
+                )
+                buildSmbDisplayUri(spec.copy(host = displayHost))
+            }
+            .orEmpty()
     } else {
         node.source.orEmpty()
     }
+}
+
+internal fun resolveNetworkNodeDisplayTitle(node: NetworkNode): String {
+    if (node.type == NetworkNodeType.Folder) return node.title
+    if (node.type != NetworkNodeType.RemoteSource) return node.title
+    if (node.sourceKind != NetworkSourceKind.Smb) {
+        return node.title.ifBlank { node.source.orEmpty() }
+    }
+
+    val spec = resolveNetworkNodeSmbSpec(node)
+    val explicitTitle = node.title.trim()
+    val hasExplicitTitle = explicitTitle.isNotBlank() && !isLegacyAutoSmbTitle(explicitTitle, spec)
+    if (hasExplicitTitle) {
+        return explicitTitle
+    }
+    val hostLabel = normalizeSmbHostDisplayLabel(
+        node.smbDiscoveredHostName?.trim().takeUnless { it.isNullOrBlank() }
+            ?: spec?.host.orEmpty()
+    )
+    return if (spec == null) {
+        node.source.orEmpty()
+    } else if (spec.share.isBlank()) {
+        hostLabel
+    } else if (spec.path.isNullOrBlank()) {
+        "$hostLabel/${spec.share}"
+    } else {
+        "$hostLabel/${spec.share}/${spec.path}"
+    }
+}
+
+private fun isLegacyAutoSmbTitle(title: String, spec: SmbSourceSpec?): Boolean {
+    if (spec == null) return false
+    val normalizedTitle = title.trim()
+    if (normalizedTitle.isBlank()) return false
+    val autoCandidates = buildList {
+        add(spec.host)
+        if (spec.share.isNotBlank()) {
+            add("${spec.host}/${spec.share}")
+            if (!spec.path.isNullOrBlank()) {
+                add("${spec.host}/${spec.share}/${spec.path}")
+            }
+        }
+    }
+    return autoCandidates.any { candidate ->
+        normalizedTitle.equals(candidate, ignoreCase = true)
+    }
+}
+
+private fun normalizeSmbHostDisplayLabel(rawHost: String): String {
+    val host = rawHost.trim()
+    if (host.isBlank()) return host
+    val withoutLocal = host.removeSuffix(".local").removeSuffix(".LOCAL").trimEnd('.')
+    return withoutLocal.ifBlank { host }
 }

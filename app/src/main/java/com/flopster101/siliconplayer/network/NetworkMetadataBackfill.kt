@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer
 
+import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import java.io.File
@@ -21,6 +22,7 @@ internal fun cancelPendingNetworkSourceMetadataBackfillJobs() {
 
 internal fun scheduleNetworkSourceMetadataBackfill(
     scope: CoroutineScope,
+    context: Context,
     sourceId: String,
     onResolved: (sourceId: String, title: String?, artist: String?) -> Unit,
     onSettled: (sourceId: String) -> Unit = {}
@@ -32,7 +34,7 @@ internal fun scheduleNetworkSourceMetadataBackfill(
     pendingNetworkMetadataJobs.remove(normalizedSource)?.cancel()
     val job = scope.launch(Dispatchers.IO) {
         try {
-            val metadata = readNetworkSourceMetadata(normalizedSource)
+            val metadata = readNetworkSourceMetadata(context, normalizedSource)
             withContext(Dispatchers.Main.immediate) {
                 metadata?.let { resolved ->
                     onResolved(normalizedSource, resolved.first, resolved.second)
@@ -53,7 +55,10 @@ internal fun scheduleNetworkSourceMetadataBackfill(
     }
 }
 
-private fun readNetworkSourceMetadata(sourceId: String): Pair<String?, String?>? {
+private suspend fun readNetworkSourceMetadata(
+    context: Context,
+    sourceId: String
+): Pair<String?, String?>? {
     val uri = Uri.parse(sourceId)
     val scheme = uri.scheme?.lowercase(Locale.ROOT)
     val retriever = MediaMetadataRetriever()
@@ -61,6 +66,17 @@ private fun readNetworkSourceMetadata(sourceId: String): Pair<String?, String?>?
         when (scheme) {
             "http", "https" -> retriever.setDataSource(sourceId, emptyMap())
             "file" -> retriever.setDataSource(uri.path ?: return null)
+            "smb" -> {
+                val smbSpec = parseSmbSourceSpecFromInput(sourceId) ?: return null
+                val downloadResult = downloadSmbSourceToCache(
+                    context = context,
+                    sourceId = sourceId,
+                    spec = smbSpec,
+                    onStatus = {}
+                )
+                val localFile = downloadResult.file ?: return null
+                retriever.setDataSource(localFile.absolutePath)
+            }
             else -> {
                 val localFile = File(sourceId)
                 if (localFile.exists() && localFile.isFile) {

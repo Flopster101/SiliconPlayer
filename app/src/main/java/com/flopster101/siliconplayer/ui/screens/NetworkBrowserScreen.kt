@@ -74,6 +74,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -91,16 +92,21 @@ import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.NetworkNode
 import com.flopster101.siliconplayer.NetworkNodeType
 import com.flopster101.siliconplayer.NetworkSourceKind
+import com.flopster101.siliconplayer.SmbSourceSpec
 import com.flopster101.siliconplayer.buildRecentTrackDisplay
+import com.flopster101.siliconplayer.buildSmbRequestUri
 import com.flopster101.siliconplayer.buildSmbSourceId
 import com.flopster101.siliconplayer.buildSmbSourceSpec
 import com.flopster101.siliconplayer.formatNetworkFolderSummary
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.nextNetworkNodeId
+import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
 import com.flopster101.siliconplayer.resolveNetworkNodeDisplaySource
+import com.flopster101.siliconplayer.resolveNetworkNodeDisplayTitle
 import com.flopster101.siliconplayer.resolveNetworkNodeOpenInput
 import com.flopster101.siliconplayer.resolveNetworkNodeSmbSpec
 import com.flopster101.siliconplayer.resolveNetworkNodeSourceId
+import com.flopster101.siliconplayer.resolveSmbHostDisplayName
 import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
@@ -174,12 +180,17 @@ internal fun NetworkBrowserScreen(
     val uiScope = rememberCoroutineScope()
     val refreshTimeoutJobs = remember { LinkedHashMap<String, Job>() }
     val refreshSettledSources = remember { LinkedHashSet<String>() }
+    val smbHostResolveJobs = remember { LinkedHashMap<String, Job>() }
+    val latestNodes by rememberUpdatedState(nodes)
+    val latestOnNodesChanged by rememberUpdatedState(onNodesChanged)
 
     DisposableEffect(onCancelPendingMetadataBackfill) {
         onDispose {
             refreshTimeoutJobs.values.forEach { it.cancel() }
             refreshTimeoutJobs.clear()
             refreshSettledSources.clear()
+            smbHostResolveJobs.values.forEach { it.cancel() }
+            smbHostResolveJobs.clear()
             onCancelPendingMetadataBackfill()
         }
     }
@@ -197,7 +208,7 @@ internal fun NetworkBrowserScreen(
                         else -> 2
                     }
                 }
-                    .thenBy { it.title.lowercase() }
+                    .thenBy { resolveNetworkNodeDisplayTitle(it).lowercase() }
             )
             .toList()
     }
@@ -316,11 +327,116 @@ internal fun NetworkBrowserScreen(
         deleteNodeIdsPendingConfirmation = nodeIds
     }
 
+    fun requestSmbHostDisplayName(
+        sourceId: String,
+        nodeIds: Set<Long>,
+        specOverride: SmbSourceSpec? = null,
+        onSettled: (() -> Unit)? = null
+    ) {
+        if (nodeIds.isEmpty()) {
+            onSettled?.invoke()
+            return
+        }
+        val smbSpec = specOverride
+            ?: latestNodes
+                .asSequence()
+                .filter { nodeIds.contains(it.id) }
+                .firstNotNullOfOrNull { node ->
+                    if (node.type == NetworkNodeType.RemoteSource && node.sourceKind == NetworkSourceKind.Smb) {
+                        resolveNetworkNodeSmbSpec(node)
+                    } else {
+                        null
+                    }
+                }
+            ?: parseSmbSourceSpecFromInput(sourceId)
+        if (smbSpec == null || smbSpec.host.isBlank()) {
+            onSettled?.invoke()
+            return
+        }
+
+        smbHostResolveJobs.remove(sourceId)?.cancel()
+        val job = uiScope.launch {
+            try {
+                val resolvedHostName = resolveSmbHostDisplayName(smbSpec)
+                    .getOrNull()
+                    ?.trim()
+                    .takeUnless { it.isNullOrBlank() }
+                    ?: return@launch
+                val updated = latestNodes.map { node ->
+                    if (node.sourceKind != NetworkSourceKind.Smb || node.type != NetworkNodeType.RemoteSource) {
+                        return@map node
+                    }
+                    val nodeSmbSpec = resolveNetworkNodeSmbSpec(node)
+                    val isDirectTarget = nodeIds.contains(node.id)
+                    val isSameHost = nodeSmbSpec?.host?.equals(smbSpec.host, ignoreCase = true) == true
+                    if (!isDirectTarget && !isSameHost) {
+                        return@map node
+                    }
+                    val currentTitle = node.title.trim()
+                    val autoTitleCandidates = buildList {
+                        val specForTitle = nodeSmbSpec ?: return@buildList
+                        add(specForTitle.host)
+                        if (specForTitle.share.isNotBlank()) {
+                            add("${specForTitle.host}/${specForTitle.share}")
+                            if (!specForTitle.path.isNullOrBlank()) {
+                                add("${specForTitle.host}/${specForTitle.share}/${specForTitle.path}")
+                            }
+                        }
+                    }
+                    val isLegacyAutoTitle = autoTitleCandidates.any {
+                        currentTitle.equals(it, ignoreCase = true)
+                    }
+                    val normalizedTitle = if (isLegacyAutoTitle) "" else node.title
+                    if (node.smbDiscoveredHostName == resolvedHostName && normalizedTitle == node.title) {
+                        return@map node
+                    }
+                    node.copy(
+                        smbDiscoveredHostName = resolvedHostName,
+                        title = normalizedTitle
+                    )
+                }
+                if (updated != latestNodes) {
+                    latestOnNodesChanged(updated)
+                }
+            } finally {
+                onSettled?.invoke()
+            }
+        }
+        smbHostResolveJobs[sourceId] = job
+        job.invokeOnCompletion {
+            if (smbHostResolveJobs[sourceId] == job) {
+                smbHostResolveJobs.remove(sourceId)
+            }
+        }
+    }
+
     fun requestRemoteSourceMetadata(entry: NetworkNode) {
         if (entry.type != NetworkNodeType.RemoteSource) return
         val sourceId = resolveNetworkNodeSourceId(entry).orEmpty()
         if (sourceId.isBlank()) return
         metadataLoadingNodeIds = metadataLoadingNodeIds + entry.id
+        if (entry.sourceKind == NetworkSourceKind.Smb) {
+            val isSmbFolderLike = isSmbFolderLikeSource(entry, sourceId)
+            val smbRequestSourceId = resolveNetworkNodeSmbSpec(entry)?.let(::buildSmbRequestUri) ?: sourceId
+            var pendingSettleCount = if (isSmbFolderLike) 1 else 2
+            fun settleOne() {
+                pendingSettleCount -= 1
+                if (pendingSettleCount <= 0) {
+                    metadataLoadingNodeIds = metadataLoadingNodeIds - entry.id
+                }
+            }
+            requestSmbHostDisplayName(
+                sourceId = sourceId,
+                nodeIds = setOf(entry.id),
+                specOverride = resolveNetworkNodeSmbSpec(entry),
+                onSettled = ::settleOne
+            )
+            if (isSmbFolderLike) {
+                return
+            }
+            onResolveRemoteSourceMetadata(smbRequestSourceId, ::settleOne)
+            return
+        }
         onResolveRemoteSourceMetadata(sourceId) {
             metadataLoadingNodeIds = metadataLoadingNodeIds - entry.id
         }
@@ -401,7 +517,16 @@ internal fun NetworkBrowserScreen(
         metadataLoadingNodeIds = metadataLoadingNodeIds + targetNodeIds
 
         sourceNodeIdsBySourceId.forEach { (sourceId, _) ->
-            onResolveRemoteSourceMetadata(sourceId) {
+            val targetNodeIdsForSource = sourceNodeIdsBySourceId[sourceId].orEmpty()
+            val representativeNode = nodesById[targetNodeIdsForSource.firstOrNull()]
+            val representativeSmbSpec = representativeNode?.let(::resolveNetworkNodeSmbSpec)
+            val metadataRequestSourceId = representativeSmbSpec?.let(::buildSmbRequestUri) ?: sourceId
+            requestSmbHostDisplayName(
+                sourceId = sourceId,
+                nodeIds = targetNodeIdsForSource,
+                specOverride = representativeSmbSpec
+            )
+            onResolveRemoteSourceMetadata(metadataRequestSourceId) {
                 settleBatchRefreshSource(sourceId, success = true)
             }
             refreshTimeoutJobs[sourceId] = uiScope.launch {
@@ -547,15 +672,7 @@ internal fun NetworkBrowserScreen(
             password = password
         ) ?: return
         val sourceId = buildSmbSourceId(smbSpec)
-        val title = name.trim().ifBlank {
-            if (smbSpec.share.isBlank()) {
-                smbSpec.host
-            } else if (smbSpec.path.isNullOrBlank()) {
-                "${smbSpec.host}/${smbSpec.share}"
-            } else {
-                "${smbSpec.host}/${smbSpec.share}/${smbSpec.path}"
-            }
-        }
+        val explicitTitle = name.trim()
         val upsertedNodeId: Long
         val updated = if (editingSmbNodeId == null) {
             val newNodeId = nextNetworkNodeId(nodes)
@@ -564,14 +681,15 @@ internal fun NetworkBrowserScreen(
                 id = newNodeId,
                 parentId = currentFolderId,
                 type = NetworkNodeType.RemoteSource,
-                title = title,
+                title = explicitTitle,
                 source = sourceId,
                 sourceKind = NetworkSourceKind.Smb,
                 smbHost = smbSpec.host,
                 smbShare = smbSpec.share,
                 smbPath = smbSpec.path,
                 smbUsername = smbSpec.username,
-                smbPassword = smbSpec.password
+                smbPassword = smbSpec.password,
+                smbDiscoveredHostName = null
             )
         } else {
             upsertedNodeId = editingSmbNodeId ?: return
@@ -579,7 +697,7 @@ internal fun NetworkBrowserScreen(
                 if (node.id == editingSmbNodeId) {
                     val sourceChanged = resolveNetworkNodeSourceId(node) != sourceId
                     node.copy(
-                        title = title,
+                        title = explicitTitle,
                         source = sourceId,
                         sourceKind = NetworkSourceKind.Smb,
                         smbHost = smbSpec.host,
@@ -587,6 +705,7 @@ internal fun NetworkBrowserScreen(
                         smbPath = smbSpec.path,
                         smbUsername = smbSpec.username,
                         smbPassword = smbSpec.password,
+                        smbDiscoveredHostName = if (sourceChanged) null else node.smbDiscoveredHostName,
                         metadataTitle = if (sourceChanged) null else node.metadataTitle,
                         metadataArtist = if (sourceChanged) null else node.metadataArtist
                     )
@@ -597,8 +716,23 @@ internal fun NetworkBrowserScreen(
         }
         onNodesChanged(updated)
         metadataLoadingNodeIds = metadataLoadingNodeIds + upsertedNodeId
-        onResolveRemoteSourceMetadata(sourceId) {
-            metadataLoadingNodeIds = metadataLoadingNodeIds - upsertedNodeId
+        val upsertedNode = updated.firstOrNull { it.id == upsertedNodeId }
+        val isSmbFolderLike = upsertedNode?.let { isSmbFolderLikeSource(it, sourceId) } ?: false
+        var pendingSettleCount = if (isSmbFolderLike) 1 else 2
+        fun settleOne() {
+            pendingSettleCount -= 1
+            if (pendingSettleCount <= 0) {
+                metadataLoadingNodeIds = metadataLoadingNodeIds - upsertedNodeId
+            }
+        }
+        requestSmbHostDisplayName(
+            sourceId = sourceId,
+            nodeIds = setOf(upsertedNodeId),
+            specOverride = smbSpec,
+            onSettled = ::settleOne
+        )
+        if (!isSmbFolderLike) {
+            onResolveRemoteSourceMetadata(buildSmbRequestUri(smbSpec), ::settleOne)
         }
     }
 
@@ -1149,7 +1283,7 @@ internal fun NetworkBrowserScreen(
                             val isRemoteSource = entry.type == NetworkNodeType.RemoteSource
                             val isMetadataLoading = isRemoteSource && metadataLoadingNodeIds.contains(entry.id)
                             val sourceLabel = resolveNetworkNodeDisplaySource(entry)
-                            val fallbackTitle = entry.title.ifBlank { sourceLabel }
+                            val fallbackTitle = resolveNetworkNodeDisplayTitle(entry)
                             val remoteDisplay = buildRecentTrackDisplay(
                                 title = entry.metadataTitle.orEmpty(),
                                 artist = entry.metadataArtist.orEmpty(),
@@ -1164,7 +1298,16 @@ internal fun NetworkBrowserScreen(
                                 folderSummariesById[entry.id].orEmpty()
                             } else {
                                 val sourceScheme = Uri.parse(sourceId).scheme?.lowercase(Locale.ROOT)
-                                val sourceTypeLabel = if (sourceScheme == "smb") "SMB" else null
+                                val sourceTypeLabel = if (sourceScheme == "smb") {
+                                    val smbHostLabel = entry.smbDiscoveredHostName
+                                        ?.trim()
+                                        .takeUnless { it.isNullOrBlank() }
+                                        ?: parseSmbSourceSpecFromInput(sourceId)?.host
+                                            ?.let(::normalizeSmbHostLabelForUi)
+                                    if (smbHostLabel == null) "SMB" else "SMB ($smbHostLabel)"
+                                } else {
+                                    null
+                                }
                                 val formatLabel = if (isSmbFolderLikeSource) {
                                     "Folder"
                                 } else {
@@ -1875,4 +2018,10 @@ private fun inferNetworkSourceFormatLabel(source: String): String {
     if (leaf.isBlank()) return "Unknown"
     val ext = inferredPrimaryExtensionForName(leaf)
     return ext?.uppercase(Locale.ROOT) ?: "Unknown"
+}
+
+private fun normalizeSmbHostLabelForUi(rawHost: String?): String? {
+    val host = rawHost?.trim().takeUnless { it.isNullOrBlank() } ?: return null
+    val withoutLocal = host.removeSuffix(".local").removeSuffix(".LOCAL").trimEnd('.')
+    return withoutLocal.ifBlank { host }
 }

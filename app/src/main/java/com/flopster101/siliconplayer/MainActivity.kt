@@ -2562,6 +2562,7 @@ private fun AppNavigation(
                     onResolveRemoteSourceMetadata = { sourceId, onSettled ->
                         scheduleNetworkSourceMetadataBackfill(
                             scope = appScope,
+                            context = context.applicationContext,
                             sourceId = sourceId,
                             onResolved = { resolvedSource, resolvedTitle, resolvedArtist ->
                                 applyNetworkSourceMetadata(resolvedSource, resolvedTitle, resolvedArtist)

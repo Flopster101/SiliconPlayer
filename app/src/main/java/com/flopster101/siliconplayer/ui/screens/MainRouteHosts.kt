@@ -117,7 +117,10 @@ internal fun MainBrowserRouteHost(
                 backHandlingEnabled = backHandlingEnabled,
                 onExitBrowser = onExitBrowser,
                 onOpenRemoteSource = onOpenRemoteSource,
-                onRememberSmbCredentials = onRememberSmbCredentials
+                onRememberSmbCredentials = onRememberSmbCredentials,
+                onBrowserLocationChanged = { smbSourceId ->
+                    onBrowserLocationChanged(null, smbSourceId)
+                }
             )
         } else {
             FileBrowserScreen(

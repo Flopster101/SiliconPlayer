@@ -2649,7 +2649,10 @@ private fun AppNavigation(
                         returnToNetworkOnBrowserExit = false
                     },
                     onBrowserLocationChanged = { locationId, directoryPath ->
-                        if (locationId != null && directoryPath != null) {
+                        if (
+                            directoryPath != null &&
+                            (locationId != null || parseSmbSourceSpecFromInput(directoryPath) != null)
+                        ) {
                             runtimeDelegates.addRecentFolder(directoryPath, locationId)
                         }
                         if (browserLaunchLocationId != null || browserLaunchDirectoryPath != null) {

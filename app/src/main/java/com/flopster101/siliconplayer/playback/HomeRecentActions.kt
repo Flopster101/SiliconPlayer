@@ -166,7 +166,20 @@ private fun resolveBrowserFolderForRecentSource(entry: RecentPathEntry): Pair<St
 
     val parsed = Uri.parse(entry.path)
     val scheme = parsed.scheme?.lowercase(Locale.ROOT)
-    if (scheme == "http" || scheme == "https" || scheme == "smb") return null
+    if (scheme == "smb") {
+        val smbSpec = parseSmbSourceSpecFromInput(entry.path) ?: return null
+        if (smbSpec.share.isBlank()) return null
+        val normalizedPath = smbSpec.path?.trim().orEmpty()
+        if (normalizedPath.isBlank()) {
+            return null to buildSmbSourceId(smbSpec.copy(path = null))
+        }
+        val parentPath = normalizedPath.substringBeforeLast('/', missingDelimiterValue = "")
+            .trim()
+            .ifBlank { null }
+        val parentSpec = smbSpec.copy(path = parentPath)
+        return null to buildSmbSourceId(parentSpec)
+    }
+    if (scheme == "http" || scheme == "https") return null
 
     val localPath = if (scheme == "file") {
         parsed.path
@@ -203,6 +216,21 @@ private fun resolveBrowserParentForRecentFolder(entry: RecentPathEntry): Pair<St
     }
 
     val rawPath = entry.path.trim().takeIf { it.isNotBlank() } ?: return null
+    val smbSpec = parseSmbSourceSpecFromInput(rawPath)
+    if (smbSpec != null) {
+        if (smbSpec.share.isBlank()) return null
+        val normalizedPath = smbSpec.path?.trim().orEmpty()
+        val parentSpec = if (normalizedPath.isBlank()) {
+            smbSpec.copy(share = "", path = null)
+        } else {
+            val parentPath = normalizedPath.substringBeforeLast('/', missingDelimiterValue = "")
+                .trim()
+                .ifBlank { null }
+            smbSpec.copy(path = parentPath)
+        }
+        return null to buildSmbSourceId(parentSpec)
+    }
+
     val folder = File(rawPath)
     val parentPath = folder.parentFile?.absolutePath ?: return null
     return entry.locationId to parentPath

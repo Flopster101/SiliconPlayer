@@ -88,7 +88,8 @@ internal fun SmbFileBrowserScreen(
     backHandlingEnabled: Boolean,
     onExitBrowser: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
-    onRememberSmbCredentials: (String, String?, String?) -> Unit
+    onRememberSmbCredentials: (String, String?, String?) -> Unit,
+    onBrowserLocationChanged: (String) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
     val launchShare = remember(sourceSpec.share) { sourceSpec.share.trim() }
@@ -145,6 +146,15 @@ internal fun SmbFileBrowserScreen(
 
     fun isSharePickerMode(): Boolean = currentShare.isBlank()
 
+    fun currentDirectorySourceId(): String {
+        return buildSmbSourceId(
+            credentialsSpec.copy(
+                share = currentShare,
+                path = effectivePath()
+            )
+        )
+    }
+
     fun loadCurrentDirectory() {
         listJob?.cancel()
         isLoading = true
@@ -177,6 +187,7 @@ internal fun SmbFileBrowserScreen(
             result.onSuccess { resolved ->
                 entries = resolved
                 errorMessage = null
+                onBrowserLocationChanged(currentDirectorySourceId())
                 val folders = resolved.count { it.isDirectory }
                 val files = resolved.size - folders
                 appendLoadingLog("Found ${resolved.size} entries")

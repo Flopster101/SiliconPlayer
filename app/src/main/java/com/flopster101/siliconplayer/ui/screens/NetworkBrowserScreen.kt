@@ -53,6 +53,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -86,6 +88,8 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -176,6 +180,7 @@ internal fun NetworkBrowserScreen(
     var newSmbPath by remember { mutableStateOf("") }
     var newSmbUsername by remember { mutableStateOf("") }
     var newSmbPassword by remember { mutableStateOf("") }
+    var newSmbPasswordVisible by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val uiScope = rememberCoroutineScope()
     val refreshTimeoutJobs = remember { LinkedHashMap<String, Job>() }
@@ -292,6 +297,7 @@ internal fun NetworkBrowserScreen(
                 newSmbPath = smbSpec?.path.orEmpty()
                 newSmbUsername = smbSpec?.username.orEmpty()
                 newSmbPassword = smbSpec?.password.orEmpty()
+                newSmbPasswordVisible = false
                 showAddSmbSourceDialog = true
             }
 
@@ -1062,6 +1068,7 @@ internal fun NetworkBrowserScreen(
                                     newSmbPath = ""
                                     newSmbUsername = ""
                                     newSmbPassword = ""
+                                    newSmbPasswordVisible = false
                                     showAddSmbSourceDialog = true
                                 }
                             )
@@ -1608,6 +1615,7 @@ internal fun NetworkBrowserScreen(
             onDismissRequest = {
                 showAddSmbSourceDialog = false
                 editingSmbNodeId = null
+                newSmbPasswordVisible = false
             },
             title = {
                 Text(if (isEditing) "Edit SMB share" else "Add SMB share")
@@ -1648,7 +1656,28 @@ internal fun NetworkBrowserScreen(
                         value = newSmbPassword,
                         onValueChange = { newSmbPassword = it },
                         singleLine = true,
-                        label = { Text("Password (optional)") }
+                        label = { Text("Password (optional)") },
+                        visualTransformation = if (newSmbPasswordVisible) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { newSmbPasswordVisible = !newSmbPasswordVisible }) {
+                                Icon(
+                                    imageVector = if (newSmbPasswordVisible) {
+                                        Icons.Default.VisibilityOff
+                                    } else {
+                                        Icons.Default.Visibility
+                                    },
+                                    contentDescription = if (newSmbPasswordVisible) {
+                                        "Hide password"
+                                    } else {
+                                        "Show password"
+                                    }
+                                )
+                            }
+                        }
                     )
                 }
             },
@@ -1671,6 +1700,7 @@ internal fun NetworkBrowserScreen(
                         newSmbPath = ""
                         newSmbUsername = ""
                         newSmbPassword = ""
+                        newSmbPasswordVisible = false
                     },
                     enabled = newSmbHost.trim().isNotEmpty()
                 ) {
@@ -1682,6 +1712,7 @@ internal fun NetworkBrowserScreen(
                     onClick = {
                         showAddSmbSourceDialog = false
                         editingSmbNodeId = null
+                        newSmbPasswordVisible = false
                     }
                 ) {
                     Text("Cancel")

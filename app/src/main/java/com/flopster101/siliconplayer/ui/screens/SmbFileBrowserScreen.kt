@@ -28,6 +28,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -55,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Dp
@@ -106,6 +109,7 @@ internal fun SmbFileBrowserScreen(
     var authDialogErrorMessage by remember(sourceSpec) { mutableStateOf<String?>(null) }
     var authDialogUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username.orEmpty()) }
     var authDialogPassword by remember(sourceSpec) { mutableStateOf("") }
+    var authDialogPasswordVisible by remember(sourceSpec) { mutableStateOf(false) }
     var authRememberPassword by remember(sourceSpec) { mutableStateOf(true) }
     var sessionUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username) }
     var sessionPassword by remember(sourceSpec) { mutableStateOf(sourceSpec.password) }
@@ -184,6 +188,7 @@ internal fun SmbFileBrowserScreen(
                 if (authFailed) {
                     authDialogUsername = credentialsSpec.username.orEmpty()
                     authDialogPassword = ""
+                    authDialogPasswordVisible = false
                     authRememberPassword = true
                     authDialogErrorMessage = if (credentialsSpec.password.isNullOrBlank()) {
                         "This SMB source requires authentication."
@@ -236,6 +241,7 @@ internal fun SmbFileBrowserScreen(
         authDialogErrorMessage = null
         authDialogUsername = sourceSpec.username.orEmpty()
         authDialogPassword = ""
+        authDialogPasswordVisible = false
         authRememberPassword = true
         sessionUsername = sourceSpec.username
         sessionPassword = sourceSpec.password
@@ -433,7 +439,10 @@ internal fun SmbFileBrowserScreen(
 
     if (authDialogVisible) {
         AlertDialog(
-            onDismissRequest = { authDialogVisible = false },
+            onDismissRequest = {
+                authDialogVisible = false
+                authDialogPasswordVisible = false
+            },
             title = { Text("SMB authentication required") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -455,7 +464,27 @@ internal fun SmbFileBrowserScreen(
                         onValueChange = { authDialogPassword = it },
                         singleLine = true,
                         label = { Text("Password") },
-                        visualTransformation = PasswordVisualTransformation()
+                        visualTransformation = if (authDialogPasswordVisible) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { authDialogPasswordVisible = !authDialogPasswordVisible }) {
+                                Icon(
+                                    imageVector = if (authDialogPasswordVisible) {
+                                        Icons.Default.VisibilityOff
+                                    } else {
+                                        Icons.Default.Visibility
+                                    },
+                                    contentDescription = if (authDialogPasswordVisible) {
+                                        "Hide password"
+                                    } else {
+                                        "Show password"
+                                    }
+                                )
+                            }
+                        }
                     )
                     Row(
                         modifier = Modifier
@@ -491,6 +520,7 @@ internal fun SmbFileBrowserScreen(
                             )
                         }
                         authDialogVisible = false
+                        authDialogPasswordVisible = false
                         loadCurrentDirectory()
                     }
                 ) {
@@ -498,7 +528,10 @@ internal fun SmbFileBrowserScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { authDialogVisible = false }) {
+                TextButton(onClick = {
+                    authDialogVisible = false
+                    authDialogPasswordVisible = false
+                }) {
                     Text("Cancel")
                 }
             }

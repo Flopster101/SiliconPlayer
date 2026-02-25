@@ -31,6 +31,7 @@ internal data class NetworkNode(
     val smbPath: String? = null,
     val smbUsername: String? = null,
     val smbPassword: String? = null,
+    val httpRootPath: String? = null,
     val smbDiscoveredHostName: String? = null,
     val metadataTitle: String? = null,
     val metadataArtist: String? = null
@@ -75,6 +76,7 @@ internal fun readNetworkNodes(prefs: SharedPreferences): List<NetworkNode> {
                         }
                         val metadataTitle = objectValue.optString("metadataTitle", "").trim().ifBlank { null }
                         val metadataArtist = objectValue.optString("metadataArtist", "").trim().ifBlank { null }
+                        val httpRootPath = objectValue.optString("httpRootPath", "").trim().ifBlank { null }
                         val smbDiscoveredHostName = objectValue
                             .optString("smbDiscoveredHostName", "")
                             .trim()
@@ -114,6 +116,7 @@ internal fun readNetworkNodes(prefs: SharedPreferences): List<NetworkNode> {
                                 smbPath = smbSpec?.path,
                                 smbUsername = smbSpec?.username,
                                 smbPassword = smbSpec?.password,
+                                httpRootPath = httpRootPath,
                                 smbDiscoveredHostName = smbDiscoveredHostName,
                                 metadataTitle = metadataTitle,
                                 metadataArtist = metadataArtist
@@ -178,6 +181,7 @@ internal fun writeNetworkNodes(
                     .put("smbPath", resolvedSmbSpec?.path.orEmpty())
                     .put("smbUsername", resolvedSmbSpec?.username.orEmpty())
                     .put("smbPassword", resolvedSmbSpec?.password.orEmpty())
+                    .put("httpRootPath", node.httpRootPath.orEmpty())
                     .put("smbDiscoveredHostName", node.smbDiscoveredHostName.orEmpty())
                     .put("metadataTitle", node.metadataTitle.orEmpty())
                     .put("metadataArtist", node.metadataArtist.orEmpty())
@@ -261,8 +265,24 @@ internal fun resolveNetworkNodeOpenInput(node: NetworkNode): String? {
     return if (node.sourceKind == NetworkSourceKind.Smb) {
         resolveNetworkNodeSmbSpec(node)?.let(::buildSmbRequestUri)
     } else {
-        node.source?.trim().takeUnless { it.isNullOrBlank() }
+        val source = node.source?.trim().takeUnless { it.isNullOrBlank() } ?: return null
+        val httpSpec = parseHttpSourceSpecFromInput(source)
+        if (httpSpec != null) {
+            buildHttpRequestUri(httpSpec)
+        } else {
+            source
+        }
     }
+}
+
+internal fun resolveNetworkNodeHttpRootPath(node: NetworkNode): String? {
+    if (node.type != NetworkNodeType.RemoteSource || node.sourceKind == NetworkSourceKind.Smb) {
+        return null
+    }
+    return node.httpRootPath
+        ?.trim()
+        .takeUnless { it.isNullOrBlank() }
+        ?.let(::normalizeHttpDirectoryPath)
 }
 
 internal fun resolveNetworkNodeDisplaySource(node: NetworkNode): String {
@@ -271,7 +291,10 @@ internal fun resolveNetworkNodeDisplaySource(node: NetworkNode): String {
             ?.let(::buildSmbDisplayUri)
             .orEmpty()
     } else {
-        node.source.orEmpty()
+        val source = node.source.orEmpty()
+        parseHttpSourceSpecFromInput(source)
+            ?.let(::buildHttpDisplayUri)
+            ?: source
     }
 }
 
@@ -279,7 +302,12 @@ internal fun resolveNetworkNodeDisplayTitle(node: NetworkNode): String {
     if (node.type == NetworkNodeType.Folder) return node.title
     if (node.type != NetworkNodeType.RemoteSource) return node.title
     if (node.sourceKind != NetworkSourceKind.Smb) {
-        return node.title.ifBlank { node.source.orEmpty() }
+        return node.title.ifBlank {
+            val source = node.source.orEmpty()
+            parseHttpSourceSpecFromInput(source)
+                ?.let(::buildHttpDisplayUri)
+                ?: source
+        }
     }
 
     val spec = resolveNetworkNodeSmbSpec(node)
@@ -301,6 +329,46 @@ internal fun resolveNetworkNodeDisplayTitle(node: NetworkNode): String {
     } else {
         "$hostLabel/${spec.share}/${spec.path}"
     }
+}
+
+internal fun rememberHttpCredentialsForNetworkNode(
+    nodes: List<NetworkNode>,
+    sourceNodeId: Long?,
+    username: String?,
+    password: String?
+): List<NetworkNode> {
+    if (sourceNodeId == null) return nodes
+    val normalizedUsername = username?.trim().takeUnless { it.isNullOrBlank() }
+    val normalizedPassword = password?.trim().takeUnless { it.isNullOrBlank() }
+    var changed = false
+    val updated = nodes.map { node ->
+        if (node.id != sourceNodeId || node.type != NetworkNodeType.RemoteSource) {
+            return@map node
+        }
+        if (node.sourceKind == NetworkSourceKind.Smb) {
+            return@map node
+        }
+        val source = resolveNetworkNodeSourceId(node).orEmpty()
+        val httpSpec = parseHttpSourceSpecFromInput(source) ?: return@map node
+        val updatedSpec = httpSpec.copy(
+            username = normalizedUsername,
+            password = normalizedPassword
+        )
+        val updatedSource = if (
+            normalizedUsername == null &&
+            normalizedPassword == null
+        ) {
+            buildHttpSourceId(updatedSpec)
+        } else {
+            buildHttpRequestUri(updatedSpec)
+        }
+        if (samePath(source, updatedSource) && source == updatedSource) {
+            return@map node
+        }
+        changed = true
+        node.copy(source = updatedSource)
+    }
+    return if (changed) updated else nodes
 }
 
 private fun isLegacyAutoSmbTitle(title: String, spec: SmbSourceSpec?): Boolean {

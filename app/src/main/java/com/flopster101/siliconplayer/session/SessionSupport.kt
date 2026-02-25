@@ -31,7 +31,14 @@ internal fun normalizeSourceIdentity(path: String?): String? {
     val uri = Uri.parse(trimmed)
     val scheme = uri.scheme?.lowercase(Locale.ROOT)
     return when (scheme) {
-        "http", "https" -> uri.normalizeScheme().toString()
+        "http", "https" -> {
+            val httpSpec = parseHttpSourceSpecFromInput(trimmed)
+            if (httpSpec != null) {
+                buildHttpSourceId(httpSpec)
+            } else {
+                uri.normalizeScheme().toString()
+            }
+        }
         "archive" -> {
             val parsedArchive = parseArchiveSourceId(trimmed) ?: return trimmed
             val canonicalArchivePath = try {
@@ -140,9 +147,9 @@ internal fun resolveManualSourceInput(rawInput: String): ManualSourceResolution?
     val uri = Uri.parse(trimmed)
     val scheme = uri.scheme?.lowercase(Locale.ROOT)
     if (scheme == "http" || scheme == "https") {
-        if (uri.host.isNullOrBlank()) return null
-        val normalizedUrl = uri.normalizeScheme().toString()
-        val requestUrl = stripUrlFragment(normalizedUrl)
+        val httpSpec = parseHttpSourceSpecFromInput(trimmed) ?: return null
+        val normalizedUrl = buildHttpSourceId(httpSpec)
+        val requestUrl = stripUrlFragment(buildHttpRequestUri(httpSpec))
         val safeName = remoteFilenameHintFromUri(uri) ?: sanitizeRemoteLeafName(uri.host) ?: "remote"
         return ManualSourceResolution(
             type = ManualSourceType.RemoteUrl,

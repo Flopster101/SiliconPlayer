@@ -56,7 +56,9 @@ internal fun fileMatchesSupportedExtensions(file: File, supportedExtensions: Set
 }
 
 internal fun inferredDisplayTitleForName(name: String): String {
-    val baseName = name.substringAfterLast('/').substringAfterLast('\\').trim()
+    val baseName = stripRemoteCacheHashPrefix(
+        name.substringAfterLast('/').substringAfterLast('\\').trim()
+    )
     if (baseName.isBlank()) return name
 
     val firstDot = baseName.indexOf('.')

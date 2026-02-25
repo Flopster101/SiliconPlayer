@@ -115,6 +115,7 @@ import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
 import com.flopster101.siliconplayer.pluginNameForCoreName
 import com.flopster101.siliconplayer.rememberDialogScrollbarAlpha
+import com.flopster101.siliconplayer.stripRemoteCacheHashPrefix
 import com.flopster101.siliconplayer.ui.dialogs.VisualizationModePickerDialog
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
 import java.io.File
@@ -1407,13 +1408,7 @@ private fun PlayerTopBar(
 }
 
 private fun toDisplayFilename(file: File): String {
-    val name = file.name
-    val path = file.absolutePath
-    if (path.contains("/cache/remote_sources/")) {
-        val normalized = name.replaceFirst(Regex("^[0-9a-fA-F]{40}_"), "")
-        if (normalized.isNotBlank()) return normalized
-    }
-    return name
+    return stripRemoteCacheHashPrefix(file.name)
 }
 
 private fun normalizedScale(valueDp: Dp, compactDp: Dp, roomyDp: Dp): Float {

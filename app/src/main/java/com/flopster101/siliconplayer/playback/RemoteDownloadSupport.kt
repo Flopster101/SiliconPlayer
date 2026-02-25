@@ -35,7 +35,10 @@ internal suspend fun downloadRemoteUrlToCache(
     }
 
     var temp = File(target.absolutePath + ".part")
-    Log.d(URL_SOURCE_TAG, "Downloading URL to cache: source=$url request=$requestUrl")
+    Log.d(
+        URL_SOURCE_TAG,
+        "Downloading URL to cache: source=${sanitizeHttpUrlForLog(url)} request=${sanitizeHttpUrlForLog(requestUrl)}"
+    )
     emitStatus(
         RemoteLoadUiState(
             sourceId = url,
@@ -57,13 +60,21 @@ internal suspend fun downloadRemoteUrlToCache(
                 setRequestProperty("Accept", "*/*")
                 setRequestProperty("Connection", "close")
                 setRequestProperty("Icy-MetaData", "1")
+                parseHttpSourceSpecFromInput(currentUrl)?.let { spec ->
+                    httpBasicAuthorizationHeader(
+                        username = spec.username,
+                        password = spec.password
+                    )?.let { header ->
+                        setRequestProperty("Authorization", header)
+                    }
+                }
             }
             val responseCode = connection.responseCode
             if (responseCode in 300..399) {
                 val location = connection.getHeaderField("Location")
                 Log.d(
                     URL_SOURCE_TAG,
-                    "Redirect hop=$hop code=$responseCode from=$currentUrl to=${location ?: "<missing>"}"
+                    "Redirect hop=$hop code=$responseCode from=${sanitizeHttpUrlForLog(currentUrl)} to=${location ?: "<missing>"}"
                 )
                 connection.disconnect()
                 if (location.isNullOrBlank()) {
@@ -72,14 +83,17 @@ internal suspend fun downloadRemoteUrlToCache(
                 currentUrl = URL(URL(currentUrl), location).toString()
                 return@repeat
             }
-            Log.d(URL_SOURCE_TAG, "HTTP response code=$responseCode finalUrl=$currentUrl")
+            Log.d(
+                URL_SOURCE_TAG,
+                "HTTP response code=$responseCode finalUrl=${sanitizeHttpUrlForLog(currentUrl)}"
+            )
             if (responseCode !in 200..299) {
                 connection.disconnect()
                 return Pair(null, "HTTP $responseCode")
             }
             return Pair(connection, null)
         }
-        Log.e(URL_SOURCE_TAG, "Too many redirects for URL: $initialUrl")
+        Log.e(URL_SOURCE_TAG, "Too many redirects for URL: ${sanitizeHttpUrlForLog(initialUrl)}")
         return Pair(null, "Too many redirects")
     }
 
@@ -88,7 +102,10 @@ internal suspend fun downloadRemoteUrlToCache(
         val (openedConnection, openError) = openWithRedirects(requestUrl)
         connection = openedConnection
         if (connection == null) {
-            Log.e(URL_SOURCE_TAG, "HTTP open failed for URL: source=$url request=$requestUrl")
+            Log.e(
+                URL_SOURCE_TAG,
+                "HTTP open failed for URL: source=${sanitizeHttpUrlForLog(url)} request=${sanitizeHttpUrlForLog(requestUrl)}"
+            )
             RemoteDownloadResult(
                 file = null,
                 errorMessage = openError ?: "Connection failed"
@@ -199,10 +216,13 @@ internal suspend fun downloadRemoteUrlToCache(
             RemoteDownloadResult(file = target)
         }
     } catch (_: CancellationException) {
-        Log.d(URL_SOURCE_TAG, "Download cancelled for URL: $url")
+        Log.d(URL_SOURCE_TAG, "Download cancelled for URL: ${sanitizeHttpUrlForLog(url)}")
         RemoteDownloadResult(file = null, errorMessage = "Cancelled", cancelled = true)
     } catch (t: Throwable) {
-        Log.e(URL_SOURCE_TAG, "Download failed for URL: $url (${t::class.java.simpleName}: ${t.message})")
+        Log.e(
+            URL_SOURCE_TAG,
+            "Download failed for URL: ${sanitizeHttpUrlForLog(url)} (${t::class.java.simpleName}: ${t.message})"
+        )
         RemoteDownloadResult(
             file = null,
             errorMessage = "${t::class.java.simpleName}: ${t.message ?: "unknown error"}"

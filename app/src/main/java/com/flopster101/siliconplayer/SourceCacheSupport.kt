@@ -48,6 +48,18 @@ internal fun sanitizeRemoteLeafName(raw: String?): String? {
     return trimmed.replace(Regex("""[\\/:*?"<>|]"""), "_")
 }
 
+private val REMOTE_CACHE_HASH_PREFIX_REGEX = Regex("^[0-9a-fA-F]{40}_(.+)$")
+
+internal fun stripRemoteCacheHashPrefix(rawName: String): String {
+    val normalized = rawName.trim()
+    if (normalized.isEmpty()) return rawName
+    return REMOTE_CACHE_HASH_PREFIX_REGEX.matchEntire(normalized)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.takeIf { it.isNotBlank() }
+        ?: normalized
+}
+
 internal fun stripUrlFragment(url: String): String {
     val parsed = Uri.parse(url)
     if (parsed.fragment.isNullOrBlank()) return url

@@ -354,6 +354,8 @@ private fun AppNavigation(
     var browserLaunchLocationId by remember { mutableStateOf<String?>(null) }
     var browserLaunchDirectoryPath by remember { mutableStateOf<String?>(null) }
     var browserLaunchSmbSourceNodeId by remember { mutableStateOf<Long?>(null) }
+    var browserLaunchHttpSourceNodeId by remember { mutableStateOf<Long?>(null) }
+    var browserLaunchHttpRootPath by remember { mutableStateOf<String?>(null) }
     var networkCurrentFolderId by remember { mutableStateOf<Long?>(null) }
     var returnToNetworkOnBrowserExit by remember { mutableStateOf(false) }
     val storageDescriptors = remember(context) { detectStorageDescriptors(context) }
@@ -428,6 +430,18 @@ private fun AppNavigation(
             )
         }
         if (changed) {
+            networkNodes = updated
+            writeNetworkNodes(prefs, updated)
+        }
+    }
+    val rememberNetworkHttpCredentials: (Long?, String, String?, String?) -> Unit = { sourceNodeId, _, username, password ->
+        val updated = rememberHttpCredentialsForNetworkNode(
+            nodes = networkNodes,
+            sourceNodeId = sourceNodeId,
+            username = username,
+            password = password
+        )
+        if (updated != networkNodes) {
             networkNodes = updated
             writeNetworkNodes(prefs, updated)
         }
@@ -1212,6 +1226,8 @@ private fun AppNavigation(
             browserLaunchLocationId = locationId
             browserLaunchDirectoryPath = directoryPath
             browserLaunchSmbSourceNodeId = null
+            browserLaunchHttpSourceNodeId = null
+            browserLaunchHttpRootPath = null
         },
         onCurrentViewChanged = { currentView = it },
         onAddRecentFolder = { path, locationId ->
@@ -2519,6 +2535,8 @@ private fun AppNavigation(
                         browserLaunchLocationId = null
                         browserLaunchDirectoryPath = null
                         browserLaunchSmbSourceNodeId = null
+                        browserLaunchHttpSourceNodeId = null
+                        browserLaunchHttpRootPath = null
                         returnToNetworkOnBrowserExit = false
                         currentView = MainView.Browser
                     },
@@ -2539,10 +2557,20 @@ private fun AppNavigation(
                             browserLaunchLocationId = null
                             browserLaunchDirectoryPath = smbTarget.requestUri
                             browserLaunchSmbSourceNodeId = smbTarget.sourceNodeId
+                            browserLaunchHttpSourceNodeId = null
+                            browserLaunchHttpRootPath = null
+                        } else if (parseHttpSourceSpecFromInput(entry.path) != null) {
+                            browserLaunchLocationId = null
+                            browserLaunchDirectoryPath = entry.path
+                            browserLaunchSmbSourceNodeId = null
+                            browserLaunchHttpSourceNodeId = null
+                            browserLaunchHttpRootPath = null
                         } else {
                             browserLaunchLocationId = entry.locationId
                             browserLaunchDirectoryPath = entry.path
                             browserLaunchSmbSourceNodeId = null
+                            browserLaunchHttpSourceNodeId = null
+                            browserLaunchHttpRootPath = null
                         }
                         returnToNetworkOnBrowserExit = false
                         currentView = MainView.Browser
@@ -2602,6 +2630,8 @@ private fun AppNavigation(
                                 browserLaunchLocationId = locationId
                                 browserLaunchDirectoryPath = directoryPath
                                 browserLaunchSmbSourceNodeId = smbSourceNodeId
+                                browserLaunchHttpSourceNodeId = null
+                                browserLaunchHttpRootPath = null
                                 returnToNetworkOnBrowserExit = false
                                 currentView = MainView.Browser
                             }
@@ -2624,6 +2654,8 @@ private fun AppNavigation(
                                 browserLaunchLocationId = locationId
                                 browserLaunchDirectoryPath = directoryPath
                                 browserLaunchSmbSourceNodeId = smbSourceNodeId
+                                browserLaunchHttpSourceNodeId = null
+                                browserLaunchHttpRootPath = null
                                 returnToNetworkOnBrowserExit = false
                                 currentView = MainView.Browser
                             }
@@ -2671,6 +2703,17 @@ private fun AppNavigation(
                         browserLaunchLocationId = null
                         browserLaunchDirectoryPath = rawInput
                         browserLaunchSmbSourceNodeId = sourceNodeId
+                        browserLaunchHttpSourceNodeId = null
+                        browserLaunchHttpRootPath = null
+                        returnToNetworkOnBrowserExit = true
+                        currentView = MainView.Browser
+                    },
+                    onBrowseHttpSource = { rawInput, sourceNodeId, rootPath ->
+                        browserLaunchLocationId = null
+                        browserLaunchDirectoryPath = rawInput
+                        browserLaunchSmbSourceNodeId = null
+                        browserLaunchHttpSourceNodeId = sourceNodeId
+                        browserLaunchHttpRootPath = rootPath
                         returnToNetworkOnBrowserExit = true
                         currentView = MainView.Browser
                     }
@@ -2686,6 +2729,8 @@ private fun AppNavigation(
                     initialDirectoryPath = browserLaunchDirectoryPath
                         ?: if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
                     initialSmbSourceNodeId = browserLaunchSmbSourceNodeId,
+                    initialHttpSourceNodeId = browserLaunchHttpSourceNodeId,
+                    initialHttpRootPath = browserLaunchHttpRootPath,
                     restoreFocusedItemRequestToken = browserFocusRestoreRequestToken,
                     bottomContentPadding = miniPlayerListInset,
                     showParentDirectoryEntry = showParentDirectoryEntry,
@@ -2701,6 +2746,8 @@ private fun AppNavigation(
                         }
                         returnToNetworkOnBrowserExit = false
                         browserLaunchSmbSourceNodeId = null
+                        browserLaunchHttpSourceNodeId = null
+                        browserLaunchHttpRootPath = null
                     },
                     onBrowserLocationChanged = { locationId, directoryPath ->
                         if (
@@ -2737,6 +2784,9 @@ private fun AppNavigation(
                     },
                     onRememberSmbCredentials = { sourceNodeId, sourceId, username, password ->
                         rememberNetworkSmbCredentials(sourceNodeId, sourceId, username, password)
+                    },
+                    onRememberHttpCredentials = { sourceNodeId, sourceId, username, password ->
+                        rememberNetworkHttpCredentials(sourceNodeId, sourceId, username, password)
                     }
                 )
             },

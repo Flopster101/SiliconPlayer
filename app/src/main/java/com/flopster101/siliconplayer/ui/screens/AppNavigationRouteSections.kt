@@ -77,7 +77,8 @@ internal fun AppNavigationNetworkRouteSection(
     onResolveRemoteSourceMetadata: (String, () -> Unit) -> Unit,
     onCancelPendingMetadataBackfill: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
-    onBrowseSmbSource: (String, Long?) -> Unit
+    onBrowseSmbSource: (String, Long?) -> Unit,
+    onBrowseHttpSource: (String, Long?, String?) -> Unit
 ) {
     MainNetworkRouteHost(
         mainPadding = mainPadding,
@@ -91,7 +92,8 @@ internal fun AppNavigationNetworkRouteSection(
         onResolveRemoteSourceMetadata = onResolveRemoteSourceMetadata,
         onCancelPendingMetadataBackfill = onCancelPendingMetadataBackfill,
         onOpenRemoteSource = onOpenRemoteSource,
-        onBrowseSmbSource = onBrowseSmbSource
+        onBrowseSmbSource = onBrowseSmbSource,
+        onBrowseHttpSource = onBrowseHttpSource
     )
 }
 
@@ -103,6 +105,8 @@ internal fun AppNavigationBrowserRouteSection(
     initialLocationId: String?,
     initialDirectoryPath: String?,
     initialSmbSourceNodeId: Long?,
+    initialHttpSourceNodeId: Long?,
+    initialHttpRootPath: String?,
     restoreFocusedItemRequestToken: Int,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     showParentDirectoryEntry: Boolean,
@@ -114,7 +118,8 @@ internal fun AppNavigationBrowserRouteSection(
     onBrowserLocationChanged: (String?, String?) -> Unit,
     onFileSelected: (File, String?) -> Unit,
     onOpenRemoteSource: (String) -> Unit,
-    onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit
+    onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
+    onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit
 ) {
     MainBrowserRouteHost(
         mainPadding = mainPadding,
@@ -123,6 +128,8 @@ internal fun AppNavigationBrowserRouteSection(
         initialLocationId = initialLocationId,
         initialDirectoryPath = initialDirectoryPath,
         initialSmbSourceNodeId = initialSmbSourceNodeId,
+        initialHttpSourceNodeId = initialHttpSourceNodeId,
+        initialHttpRootPath = initialHttpRootPath,
         restoreFocusedItemRequestToken = restoreFocusedItemRequestToken,
         bottomContentPadding = bottomContentPadding,
         showParentDirectoryEntry = showParentDirectoryEntry,
@@ -134,7 +141,8 @@ internal fun AppNavigationBrowserRouteSection(
         onBrowserLocationChanged = onBrowserLocationChanged,
         onFileSelected = onFileSelected,
         onOpenRemoteSource = onOpenRemoteSource,
-        onRememberSmbCredentials = onRememberSmbCredentials
+        onRememberSmbCredentials = onRememberSmbCredentials,
+        onRememberHttpCredentials = onRememberHttpCredentials
     )
 }
 

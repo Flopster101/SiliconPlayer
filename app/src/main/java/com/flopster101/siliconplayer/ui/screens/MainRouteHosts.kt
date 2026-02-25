@@ -8,6 +8,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.flopster101.siliconplayer.ui.screens.FileBrowserScreen
+import com.flopster101.siliconplayer.ui.screens.HttpFileBrowserScreen
 import com.flopster101.siliconplayer.ui.screens.NetworkBrowserScreen
 import com.flopster101.siliconplayer.ui.screens.SmbFileBrowserScreen
 import java.io.File
@@ -67,7 +68,8 @@ internal fun MainNetworkRouteHost(
     onResolveRemoteSourceMetadata: (String, () -> Unit) -> Unit,
     onCancelPendingMetadataBackfill: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
-    onBrowseSmbSource: (String, Long?) -> Unit
+    onBrowseSmbSource: (String, Long?) -> Unit,
+    onBrowseHttpSource: (String, Long?, String?) -> Unit
 ) {
     Box(modifier = Modifier.padding(mainPadding)) {
         NetworkBrowserScreen(
@@ -81,7 +83,8 @@ internal fun MainNetworkRouteHost(
             onResolveRemoteSourceMetadata = onResolveRemoteSourceMetadata,
             onCancelPendingMetadataBackfill = onCancelPendingMetadataBackfill,
             onOpenRemoteSource = onOpenRemoteSource,
-            onBrowseSmbSource = onBrowseSmbSource
+            onBrowseSmbSource = onBrowseSmbSource,
+            onBrowseHttpSource = onBrowseHttpSource
         )
     }
 }
@@ -94,6 +97,8 @@ internal fun MainBrowserRouteHost(
     initialLocationId: String?,
     initialDirectoryPath: String?,
     initialSmbSourceNodeId: Long?,
+    initialHttpSourceNodeId: Long?,
+    initialHttpRootPath: String?,
     restoreFocusedItemRequestToken: Int,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     showParentDirectoryEntry: Boolean,
@@ -105,9 +110,13 @@ internal fun MainBrowserRouteHost(
     onBrowserLocationChanged: (String?, String?) -> Unit,
     onFileSelected: (File, String?) -> Unit,
     onOpenRemoteSource: (String) -> Unit,
-    onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit
+    onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
+    onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit
 ) {
     val initialSmbSpec = remember { initialDirectoryPath?.let(::parseSmbSourceSpecFromInput) }
+    val initialHttpSpec = remember {
+        if (initialSmbSpec != null) null else initialDirectoryPath?.let(::parseHttpSourceSpecFromInput)
+    }
     Box(modifier = Modifier.padding(mainPadding)) {
         if (initialSmbSpec != null) {
             LaunchedEffect(initialSmbSpec) {
@@ -123,6 +132,23 @@ internal fun MainBrowserRouteHost(
                 sourceNodeId = initialSmbSourceNodeId,
                 onBrowserLocationChanged = { smbSourceId ->
                     onBrowserLocationChanged(null, smbSourceId)
+                }
+            )
+        } else if (initialHttpSpec != null) {
+            LaunchedEffect(initialHttpSpec) {
+                onVisiblePlayableFilesChanged(emptyList())
+            }
+            HttpFileBrowserScreen(
+                sourceSpec = initialHttpSpec,
+                browserRootPath = initialHttpRootPath,
+                bottomContentPadding = bottomContentPadding,
+                backHandlingEnabled = backHandlingEnabled,
+                onExitBrowser = onExitBrowser,
+                onOpenRemoteSource = onOpenRemoteSource,
+                onRememberHttpCredentials = onRememberHttpCredentials,
+                sourceNodeId = initialHttpSourceNodeId,
+                onBrowserLocationChanged = { httpSourceId ->
+                    onBrowserLocationChanged(null, httpSourceId)
                 }
             )
         } else {

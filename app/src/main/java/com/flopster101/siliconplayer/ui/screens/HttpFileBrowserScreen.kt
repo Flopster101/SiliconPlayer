@@ -1,0 +1,1164 @@
+package com.flopster101.siliconplayer.ui.screens
+
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.HttpAuthenticationFailureReason
+import com.flopster101.siliconplayer.HttpBrowserEntry
+import com.flopster101.siliconplayer.HttpSourceSpec
+import com.flopster101.siliconplayer.buildHttpDisplayUri
+import com.flopster101.siliconplayer.buildHttpRequestUri
+import com.flopster101.siliconplayer.buildHttpSourceId
+import com.flopster101.siliconplayer.httpAuthenticationFailureMessage
+import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.listHttpDirectoryEntries
+import com.flopster101.siliconplayer.normalizeHttpDirectoryPath
+import com.flopster101.siliconplayer.normalizeHttpPath
+import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
+import com.flopster101.siliconplayer.resolveHttpAuthenticationFailureReason
+import java.util.Locale
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+private val HTTP_ICON_BOX_SIZE = 38.dp
+private val HTTP_ICON_GLYPH_SIZE = 26.dp
+
+private data class HttpLoadingCancelState(
+    val previousSpec: HttpSourceSpec?,
+    val previousEntries: List<HttpBrowserEntry>,
+    val previousErrorMessage: String?
+)
+
+private enum class HttpBrowserNavDirection {
+    Forward,
+    Backward,
+    Neutral
+}
+
+private enum class HttpBrowserPane {
+    Loading,
+    Error,
+    Empty,
+    Entries
+}
+
+private data class HttpBrowserContentState(
+    val pane: HttpBrowserPane,
+    val path: String
+)
+
+@OptIn(ExperimentalMaterialApi::class)
+@Composable
+internal fun HttpFileBrowserScreen(
+    sourceSpec: HttpSourceSpec,
+    browserRootPath: String?,
+    bottomContentPadding: Dp,
+    backHandlingEnabled: Boolean,
+    onExitBrowser: () -> Unit,
+    onOpenRemoteSource: (String) -> Unit,
+    onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit,
+    sourceNodeId: Long?,
+    onBrowserLocationChanged: (String) -> Unit
+) {
+    val coroutineScope = rememberCoroutineScope()
+    var currentSpec by remember(sourceSpec) { mutableStateOf(sourceSpec) }
+    var entries by remember(sourceSpec) { mutableStateOf<List<HttpBrowserEntry>>(emptyList()) }
+    var isLoading by remember(sourceSpec) { mutableStateOf(false) }
+    var errorMessage by remember(sourceSpec) { mutableStateOf<String?>(null) }
+    var listJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
+    val loadingLogLines = remember(sourceSpec) { mutableStateListOf<String>() }
+    var authDialogVisible by remember(sourceSpec) { mutableStateOf(false) }
+    var authDialogErrorMessage by remember(sourceSpec) { mutableStateOf<String?>(null) }
+    var authDialogUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username.orEmpty()) }
+    var authDialogPassword by remember(sourceSpec) { mutableStateOf("") }
+    var authDialogPasswordVisible by remember(sourceSpec) { mutableStateOf(false) }
+    var authRememberPassword by remember(sourceSpec) { mutableStateOf(true) }
+    var sessionUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username) }
+    var sessionPassword by remember(sourceSpec) { mutableStateOf(sourceSpec.password) }
+    var loadRequestSequence by remember(sourceSpec) { mutableStateOf(0) }
+    var isPullRefreshing by remember(sourceSpec) { mutableStateOf(false) }
+    var loadingPartialEntries by remember(sourceSpec) { mutableStateOf<List<HttpBrowserEntry>>(emptyList()) }
+    var loadingLoadedCount by remember(sourceSpec) { mutableStateOf(0) }
+    var loadCancelState by remember(sourceSpec) { mutableStateOf<HttpLoadingCancelState?>(null) }
+    var browserNavDirection by remember(sourceSpec) { mutableStateOf(HttpBrowserNavDirection.Neutral) }
+    val directoryEntriesCache = remember(sourceSpec) { mutableStateMapOf<String, List<HttpBrowserEntry>>() }
+    val effectiveRootPath = remember(sourceSpec, browserRootPath) {
+        browserRootPath
+            ?.trim()
+            .takeUnless { it.isNullOrBlank() }
+            ?.let(::normalizeHttpDirectoryPath)
+            ?: "/"
+    }
+
+    fun appendLoadingLog(message: String) {
+        val lineNumber = loadingLogLines.size + 1
+        loadingLogLines += "[${lineNumber.toString().padStart(2, '0')}] $message"
+        val maxLines = 80
+        if (loadingLogLines.size > maxLines) {
+            repeat(loadingLogLines.size - maxLines) {
+                loadingLogLines.removeAt(0)
+            }
+        }
+    }
+
+    fun browserSpec(): HttpSourceSpec {
+        return currentSpec.copy(
+            username = sessionUsername,
+            password = sessionPassword
+        )
+    }
+
+    fun currentDirectorySourceId(): String {
+        return buildHttpSourceId(browserSpec())
+    }
+
+    fun directoryCacheKeyFor(spec: HttpSourceSpec): String {
+        return buildHttpRequestUri(
+            spec.copy(
+                path = normalizeHttpDirectoryPath(spec.path)
+            )
+        )
+    }
+
+    fun abortActiveLoad() {
+        loadRequestSequence += 1
+        listJob?.cancel()
+        listJob = null
+        isLoading = false
+    }
+
+    fun showLoadedEntriesNow() {
+        val partialSnapshot = loadingPartialEntries
+        browserNavDirection = HttpBrowserNavDirection.Neutral
+        abortActiveLoad()
+        entries = partialSnapshot
+        errorMessage = null
+        loadingPartialEntries = emptyList()
+        loadingLoadedCount = 0
+        loadCancelState = null
+        onBrowserLocationChanged(currentDirectorySourceId())
+    }
+
+    fun cancelCurrentLoadAndGoBack() {
+        val cancelStateSnapshot = loadCancelState
+        abortActiveLoad()
+        loadingPartialEntries = emptyList()
+        loadingLoadedCount = 0
+        loadCancelState = null
+        if (cancelStateSnapshot?.previousSpec == null) {
+            onExitBrowser()
+            return
+        }
+        browserNavDirection = HttpBrowserNavDirection.Backward
+        currentSpec = cancelStateSnapshot.previousSpec.copy(
+            username = sessionUsername,
+            password = sessionPassword
+        )
+        entries = cancelStateSnapshot.previousEntries
+        errorMessage = cancelStateSnapshot.previousErrorMessage
+        onBrowserLocationChanged(currentDirectorySourceId())
+    }
+
+    fun loadCurrentDirectory(cancelState: HttpLoadingCancelState?) {
+        listJob?.cancel()
+        loadRequestSequence += 1
+        val requestSequence = loadRequestSequence
+        isLoading = true
+        errorMessage = null
+        entries = emptyList()
+        loadingPartialEntries = emptyList()
+        loadingLoadedCount = 0
+        loadCancelState = cancelState
+        loadingLogLines.clear()
+        val requestSpec = browserSpec()
+        appendLoadingLog("Connecting to ${buildHttpDisplayUri(requestSpec)}")
+        appendLoadingLog("Listing directory page")
+        listJob = coroutineScope.launch {
+            var lastLoggedCount = 0
+            val result = listHttpDirectoryEntries(
+                spec = requestSpec,
+                onProgress = { loadedCount, partialEntries ->
+                    if (requestSequence != loadRequestSequence) return@listHttpDirectoryEntries
+                    loadingLoadedCount = loadedCount
+                    loadingPartialEntries = partialEntries
+                    if (loadedCount > 0 && (loadedCount - lastLoggedCount) >= 50) {
+                        appendLoadingLog("Loaded $loadedCount entries...")
+                        lastLoggedCount = loadedCount
+                    }
+                }
+            )
+            if (requestSequence != loadRequestSequence) {
+                return@launch
+            }
+            result.onSuccess { listing ->
+                currentSpec = listing.resolvedDirectorySpec.copy(
+                    username = sessionUsername,
+                    password = sessionPassword
+                )
+                entries = listing.entries
+                directoryEntriesCache[directoryCacheKeyFor(currentSpec)] = listing.entries
+                errorMessage = null
+                onBrowserLocationChanged(currentDirectorySourceId())
+                val folders = listing.entries.count { it.isDirectory }
+                val files = listing.entries.size - folders
+                appendLoadingLog("Found ${listing.entries.size} entries")
+                appendLoadingLog("$folders folders, $files files")
+                appendLoadingLog("Load finished")
+            }.onFailure { throwable ->
+                if (throwable is CancellationException) {
+                    return@onFailure
+                }
+                entries = emptyList()
+                val authFailureReason = resolveHttpAuthenticationFailureReason(throwable)?.let { reason ->
+                    if (
+                        reason == HttpAuthenticationFailureReason.Unknown &&
+                        requestSpec.username.isNullOrBlank() &&
+                        requestSpec.password.isNullOrBlank()
+                    ) {
+                        HttpAuthenticationFailureReason.AuthenticationRequired
+                    } else {
+                        reason
+                    }
+                }
+                if (authFailureReason != null) {
+                    val authMessage = httpAuthenticationFailureMessage(authFailureReason)
+                    authDialogErrorMessage = authMessage
+                    if (!authDialogVisible) {
+                        authDialogUsername = requestSpec.username.orEmpty()
+                        authDialogPassword = ""
+                        authDialogPasswordVisible = false
+                        authRememberPassword = true
+                    }
+                    authDialogVisible = true
+                    errorMessage = authMessage
+                } else {
+                    errorMessage = throwable.message ?: "Unable to list HTTP directory"
+                }
+                appendLoadingLog(
+                    "Load failed: ${throwable.message ?: throwable.javaClass.simpleName ?: "Unknown error"}"
+                )
+            }
+            if (requestSequence == loadRequestSequence) {
+                isLoading = false
+                listJob = null
+                loadCancelState = null
+                loadingPartialEntries = emptyList()
+                loadingLoadedCount = 0
+            }
+        }
+    }
+
+    fun openDirectory(
+        targetSpec: HttpSourceSpec,
+        cancelState: HttpLoadingCancelState?,
+        forceReload: Boolean = false,
+        navigationDirection: HttpBrowserNavDirection = HttpBrowserNavDirection.Forward
+    ) {
+        browserNavDirection = navigationDirection
+        val normalizedTargetSpec = targetSpec.copy(
+            path = normalizeHttpDirectoryPath(targetSpec.path),
+            username = sessionUsername,
+            password = sessionPassword
+        )
+        currentSpec = normalizedTargetSpec
+        val cacheKey = directoryCacheKeyFor(normalizedTargetSpec)
+        val cachedEntries = directoryEntriesCache[cacheKey]
+        if (!forceReload && cachedEntries != null) {
+            abortActiveLoad()
+            entries = cachedEntries
+            errorMessage = null
+            loadingPartialEntries = emptyList()
+            loadingLoadedCount = 0
+            loadCancelState = null
+            onBrowserLocationChanged(currentDirectorySourceId())
+            return
+        }
+        loadCurrentDirectory(cancelState)
+    }
+
+    fun navigateUpWithinBrowser(): Boolean {
+        val normalizedPath = normalizeHttpDirectoryPath(currentSpec.path)
+        if (!canNavigateUpWithinHttpBrowser(normalizedPath, effectiveRootPath)) {
+            return false
+        }
+        val parent = normalizedPath
+            .trimEnd('/')
+            .substringBeforeLast('/', missingDelimiterValue = "")
+            .trim()
+        val parentPath = if (parent.isBlank()) "/" else normalizeHttpDirectoryPath(parent)
+        val clampedParentPath = if (parentPath.length < effectiveRootPath.length) {
+            effectiveRootPath
+        } else {
+            parentPath
+        }
+        val cancelSnapshot = HttpLoadingCancelState(
+            previousSpec = currentSpec,
+            previousEntries = entries,
+            previousErrorMessage = errorMessage
+        )
+        openDirectory(
+            targetSpec = currentSpec.copy(path = clampedParentPath, query = null),
+            cancelState = cancelSnapshot,
+            navigationDirection = HttpBrowserNavDirection.Backward
+        )
+        return true
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            listJob?.cancel()
+        }
+    }
+
+    LaunchedEffect(sourceSpec) {
+        currentSpec = sourceSpec
+        entries = emptyList()
+        loadingPartialEntries = emptyList()
+        loadingLoadedCount = 0
+        loadCancelState = null
+        authDialogVisible = false
+        authDialogErrorMessage = null
+        authDialogUsername = sourceSpec.username.orEmpty()
+        authDialogPassword = ""
+        authDialogPasswordVisible = false
+        authRememberPassword = true
+        sessionUsername = sourceSpec.username
+        sessionPassword = sourceSpec.password
+        openDirectory(
+            targetSpec = sourceSpec,
+            cancelState = HttpLoadingCancelState(
+                previousSpec = null,
+                previousEntries = emptyList(),
+                previousErrorMessage = null
+            ),
+            navigationDirection = HttpBrowserNavDirection.Neutral
+        )
+    }
+
+    BackHandler(enabled = backHandlingEnabled) {
+        if (isLoading) {
+            cancelCurrentLoadAndGoBack()
+            return@BackHandler
+        }
+        if (!navigateUpWithinBrowser()) {
+            onExitBrowser()
+        }
+    }
+
+    val canNavigateUp = canNavigateUpWithinHttpBrowser(
+        currentPath = currentSpec.path,
+        rootPath = effectiveRootPath
+    )
+    val browserContentState = remember(currentSpec.path, isLoading, errorMessage, entries.isEmpty()) {
+        HttpBrowserContentState(
+            pane = when {
+                isLoading -> HttpBrowserPane.Loading
+                !errorMessage.isNullOrBlank() -> HttpBrowserPane.Error
+                entries.isEmpty() -> HttpBrowserPane.Empty
+                else -> HttpBrowserPane.Entries
+            },
+            path = normalizeHttpDirectoryPath(currentSpec.path)
+        )
+    }
+    val subtitle = buildHttpDisplayUri(browserSpec())
+    val protocolLabel = browserSpec().scheme.uppercase(Locale.ROOT)
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = isPullRefreshing,
+        onRefresh = {
+            if (isPullRefreshing || isLoading) return@rememberPullRefreshState
+            coroutineScope.launch {
+                isPullRefreshing = true
+                openDirectory(
+                    targetSpec = currentSpec,
+                    cancelState = HttpLoadingCancelState(
+                        previousSpec = currentSpec,
+                        previousEntries = entries,
+                        previousErrorMessage = errorMessage
+                    ),
+                    forceReload = true,
+                    navigationDirection = HttpBrowserNavDirection.Neutral
+                )
+                val deadline = System.currentTimeMillis() + 20_000L
+                while (isLoading && System.currentTimeMillis() < deadline) {
+                    delay(24)
+                }
+                isPullRefreshing = false
+            }
+        }
+    )
+
+    Scaffold(
+        topBar = {
+            Column {
+                Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(58.dp)
+                            .padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = {
+                            if (isLoading) {
+                                cancelCurrentLoadAndGoBack()
+                                return@IconButton
+                            }
+                            if (!navigateUpWithinBrowser()) {
+                                onExitBrowser()
+                            }
+                        }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = if (canNavigateUp) {
+                                    "Navigate up"
+                                } else {
+                                    "Back to home"
+                                }
+                            )
+                        }
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 2.dp)
+                        ) {
+                            Text(
+                                text = "File Browser",
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+                HorizontalDivider()
+            }
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .pullRefresh(pullRefreshState)
+        ) {
+            AnimatedContent(
+                targetState = browserContentState,
+                transitionSpec = {
+                    val loadingTransition =
+                        initialState.pane == HttpBrowserPane.Loading || targetState.pane == HttpBrowserPane.Loading
+                    if (loadingTransition) {
+                        (
+                            fadeIn(animationSpec = tween(durationMillis = 170, easing = LinearOutSlowInEasing)) +
+                                slideInVertically(
+                                    initialOffsetY = { fullHeight -> fullHeight / 14 },
+                                    animationSpec = tween(durationMillis = 190, easing = FastOutSlowInEasing)
+                                )
+                            ) togetherWith (
+                            fadeOut(animationSpec = tween(durationMillis = 120, easing = FastOutLinearInEasing)) +
+                                slideOutVertically(
+                                    targetOffsetY = { fullHeight -> -fullHeight / 16 },
+                                    animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing)
+                                )
+                            )
+                    } else {
+                        val forward = browserNavDirection == HttpBrowserNavDirection.Forward
+                        val backward = browserNavDirection == HttpBrowserNavDirection.Backward
+                        val enterOffset = when {
+                            forward -> { width: Int -> width / 2 }
+                            backward -> { width: Int -> -width / 4 }
+                            else -> { _: Int -> 0 }
+                        }
+                        val exitOffset = when {
+                            forward -> { width: Int -> -width / 5 }
+                            backward -> { width: Int -> width / 3 }
+                            else -> { _: Int -> 0 }
+                        }
+                        (
+                            slideInHorizontally(
+                                initialOffsetX = enterOffset,
+                                animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
+                            ) +
+                                fadeIn(
+                                    animationSpec = tween(
+                                        durationMillis = 180,
+                                        delayMillis = if (forward || backward) 40 else 0,
+                                        easing = LinearOutSlowInEasing
+                                    )
+                                )
+                            ) togetherWith (
+                            slideOutHorizontally(
+                                targetOffsetX = exitOffset,
+                                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+                            ) +
+                                fadeOut(animationSpec = tween(durationMillis = 120, easing = FastOutLinearInEasing))
+                            )
+                    }
+                },
+                label = "httpBrowserLoadingTransition",
+                modifier = Modifier.fillMaxSize()
+            ) { state ->
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = bottomContentPadding)
+                ) {
+                    if (canNavigateUp && state.pane != HttpBrowserPane.Loading) {
+                        item("parent") {
+                            HttpParentDirectoryRow(
+                                onClick = {
+                                    if (!isLoading) {
+                                        navigateUpWithinBrowser()
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    if (state.pane == HttpBrowserPane.Loading) {
+                        item("loading") {
+                            HttpLoadingCard(
+                                title = "Loading $protocolLabel directory...",
+                                subtitle = if (loadingLoadedCount > 0) {
+                                    "$loadingLoadedCount entries loaded so far"
+                                } else {
+                                    "Fetching folder entries"
+                                },
+                                logLines = loadingLogLines,
+                                protocolLabel = protocolLabel,
+                                onShowNow = { showLoadedEntriesNow() },
+                                onCancel = { cancelCurrentLoadAndGoBack() },
+                                showNowEnabled = loadingLoadedCount > 0
+                            )
+                        }
+                    } else if (state.pane == HttpBrowserPane.Error) {
+                        item("error") {
+                            ElevatedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(MaterialTheme.colorScheme.errorContainer)
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.WarningAmber,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = "Unable to open HTTP directory",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                    Text(
+                                        text = errorMessage.orEmpty(),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                    TextButton(
+                                        onClick = {
+                                            openDirectory(
+                                                targetSpec = currentSpec,
+                                                cancelState = HttpLoadingCancelState(
+                                                    previousSpec = currentSpec,
+                                                    previousEntries = entries,
+                                                    previousErrorMessage = errorMessage
+                                                ),
+                                                forceReload = true,
+                                                navigationDirection = HttpBrowserNavDirection.Neutral
+                                            )
+                                        }
+                                    ) {
+                                        Text("Retry")
+                                    }
+                                }
+                            }
+                        }
+                    } else if (state.pane == HttpBrowserPane.Empty) {
+                        item("empty") {
+                            HttpInfoCard(
+                                title = "This directory is empty",
+                                subtitle = "No files or folders found"
+                            )
+                        }
+                    } else {
+                        items(entries, key = { entry -> entry.sourceId }) { entry ->
+                            HttpEntryRow(
+                                entry = entry,
+                                onClick = {
+                                    if (entry.isDirectory) {
+                                        val nextSpec = parseHttpSourceSpecFromInput(entry.requestUrl)
+                                            ?: return@HttpEntryRow
+                                        val cancelSnapshot = HttpLoadingCancelState(
+                                            previousSpec = currentSpec,
+                                            previousEntries = entries,
+                                            previousErrorMessage = errorMessage
+                                        )
+                                        openDirectory(
+                                            targetSpec = nextSpec.copy(
+                                                username = sessionUsername,
+                                                password = sessionPassword
+                                            ),
+                                            cancelState = cancelSnapshot,
+                                            navigationDirection = HttpBrowserNavDirection.Forward
+                                        )
+                                    } else {
+                                        onOpenRemoteSource(
+                                            appendHttpDisplayNameFragment(
+                                                sourceUrl = entry.requestUrl,
+                                                displayName = entry.name
+                                            )
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            PullRefreshIndicator(
+                refreshing = isPullRefreshing,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter),
+                backgroundColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+
+    if (authDialogVisible) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {
+                authDialogVisible = false
+                authDialogPasswordVisible = false
+            },
+            title = { Text("HTTP authentication required") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    authDialogErrorMessage?.let { message ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(MaterialTheme.colorScheme.errorContainer)
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.WarningAmber,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                    OutlinedTextField(
+                        value = authDialogUsername,
+                        onValueChange = { authDialogUsername = it },
+                        singleLine = true,
+                        label = { Text("Username") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = authDialogPassword,
+                        onValueChange = { authDialogPassword = it },
+                        singleLine = true,
+                        label = { Text("Password") },
+                        visualTransformation = if (authDialogPasswordVisible) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { authDialogPasswordVisible = !authDialogPasswordVisible }) {
+                                Icon(
+                                    imageVector = if (authDialogPasswordVisible) {
+                                        Icons.Default.VisibilityOff
+                                    } else {
+                                        Icons.Default.Visibility
+                                    },
+                                    contentDescription = if (authDialogPasswordVisible) {
+                                        "Hide password"
+                                    } else {
+                                        "Show password"
+                                    }
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { authRememberPassword = !authRememberPassword },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = authRememberPassword,
+                            onCheckedChange = { checked -> authRememberPassword = checked }
+                        )
+                        Text(
+                            text = "Remember password",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                val hasCredentials = authDialogUsername.trim().isNotEmpty() || authDialogPassword.trim().isNotEmpty()
+                TextButton(
+                    enabled = hasCredentials,
+                    onClick = {
+                        val normalizedUsername = authDialogUsername.trim().ifBlank { null }
+                        val normalizedPassword = authDialogPassword.trim().ifBlank { null }
+                        sessionUsername = normalizedUsername
+                        sessionPassword = normalizedPassword
+                        if (authRememberPassword) {
+                            onRememberHttpCredentials(
+                                sourceNodeId,
+                                currentDirectorySourceId(),
+                                normalizedUsername,
+                                normalizedPassword
+                            )
+                        }
+                        authDialogVisible = false
+                        authDialogPasswordVisible = false
+                        loadCurrentDirectory(
+                            cancelState = HttpLoadingCancelState(
+                                previousSpec = currentSpec,
+                                previousEntries = entries,
+                                previousErrorMessage = errorMessage
+                            )
+                        )
+                    }
+                ) {
+                    Text("Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    authDialogVisible = false
+                    authDialogPasswordVisible = false
+                }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun HttpParentDirectoryRow(
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(HTTP_ICON_BOX_SIZE),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(11.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Folder,
+                    contentDescription = "Parent directory",
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(HTTP_ICON_GLYPH_SIZE)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "..",
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1
+            )
+            Text(
+                text = "Parent directory",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun HttpEntryRow(
+    entry: HttpBrowserEntry,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val chipContainerColor = if (entry.isDirectory) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.secondaryContainer
+        }
+        val chipContentColor = if (entry.isDirectory) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        }
+        Box(
+            modifier = Modifier
+                .size(HTTP_ICON_BOX_SIZE)
+                .background(
+                    color = chipContainerColor,
+                    shape = RoundedCornerShape(11.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (entry.isDirectory) Icons.Default.Folder else Icons.Default.AudioFile,
+                contentDescription = null,
+                tint = chipContentColor,
+                modifier = Modifier.size(HTTP_ICON_GLYPH_SIZE)
+            )
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = entry.name,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = if (entry.isDirectory) {
+                    "Folder"
+                } else {
+                    inferHttpFormatLabel(entry.name)
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun HttpInfoCard(
+    title: String,
+    subtitle: String
+) {
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun HttpLoadingCard(
+    title: String,
+    subtitle: String,
+    logLines: List<String>,
+    protocolLabel: String,
+    showContainerCard: Boolean = true,
+    onShowNow: (() -> Unit)? = null,
+    onCancel: (() -> Unit)? = null,
+    showNowEnabled: Boolean = false
+) {
+    val logListState = rememberLazyListState()
+    LaunchedEffect(logLines.size) {
+        if (logLines.isNotEmpty()) {
+            logListState.animateScrollToItem(logLines.lastIndex)
+        }
+    }
+    val content: @Composable () -> Unit = {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(12.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = NetworkIcons.WorldCode,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    strokeWidth = 2.dp
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(108.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                if (logLines.isEmpty()) {
+                    Text(
+                        text = "[00] Waiting for $protocolLabel response...",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontFamily = FontFamily.Monospace
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        state = logListState,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(logLines.size, key = { index -> "$index:${logLines[index]}" }) { index ->
+                            Text(
+                                text = logLines[index],
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontFamily = FontFamily.Monospace
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+            if (onShowNow != null || onCancel != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    if (onShowNow != null) {
+                        TextButton(
+                            onClick = onShowNow,
+                            enabled = showNowEnabled
+                        ) {
+                            Text("Show now")
+                        }
+                    }
+                    if (onCancel != null) {
+                        TextButton(onClick = onCancel) {
+                            Text("Cancel")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (showContainerCard) {
+        ElevatedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            content()
+        }
+    } else {
+        content()
+    }
+}
+
+private fun inferHttpFormatLabel(name: String): String {
+    val ext = inferredPrimaryExtensionForName(name)
+    return ext?.uppercase(Locale.ROOT) ?: "Unknown"
+}
+
+private fun canNavigateUpWithinHttpBrowser(
+    currentPath: String?,
+    rootPath: String?
+): Boolean {
+    val normalizedCurrent = normalizeHttpDirectoryPath(currentPath)
+    val normalizedRoot = rootPath
+        ?.trim()
+        .takeUnless { it.isNullOrBlank() }
+        ?.let(::normalizeHttpDirectoryPath)
+        ?: "/"
+    if (normalizedCurrent == normalizedRoot) return false
+    if (!normalizedCurrent.startsWith(normalizedRoot)) return false
+    return true
+}
+
+private fun appendHttpDisplayNameFragment(
+    sourceUrl: String,
+    displayName: String
+): String {
+    val trimmedLabel = displayName.trim()
+    if (trimmedLabel.isBlank()) return sourceUrl
+    val sanitizedLabel = trimmedLabel
+        .replace('/', '_')
+        .replace('\\', '_')
+    return try {
+        Uri.parse(sourceUrl)
+            .buildUpon()
+            .fragment(Uri.encode(sanitizedLabel))
+            .build()
+            .toString()
+    } catch (_: Throwable) {
+        sourceUrl
+    }
+}

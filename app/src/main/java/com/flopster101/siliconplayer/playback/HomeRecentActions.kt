@@ -208,7 +208,23 @@ private fun resolveBrowserFolderForRecentSource(
             smbSourceNodeId = smbTarget.sourceNodeId
         )
     }
-    if (scheme == "http" || scheme == "https") return null
+    if (scheme == "http" || scheme == "https") {
+        val httpSpec = parseHttpSourceSpecFromInput(entry.path) ?: return null
+        val normalizedPath = normalizeHttpPath(httpSpec.path)
+        val parentPath = normalizedPath
+            .trimEnd('/')
+            .substringBeforeLast('/', missingDelimiterValue = "")
+            .trim()
+        val parentSpec = httpSpec.copy(
+            path = if (parentPath.isBlank()) "/" else "$parentPath/",
+            query = null
+        )
+        return BrowserOpenTarget(
+            locationId = null,
+            directoryPath = buildHttpRequestUri(parentSpec),
+            smbSourceNodeId = null
+        )
+    }
 
     val localPath = if (scheme == "file") {
         parsed.path
@@ -280,6 +296,24 @@ private fun resolveBrowserParentForRecentFolder(
             locationId = null,
             directoryPath = smbTarget.requestUri,
             smbSourceNodeId = smbTarget.sourceNodeId
+        )
+    }
+    val httpSpec = parseHttpSourceSpecFromInput(rawPath)
+    if (httpSpec != null) {
+        val normalizedPath = normalizeHttpPath(httpSpec.path)
+        if (normalizedPath == "/") return null
+        val parentPath = normalizedPath
+            .trimEnd('/')
+            .substringBeforeLast('/', missingDelimiterValue = "")
+            .trim()
+        val parentSpec = httpSpec.copy(
+            path = if (parentPath.isBlank()) "/" else "$parentPath/",
+            query = null
+        )
+        return BrowserOpenTarget(
+            locationId = null,
+            directoryPath = buildHttpRequestUri(parentSpec),
+            smbSourceNodeId = null
         )
     }
 

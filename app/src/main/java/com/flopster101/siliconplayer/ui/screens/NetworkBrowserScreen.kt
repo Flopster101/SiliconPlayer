@@ -65,6 +65,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -99,17 +100,25 @@ import com.flopster101.siliconplayer.NetworkNodeType
 import com.flopster101.siliconplayer.NetworkSourceKind
 import com.flopster101.siliconplayer.SmbSourceSpec
 import com.flopster101.siliconplayer.buildRecentTrackDisplay
+import com.flopster101.siliconplayer.buildHttpDisplayUri
+import com.flopster101.siliconplayer.buildHttpRequestUri
+import com.flopster101.siliconplayer.buildHttpSourceId
 import com.flopster101.siliconplayer.buildSmbRequestUri
 import com.flopster101.siliconplayer.buildSmbSourceId
 import com.flopster101.siliconplayer.buildSmbSourceSpec
 import com.flopster101.siliconplayer.formatNetworkFolderSummary
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.isLikelyHttpDirectorySource
+import com.flopster101.siliconplayer.normalizeHttpDirectoryPath
+import com.flopster101.siliconplayer.normalizeHttpPath
 import com.flopster101.siliconplayer.normalizeSourceIdentity
 import com.flopster101.siliconplayer.nextNetworkNodeId
+import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
 import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
 import com.flopster101.siliconplayer.placeholderArtworkIconForFile
 import com.flopster101.siliconplayer.resolveNetworkNodeDisplaySource
 import com.flopster101.siliconplayer.resolveNetworkNodeDisplayTitle
+import com.flopster101.siliconplayer.resolveNetworkNodeHttpRootPath
 import com.flopster101.siliconplayer.resolveNetworkNodeOpenInput
 import com.flopster101.siliconplayer.resolveNetworkNodeSmbSpec
 import com.flopster101.siliconplayer.resolveNetworkNodeSourceId
@@ -150,12 +159,14 @@ internal fun NetworkBrowserScreen(
     onResolveRemoteSourceMetadata: (String, () -> Unit) -> Unit,
     onCancelPendingMetadataBackfill: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
-    onBrowseSmbSource: (String, Long?) -> Unit
+    onBrowseSmbSource: (String, Long?) -> Unit,
+    onBrowseHttpSource: (String, Long?, String?) -> Unit
 ) {
     var showAddMenu by remember { mutableStateOf(false) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var showAddSourceDialog by remember { mutableStateOf(false) }
     var showAddSmbSourceDialog by remember { mutableStateOf(false) }
+    var showAddHttpSourceDialog by remember { mutableStateOf(false) }
     var showSelectionActionsMenu by remember { mutableStateOf(false) }
     var showSelectionToggleMenu by remember { mutableStateOf(false) }
     var selectionModeEnabled by remember { mutableStateOf(false) }
@@ -163,6 +174,7 @@ internal fun NetworkBrowserScreen(
     var editingFolderNodeId by remember { mutableStateOf<Long?>(null) }
     var editingSourceNodeId by remember { mutableStateOf<Long?>(null) }
     var editingSmbNodeId by remember { mutableStateOf<Long?>(null) }
+    var editingHttpNodeId by remember { mutableStateOf<Long?>(null) }
     var selectedNodeIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
     var deleteNodeIdsPendingConfirmation by remember { mutableStateOf<Set<Long>?>(null) }
     var clipboardState by remember { mutableStateOf<NetworkClipboardState?>(null) }
@@ -185,6 +197,12 @@ internal fun NetworkBrowserScreen(
     var newSmbUsername by remember { mutableStateOf("") }
     var newSmbPassword by remember { mutableStateOf("") }
     var newSmbPasswordVisible by remember { mutableStateOf(false) }
+    var newHttpSourceName by remember { mutableStateOf("") }
+    var newHttpUrl by remember { mutableStateOf("") }
+    var newHttpUsername by remember { mutableStateOf("") }
+    var newHttpPassword by remember { mutableStateOf("") }
+    var newHttpPasswordVisible by remember { mutableStateOf(false) }
+    var newHttpTreatAsRoot by remember { mutableStateOf(true) }
     val context = LocalContext.current
     val uiScope = rememberCoroutineScope()
     val refreshTimeoutJobs = remember { LinkedHashMap<String, Job>() }
@@ -214,7 +232,8 @@ internal fun NetworkBrowserScreen(
                     when {
                         entry.type == NetworkNodeType.Folder -> 0
                         isSmbFolderLikeSource(entry, resolveNetworkNodeSourceId(entry).orEmpty()) -> 1
-                        else -> 2
+                        isHttpFolderLikeSource(entry, resolveNetworkNodeSourceId(entry).orEmpty()) -> 2
+                        else -> 3
                     }
                 }
                     .thenBy { resolveNetworkNodeDisplayTitle(it).lowercase() }
@@ -285,6 +304,7 @@ internal fun NetworkBrowserScreen(
 
     fun beginEntryEdit(entry: NetworkNode) {
         expandedEntryMenuNodeId = null
+        val sourceId = resolveNetworkNodeSourceId(entry).orEmpty()
         when {
             entry.type == NetworkNodeType.Folder -> {
                 editingFolderNodeId = entry.id
@@ -305,10 +325,25 @@ internal fun NetworkBrowserScreen(
                 showAddSmbSourceDialog = true
             }
 
+            isHttpFolderLikeSource(entry, sourceId) -> {
+                val httpSpec = parseHttpSourceSpecFromInput(sourceId)
+                editingHttpNodeId = entry.id
+                newHttpSourceName = entry.title
+                newHttpUrl = httpSpec
+                    ?.copy(username = null, password = null)
+                    ?.let(::buildHttpDisplayUri)
+                    ?: sourceId
+                newHttpUsername = httpSpec?.username.orEmpty()
+                newHttpPassword = httpSpec?.password.orEmpty()
+                newHttpPasswordVisible = false
+                newHttpTreatAsRoot = resolveNetworkNodeHttpRootPath(entry) != null
+                showAddHttpSourceDialog = true
+            }
+
             else -> {
                 editingSourceNodeId = entry.id
                 newSourceName = entry.title
-                newSourcePath = resolveNetworkNodeSourceId(entry).orEmpty()
+                newSourcePath = sourceId
                 showAddSourceDialog = true
             }
         }
@@ -445,6 +480,10 @@ internal fun NetworkBrowserScreen(
                 return
             }
             onResolveRemoteSourceMetadata(smbRequestSourceId, ::settleOne)
+            return
+        }
+        if (isHttpFolderLikeSource(entry, sourceId)) {
+            metadataLoadingNodeIds = metadataLoadingNodeIds - entry.id
             return
         }
         onResolveRemoteSourceMetadata(sourceId) {
@@ -651,6 +690,7 @@ internal fun NetworkBrowserScreen(
                         smbPath = null,
                         smbUsername = null,
                         smbPassword = null,
+                        httpRootPath = null,
                         metadataTitle = if (sourceChanged) null else node.metadataTitle,
                         metadataArtist = if (sourceChanged) null else node.metadataArtist
                     )
@@ -661,6 +701,10 @@ internal fun NetworkBrowserScreen(
         }
         onNodesChanged(updated)
         metadataLoadingNodeIds = metadataLoadingNodeIds + upsertedNodeId
+        if (isLikelyHttpDirectorySource(normalizedSource)) {
+            metadataLoadingNodeIds = metadataLoadingNodeIds - upsertedNodeId
+            return
+        }
         onResolveRemoteSourceMetadata(normalizedSource) {
             metadataLoadingNodeIds = metadataLoadingNodeIds - upsertedNodeId
         }
@@ -715,6 +759,7 @@ internal fun NetworkBrowserScreen(
                         smbPath = smbSpec.path,
                         smbUsername = smbSpec.username,
                         smbPassword = smbSpec.password,
+                        httpRootPath = null,
                         smbDiscoveredHostName = if (sourceChanged) null else node.smbDiscoveredHostName,
                         metadataTitle = if (sourceChanged) null else node.metadataTitle,
                         metadataArtist = if (sourceChanged) null else node.metadataArtist
@@ -743,6 +788,97 @@ internal fun NetworkBrowserScreen(
         )
         if (!isSmbFolderLike) {
             onResolveRemoteSourceMetadata(buildSmbRequestUri(smbSpec), ::settleOne)
+        }
+    }
+
+    fun upsertHttpSource(
+        name: String,
+        url: String,
+        username: String,
+        password: String,
+        treatUrlDirectoryAsRoot: Boolean
+    ) {
+        val parsedSpec = parseHttpSourceSpecFromInput(url) ?: return
+        val normalizedUsername = username.trim().ifBlank {
+            parsedSpec.username?.trim().orEmpty()
+        }.ifBlank { null }
+        val normalizedPassword = password.trim().ifBlank {
+            parsedSpec.password?.trim().orEmpty()
+        }.ifBlank { null }
+        val normalizedInputSourceId = buildHttpSourceId(parsedSpec)
+        val isDirectoryLike = isLikelyHttpDirectorySource(normalizedInputSourceId)
+        val normalizedPath = if (isDirectoryLike) {
+            normalizeHttpDirectoryPath(parsedSpec.path)
+        } else {
+            normalizeHttpPath(parsedSpec.path)
+        }
+        val finalSpec = parsedSpec.copy(
+            path = normalizedPath,
+            username = normalizedUsername,
+            password = normalizedPassword
+        )
+        val sourceId = if (normalizedUsername == null && normalizedPassword == null) {
+            buildHttpSourceId(finalSpec)
+        } else {
+            buildHttpRequestUri(finalSpec)
+        }
+        val normalizedRootPath = if (isDirectoryLike && treatUrlDirectoryAsRoot) {
+            normalizeHttpDirectoryPath(finalSpec.path)
+        } else {
+            null
+        }
+        val title = name.trim().ifBlank {
+            buildHttpDisplayUri(finalSpec.copy(username = null, password = null))
+        }
+        val upsertedNodeId: Long
+        val updated = if (editingHttpNodeId == null) {
+            val newNodeId = nextNetworkNodeId(nodes)
+            upsertedNodeId = newNodeId
+            nodes + NetworkNode(
+                id = newNodeId,
+                parentId = currentFolderId,
+                type = NetworkNodeType.RemoteSource,
+                title = title,
+                source = sourceId,
+                sourceKind = NetworkSourceKind.Generic,
+                smbHost = null,
+                smbShare = null,
+                smbPath = null,
+                smbUsername = null,
+                smbPassword = null,
+                httpRootPath = normalizedRootPath
+            )
+        } else {
+            upsertedNodeId = editingHttpNodeId ?: return
+            nodes.map { node ->
+                if (node.id == editingHttpNodeId) {
+                    val sourceChanged = resolveNetworkNodeSourceId(node) != sourceId
+                    node.copy(
+                        title = title,
+                        source = sourceId,
+                        sourceKind = NetworkSourceKind.Generic,
+                        smbHost = null,
+                        smbShare = null,
+                        smbPath = null,
+                        smbUsername = null,
+                        smbPassword = null,
+                        httpRootPath = normalizedRootPath,
+                        metadataTitle = if (sourceChanged) null else node.metadataTitle,
+                        metadataArtist = if (sourceChanged) null else node.metadataArtist
+                    )
+                } else {
+                    node
+                }
+            }
+        }
+        onNodesChanged(updated)
+        metadataLoadingNodeIds = metadataLoadingNodeIds + upsertedNodeId
+        if (isDirectoryLike) {
+            metadataLoadingNodeIds = metadataLoadingNodeIds - upsertedNodeId
+            return
+        }
+        onResolveRemoteSourceMetadata(sourceId) {
+            metadataLoadingNodeIds = metadataLoadingNodeIds - upsertedNodeId
         }
     }
 
@@ -1076,6 +1212,26 @@ internal fun NetworkBrowserScreen(
                                     showAddSmbSourceDialog = true
                                 }
                             )
+                            DropdownMenuItem(
+                                text = { Text("HTTP/HTTPS server") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = NetworkIcons.WorldCode,
+                                        contentDescription = null
+                                    )
+                                },
+                                onClick = {
+                                    showAddMenu = false
+                                    editingHttpNodeId = null
+                                    newHttpSourceName = ""
+                                    newHttpUrl = ""
+                                    newHttpUsername = ""
+                                    newHttpPassword = ""
+                                    newHttpPasswordVisible = false
+                                    newHttpTreatAsRoot = true
+                                    showAddHttpSourceDialog = true
+                                }
+                            )
                         }
                     }
                 }
@@ -1200,6 +1356,7 @@ internal fun NetworkBrowserScreen(
                 val sourceId = resolveNetworkNodeSourceId(entry).orEmpty()
                 val sourceScheme = Uri.parse(sourceId).scheme?.lowercase(Locale.ROOT)
                 val isSmbFolderLikeSource = isSmbFolderLikeSource(entry, sourceId)
+                val isHttpFolderLikeSource = isHttpFolderLikeSource(entry, sourceId)
                 val isSelected = selectedNodeIds.contains(entry.id)
                 val cardContainerColor by animateColorAsState(
                     targetValue = if (isSelected) {
@@ -1236,6 +1393,12 @@ internal fun NetworkBrowserScreen(
                                             resolveNetworkNodeOpenInput(entry)?.let { openInput ->
                                                 if (entry.sourceKind == NetworkSourceKind.Smb) {
                                                     onBrowseSmbSource(openInput, entry.id)
+                                                } else if (isHttpFolderLikeSource) {
+                                                    onBrowseHttpSource(
+                                                        openInput,
+                                                        entry.id,
+                                                        resolveNetworkNodeHttpRootPath(entry)
+                                                    )
                                                 } else {
                                                     onOpenRemoteSource(openInput)
                                                 }
@@ -1256,17 +1419,17 @@ internal fun NetworkBrowserScreen(
                     ) {
                         val isFolder = entry.type == NetworkNodeType.Folder
                         val chipShape = RoundedCornerShape(11.dp)
-                        val chipContainerColor = if (isFolder || isSmbFolderLikeSource) {
+                        val chipContainerColor = if (isFolder || isSmbFolderLikeSource || isHttpFolderLikeSource) {
                             MaterialTheme.colorScheme.primaryContainer
                         } else {
                             MaterialTheme.colorScheme.secondaryContainer
                         }
-                        val chipContentColor = if (isFolder || isSmbFolderLikeSource) {
+                        val chipContentColor = if (isFolder || isSmbFolderLikeSource || isHttpFolderLikeSource) {
                             MaterialTheme.colorScheme.onPrimaryContainer
                         } else {
                             MaterialTheme.colorScheme.onSecondaryContainer
                         }
-                        val remoteSourceIconFile = if (!isFolder && !isSmbFolderLikeSource) {
+                        val remoteSourceIconFile = if (!isFolder && !isSmbFolderLikeSource && !isHttpFolderLikeSource) {
                             resolveNetworkRemoteIconFile(sourceId)
                         } else {
                             null
@@ -1274,6 +1437,7 @@ internal fun NetworkBrowserScreen(
                         val leadingIcon = when {
                             isFolder -> Icons.Default.Folder
                             isSmbFolderLikeSource -> NetworkIcons.SmbShare
+                            isHttpFolderLikeSource -> NetworkIcons.WorldCode
                             else -> placeholderArtworkIconForFile(
                                 file = remoteSourceIconFile,
                                 decoderName = null,
@@ -1320,17 +1484,20 @@ internal fun NetworkBrowserScreen(
                                     append(folderSummariesById[entry.id].orEmpty())
                                 }
                             } else {
-                                val sourceTypeLabel = if (sourceScheme == "smb") {
-                                    val smbHostLabel = entry.smbDiscoveredHostName
-                                        ?.trim()
-                                        .takeUnless { it.isNullOrBlank() }
-                                        ?: parseSmbSourceSpecFromInput(sourceId)?.host
-                                            ?.let(::normalizeSmbHostLabelForUi)
-                                    if (smbHostLabel == null) "SMB" else "SMB ($smbHostLabel)"
-                                } else {
-                                    null
+                                val sourceTypeLabel = when (sourceScheme) {
+                                    "smb" -> {
+                                        val smbHostLabel = entry.smbDiscoveredHostName
+                                            ?.trim()
+                                            .takeUnless { it.isNullOrBlank() }
+                                            ?: parseSmbSourceSpecFromInput(sourceId)?.host
+                                                ?.let(::normalizeSmbHostLabelForUi)
+                                        if (smbHostLabel == null) "SMB" else "SMB ($smbHostLabel)"
+                                    }
+                                    "http" -> "HTTP"
+                                    "https" -> "HTTPS"
+                                    else -> null
                                 }
-                                val formatLabel = if (isSmbFolderLikeSource) {
+                                val formatLabel = if (isSmbFolderLikeSource || isHttpFolderLikeSource) {
                                     "Folder"
                                 } else {
                                     inferNetworkSourceFormatLabel(sourceLabel)
@@ -1735,6 +1902,126 @@ internal fun NetworkBrowserScreen(
         )
     }
 
+    if (showAddHttpSourceDialog) {
+        val isEditing = editingHttpNodeId != null
+        val parsedHttpSpec = parseHttpSourceSpecFromInput(newHttpUrl)
+        AlertDialog(
+            onDismissRequest = {
+                showAddHttpSourceDialog = false
+                editingHttpNodeId = null
+                newHttpPasswordVisible = false
+            },
+            title = {
+                Text(if (isEditing) "Edit HTTP/HTTPS server" else "Add HTTP/HTTPS server")
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = newHttpSourceName,
+                        onValueChange = { newHttpSourceName = it },
+                        singleLine = true,
+                        label = { Text("Name (optional)") }
+                    )
+                    OutlinedTextField(
+                        value = newHttpUrl,
+                        onValueChange = { newHttpUrl = it },
+                        singleLine = true,
+                        label = { RequiredFieldLabel("Server URL") }
+                    )
+                    OutlinedTextField(
+                        value = newHttpUsername,
+                        onValueChange = { newHttpUsername = it },
+                        singleLine = true,
+                        label = { Text("Username (optional)") }
+                    )
+                    OutlinedTextField(
+                        value = newHttpPassword,
+                        onValueChange = { newHttpPassword = it },
+                        singleLine = true,
+                        label = { Text("Password (optional)") },
+                        visualTransformation = if (newHttpPasswordVisible) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { newHttpPasswordVisible = !newHttpPasswordVisible }) {
+                                Icon(
+                                    imageVector = if (newHttpPasswordVisible) {
+                                        Icons.Default.VisibilityOff
+                                    } else {
+                                        Icons.Default.Visibility
+                                    },
+                                    contentDescription = if (newHttpPasswordVisible) {
+                                        "Hide password"
+                                    } else {
+                                        "Show password"
+                                    }
+                                )
+                            }
+                        }
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Switch(
+                            checked = newHttpTreatAsRoot,
+                            onCheckedChange = { checked -> newHttpTreatAsRoot = checked }
+                        )
+                        Text(
+                            text = "Treat URL directory as browser root",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    if (parsedHttpSpec == null && newHttpUrl.trim().isNotEmpty()) {
+                        Text(
+                            text = "Enter a valid http:// or https:// URL.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        upsertHttpSource(
+                            name = newHttpSourceName,
+                            url = newHttpUrl,
+                            username = newHttpUsername,
+                            password = newHttpPassword,
+                            treatUrlDirectoryAsRoot = newHttpTreatAsRoot
+                        )
+                        showAddHttpSourceDialog = false
+                        editingHttpNodeId = null
+                        newHttpSourceName = ""
+                        newHttpUrl = ""
+                        newHttpUsername = ""
+                        newHttpPassword = ""
+                        newHttpPasswordVisible = false
+                        newHttpTreatAsRoot = true
+                    },
+                    enabled = parsedHttpSpec != null
+                ) {
+                    Text(if (isEditing) "Save" else "Add")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showAddHttpSourceDialog = false
+                        editingHttpNodeId = null
+                        newHttpPasswordVisible = false
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     if (deleteNodePendingIds.isNotEmpty()) {
         val deleteRootIds = normalizeSelectionRootIds(nodes, deleteNodePendingIds)
         AlertDialog(
@@ -2034,6 +2321,13 @@ private fun isSmbFolderLikeSource(entry: NetworkNode, sourceId: String): Boolean
     val leaf = normalizedPath.substringAfterLast('/').trim()
     if (leaf.isBlank()) return true
     return inferredPrimaryExtensionForName(leaf) == null || sourceId.endsWith("/")
+}
+
+private fun isHttpFolderLikeSource(entry: NetworkNode, sourceId: String): Boolean {
+    if (entry.type != NetworkNodeType.RemoteSource || entry.sourceKind == NetworkSourceKind.Smb) {
+        return false
+    }
+    return isLikelyHttpDirectorySource(sourceId)
 }
 
 private fun resolveNetworkRemoteIconFile(sourceId: String): File? {

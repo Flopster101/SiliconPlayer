@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Visibility
@@ -30,6 +29,8 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -348,6 +349,7 @@ internal fun SmbFileBrowserScreen(
     }
     val entriesListState = rememberLazyListState()
     val nonEntriesListState = rememberLazyListState()
+    var selectorExpanded by remember(sourceSpec) { mutableStateOf(false) }
     val directoryScrollbarAlpha = rememberDialogLazyListScrollbarAlpha(
         enabled = browserContentState.pane == SmbBrowserPane.Entries,
         listState = entriesListState,
@@ -383,33 +385,67 @@ internal fun SmbFileBrowserScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(58.dp)
-                            .padding(horizontal = 4.dp),
+                            .padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = {
-                            if (!navigateUpWithinBrowser()) {
-                                onExitBrowser()
-                            }
-                        }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = if (canNavigateUp) {
-                                    "Navigate up"
-                                } else {
-                                    "Back to home"
-                                }
-                            )
-                        }
                         Column(
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(horizontal = 2.dp)
                         ) {
-                            Text(
-                                text = "File Browser",
-                                style = MaterialTheme.typography.labelLarge
+                            Box {
+                                BrowserToolbarSelectorLabel(
+                                    expanded = selectorExpanded,
+                                    onClick = { selectorExpanded = true }
+                                )
+                                DropdownMenu(
+                                    expanded = selectorExpanded,
+                                    onDismissRequest = { selectorExpanded = false }
+                                ) {
+                                    Text(
+                                        text = "Storage locations",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                    )
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text("SMB server")
+                                                Text(
+                                                    text = credentialsSpec.host,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = NetworkIcons.SmbShare,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        enabled = false,
+                                        onClick = {}
+                                    )
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                    Text(
+                                        text = "Directory tree",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Coming soon") },
+                                        enabled = false,
+                                        onClick = {}
+                                    )
+                                }
+                            }
+                            BrowserToolbarPathRow(
+                                icon = NetworkIcons.SmbShare,
+                                subtitle = subtitle
                             )
-                            BrowserToolbarSubtitle(subtitle = subtitle)
                         }
                     }
                 }

@@ -27,13 +27,14 @@ import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -452,6 +453,7 @@ internal fun HttpFileBrowserScreen(
     val rawSubtitle = buildHttpDisplayUri(browserSpec())
     val subtitle = decodePercentEncodedForDisplay(rawSubtitle) ?: rawSubtitle
     val protocolLabel = browserSpec().scheme.uppercase(Locale.ROOT)
+    var selectorExpanded by remember(sourceSpec) { mutableStateOf(false) }
     val entriesListState = rememberLazyListState()
     val nonEntriesListState = rememberLazyListState()
     val pullRefreshState = rememberPullRefreshState(
@@ -493,37 +495,73 @@ internal fun HttpFileBrowserScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(58.dp)
-                            .padding(horizontal = 4.dp),
+                            .padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = {
-                            if (isLoading) {
-                                cancelCurrentLoadAndGoBack()
-                                return@IconButton
-                            }
-                            if (!navigateUpWithinBrowser()) {
-                                onExitBrowser()
-                            }
-                        }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = if (canNavigateUp) {
-                                    "Navigate up"
-                                } else {
-                                    "Back to home"
-                                }
-                            )
-                        }
                         Column(
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(horizontal = 2.dp)
                         ) {
-                            Text(
-                                text = "File Browser",
-                                style = MaterialTheme.typography.labelLarge
+                            Box {
+                                BrowserToolbarSelectorLabel(
+                                    expanded = selectorExpanded,
+                                    onClick = { selectorExpanded = true }
+                                )
+                                DropdownMenu(
+                                    expanded = selectorExpanded,
+                                    onDismissRequest = { selectorExpanded = false }
+                                ) {
+                                    Text(
+                                        text = "Storage locations",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                    )
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(
+                                                    text = if (browserSpec().scheme.equals("https", ignoreCase = true)) {
+                                                        "HTTPS server"
+                                                    } else {
+                                                        "HTTP server"
+                                                    }
+                                                )
+                                                Text(
+                                                    text = browserSpec().host,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = NetworkIcons.WorldCode,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        enabled = false,
+                                        onClick = {}
+                                    )
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                    Text(
+                                        text = "Directory tree",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Coming soon") },
+                                        enabled = false,
+                                        onClick = {}
+                                    )
+                                }
+                            }
+                            BrowserToolbarPathRow(
+                                icon = NetworkIcons.WorldCode,
+                                subtitle = subtitle
                             )
-                            BrowserToolbarSubtitle(subtitle = subtitle)
                         }
                     }
                 }

@@ -23,12 +23,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
@@ -161,7 +159,7 @@ fun FileBrowserScreen(
     val browserEntryFocusRequesters = remember { mutableStateMapOf<String, FocusRequester>() }
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
-    val selectorIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
+    val subtitleIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
     val browserContentState = remember(selectedLocationId, currentDirectory?.absolutePath, isLoadingDirectory) {
         BrowserContentState(
             pane = when {
@@ -579,82 +577,36 @@ fun FileBrowserScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(58.dp)
-                            .padding(horizontal = 4.dp),
+                            .padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (selectedLocation != null || onExitBrowser != null) {
-                            IconButton(onClick = { handleBack() }) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = if (selectedLocation != null) "Navigate up" else "Back to home"
-                                )
-                            }
-                        } else {
-                            Spacer(modifier = Modifier.width(48.dp))
-                        }
-
                         Column(
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(horizontal = 2.dp)
                         ) {
-                            Text(
-                                text = "File Browser",
-                                style = MaterialTheme.typography.labelLarge
-                            )
-                            BrowserToolbarSubtitle(subtitle = subtitle)
-                        }
-
-                        Box(modifier = Modifier.padding(end = 6.dp)) {
-                            IconButton(
-                                onClick = { selectorExpanded = true },
-                                modifier = Modifier.focusRequester(selectorButtonFocusRequester)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = selectorIcon,
-                                        contentDescription = "Open location selector"
-                                    )
-                                    Spacer(modifier = Modifier.width(2.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.KeyboardArrowDown,
-                                        contentDescription = null
-                                    )
-                                }
-                            }
-                            DropdownMenu(
-                                expanded = selectorExpanded,
-                                onDismissRequest = { selectorExpanded = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text("Home")
-                                            Text(
-                                                "Storage locations",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Home,
-                                            contentDescription = null
-                                        )
-                                    },
-                                    onClick = {
-                                        selectorExpanded = false
-                                        openBrowserHome()
-                                    }
+                            Box {
+                                BrowserToolbarSelectorLabel(
+                                    expanded = selectorExpanded,
+                                    onClick = { selectorExpanded = true },
+                                    focusRequester = selectorButtonFocusRequester
                                 )
-                                storageLocations.forEach { location ->
+                                DropdownMenu(
+                                    expanded = selectorExpanded,
+                                    onDismissRequest = { selectorExpanded = false }
+                                ) {
+                                    Text(
+                                        text = "Storage locations",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                    )
                                     DropdownMenuItem(
                                         text = {
                                             Column {
-                                                Text(location.typeLabel)
+                                                Text("Home")
                                                 Text(
-                                                    location.name,
+                                                    "Storage locations",
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -662,17 +614,57 @@ fun FileBrowserScreen(
                                         },
                                         leadingIcon = {
                                             Icon(
-                                                imageVector = iconForStorageKind(location.kind, context),
+                                                imageVector = Icons.Default.Home,
                                                 contentDescription = null
                                             )
                                         },
                                         onClick = {
                                             selectorExpanded = false
-                                            openLocation(location)
+                                            openBrowserHome()
                                         }
+                                    )
+                                    storageLocations.forEach { location ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Column {
+                                                    Text(location.typeLabel)
+                                                    Text(
+                                                        location.name,
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = iconForStorageKind(location.kind, context),
+                                                    contentDescription = null
+                                                )
+                                            },
+                                            onClick = {
+                                                selectorExpanded = false
+                                                openLocation(location)
+                                            }
+                                        )
+                                    }
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                    Text(
+                                        text = "Directory tree",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Coming soon") },
+                                        enabled = false,
+                                        onClick = {}
                                     )
                                 }
                             }
+                            BrowserToolbarPathRow(
+                                icon = subtitleIcon,
+                                subtitle = subtitle
+                            )
                         }
                     }
                 }

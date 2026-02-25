@@ -74,7 +74,8 @@ internal fun AppNavigationNetworkRouteSection(
     onExitNetwork: () -> Unit,
     onCurrentFolderIdChanged: (Long?) -> Unit,
     onNodesChanged: (List<NetworkNode>) -> Unit,
-    onResolveRemoteSourceMetadata: (String) -> Unit,
+    onResolveRemoteSourceMetadata: (String, () -> Unit) -> Unit,
+    onCancelPendingMetadataBackfill: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
     onBrowseSmbSource: (String) -> Unit
 ) {
@@ -88,6 +89,7 @@ internal fun AppNavigationNetworkRouteSection(
         onCurrentFolderIdChanged = onCurrentFolderIdChanged,
         onNodesChanged = onNodesChanged,
         onResolveRemoteSourceMetadata = onResolveRemoteSourceMetadata,
+        onCancelPendingMetadataBackfill = onCancelPendingMetadataBackfill,
         onOpenRemoteSource = onOpenRemoteSource,
         onBrowseSmbSource = onBrowseSmbSource
     )

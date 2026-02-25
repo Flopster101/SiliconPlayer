@@ -1,6 +1,7 @@
 package com.flopster101.siliconplayer.ui.screens
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
@@ -66,17 +67,20 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
@@ -99,13 +103,15 @@ import com.flopster101.siliconplayer.resolveNetworkNodeSmbSpec
 import com.flopster101.siliconplayer.resolveNetworkNodeSourceId
 import java.util.Locale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 private val NETWORK_ICON_BOX_SIZE = 38.dp
 private val NETWORK_ICON_GLYPH_SIZE = 26.dp
-private const val NETWORK_REFRESH_PLACEHOLDER_DELAY_MS = 1200L
 private const val NETWORK_ENTRY_ANIM_DURATION_MS = 190
 private const val NETWORK_STATUS_ANIM_DURATION_MS = 170
 private const val NETWORK_SELECTION_COLOR_ANIM_DURATION_MS = 140
+private const val NETWORK_REFRESH_TIMEOUT_MS = 60_000L
 
 private enum class NetworkClipboardMode {
     Copy,
@@ -127,7 +133,8 @@ internal fun NetworkBrowserScreen(
     onExitNetwork: () -> Unit,
     onCurrentFolderIdChanged: (Long?) -> Unit,
     onNodesChanged: (List<NetworkNode>) -> Unit,
-    onResolveRemoteSourceMetadata: (String) -> Unit,
+    onResolveRemoteSourceMetadata: (String, () -> Unit) -> Unit,
+    onCancelPendingMetadataBackfill: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
     onBrowseSmbSource: (String) -> Unit
 ) {
@@ -146,7 +153,13 @@ internal fun NetworkBrowserScreen(
     var deleteNodeIdsPendingConfirmation by remember { mutableStateOf<Set<Long>?>(null) }
     var clipboardState by remember { mutableStateOf<NetworkClipboardState?>(null) }
     var blockedOperationMessage by remember { mutableStateOf<String?>(null) }
+    var refreshNodeIdsPendingConfirmation by remember { mutableStateOf<Set<Long>?>(null) }
     var refreshNodeIdsInProgress by remember { mutableStateOf<Set<Long>?>(null) }
+    var refreshCompletedNodeIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var refreshSuccessfulFileCount by remember { mutableStateOf(0) }
+    var refreshPopupHidden by remember { mutableStateOf(false) }
+    var refreshSourceNodeMap by remember { mutableStateOf<Map<String, Set<Long>>>(emptyMap()) }
+    var metadataLoadingNodeIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
 
     var newFolderName by remember { mutableStateOf("") }
     var newSourceName by remember { mutableStateOf("") }
@@ -157,6 +170,19 @@ internal fun NetworkBrowserScreen(
     var newSmbPath by remember { mutableStateOf("") }
     var newSmbUsername by remember { mutableStateOf("") }
     var newSmbPassword by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val uiScope = rememberCoroutineScope()
+    val refreshTimeoutJobs = remember { LinkedHashMap<String, Job>() }
+    val refreshSettledSources = remember { LinkedHashSet<String>() }
+
+    DisposableEffect(onCancelPendingMetadataBackfill) {
+        onDispose {
+            refreshTimeoutJobs.values.forEach { it.cancel() }
+            refreshTimeoutJobs.clear()
+            refreshSettledSources.clear()
+            onCancelPendingMetadataBackfill()
+        }
+    }
 
     val nodesById = remember(nodes, currentFolderId) { nodes.associateBy { it.id } }
     val currentEntries = remember(nodes, currentFolderId) {
@@ -214,6 +240,23 @@ internal fun NetworkBrowserScreen(
     }
     val refreshNodePendingIds = remember(refreshNodeIdsInProgress) {
         refreshNodeIdsInProgress.orEmpty()
+    }
+    val refreshNodeConfirmationIds = remember(refreshNodeIdsPendingConfirmation) {
+        refreshNodeIdsPendingConfirmation.orEmpty()
+    }
+    LaunchedEffect(nodes) {
+        val existingNodeIds = nodes.mapTo(LinkedHashSet()) { it.id }
+        metadataLoadingNodeIds = metadataLoadingNodeIds.intersect(existingNodeIds)
+        refreshNodeIdsInProgress = refreshNodeIdsInProgress?.intersect(existingNodeIds)?.takeIf { it.isNotEmpty() }
+        refreshCompletedNodeIds = refreshCompletedNodeIds.intersect(existingNodeIds)
+        if (refreshNodeIdsInProgress == null) {
+            refreshSuccessfulFileCount = 0
+            refreshSourceNodeMap = emptyMap()
+            refreshSettledSources.clear()
+            refreshTimeoutJobs.values.forEach { it.cancel() }
+            refreshTimeoutJobs.clear()
+            refreshPopupHidden = false
+        }
     }
 
     fun navigateUpOneFolder() {
@@ -273,17 +316,126 @@ internal fun NetworkBrowserScreen(
         deleteNodeIdsPendingConfirmation = nodeIds
     }
 
-    fun beginRefreshPlaceholder(entry: NetworkNode) {
-        expandedEntryMenuNodeId = null
-        showSelectionActionsMenu = false
-        refreshNodeIdsInProgress = setOf(entry.id)
+    fun requestRemoteSourceMetadata(entry: NetworkNode) {
+        if (entry.type != NetworkNodeType.RemoteSource) return
+        val sourceId = resolveNetworkNodeSourceId(entry).orEmpty()
+        if (sourceId.isBlank()) return
+        metadataLoadingNodeIds = metadataLoadingNodeIds + entry.id
+        onResolveRemoteSourceMetadata(sourceId) {
+            metadataLoadingNodeIds = metadataLoadingNodeIds - entry.id
+        }
     }
 
-    fun beginRefreshPlaceholder(nodeIds: Set<Long>) {
+    fun beginRefreshConfirmation(rootNodeIds: Set<Long>) {
+        if (rootNodeIds.isEmpty()) return
+        val refreshableFileCount = collectRefreshableRemoteSourceNodeIds(nodes, rootNodeIds).size
+        if (refreshableFileCount <= 0) {
+            blockedOperationMessage = "No files available to refresh."
+            return
+        }
+        refreshNodeIdsPendingConfirmation = rootNodeIds
+    }
+
+    fun settleBatchRefreshSource(sourceId: String, success: Boolean) {
+        if (!refreshSettledSources.add(sourceId)) return
+        refreshTimeoutJobs.remove(sourceId)?.cancel()
+        val sourceNodeIds = refreshSourceNodeMap[sourceId].orEmpty()
+        if (sourceNodeIds.isEmpty()) return
+
+        val updatedCompletedNodeIds = refreshCompletedNodeIds + sourceNodeIds
+        refreshCompletedNodeIds = updatedCompletedNodeIds
+        metadataLoadingNodeIds = metadataLoadingNodeIds - sourceNodeIds
+        if (success) {
+            refreshSuccessfulFileCount += sourceNodeIds.size
+        }
+
+        val totalTargets = refreshNodeIdsInProgress?.size ?: 0
+        if (totalTargets > 0 && updatedCompletedNodeIds.size >= totalTargets) {
+            val successCount = refreshSuccessfulFileCount
+            refreshNodeIdsInProgress = null
+            refreshCompletedNodeIds = emptySet()
+            refreshSuccessfulFileCount = 0
+            refreshPopupHidden = false
+            refreshSourceNodeMap = emptyMap()
+            refreshSettledSources.clear()
+            refreshTimeoutJobs.values.forEach { it.cancel() }
+            refreshTimeoutJobs.clear()
+            val label = if (successCount == 1) "file" else "files"
+            Toast.makeText(
+                context,
+                "$successCount $label refreshed successfully",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    fun startBatchRefresh(rootNodeIds: Set<Long>) {
+        val refreshableSourceNodeIds = collectRefreshableRemoteSourceNodeIds(nodes, rootNodeIds)
+        if (refreshableSourceNodeIds.isEmpty()) {
+            blockedOperationMessage = "No files available to refresh."
+            return
+        }
+
+        val sourceNodeIdsBySourceId = LinkedHashMap<String, MutableSet<Long>>()
+        refreshableSourceNodeIds.forEach { nodeId ->
+            val sourceId = nodesById[nodeId]?.let(::resolveNetworkNodeSourceId).orEmpty()
+            if (sourceId.isBlank()) return@forEach
+            sourceNodeIdsBySourceId.getOrPut(sourceId) { LinkedHashSet() } += nodeId
+        }
+        if (sourceNodeIdsBySourceId.isEmpty()) {
+            blockedOperationMessage = "No files available to refresh."
+            return
+        }
+
+        val targetNodeIds = LinkedHashSet<Long>()
+        sourceNodeIdsBySourceId.values.forEach { targetNodeIds.addAll(it) }
+
+        refreshTimeoutJobs.values.forEach { it.cancel() }
+        refreshTimeoutJobs.clear()
+        refreshSettledSources.clear()
+        refreshSourceNodeMap = sourceNodeIdsBySourceId.mapValues { (_, ids) -> ids.toSet() }
+        refreshNodeIdsInProgress = targetNodeIds
+        refreshCompletedNodeIds = emptySet()
+        refreshSuccessfulFileCount = 0
+        refreshPopupHidden = false
+        metadataLoadingNodeIds = metadataLoadingNodeIds + targetNodeIds
+
+        sourceNodeIdsBySourceId.forEach { (sourceId, _) ->
+            onResolveRemoteSourceMetadata(sourceId) {
+                settleBatchRefreshSource(sourceId, success = true)
+            }
+            refreshTimeoutJobs[sourceId] = uiScope.launch {
+                delay(NETWORK_REFRESH_TIMEOUT_MS)
+                settleBatchRefreshSource(sourceId, success = false)
+            }
+        }
+    }
+
+    fun requestRefresh(entry: NetworkNode) {
+        if (refreshNodeIdsInProgress != null || refreshNodeIdsPendingConfirmation != null) return
+        expandedEntryMenuNodeId = null
+        showSelectionActionsMenu = false
+        if (entry.type == NetworkNodeType.RemoteSource) {
+            requestRemoteSourceMetadata(entry)
+        } else {
+            beginRefreshConfirmation(setOf(entry.id))
+        }
+    }
+
+    fun requestRefresh(nodeIds: Set<Long>) {
+        if (refreshNodeIdsInProgress != null || refreshNodeIdsPendingConfirmation != null) return
         if (nodeIds.isEmpty()) return
         expandedEntryMenuNodeId = null
         showSelectionActionsMenu = false
-        refreshNodeIdsInProgress = nodeIds
+        val targetRootIds = normalizeSelectionRootIds(nodes, nodeIds)
+        if (targetRootIds.size == 1) {
+            val singleEntry = nodesById[targetRootIds.first()]
+            if (singleEntry?.type == NetworkNodeType.RemoteSource) {
+                requestRemoteSourceMetadata(singleEntry)
+                return
+            }
+        }
+        beginRefreshConfirmation(targetRootIds.toSet())
     }
 
     fun toggleSelection(nodeId: Long) {
@@ -296,7 +448,9 @@ internal fun NetworkBrowserScreen(
     }
 
     BackHandler(enabled = backHandlingEnabled) {
-        if (isSelectionMode) {
+        if (refreshNodeIdsPendingConfirmation != null) {
+            refreshNodeIdsPendingConfirmation = null
+        } else if (isSelectionMode) {
             selectedNodeIds = emptySet()
             selectionModeEnabled = false
             showSelectionActionsMenu = false
@@ -336,9 +490,12 @@ internal fun NetworkBrowserScreen(
         val normalizedSource = source.trim()
         if (normalizedSource.isEmpty()) return
         val title = name.trim().ifBlank { normalizedSource }
+        val upsertedNodeId: Long
         val updated = if (editingSourceNodeId == null) {
+            val newNodeId = nextNetworkNodeId(nodes)
+            upsertedNodeId = newNodeId
             nodes + NetworkNode(
-                id = nextNetworkNodeId(nodes),
+                id = newNodeId,
                 parentId = currentFolderId,
                 type = NetworkNodeType.RemoteSource,
                 title = title,
@@ -346,6 +503,7 @@ internal fun NetworkBrowserScreen(
                 sourceKind = NetworkSourceKind.Generic
             )
         } else {
+            upsertedNodeId = editingSourceNodeId ?: return
             nodes.map { node ->
                 if (node.id == editingSourceNodeId) {
                     val sourceChanged = resolveNetworkNodeSourceId(node) != normalizedSource
@@ -367,7 +525,10 @@ internal fun NetworkBrowserScreen(
             }
         }
         onNodesChanged(updated)
-        onResolveRemoteSourceMetadata(normalizedSource)
+        metadataLoadingNodeIds = metadataLoadingNodeIds + upsertedNodeId
+        onResolveRemoteSourceMetadata(normalizedSource) {
+            metadataLoadingNodeIds = metadataLoadingNodeIds - upsertedNodeId
+        }
     }
 
     fun upsertSmbSource(
@@ -395,9 +556,12 @@ internal fun NetworkBrowserScreen(
                 "${smbSpec.host}/${smbSpec.share}/${smbSpec.path}"
             }
         }
+        val upsertedNodeId: Long
         val updated = if (editingSmbNodeId == null) {
+            val newNodeId = nextNetworkNodeId(nodes)
+            upsertedNodeId = newNodeId
             nodes + NetworkNode(
-                id = nextNetworkNodeId(nodes),
+                id = newNodeId,
                 parentId = currentFolderId,
                 type = NetworkNodeType.RemoteSource,
                 title = title,
@@ -410,6 +574,7 @@ internal fun NetworkBrowserScreen(
                 smbPassword = smbSpec.password
             )
         } else {
+            upsertedNodeId = editingSmbNodeId ?: return
             nodes.map { node ->
                 if (node.id == editingSmbNodeId) {
                     val sourceChanged = resolveNetworkNodeSourceId(node) != sourceId
@@ -431,6 +596,10 @@ internal fun NetworkBrowserScreen(
             }
         }
         onNodesChanged(updated)
+        metadataLoadingNodeIds = metadataLoadingNodeIds + upsertedNodeId
+        onResolveRemoteSourceMetadata(sourceId) {
+            metadataLoadingNodeIds = metadataLoadingNodeIds - upsertedNodeId
+        }
     }
 
     fun applyPasteFromClipboard() {
@@ -620,7 +789,7 @@ internal fun NetworkBrowserScreen(
                                         )
                                     },
                                     enabled = selectedNodeIds.isNotEmpty(),
-                                    onClick = { beginRefreshPlaceholder(selectedNodeIds) }
+                                    onClick = { requestRefresh(selectedNodeIds) }
                                 )
                             }
                         }
@@ -978,6 +1147,7 @@ internal fun NetworkBrowserScreen(
 
                         Column(modifier = Modifier.weight(1f)) {
                             val isRemoteSource = entry.type == NetworkNodeType.RemoteSource
+                            val isMetadataLoading = isRemoteSource && metadataLoadingNodeIds.contains(entry.id)
                             val sourceLabel = resolveNetworkNodeDisplaySource(entry)
                             val fallbackTitle = entry.title.ifBlank { sourceLabel }
                             val remoteDisplay = buildRecentTrackDisplay(
@@ -1039,6 +1209,24 @@ internal fun NetworkBrowserScreen(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                            }
+
+                            if (isMetadataLoading) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(12.dp),
+                                        strokeWidth = 1.8.dp
+                                    )
+                                    Text(
+                                        text = "Loading information...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
 
                             if (subtitle.isNotBlank()) {
@@ -1157,7 +1345,7 @@ internal fun NetworkBrowserScreen(
                                                 contentDescription = null
                                             )
                                         },
-                                        onClick = { beginRefreshPlaceholder(entry) }
+                                        onClick = { requestRefresh(entry) }
                                     )
                                 }
                             }
@@ -1409,14 +1597,45 @@ internal fun NetworkBrowserScreen(
         )
     }
 
-    if (refreshNodePendingIds.isNotEmpty()) {
-        val refreshCount = refreshNodePendingIds.size
-        LaunchedEffect(refreshNodePendingIds) {
-            delay(NETWORK_REFRESH_PLACEHOLDER_DELAY_MS)
-            refreshNodeIdsInProgress = null
+    if (refreshNodeConfirmationIds.isNotEmpty()) {
+        val refreshableFileCount = remember(nodes, refreshNodeConfirmationIds) {
+            collectRefreshableRemoteSourceNodeIds(nodes, refreshNodeConfirmationIds).size
         }
         AlertDialog(
-            onDismissRequest = {},
+            onDismissRequest = { refreshNodeIdsPendingConfirmation = null },
+            title = { Text("Refresh files") },
+            text = {
+                Text(
+                    text = "Refresh $refreshableFileCount ${
+                        if (refreshableFileCount == 1) "file" else "files"
+                    }?",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val pendingRootIds = refreshNodeConfirmationIds
+                        refreshNodeIdsPendingConfirmation = null
+                        startBatchRefresh(pendingRootIds)
+                    }
+                ) {
+                    Text("Refresh")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { refreshNodeIdsPendingConfirmation = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (refreshNodePendingIds.isNotEmpty() && !refreshPopupHidden) {
+        val refreshTotalCount = refreshNodePendingIds.size
+        val refreshCompletedCount = refreshCompletedNodeIds.size.coerceIn(0, refreshTotalCount)
+        AlertDialog(
+            onDismissRequest = { refreshPopupHidden = true },
             title = { Text("Refresh") },
             text = {
                 Row(
@@ -1424,11 +1643,15 @@ internal fun NetworkBrowserScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                    Text("Refreshing $refreshCount/$refreshCount files...")
+                    Text("Refreshing $refreshCompletedCount/$refreshTotalCount files...")
                 }
             },
             confirmButton = {},
-            dismissButton = {}
+            dismissButton = {
+                TextButton(onClick = { refreshPopupHidden = true }) {
+                    Text("Hide")
+                }
+            }
         )
     }
 
@@ -1500,6 +1723,27 @@ private fun collectNodeSubtreeIds(nodes: List<NetworkNode>, rootNodeId: Long): S
         }
     }
     return visited
+}
+
+private fun collectRefreshableRemoteSourceNodeIds(
+    nodes: List<NetworkNode>,
+    rootNodeIds: Set<Long>
+): Set<Long> {
+    if (rootNodeIds.isEmpty()) return emptySet()
+    val nodesById = nodes.associateBy { it.id }
+    val normalizedRootIds = normalizeSelectionRootIds(nodes, rootNodeIds)
+    val effectiveRootIds = if (normalizedRootIds.isEmpty()) rootNodeIds.toList() else normalizedRootIds
+    val refreshableIds = LinkedHashSet<Long>()
+    effectiveRootIds.forEach { rootNodeId ->
+        val subtreeIds = collectNodeSubtreeIds(nodes, rootNodeId)
+        subtreeIds.forEach { nodeId ->
+            val node = nodesById[nodeId] ?: return@forEach
+            if (node.type == NetworkNodeType.RemoteSource) {
+                refreshableIds += nodeId
+            }
+        }
+    }
+    return refreshableIds
 }
 
 private fun normalizeSelectionRootIds(

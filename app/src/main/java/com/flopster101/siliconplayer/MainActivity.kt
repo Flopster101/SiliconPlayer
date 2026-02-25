@@ -2559,14 +2559,20 @@ private fun AppNavigation(
                         networkNodes = updatedNodes
                         writeNetworkNodes(prefs, updatedNodes)
                     },
-                    onResolveRemoteSourceMetadata = { sourceId ->
+                    onResolveRemoteSourceMetadata = { sourceId, onSettled ->
                         scheduleNetworkSourceMetadataBackfill(
                             scope = appScope,
                             sourceId = sourceId,
                             onResolved = { resolvedSource, resolvedTitle, resolvedArtist ->
                                 applyNetworkSourceMetadata(resolvedSource, resolvedTitle, resolvedArtist)
+                            },
+                            onSettled = {
+                                onSettled()
                             }
                         )
+                    },
+                    onCancelPendingMetadataBackfill = {
+                        cancelPendingNetworkSourceMetadataBackfillJobs()
                     },
                     onOpenRemoteSource = { rawInput ->
                         returnToNetworkOnBrowserExit = false

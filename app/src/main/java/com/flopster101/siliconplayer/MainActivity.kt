@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer
 
+import android.app.Activity
 import android.os.Bundle
 import android.os.SystemClock
 import android.graphics.Bitmap
@@ -350,6 +351,38 @@ class MainActivity : ComponentActivity() {
 private fun resolveAutoDarkThemePreference(context: Context, systemDarkTheme: Boolean): Boolean {
     val isTvDevice = context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
     return if (isTvDevice) true else systemDarkTheme
+}
+
+private const val HOME_BACK_EXIT_TIMEOUT_MS = 2_000L
+
+@Composable
+private fun HomeExitBackHandler(
+    context: Context,
+    currentView: MainView,
+    isPlayerExpanded: Boolean,
+    showUrlOrPathDialog: Boolean
+) {
+    val hostActivity = context as? Activity
+    var lastHomeBackPressedAtMs by remember { mutableLongStateOf(0L) }
+
+    BackHandler(
+        enabled = currentView == MainView.Home &&
+            !isPlayerExpanded &&
+            !showUrlOrPathDialog
+    ) {
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastHomeBackPressedAtMs <= HOME_BACK_EXIT_TIMEOUT_MS) {
+            hostActivity?.finish()
+        } else {
+            lastHomeBackPressedAtMs = now
+            Toast.makeText(context, "Press back again to exit app", Toast.LENGTH_SHORT).show()
+        }
+    }
+    LaunchedEffect(currentView) {
+        if (currentView != MainView.Home) {
+            lastHomeBackPressedAtMs = 0L
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalComposeUiApi::class)
@@ -1680,6 +1713,12 @@ private fun AppNavigation(
             exitSettingsToReturnView = exitSettingsToReturnView
         )
     }
+    HomeExitBackHandler(
+        context = context,
+        currentView = currentView,
+        isPlayerExpanded = isPlayerExpanded,
+        showUrlOrPathDialog = showUrlOrPathDialog
+    )
 
     @Composable
     fun BoxScope.PlayerOverlayAndDialogsSection() {

@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
@@ -68,6 +69,7 @@ import com.flopster101.siliconplayer.SmbBrowserEntry
 import com.flopster101.siliconplayer.SmbSourceSpec
 import com.flopster101.siliconplayer.SmbAuthenticationFailureReason
 import com.flopster101.siliconplayer.buildSmbEntrySourceSpec
+import com.flopster101.siliconplayer.buildSmbDisplayUri
 import com.flopster101.siliconplayer.buildSmbRequestUri
 import com.flopster101.siliconplayer.buildSmbSourceId
 import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
@@ -158,6 +160,8 @@ internal fun SmbFileBrowserScreen(
     }
     val browserSearchController = rememberBrowserSearchController()
     val browserSelectionController = rememberBrowserSelectionController<String>()
+    var browserInfoFields by remember(sourceSpec) { mutableStateOf<List<BrowserInfoField>>(emptyList()) }
+    var showBrowserInfoDialog by remember(sourceSpec) { mutableStateOf(false) }
 
     fun appendLoadingLog(message: String) {
         val lineNumber = loadingLogLines.size + 1
@@ -407,8 +411,43 @@ internal fun SmbFileBrowserScreen(
         }
     }
 
+    fun showSelectionInfoDialog() {
+        val selectedEntries = entries.filter { entry ->
+            browserSelectionController.selectedKeys.contains(entrySelectionKeyFor(entry))
+        }
+        if (selectedEntries.isEmpty()) return
+        val infoEntries = selectedEntries.map { entry ->
+            BrowserInfoEntry(
+                name = entry.name,
+                isDirectory = entry.isDirectory,
+                sizeBytes = if (entry.isDirectory) null else entry.sizeBytes
+            )
+        }
+        val pathLabel = buildSmbDisplayUri(
+            credentialsSpec.copy(
+                share = currentShare,
+                path = effectivePath()
+            )
+        )
+        val hostLabel = buildString {
+            append(credentialsSpec.host)
+            if (currentShare.isNotBlank()) {
+                append('/')
+                append(decodePercentEncodedForDisplay(currentShare) ?: currentShare)
+            }
+        }
+        browserInfoFields = buildBrowserInfoFields(
+            entries = infoEntries,
+            path = pathLabel,
+            storageOrHostLabel = "Host",
+            storageOrHost = hostLabel
+        )
+        showBrowserInfoDialog = true
+    }
+
     LaunchedEffect(currentShare, currentSubPath) {
         browserSelectionController.exitSelectionMode()
+        showBrowserInfoDialog = false
     }
 
     Scaffold(
@@ -488,7 +527,14 @@ internal fun SmbFileBrowserScreen(
                                 browserSelectionController.selectAll(filteredEntries.map(entrySelectionKeyFor))
                             },
                             onDeselectAll = { browserSelectionController.deselectAll() },
-                            actionItems = emptyList(),
+                            actionItems = listOf(
+                                BrowserSelectionActionItem(
+                                    label = "Info",
+                                    icon = Icons.Default.Info,
+                                    enabled = browserSelectionController.selectedKeys.isNotEmpty(),
+                                    onClick = { showSelectionInfoDialog() }
+                                )
+                            ),
                             onCancel = { browserSelectionController.exitSelectionMode() }
                         )
                         BrowserToolbarSearchButton(
@@ -843,6 +889,14 @@ internal fun SmbFileBrowserScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    if (showBrowserInfoDialog) {
+        BrowserInfoDialog(
+            title = "Info",
+            fields = browserInfoFields,
+            onDismiss = { showBrowserInfoDialog = false }
         )
     }
 }

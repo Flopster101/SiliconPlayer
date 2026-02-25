@@ -21,6 +21,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -45,6 +47,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -68,12 +71,22 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.NativeBridge
+import com.flopster101.siliconplayer.canonicalDecoderNameForAlias
+import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
+import com.flopster101.siliconplayer.extensionCandidatesForName
+import com.flopster101.siliconplayer.formatByteCount
+import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 internal enum class BrowserPageNavDirection {
     Forward,
@@ -156,6 +169,193 @@ internal data class BrowserSelectionActionItem(
     val enabled: Boolean = true,
     val onClick: () -> Unit
 )
+
+internal data class BrowserInfoEntry(
+    val name: String,
+    val isDirectory: Boolean,
+    val sizeBytes: Long?
+)
+
+internal data class BrowserInfoField(
+    val label: String,
+    val value: String
+)
+
+internal fun buildBrowserInfoFields(
+    entries: List<BrowserInfoEntry>,
+    path: String,
+    storageOrHostLabel: String,
+    storageOrHost: String
+): List<BrowserInfoField> {
+    if (entries.isEmpty()) return emptyList()
+    val single = entries.size == 1
+    val fields = mutableListOf<BrowserInfoField>()
+    val displayPath = decodePercentEncodedForDisplay(path) ?: path
+    fields += BrowserInfoField("Path", displayPath)
+    if (single) {
+        fields += BrowserInfoField(
+            "Filename",
+            decodePercentEncodedForDisplay(entries.first().name) ?: entries.first().name
+        )
+    }
+    fields += BrowserInfoField(
+        if (single) "Size" else "Total size",
+        describeSize(entries)
+    )
+    fields += BrowserInfoField(
+        storageOrHostLabel,
+        decodePercentEncodedForDisplay(storageOrHost) ?: storageOrHost
+    )
+    fields += BrowserInfoField(
+        if (single) "Extension" else "Extensions",
+        describeExtensions(entries)
+    )
+    fields += BrowserInfoField(
+        "Compatible cores",
+        describePlayableCores(entries)
+    )
+    return fields
+}
+
+private fun describeSize(entries: List<BrowserInfoEntry>): String {
+    val singleEntry = entries.singleOrNull()
+    if (singleEntry != null) {
+        return if (singleEntry.isDirectory) {
+            "Folder"
+        } else {
+            singleEntry.sizeBytes?.takeIf { it >= 0L }?.let(::formatByteCount) ?: "Unknown"
+        }
+    }
+    val fileEntries = entries.filterNot { it.isDirectory }
+    if (fileEntries.isEmpty()) return "Folders only"
+    val knownSizes = fileEntries.mapNotNull { entry ->
+        entry.sizeBytes?.takeIf { it >= 0L }
+    }
+    val unknownCount = fileEntries.size - knownSizes.size
+    val knownTotal = knownSizes.sum()
+    if (knownSizes.isEmpty()) return "Unknown"
+    if (unknownCount <= 0) return formatByteCount(knownTotal)
+    return "${formatByteCount(knownTotal)} + $unknownCount unknown"
+}
+
+private fun describeExtensions(entries: List<BrowserInfoEntry>): String {
+    val singleEntry = entries.singleOrNull()
+    if (singleEntry != null) {
+        return extensionLabelForEntry(singleEntry)
+    }
+    val extensionCounts = entries
+        .groupingBy(::extensionLabelForEntry)
+        .eachCount()
+        .toList()
+        .sortedWith(
+            compareBy<Pair<String, Int>> { if (it.first == "Folder") 0 else 1 }
+                .thenBy { it.first.lowercase(Locale.ROOT) }
+        )
+    return extensionCounts.joinToString(", ") { (extension, count) ->
+        "$extension ($count)"
+    }
+}
+
+private fun extensionLabelForEntry(entry: BrowserInfoEntry): String {
+    if (entry.isDirectory) return "Folder"
+    val primary = inferredPrimaryExtensionForName(entry.name) ?: return "Unknown"
+    return primary.uppercase(Locale.ROOT)
+}
+
+private fun describePlayableCores(entries: List<BrowserInfoEntry>): String {
+    val candidateExtensions = entries
+        .asSequence()
+        .filterNot { it.isDirectory }
+        .flatMap { entry -> extensionCandidatesForName(entry.name).asSequence() }
+        .mapNotNull(::normalizeExtensionToken)
+        .toSet()
+    if (candidateExtensions.isEmpty()) return "None"
+
+    val matchingCores = NativeBridge.getRegisteredDecoderNames()
+        .asSequence()
+        .map { it.trim() }
+        .filter { it.isNotBlank() && NativeBridge.isDecoderEnabled(it) }
+        .mapNotNull { decoderName ->
+            val enabledExtensions = NativeBridge.getDecoderEnabledExtensions(decoderName)
+                .asSequence()
+                .mapNotNull(::normalizeExtensionToken)
+                .toSet()
+            val supportedExtensions = if (enabledExtensions.isNotEmpty()) {
+                enabledExtensions
+            } else {
+                NativeBridge.getDecoderSupportedExtensions(decoderName)
+                    .asSequence()
+                    .mapNotNull(::normalizeExtensionToken)
+                    .toSet()
+            }
+            if (supportedExtensions.intersect(candidateExtensions).isEmpty()) return@mapNotNull null
+            DecoderMatch(
+                label = canonicalDecoderNameForAlias(decoderName) ?: decoderName,
+                priority = NativeBridge.getDecoderPriority(decoderName)
+            )
+        }
+        .sortedWith(compareBy<DecoderMatch> { it.priority }.thenBy { it.label.lowercase(Locale.ROOT) })
+        .map { it.label }
+        .distinct()
+        .toList()
+
+    if (matchingCores.isEmpty()) return "None"
+    return matchingCores.joinToString(", ")
+}
+
+private data class DecoderMatch(
+    val label: String,
+    val priority: Int
+)
+
+private fun normalizeExtensionToken(raw: String?): String? {
+    val normalized = raw
+        ?.trim()
+        ?.lowercase(Locale.ROOT)
+        ?.removePrefix("*.")
+        ?.removePrefix(".")
+        ?.takeUnless { it.isNullOrBlank() }
+        ?: return null
+    return normalized
+}
+
+@Composable
+internal fun BrowserInfoDialog(
+    title: String,
+    fields: List<BrowserInfoField>,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                fields.forEach { field ->
+                    Text(
+                        text = buildAnnotatedString {
+                            withStyle(style = SpanStyle(fontWeight = FontWeight.SemiBold)) {
+                                append("${field.label}: ")
+                            }
+                            append(field.value)
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
 
 @Composable
 internal fun rememberBrowserSearchController(): BrowserSearchController {

@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.SdCard
@@ -162,6 +163,8 @@ fun FileBrowserScreen(
     val browserEntryFocusRequesters = remember { mutableStateMapOf<String, FocusRequester>() }
     val browserSearchController = rememberBrowserSearchController()
     val browserSelectionController = rememberBrowserSelectionController<String>()
+    var browserInfoFields by remember { mutableStateOf<List<BrowserInfoField>>(emptyList()) }
+    var showBrowserInfoDialog by remember { mutableStateOf(false) }
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val subtitleIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
@@ -450,6 +453,33 @@ fun FileBrowserScreen(
         }
     }
 
+    fun showSelectionInfoDialog() {
+        val selectedItems = fileList.filter { item ->
+            browserSelectionController.selectedKeys.contains(item.file.absolutePath)
+        }
+        if (selectedItems.isEmpty()) return
+        val infoEntries = selectedItems.map { item ->
+            BrowserInfoEntry(
+                name = item.name,
+                isDirectory = item.isDirectory,
+                sizeBytes = if (item.isDirectory) null else item.size
+            )
+        }
+        val pathLabel = currentDirectory?.absolutePath
+            ?: selectedLocation?.directory?.absolutePath
+            ?: "/"
+        val storageLabel = selectedLocation?.let { location ->
+            "${location.typeLabel} (${location.name})"
+        } ?: "Unknown"
+        browserInfoFields = buildBrowserInfoFields(
+            entries = infoEntries,
+            path = pathLabel,
+            storageOrHostLabel = "Storage",
+            storageOrHost = storageLabel
+        )
+        showBrowserInfoDialog = true
+    }
+
     LaunchedEffect(storageLocations, initialLocationId, initialDirectoryPath) {
         if (hasRestoredInitialNavigation) return@LaunchedEffect
         hasRestoredInitialNavigation = true
@@ -497,6 +527,7 @@ fun FileBrowserScreen(
 
     LaunchedEffect(selectedLocationId, currentDirectory?.absolutePath) {
         browserSelectionController.exitSelectionMode()
+        showBrowserInfoDialog = false
     }
 
     BackHandler(
@@ -700,7 +731,14 @@ fun FileBrowserScreen(
                                     )
                                 },
                                 onDeselectAll = { browserSelectionController.deselectAll() },
-                                actionItems = emptyList(),
+                                actionItems = listOf(
+                                    BrowserSelectionActionItem(
+                                        label = "Info",
+                                        icon = Icons.Default.Info,
+                                        enabled = browserSelectionController.selectedKeys.isNotEmpty(),
+                                        onClick = { showSelectionInfoDialog() }
+                                    )
+                                ),
                                 onCancel = { browserSelectionController.exitSelectionMode() }
                             )
                             BrowserToolbarSearchButton(
@@ -978,6 +1016,14 @@ fun FileBrowserScreen(
                 )
             }
         }
+    }
+
+    if (showBrowserInfoDialog) {
+        BrowserInfoDialog(
+            title = "Info",
+            fields = browserInfoFields,
+            onDismiss = { showBrowserInfoDialog = false }
+        )
     }
 }
 

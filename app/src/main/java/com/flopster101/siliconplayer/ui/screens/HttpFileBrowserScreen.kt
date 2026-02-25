@@ -32,6 +32,7 @@ import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
@@ -169,6 +170,8 @@ internal fun HttpFileBrowserScreen(
     }
     val browserSearchController = rememberBrowserSearchController()
     val browserSelectionController = rememberBrowserSelectionController<String>()
+    var browserInfoFields by remember(sourceSpec) { mutableStateOf<List<BrowserInfoField>>(emptyList()) }
+    var showBrowserInfoDialog by remember(sourceSpec) { mutableStateOf(false) }
 
     fun updatePlayableRemoteSources(entriesForNavigation: List<HttpBrowserEntry>) {
         RemotePlayableSourceIdsHolder.current = entriesForNavigation
@@ -499,8 +502,37 @@ internal fun HttpFileBrowserScreen(
         label = "httpBrowserDirectoryScrollbarAlpha"
     )
 
+    fun showSelectionInfoDialog() {
+        val selectedEntries = entries.filter { entry ->
+            browserSelectionController.selectedKeys.contains(entrySelectionKeyFor(entry))
+        }
+        if (selectedEntries.isEmpty()) return
+        val infoEntries = selectedEntries.map { entry ->
+            BrowserInfoEntry(
+                name = entry.name,
+                isDirectory = entry.isDirectory,
+                sizeBytes = null
+            )
+        }
+        val spec = browserSpec()
+        val hostLabel = buildString {
+            append(spec.host)
+            spec.port?.let { port ->
+                if (port > 0) append(":$port")
+            }
+        }
+        browserInfoFields = buildBrowserInfoFields(
+            entries = infoEntries,
+            path = buildHttpDisplayUri(spec),
+            storageOrHostLabel = "Host",
+            storageOrHost = hostLabel
+        )
+        showBrowserInfoDialog = true
+    }
+
     LaunchedEffect(currentSpec.path) {
         browserSelectionController.exitSelectionMode()
+        showBrowserInfoDialog = false
     }
 
     Scaffold(
@@ -586,7 +618,14 @@ internal fun HttpFileBrowserScreen(
                                 browserSelectionController.selectAll(filteredEntries.map(entrySelectionKeyFor))
                             },
                             onDeselectAll = { browserSelectionController.deselectAll() },
-                            actionItems = emptyList(),
+                            actionItems = listOf(
+                                BrowserSelectionActionItem(
+                                    label = "Info",
+                                    icon = Icons.Default.Info,
+                                    enabled = browserSelectionController.selectedKeys.isNotEmpty(),
+                                    onClick = { showSelectionInfoDialog() }
+                                )
+                            ),
                             onCancel = { browserSelectionController.exitSelectionMode() }
                         )
                         BrowserToolbarSearchButton(
@@ -961,6 +1000,14 @@ internal fun HttpFileBrowserScreen(
                     Text("Cancel")
                 }
             }
+        )
+    }
+
+    if (showBrowserInfoDialog) {
+        BrowserInfoDialog(
+            title = "Info",
+            fields = browserInfoFields,
+            onDismiss = { showBrowserInfoDialog = false }
         )
     }
 }

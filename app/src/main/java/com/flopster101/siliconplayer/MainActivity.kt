@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.media.MediaMetadataRetriever
 import android.view.WindowManager
@@ -136,6 +137,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Locale
+
+private fun isNetworkBrowserDirectoryPath(path: String?): Boolean {
+    val candidate = path?.trim().takeUnless { it.isNullOrBlank() } ?: return false
+    val scheme = Uri.parse(candidate).scheme?.lowercase(Locale.ROOT)
+    return scheme == "smb" || scheme == "http" || scheme == "https"
+}
 
 class MainActivity : ComponentActivity() {
     private var initialFileToOpen: File? = null
@@ -533,15 +541,40 @@ private fun AppNavigation(
             )
         )
     }
+    val persistedBrowserLocationId = remember {
+        prefs.getString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, null)
+    }
+    val persistedBrowserDirectoryPath = remember {
+        prefs.getString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, null)
+    }
+    val persistedBrowserDirectoryPathIsNetwork = remember(persistedBrowserDirectoryPath) {
+        isNetworkBrowserDirectoryPath(persistedBrowserDirectoryPath)
+    }
     var lastBrowserLocationId by remember {
         mutableStateOf(
-            prefs.getString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, null)
+            if (persistedBrowserDirectoryPathIsNetwork) {
+                null
+            } else {
+                persistedBrowserLocationId
+            }
         )
     }
     var lastBrowserDirectoryPath by remember {
         mutableStateOf(
-            prefs.getString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, null)
+            if (persistedBrowserDirectoryPathIsNetwork) {
+                null
+            } else {
+                persistedBrowserDirectoryPath
+            }
         )
+    }
+    LaunchedEffect(persistedBrowserDirectoryPathIsNetwork) {
+        if (persistedBrowserDirectoryPathIsNetwork) {
+            prefs.edit()
+                .putString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, null)
+                .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, null)
+                .apply()
+        }
     }
     var keepScreenOn by remember {
         mutableStateOf(
@@ -2680,7 +2713,10 @@ private fun AppNavigation(
                             browserLaunchLocationId = null
                             browserLaunchDirectoryPath = null
                         }
-                        if (!rememberBrowserLocation) return@AppNavigationBrowserRouteSection
+                        val shouldRememberBrowserLocation = !isNetworkBrowserDirectoryPath(directoryPath)
+                        if (!rememberBrowserLocation || !shouldRememberBrowserLocation) {
+                            return@AppNavigationBrowserRouteSection
+                        }
                         lastBrowserLocationId = locationId
                         lastBrowserDirectoryPath = directoryPath
                         prefs.edit()

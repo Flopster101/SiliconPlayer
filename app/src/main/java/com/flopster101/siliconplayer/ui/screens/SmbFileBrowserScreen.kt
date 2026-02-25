@@ -28,12 +28,15 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,13 +56,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.SmbBrowserEntry
 import com.flopster101.siliconplayer.SmbSourceSpec
 import com.flopster101.siliconplayer.buildSmbEntrySourceSpec
 import com.flopster101.siliconplayer.buildSmbRequestUri
+import com.flopster101.siliconplayer.buildSmbSourceId
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.isSmbAuthenticationFailure
 import com.flopster101.siliconplayer.joinSmbRelativePath
 import com.flopster101.siliconplayer.listSmbDirectoryEntries
 import com.flopster101.siliconplayer.listSmbHostShareEntries
@@ -78,12 +84,13 @@ internal fun SmbFileBrowserScreen(
     bottomContentPadding: Dp,
     backHandlingEnabled: Boolean,
     onExitBrowser: () -> Unit,
-    onOpenRemoteSource: (String) -> Unit
+    onOpenRemoteSource: (String) -> Unit,
+    onRememberSmbCredentials: (String, String?, String?) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
     val launchShare = remember(sourceSpec.share) { sourceSpec.share.trim() }
     val canBrowseHostShares = launchShare.isBlank()
-    val credentialsSpec = remember(sourceSpec) { sourceSpec.copy(share = "", path = null) }
+    val sourceId = remember(sourceSpec) { buildSmbSourceId(sourceSpec) }
     val rootPath = remember(sourceSpec.path, launchShare) {
         if (launchShare.isBlank()) "" else normalizeSmbPathForShare(sourceSpec.path).orEmpty()
     }
@@ -95,6 +102,21 @@ internal fun SmbFileBrowserScreen(
     var errorMessage by remember(sourceSpec) { mutableStateOf<String?>(null) }
     var listJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
     val loadingLogLines = remember(sourceSpec) { mutableStateListOf<String>() }
+    var authDialogVisible by remember(sourceSpec) { mutableStateOf(false) }
+    var authDialogErrorMessage by remember(sourceSpec) { mutableStateOf<String?>(null) }
+    var authDialogUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username.orEmpty()) }
+    var authDialogPassword by remember(sourceSpec) { mutableStateOf("") }
+    var authRememberPassword by remember(sourceSpec) { mutableStateOf(true) }
+    var sessionUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username) }
+    var sessionPassword by remember(sourceSpec) { mutableStateOf(sourceSpec.password) }
+    val credentialsSpec = remember(sourceSpec, sessionUsername, sessionPassword) {
+        sourceSpec.copy(
+            share = "",
+            path = null,
+            username = sessionUsername,
+            password = sessionPassword
+        )
+    }
 
     fun appendLoadingLog(message: String) {
         val lineNumber = loadingLogLines.size + 1
@@ -158,10 +180,24 @@ internal fun SmbFileBrowserScreen(
                 appendLoadingLog("Load finished")
             }.onFailure { throwable ->
                 entries = emptyList()
-                errorMessage = throwable.message ?: if (share.isBlank()) {
-                    "Unable to list SMB shares"
+                val authFailed = isSmbAuthenticationFailure(throwable)
+                if (authFailed) {
+                    authDialogUsername = credentialsSpec.username.orEmpty()
+                    authDialogPassword = ""
+                    authRememberPassword = true
+                    authDialogErrorMessage = if (credentialsSpec.password.isNullOrBlank()) {
+                        "This SMB source requires authentication."
+                    } else {
+                        "Authentication failed. Check username and password."
+                    }
+                    authDialogVisible = true
+                    errorMessage = "Authentication required."
                 } else {
-                    "Unable to list SMB directory"
+                    errorMessage = throwable.message ?: if (share.isBlank()) {
+                        "Unable to list SMB shares"
+                    } else {
+                        "Unable to list SMB directory"
+                    }
                 }
                 appendLoadingLog(
                     "Load failed: ${throwable.message ?: throwable.javaClass.simpleName ?: "Unknown error"}"
@@ -196,6 +232,13 @@ internal fun SmbFileBrowserScreen(
     LaunchedEffect(sourceSpec) {
         currentShare = launchShare
         currentSubPath = ""
+        authDialogVisible = false
+        authDialogErrorMessage = null
+        authDialogUsername = sourceSpec.username.orEmpty()
+        authDialogPassword = ""
+        authRememberPassword = true
+        sessionUsername = sourceSpec.username
+        sessionPassword = sourceSpec.password
         loadCurrentDirectory()
     }
 
@@ -386,6 +429,80 @@ internal fun SmbFileBrowserScreen(
                 }
             }
         }
+    }
+
+    if (authDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { authDialogVisible = false },
+            title = { Text("SMB authentication required") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    authDialogErrorMessage?.let { message ->
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    OutlinedTextField(
+                        value = authDialogUsername,
+                        onValueChange = { authDialogUsername = it },
+                        singleLine = true,
+                        label = { Text("Username") }
+                    )
+                    OutlinedTextField(
+                        value = authDialogPassword,
+                        onValueChange = { authDialogPassword = it },
+                        singleLine = true,
+                        label = { Text("Password") },
+                        visualTransformation = PasswordVisualTransformation()
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { authRememberPassword = !authRememberPassword },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = authRememberPassword,
+                            onCheckedChange = { checked -> authRememberPassword = checked }
+                        )
+                        Text(
+                            text = "Remember password",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                val hasCredentials = authDialogUsername.trim().isNotEmpty() || authDialogPassword.trim().isNotEmpty()
+                TextButton(
+                    enabled = hasCredentials,
+                    onClick = {
+                        val normalizedUsername = authDialogUsername.trim().ifBlank { null }
+                        val normalizedPassword = authDialogPassword.trim().ifBlank { null }
+                        sessionUsername = normalizedUsername
+                        sessionPassword = normalizedPassword
+                        if (authRememberPassword) {
+                            onRememberSmbCredentials(
+                                sourceId,
+                                normalizedUsername,
+                                normalizedPassword
+                            )
+                        }
+                        authDialogVisible = false
+                        loadCurrentDirectory()
+                    }
+                ) {
+                    Text("Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { authDialogVisible = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

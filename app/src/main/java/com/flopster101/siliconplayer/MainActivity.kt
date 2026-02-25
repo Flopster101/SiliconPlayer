@@ -387,6 +387,43 @@ private fun AppNavigation(
             writeNetworkNodes(prefs, updated)
         }
     }
+    val rememberNetworkSmbCredentials: (String, String?, String?) -> Unit = { sourceId, username, password ->
+        val normalizedUsername = username?.trim().takeUnless { it.isNullOrBlank() }
+        val normalizedPassword = password?.trim().takeUnless { it.isNullOrBlank() }
+        var changed = false
+        val updated = networkNodes.map { node ->
+            if (node.type != NetworkNodeType.RemoteSource || node.sourceKind != NetworkSourceKind.Smb) {
+                return@map node
+            }
+            val nodeSourceId = resolveNetworkNodeSourceId(node)
+            if (!samePath(nodeSourceId, sourceId)) {
+                return@map node
+            }
+            val nodeSpec = resolveNetworkNodeSmbSpec(node) ?: return@map node
+            val updatedSpec = nodeSpec.copy(
+                username = normalizedUsername,
+                password = normalizedPassword
+            )
+            val updatedSourceId = buildSmbSourceId(updatedSpec)
+            if (
+                node.smbUsername == normalizedUsername &&
+                node.smbPassword == normalizedPassword &&
+                samePath(node.source, updatedSourceId)
+            ) {
+                return@map node
+            }
+            changed = true
+            node.copy(
+                source = updatedSourceId,
+                smbUsername = normalizedUsername,
+                smbPassword = normalizedPassword
+            )
+        }
+        if (changed) {
+            networkNodes = updated
+            writeNetworkNodes(prefs, updated)
+        }
+    }
     AppNavigationStartupEffects(
         prefs = prefs,
         defaultScopeTextSizeSp = defaultScopeTextSizeSp,
@@ -2637,6 +2674,9 @@ private fun AppNavigation(
                     },
                     onOpenRemoteSource = { rawInput ->
                         manualOpenDelegates.applyManualInputSelection(rawInput)
+                    },
+                    onRememberSmbCredentials = { sourceId, username, password ->
+                        rememberNetworkSmbCredentials(sourceId, username, password)
                     }
                 )
             },

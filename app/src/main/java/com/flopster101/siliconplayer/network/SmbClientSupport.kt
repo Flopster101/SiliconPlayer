@@ -26,6 +26,28 @@ internal fun authenticateSmbSession(connection: Connection, spec: SmbSourceSpec)
     throw lastFailure ?: IllegalStateException("Unable to authenticate SMB session")
 }
 
+internal fun isSmbAuthenticationFailure(throwable: Throwable?): Boolean {
+    if (throwable == null) return false
+    var current: Throwable? = throwable
+    while (current != null) {
+        val message = current.message.orEmpty()
+        if (
+            message.contains("Authentication failed", ignoreCase = true) ||
+            message.contains("STATUS_LOGON_FAILURE", ignoreCase = true) ||
+            message.contains("STATUS_WRONG_PASSWORD", ignoreCase = true) ||
+            message.contains("STATUS_ACCESS_DENIED", ignoreCase = true) ||
+            message.contains("STATUS_ACCOUNT_RESTRICTION", ignoreCase = true)
+        ) {
+            return true
+        }
+        if (current.message == "Unable to authenticate SMB session") {
+            return true
+        }
+        current = current.cause
+    }
+    return false
+}
+
 internal fun normalizeSmbPathForShare(rawPath: String?): String? {
     if (rawPath.isNullOrBlank()) return null
     val normalized = rawPath

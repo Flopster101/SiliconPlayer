@@ -102,7 +102,8 @@ internal fun MainBrowserRouteHost(
     onExitBrowser: () -> Unit,
     onBrowserLocationChanged: (String?, String?) -> Unit,
     onFileSelected: (File, String?) -> Unit,
-    onOpenRemoteSource: (String) -> Unit
+    onOpenRemoteSource: (String) -> Unit,
+    onRememberSmbCredentials: (String, String?, String?) -> Unit
 ) {
     val initialSmbSpec = initialDirectoryPath?.let(::parseSmbSourceSpecFromInput)
     Box(modifier = Modifier.padding(mainPadding)) {
@@ -115,7 +116,8 @@ internal fun MainBrowserRouteHost(
                 bottomContentPadding = bottomContentPadding,
                 backHandlingEnabled = backHandlingEnabled,
                 onExitBrowser = onExitBrowser,
-                onOpenRemoteSource = onOpenRemoteSource
+                onOpenRemoteSource = onOpenRemoteSource,
+                onRememberSmbCredentials = onRememberSmbCredentials
             )
         } else {
             FileBrowserScreen(

@@ -112,7 +112,8 @@ internal fun AppNavigationBrowserRouteSection(
     onExitBrowser: () -> Unit,
     onBrowserLocationChanged: (String?, String?) -> Unit,
     onFileSelected: (File, String?) -> Unit,
-    onOpenRemoteSource: (String) -> Unit
+    onOpenRemoteSource: (String) -> Unit,
+    onRememberSmbCredentials: (String, String?, String?) -> Unit
 ) {
     MainBrowserRouteHost(
         mainPadding = mainPadding,
@@ -130,7 +131,8 @@ internal fun AppNavigationBrowserRouteSection(
         onExitBrowser = onExitBrowser,
         onBrowserLocationChanged = onBrowserLocationChanged,
         onFileSelected = onFileSelected,
-        onOpenRemoteSource = onOpenRemoteSource
+        onOpenRemoteSource = onOpenRemoteSource,
+        onRememberSmbCredentials = onRememberSmbCredentials
     )
 }
 

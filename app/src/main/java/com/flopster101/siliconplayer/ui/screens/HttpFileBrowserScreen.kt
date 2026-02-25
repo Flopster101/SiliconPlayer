@@ -3,17 +3,6 @@ package com.flopster101.siliconplayer.ui.screens
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.ExperimentalMaterialApi
@@ -44,7 +32,6 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -68,7 +55,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -102,12 +88,6 @@ private data class HttpLoadingCancelState(
     val previousEntries: List<HttpBrowserEntry>,
     val previousErrorMessage: String?
 )
-
-private enum class HttpBrowserNavDirection {
-    Forward,
-    Backward,
-    Neutral
-}
 
 private enum class HttpBrowserPane {
     Loading,
@@ -154,7 +134,7 @@ internal fun HttpFileBrowserScreen(
     var loadingPartialEntries by remember(sourceSpec) { mutableStateOf<List<HttpBrowserEntry>>(emptyList()) }
     var loadingLoadedCount by remember(sourceSpec) { mutableStateOf(0) }
     var loadCancelState by remember(sourceSpec) { mutableStateOf<HttpLoadingCancelState?>(null) }
-    var browserNavDirection by remember(sourceSpec) { mutableStateOf(HttpBrowserNavDirection.Neutral) }
+    var browserNavDirection by remember(sourceSpec) { mutableStateOf(BrowserPageNavDirection.Neutral) }
     val directoryEntriesCache = remember(sourceSpec) { mutableStateMapOf<String, List<HttpBrowserEntry>>() }
     val effectiveRootPath = remember(sourceSpec, browserRootPath) {
         browserRootPath
@@ -203,7 +183,7 @@ internal fun HttpFileBrowserScreen(
 
     fun showLoadedEntriesNow() {
         val partialSnapshot = loadingPartialEntries
-        browserNavDirection = HttpBrowserNavDirection.Neutral
+        browserNavDirection = BrowserPageNavDirection.Neutral
         abortActiveLoad()
         entries = partialSnapshot
         errorMessage = null
@@ -223,7 +203,7 @@ internal fun HttpFileBrowserScreen(
             onExitBrowser()
             return
         }
-        browserNavDirection = HttpBrowserNavDirection.Backward
+        browserNavDirection = BrowserPageNavDirection.Backward
         currentSpec = cancelStateSnapshot.previousSpec.copy(
             username = sessionUsername,
             password = sessionPassword
@@ -326,7 +306,7 @@ internal fun HttpFileBrowserScreen(
         targetSpec: HttpSourceSpec,
         cancelState: HttpLoadingCancelState?,
         forceReload: Boolean = false,
-        navigationDirection: HttpBrowserNavDirection = HttpBrowserNavDirection.Forward
+        navigationDirection: BrowserPageNavDirection = BrowserPageNavDirection.Forward
     ) {
         browserNavDirection = navigationDirection
         val normalizedTargetSpec = targetSpec.copy(
@@ -373,7 +353,7 @@ internal fun HttpFileBrowserScreen(
         openDirectory(
             targetSpec = currentSpec.copy(path = clampedParentPath, query = null),
             cancelState = cancelSnapshot,
-            navigationDirection = HttpBrowserNavDirection.Backward
+            navigationDirection = BrowserPageNavDirection.Backward
         )
         return true
     }
@@ -405,7 +385,7 @@ internal fun HttpFileBrowserScreen(
                 previousEntries = emptyList(),
                 previousErrorMessage = null
             ),
-            navigationDirection = HttpBrowserNavDirection.Neutral
+            navigationDirection = BrowserPageNavDirection.Neutral
         )
     }
 
@@ -450,7 +430,7 @@ internal fun HttpFileBrowserScreen(
                         previousErrorMessage = errorMessage
                     ),
                     forceReload = true,
-                    navigationDirection = HttpBrowserNavDirection.Neutral
+                    navigationDirection = BrowserPageNavDirection.Neutral
                 )
                 val deadline = System.currentTimeMillis() + 20_000L
                 while (isLoading && System.currentTimeMillis() < deadline) {
@@ -523,54 +503,12 @@ internal fun HttpFileBrowserScreen(
                 targetState = browserContentState,
                 transitionSpec = {
                     val loadingTransition =
-                        initialState.pane == HttpBrowserPane.Loading || targetState.pane == HttpBrowserPane.Loading
-                    if (loadingTransition) {
-                        (
-                            fadeIn(animationSpec = tween(durationMillis = 170, easing = LinearOutSlowInEasing)) +
-                                slideInVertically(
-                                    initialOffsetY = { fullHeight -> fullHeight / 14 },
-                                    animationSpec = tween(durationMillis = 190, easing = FastOutSlowInEasing)
-                                )
-                            ) togetherWith (
-                            fadeOut(animationSpec = tween(durationMillis = 120, easing = FastOutLinearInEasing)) +
-                                slideOutVertically(
-                                    targetOffsetY = { fullHeight -> -fullHeight / 16 },
-                                    animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing)
-                                )
-                            )
-                    } else {
-                        val forward = browserNavDirection == HttpBrowserNavDirection.Forward
-                        val backward = browserNavDirection == HttpBrowserNavDirection.Backward
-                        val enterOffset = when {
-                            forward -> { width: Int -> width / 2 }
-                            backward -> { width: Int -> -width / 4 }
-                            else -> { _: Int -> 0 }
-                        }
-                        val exitOffset = when {
-                            forward -> { width: Int -> -width / 5 }
-                            backward -> { width: Int -> width / 3 }
-                            else -> { _: Int -> 0 }
-                        }
-                        (
-                            slideInHorizontally(
-                                initialOffsetX = enterOffset,
-                                animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing)
-                            ) +
-                                fadeIn(
-                                    animationSpec = tween(
-                                        durationMillis = 180,
-                                        delayMillis = if (forward || backward) 40 else 0,
-                                        easing = LinearOutSlowInEasing
-                                    )
-                                )
-                            ) togetherWith (
-                            slideOutHorizontally(
-                                targetOffsetX = exitOffset,
-                                animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
-                            ) +
-                                fadeOut(animationSpec = tween(durationMillis = 120, easing = FastOutLinearInEasing))
-                            )
-                    }
+                        initialState.pane == HttpBrowserPane.Loading ||
+                            targetState.pane == HttpBrowserPane.Loading
+                    browserContentTransform(
+                        navDirection = browserNavDirection,
+                        loadingTransition = loadingTransition
+                    )
                 },
                 label = "httpBrowserLoadingTransition",
                 modifier = Modifier.fillMaxSize()
@@ -657,7 +595,7 @@ internal fun HttpFileBrowserScreen(
                                                     previousErrorMessage = errorMessage
                                                 ),
                                                 forceReload = true,
-                                                navigationDirection = HttpBrowserNavDirection.Neutral
+                                                navigationDirection = BrowserPageNavDirection.Neutral
                                             )
                                         }
                                     ) {
@@ -692,7 +630,7 @@ internal fun HttpFileBrowserScreen(
                                                 password = sessionPassword
                                             ),
                                             cancelState = cancelSnapshot,
-                                            navigationDirection = HttpBrowserNavDirection.Forward
+                                            navigationDirection = BrowserPageNavDirection.Forward
                                         )
                                     } else {
                                         onOpenRemoteSource(
@@ -998,129 +936,21 @@ private fun HttpLoadingCard(
     onCancel: (() -> Unit)? = null,
     showNowEnabled: Boolean = false
 ) {
-    val logListState = rememberLazyListState()
-    LaunchedEffect(logLines.size) {
-        if (logLines.isNotEmpty()) {
-            logListState.animateScrollToItem(logLines.lastIndex)
-        }
+    if (!showContainerCard) {
+        return
     }
-    val content: @Composable () -> Unit = {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(12.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = NetworkIcons.WorldCode,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(108.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
-            ) {
-                if (logLines.isEmpty()) {
-                    Text(
-                        text = "[00] Waiting for $protocolLabel response...",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        state = logListState,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(logLines.size, key = { index -> "$index:${logLines[index]}" }) { index ->
-                            Text(
-                                text = logLines[index],
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontFamily = FontFamily.Monospace
-                                ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
-            if (onShowNow != null || onCancel != null) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    if (onShowNow != null) {
-                        TextButton(
-                            onClick = onShowNow,
-                            enabled = showNowEnabled
-                        ) {
-                            Text("Show now")
-                        }
-                    }
-                    if (onCancel != null) {
-                        TextButton(onClick = onCancel) {
-                            Text("Cancel")
-                        }
-                    }
-                }
-            }
-        }
-    }
-    if (showContainerCard) {
-        ElevatedCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            content()
-        }
-    } else {
-        content()
-    }
+    BrowserLoadingCard(
+        icon = NetworkIcons.WorldCode,
+        title = title,
+        subtitle = subtitle,
+        logLines = logLines,
+        waitingLine = "[00] Waiting for $protocolLabel response...",
+        primaryActionLabel = if (onShowNow != null) "Show now" else null,
+        primaryActionEnabled = showNowEnabled,
+        onPrimaryAction = onShowNow,
+        secondaryActionLabel = if (onCancel != null) "Cancel" else null,
+        onSecondaryAction = onCancel
+    )
 }
 
 private fun inferHttpFormatLabel(name: String): String {

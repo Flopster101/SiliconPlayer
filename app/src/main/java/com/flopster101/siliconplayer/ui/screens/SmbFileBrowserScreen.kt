@@ -1,9 +1,6 @@
 package com.flopster101.siliconplayer.ui.screens
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -32,7 +28,6 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -55,7 +50,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,10 +72,21 @@ import com.flopster101.siliconplayer.smbAuthenticationFailureMessage
 import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import androidx.compose.animation.core.tween
 
 private val SMB_ICON_BOX_SIZE = 38.dp
 private val SMB_ICON_GLYPH_SIZE = 26.dp
+
+private enum class SmbBrowserPane {
+    Loading,
+    Error,
+    Empty,
+    Entries
+}
+
+private data class SmbBrowserContentState(
+    val pane: SmbBrowserPane,
+    val pathKey: String
+)
 
 @Composable
 internal fun SmbFileBrowserScreen(
@@ -118,6 +123,7 @@ internal fun SmbFileBrowserScreen(
     var sessionUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username) }
     var sessionPassword by remember(sourceSpec) { mutableStateOf(sourceSpec.password) }
     var loadRequestSequence by remember(sourceSpec) { mutableStateOf(0) }
+    var browserNavDirection by remember(sourceSpec) { mutableStateOf(BrowserPageNavDirection.Neutral) }
     val credentialsSpec = remember(sourceSpec, sessionUsername, sessionPassword) {
         sourceSpec.copy(
             share = "",
@@ -244,11 +250,13 @@ internal fun SmbFileBrowserScreen(
 
     fun navigateUpWithinBrowser(): Boolean {
         if (currentSubPath.isNotBlank()) {
+            browserNavDirection = BrowserPageNavDirection.Backward
             currentSubPath = currentSubPath.substringBeforeLast('/', missingDelimiterValue = "")
             loadCurrentDirectory()
             return true
         }
         if (canBrowseHostShares && currentShare.isNotBlank()) {
+            browserNavDirection = BrowserPageNavDirection.Backward
             currentShare = ""
             currentSubPath = ""
             loadCurrentDirectory()
@@ -274,6 +282,7 @@ internal fun SmbFileBrowserScreen(
         authRememberPassword = true
         sessionUsername = sourceSpec.username
         sessionPassword = sourceSpec.password
+        browserNavDirection = BrowserPageNavDirection.Neutral
         loadCurrentDirectory()
     }
 
@@ -285,6 +294,18 @@ internal fun SmbFileBrowserScreen(
 
     val canNavigateUp = currentSubPath.isNotBlank() || (canBrowseHostShares && currentShare.isNotBlank())
     val sharePickerMode = isSharePickerMode()
+    val browserContentState = remember(currentShare, currentSubPath, isLoading, errorMessage, entries.isEmpty()) {
+        val key = "$currentShare|$currentSubPath"
+        SmbBrowserContentState(
+            pane = when {
+                isLoading -> SmbBrowserPane.Loading
+                !errorMessage.isNullOrBlank() -> SmbBrowserPane.Error
+                entries.isEmpty() -> SmbBrowserPane.Empty
+                else -> SmbBrowserPane.Entries
+            },
+            pathKey = key
+        )
+    }
     val subtitle = buildString {
         append("smb://")
         append(credentialsSpec.host)
@@ -348,23 +369,27 @@ internal fun SmbFileBrowserScreen(
             }
         }
     ) { paddingValues ->
-        val showLoadingCard = isLoading && entries.isEmpty()
         AnimatedContent(
-            targetState = showLoadingCard,
+            targetState = browserContentState,
             transitionSpec = {
-                fadeIn(animationSpec = tween(durationMillis = 200)) togetherWith
-                    fadeOut(animationSpec = tween(durationMillis = 170))
+                val loadingTransition =
+                    initialState.pane == SmbBrowserPane.Loading ||
+                        targetState.pane == SmbBrowserPane.Loading
+                browserContentTransform(
+                    navDirection = browserNavDirection,
+                    loadingTransition = loadingTransition
+                )
             },
             label = "smbBrowserLoadingTransition",
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-        ) { showLoading ->
+        ) { state ->
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = bottomContentPadding)
             ) {
-                if (canNavigateUp) {
+                if (canNavigateUp && state.pane != SmbBrowserPane.Loading) {
                     item("parent") {
                         SmbParentDirectoryRow(
                             onClick = {
@@ -374,7 +399,7 @@ internal fun SmbFileBrowserScreen(
                     }
                 }
 
-                if (showLoading) {
+                if (state.pane == SmbBrowserPane.Loading) {
                     item("loading") {
                         SmbLoadingCard(
                             title = if (sharePickerMode) {
@@ -387,10 +412,10 @@ internal fun SmbFileBrowserScreen(
                             } else {
                                 "Fetching folder entries"
                             },
-                            logLines = loadingLogLines
+                                logLines = loadingLogLines
                         )
                     }
-                } else if (!errorMessage.isNullOrBlank()) {
+                } else if (state.pane == SmbBrowserPane.Error) {
                     item("error") {
                         ElevatedCard(
                             modifier = Modifier
@@ -434,13 +459,16 @@ internal fun SmbFileBrowserScreen(
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.error
                                 )
-                                TextButton(onClick = { loadCurrentDirectory() }) {
+                                TextButton(onClick = {
+                                    browserNavDirection = BrowserPageNavDirection.Neutral
+                                    loadCurrentDirectory()
+                                }) {
                                     Text("Retry")
                                 }
                             }
                         }
                     }
-                } else if (entries.isEmpty()) {
+                } else if (state.pane == SmbBrowserPane.Empty) {
                     item("empty") {
                         SmbInfoCard(
                             title = if (sharePickerMode) {
@@ -462,10 +490,12 @@ internal fun SmbFileBrowserScreen(
                             showAsShare = sharePickerMode,
                             onClick = {
                                 if (sharePickerMode) {
+                                    browserNavDirection = BrowserPageNavDirection.Forward
                                     currentShare = entry.name
                                     currentSubPath = ""
                                     loadCurrentDirectory()
                                 } else if (entry.isDirectory) {
+                                    browserNavDirection = BrowserPageNavDirection.Forward
                                     currentSubPath = joinSmbRelativePath(currentSubPath, entry.name)
                                     loadCurrentDirectory()
                                 } else {
@@ -756,103 +786,13 @@ private fun SmbLoadingCard(
     subtitle: String,
     logLines: List<String>
 ) {
-    val logListState = rememberLazyListState()
-    LaunchedEffect(logLines.size) {
-        if (logLines.isNotEmpty()) {
-            logListState.animateScrollToItem(logLines.lastIndex)
-        }
-    }
-
-    ElevatedCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = RoundedCornerShape(12.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = NetworkIcons.SmbShare,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(108.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
-            ) {
-                if (logLines.isEmpty()) {
-                    Text(
-                        text = "[00] Waiting for SMB response...",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontFamily = FontFamily.Monospace
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        state = logListState,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(logLines.size, key = { index -> "$index:${logLines[index]}" }) { index ->
-                            Text(
-                                text = logLines[index],
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontFamily = FontFamily.Monospace
-                                ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
+    BrowserLoadingCard(
+        icon = NetworkIcons.SmbShare,
+        title = title,
+        subtitle = subtitle,
+        logLines = logLines,
+        waitingLine = "[00] Waiting for SMB response..."
+    )
 }
 
 private fun inferSmbFormatLabel(name: String): String {

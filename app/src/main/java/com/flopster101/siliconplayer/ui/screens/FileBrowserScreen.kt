@@ -10,17 +10,8 @@ import android.webkit.MimeTypeMap
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -103,20 +94,24 @@ private val FALLBACK_VIDEO_EXTENSIONS = setOf(
     "ts", "vob", "webm", "wmv"
 )
 
-private enum class BrowserNavDirection {
-    Forward,
-    Backward
-}
-
 private data class BrowserContentState(
+    val pane: BrowserPane,
     val selectedLocationId: String?,
     val currentDirectoryPath: String?
 )
+
+private enum class BrowserPane {
+    StorageLocations,
+    LoadingDirectory,
+    DirectoryEntries
+}
 
 private data class ArchiveMountInfo(
     val archivePath: String,
     val parentPath: String
 )
+
+private const val LOCAL_BROWSER_SHOW_INTERMEDIARY_LOADING_PAGE = false
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -149,7 +144,7 @@ fun FileBrowserScreen(
     var currentDirectory by remember { mutableStateOf<File?>(null) }
     val fileList = remember { mutableStateListOf<FileItem>() }
     var selectorExpanded by remember { mutableStateOf(false) }
-    var browserNavDirection by remember { mutableStateOf(BrowserNavDirection.Forward) }
+    var browserNavDirection by remember { mutableStateOf(BrowserPageNavDirection.Forward) }
     var isLoadingDirectory by remember { mutableStateOf(false) }
     var hasRestoredInitialNavigation by remember { mutableStateOf(false) }
     val directoryListState = rememberLazyListState()
@@ -158,6 +153,7 @@ fun FileBrowserScreen(
     var directoryLoadJob by remember { mutableStateOf<Job?>(null) }
     var isPullRefreshing by remember { mutableStateOf(false) }
     var directoryAnimationEpoch by remember { mutableIntStateOf(0) }
+    val loadingLogLines = remember { mutableStateListOf<String>() }
     val archiveMountRoots = remember { mutableStateMapOf<String, ArchiveMountInfo>() }
     val selectorButtonFocusRequester = remember { FocusRequester() }
     var browserFocusedEntryKey by remember { mutableStateOf<String?>(null) }
@@ -165,10 +161,28 @@ fun FileBrowserScreen(
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val selectorIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
-    val browserContentState = BrowserContentState(
-        selectedLocationId = selectedLocationId,
-        currentDirectoryPath = currentDirectory?.absolutePath
-    )
+    val browserContentState = remember(selectedLocationId, currentDirectory?.absolutePath, isLoadingDirectory) {
+        BrowserContentState(
+            pane = when {
+                selectedLocationId == null -> BrowserPane.StorageLocations
+                LOCAL_BROWSER_SHOW_INTERMEDIARY_LOADING_PAGE && isLoadingDirectory -> BrowserPane.LoadingDirectory
+                else -> BrowserPane.DirectoryEntries
+            },
+            selectedLocationId = selectedLocationId,
+            currentDirectoryPath = currentDirectory?.absolutePath
+        )
+    }
+
+    fun appendLoadingLog(message: String) {
+        val lineNumber = loadingLogLines.size + 1
+        loadingLogLines += "[${lineNumber.toString().padStart(2, '0')}] $message"
+        val maxLines = 80
+        if (loadingLogLines.size > maxLines) {
+            repeat(loadingLogLines.size - maxLines) {
+                loadingLogLines.removeAt(0)
+            }
+        }
+    }
 
     fun cancelDirectoryLoad() {
         directoryLoadJob?.cancel()
@@ -181,6 +195,9 @@ fun FileBrowserScreen(
         isLoadingDirectory = true
         directoryAnimationEpoch += 1
         fileList.clear()
+        loadingLogLines.clear()
+        appendLoadingLog("Opening ${directory.absolutePath}")
+        appendLoadingLog("Listing directory entries")
 
         val targetPath = directory.absolutePath
         val loadingStartedAt = System.currentTimeMillis()
@@ -236,6 +253,11 @@ fun FileBrowserScreen(
                 val stillOnSameDirectory = currentDirectory?.absolutePath == targetPath &&
                     selectedLocationId != null
                 if (stillOnSameDirectory) {
+                    val folders = loadedFiles.count { it.isDirectory }
+                    val files = loadedFiles.size - folders
+                    appendLoadingLog("Found ${loadedFiles.size} entries")
+                    appendLoadingLog("$folders folders, $files files")
+                    appendLoadingLog("Load finished")
                     // Publish all items at once for normal folders. For very large folders,
                     // chunk without artificial delays to avoid blocking the main thread.
                     fileList.clear()
@@ -290,17 +312,18 @@ fun FileBrowserScreen(
     fun openBrowserHome() {
         cancelDirectoryLoad()
         launchAutoScrollTargetKey = null
-        browserNavDirection = BrowserNavDirection.Backward
+        browserNavDirection = BrowserPageNavDirection.Backward
         selectedLocationId = null
         currentDirectory = null
         fileList.clear()
+        loadingLogLines.clear()
         onVisiblePlayableFilesChanged(emptyList())
         onBrowserLocationChanged(null, null)
     }
 
     fun openLocation(location: StorageLocation) {
         launchAutoScrollTargetKey = null
-        browserNavDirection = BrowserNavDirection.Forward
+        browserNavDirection = BrowserPageNavDirection.Forward
         selectedLocationId = location.id
         currentDirectory = location.directory
         loadDirectoryAsync(location.directory)
@@ -340,9 +363,9 @@ fun FileBrowserScreen(
         val previousDepth = relativeDepth(currentDirectory, root)
         val nextDepth = relativeDepth(directory, root)
         browserNavDirection = if (nextDepth >= previousDepth) {
-            BrowserNavDirection.Forward
+            BrowserPageNavDirection.Forward
         } else {
-            BrowserNavDirection.Backward
+            BrowserPageNavDirection.Backward
         }
         currentDirectory = directory
         loadDirectoryAsync(directory)
@@ -385,14 +408,14 @@ fun FileBrowserScreen(
             if (directory.absolutePath != mountRoot) {
                 val archiveParent = directory.parentFile
                 if (archiveParent != null && archiveParent.exists() && archiveParent.isDirectory) {
-                    browserNavDirection = BrowserNavDirection.Backward
-                    navigateTo(archiveParent)
-                    return
-                }
+                browserNavDirection = BrowserPageNavDirection.Backward
+                navigateTo(archiveParent)
+                return
+            }
             }
             val parentDirectory = File(mountInfo.parentPath)
             if (parentDirectory.exists() && parentDirectory.isDirectory) {
-                browserNavDirection = BrowserNavDirection.Backward
+                browserNavDirection = BrowserPageNavDirection.Backward
                 navigateTo(parentDirectory)
                 return
             }
@@ -445,7 +468,7 @@ fun FileBrowserScreen(
                 }?.targetDirectory
             } ?: initialLocation.directory
 
-        browserNavDirection = BrowserNavDirection.Forward
+        browserNavDirection = BrowserPageNavDirection.Forward
         selectedLocationId = initialLocation.id
         currentDirectory = restoredDirectory
         loadDirectoryAsync(restoredDirectory)
@@ -721,42 +744,19 @@ fun FileBrowserScreen(
             AnimatedContent(
                 targetState = browserContentState,
                 transitionSpec = {
-                    if (isLoadingDirectory) {
-                        EnterTransition.None togetherWith ExitTransition.None
-                    } else {
-                    val forward = browserNavDirection == BrowserNavDirection.Forward
-                    val enter = slideInHorizontally(
-                        initialOffsetX = { width -> if (forward) width else -width / 4 },
-                        animationSpec = tween(
-                            durationMillis = BROWSER_PAGE_DURATION_MS,
-                            easing = FastOutSlowInEasing
-                        )
-                    ) + fadeIn(
-                        animationSpec = tween(
-                            durationMillis = 190,
-                            delayMillis = 50,
-                            easing = LinearOutSlowInEasing
-                        )
+                    val loadingTransition =
+                        initialState.pane == BrowserPane.LoadingDirectory ||
+                            targetState.pane == BrowserPane.LoadingDirectory
+                    browserContentTransform(
+                        navDirection = browserNavDirection,
+                        loadingTransition = loadingTransition,
+                        loadingPageEnabled = LOCAL_BROWSER_SHOW_INTERMEDIARY_LOADING_PAGE
                     )
-                    val exit = slideOutHorizontally(
-                        targetOffsetX = { width -> if (forward) -width / 4 else width / 4 },
-                        animationSpec = tween(
-                            durationMillis = BROWSER_PAGE_DURATION_MS,
-                            easing = FastOutSlowInEasing
-                        )
-                    ) + fadeOut(
-                        animationSpec = tween(
-                            durationMillis = 120,
-                            easing = FastOutLinearInEasing
-                        )
-                    )
-                    enter togetherWith exit
-                    }
                 },
                 label = "browserContentTransition",
                 modifier = Modifier.fillMaxSize()
             ) { state ->
-                if (state.selectedLocationId == null) {
+                if (state.pane == BrowserPane.StorageLocations) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
@@ -805,6 +805,14 @@ fun FileBrowserScreen(
                             }
                         }
                     }
+                } else if (state.pane == BrowserPane.LoadingDirectory) {
+                    BrowserLoadingCard(
+                        icon = Icons.Default.Folder,
+                        title = "Loading directory...",
+                        subtitle = currentDirectory?.absolutePath ?: "Fetching folder entries",
+                        logLines = loadingLogLines,
+                        waitingLine = "[00] Waiting for filesystem response..."
+                    )
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),

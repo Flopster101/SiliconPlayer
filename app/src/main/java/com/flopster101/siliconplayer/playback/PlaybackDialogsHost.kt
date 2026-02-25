@@ -2,7 +2,6 @@ package com.flopster101.siliconplayer
 
 import androidx.compose.runtime.Composable
 import com.flopster101.siliconplayer.ui.dialogs.AudioEffectsDialog
-import com.flopster101.siliconplayer.ui.dialogs.RemoteLoadProgressDialog
 import com.flopster101.siliconplayer.ui.dialogs.SoxExperimentalDialog
 import com.flopster101.siliconplayer.ui.dialogs.SubtuneSelectorDialog
 import com.flopster101.siliconplayer.ui.dialogs.UrlOrPathDialog
@@ -50,13 +49,6 @@ internal fun PlaybackDialogsHost(
             onForceCachingChange = onUrlOrPathForceCachingChange,
             onDismiss = onUrlOrPathDismiss,
             onOpen = onUrlOrPathOpen
-        )
-    }
-
-    remoteLoadUiState?.let { loadState ->
-        RemoteLoadProgressDialog(
-            loadState = loadState,
-            onCancel = onCancelRemoteLoad
         )
     }
 

@@ -11,7 +11,9 @@ internal class AppNavigationTrackNavDelegates(
     private val urlOrPathForceCachingProvider: () -> Boolean,
     private val isPlayerExpandedProvider: () -> Boolean,
     private val selectedFileProvider: () -> File?,
+    private val currentPlaybackSourceIdProvider: () -> String?,
     private val visiblePlayableFilesProvider: () -> List<File>,
+    private val visiblePlayableSourceIdsProvider: () -> List<String>,
     private val playlistWrapNavigationProvider: () -> Boolean,
     private val previousRestartsAfterThresholdProvider: () -> Boolean,
     private val positionSecondsProvider: () -> Double,
@@ -37,11 +39,16 @@ internal class AppNavigationTrackNavDelegates(
     fun playAdjacentTrack(offset: Int, notifyWrap: Boolean = true): Boolean {
         return playAdjacentTrackAction(
             selectedFile = selectedFileProvider(),
+            currentPlaybackSourceId = currentPlaybackSourceIdProvider(),
             visiblePlayableFiles = visiblePlayableFilesProvider(),
+            visiblePlayableSourceIds = visiblePlayableSourceIdsProvider(),
+            urlOrPathForceCaching = urlOrPathForceCachingProvider(),
+            isPlayerExpanded = isPlayerExpandedProvider(),
             offset = offset,
             playlistWrapNavigation = playlistWrapNavigationProvider(),
             onPlaylistWrapped = if (notifyWrap) onPlaylistWrapped else { _ -> },
-            onApplyTrackSelection = onApplyTrackSelection
+            onApplyTrackSelection = onApplyTrackSelection,
+            onApplyManualInputSelection = onApplyManualInputSelection
         )
     }
 
@@ -50,7 +57,9 @@ internal class AppNavigationTrackNavDelegates(
             previousRestartsAfterThreshold = previousRestartsAfterThresholdProvider(),
             playlistWrapNavigation = playlistWrapNavigationProvider(),
             selectedFile = selectedFileProvider(),
+            currentPlaybackSourceId = currentPlaybackSourceIdProvider(),
             visiblePlayableFiles = visiblePlayableFilesProvider(),
+            visiblePlayableSourceIds = visiblePlayableSourceIdsProvider(),
             positionSeconds = positionSecondsProvider(),
             onRestartCurrent = {
                 NativeBridge.seekTo(0.0)

@@ -169,37 +169,68 @@ internal fun resolvePlaybackServiceSourceId(
 
 internal fun currentTrackListIndex(
     selectedFile: File?,
-    visiblePlayableFiles: List<File>
+    currentPlaybackSourceId: String?,
+    visiblePlayableFiles: List<File>,
+    visiblePlayableSourceIds: List<String>
 ): Int {
-    return currentTrackIndexForList(
+    val localIndex = currentTrackIndexForList(
         selectedFile = selectedFile,
         visiblePlayableFiles = visiblePlayableFiles
     )
+    if (localIndex >= 0) return localIndex
+    val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath ?: return -1
+    return visiblePlayableSourceIds.indexOfFirst { sourceId ->
+        samePath(sourceId, activeSourceId)
+    }
 }
 
 internal fun canNavigateToPreviousTrack(
     selectedFile: File?,
+    currentPlaybackSourceId: String?,
     visiblePlayableFiles: List<File>,
+    visiblePlayableSourceIds: List<String>,
     playlistWrapNavigation: Boolean
 ): Boolean {
-    val currentIndex = currentTrackListIndex(selectedFile, visiblePlayableFiles)
+    val activePlaylist = if (visiblePlayableFiles.isNotEmpty()) {
+        visiblePlayableFiles
+    } else {
+        visiblePlayableSourceIds
+    }
+    val currentIndex = currentTrackListIndex(
+        selectedFile = selectedFile,
+        currentPlaybackSourceId = currentPlaybackSourceId,
+        visiblePlayableFiles = visiblePlayableFiles,
+        visiblePlayableSourceIds = visiblePlayableSourceIds
+    )
     return if (playlistWrapNavigation) {
         currentIndex >= 0
     } else {
-        currentIndex > 0
+        currentIndex > 0 && activePlaylist.isNotEmpty()
     }
 }
 
 internal fun canNavigateToNextTrack(
     selectedFile: File?,
+    currentPlaybackSourceId: String?,
     visiblePlayableFiles: List<File>,
+    visiblePlayableSourceIds: List<String>,
     playlistWrapNavigation: Boolean
 ): Boolean {
-    val currentIndex = currentTrackListIndex(selectedFile, visiblePlayableFiles)
+    val activePlaylistSize = if (visiblePlayableFiles.isNotEmpty()) {
+        visiblePlayableFiles.size
+    } else {
+        visiblePlayableSourceIds.size
+    }
+    val currentIndex = currentTrackListIndex(
+        selectedFile = selectedFile,
+        currentPlaybackSourceId = currentPlaybackSourceId,
+        visiblePlayableFiles = visiblePlayableFiles,
+        visiblePlayableSourceIds = visiblePlayableSourceIds
+    )
     return if (playlistWrapNavigation) {
         currentIndex >= 0
     } else {
-        currentIndex in 0 until visiblePlayableFiles.lastIndex
+        currentIndex in 0 until (activePlaylistSize - 1)
     }
 }
 

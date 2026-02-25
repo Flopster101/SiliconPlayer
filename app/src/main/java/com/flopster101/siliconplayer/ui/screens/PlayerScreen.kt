@@ -114,7 +114,11 @@ import com.flopster101.siliconplayer.VisualizationRenderBackend
 import com.flopster101.siliconplayer.VisualizationVuAnchor
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
+import com.flopster101.siliconplayer.formatByteCount
 import com.flopster101.siliconplayer.pluginNameForCoreName
+import com.flopster101.siliconplayer.RemoteLoadPhase
+import com.flopster101.siliconplayer.RemoteLoadUiState
+import com.flopster101.siliconplayer.RemoteLoadUiStateHolder
 import com.flopster101.siliconplayer.rememberDialogScrollbarAlpha
 import com.flopster101.siliconplayer.stripRemoteCacheHashPrefix
 import com.flopster101.siliconplayer.ui.dialogs.VisualizationModePickerDialog
@@ -513,7 +517,7 @@ private fun rememberPlayerVisualizationPreferenceState(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlayerScreen(
+internal fun PlayerScreen(
     file: File?,
     onBack: () -> Unit,
     onCollapseBySwipe: () -> Unit = onBack,
@@ -631,6 +635,7 @@ fun PlayerScreen(
     val infoChipsFocusRequester = remember { FocusRequester() }
 
     val hasTrack = file != null
+    val remoteLoadUiState = RemoteLoadUiStateHolder.current
     val displayTitle = title.ifBlank {
         if (file != null) inferredDisplayTitleForName(file.name) else "No track selected"
     }
@@ -918,6 +923,7 @@ fun PlayerScreen(
                                     canResumeStoppedTrack = canResumeStoppedTrack,
                                     repeatMode = repeatMode,
                                     playbackStartInProgress = playbackStartInProgress,
+                                    remoteLoadUiState = remoteLoadUiState,
                                     seekInProgress = seekInProgress,
                                     canPreviousTrack = canPreviousTrack,
                                     canNextTrack = canNextTrack,
@@ -1189,6 +1195,7 @@ fun PlayerScreen(
                                         canResumeStoppedTrack = canResumeStoppedTrack,
                                         repeatMode = repeatMode,
                                         playbackStartInProgress = playbackStartInProgress,
+                                        remoteLoadUiState = remoteLoadUiState,
                                         seekInProgress = seekInProgress,
                                         canPreviousTrack = canPreviousTrack,
                                         canNextTrack = canNextTrack,
@@ -2079,6 +2086,7 @@ private fun TransportControls(
     canResumeStoppedTrack: Boolean,
     repeatMode: RepeatMode,
     playbackStartInProgress: Boolean,
+    remoteLoadUiState: RemoteLoadUiState?,
     seekInProgress: Boolean,
     canPreviousTrack: Boolean,
     canNextTrack: Boolean,
@@ -2098,6 +2106,8 @@ private fun TransportControls(
     transportAnchorFocusRequester: FocusRequester? = null,
     actionStripFirstFocusRequester: FocusRequester? = null
 ) {
+    val remoteLoadActive = remoteLoadUiState != null
+    val showLoadingIndicator = playbackStartInProgress || remoteLoadActive
     val controlsBusy = seekInProgress || playbackStartInProgress
     val canFocusPreviousTrack = hasTrack && canPreviousTrack
     val canFocusRepeatMode = canCycleRepeatMode && !controlsBusy
@@ -2342,7 +2352,7 @@ private fun TransportControls(
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 ) {
-                    if (playbackStartInProgress) {
+                    if (showLoadingIndicator) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(playIndicatorSize),
                             strokeWidth = 3.dp
@@ -2454,10 +2464,10 @@ private fun TransportControls(
                 }
             }
 
-            if (playbackStartInProgress) {
+            if (showLoadingIndicator) {
                 Spacer(modifier = Modifier.height(loadingSpacer))
                 Text(
-                    text = "Loading track...",
+                    text = remoteLoadProgressLabel(remoteLoadUiState),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -2594,6 +2604,26 @@ private fun TransportControls(
             }
         }
     }
+}
+
+private fun remoteLoadProgressLabel(remoteLoadUiState: RemoteLoadUiState?): String {
+    if (remoteLoadUiState == null) return "Loading track..."
+    val phaseLabel = when (remoteLoadUiState.phase) {
+        RemoteLoadPhase.Connecting -> "Connecting..."
+        RemoteLoadPhase.Downloading -> "Downloading..."
+        RemoteLoadPhase.Opening -> "Opening..."
+    }
+    if (remoteLoadUiState.phase == RemoteLoadPhase.Connecting) return phaseLabel
+    val downloadedLabel = formatByteCount(remoteLoadUiState.downloadedBytes)
+    val sizeLabel = remoteLoadUiState.totalBytes
+        ?.takeIf { it > 0L }
+        ?.let { total -> "$downloadedLabel / ${formatByteCount(total)}" }
+        ?: downloadedLabel
+    val percentLabel = remoteLoadUiState.percent
+        ?.takeIf { it in 0..100 }
+        ?.let { percent -> " • $percent%" }
+        .orEmpty()
+    return "$phaseLabel $sizeLabel$percentLabel"
 }
 
 @Composable

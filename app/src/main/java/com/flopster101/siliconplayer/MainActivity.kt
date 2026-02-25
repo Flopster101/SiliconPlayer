@@ -186,6 +186,53 @@ private fun resolveNetworkBrowserLaunchPathForRestore(
     )
 }
 
+private fun handleBrowserLocationChangedAction(
+    locationId: String?,
+    directoryPath: String?,
+    rememberBrowserLocation: Boolean,
+    currentSmbSourceNodeId: Long?,
+    currentHttpSourceNodeId: Long?,
+    networkNodes: List<NetworkNode>,
+    addRecentFolder: (String, String?) -> Unit,
+    setBrowserLaunchLocationId: (String?) -> Unit,
+    setBrowserLaunchDirectoryPath: (String?) -> Unit,
+    setLastBrowserLocationId: (String?) -> Unit,
+    setLastBrowserDirectoryPath: (String?) -> Unit,
+    persistBrowserLocation: (String?, String?) -> Unit
+) {
+    if (
+        directoryPath != null &&
+        (
+            locationId != null ||
+                parseSmbSourceSpecFromInput(directoryPath) != null ||
+                parseHttpSourceSpecFromInput(directoryPath) != null
+            )
+    ) {
+        addRecentFolder(directoryPath, locationId)
+    }
+    if (directoryPath != null) {
+        if (isNetworkBrowserDirectoryPath(directoryPath)) {
+            setBrowserLaunchLocationId(null)
+            setBrowserLaunchDirectoryPath(
+                resolveNetworkBrowserLaunchPathForRestore(
+                    directoryPath = directoryPath,
+                    smbSourceNodeId = currentSmbSourceNodeId,
+                    httpSourceNodeId = currentHttpSourceNodeId,
+                    networkNodes = networkNodes
+                )
+            )
+        } else {
+            setBrowserLaunchLocationId(locationId)
+            setBrowserLaunchDirectoryPath(directoryPath)
+        }
+    }
+    val shouldRememberBrowserLocation = !isNetworkBrowserDirectoryPath(directoryPath)
+    if (!rememberBrowserLocation || !shouldRememberBrowserLocation) return
+    setLastBrowserLocationId(locationId)
+    setLastBrowserDirectoryPath(directoryPath)
+    persistBrowserLocation(locationId, directoryPath)
+}
+
 class MainActivity : ComponentActivity() {
     private var initialFileToOpen: File? = null
     private var initialFileFromExternalIntent: Boolean = false
@@ -1294,7 +1341,9 @@ private fun AppNavigation(
         urlOrPathForceCachingProvider = { urlOrPathForceCaching },
         isPlayerExpandedProvider = { isPlayerExpanded },
         selectedFileProvider = { selectedFile },
+        currentPlaybackSourceIdProvider = { currentPlaybackSourceId },
         visiblePlayableFilesProvider = { visiblePlayableFiles },
+        visiblePlayableSourceIdsProvider = { RemotePlayableSourceIdsHolder.current },
         playlistWrapNavigationProvider = { playlistWrapNavigation },
         previousRestartsAfterThresholdProvider = { previousRestartsAfterThreshold },
         positionSecondsProvider = { position },
@@ -1810,11 +1859,7 @@ private fun AppNavigation(
                 }
             },
             canPreviousTrack = selectedFile != null,
-            canNextTrack = canNavigateToNextTrack(
-                selectedFile = selectedFile,
-                visiblePlayableFiles = visiblePlayableFiles,
-                playlistWrapNavigation = playlistWrapNavigation
-            ),
+            canNextTrack = selectedFile != null,
             onSeek = { seconds ->
                 if (!seekInProgress) {
                     val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
@@ -2554,7 +2599,7 @@ private fun AppNavigation(
             browserLaunchHttpRootPath = httpRootPath
             returnToNetworkOnBrowserExit = returnToNetworkOnExit
         }
-        AppNavigationMainScaffoldSection(
+        AppNavigationMainContentHost(
             currentView = currentView,
             mainContentFocusRequester = mainContentFocusRequester,
             canFocusMiniPlayer = isPlayerSurfaceVisible && !isPlayerExpanded,
@@ -2575,147 +2620,105 @@ private fun AppNavigation(
                 openSettingsRoute(SettingsRoute.Root, true)
                 currentView = MainView.Settings
             },
-            homeContent = { mainPadding ->
-                AppNavigationHomeContentSection(
-                    mainPadding = mainPadding,
-                    context = context,
-                    prefs = prefs,
-                    currentTrackPath = currentPlaybackSourceId ?: selectedFile?.absolutePath,
-                    metadataTitle = metadataTitle,
-                    metadataArtist = metadataArtist,
-                    isPlaying = isPlaying,
-                    recentFolders = recentFolders,
-                    recentPlayedFiles = recentPlayedFiles,
-                    recentFoldersLimit = recentFoldersLimit,
-                    recentFilesLimit = recentFilesLimit,
-                    networkNodes = networkNodes,
-                    storageDescriptors = storageDescriptors,
-                    bottomContentPadding = miniPlayerListInset,
-                    openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                    trackLoadDelegates = trackLoadDelegates,
-                    manualOpenDelegates = manualOpenDelegates,
-                    runtimeDelegates = runtimeDelegates,
-                    onRecentFoldersChanged = { recentFolders = it },
-                    onRecentPlayedFilesChanged = { recentPlayedFiles = it },
-                    onOpenBrowser = openBrowser,
-                    onCurrentViewChanged = { currentView = it },
-                    onOpenUrlOrPathDialog = {
-                        urlOrPathInput = ""
-                        showUrlOrPathDialog = true
-                    }
+            context = context,
+            prefs = prefs,
+            currentPlaybackSourceId = currentPlaybackSourceId,
+            selectedFile = selectedFile,
+            metadataTitle = metadataTitle,
+            metadataArtist = metadataArtist,
+            isPlaying = isPlaying,
+            recentFolders = recentFolders,
+            recentPlayedFiles = recentPlayedFiles,
+            recentFoldersLimit = recentFoldersLimit,
+            recentFilesLimit = recentFilesLimit,
+            networkNodes = networkNodes,
+            storageDescriptors = storageDescriptors,
+            miniPlayerListInset = miniPlayerListInset,
+            openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+            autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+            trackLoadDelegates = trackLoadDelegates,
+            manualOpenDelegates = manualOpenDelegates,
+            runtimeDelegates = runtimeDelegates,
+            onRecentFoldersChanged = { recentFolders = it },
+            onRecentPlayedFilesChanged = { recentPlayedFiles = it },
+            onOpenBrowser = openBrowser,
+            onCurrentViewChanged = { currentView = it },
+            onOpenUrlOrPathDialog = {
+                urlOrPathInput = ""
+                showUrlOrPathDialog = true
+            },
+            isPlayerExpanded = isPlayerExpanded,
+            networkCurrentFolderId = networkCurrentFolderId,
+            onNetworkCurrentFolderIdChanged = { networkCurrentFolderId = it },
+            onNetworkNodesChanged = { updatedNodes ->
+                networkNodes = updatedNodes
+                writeNetworkNodes(prefs, updatedNodes)
+            },
+            onResolveRemoteSourceMetadata = { sourceId, onSettled ->
+                scheduleNetworkSourceMetadataBackfill(
+                    scope = appScope,
+                    context = context.applicationContext,
+                    sourceId = sourceId,
+                    onResolved = { resolvedSource, resolvedTitle, resolvedArtist ->
+                        applyNetworkSourceMetadata(resolvedSource, resolvedTitle, resolvedArtist)
+                    },
+                    onSettled = { onSettled() }
                 )
             },
-            networkContent = { mainPadding ->
-                AppNavigationNetworkContentSection(
-                    mainPadding = mainPadding,
-                    bottomContentPadding = miniPlayerListInset,
-                    isPlayerExpanded = isPlayerExpanded,
-                    networkNodes = networkNodes,
-                    networkCurrentFolderId = networkCurrentFolderId,
-                    manualOpenDelegates = manualOpenDelegates,
-                    onCurrentViewChanged = { currentView = it },
-                    onNetworkCurrentFolderIdChanged = { networkCurrentFolderId = it },
-                    onNetworkNodesChanged = { updatedNodes ->
-                        networkNodes = updatedNodes
-                        writeNetworkNodes(prefs, updatedNodes)
-                    },
-                    onResolveRemoteSourceMetadata = { sourceId, onSettled ->
-                        scheduleNetworkSourceMetadataBackfill(
-                            scope = appScope,
-                            context = context.applicationContext,
-                            sourceId = sourceId,
-                            onResolved = { resolvedSource, resolvedTitle, resolvedArtist ->
-                                applyNetworkSourceMetadata(resolvedSource, resolvedTitle, resolvedArtist)
-                            },
-                            onSettled = { onSettled() }
-                        )
-                    },
-                    onCancelPendingMetadataBackfill = {
-                        cancelPendingNetworkSourceMetadataBackfillJobs()
-                    },
-                    onOpenBrowser = openBrowser
-                )
+            onCancelPendingMetadataBackfill = {
+                cancelPendingNetworkSourceMetadataBackfillJobs()
             },
-            browserContent = { mainPadding ->
-                AppNavigationBrowserContentSection(
-                    mainPadding = mainPadding,
-                    prefs = prefs,
-                    repository = repository,
-                    decoderExtensionArtworkHints = decoderExtensionArtworkHints,
+            repository = repository,
+            decoderExtensionArtworkHints = decoderExtensionArtworkHints,
+            rememberBrowserLocation = rememberBrowserLocation,
+            lastBrowserLocationId = lastBrowserLocationId,
+            lastBrowserDirectoryPath = lastBrowserDirectoryPath,
+            browserLaunchLocationId = browserLaunchLocationId,
+            browserLaunchDirectoryPath = browserLaunchDirectoryPath,
+            browserLaunchSmbSourceNodeId = browserLaunchSmbSourceNodeId,
+            browserLaunchHttpSourceNodeId = browserLaunchHttpSourceNodeId,
+            browserLaunchHttpRootPath = browserLaunchHttpRootPath,
+            browserFocusRestoreRequestToken = browserFocusRestoreRequestToken,
+            showParentDirectoryEntry = showParentDirectoryEntry,
+            showFileIconChipBackground = showFileIconChipBackground,
+            onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
+            onBrowserLaunchLocationIdChanged = { browserLaunchLocationId = it },
+            onBrowserLaunchDirectoryPathChanged = { browserLaunchDirectoryPath = it },
+            onBrowserLaunchSmbSourceNodeIdChanged = { browserLaunchSmbSourceNodeId = it },
+            onBrowserLaunchHttpSourceNodeIdChanged = { browserLaunchHttpSourceNodeId = it },
+            onBrowserLaunchHttpRootPathChanged = { browserLaunchHttpRootPath = it },
+            onReturnToNetworkOnBrowserExitChanged = { returnToNetworkOnBrowserExit = it },
+            returnToNetworkOnBrowserExit = returnToNetworkOnBrowserExit,
+            onLastBrowserLocationIdChanged = { lastBrowserLocationId = it },
+            onLastBrowserDirectoryPathChanged = { lastBrowserDirectoryPath = it },
+            onBrowserLocationChanged = { locationId, directoryPath ->
+                handleBrowserLocationChangedAction(
+                    locationId = locationId,
+                    directoryPath = directoryPath,
                     rememberBrowserLocation = rememberBrowserLocation,
-                    lastBrowserLocationId = lastBrowserLocationId,
-                    lastBrowserDirectoryPath = lastBrowserDirectoryPath,
-                    browserLaunchLocationId = browserLaunchLocationId,
-                    browserLaunchDirectoryPath = browserLaunchDirectoryPath,
-                    browserLaunchSmbSourceNodeId = browserLaunchSmbSourceNodeId,
-                    browserLaunchHttpSourceNodeId = browserLaunchHttpSourceNodeId,
-                    browserLaunchHttpRootPath = browserLaunchHttpRootPath,
-                    browserFocusRestoreRequestToken = browserFocusRestoreRequestToken,
-                    bottomContentPadding = miniPlayerListInset,
-                    showParentDirectoryEntry = showParentDirectoryEntry,
-                    showFileIconChipBackground = showFileIconChipBackground,
-                    isPlayerExpanded = isPlayerExpanded,
-                    selectedFile = selectedFile,
+                    currentSmbSourceNodeId = browserLaunchSmbSourceNodeId,
+                    currentHttpSourceNodeId = browserLaunchHttpSourceNodeId,
                     networkNodes = networkNodes,
-                    autoPlayOnTrackSelect = autoPlayOnTrackSelect,
-                    openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                    trackLoadDelegates = trackLoadDelegates,
-                    manualOpenDelegates = manualOpenDelegates,
-                    runtimeDelegates = runtimeDelegates,
-                    onCurrentViewChanged = { currentView = it },
-                    onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
-                    onBrowserLaunchLocationIdChanged = { browserLaunchLocationId = it },
-                    onBrowserLaunchDirectoryPathChanged = { browserLaunchDirectoryPath = it },
-                    onBrowserLaunchSmbSourceNodeIdChanged = { browserLaunchSmbSourceNodeId = it },
-                    onBrowserLaunchHttpSourceNodeIdChanged = { browserLaunchHttpSourceNodeId = it },
-                    onBrowserLaunchHttpRootPathChanged = { browserLaunchHttpRootPath = it },
-                    onReturnToNetworkOnBrowserExitChanged = { returnToNetworkOnBrowserExit = it },
-                    returnToNetworkOnBrowserExit = returnToNetworkOnBrowserExit,
-                    onLastBrowserLocationIdChanged = { lastBrowserLocationId = it },
-                    onLastBrowserDirectoryPathChanged = { lastBrowserDirectoryPath = it },
-                    onBrowserLocationChanged = { locationId, directoryPath ->
-                        if (
-                            directoryPath != null &&
-                            (
-                                locationId != null ||
-                                    parseSmbSourceSpecFromInput(directoryPath) != null ||
-                                    parseHttpSourceSpecFromInput(directoryPath) != null
-                                )
-                        ) {
-                            runtimeDelegates.addRecentFolder(directoryPath, locationId)
-                        }
-                        if (directoryPath != null) {
-                            if (isNetworkBrowserDirectoryPath(directoryPath)) {
-                                browserLaunchLocationId = null
-                                browserLaunchDirectoryPath = resolveNetworkBrowserLaunchPathForRestore(
-                                    directoryPath = directoryPath,
-                                    smbSourceNodeId = browserLaunchSmbSourceNodeId,
-                                    httpSourceNodeId = browserLaunchHttpSourceNodeId,
-                                    networkNodes = networkNodes
-                                )
-                            } else {
-                                browserLaunchLocationId = locationId
-                                browserLaunchDirectoryPath = directoryPath
-                            }
-                        }
-                        val shouldRememberBrowserLocation = !isNetworkBrowserDirectoryPath(directoryPath)
-                        if (!rememberBrowserLocation || !shouldRememberBrowserLocation) {
-                            return@AppNavigationBrowserContentSection
-                        }
-                        lastBrowserLocationId = locationId
-                        lastBrowserDirectoryPath = directoryPath
+                    addRecentFolder = { path, targetLocationId ->
+                        runtimeDelegates.addRecentFolder(path, targetLocationId)
+                    },
+                    setBrowserLaunchLocationId = { browserLaunchLocationId = it },
+                    setBrowserLaunchDirectoryPath = { browserLaunchDirectoryPath = it },
+                    setLastBrowserLocationId = { lastBrowserLocationId = it },
+                    setLastBrowserDirectoryPath = { lastBrowserDirectoryPath = it },
+                    persistBrowserLocation = { targetLocationId, targetDirectoryPath ->
                         prefs.edit()
-                            .putString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, locationId)
-                            .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, directoryPath)
+                            .putString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, targetLocationId)
+                            .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, targetDirectoryPath)
                             .apply()
-                    },
-                    onRememberSmbCredentials = { sourceNodeId, sourceId, username, password ->
-                        rememberNetworkSmbCredentials(sourceNodeId, sourceId, username, password)
-                    },
-                    onRememberHttpCredentials = { sourceNodeId, sourceId, username, password ->
-                        rememberNetworkHttpCredentials(sourceNodeId, sourceId, username, password)
                     }
                 )
+            },
+            onRememberSmbCredentials = { sourceNodeId, sourceId, username, password ->
+                rememberNetworkSmbCredentials(sourceNodeId, sourceId, username, password)
+            },
+            onRememberHttpCredentials = { sourceNodeId, sourceId, username, password ->
+                rememberNetworkHttpCredentials(sourceNodeId, sourceId, username, password)
             },
             settingsContent = settingsRouteContent
         )

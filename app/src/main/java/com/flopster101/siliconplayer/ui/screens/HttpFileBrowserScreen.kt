@@ -68,15 +68,19 @@ import com.flopster101.siliconplayer.HttpSourceSpec
 import com.flopster101.siliconplayer.buildHttpDisplayUri
 import com.flopster101.siliconplayer.buildHttpRequestUri
 import com.flopster101.siliconplayer.buildHttpSourceId
+import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import com.flopster101.siliconplayer.httpAuthenticationFailureMessage
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.listHttpDirectoryEntries
+import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.normalizeHttpDirectoryPath
 import com.flopster101.siliconplayer.normalizeHttpPath
 import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
 import com.flopster101.siliconplayer.resolveHttpAuthenticationFailureReason
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
+import com.flopster101.siliconplayer.RemotePlayableSourceIdsHolder
+import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -146,6 +150,23 @@ internal fun HttpFileBrowserScreen(
             ?.let(::normalizeHttpDirectoryPath)
             ?: "/"
     }
+    val supportedExtensions = remember {
+        NativeBridge.getSupportedExtensions()
+            .asSequence()
+            .map { it.trim().lowercase(Locale.ROOT) }
+            .filter { it.isNotBlank() }
+            .toSet()
+    }
+
+    fun updatePlayableRemoteSources(entriesForNavigation: List<HttpBrowserEntry>) {
+        RemotePlayableSourceIdsHolder.current = entriesForNavigation
+            .asSequence()
+            .filter { entry ->
+                !entry.isDirectory && fileMatchesSupportedExtensions(File(entry.name), supportedExtensions)
+            }
+            .map { entry -> entry.requestUrl }
+            .toList()
+    }
 
     fun appendLoadingLog(message: String) {
         val lineNumber = loadingLogLines.size + 1
@@ -189,6 +210,7 @@ internal fun HttpFileBrowserScreen(
         browserNavDirection = BrowserPageNavDirection.Neutral
         abortActiveLoad()
         entries = partialSnapshot
+        updatePlayableRemoteSources(partialSnapshot)
         errorMessage = null
         loadingPartialEntries = emptyList()
         loadingLoadedCount = 0
@@ -212,6 +234,7 @@ internal fun HttpFileBrowserScreen(
             password = sessionPassword
         )
         entries = cancelStateSnapshot.previousEntries
+        updatePlayableRemoteSources(cancelStateSnapshot.previousEntries)
         errorMessage = cancelStateSnapshot.previousErrorMessage
         onBrowserLocationChanged(currentDirectorySourceId())
     }
@@ -223,6 +246,7 @@ internal fun HttpFileBrowserScreen(
         isLoading = true
         errorMessage = null
         entries = emptyList()
+        RemotePlayableSourceIdsHolder.current = emptyList()
         loadingPartialEntries = emptyList()
         loadingLoadedCount = 0
         loadCancelState = cancelState
@@ -253,6 +277,7 @@ internal fun HttpFileBrowserScreen(
                     password = sessionPassword
                 )
                 entries = listing.entries
+                updatePlayableRemoteSources(listing.entries)
                 directoryEntriesCache[directoryCacheKeyFor(currentSpec)] = listing.entries
                 errorMessage = null
                 onBrowserLocationChanged(currentDirectorySourceId())
@@ -266,6 +291,7 @@ internal fun HttpFileBrowserScreen(
                     return@onFailure
                 }
                 entries = emptyList()
+                RemotePlayableSourceIdsHolder.current = emptyList()
                 val authFailureReason = resolveHttpAuthenticationFailureReason(throwable)?.let { reason ->
                     if (
                         reason == HttpAuthenticationFailureReason.Unknown &&
@@ -323,6 +349,7 @@ internal fun HttpFileBrowserScreen(
         if (!forceReload && cachedEntries != null) {
             abortActiveLoad()
             entries = cachedEntries
+            updatePlayableRemoteSources(cachedEntries)
             errorMessage = null
             loadingPartialEntries = emptyList()
             loadingLoadedCount = 0

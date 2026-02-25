@@ -11,6 +11,7 @@ import com.flopster101.siliconplayer.readNativeTrackSnapshot
 import com.flopster101.siliconplayer.runWithNativeAudioSession
 import com.flopster101.siliconplayer.resolvePreviousTrackAction
 import com.flopster101.siliconplayer.resolveResumeTarget
+import com.flopster101.siliconplayer.samePath
 import com.flopster101.siliconplayer.data.resolveArchiveSourceToMountedFile
 import java.io.File
 import kotlin.coroutines.coroutineContext
@@ -128,24 +129,45 @@ internal fun resumeLastStoppedTrackAction(
 
 internal fun playAdjacentTrackAction(
     selectedFile: File?,
+    currentPlaybackSourceId: String?,
     visiblePlayableFiles: List<File>,
+    visiblePlayableSourceIds: List<String>,
+    urlOrPathForceCaching: Boolean,
+    isPlayerExpanded: Boolean,
     offset: Int,
     playlistWrapNavigation: Boolean,
     onPlaylistWrapped: (Int) -> Unit,
-    onApplyTrackSelection: (file: File, autoStart: Boolean, expandOverride: Boolean?) -> Unit
+    onApplyTrackSelection: (file: File, autoStart: Boolean, expandOverride: Boolean?) -> Unit,
+    onApplyManualInputSelection: (rawInput: String, options: ManualSourceOpenOptions, expandOverride: Boolean?) -> Unit
 ): Boolean {
-    val playlistSize = visiblePlayableFiles.size
+    val hasLocalPlaylist = visiblePlayableFiles.isNotEmpty()
+    val playlistSize = if (hasLocalPlaylist) {
+        visiblePlayableFiles.size
+    } else {
+        visiblePlayableSourceIds.size
+    }
     if (playlistSize <= 0) return false
-    val currentIndex = currentTrackIndexForList(
-        selectedFile = selectedFile,
-        visiblePlayableFiles = visiblePlayableFiles
-    )
+    val currentIndex = if (hasLocalPlaylist) {
+        currentTrackIndexForList(
+            selectedFile = selectedFile,
+            visiblePlayableFiles = visiblePlayableFiles
+        )
+    } else {
+        val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
+        if (activeSourceId.isNullOrBlank()) {
+            -1
+        } else {
+            visiblePlayableSourceIds.indexOfFirst { sourceId ->
+                samePath(sourceId, activeSourceId)
+            }
+        }
+    }
     if (currentIndex < 0) return false
 
     val rawTargetIndex = currentIndex + offset
     val targetIndex = if (playlistWrapNavigation) {
         val wrappedTargetIndex = ((rawTargetIndex % playlistSize) + playlistSize) % playlistSize
-        val wrapped = rawTargetIndex !in visiblePlayableFiles.indices && playlistSize > 1
+        val wrapped = rawTargetIndex !in (0 until playlistSize) && playlistSize > 1
         if (wrapped) {
             onPlaylistWrapped(offset)
         }
@@ -154,8 +176,17 @@ internal fun playAdjacentTrackAction(
         rawTargetIndex
     }
 
-    val target = visiblePlayableFiles.getOrNull(targetIndex) ?: return false
-    onApplyTrackSelection(target, true, null)
+    if (hasLocalPlaylist) {
+        val target = visiblePlayableFiles.getOrNull(targetIndex) ?: return false
+        onApplyTrackSelection(target, true, null)
+    } else {
+        val targetSourceId = visiblePlayableSourceIds.getOrNull(targetIndex) ?: return false
+        onApplyManualInputSelection(
+            targetSourceId,
+            ManualSourceOpenOptions(forceCaching = urlOrPathForceCaching),
+            isPlayerExpanded
+        )
+    }
     return true
 }
 
@@ -163,20 +194,39 @@ internal fun handlePreviousTrackAction(
     previousRestartsAfterThreshold: Boolean,
     playlistWrapNavigation: Boolean,
     selectedFile: File?,
+    currentPlaybackSourceId: String?,
     visiblePlayableFiles: List<File>,
+    visiblePlayableSourceIds: List<String>,
     positionSeconds: Double,
     onRestartCurrent: () -> Unit,
     onPlayAdjacentTrack: (Int) -> Boolean
 ): Boolean {
-    val hasTrackLoaded = selectedFile != null
-    val currentTrackIndex = currentTrackIndexForList(
-        selectedFile = selectedFile,
-        visiblePlayableFiles = visiblePlayableFiles
-    )
-    val hasPreviousTrack = if (playlistWrapNavigation) {
-        currentTrackIndex >= 0 && visiblePlayableFiles.isNotEmpty()
+    val hasLocalPlaylist = visiblePlayableFiles.isNotEmpty()
+    val activePlaylistSize = if (hasLocalPlaylist) {
+        visiblePlayableFiles.size
     } else {
-        currentTrackIndex > 0 && visiblePlayableFiles.isNotEmpty()
+        visiblePlayableSourceIds.size
+    }
+    val hasTrackLoaded = selectedFile != null
+    val currentTrackIndex = if (hasLocalPlaylist) {
+        currentTrackIndexForList(
+            selectedFile = selectedFile,
+            visiblePlayableFiles = visiblePlayableFiles
+        )
+    } else {
+        val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
+        if (activeSourceId.isNullOrBlank()) {
+            -1
+        } else {
+            visiblePlayableSourceIds.indexOfFirst { sourceId ->
+                samePath(sourceId, activeSourceId)
+            }
+        }
+    }
+    val hasPreviousTrack = if (playlistWrapNavigation) {
+        currentTrackIndex >= 0 && activePlaylistSize > 0
+    } else {
+        currentTrackIndex > 0 && activePlaylistSize > 0
     }
     return when (
         resolvePreviousTrackAction(

@@ -63,15 +63,19 @@ import com.flopster101.siliconplayer.SmbAuthenticationFailureReason
 import com.flopster101.siliconplayer.buildSmbEntrySourceSpec
 import com.flopster101.siliconplayer.buildSmbRequestUri
 import com.flopster101.siliconplayer.buildSmbSourceId
+import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.joinSmbRelativePath
 import com.flopster101.siliconplayer.listSmbDirectoryEntries
 import com.flopster101.siliconplayer.listSmbHostShareEntries
+import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.normalizeSmbPathForShare
 import com.flopster101.siliconplayer.resolveSmbAuthenticationFailureReason
 import com.flopster101.siliconplayer.smbAuthenticationFailureMessage
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
+import com.flopster101.siliconplayer.RemotePlayableSourceIdsHolder
+import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -135,6 +139,13 @@ internal fun SmbFileBrowserScreen(
             password = sessionPassword
         )
     }
+    val supportedExtensions = remember {
+        NativeBridge.getSupportedExtensions()
+            .asSequence()
+            .map { it.trim().lowercase(Locale.ROOT) }
+            .filter { it.isNotBlank() }
+            .toSet()
+    }
 
     fun appendLoadingLog(message: String) {
         val lineNumber = loadingLogLines.size + 1
@@ -174,6 +185,7 @@ internal fun SmbFileBrowserScreen(
         val requestSequence = loadRequestSequence
         isLoading = true
         errorMessage = null
+        RemotePlayableSourceIdsHolder.current = emptyList()
         loadingLogLines.clear()
         val share = currentShare
         val pathInsideShare = effectivePath()
@@ -206,6 +218,25 @@ internal fun SmbFileBrowserScreen(
                 entries = resolved
                 errorMessage = null
                 onBrowserLocationChanged(currentDirectorySourceId())
+                if (share.isBlank()) {
+                    RemotePlayableSourceIdsHolder.current = emptyList()
+                } else {
+                    val playableSourceIds = resolved
+                        .asSequence()
+                        .filter { entry ->
+                            !entry.isDirectory && fileMatchesSupportedExtensions(File(entry.name), supportedExtensions)
+                        }
+                        .map { entry ->
+                            val targetPath = joinSmbRelativePath(effectivePath().orEmpty(), entry.name)
+                            val targetSpec = buildSmbEntrySourceSpec(
+                                credentialsSpec.copy(share = share),
+                                targetPath
+                            )
+                            buildSmbRequestUri(targetSpec)
+                        }
+                        .toList()
+                    RemotePlayableSourceIdsHolder.current = playableSourceIds
+                }
                 val folders = resolved.count { it.isDirectory }
                 val files = resolved.size - folders
                 appendLoadingLog("Found ${resolved.size} entries")
@@ -213,6 +244,7 @@ internal fun SmbFileBrowserScreen(
                 appendLoadingLog("Load finished")
             }.onFailure { throwable ->
                 entries = emptyList()
+                RemotePlayableSourceIdsHolder.current = emptyList()
                 val authFailureReason = resolveSmbAuthenticationFailureReason(throwable)?.let { reason ->
                     if (
                         reason == SmbAuthenticationFailureReason.Unknown &&

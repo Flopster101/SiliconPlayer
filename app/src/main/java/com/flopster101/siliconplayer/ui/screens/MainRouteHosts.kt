@@ -11,6 +11,7 @@ import com.flopster101.siliconplayer.ui.screens.FileBrowserScreen
 import com.flopster101.siliconplayer.ui.screens.HttpFileBrowserScreen
 import com.flopster101.siliconplayer.ui.screens.NetworkBrowserScreen
 import com.flopster101.siliconplayer.ui.screens.SmbFileBrowserScreen
+import com.flopster101.siliconplayer.RemotePlayableSourceIdsHolder
 import java.io.File
 
 @Composable
@@ -152,6 +153,9 @@ internal fun MainBrowserRouteHost(
                 }
             )
         } else {
+            LaunchedEffect(initialLocationId, initialDirectoryPath) {
+                RemotePlayableSourceIdsHolder.current = emptyList()
+            }
             FileBrowserScreen(
                 repository = repository,
                 decoderExtensionArtworkHints = decoderExtensionArtworkHints,

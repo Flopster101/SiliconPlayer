@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import java.io.File
 
 @Composable
@@ -49,6 +50,9 @@ internal fun AppNavigationPlaybackDialogsSection(
     onForceMonoChanged: (Boolean) -> Unit,
     onShowAudioEffectsDialogChanged: (Boolean) -> Unit
 ) {
+    SideEffect {
+        RemoteLoadUiStateHolder.current = remoteLoadUiState
+    }
     PlaybackDialogsHost(
         showUrlOrPathDialog = showUrlOrPathDialog,
         urlOrPathInput = urlOrPathInput,

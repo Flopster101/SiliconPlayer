@@ -9,7 +9,6 @@ import android.os.storage.StorageVolume
 import android.webkit.MimeTypeMap
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -603,37 +602,7 @@ fun FileBrowserScreen(
                                 text = "File Browser",
                                 style = MaterialTheme.typography.labelLarge
                             )
-                            Crossfade(targetState = subtitle, label = "browserSubtitle") { text ->
-                                val shouldMarquee = text.length > 52
-                                if (shouldMarquee) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clipToBounds()
-                                    ) {
-                                        Text(
-                                            text = text,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            softWrap = false,
-                                            overflow = TextOverflow.Clip,
-                                            modifier = Modifier.basicMarquee(
-                                                iterations = Int.MAX_VALUE,
-                                                initialDelayMillis = 900
-                                            )
-                                        )
-                                    }
-                                } else {
-                                    Text(
-                                        text = text,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
+                            BrowserToolbarSubtitle(subtitle = subtitle)
                         }
 
                         Box(modifier = Modifier.padding(end = 6.dp)) {

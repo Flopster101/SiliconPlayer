@@ -66,6 +66,7 @@ import com.flopster101.siliconplayer.SmbAuthenticationFailureReason
 import com.flopster101.siliconplayer.buildSmbEntrySourceSpec
 import com.flopster101.siliconplayer.buildSmbRequestUri
 import com.flopster101.siliconplayer.buildSmbSourceId
+import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.joinSmbRelativePath
@@ -358,11 +359,17 @@ internal fun SmbFileBrowserScreen(
         append(credentialsSpec.host)
         if (currentShare.isNotBlank()) {
             append('/')
-            append(currentShare)
+            append(decodePercentEncodedForDisplay(currentShare) ?: currentShare)
             effectivePath()?.let { path ->
                 if (path.isNotBlank()) {
                     append('/')
-                    append(path)
+                    append(
+                        path
+                            .split('/')
+                            .joinToString("/") { segment ->
+                                decodePercentEncodedForDisplay(segment) ?: segment
+                            }
+                    )
                 }
             }
         }
@@ -402,13 +409,7 @@ internal fun SmbFileBrowserScreen(
                                 text = "File Browser",
                                 style = MaterialTheme.typography.labelLarge
                             )
-                            Text(
-                                text = subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            BrowserToolbarSubtitle(subtitle = subtitle)
                         }
                     }
                 }

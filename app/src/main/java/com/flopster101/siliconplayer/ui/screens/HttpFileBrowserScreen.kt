@@ -71,6 +71,7 @@ import com.flopster101.siliconplayer.HttpSourceSpec
 import com.flopster101.siliconplayer.buildHttpDisplayUri
 import com.flopster101.siliconplayer.buildHttpRequestUri
 import com.flopster101.siliconplayer.buildHttpSourceId
+import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import com.flopster101.siliconplayer.httpAuthenticationFailureMessage
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
@@ -448,7 +449,8 @@ internal fun HttpFileBrowserScreen(
             path = normalizeHttpDirectoryPath(currentSpec.path)
         )
     }
-    val subtitle = buildHttpDisplayUri(browserSpec())
+    val rawSubtitle = buildHttpDisplayUri(browserSpec())
+    val subtitle = decodePercentEncodedForDisplay(rawSubtitle) ?: rawSubtitle
     val protocolLabel = browserSpec().scheme.uppercase(Locale.ROOT)
     val entriesListState = rememberLazyListState()
     val nonEntriesListState = rememberLazyListState()
@@ -521,13 +523,7 @@ internal fun HttpFileBrowserScreen(
                                 text = "File Browser",
                                 style = MaterialTheme.typography.labelLarge
                             )
-                            Text(
-                                text = subtitle,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            BrowserToolbarSubtitle(subtitle = subtitle)
                         }
                     }
                 }

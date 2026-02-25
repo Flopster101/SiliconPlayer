@@ -1,9 +1,8 @@
 package com.flopster101.siliconplayer.ui.screens
 
 import android.content.Context
-import android.os.Build
 import android.os.Process
-import android.view.WindowManager
+import android.hardware.display.DisplayManager
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -195,12 +194,13 @@ private fun snapshotSourceSignature(
 }
 
 private fun contextDisplayRefreshRateHz(context: Context): Float {
-    val rate = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        context.display?.refreshRate
-    } else {
-        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-        windowManager?.defaultDisplay?.refreshRate
-    } ?: 60f
+    val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+    val activeDisplayRate = displayManager
+        ?.displays
+        ?.asSequence()
+        ?.map { it.refreshRate }
+        ?.firstOrNull { it.isFinite() && it > 0f }
+    val rate = activeDisplayRate ?: context.display?.refreshRate ?: 60f
     return if (rate.isFinite() && rate > 0f) rate else 60f
 }
 

@@ -40,9 +40,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -104,6 +109,53 @@ internal class BrowserSearchController {
         debouncedQuery = value
     }
 }
+
+internal class BrowserSelectionController<K> {
+    var isSelectionMode by mutableStateOf(false)
+        private set
+    var selectedKeys by mutableStateOf<Set<K>>(emptySet())
+        private set
+
+    fun enterSelectionWith(key: K) {
+        isSelectionMode = true
+        selectedKeys = selectedKeys + key
+    }
+
+    fun toggleSelection(key: K) {
+        if (!isSelectionMode) return
+        selectedKeys = if (selectedKeys.contains(key)) {
+            selectedKeys - key
+        } else {
+            selectedKeys + key
+        }
+    }
+
+    fun selectAll(keys: Collection<K>) {
+        isSelectionMode = true
+        selectedKeys = keys.toSet()
+    }
+
+    fun deselectAll() {
+        selectedKeys = emptySet()
+    }
+
+    fun exitSelectionMode() {
+        isSelectionMode = false
+        selectedKeys = emptySet()
+    }
+}
+
+@Composable
+internal fun <K> rememberBrowserSelectionController(): BrowserSelectionController<K> {
+    return androidx.compose.runtime.remember { BrowserSelectionController<K>() }
+}
+
+internal data class BrowserSelectionActionItem(
+    val label: String,
+    val icon: ImageVector? = null,
+    val enabled: Boolean = true,
+    val onClick: () -> Unit
+)
 
 @Composable
 internal fun rememberBrowserSearchController(): BrowserSearchController {
@@ -443,6 +495,112 @@ internal fun BrowserToolbarSearchButton(
             contentDescription = "Search this folder",
             modifier = Modifier.size(20.dp)
         )
+    }
+}
+
+@Composable
+internal fun BrowserSelectionToolbarControls(
+    visible: Boolean,
+    canSelectAny: Boolean,
+    onSelectAll: () -> Unit,
+    onDeselectAll: () -> Unit,
+    actionItems: List<BrowserSelectionActionItem>,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (!visible) return
+
+    var showSelectionToggleMenu by androidx.compose.runtime.remember(visible) { mutableStateOf(false) }
+    var showSelectionActionsMenu by androidx.compose.runtime.remember(visible) { mutableStateOf(false) }
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(
+            onClick = onCancel,
+            modifier = Modifier.size(40.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Cancel selection mode",
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Box {
+            IconButton(
+                onClick = { showSelectionActionsMenu = true },
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "Selection actions",
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            DropdownMenu(
+                expanded = showSelectionActionsMenu,
+                onDismissRequest = { showSelectionActionsMenu = false }
+            ) {
+                actionItems.forEach { actionItem ->
+                    DropdownMenuItem(
+                        text = { Text(actionItem.label) },
+                        leadingIcon = {
+                            actionItem.icon?.let {
+                                Icon(imageVector = it, contentDescription = null)
+                            }
+                        },
+                        enabled = actionItem.enabled,
+                        onClick = {
+                            showSelectionActionsMenu = false
+                            actionItem.onClick()
+                        }
+                    )
+                }
+                if (actionItems.isEmpty()) {
+                    DropdownMenuItem(
+                        text = { Text("Info") },
+                        leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+                        enabled = false,
+                        onClick = {}
+                    )
+                }
+            }
+        }
+
+        Box {
+            IconButton(
+                onClick = { showSelectionToggleMenu = true },
+                modifier = Modifier.size(40.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SelectAll,
+                    contentDescription = "Selection toggles",
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            DropdownMenu(
+                expanded = showSelectionToggleMenu,
+                onDismissRequest = { showSelectionToggleMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Select all") },
+                    enabled = canSelectAny,
+                    onClick = {
+                        showSelectionToggleMenu = false
+                        onSelectAll()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Deselect all") },
+                    onClick = {
+                        showSelectionToggleMenu = false
+                        onDeselectAll()
+                    }
+                )
+            }
+        }
     }
 }
 

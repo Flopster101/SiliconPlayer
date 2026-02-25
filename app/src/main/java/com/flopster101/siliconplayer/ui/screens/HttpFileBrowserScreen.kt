@@ -3,8 +3,10 @@ package com.flopster101.siliconplayer.ui.screens
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
@@ -165,6 +168,7 @@ internal fun HttpFileBrowserScreen(
             .toSet()
     }
     val browserSearchController = rememberBrowserSearchController()
+    val browserSelectionController = rememberBrowserSelectionController<String>()
 
     fun updatePlayableRemoteSources(entriesForNavigation: List<HttpBrowserEntry>) {
         RemotePlayableSourceIdsHolder.current = entriesForNavigation
@@ -418,6 +422,10 @@ internal fun HttpFileBrowserScreen(
     }
 
     BackHandler(enabled = backHandlingEnabled) {
+        if (browserSelectionController.isSelectionMode) {
+            browserSelectionController.exitSelectionMode()
+            return@BackHandler
+        }
         if (isLoading) {
             cancelCurrentLoadAndGoBack()
             return@BackHandler
@@ -450,6 +458,9 @@ internal fun HttpFileBrowserScreen(
                 matchesBrowserSearchQuery(entry.name, browserSearchController.debouncedQuery)
             }
         }
+    }
+    val entrySelectionKeyFor: (HttpBrowserEntry) -> String = remember {
+        { entry -> entry.sourceId }
     }
     val rawSubtitle = buildHttpDisplayUri(browserSpec())
     val subtitle = decodePercentEncodedForDisplay(rawSubtitle) ?: rawSubtitle
@@ -487,6 +498,10 @@ internal fun HttpFileBrowserScreen(
         flashKey = "${browserContentState.path}|${filteredEntries.size}|${browserSearchController.debouncedQuery}",
         label = "httpBrowserDirectoryScrollbarAlpha"
     )
+
+    LaunchedEffect(currentSpec.path) {
+        browserSelectionController.exitSelectionMode()
+    }
 
     Scaffold(
         topBar = {
@@ -564,6 +579,16 @@ internal fun HttpFileBrowserScreen(
                                 subtitle = subtitle
                             )
                         }
+                        BrowserSelectionToolbarControls(
+                            visible = browserSelectionController.isSelectionMode,
+                            canSelectAny = filteredEntries.isNotEmpty(),
+                            onSelectAll = {
+                                browserSelectionController.selectAll(filteredEntries.map(entrySelectionKeyFor))
+                            },
+                            onDeselectAll = { browserSelectionController.deselectAll() },
+                            actionItems = emptyList(),
+                            onCancel = { browserSelectionController.exitSelectionMode() }
+                        )
                         BrowserToolbarSearchButton(
                             onClick = {
                                 if (browserSearchController.isVisible) {
@@ -714,10 +739,40 @@ internal fun HttpFileBrowserScreen(
                                 BrowserSearchNoResultsCard(query = browserSearchController.debouncedQuery)
                             }
                         } else {
-                            items(filteredEntries, key = { entry -> entry.sourceId }) { entry ->
+                            itemsIndexed(
+                                filteredEntries,
+                                key = { _, entry -> entry.sourceId }
+                            ) { index, entry ->
+                                val entrySelectionKey = entrySelectionKeyFor(entry)
+                                val hasSelectedAbove = if (index > 0) {
+                                    val aboveKey = entrySelectionKeyFor(filteredEntries[index - 1])
+                                    browserSelectionController.selectedKeys.contains(aboveKey)
+                                } else {
+                                    false
+                                }
+                                val hasSelectedBelow = if (index < filteredEntries.lastIndex) {
+                                    val belowKey = entrySelectionKeyFor(filteredEntries[index + 1])
+                                    browserSelectionController.selectedKeys.contains(belowKey)
+                                } else {
+                                    false
+                                }
                                 HttpEntryRow(
                                     entry = entry,
+                                    isSelected = browserSelectionController.selectedKeys.contains(entrySelectionKey),
+                                    hasSelectedAbove = hasSelectedAbove,
+                                    hasSelectedBelow = hasSelectedBelow,
+                                    onLongClick = {
+                                        if (browserSelectionController.isSelectionMode) {
+                                            browserSelectionController.toggleSelection(entrySelectionKey)
+                                        } else {
+                                            browserSelectionController.enterSelectionWith(entrySelectionKey)
+                                        }
+                                    },
                                     onClick = {
+                                        if (browserSelectionController.isSelectionMode) {
+                                            browserSelectionController.toggleSelection(entrySelectionKey)
+                                            return@HttpEntryRow
+                                        }
                                         if (entry.isDirectory) {
                                             val nextSpec = parseHttpSourceSpecFromInput(entry.requestUrl)
                                                 ?: return@HttpEntryRow
@@ -969,15 +1024,37 @@ private fun HttpParentDirectoryRow(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HttpEntryRow(
     entry: HttpBrowserEntry,
+    isSelected: Boolean,
+    hasSelectedAbove: Boolean = false,
+    hasSelectedBelow: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
+    val selectionShape = RoundedCornerShape(
+        topStart = if (hasSelectedAbove) 0.dp else 18.dp,
+        topEnd = if (hasSelectedAbove) 0.dp else 18.dp,
+        bottomStart = if (hasSelectedBelow) 0.dp else 18.dp,
+        bottomEnd = if (hasSelectedBelow) 0.dp else 18.dp
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clip(selectionShape)
+            .background(
+                if (isSelected) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                } else {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+                }
+            )
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

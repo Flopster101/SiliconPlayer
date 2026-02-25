@@ -16,11 +16,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
@@ -50,6 +52,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
@@ -158,6 +161,7 @@ fun FileBrowserScreen(
     var browserFocusedEntryKey by remember { mutableStateOf<String?>(null) }
     val browserEntryFocusRequesters = remember { mutableStateMapOf<String, FocusRequester>() }
     val browserSearchController = rememberBrowserSearchController()
+    val browserSelectionController = rememberBrowserSelectionController<String>()
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val subtitleIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
@@ -435,6 +439,10 @@ fun FileBrowserScreen(
     }
 
     fun handleBack() {
+        if (browserSelectionController.isSelectionMode) {
+            browserSelectionController.exitSelectionMode()
+            return
+        }
         if (selectedLocation != null) {
             navigateUpWithinLocation()
         } else {
@@ -485,6 +493,10 @@ fun FileBrowserScreen(
         } else {
             null
         }
+    }
+
+    LaunchedEffect(selectedLocationId, currentDirectory?.absolutePath) {
+        browserSelectionController.exitSelectionMode()
     }
 
     BackHandler(
@@ -679,6 +691,18 @@ fun FileBrowserScreen(
                             )
                         }
                         if (selectedLocationId != null) {
+                            BrowserSelectionToolbarControls(
+                                visible = browserSelectionController.isSelectionMode,
+                                canSelectAny = filteredFileList.isNotEmpty(),
+                                onSelectAll = {
+                                    browserSelectionController.selectAll(
+                                        filteredFileList.map { item -> item.file.absolutePath }
+                                    )
+                                },
+                                onDeselectAll = { browserSelectionController.deselectAll() },
+                                actionItems = emptyList(),
+                                onCancel = { browserSelectionController.exitSelectionMode() }
+                            )
                             BrowserToolbarSearchButton(
                                 onClick = {
                                     if (browserSearchController.isVisible) {
@@ -849,11 +873,24 @@ fun FileBrowserScreen(
                                 BrowserSearchNoResultsCard(query = browserSearchController.debouncedQuery)
                             }
                         } else {
-                            items(
+                            itemsIndexed(
                                 items = filteredFileList,
-                                key = { item -> item.file.absolutePath }
-                            ) { item ->
+                                key = { _, item -> item.file.absolutePath }
+                            ) { index, item ->
                                 val entryKey = item.file.absolutePath
+                                val isSelected = browserSelectionController.selectedKeys.contains(entryKey)
+                                val hasSelectedAbove = if (index > 0) {
+                                    val aboveKey = filteredFileList[index - 1].file.absolutePath
+                                    browserSelectionController.selectedKeys.contains(aboveKey)
+                                } else {
+                                    false
+                                }
+                                val hasSelectedBelow = if (index < filteredFileList.lastIndex) {
+                                    val belowKey = filteredFileList[index + 1].file.absolutePath
+                                    browserSelectionController.selectedKeys.contains(belowKey)
+                                } else {
+                                    false
+                                }
                                 AnimatedFileBrowserEntry(
                                     itemKey = entryKey,
                                     animationEpoch = directoryAnimationEpoch,
@@ -867,12 +904,26 @@ fun FileBrowserScreen(
                                     FileItemRow(
                                         item = item,
                                         isPlaying = item.file == playingFile,
+                                        isSelected = isSelected,
+                                        hasSelectedAbove = hasSelectedAbove,
+                                        hasSelectedBelow = hasSelectedBelow,
                                         showFileIconChipBackground = showFileIconChipBackground,
                                         decoderExtensionArtworkHints = decoderExtensionArtworkHints,
                                         rightFocusRequester = selectorButtonFocusRequester,
                                         rowFocusRequester = rowFocusRequester,
                                         onFocused = { browserFocusedEntryKey = entryKey },
+                                        onLongClick = {
+                                            if (browserSelectionController.isSelectionMode) {
+                                                browserSelectionController.toggleSelection(entryKey)
+                                            } else {
+                                                browserSelectionController.enterSelectionWith(entryKey)
+                                            }
+                                        },
                                         onClick = {
+                                            if (browserSelectionController.isSelectionMode) {
+                                                browserSelectionController.toggleSelection(entryKey)
+                                                return@FileItemRow
+                                            }
                                             if (item.isArchive) {
                                                 openArchive(item)
                                             } else if (item.isDirectory) {
@@ -1299,13 +1350,23 @@ private fun isWithinRoot(file: File, root: File): Boolean {
 fun FileItemRow(
     item: FileItem,
     isPlaying: Boolean,
+    isSelected: Boolean = false,
+    hasSelectedAbove: Boolean = false,
+    hasSelectedBelow: Boolean = false,
     showFileIconChipBackground: Boolean,
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint> = emptyMap(),
     rightFocusRequester: FocusRequester? = null,
     rowFocusRequester: FocusRequester? = null,
     onFocused: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
+    val selectionShape = RoundedCornerShape(
+        topStart = if (hasSelectedAbove) 0.dp else 18.dp,
+        topEnd = if (hasSelectedAbove) 0.dp else 18.dp,
+        bottomStart = if (hasSelectedBelow) 0.dp else 18.dp,
+        bottomEnd = if (hasSelectedBelow) 0.dp else 18.dp
+    )
     val isVideoFile = !item.isDirectory && isLikelyVideoFile(item.file)
     val decoderArtworkHint = if (item.isDirectory || isVideoFile) {
         null
@@ -1336,6 +1397,14 @@ fun FileItemRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(selectionShape)
+            .background(
+                if (isSelected) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                } else {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+                }
+            )
             .focusProperties {
                 if (rightFocusRequester != null) {
                     right = rightFocusRequester
@@ -1343,7 +1412,10 @@ fun FileItemRow(
             }
             .then(if (rowFocusRequester != null) Modifier.focusRequester(rowFocusRequester) else Modifier)
             .onFocusChanged { state -> if (state.isFocused) onFocused?.invoke() }
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .focusable()
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically

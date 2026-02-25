@@ -2,8 +2,10 @@ package com.flopster101.siliconplayer.ui.screens
 
 import androidx.compose.animation.AnimatedContent
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -154,6 +157,7 @@ internal fun SmbFileBrowserScreen(
             .toSet()
     }
     val browserSearchController = rememberBrowserSearchController()
+    val browserSelectionController = rememberBrowserSelectionController<String>()
 
     fun appendLoadingLog(message: String) {
         val lineNumber = loadingLogLines.size + 1
@@ -331,6 +335,10 @@ internal fun SmbFileBrowserScreen(
     }
 
     BackHandler(enabled = backHandlingEnabled) {
+        if (browserSelectionController.isSelectionMode) {
+            browserSelectionController.exitSelectionMode()
+            return@BackHandler
+        }
         if (!navigateUpWithinBrowser()) {
             onExitBrowser()
         }
@@ -387,6 +395,20 @@ internal fun SmbFileBrowserScreen(
                 }
             }
         }
+    }
+    val selectionBasePath = remember(currentShare, currentSubPath) { effectivePath().orEmpty() }
+    val entrySelectionKeyFor: (SmbBrowserEntry) -> String = remember(sharePickerMode, selectionBasePath) {
+        { entry ->
+            if (sharePickerMode) {
+                "share:${entry.name}"
+            } else {
+                "entry:${joinSmbRelativePath(selectionBasePath, entry.name)}:${entry.isDirectory}"
+            }
+        }
+    }
+
+    LaunchedEffect(currentShare, currentSubPath) {
+        browserSelectionController.exitSelectionMode()
     }
 
     Scaffold(
@@ -459,6 +481,16 @@ internal fun SmbFileBrowserScreen(
                                 subtitle = subtitle
                             )
                         }
+                        BrowserSelectionToolbarControls(
+                            visible = browserSelectionController.isSelectionMode,
+                            canSelectAny = filteredEntries.isNotEmpty(),
+                            onSelectAll = {
+                                browserSelectionController.selectAll(filteredEntries.map(entrySelectionKeyFor))
+                            },
+                            onDeselectAll = { browserSelectionController.deselectAll() },
+                            actionItems = emptyList(),
+                            onCancel = { browserSelectionController.exitSelectionMode() }
+                        )
                         BrowserToolbarSearchButton(
                             onClick = {
                                 if (browserSearchController.isVisible) {
@@ -608,11 +640,41 @@ internal fun SmbFileBrowserScreen(
                             BrowserSearchNoResultsCard(query = browserSearchController.debouncedQuery)
                         }
                     } else {
-                        items(filteredEntries, key = { entry -> "${entry.isDirectory}:${entry.name}" }) { entry ->
+                        itemsIndexed(
+                            filteredEntries,
+                            key = { _, entry -> "${entry.isDirectory}:${entry.name}" }
+                        ) { index, entry ->
+                            val entrySelectionKey = entrySelectionKeyFor(entry)
+                            val hasSelectedAbove = if (index > 0) {
+                                val aboveKey = entrySelectionKeyFor(filteredEntries[index - 1])
+                                browserSelectionController.selectedKeys.contains(aboveKey)
+                            } else {
+                                false
+                            }
+                            val hasSelectedBelow = if (index < filteredEntries.lastIndex) {
+                                val belowKey = entrySelectionKeyFor(filteredEntries[index + 1])
+                                browserSelectionController.selectedKeys.contains(belowKey)
+                            } else {
+                                false
+                            }
                             SmbEntryRow(
                                 entry = entry,
+                                isSelected = browserSelectionController.selectedKeys.contains(entrySelectionKey),
+                                hasSelectedAbove = hasSelectedAbove,
+                                hasSelectedBelow = hasSelectedBelow,
                                 showAsShare = sharePickerMode,
+                                onLongClick = {
+                                    if (browserSelectionController.isSelectionMode) {
+                                        browserSelectionController.toggleSelection(entrySelectionKey)
+                                    } else {
+                                        browserSelectionController.enterSelectionWith(entrySelectionKey)
+                                    }
+                                },
                                 onClick = {
+                                    if (browserSelectionController.isSelectionMode) {
+                                        browserSelectionController.toggleSelection(entrySelectionKey)
+                                        return@SmbEntryRow
+                                    }
                                     if (sharePickerMode) {
                                         browserNavDirection = BrowserPageNavDirection.Forward
                                         currentShare = entry.name
@@ -844,16 +906,38 @@ private fun SmbParentDirectoryRow(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SmbEntryRow(
     entry: SmbBrowserEntry,
+    isSelected: Boolean,
+    hasSelectedAbove: Boolean = false,
+    hasSelectedBelow: Boolean = false,
     showAsShare: Boolean,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
+    val selectionShape = RoundedCornerShape(
+        topStart = if (hasSelectedAbove) 0.dp else 18.dp,
+        topEnd = if (hasSelectedAbove) 0.dp else 18.dp,
+        bottomStart = if (hasSelectedBelow) 0.dp else 18.dp,
+        bottomEnd = if (hasSelectedBelow) 0.dp else 18.dp
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clip(selectionShape)
+            .background(
+                if (isSelected) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                } else {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+                }
+            )
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

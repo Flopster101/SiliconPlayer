@@ -62,6 +62,7 @@ internal fun buildBrowserLocationChangedUpdate(
 
     val recentFolderUpdate = if (
         normalizedDirectoryPath != null &&
+        isEligibleForRecentFolderUpdate(model) &&
         (
             launchState.locationId != null ||
                 model is BrowserLocationModel.Smb ||
@@ -141,6 +142,19 @@ internal fun buildBrowserLocationChangedUpdate(
         rememberedLocationId = launchLocationId,
         rememberedDirectoryPath = launchDirectoryPath
     )
+}
+
+private fun isEligibleForRecentFolderUpdate(model: BrowserLocationModel): Boolean {
+    if (model !is BrowserLocationModel.ArchiveLogical) return true
+    val parsed = parseArchiveLogicalPath(model.logicalPath) ?: return true
+    val archiveLocation = parsed.first
+    val inArchivePath = parsed.second
+    val isRemoteArchive = parseSmbSourceSpecFromInput(archiveLocation) != null ||
+        parseHttpSourceSpecFromInput(archiveLocation) != null
+    if (!isRemoteArchive) return true
+    // Remote archive subfolder recents are currently unstable across reopen/auth paths.
+    // Keep track recents, but skip folder-recents for nested in-archive directories.
+    return inArchivePath.isNullOrBlank()
 }
 
 private fun resolveSmbLaunchRequestUriForRestore(

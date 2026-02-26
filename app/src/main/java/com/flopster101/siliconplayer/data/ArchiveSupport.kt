@@ -372,6 +372,13 @@ internal fun resolveArchiveContainerParentLocation(archiveLocation: String): Str
     return File(localPath).parentFile?.absolutePath
 }
 
+internal fun resolveArchiveLocationToFile(
+    context: Context,
+    archiveLocation: String
+): File? {
+    return resolveArchiveFileForLocation(context, archiveLocation)
+}
+
 private fun resolveArchiveFileForLocation(context: Context, archiveLocation: String): File? {
     val trimmed = archiveLocation.trim()
     if (trimmed.isBlank()) return null

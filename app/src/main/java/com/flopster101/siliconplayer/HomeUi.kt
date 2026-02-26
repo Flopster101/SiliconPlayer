@@ -508,7 +508,7 @@ internal fun HomeScreen(
                                             val archiveName = parseArchiveLogicalPath(entry.path)
                                                 ?.takeIf { it.second != null }
                                                 ?.first
-                                                ?.let { File(it).name }
+                                                ?.let { sourceLeafNameForDisplay(it) }
                                                 ?.takeIf { it.isNotBlank() }
                                             val storageSubtitle = if (archiveName != null) {
                                                 "${storagePresentation.label} • $archiveName"

@@ -8,6 +8,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.flopster101.siliconplayer.data.buildArchiveDirectoryPath
+import com.flopster101.siliconplayer.data.buildArchiveSourceId
 import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
 import com.flopster101.siliconplayer.data.parseArchiveSourceId
 import com.flopster101.siliconplayer.data.resolveArchiveContainerParentLocation
@@ -17,11 +18,13 @@ import java.util.Locale
 internal fun playRecentFileEntryAction(
     cacheRoot: File,
     entry: RecentPathEntry,
+    networkNodes: List<NetworkNode>,
     openPlayerOnTrackSelect: Boolean,
     onApplyTrackSelection: (File, Boolean, Boolean?, String?, String?, Boolean) -> Unit,
     onApplyManualInputSelection: (String) -> Unit
 ) {
-    val normalized = normalizeSourceIdentity(entry.path)
+    val playbackInput = resolveRecentPlaybackInput(entry, networkNodes)
+    val normalized = normalizeSourceIdentity(playbackInput)
     val uri = normalized?.let { Uri.parse(it) }
     val scheme = uri?.scheme?.lowercase(Locale.ROOT)
     val isRemote = scheme == "http" || scheme == "https" || scheme == "smb"
@@ -37,11 +40,57 @@ internal fun playRecentFileEntryAction(
                 false
             )
         } else {
-            onApplyManualInputSelection(entry.path)
+            onApplyManualInputSelection(playbackInput)
         }
     } else {
-        onApplyManualInputSelection(entry.path)
+        onApplyManualInputSelection(playbackInput)
     }
+}
+
+private fun resolveRecentPlaybackInput(
+    entry: RecentPathEntry,
+    networkNodes: List<NetworkNode>
+): String {
+    val rawPath = entry.path.trim()
+    if (rawPath.isBlank()) return entry.path
+
+    parseArchiveSourceId(rawPath)?.let { archiveSource ->
+        parseSmbSourceSpecFromInput(archiveSource.archivePath)?.let { archiveSmbSpec ->
+            val smbTarget = resolveSmbRecentOpenTarget(
+                targetSpec = archiveSmbSpec,
+                networkNodes = networkNodes,
+                preferredSourceNodeId = entry.sourceNodeId
+            )
+            return buildArchiveSourceId(smbTarget.requestUri, archiveSource.entryPath)
+        }
+        parseHttpSourceSpecFromInput(archiveSource.archivePath)?.let { archiveHttpSpec ->
+            val httpTarget = resolveHttpRecentOpenTarget(
+                targetSpec = archiveHttpSpec,
+                networkNodes = networkNodes,
+                preferredSourceNodeId = entry.sourceNodeId
+            )
+            return buildArchiveSourceId(httpTarget.requestUri, archiveSource.entryPath)
+        }
+        return rawPath
+    }
+
+    parseSmbSourceSpecFromInput(rawPath)?.let { smbSpec ->
+        return resolveSmbRecentOpenTarget(
+            targetSpec = smbSpec,
+            networkNodes = networkNodes,
+            preferredSourceNodeId = entry.sourceNodeId
+        ).requestUri
+    }
+
+    parseHttpSourceSpecFromInput(rawPath)?.let { httpSpec ->
+        return resolveHttpRecentOpenTarget(
+            targetSpec = httpSpec,
+            networkNodes = networkNodes,
+            preferredSourceNodeId = entry.sourceNodeId
+        ).requestUri
+    }
+
+    return rawPath
 }
 
 internal fun applyRecentFolderAction(
@@ -176,6 +225,11 @@ internal data class SmbTargetResolution(
     val requestUri: String
 )
 
+internal data class HttpTargetResolution(
+    val sourceNodeId: Long?,
+    val requestUri: String
+)
+
 private fun resolveBrowserFolderForRecentSource(
     entry: RecentPathEntry,
     networkNodes: List<NetworkNode>
@@ -192,7 +246,7 @@ private fun resolveBrowserFolderForRecentSource(
         val archiveSmb = parseSmbSourceSpecFromInput(archiveSource.archivePath)
         val archiveHttp = parseHttpSourceSpecFromInput(archiveSource.archivePath)
         return BrowserOpenTarget(
-            locationId = entry.locationId,
+            locationId = null,
             directoryPath = logicalDirectory,
             smbSourceNodeId = if (archiveSmb != null) entry.sourceNodeId else null,
             httpSourceNodeId = if (archiveHttp != null) entry.sourceNodeId else null
@@ -236,11 +290,16 @@ private fun resolveBrowserFolderForRecentSource(
             path = if (parentPath.isBlank()) "/" else "$parentPath/",
             query = null
         )
+        val httpTarget = resolveHttpRecentOpenTarget(
+            targetSpec = parentSpec,
+            networkNodes = networkNodes,
+            preferredSourceNodeId = entry.sourceNodeId
+        )
         return BrowserOpenTarget(
             locationId = null,
-            directoryPath = buildHttpRequestUri(parentSpec),
+            directoryPath = httpTarget.requestUri,
             smbSourceNodeId = null,
-            httpSourceNodeId = entry.sourceNodeId
+            httpSourceNodeId = httpTarget.sourceNodeId
         )
     }
 
@@ -273,9 +332,24 @@ private fun resolveBrowserParentForRecentFolder(
             val archiveParent = resolveArchiveContainerParentLocation(archivePath) ?: return null
             val archiveSmb = parseSmbSourceSpecFromInput(archivePath)
             val archiveHttp = parseHttpSourceSpecFromInput(archivePath)
+            val parentSmbSpec = parseSmbSourceSpecFromInput(archiveParent)
+            val parentHttpSpec = parseHttpSourceSpecFromInput(archiveParent)
+            val resolvedArchiveParent = when {
+                parentSmbSpec != null -> resolveSmbRecentOpenTarget(
+                    targetSpec = parentSmbSpec,
+                    networkNodes = networkNodes,
+                    preferredSourceNodeId = entry.sourceNodeId
+                ).requestUri
+                parentHttpSpec != null -> resolveHttpRecentOpenTarget(
+                    targetSpec = parentHttpSpec,
+                    networkNodes = networkNodes,
+                    preferredSourceNodeId = entry.sourceNodeId
+                ).requestUri
+                else -> archiveParent
+            }
             return BrowserOpenTarget(
-                locationId = entry.locationId,
-                directoryPath = archiveParent,
+                locationId = null,
+                directoryPath = resolvedArchiveParent,
                 smbSourceNodeId = if (archiveSmb != null) entry.sourceNodeId else null,
                 httpSourceNodeId = if (archiveHttp != null) entry.sourceNodeId else null
             )
@@ -292,7 +366,7 @@ private fun resolveBrowserParentForRecentFolder(
         val archiveSmb = parseSmbSourceSpecFromInput(archivePath)
         val archiveHttp = parseHttpSourceSpecFromInput(archivePath)
         return BrowserOpenTarget(
-            locationId = entry.locationId,
+            locationId = null,
             directoryPath = logicalParent,
             smbSourceNodeId = if (archiveSmb != null) entry.sourceNodeId else null,
             httpSourceNodeId = if (archiveHttp != null) entry.sourceNodeId else null
@@ -336,11 +410,16 @@ private fun resolveBrowserParentForRecentFolder(
             path = if (parentPath.isBlank()) "/" else "$parentPath/",
             query = null
         )
+        val httpTarget = resolveHttpRecentOpenTarget(
+            targetSpec = parentSpec,
+            networkNodes = networkNodes,
+            preferredSourceNodeId = entry.sourceNodeId
+        )
         return BrowserOpenTarget(
             locationId = null,
-            directoryPath = buildHttpRequestUri(parentSpec),
+            directoryPath = httpTarget.requestUri,
             smbSourceNodeId = null,
-            httpSourceNodeId = entry.sourceNodeId
+            httpSourceNodeId = httpTarget.sourceNodeId
         )
     }
 
@@ -435,5 +514,96 @@ internal fun resolveSmbRecentOpenTarget(
     return SmbTargetResolution(
         sourceNodeId = resolvedNodeId,
         requestUri = buildSmbRequestUri(finalSpec)
+    )
+}
+
+internal fun resolveHttpRecentOpenTarget(
+    targetSpec: HttpSourceSpec,
+    networkNodes: List<NetworkNode>,
+    preferredSourceNodeId: Long? = null
+): HttpTargetResolution {
+    if (!targetSpec.password.isNullOrBlank()) {
+        return HttpTargetResolution(
+            sourceNodeId = null,
+            requestUri = buildHttpRequestUri(targetSpec)
+        )
+    }
+
+    val preferredNodeSpec = preferredSourceNodeId
+        ?.let { sourceNodeId ->
+            networkNodes.firstOrNull { node ->
+                node.id == sourceNodeId &&
+                    node.type == NetworkNodeType.RemoteSource &&
+                    node.sourceKind != NetworkSourceKind.Smb
+            }
+        }
+        ?.let(::resolveNetworkNodeSourceId)
+        ?.let(::parseHttpSourceSpecFromInput)
+
+    if (preferredNodeSpec != null) {
+        val exactSpec = targetSpec.copy(
+            username = preferredNodeSpec.username ?: targetSpec.username,
+            password = preferredNodeSpec.password ?: targetSpec.password
+        )
+        return HttpTargetResolution(
+            sourceNodeId = preferredSourceNodeId,
+            requestUri = buildHttpRequestUri(exactSpec)
+        )
+    }
+
+    val normalizedTargetPath = normalizeHttpDirectoryPath(targetSpec.path)
+    val normalizedTargetUser = targetSpec.username?.trim().orEmpty()
+    val normalizedTargetPort = targetSpec.port ?: -1
+    val candidate = networkNodes
+        .asSequence()
+        .filter { node ->
+            node.type == NetworkNodeType.RemoteSource && node.sourceKind != NetworkSourceKind.Smb
+        }
+        .mapNotNull { node ->
+            val spec = resolveNetworkNodeSourceId(node)
+                ?.let(::parseHttpSourceSpecFromInput)
+                ?: return@mapNotNull null
+            if (!spec.scheme.equals(targetSpec.scheme, ignoreCase = true)) return@mapNotNull null
+            if (!spec.host.equals(targetSpec.host, ignoreCase = true)) return@mapNotNull null
+            val normalizedNodePort = spec.port ?: -1
+            if (normalizedNodePort != normalizedTargetPort) return@mapNotNull null
+
+            val normalizedNodePath = normalizeHttpDirectoryPath(spec.path)
+            val normalizedNodeUser = spec.username?.trim().orEmpty()
+            var score = 0
+            if (
+                normalizedNodeUser.isNotEmpty() &&
+                normalizedNodeUser.equals(normalizedTargetUser, ignoreCase = true)
+            ) {
+                score += 200
+            }
+            if (normalizedNodePath.equals(normalizedTargetPath, ignoreCase = true)) {
+                score += 400
+            } else {
+                if (normalizedTargetPath.startsWith(normalizedNodePath)) {
+                    score += 100 + normalizedNodePath.length
+                }
+                if (normalizedNodePath.startsWith(normalizedTargetPath)) {
+                    score += 40 + normalizedTargetPath.length
+                }
+            }
+            if (!spec.password.isNullOrBlank()) score += 10
+            node.id to (score to spec)
+        }
+        .maxByOrNull { (_, pair) -> pair.first }
+
+    val resolvedNodeId = candidate?.first
+    val credentialSpec = candidate?.second?.second
+    val finalSpec = if (credentialSpec == null) {
+        targetSpec
+    } else {
+        targetSpec.copy(
+            username = credentialSpec.username ?: targetSpec.username,
+            password = credentialSpec.password ?: targetSpec.password
+        )
+    }
+    return HttpTargetResolution(
+        sourceNodeId = resolvedNodeId,
+        requestUri = buildHttpRequestUri(finalSpec)
     )
 }

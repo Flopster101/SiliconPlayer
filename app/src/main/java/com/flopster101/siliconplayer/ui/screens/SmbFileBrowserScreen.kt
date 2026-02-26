@@ -149,32 +149,42 @@ internal fun SmbFileBrowserScreen(
     val coroutineScope = rememberCoroutineScope()
     val smbListingAdapter = remember { SmbBrowserListingAdapter() }
     val allowCredentialRemember = sourceNodeId != null
+    val screenSessionKey = remember(
+        sourceNodeId,
+        sourceSpec.host,
+        sourceSpec.share,
+        sourceSpec.username,
+        sourceSpec.password
+    ) {
+        "node=${sourceNodeId ?: "adhoc"}|host=${sourceSpec.host}|share=${sourceSpec.share}|user=${sourceSpec.username.orEmpty()}"
+    }
     val launchShare = remember(sourceSpec.share) { sourceSpec.share.trim() }
     val canBrowseHostShares = allowHostShareNavigation || launchShare.isBlank()
-    val sourceId = remember(sourceSpec) { buildSmbSourceId(sourceSpec) }
-    val rootPath = remember(sourceSpec.path, launchShare) {
-        if (launchShare.isBlank()) "" else normalizeSmbPathForShare(sourceSpec.path).orEmpty()
-    }
+    val sourceId = remember(screenSessionKey, sourceSpec) { buildSmbSourceId(sourceSpec) }
 
-    var currentShare by remember(sourceSpec) { mutableStateOf(launchShare) }
-    var currentSubPath by remember(sourceSpec) { mutableStateOf("") }
-    var entries by remember(sourceSpec) { mutableStateOf<List<SmbBrowserEntry>>(emptyList()) }
-    var isLoading by remember(sourceSpec) { mutableStateOf(false) }
-    var errorMessage by remember(sourceSpec) { mutableStateOf<String?>(null) }
-    var listJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
-    val loadingLogLines = remember(sourceSpec) { mutableStateListOf<String>() }
-    var authDialogVisible by remember(sourceSpec) { mutableStateOf(false) }
-    var authDialogErrorMessage by remember(sourceSpec) { mutableStateOf<String?>(null) }
-    var authDialogUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username.orEmpty()) }
-    var authDialogPassword by remember(sourceSpec) { mutableStateOf("") }
-    var authDialogPasswordVisible by remember(sourceSpec) { mutableStateOf(false) }
-    var authRememberPassword by remember(sourceSpec, sourceNodeId) { mutableStateOf(allowCredentialRemember) }
-    var sessionUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username) }
-    var sessionPassword by remember(sourceSpec) { mutableStateOf(sourceSpec.password) }
-    var loadRequestSequence by remember(sourceSpec) { mutableStateOf(0) }
-    var browserNavDirection by remember(sourceSpec) { mutableStateOf(BrowserPageNavDirection.Neutral) }
-    val credentialsSpec = remember(sourceSpec, sessionUsername, sessionPassword) {
+    var currentShare by remember(screenSessionKey) { mutableStateOf(launchShare) }
+    var currentSubPath by remember(screenSessionKey) {
+        mutableStateOf(if (launchShare.isBlank()) "" else normalizeSmbPathForShare(sourceSpec.path).orEmpty())
+    }
+    var entries by remember(screenSessionKey) { mutableStateOf<List<SmbBrowserEntry>>(emptyList()) }
+    var isLoading by remember(screenSessionKey) { mutableStateOf(false) }
+    var errorMessage by remember(screenSessionKey) { mutableStateOf<String?>(null) }
+    var listJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
+    val loadingLogLines = remember(screenSessionKey) { mutableStateListOf<String>() }
+    var authDialogVisible by remember(screenSessionKey) { mutableStateOf(false) }
+    var authDialogErrorMessage by remember(screenSessionKey) { mutableStateOf<String?>(null) }
+    var authDialogUsername by remember(screenSessionKey) { mutableStateOf(sourceSpec.username.orEmpty()) }
+    var authDialogPassword by remember(screenSessionKey) { mutableStateOf("") }
+    var authDialogPasswordVisible by remember(screenSessionKey) { mutableStateOf(false) }
+    var authRememberPassword by remember(screenSessionKey, sourceNodeId) { mutableStateOf(allowCredentialRemember) }
+    var sessionUsername by remember(screenSessionKey) { mutableStateOf(sourceSpec.username) }
+    var sessionPassword by remember(screenSessionKey) { mutableStateOf(sourceSpec.password) }
+    var loadRequestSequence by remember(screenSessionKey) { mutableStateOf(0) }
+    var browserNavDirection by remember(screenSessionKey) { mutableStateOf(BrowserPageNavDirection.Neutral) }
+    var hasLoadedInitialDirectory by remember(screenSessionKey) { mutableStateOf(false) }
+    val credentialsSpec = remember(screenSessionKey, sourceSpec.host, sessionUsername, sessionPassword) {
         sourceSpec.copy(
+            host = sourceSpec.host,
             share = "",
             path = null,
             username = sessionUsername,
@@ -191,13 +201,13 @@ internal fun SmbFileBrowserScreen(
     val decoderExtensionArtworkHints = rememberBrowserDecoderArtworkHints()
     val browserSearchController = rememberBrowserSearchController()
     val browserSelectionController = rememberBrowserSelectionController<String>()
-    var browserInfoFields by remember(sourceSpec) { mutableStateOf<List<BrowserInfoField>>(emptyList()) }
-    var showBrowserInfoDialog by remember(sourceSpec) { mutableStateOf(false) }
-    var pendingExportTargets by remember(sourceSpec) { mutableStateOf<List<SmbSelectionFileTarget>>(emptyList()) }
-    var exportConflictDialogState by remember(sourceSpec) { mutableStateOf<BrowserExportConflictDialogState?>(null) }
-    var exportDownloadProgressState by remember(sourceSpec) { mutableStateOf<BrowserRemoteExportProgressState?>(null) }
-    var exportDownloadJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
-    var archiveOpenJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
+    var browserInfoFields by remember(screenSessionKey) { mutableStateOf<List<BrowserInfoField>>(emptyList()) }
+    var showBrowserInfoDialog by remember(screenSessionKey) { mutableStateOf(false) }
+    var pendingExportTargets by remember(screenSessionKey) { mutableStateOf<List<SmbSelectionFileTarget>>(emptyList()) }
+    var exportConflictDialogState by remember(screenSessionKey) { mutableStateOf<BrowserExportConflictDialogState?>(null) }
+    var exportDownloadProgressState by remember(screenSessionKey) { mutableStateOf<BrowserRemoteExportProgressState?>(null) }
+    var exportDownloadJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
+    var archiveOpenJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
 
     fun appendLoadingLog(message: String) {
         val lineNumber = loadingLogLines.size + 1
@@ -212,12 +222,8 @@ internal fun SmbFileBrowserScreen(
 
     fun effectivePath(): String? {
         val sub = normalizeSmbPathForShare(currentSubPath).orEmpty()
-        return when {
-            rootPath.isBlank() && sub.isBlank() -> null
-            sub.isBlank() -> rootPath
-            rootPath.isBlank() -> sub
-            else -> "$rootPath/$sub"
-        }
+        if (currentShare.isBlank()) return null
+        return sub.ifBlank { null }
     }
 
     fun isSharePickerMode(): Boolean = currentShare.isBlank()
@@ -366,10 +372,17 @@ internal fun SmbFileBrowserScreen(
         }
     }
 
-    LaunchedEffect(sourceSpec) {
+    LaunchedEffect(sourceSpec, screenSessionKey) {
+        val desiredShare = sourceSpec.share.trim()
+        val desiredSubPath = if (desiredShare.isBlank()) "" else normalizeSmbPathForShare(sourceSpec.path).orEmpty()
+        val sameNavigation = currentShare == desiredShare && normalizeSmbPathForShare(currentSubPath).orEmpty() == desiredSubPath
+        val sameCredentials = sessionUsername == sourceSpec.username && sessionPassword == sourceSpec.password
+        if (sameNavigation && sameCredentials && hasLoadedInitialDirectory) {
+            return@LaunchedEffect
+        }
         browserSearchController.hide()
-        currentShare = launchShare
-        currentSubPath = ""
+        currentShare = desiredShare
+        currentSubPath = desiredSubPath
         authDialogVisible = false
         authDialogErrorMessage = null
         authDialogUsername = sourceSpec.username.orEmpty()
@@ -379,6 +392,7 @@ internal fun SmbFileBrowserScreen(
         sessionUsername = sourceSpec.username
         sessionPassword = sourceSpec.password
         browserNavDirection = BrowserPageNavDirection.Neutral
+        hasLoadedInitialDirectory = true
         loadCurrentDirectory()
     }
 
@@ -426,7 +440,7 @@ internal fun SmbFileBrowserScreen(
     }
     val entriesListState = rememberLazyListState()
     val nonEntriesListState = rememberLazyListState()
-    var selectorExpanded by remember(sourceSpec) { mutableStateOf(false) }
+    var selectorExpanded by remember(screenSessionKey) { mutableStateOf(false) }
     val directoryScrollbarAlpha = rememberDialogLazyListScrollbarAlpha(
         enabled = browserContentState.pane == SmbBrowserPane.Entries,
         listState = entriesListState,

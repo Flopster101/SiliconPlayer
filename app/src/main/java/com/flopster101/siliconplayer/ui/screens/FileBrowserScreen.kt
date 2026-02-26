@@ -75,10 +75,14 @@ import com.flopster101.siliconplayer.R
 import com.flopster101.siliconplayer.rememberDialogLazyListScrollbarAlpha
 import com.flopster101.siliconplayer.resolveDecoderArtworkHintForFileName
 import com.flopster101.siliconplayer.resolveBrowserLocationModel
+import com.flopster101.siliconplayer.buildHttpDisplayUri
+import com.flopster101.siliconplayer.buildSmbDisplayUri
+import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
 import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
 import com.flopster101.siliconplayer.data.buildArchiveSourceId
 import com.flopster101.siliconplayer.data.buildArchiveDirectoryPath
+import com.flopster101.siliconplayer.data.parseArchiveSourceId
 import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
 import com.flopster101.siliconplayer.LocalBrowserListLocation
 import com.flopster101.siliconplayer.LocalBrowserListingAdapter
@@ -86,6 +90,7 @@ import com.flopster101.siliconplayer.data.FileItem
 import com.flopster101.siliconplayer.data.FileRepository
 import com.flopster101.siliconplayer.data.ensureArchiveMounted
 import com.flopster101.siliconplayer.data.resolveArchiveLogicalDirectory
+import com.flopster101.siliconplayer.data.resolveArchiveLocationToFile
 import com.flopster101.siliconplayer.session.ExportFileItem
 import com.flopster101.siliconplayer.session.ExportConflictDecision
 import com.flopster101.siliconplayer.session.ExportNameConflict
@@ -137,6 +142,14 @@ private data class ArchiveMountInfo(
     val smbSourceNodeId: Long? = null,
     val httpSourceNodeId: Long? = null,
     val httpRootPath: String? = null
+)
+
+private data class ArchiveToolbarContext(
+    val subtitle: String,
+    val isRemote: Boolean,
+    val sourceLabel: String,
+    val sourceTypeLabel: String,
+    val sourceIcon: ImageVector
 )
 
 private const val LOCAL_BROWSER_SHOW_INTERMEDIARY_LOADING_PAGE = false
@@ -199,11 +212,22 @@ internal fun FileBrowserScreen(
     var pendingDeleteFilePaths by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
-    val subtitleIcon = selectedLocation?.let { iconForStorageKind(it.kind, context) } ?: Icons.Default.Home
-    val browserContentState = remember(selectedLocationId, currentDirectory?.absolutePath, isLoadingDirectory) {
+    val hasActiveDirectory = currentDirectory != null
+    val hasPendingInitialNavigation =
+        selectedLocationId == null &&
+            !hasActiveDirectory &&
+            !initialDirectoryPath.isNullOrBlank()
+    val browserContentState = remember(
+        selectedLocationId,
+        currentDirectory?.absolutePath,
+        isLoadingDirectory,
+        hasPendingInitialNavigation
+    ) {
         BrowserContentState(
             pane = when {
-                selectedLocationId == null -> BrowserPane.StorageLocations
+                selectedLocationId == null && !hasActiveDirectory && hasPendingInitialNavigation ->
+                    BrowserPane.LoadingDirectory
+                selectedLocationId == null && !hasActiveDirectory -> BrowserPane.StorageLocations
                 LOCAL_BROWSER_SHOW_INTERMEDIARY_LOADING_PAGE && isLoadingDirectory -> BrowserPane.LoadingDirectory
                 else -> BrowserPane.DirectoryEntries
             },
@@ -276,6 +300,7 @@ internal fun FileBrowserScreen(
                                 .trim('/')
                         }
                         val zipSizes = readZipEntrySizesForDirectory(
+                            context = context,
                             archivePath = mountInfo.archivePath,
                             relativeDirectory = relativeDirectory
                         )
@@ -301,8 +326,7 @@ internal fun FileBrowserScreen(
                         .map { it.file }
                         .toList()
                 )
-                val stillOnSameDirectory = currentDirectory?.absolutePath == targetPath &&
-                    selectedLocationId != null
+                val stillOnSameDirectory = currentDirectory?.absolutePath == targetPath
                 if (stillOnSameDirectory) {
                     val folders = loadedFiles.count { it.isDirectory }
                     val files = loadedFiles.size - folders
@@ -319,7 +343,7 @@ internal fun FileBrowserScreen(
                         var index = 0
                         while (index < loadedFiles.size) {
                             ensureActive()
-                            if (currentDirectory?.absolutePath != targetPath || selectedLocationId == null) break
+                            if (currentDirectory?.absolutePath != targetPath) break
 
                             val end = min(index + publishBatchSize, loadedFiles.size)
                             val chunk = loadedFiles.subList(index, end)
@@ -512,9 +536,7 @@ internal fun FileBrowserScreen(
     }
 
     fun navigateUpWithinLocation() {
-        val location = selectedLocation ?: return openBrowserHome()
         val directory = currentDirectory ?: return openBrowserHome()
-        val root = location.directory
 
         findArchiveMount(directory.absolutePath)?.let { (mountRoot, mountInfo) ->
             val normalizedDirectoryPath = normalizePathForArchiveMountLookup(directory.absolutePath)
@@ -568,6 +590,8 @@ internal fun FileBrowserScreen(
             return
         }
 
+        val location = selectedLocation ?: return openBrowserHome()
+        val root = location.directory
         if (directory.absolutePath == root.absolutePath) {
             openBrowserHome()
             return
@@ -586,7 +610,7 @@ internal fun FileBrowserScreen(
             browserSelectionController.exitSelectionMode()
             return
         }
-        if (selectedLocation != null) {
+        if (currentDirectory != null) {
             navigateUpWithinLocation()
         } else {
             onExitBrowser?.invoke()
@@ -730,43 +754,64 @@ internal fun FileBrowserScreen(
         }
     }
 
-    LaunchedEffect(storageLocations, initialLocationId, initialDirectoryPath) {
+    LaunchedEffect(
+        storageLocations,
+        initialLocationId,
+        initialDirectoryPath,
+        initialSmbSourceNodeId,
+        initialHttpSourceNodeId,
+        initialHttpRootPath
+    ) {
         val initialLocation = initialLocationId?.let { id ->
             storageLocations.firstOrNull { it.id == id }
-        } ?: return@LaunchedEffect
-        val navigationKey = "${initialLocation.id}|${initialDirectoryPath.orEmpty()}"
+        }
+        val navigationKey = buildString {
+            append(initialLocationId.orEmpty())
+            append('|')
+            append(initialDirectoryPath.orEmpty())
+            append('|')
+            append(initialSmbSourceNodeId ?: -1L)
+            append('|')
+            append(initialHttpSourceNodeId ?: -1L)
+            append('|')
+            append(initialHttpRootPath.orEmpty())
+        }
         if (lastAppliedInitialNavigationKey == navigationKey) return@LaunchedEffect
         lastAppliedInitialNavigationKey = navigationKey
 
-        val restoredDirectory = initialDirectoryPath
-            ?.let { path ->
-                File(path).takeIf { file ->
-                    file.exists() && file.isDirectory && isWithinRoot(file, initialLocation.directory)
-                } ?: withContext(Dispatchers.IO) {
-                    resolveArchiveLogicalDirectory(context, path)
-                }?.takeIf { resolved ->
-                    File(resolved.parentPath).let { parent ->
-                        parent.exists() && parent.isDirectory && isWithinRoot(parent, initialLocation.directory)
-                    }
-                }?.also { resolved ->
-                    val archiveLocation = resolved.archivePath
-                    val archiveIsSmb = parseSmbSourceSpecFromInput(archiveLocation) != null
-                    val archiveIsHttp = parseHttpSourceSpecFromInput(archiveLocation) != null
-                    archiveMountRoots[normalizePathForArchiveMountLookup(resolved.mountDirectory.absolutePath)] =
-                        ArchiveMountInfo(
+        val rawInitialDirectory = initialDirectoryPath?.trim().takeUnless { it.isNullOrBlank() }
+        val resolvedArchive = rawInitialDirectory?.let { path ->
+            withContext(Dispatchers.IO) { resolveArchiveLogicalDirectory(context, path) }
+        }
+        val restoredDirectory = when {
+            resolvedArchive != null -> {
+                val archiveLocation = resolvedArchive.archivePath
+                val archiveIsSmb = parseSmbSourceSpecFromInput(archiveLocation) != null
+                val archiveIsHttp = parseHttpSourceSpecFromInput(archiveLocation) != null
+                archiveMountRoots[normalizePathForArchiveMountLookup(resolvedArchive.mountDirectory.absolutePath)] =
+                    ArchiveMountInfo(
                         archivePath = archiveLocation,
-                        parentPath = resolved.parentPath,
-                        returnTargetPath = resolved.parentPath,
+                        parentPath = resolvedArchive.parentPath,
+                        returnTargetPath = resolvedArchive.parentPath,
                         logicalArchivePath = archiveLocation,
                         smbSourceNodeId = if (archiveIsSmb) initialSmbSourceNodeId else null,
                         httpSourceNodeId = if (archiveIsHttp) initialHttpSourceNodeId else null,
                         httpRootPath = if (archiveIsHttp) initialHttpRootPath else null
                     )
-                }?.targetDirectory
-            } ?: initialLocation.directory
+                resolvedArchive.targetDirectory
+            }
+            rawInitialDirectory != null -> File(rawInitialDirectory).takeIf { it.exists() && it.isDirectory }
+            else -> initialLocation?.directory
+        } ?: initialLocation?.directory ?: run {
+            openBrowserHome()
+            return@LaunchedEffect
+        }
+
+        val resolvedLocationId = initialLocation?.id
+            ?: storageLocations.firstOrNull { isWithinRoot(restoredDirectory, it.directory) }?.id
 
         browserNavDirection = BrowserPageNavDirection.Forward
-        selectedLocationId = initialLocation.id
+        selectedLocationId = resolvedLocationId
         currentDirectory = restoredDirectory
         loadDirectoryAsync(restoredDirectory)
         val restoredMountInfo = findArchiveMount(restoredDirectory.absolutePath)?.second
@@ -778,7 +823,7 @@ internal fun FileBrowserScreen(
             parseHttpSourceSpecFromInput(restoredArchiveOriginPath) != null
         onBrowserLocationChanged(
             BrowserLaunchState(
-                locationId = initialLocation.id,
+                locationId = resolvedLocationId,
                 directoryPath = restoredLogicalArchivePath ?: restoredDirectory.absolutePath,
                 smbSourceNodeId = if (restoredIsArchiveSmb) {
                     restoredMountInfo?.smbSourceNodeId ?: initialSmbSourceNodeId
@@ -818,7 +863,7 @@ internal fun FileBrowserScreen(
     }
 
     BackHandler(
-        enabled = backHandlingEnabled && (selectedLocation != null || onExitBrowser != null),
+        enabled = backHandlingEnabled && (currentDirectory != null || onExitBrowser != null),
         onBack = { handleBack() }
     )
 
@@ -866,10 +911,21 @@ internal fun FileBrowserScreen(
         requester.requestFocus()
     }
 
-    val subtitle = if (selectedLocation == null) {
+    val logicalArchivePath = resolveLogicalArchivePath(currentDirectory)
+    val archiveToolbarContext = remember(logicalArchivePath) {
+        logicalArchivePath?.let(::buildArchiveToolbarContext)
+    }
+    val showLocalStorageSelector = archiveToolbarContext?.isRemote != true
+    val subtitleIcon = archiveToolbarContext?.sourceIcon
+        ?: selectedLocation?.let { iconForStorageKind(it.kind, context) }
+        ?: Icons.Default.Home
+    val subtitleIconPainterResId = if (archiveToolbarContext != null) R.drawable.ic_folder_zip else null
+    val subtitle = archiveToolbarContext?.subtitle ?: if (selectedLocation == null && currentDirectory == null) {
         "Storage locations"
     } else {
-        resolveLogicalArchivePath(currentDirectory) ?: (currentDirectory?.absolutePath ?: selectedLocation.name)
+        currentDirectory?.absolutePath
+            ?: selectedLocation?.name
+            ?: "Storage locations"
     }
     val filteredFileList by remember(browserSearchController.debouncedQuery) {
         derivedStateOf {
@@ -930,48 +986,31 @@ internal fun FileBrowserScreen(
                             Box {
                                 BrowserToolbarSelectorLabel(
                                     expanded = selectorExpanded,
-                                    onClick = { selectorExpanded = true },
+                                    onClick = {
+                                        if (showLocalStorageSelector) {
+                                            selectorExpanded = true
+                                        }
+                                    },
+                                    enabled = showLocalStorageSelector,
                                     focusRequester = selectorButtonFocusRequester
                                 )
                                 DropdownMenu(
                                     expanded = selectorExpanded,
                                     onDismissRequest = { selectorExpanded = false }
                                 ) {
-                                    Text(
-                                        text = "Storage locations",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                    )
-                                    DropdownMenuItem(
-                                        text = {
-                                            Column {
-                                                Text("Home")
-                                                Text(
-                                                    "Storage locations",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        },
-                                        leadingIcon = {
-                                            Icon(
-                                                imageVector = Icons.Default.Home,
-                                                contentDescription = null
-                                            )
-                                        },
-                                        onClick = {
-                                            selectorExpanded = false
-                                            openBrowserHome()
-                                        }
-                                    )
-                                    storageLocations.forEach { location ->
+                                    if (showLocalStorageSelector) {
+                                        Text(
+                                            text = "Storage locations",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                        )
                                         DropdownMenuItem(
                                             text = {
                                                 Column {
-                                                    Text(location.typeLabel)
+                                                    Text("Home")
                                                     Text(
-                                                        location.name,
+                                                        "Storage locations",
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
@@ -979,33 +1018,86 @@ internal fun FileBrowserScreen(
                                             },
                                             leadingIcon = {
                                                 Icon(
-                                                    imageVector = iconForStorageKind(location.kind, context),
+                                                    imageVector = Icons.Default.Home,
                                                     contentDescription = null
                                                 )
                                             },
                                             onClick = {
                                                 selectorExpanded = false
-                                                openLocation(location)
+                                                openBrowserHome()
                                             }
                                         )
+                                        storageLocations.forEach { location ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Column {
+                                                        Text(location.typeLabel)
+                                                        Text(
+                                                            location.name,
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = iconForStorageKind(location.kind, context),
+                                                        contentDescription = null
+                                                    )
+                                                },
+                                                onClick = {
+                                                    selectorExpanded = false
+                                                    openLocation(location)
+                                                }
+                                            )
+                                        }
+                                        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                        Text(
+                                            text = "Directory tree",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Coming soon") },
+                                            enabled = false,
+                                            onClick = {}
+                                        )
+                                    } else {
+                                        val contextLabel = archiveToolbarContext
+                                        Text(
+                                            text = "Archive source",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                        )
+                                        DropdownMenuItem(
+                                            text = {
+                                                Column {
+                                                    Text(contextLabel?.sourceTypeLabel ?: "Archive")
+                                                    Text(
+                                                        contextLabel?.sourceLabel ?: "Remote source",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = contextLabel?.sourceIcon ?: Icons.Default.Folder,
+                                                    contentDescription = null
+                                                )
+                                            },
+                                            enabled = false,
+                                            onClick = {}
+                                        )
                                     }
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                    Text(
-                                        text = "Directory tree",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Coming soon") },
-                                        enabled = false,
-                                        onClick = {}
-                                    )
                                 }
                             }
                             BrowserToolbarPathRow(
                                 icon = subtitleIcon,
-                                subtitle = subtitle
+                                subtitle = subtitle,
+                                iconPainterResId = subtitleIconPainterResId
                             )
                         }
                         if (selectedLocationId != null) {
@@ -1083,7 +1175,7 @@ internal fun FileBrowserScreen(
                     }
                 }
                 BrowserSearchToolbarRow(
-                    visible = selectedLocationId != null && browserSearchController.isVisible,
+                    visible = currentDirectory != null && browserSearchController.isVisible,
                     queryInput = browserSearchController.input,
                     onQueryInputChanged = browserSearchController::onInputChange,
                     onClose = browserSearchController::hide
@@ -1092,8 +1184,8 @@ internal fun FileBrowserScreen(
             }
         }
     ) { paddingValues ->
-        LaunchedEffect(selectedLocationId) {
-            if (selectedLocationId == null) {
+        LaunchedEffect(selectedLocationId, currentDirectory?.absolutePath) {
+            if (currentDirectory == null) {
                 browserSearchController.hide()
             }
         }
@@ -1101,7 +1193,7 @@ internal fun FileBrowserScreen(
             if (isPullRefreshing) return
             coroutineScope.launch {
                 isPullRefreshing = true
-                if (selectedLocationId == null) {
+                if (currentDirectory == null) {
                     storageLocationsRefreshToken += 1
                     delay(240)
                 } else {
@@ -1495,6 +1587,70 @@ private fun AnimatedFileBrowserEntry(
 
 private fun shouldPublishDirectoryAllAtOnce(totalItems: Int): Boolean {
     return totalItems <= DIRECTORY_DIRECT_PUBLISH_MAX_ITEMS
+}
+
+private fun buildArchiveToolbarContext(logicalPath: String): ArchiveToolbarContext? {
+    val parsed = parseArchiveLogicalPath(logicalPath) ?: return null
+    val archiveLocation = parsed.first
+    val inArchivePath = parsed.second
+    val archiveSource = parseArchiveSourceId(archiveLocation)
+    val archiveContainerLocation = archiveSource?.archivePath ?: archiveLocation
+    val archiveContainerDisplay = when {
+        parseSmbSourceSpecFromInput(archiveContainerLocation) != null -> {
+            val spec = parseSmbSourceSpecFromInput(archiveContainerLocation) ?: return null
+            decodePercentEncodedForDisplay(buildSmbDisplayUri(spec)) ?: buildSmbDisplayUri(spec)
+        }
+        parseHttpSourceSpecFromInput(archiveContainerLocation) != null -> {
+            val spec = parseHttpSourceSpecFromInput(archiveContainerLocation) ?: return null
+            decodePercentEncodedForDisplay(buildHttpDisplayUri(spec)) ?: buildHttpDisplayUri(spec)
+        }
+        else -> decodePercentEncodedForDisplay(archiveContainerLocation) ?: archiveContainerLocation
+    }
+    val archiveEntryDisplay = archiveSource
+        ?.entryPath
+        ?.split('/')
+        ?.filter { it.isNotBlank() }
+        ?.joinToString("/") { segment -> decodePercentEncodedForDisplay(segment) ?: segment }
+        ?.takeIf { it.isNotBlank() }
+    val inArchiveDisplay = inArchivePath
+        ?.split('/')
+        ?.filter { it.isNotBlank() }
+        ?.joinToString("/") { segment -> decodePercentEncodedForDisplay(segment) ?: segment }
+        ?.takeIf { it.isNotBlank() }
+    val subtitle = buildString {
+        append(archiveContainerDisplay)
+        if (!archiveEntryDisplay.isNullOrBlank()) {
+            append('/')
+            append(archiveEntryDisplay)
+        }
+        if (!inArchiveDisplay.isNullOrBlank()) {
+            append('/')
+            append(inArchiveDisplay)
+        }
+    }
+    return when {
+        parseSmbSourceSpecFromInput(archiveContainerLocation) != null -> ArchiveToolbarContext(
+            subtitle = subtitle,
+            isRemote = true,
+            sourceLabel = archiveContainerDisplay,
+            sourceTypeLabel = "SMB archive",
+            sourceIcon = NetworkIcons.SmbShare
+        )
+        parseHttpSourceSpecFromInput(archiveContainerLocation) != null -> ArchiveToolbarContext(
+            subtitle = subtitle,
+            isRemote = true,
+            sourceLabel = archiveContainerDisplay,
+            sourceTypeLabel = "HTTP archive",
+            sourceIcon = NetworkIcons.WorldCode
+        )
+        else -> ArchiveToolbarContext(
+            subtitle = subtitle,
+            isRemote = false,
+            sourceLabel = archiveContainerDisplay,
+            sourceTypeLabel = "Local archive",
+            sourceIcon = Icons.Default.Folder
+        )
+    }
 }
 
 private fun directoryPublishBatchSize(totalItems: Int): Int = when {
@@ -2003,12 +2159,14 @@ private fun formatFileSizeHumanReadable(bytes: Long): String {
 }
 
 private fun readZipEntrySizesForDirectory(
+    context: Context,
     archivePath: String,
     relativeDirectory: String
 ): Map<String, Long> {
     val normalizedDirectory = relativeDirectory.replace('\\', '/').trim('/')
+    val archiveFile = resolveArchiveLocationToFile(context, archivePath) ?: return emptyMap()
     return try {
-        ZipFile(File(archivePath)).use { zip ->
+        ZipFile(archiveFile).use { zip ->
             val sizes = LinkedHashMap<String, Long>()
             val entries = zip.entries()
             while (entries.hasMoreElements()) {

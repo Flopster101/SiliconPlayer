@@ -950,6 +950,7 @@ internal fun BrowserToolbarSubtitle(
 internal fun BrowserToolbarPathRow(
     icon: ImageVector,
     subtitle: String,
+    iconPainterResId: Int? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -958,12 +959,21 @@ internal fun BrowserToolbarPathRow(
             .padding(start = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp)
-        )
+        if (iconPainterResId != null) {
+            Icon(
+                painter = painterResource(id = iconPainterResId),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+        }
         Spacer(modifier = Modifier.width(6.dp))
         BrowserToolbarSubtitle(
             subtitle = subtitle,
@@ -978,6 +988,7 @@ internal fun BrowserToolbarSelectorLabel(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     label: String = "File Browser",
+    enabled: Boolean = true,
     focusRequester: FocusRequester? = null
 ) {
     val focusModifier = if (focusRequester != null) {
@@ -989,8 +1000,8 @@ internal fun BrowserToolbarSelectorLabel(
         modifier = modifier
             .then(focusModifier)
             .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .focusable()
+            .clickable(enabled = enabled, onClick = onClick)
+            .focusable(enabled = enabled)
             .padding(horizontal = 6.dp, vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

@@ -10,7 +10,9 @@ import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.TabletAndroid
 import androidx.compose.material.icons.filled.Usb
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.flopster101.siliconplayer.data.buildArchiveDirectoryPath
 import com.flopster101.siliconplayer.data.buildArchiveSourceId
+import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
 import com.flopster101.siliconplayer.data.parseArchiveSourceId
 import com.flopster101.siliconplayer.ui.screens.NetworkIcons
 import org.json.JSONArray
@@ -41,29 +43,16 @@ internal fun normalizeSourceIdentity(path: String?): String? {
         }
         "archive" -> {
             val parsedArchive = parseArchiveSourceId(trimmed) ?: return trimmed
-            val normalizedArchivePath = when (
-                Uri.parse(parsedArchive.archivePath).scheme?.lowercase(Locale.ROOT)
-            ) {
-                "http", "https", "smb" -> normalizeSourceIdentity(parsedArchive.archivePath)
-                    ?: parsedArchive.archivePath
-                "file" -> {
-                    val uriPath = Uri.parse(parsedArchive.archivePath).path
-                    val localPath = uriPath?.takeIf { it.isNotBlank() } ?: parsedArchive.archivePath
-                    try {
-                        File(localPath).canonicalFile.absolutePath
-                    } catch (_: Exception) {
-                        File(localPath).absoluteFile.normalize().path
-                    }
-                }
-                else -> {
-                    try {
-                        File(parsedArchive.archivePath).canonicalFile.absolutePath
-                    } catch (_: Exception) {
-                        File(parsedArchive.archivePath).absoluteFile.normalize().path
-                    }
-                }
-            }
+            val normalizedArchivePath = normalizeArchiveContainerLocation(parsedArchive.archivePath)
             buildArchiveSourceId(normalizedArchivePath, parsedArchive.entryPath)
+        }
+        "archive-dir" -> {
+            val parsedArchiveDirectory = parseArchiveLogicalPath(trimmed) ?: return trimmed
+            val normalizedArchivePath = normalizeArchiveContainerLocation(parsedArchiveDirectory.first)
+            buildArchiveDirectoryPath(
+                archivePath = normalizedArchivePath,
+                inArchiveDirectoryPath = parsedArchiveDirectory.second
+            )
         }
         "file" -> {
             val localPath = uri.path?.takeIf { it.isNotBlank() } ?: return null
@@ -90,6 +79,28 @@ internal fun normalizeSourceIdentity(path: String?): String? {
                 File(trimmed).canonicalFile.absolutePath
             } catch (_: Exception) {
                 File(trimmed).absoluteFile.normalize().path
+            }
+        }
+    }
+}
+
+private fun normalizeArchiveContainerLocation(rawArchiveLocation: String): String {
+    return when (Uri.parse(rawArchiveLocation).scheme?.lowercase(Locale.ROOT)) {
+        "http", "https", "smb" -> normalizeSourceIdentity(rawArchiveLocation) ?: rawArchiveLocation
+        "file" -> {
+            val uriPath = Uri.parse(rawArchiveLocation).path
+            val localPath = uriPath?.takeIf { it.isNotBlank() } ?: rawArchiveLocation
+            try {
+                File(localPath).canonicalFile.absolutePath
+            } catch (_: Exception) {
+                File(localPath).absoluteFile.normalize().path
+            }
+        }
+        else -> {
+            try {
+                File(rawArchiveLocation).canonicalFile.absolutePath
+            } catch (_: Exception) {
+                File(rawArchiveLocation).absoluteFile.normalize().path
             }
         }
     }
@@ -311,9 +322,56 @@ internal fun storagePresentationForEntry(
     entry: RecentPathEntry,
     descriptors: List<StorageDescriptor>
 ): StoragePresentation {
-    val normalizedPath = normalizeSourceIdentity(entry.path) ?: entry.path
+    val rawPath = entry.path.trim()
+    val normalizedPath = normalizeSourceIdentity(rawPath) ?: rawPath
     val parsed = Uri.parse(normalizedPath)
     val scheme = parsed.scheme?.lowercase(Locale.ROOT)
+    if (scheme == "archive-dir") {
+        val archivePath = parseArchiveLogicalPath(normalizedPath)?.first
+            ?: parseArchiveLogicalPath(rawPath)?.first
+        if (!archivePath.isNullOrBlank()) {
+            val archiveUri = Uri.parse(archivePath)
+            val archiveScheme = archiveUri.scheme?.lowercase(Locale.ROOT)
+            if (archiveScheme == "http" || archiveScheme == "https") {
+                val hostLabel = archiveUri.host?.takeIf { it.isNotBlank() } ?: "unknown host"
+                val protocolLabel = archiveScheme.uppercase(Locale.ROOT)
+                val qualifier = if (isRemoteSourceCached(context, archivePath)) "Cached" else null
+                return StoragePresentation(
+                    label = "$protocolLabel ($hostLabel)",
+                    icon = NetworkIcons.WorldCode,
+                    qualifier = qualifier
+                )
+            }
+            if (archiveScheme == "smb") {
+                val smbSpec = parseSmbSourceSpecFromInput(archivePath)
+                val qualifier = if (isRemoteSourceCached(context, archivePath)) "Cached" else null
+                val smbLabel = if (smbSpec == null) {
+                    "SMB"
+                } else {
+                    val smbTarget = if (smbSpec.share.isBlank()) {
+                        smbSpec.host
+                    } else {
+                        "${smbSpec.host}/${smbSpec.share}"
+                    }
+                    "SMB ($smbTarget)"
+                }
+                return StoragePresentation(
+                    label = smbLabel,
+                    icon = NetworkIcons.SmbShare,
+                    qualifier = qualifier
+                )
+            }
+            val archiveName = sourceLeafNameForDisplay(archivePath)
+                ?.takeIf { it.isNotBlank() }
+                ?: decodePercentEncodedForDisplay(File(archivePath).name)
+                    ?.takeIf { it.isNotBlank() }
+                ?: "Archive"
+            return StoragePresentation(
+                label = archiveName,
+                icon = Icons.Default.Folder
+            )
+        }
+    }
     if (scheme == "http" || scheme == "https") {
         val hostLabel = parsed.host?.takeIf { it.isNotBlank() } ?: "unknown host"
         val protocolLabel = scheme.uppercase(Locale.ROOT)
@@ -346,7 +404,13 @@ internal fun storagePresentationForEntry(
     if (scheme == "archive") {
         val archiveName = parseArchiveSourceId(entry.path)
             ?.archivePath
-            ?.let { File(it).name.ifBlank { it } }
+            ?.let { archivePath ->
+                sourceLeafNameForDisplay(archivePath)
+                    ?.takeIf { it.isNotBlank() }
+                    ?: decodePercentEncodedForDisplay(File(archivePath).name)
+                        ?.takeIf { it.isNotBlank() }
+                    ?: archivePath
+            }
             ?: "Archive"
         return StoragePresentation(
             label = archiveName,

@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.Dp
+import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
 import com.flopster101.siliconplayer.data.FileRepository
 import java.io.File
 
@@ -55,33 +56,56 @@ internal fun AppNavigationHomeContentSection(
         },
         onOpenUrlOrPath = onOpenUrlOrPathDialog,
         onOpenRecentFolder = { entry ->
-            val smbSpec = parseSmbSourceSpecFromInput(entry.path)
-            if (smbSpec != null) {
-                val smbTarget = resolveSmbRecentOpenTarget(
-                    targetSpec = smbSpec,
-                    networkNodes = networkNodes,
-                    preferredSourceNodeId = entry.sourceNodeId
-                )
+            val archiveLogicalPath = parseArchiveLogicalPath(entry.path)
+            if (archiveLogicalPath != null) {
+                val archiveSourcePath = archiveLogicalPath.first
+                val isArchiveSmb = parseSmbSourceSpecFromInput(archiveSourcePath) != null
+                val isArchiveHttp = parseHttpSourceSpecFromInput(archiveSourcePath) != null
                 onOpenBrowser(
                     browserOpenRequest(
-                        directoryPath = smbTarget.requestUri,
-                        smbSourceNodeId = smbTarget.sourceNodeId
-                    )
-                )
-            } else if (parseHttpSourceSpecFromInput(entry.path) != null) {
-                onOpenBrowser(
-                    browserOpenRequest(
+                        locationId = null,
                         directoryPath = entry.path,
-                        httpSourceNodeId = entry.sourceNodeId
+                        smbSourceNodeId = if (isArchiveSmb) entry.sourceNodeId else null,
+                        httpSourceNodeId = if (isArchiveHttp) entry.sourceNodeId else null
                     )
                 )
             } else {
-                onOpenBrowser(
-                    browserOpenRequest(
-                        locationId = entry.locationId,
-                        directoryPath = entry.path
+                val smbSpec = parseSmbSourceSpecFromInput(entry.path)
+                if (smbSpec != null) {
+                    val smbTarget = resolveSmbRecentOpenTarget(
+                        targetSpec = smbSpec,
+                        networkNodes = networkNodes,
+                        preferredSourceNodeId = entry.sourceNodeId
                     )
-                )
+                    onOpenBrowser(
+                        browserOpenRequest(
+                            directoryPath = smbTarget.requestUri,
+                            smbSourceNodeId = smbTarget.sourceNodeId
+                        )
+                    )
+                } else {
+                    val httpSpec = parseHttpSourceSpecFromInput(entry.path)
+                    if (httpSpec != null) {
+                        val httpTarget = resolveHttpRecentOpenTarget(
+                            targetSpec = httpSpec,
+                            networkNodes = networkNodes,
+                            preferredSourceNodeId = entry.sourceNodeId
+                        )
+                        onOpenBrowser(
+                            browserOpenRequest(
+                                directoryPath = httpTarget.requestUri,
+                                httpSourceNodeId = httpTarget.sourceNodeId
+                            )
+                        )
+                    } else {
+                        onOpenBrowser(
+                            browserOpenRequest(
+                                locationId = entry.locationId,
+                                directoryPath = entry.path
+                            )
+                        )
+                    }
+                }
             }
             onCurrentViewChanged(MainView.Browser)
         },
@@ -89,6 +113,7 @@ internal fun AppNavigationHomeContentSection(
             playRecentFileEntryAction(
                 cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
                 entry = entry,
+                networkNodes = networkNodes,
                 openPlayerOnTrackSelect = openPlayerOnTrackSelect,
                 onApplyTrackSelection = { file, autoStart, expandOverride, sourceIdOverride, locationIdOverride, useSongVolumeLookup ->
                     trackLoadDelegates.applyTrackSelection(

@@ -163,28 +163,40 @@ internal fun HttpFileBrowserScreen(
     val coroutineScope = rememberCoroutineScope()
     val httpListingAdapter = remember { HttpBrowserListingAdapter() }
     val allowCredentialRemember = sourceNodeId != null
-    var currentSpec by remember(sourceSpec) { mutableStateOf(sourceSpec) }
-    var entries by remember(sourceSpec) { mutableStateOf<List<HttpBrowserEntry>>(emptyList()) }
-    var isLoading by remember(sourceSpec) { mutableStateOf(false) }
-    var errorMessage by remember(sourceSpec) { mutableStateOf<String?>(null) }
-    var listJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
-    val loadingLogLines = remember(sourceSpec) { mutableStateListOf<String>() }
-    var authDialogVisible by remember(sourceSpec) { mutableStateOf(false) }
-    var authDialogErrorMessage by remember(sourceSpec) { mutableStateOf<String?>(null) }
-    var authDialogUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username.orEmpty()) }
-    var authDialogPassword by remember(sourceSpec) { mutableStateOf("") }
-    var authDialogPasswordVisible by remember(sourceSpec) { mutableStateOf(false) }
-    var authRememberPassword by remember(sourceSpec, sourceNodeId) { mutableStateOf(allowCredentialRemember) }
-    var sessionUsername by remember(sourceSpec) { mutableStateOf(sourceSpec.username) }
-    var sessionPassword by remember(sourceSpec) { mutableStateOf(sourceSpec.password) }
-    var loadRequestSequence by remember(sourceSpec) { mutableStateOf(0) }
-    var isPullRefreshing by remember(sourceSpec) { mutableStateOf(false) }
-    var loadingPartialEntries by remember(sourceSpec) { mutableStateOf<List<HttpBrowserEntry>>(emptyList()) }
-    var loadingLoadedCount by remember(sourceSpec) { mutableStateOf(0) }
-    var loadCancelState by remember(sourceSpec) { mutableStateOf<HttpLoadingCancelState?>(null) }
-    var browserNavDirection by remember(sourceSpec) { mutableStateOf(BrowserPageNavDirection.Neutral) }
-    val directoryEntriesCache = remember(sourceSpec) { mutableStateMapOf<String, List<HttpBrowserEntry>>() }
-    val effectiveRootPath = remember(sourceSpec, browserRootPath) {
+    val screenSessionKey = remember(
+        sourceNodeId,
+        sourceSpec.scheme,
+        sourceSpec.host,
+        sourceSpec.port,
+        sourceSpec.username,
+        sourceSpec.password,
+        browserRootPath
+    ) {
+        "node=${sourceNodeId ?: "adhoc"}|scheme=${sourceSpec.scheme}|host=${sourceSpec.host}|port=${sourceSpec.port ?: -1}|user=${sourceSpec.username.orEmpty()}|root=${browserRootPath.orEmpty()}"
+    }
+    var currentSpec by remember(screenSessionKey) { mutableStateOf(sourceSpec) }
+    var entries by remember(screenSessionKey) { mutableStateOf<List<HttpBrowserEntry>>(emptyList()) }
+    var isLoading by remember(screenSessionKey) { mutableStateOf(false) }
+    var errorMessage by remember(screenSessionKey) { mutableStateOf<String?>(null) }
+    var listJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
+    val loadingLogLines = remember(screenSessionKey) { mutableStateListOf<String>() }
+    var authDialogVisible by remember(screenSessionKey) { mutableStateOf(false) }
+    var authDialogErrorMessage by remember(screenSessionKey) { mutableStateOf<String?>(null) }
+    var authDialogUsername by remember(screenSessionKey) { mutableStateOf(sourceSpec.username.orEmpty()) }
+    var authDialogPassword by remember(screenSessionKey) { mutableStateOf("") }
+    var authDialogPasswordVisible by remember(screenSessionKey) { mutableStateOf(false) }
+    var authRememberPassword by remember(screenSessionKey, sourceNodeId) { mutableStateOf(allowCredentialRemember) }
+    var sessionUsername by remember(screenSessionKey) { mutableStateOf(sourceSpec.username) }
+    var sessionPassword by remember(screenSessionKey) { mutableStateOf(sourceSpec.password) }
+    var loadRequestSequence by remember(screenSessionKey) { mutableStateOf(0) }
+    var isPullRefreshing by remember(screenSessionKey) { mutableStateOf(false) }
+    var loadingPartialEntries by remember(screenSessionKey) { mutableStateOf<List<HttpBrowserEntry>>(emptyList()) }
+    var loadingLoadedCount by remember(screenSessionKey) { mutableStateOf(0) }
+    var loadCancelState by remember(screenSessionKey) { mutableStateOf<HttpLoadingCancelState?>(null) }
+    var browserNavDirection by remember(screenSessionKey) { mutableStateOf(BrowserPageNavDirection.Neutral) }
+    var hasLoadedInitialDirectory by remember(screenSessionKey) { mutableStateOf(false) }
+    val directoryEntriesCache = remember(screenSessionKey) { mutableStateMapOf<String, List<HttpBrowserEntry>>() }
+    val effectiveRootPath = remember(screenSessionKey, browserRootPath) {
         browserRootPath
             ?.trim()
             .takeUnless { it.isNullOrBlank() }
@@ -201,13 +213,13 @@ internal fun HttpFileBrowserScreen(
     val decoderExtensionArtworkHints = rememberBrowserDecoderArtworkHints()
     val browserSearchController = rememberBrowserSearchController()
     val browserSelectionController = rememberBrowserSelectionController<String>()
-    var browserInfoFields by remember(sourceSpec) { mutableStateOf<List<BrowserInfoField>>(emptyList()) }
-    var showBrowserInfoDialog by remember(sourceSpec) { mutableStateOf(false) }
-    var pendingExportTargets by remember(sourceSpec) { mutableStateOf<List<HttpSelectionFileTarget>>(emptyList()) }
-    var exportConflictDialogState by remember(sourceSpec) { mutableStateOf<BrowserExportConflictDialogState?>(null) }
-    var exportDownloadProgressState by remember(sourceSpec) { mutableStateOf<BrowserRemoteExportProgressState?>(null) }
-    var exportDownloadJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
-    var archiveOpenJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
+    var browserInfoFields by remember(screenSessionKey) { mutableStateOf<List<BrowserInfoField>>(emptyList()) }
+    var showBrowserInfoDialog by remember(screenSessionKey) { mutableStateOf(false) }
+    var pendingExportTargets by remember(screenSessionKey) { mutableStateOf<List<HttpSelectionFileTarget>>(emptyList()) }
+    var exportConflictDialogState by remember(screenSessionKey) { mutableStateOf<BrowserExportConflictDialogState?>(null) }
+    var exportDownloadProgressState by remember(screenSessionKey) { mutableStateOf<BrowserRemoteExportProgressState?>(null) }
+    var exportDownloadJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
+    var archiveOpenJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
 
     fun updatePlayableRemoteSources(entriesForNavigation: List<HttpBrowserEntry>) {
         RemotePlayableSourceIdsHolder.current = entriesForNavigation
@@ -456,9 +468,21 @@ internal fun HttpFileBrowserScreen(
         }
     }
 
-    LaunchedEffect(sourceSpec) {
+    LaunchedEffect(sourceSpec, screenSessionKey) {
+        val desiredSpec = sourceSpec.copy(path = normalizeHttpDirectoryPath(sourceSpec.path))
+        val currentNormalizedPath = normalizeHttpDirectoryPath(currentSpec.path)
+        val sameNavigation =
+            currentSpec.scheme.equals(desiredSpec.scheme, ignoreCase = true) &&
+                currentSpec.host.equals(desiredSpec.host, ignoreCase = true) &&
+                currentSpec.port == desiredSpec.port &&
+                currentNormalizedPath == desiredSpec.path &&
+                currentSpec.query == desiredSpec.query
+        val sameCredentials = sessionUsername == sourceSpec.username && sessionPassword == sourceSpec.password
+        if (sameNavigation && sameCredentials && hasLoadedInitialDirectory) {
+            return@LaunchedEffect
+        }
         browserSearchController.hide()
-        currentSpec = sourceSpec
+        currentSpec = desiredSpec
         entries = emptyList()
         loadingPartialEntries = emptyList()
         loadingLoadedCount = 0
@@ -471,8 +495,9 @@ internal fun HttpFileBrowserScreen(
         authRememberPassword = allowCredentialRemember
         sessionUsername = sourceSpec.username
         sessionPassword = sourceSpec.password
+        hasLoadedInitialDirectory = true
         openDirectory(
-            targetSpec = sourceSpec,
+            targetSpec = desiredSpec,
             cancelState = HttpLoadingCancelState(
                 previousSpec = null,
                 previousEntries = emptyList(),
@@ -535,7 +560,7 @@ internal fun HttpFileBrowserScreen(
     val rawSubtitle = buildHttpDisplayUri(browserSpec())
     val subtitle = decodePercentEncodedForDisplay(rawSubtitle) ?: rawSubtitle
     val protocolLabel = browserSpec().scheme.uppercase(Locale.ROOT)
-    var selectorExpanded by remember(sourceSpec) { mutableStateOf(false) }
+    var selectorExpanded by remember(screenSessionKey) { mutableStateOf(false) }
     val entriesListState = rememberLazyListState()
     val nonEntriesListState = rememberLazyListState()
     val pullRefreshState = rememberPullRefreshState(

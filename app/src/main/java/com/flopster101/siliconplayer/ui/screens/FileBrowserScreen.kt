@@ -1378,7 +1378,15 @@ internal fun FileBrowserScreen(
                                         onFocused = { browserFocusedEntryKey = entryKey },
                                         onLongClick = {
                                             if (browserSelectionController.isSelectionMode) {
-                                                browserSelectionController.toggleSelection(entryKey)
+                                                val didSelectRange =
+                                                    browserSelectionController.selectedKeys.size == 1 &&
+                                                        browserSelectionController.selectRangeTo(
+                                                            key = entryKey,
+                                                            orderedKeys = filteredFileList.map { it.file.absolutePath }
+                                                        )
+                                                if (!didSelectRange) {
+                                                    browserSelectionController.toggleSelection(entryKey)
+                                                }
                                             } else {
                                                 browserSelectionController.enterSelectionWith(entryKey)
                                             }

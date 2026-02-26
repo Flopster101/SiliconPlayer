@@ -1150,7 +1150,17 @@ internal fun SmbFileBrowserScreen(
                                 showAsShare = stateSharePickerMode,
                                 onLongClick = {
                                     if (browserSelectionController.isSelectionMode) {
-                                        browserSelectionController.toggleSelection(entrySelectionKey)
+                                        val didSelectRange =
+                                            browserSelectionController.selectedKeys.size == 1 &&
+                                                browserSelectionController.selectRangeTo(
+                                                    key = entrySelectionKey,
+                                                    orderedKeys = stateFilteredEntries.map { stateEntry ->
+                                                        entrySelectionKeyFor(stateEntry)
+                                                    }
+                                                )
+                                        if (!didSelectRange) {
+                                            browserSelectionController.toggleSelection(entrySelectionKey)
+                                        }
                                     } else {
                                         browserSelectionController.enterSelectionWith(entrySelectionKey)
                                     }

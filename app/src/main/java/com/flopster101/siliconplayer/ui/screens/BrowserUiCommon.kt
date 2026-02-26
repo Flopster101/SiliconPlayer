@@ -153,33 +153,61 @@ internal class BrowserSelectionController<K> {
         private set
     var selectedKeys by mutableStateOf<Set<K>>(emptySet())
         private set
+    private var rangeAnchorKey: K? by mutableStateOf(null)
 
     fun enterSelectionWith(key: K) {
         isSelectionMode = true
         selectedKeys = selectedKeys + key
+        rangeAnchorKey = key
     }
 
     fun toggleSelection(key: K) {
         if (!isSelectionMode) return
-        selectedKeys = if (selectedKeys.contains(key)) {
+        val nextSelectedKeys = if (selectedKeys.contains(key)) {
             selectedKeys - key
         } else {
             selectedKeys + key
         }
+        selectedKeys = nextSelectedKeys
+        rangeAnchorKey = when {
+            nextSelectedKeys.isEmpty() -> null
+            key in nextSelectedKeys -> key
+            else -> nextSelectedKeys.firstOrNull()
+        }
+    }
+
+    fun selectRangeTo(
+        key: K,
+        orderedKeys: List<K>
+    ): Boolean {
+        if (!isSelectionMode) return false
+        val anchor = rangeAnchorKey ?: selectedKeys.singleOrNull() ?: return false
+        val anchorIndex = orderedKeys.indexOf(anchor)
+        val targetIndex = orderedKeys.indexOf(key)
+        if (anchorIndex < 0 || targetIndex < 0) return false
+        val start = minOf(anchorIndex, targetIndex)
+        val end = maxOf(anchorIndex, targetIndex)
+        val rangeSelection = orderedKeys.subList(start, end + 1).toSet()
+        selectedKeys = selectedKeys + rangeSelection
+        rangeAnchorKey = anchor
+        return true
     }
 
     fun selectAll(keys: Collection<K>) {
         isSelectionMode = true
         selectedKeys = keys.toSet()
+        rangeAnchorKey = keys.firstOrNull()
     }
 
     fun deselectAll() {
         selectedKeys = emptySet()
+        rangeAnchorKey = null
     }
 
     fun exitSelectionMode() {
         isSelectionMode = false
         selectedKeys = emptySet()
+        rangeAnchorKey = null
     }
 }
 

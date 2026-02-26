@@ -12,14 +12,29 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.Inet4Address
 import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.NetworkInterface
+import java.net.Socket
 import java.nio.charset.StandardCharsets
 import java.util.Locale
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 internal data class SmbBrowserEntry(
     val name: String,
     val isDirectory: Boolean,
     val sizeBytes: Long,
     val isHidden: Boolean = false
+)
+
+internal data class SmbDiscoveredHost(
+    val ipAddress: String,
+    val hostName: String,
+    val mdnsHostName: String?,
+    val connectionHost: String
 )
 
 internal suspend fun listSmbDirectoryEntries(
@@ -153,6 +168,32 @@ internal suspend fun resolveSmbHostDisplayName(
     }
 }
 
+internal suspend fun discoverSmbHostsOnLocalNetwork(
+    maxConcurrentProbes: Int = 48
+): Result<List<SmbDiscoveredHost>> = withContext(Dispatchers.IO) {
+    runCatching {
+        val candidates = localSubnetIpv4HostCandidates()
+        if (candidates.isEmpty()) return@runCatching emptyList<SmbDiscoveredHost>()
+        val semaphore = Semaphore(maxConcurrentProbes.coerceAtLeast(1))
+        val discovered = coroutineScope {
+            candidates.map { ip ->
+                async {
+                    semaphore.withPermit {
+                        probeSmbHost(ip)
+                    }
+                }
+            }.awaitAll()
+        }
+            .filterNotNull()
+            .distinctBy { it.ipAddress }
+            .sortedWith(
+                compareBy<SmbDiscoveredHost> { it.hostName.lowercase(Locale.ROOT) }
+                    .thenBy { it.ipAddress }
+            )
+        discovered
+    }
+}
+
 private fun normalizeDiscoveredHostCandidate(raw: String?): String? {
     val cleaned = raw
         ?.trim()
@@ -194,6 +235,112 @@ private fun queryNetBiosNodeStatusName(hostOrIp: String): String? {
     } finally {
         socket.close()
     }
+}
+
+private fun localSubnetIpv4HostCandidates(): List<String> {
+    val candidates = linkedSetOf<String>()
+    val interfaces = runCatching { NetworkInterface.getNetworkInterfaces() }.getOrNull() ?: return emptyList()
+    while (interfaces.hasMoreElements()) {
+        val networkInterface = interfaces.nextElement()
+        if (!networkInterface.isUp || networkInterface.isLoopback || networkInterface.isVirtual) continue
+        networkInterface.interfaceAddresses
+            .asSequence()
+            .filter { ifaceAddress ->
+                val address = ifaceAddress.address
+                address is Inet4Address &&
+                    !address.isLoopbackAddress &&
+                    !address.isLinkLocalAddress &&
+                    address.isSiteLocalAddress
+            }
+            .forEach { ifaceAddress ->
+                val baseAddress = ifaceAddress.address as Inet4Address
+                val prefix = ifaceAddress.networkPrefixLength.toInt().coerceIn(1, 30)
+                val scanPrefix = prefix.coerceAtLeast(24)
+                val baseInt = ipv4ToInt(baseAddress)
+                val hostBits = 32 - scanPrefix
+                val hostCount = (1 shl hostBits) - 2
+                if (hostCount <= 0) return@forEach
+                val networkMask = (-1 shl hostBits)
+                val networkBase = baseInt and networkMask
+                for (host in 1..hostCount) {
+                    val candidateInt = networkBase + host
+                    if (candidateInt == baseInt) continue
+                    candidates += intToIpv4(candidateInt)
+                }
+            }
+    }
+    return candidates.toList()
+}
+
+private suspend fun probeSmbHost(ipAddress: String): SmbDiscoveredHost? {
+    val reachable = runCatching {
+        Socket().use { socket ->
+            socket.connect(InetSocketAddress(ipAddress, 445), 180)
+            true
+        }
+    }.getOrElse { false }
+    if (!reachable) return null
+
+    val reverseDnsName = runCatching {
+        InetAddress.getByName(ipAddress).hostName?.trim().orEmpty()
+    }.getOrNull()
+        ?.takeUnless { it.isBlank() || looksLikeIpLiteral(it) }
+
+    val resolvedSmbName = resolveSmbHostDisplayName(
+        SmbSourceSpec(host = ipAddress, share = "", path = null, username = null, password = null)
+    ).getOrNull()
+        ?.trim()
+        .takeUnless { it.isNullOrBlank() || looksLikeIpLiteral(it) }
+
+    val mdnsHostName = resolveMdnsHostCandidate(
+        reverseDnsName = reverseDnsName,
+        resolvedSmbName = resolvedSmbName
+    )
+
+    val preferredHost = resolvedSmbName ?: mdnsHostName ?: ipAddress
+    val connectionHost = mdnsHostName ?: ipAddress
+    return SmbDiscoveredHost(
+        ipAddress = ipAddress,
+        hostName = preferredHost,
+        mdnsHostName = mdnsHostName,
+        connectionHost = connectionHost
+    )
+}
+
+private fun resolveMdnsHostCandidate(
+    reverseDnsName: String?,
+    resolvedSmbName: String?
+): String? {
+    val candidates = buildList {
+        reverseDnsName?.trim()?.takeIf { it.isNotBlank() }?.let(::add)
+        resolvedSmbName?.trim()?.takeIf { it.isNotBlank() }?.let(::add)
+    }
+    candidates.forEach { raw ->
+        val candidate = if (raw.contains('.')) raw else "$raw.local"
+        val normalized = candidate.trim().lowercase(Locale.ROOT)
+        if (normalized.isBlank() || looksLikeIpLiteral(normalized)) return@forEach
+        val resolved = runCatching { InetAddress.getByName(normalized) }.getOrNull()
+        if (resolved != null) {
+            return normalized
+        }
+    }
+    return null
+}
+
+private fun ipv4ToInt(address: Inet4Address): Int {
+    val bytes = address.address
+    return ((bytes[0].toInt() and 0xFF) shl 24) or
+        ((bytes[1].toInt() and 0xFF) shl 16) or
+        ((bytes[2].toInt() and 0xFF) shl 8) or
+        (bytes[3].toInt() and 0xFF)
+}
+
+private fun intToIpv4(value: Int): String {
+    val b1 = (value ushr 24) and 0xFF
+    val b2 = (value ushr 16) and 0xFF
+    val b3 = (value ushr 8) and 0xFF
+    val b4 = value and 0xFF
+    return "$b1.$b2.$b3.$b4"
 }
 
 private fun resolveIpv4Address(host: String): String? {

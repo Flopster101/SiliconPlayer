@@ -115,6 +115,7 @@ import com.flopster101.siliconplayer.formatNetworkFolderSummary
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.isLikelyHttpDirectorySource
 import com.flopster101.siliconplayer.listSmbDirectoryEntries
+import com.flopster101.siliconplayer.discoverSmbHostsOnLocalNetwork
 import com.flopster101.siliconplayer.listSmbHostShareEntries
 import com.flopster101.siliconplayer.normalizeHttpDirectoryPath
 import com.flopster101.siliconplayer.normalizeHttpPath
@@ -188,6 +189,7 @@ internal fun NetworkBrowserScreen(
     var showAddSourceDialog by remember { mutableStateOf(false) }
     var showAddSmbSourceDialog by remember { mutableStateOf(false) }
     var showAddHttpSourceDialog by remember { mutableStateOf(false) }
+    var showSmbHostScanDialog by remember { mutableStateOf(false) }
     var showSelectionActionsMenu by remember { mutableStateOf(false) }
     var showSelectionToggleMenu by remember { mutableStateOf(false) }
     var selectionModeEnabled by remember { mutableStateOf(false) }
@@ -224,6 +226,10 @@ internal fun NetworkBrowserScreen(
     var newSmbUsername by remember { mutableStateOf("") }
     var newSmbPassword by remember { mutableStateOf("") }
     var newSmbPasswordVisible by remember { mutableStateOf(false) }
+    var smbHostScanEntries by remember { mutableStateOf<List<NetworkHostScanEntry>>(emptyList()) }
+    var smbHostScanLoading by remember { mutableStateOf(false) }
+    var smbHostScanError by remember { mutableStateOf<String?>(null) }
+    var smbHostScanJob by remember { mutableStateOf<Job?>(null) }
     var newHttpSourceName by remember { mutableStateOf("") }
     var newHttpUrl by remember { mutableStateOf("") }
     var newHttpUsername by remember { mutableStateOf("") }
@@ -246,6 +252,7 @@ internal fun NetworkBrowserScreen(
             refreshSettledSources.clear()
             smbHostResolveJobs.values.forEach { it.cancel() }
             smbHostResolveJobs.clear()
+            smbHostScanJob?.cancel()
             httpSiteResolveJobs.values.forEach { it.cancel() }
             httpSiteResolveJobs.clear()
             infoFetchJob?.cancel()
@@ -579,6 +586,36 @@ internal fun NetworkBrowserScreen(
             if (httpSiteResolveJobs[sourceId] == job) {
                 httpSiteResolveJobs.remove(sourceId)
             }
+        }
+    }
+
+    fun refreshSmbHostScan() {
+        smbHostScanJob?.cancel()
+        smbHostScanLoading = true
+        smbHostScanError = null
+        smbHostScanJob = uiScope.launch {
+            val result = discoverSmbHostsOnLocalNetwork()
+            result.onSuccess { hosts ->
+                smbHostScanEntries = hosts.map { host ->
+                    val title = host.hostName
+                    val subtitle = if (!host.mdnsHostName.isNullOrBlank()) {
+                        "${host.mdnsHostName} • ${host.ipAddress}"
+                    } else {
+                        host.ipAddress
+                    }
+                    NetworkHostScanEntry(
+                        id = host.ipAddress,
+                        title = title,
+                        subtitle = subtitle,
+                        primaryValue = host.connectionHost
+                    )
+                }
+            }.onFailure { throwable ->
+                smbHostScanEntries = emptyList()
+                smbHostScanError = throwable.message?.takeIf { it.isNotBlank() } ?: "Unable to scan hosts."
+            }
+            smbHostScanLoading = false
+            smbHostScanJob = null
         }
     }
 
@@ -2052,6 +2089,11 @@ internal fun NetworkBrowserScreen(
             onPasswordChange = { newSmbPassword = it },
             passwordVisible = newSmbPasswordVisible,
             onPasswordVisibleChange = { newSmbPasswordVisible = it },
+            onScanHosts = {
+                showAddSmbSourceDialog = false
+                showSmbHostScanDialog = true
+                refreshSmbHostScan()
+            },
             onDismiss = {
                 showAddSmbSourceDialog = false
                 editingSmbNodeId = null
@@ -2075,6 +2117,31 @@ internal fun NetworkBrowserScreen(
                 newSmbUsername = ""
                 newSmbPassword = ""
                 newSmbPasswordVisible = false
+            }
+        )
+    }
+
+    if (showSmbHostScanDialog) {
+        NetworkHostScanDialog(
+            title = "Scan SMB hosts",
+            entries = smbHostScanEntries,
+            isLoading = smbHostScanLoading,
+            errorMessage = smbHostScanError,
+            onRefresh = { refreshSmbHostScan() },
+            onDismiss = {
+                smbHostScanJob?.cancel()
+                smbHostScanJob = null
+                smbHostScanLoading = false
+                showSmbHostScanDialog = false
+                showAddSmbSourceDialog = true
+            },
+            onSelect = { entry ->
+                newSmbHost = entry.primaryValue
+                smbHostScanJob?.cancel()
+                smbHostScanJob = null
+                smbHostScanLoading = false
+                showSmbHostScanDialog = false
+                showAddSmbSourceDialog = true
             }
         )
     }

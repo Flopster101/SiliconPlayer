@@ -8,22 +8,26 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -163,6 +167,7 @@ internal fun NetworkSmbSourceDialog(
     onPasswordChange: (String) -> Unit,
     passwordVisible: Boolean,
     onPasswordVisibleChange: (Boolean) -> Unit,
+    onScanHosts: () -> Unit,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
@@ -256,6 +261,100 @@ internal fun NetworkSmbSourceDialog(
                 onClick = onConfirm
             ) {
                 Text(if (isEditing) "Save" else "Add")
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onScanHosts) {
+                    Text("Scan")
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
+            }
+        }
+    )
+}
+
+internal data class NetworkHostScanEntry(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val primaryValue: String
+)
+
+@Composable
+internal fun NetworkHostScanDialog(
+    title: String,
+    entries: List<NetworkHostScanEntry>,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onRefresh: () -> Unit,
+    onDismiss: () -> Unit,
+    onSelect: (NetworkHostScanEntry) -> Unit
+) {
+    AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            NetworkDialogScrollableContent {
+                if (isLoading && entries.isEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.2.dp)
+                    }
+                }
+                errorMessage?.takeIf { it.isNotBlank() }?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+                if (!isLoading && entries.isEmpty() && errorMessage.isNullOrBlank()) {
+                    Text(
+                        text = "No hosts found on the local network.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                entries.forEach { entry ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(entry) },
+                        shape = MaterialTheme.shapes.large,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = entry.title,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = entry.subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onRefresh) {
+                Text("Refresh")
             }
         },
         dismissButton = {

@@ -11,6 +11,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import java.io.File
 
+private fun normalizeBassDepthPref(value: Int): Int {
+    return if (value in 0..4) {
+        value
+    } else {
+        (8 - value.coerceIn(4, 8)).coerceIn(0, 4)
+    }
+}
+
+private fun normalizeBassRangePref(value: Int): Int {
+    return if (value in 0..4) {
+        value
+    } else {
+        (4 - ((value.coerceIn(5, 21) - 1) / 5)).coerceIn(0, 4)
+    }
+}
+
+private fun normalizeSurroundDelayMsPref(value: Int): Int {
+    if (value in 5..45 && value % 5 == 0) return value
+    val clamped = value.coerceIn(5, 45)
+    val step = ((clamped - 5) + 2) / 5
+    return 5 + (step * 5)
+}
+
 @Composable
 internal fun AppNavigationPlaybackDialogsSection(
     prefs: SharedPreferences,
@@ -67,12 +90,16 @@ internal fun AppNavigationPlaybackDialogsSection(
     }
     var dspBassDepth by remember {
         mutableIntStateOf(
-            prefs.getInt(AppPreferenceKeys.AUDIO_DSP_BASS_DEPTH, AppDefaults.AudioProcessing.Dsp.bassDepth).coerceIn(4, 8)
+            normalizeBassDepthPref(
+                prefs.getInt(AppPreferenceKeys.AUDIO_DSP_BASS_DEPTH, AppDefaults.AudioProcessing.Dsp.bassDepth)
+            )
         )
     }
     var dspBassRange by remember {
         mutableIntStateOf(
-            prefs.getInt(AppPreferenceKeys.AUDIO_DSP_BASS_RANGE, AppDefaults.AudioProcessing.Dsp.bassRange).coerceIn(5, 21)
+            normalizeBassRangePref(
+                prefs.getInt(AppPreferenceKeys.AUDIO_DSP_BASS_RANGE, AppDefaults.AudioProcessing.Dsp.bassRange)
+            )
         )
     }
     var dspSurroundEnabled by remember {
@@ -87,7 +114,9 @@ internal fun AppNavigationPlaybackDialogsSection(
     }
     var dspSurroundDelayMs by remember {
         mutableIntStateOf(
-            prefs.getInt(AppPreferenceKeys.AUDIO_DSP_SURROUND_DELAY_MS, AppDefaults.AudioProcessing.Dsp.surroundDelayMs).coerceIn(5, 45)
+            normalizeSurroundDelayMsPref(
+                prefs.getInt(AppPreferenceKeys.AUDIO_DSP_SURROUND_DELAY_MS, AppDefaults.AudioProcessing.Dsp.surroundDelayMs)
+            )
         )
     }
     var dspReverbEnabled by remember {
@@ -220,12 +249,12 @@ internal fun AppNavigationPlaybackDialogsSection(
             NativeBridge.setDspBassEnabled(it)
         },
         onDspBassDepthChange = {
-            val normalized = it.coerceIn(4, 8)
+            val normalized = it.coerceIn(0, 4)
             tempDspBassDepth = normalized
             NativeBridge.setDspBassDepth(normalized)
         },
         onDspBassRangeChange = {
-            val normalized = it.coerceIn(5, 21)
+            val normalized = it.coerceIn(0, 4)
             tempDspBassRange = normalized
             NativeBridge.setDspBassRange(normalized)
         },
@@ -239,7 +268,7 @@ internal fun AppNavigationPlaybackDialogsSection(
             NativeBridge.setDspSurroundDepth(normalized)
         },
         onDspSurroundDelayMsChange = {
-            val normalized = it.coerceIn(5, 45)
+            val normalized = normalizeSurroundDelayMsPref(it)
             tempDspSurroundDelayMs = normalized
             NativeBridge.setDspSurroundDelayMs(normalized)
         },

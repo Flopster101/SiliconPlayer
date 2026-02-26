@@ -339,8 +339,8 @@ private:
     std::atomic<bool> masterSoloRight { false };
     std::atomic<bool> outputLimiterEnabled { false };
     std::atomic<bool> dspBassEnabled { false };
-    std::atomic<int> dspBassDepth { 6 };
-    std::atomic<int> dspBassRange { 14 };
+    std::atomic<int> dspBassDepth { 2 };
+    std::atomic<int> dspBassRange { 2 };
     std::atomic<bool> dspSurroundEnabled { false };
     std::atomic<int> dspSurroundDepth { 8 };
     std::atomic<int> dspSurroundDelayMs { 20 };

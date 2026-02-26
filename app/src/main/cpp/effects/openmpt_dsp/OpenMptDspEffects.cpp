@@ -286,6 +286,10 @@ void OpenMptDspEffects::reset() {
     configuredSampleRate = 0;
     bassX1 = 0;
     bassY1 = 0;
+    bassDcrY1L = 0;
+    bassDcrX1L = 0;
+    bassDcrY1R = 0;
+    bassDcrX1R = 0;
     surroundDelayL.clear();
     surroundDelayR.clear();
     surroundWritePos = 0;
@@ -348,6 +352,10 @@ void OpenMptDspEffects::resetForSampleRate(int sampleRate) {
     configuredSampleRate = safeRate;
     bassX1 = 0;
     bassY1 = 0;
+    bassDcrY1L = 0;
+    bassDcrX1L = 0;
+    bassDcrY1R = 0;
+    bassDcrX1R = 0;
 
     const int maxSurroundDelayFrames = std::max(16, (safeRate * 45) / 1000);
     surroundDelayL.assign(static_cast<size_t>(maxSurroundDelayFrames), 0.0f);
@@ -423,10 +431,11 @@ void OpenMptDspEffects::applyBass(
         int channels,
         int sampleRate,
         const OpenMptDspParams& params) {
-    const int depth = std::clamp(params.bassDepth, 4, 8);
-    const int range = std::clamp(params.bassRange, 5, 21);
-    const int nXBassCutOff = std::clamp(50 + (range + 2) * 20, 60, 600);
-    int nXBassGain = std::clamp(depth, 2, 8);
+    const int depthStep = std::clamp(params.bassDepth, 0, 4);
+    const int rangeStep = std::clamp(params.bassRange, 0, 4);
+    const int nXBassRange = std::clamp((4 - rangeStep) * 5 + 1, 5, 21);
+    const int nXBassCutOff = std::clamp(50 + (nXBassRange + 2) * 20, 60, 600);
+    int nXBassGain = std::clamp(8 - depthStep, 4, 8);
     int32_t a1 = 0;
     int32_t b0 = 1024;
     int32_t b1 = 0;
@@ -446,11 +455,24 @@ void OpenMptDspEffects::applyBass(
         b1 >>= (nXBassGain - 5);
     }
 
-    for (int frame = 0; frame < frames; ++frame) {
-        if (channels >= 2) {
+    if (channels >= 2) {
+        int32_t y1l = bassDcrY1L;
+        int32_t x1l = bassDcrX1L;
+        int32_t y1r = bassDcrY1R;
+        int32_t x1r = bassDcrX1R;
+        for (int frame = 0; frame < frames; ++frame) {
             const int idx = frame * channels;
             int32_t inL = static_cast<int32_t>(std::lrint(std::clamp(buffer[idx], -1.0f, 1.0f) * 32767.0f));
             int32_t inR = static_cast<int32_t>(std::lrint(std::clamp(buffer[idx + 1], -1.0f, 1.0f) * 32767.0f));
+            const int32_t diffL = x1l - inL;
+            const int32_t diffR = x1r - inR;
+            x1l = inL;
+            x1r = inR;
+            inL = diffL / (1 << (kDcrAmount + 1)) - diffL + y1l;
+            inR = diffR / (1 << (kDcrAmount + 1)) - diffR + y1r;
+            y1l = inL - inL / (1 << kDcrAmount);
+            y1r = inR - inR / (1 << kDcrAmount);
+
             const int32_t x_m = (inL + inR + 0x100) >> 9;
             bassY1 = (b0 * x_m + b1 * bassX1 + a1 * bassY1) >> 2;
             bassX1 = x_m;
@@ -459,8 +481,21 @@ void OpenMptDspEffects::applyBass(
             bassY1 = (bassY1 + 0x80) >> 8;
             buffer[idx] = clampSample(static_cast<float>(inL) / 32767.0f);
             buffer[idx + 1] = clampSample(static_cast<float>(inR) / 32767.0f);
-        } else {
+        }
+        bassDcrY1L = y1l;
+        bassDcrX1L = x1l;
+        bassDcrY1R = y1r;
+        bassDcrX1R = x1r;
+    } else {
+        int32_t y1 = bassDcrY1L;
+        int32_t x1 = bassDcrX1L;
+        for (int frame = 0; frame < frames; ++frame) {
             int32_t inM = static_cast<int32_t>(std::lrint(std::clamp(buffer[frame], -1.0f, 1.0f) * 32767.0f));
+            const int32_t diff = x1 - inM;
+            x1 = inM;
+            inM = diff / (1 << (kDcrAmount + 1)) - diff + y1;
+            y1 = inM - inM / (1 << kDcrAmount);
+
             const int32_t x_m = (inM + 0x80) >> 8;
             bassY1 = (b0 * x_m + b1 * bassX1 + a1 * bassY1) >> 2;
             bassX1 = x_m;
@@ -468,6 +503,8 @@ void OpenMptDspEffects::applyBass(
             bassY1 = (bassY1 + 0x40) >> 8;
             buffer[frame] = clampSample(static_cast<float>(inM) / 32767.0f);
         }
+        bassDcrY1L = y1;
+        bassDcrX1L = x1;
     }
 }
 
@@ -481,7 +518,8 @@ void OpenMptDspEffects::applySurround(
         return;
     }
 
-    const int delayMs = std::clamp(params.surroundDelayMs, 5, 45);
+    const int delayClamped = std::clamp(params.surroundDelayMs, 5, 45);
+    const int delayMs = 5 + ((((delayClamped - 5) + 2) / 5) * 5);
     const int depth = std::clamp(params.surroundDepth, 1, 16);
     if (delayMs != surroundConfiguredDelayMs || depth != surroundConfiguredDepth) {
         const int safeRate = std::max(sampleRate, 8000);

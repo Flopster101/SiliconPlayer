@@ -21,8 +21,8 @@ object AppDefaults {
 
         object Dsp {
             const val bassEnabled = false
-            const val bassDepth = 6
-            const val bassRange = 14
+            const val bassDepth = 2
+            const val bassRange = 2
             const val surroundEnabled = false
             const val surroundDepth = 8
             const val surroundDelayMs = 20

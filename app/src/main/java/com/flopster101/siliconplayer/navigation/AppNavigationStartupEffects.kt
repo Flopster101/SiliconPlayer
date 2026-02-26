@@ -6,6 +6,29 @@ import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private fun normalizeBassDepthPref(value: Int): Int {
+    return if (value in 0..4) {
+        value
+    } else {
+        (8 - value.coerceIn(4, 8)).coerceIn(0, 4)
+    }
+}
+
+private fun normalizeBassRangePref(value: Int): Int {
+    return if (value in 0..4) {
+        value
+    } else {
+        (4 - ((value.coerceIn(5, 21) - 1) / 5)).coerceIn(0, 4)
+    }
+}
+
+private fun normalizeSurroundDelayMsPref(value: Int): Int {
+    if (value in 5..45 && value % 5 == 0) return value
+    val clamped = value.coerceIn(5, 45)
+    val step = ((clamped - 5) + 2) / 5
+    return 5 + (step * 5)
+}
+
 @Composable
 internal fun AppNavigationStartupEffects(
     prefs: SharedPreferences,
@@ -58,11 +81,11 @@ internal fun AppNavigationStartupEffects(
         val dspBassDepth = prefs.getInt(
             AppPreferenceKeys.AUDIO_DSP_BASS_DEPTH,
             AppDefaults.AudioProcessing.Dsp.bassDepth
-        ).coerceIn(4, 8)
+        ).let(::normalizeBassDepthPref)
         val dspBassRange = prefs.getInt(
             AppPreferenceKeys.AUDIO_DSP_BASS_RANGE,
             AppDefaults.AudioProcessing.Dsp.bassRange
-        ).coerceIn(5, 21)
+        ).let(::normalizeBassRangePref)
         val dspSurroundEnabled = prefs.getBoolean(
             AppPreferenceKeys.AUDIO_DSP_SURROUND_ENABLED,
             AppDefaults.AudioProcessing.Dsp.surroundEnabled
@@ -74,7 +97,7 @@ internal fun AppNavigationStartupEffects(
         val dspSurroundDelayMs = prefs.getInt(
             AppPreferenceKeys.AUDIO_DSP_SURROUND_DELAY_MS,
             AppDefaults.AudioProcessing.Dsp.surroundDelayMs
-        ).coerceIn(5, 45)
+        ).let(::normalizeSurroundDelayMsPref)
         val dspReverbEnabled = prefs.getBoolean(
             AppPreferenceKeys.AUDIO_DSP_REVERB_ENABLED,
             AppDefaults.AudioProcessing.Dsp.reverbEnabled

@@ -24,8 +24,8 @@ namespace siliconplayer::effects {
 
 struct OpenMptDspParams {
     bool bassEnabled = false;
-    int bassDepth = 6;    // OpenMPT-like range 4..8
-    int bassRange = 14;   // OpenMPT-like range 5..21
+    int bassDepth = 2;    // OpenMPT desktop slider step: 0..4
+    int bassRange = 2;    // OpenMPT desktop slider step: 0..4
 
     bool surroundEnabled = false;
     int surroundDepth = 8;    // 1..16
@@ -70,6 +70,10 @@ private:
     int configuredSampleRate = 0;
     int32_t bassX1 = 0;
     int32_t bassY1 = 0;
+    int32_t bassDcrY1L = 0;
+    int32_t bassDcrX1L = 0;
+    int32_t bassDcrY1R = 0;
+    int32_t bassDcrX1R = 0;
 
     std::vector<float> surroundDelayL;
     std::vector<float> surroundDelayR;

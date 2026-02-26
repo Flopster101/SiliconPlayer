@@ -362,14 +362,14 @@ private fun DspTabContent(
                 DspIntSliderRow(
                     label = "Bass Depth",
                     value = dspBassDepth,
-                    valueRange = 4..8,
+                    valueRange = 0..4,
                     onValueChange = onDspBassDepthChange,
                     enabled = dspBassEnabled
                 )
                 DspIntSliderRow(
                     label = "Bass Range",
                     value = dspBassRange,
-                    valueRange = 5..21,
+                    valueRange = 0..4,
                     onValueChange = onDspBassRangeChange,
                     enabled = dspBassEnabled
                 )
@@ -392,6 +392,7 @@ private fun DspTabContent(
                     label = "Surround Delay (ms)",
                     value = dspSurroundDelayMs,
                     valueRange = 5..45,
+                    step = 5,
                     onValueChange = onDspSurroundDelayMsChange,
                     enabled = dspSurroundEnabled
                 )
@@ -548,6 +549,7 @@ private fun DspIntSliderRow(
     label: String,
     value: Int,
     valueRange: IntRange,
+    step: Int = 1,
     onValueChange: (Int) -> Unit,
     enabled: Boolean = true
 ) {
@@ -574,9 +576,23 @@ private fun DspIntSliderRow(
         }
         Slider(
             value = value.toFloat(),
-            onValueChange = { onValueChange(it.toInt().coerceIn(valueRange.first, valueRange.last)) },
+            onValueChange = {
+                val clamped = it.toInt().coerceIn(valueRange.first, valueRange.last)
+                val snapped = if (step <= 1) {
+                    clamped
+                } else {
+                    val offset = clamped - valueRange.first
+                    val snappedOffset = ((offset + (step / 2)) / step) * step
+                    (valueRange.first + snappedOffset).coerceIn(valueRange.first, valueRange.last)
+                }
+                onValueChange(snapped)
+            },
             valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
-            steps = (valueRange.last - valueRange.first - 1).coerceAtLeast(0),
+            steps = if (step <= 1) {
+                (valueRange.last - valueRange.first - 1).coerceAtLeast(0)
+            } else {
+                (((valueRange.last - valueRange.first) / step) - 1).coerceAtLeast(0)
+            },
             enabled = enabled
         )
     }

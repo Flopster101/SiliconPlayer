@@ -196,11 +196,11 @@ void AudioEngine::setDspBassEnabled(bool enabled) {
 }
 
 void AudioEngine::setDspBassDepth(int depth) {
-    dspBassDepth.store(std::clamp(depth, 4, 8));
+    dspBassDepth.store(std::clamp(depth, 0, 4));
 }
 
 void AudioEngine::setDspBassRange(int range) {
-    dspBassRange.store(std::clamp(range, 5, 21));
+    dspBassRange.store(std::clamp(range, 0, 4));
 }
 
 void AudioEngine::setDspSurroundEnabled(bool enabled) {
@@ -212,7 +212,9 @@ void AudioEngine::setDspSurroundDepth(int depth) {
 }
 
 void AudioEngine::setDspSurroundDelayMs(int delayMs) {
-    dspSurroundDelayMs.store(std::clamp(delayMs, 5, 45));
+    const int clamped = std::clamp(delayMs, 5, 45);
+    const int step = ((clamped - 5) + 2) / 5;
+    dspSurroundDelayMs.store(5 + (step * 5));
 }
 
 void AudioEngine::setDspReverbEnabled(bool enabled) {

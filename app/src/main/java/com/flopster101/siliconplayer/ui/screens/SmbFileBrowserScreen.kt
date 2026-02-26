@@ -1244,7 +1244,9 @@ internal fun SmbFileBrowserScreen(
         BrowserRemoteExportProgressDialog(
             state = state,
             onCancel = {
+                exportDownloadProgressState = null
                 exportDownloadJob?.cancel()
+                archiveOpenJob?.cancel()
             }
         )
     }

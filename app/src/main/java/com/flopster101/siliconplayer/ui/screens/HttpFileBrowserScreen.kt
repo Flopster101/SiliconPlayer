@@ -1384,7 +1384,9 @@ internal fun HttpFileBrowserScreen(
         BrowserRemoteExportProgressDialog(
             state = state,
             onCancel = {
+                exportDownloadProgressState = null
                 exportDownloadJob?.cancel()
+                archiveOpenJob?.cancel()
             }
         )
     }

@@ -531,7 +531,25 @@ void AudioEngine::applyOpenMptDspEffects(float* buffer, int numFrames, int chann
     params.reverbPreset = dspReverbPreset.load(std::memory_order_relaxed);
     params.bitCrushEnabled = dspBitCrushEnabled.load(std::memory_order_relaxed);
     params.bitCrushBits = dspBitCrushBits.load(std::memory_order_relaxed);
+
+    const bool anyDspEnabled =
+            params.bassEnabled || params.surroundEnabled || params.reverbEnabled || params.bitCrushEnabled;
+    if (!anyDspEnabled || !buffer || numFrames <= 0 || channels <= 0) {
+        return;
+    }
+
+    // Phase 1 headroom: fixed DSP bus staging to avoid callback-rate gain modulation.
+    constexpr float kDspBusPreGain = 0.5623413f;      // -5.0 dB
+    constexpr float kDspBusMakeupGain = 1.5848932f;   // +4.0 dB (net: -1.0 dB)
+    const int totalSamples = numFrames * channels;
+    for (int i = 0; i < totalSamples; ++i) {
+        buffer[i] *= kDspBusPreGain;
+    }
+
     openMptDspEffects.process(buffer, numFrames, channels, sampleRate, params);
+    for (int i = 0; i < totalSamples; ++i) {
+        buffer[i] *= kDspBusMakeupGain;
+    }
 }
 
 void AudioEngine::applyOutputLimiter(float* buffer, int numFrames, int channels) {

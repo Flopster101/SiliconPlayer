@@ -45,8 +45,7 @@ constexpr int kRvbMaxRvbDelay = 3800;
 constexpr int kTankLengthAvg = (kRvbDif1LLen + kRvbDif1RLen + kRvbDif2LLen + kRvbDif2RLen + kRvbDly1LLen + kRvbDly1RLen + kRvbDly2LLen + kRvbDly2RLen) / 2;
 constexpr int kDcrAmount = 9;
 constexpr float kMixScale = static_cast<float>(1 << 24);
-constexpr float kGlobalReverbSendGain = 0.70f;
-constexpr float kGlobalReverbReturnMakeupGain = 1.14f;
+constexpr float kGlobalReverbSendGain = 1.0f;
 
 float clampSample(float sample) {
     return std::clamp(sample, -1.0f, 1.0f);
@@ -292,10 +291,8 @@ void OpenMptDspEffects::reset() {
     bassDcrX1L = 0;
     bassDcrY1R = 0;
     bassDcrX1R = 0;
-    surroundDelayL.clear();
-    surroundDelayR.clear();
+    surroundDelay.clear();
     surroundWritePos = 0;
-    surroundOutputGain = 1.0f;
     reverbConfiguredPreset = -1;
     reverbConfiguredDepth = -1;
     reverbInputY1L = 0;
@@ -361,15 +358,13 @@ void OpenMptDspEffects::resetForSampleRate(int sampleRate) {
     bassDcrX1R = 0;
 
     const int maxSurroundDelayFrames = std::max(16, (safeRate * 45) / 1000);
-    surroundDelayL.assign(static_cast<size_t>(maxSurroundDelayFrames), 0.0f);
-    surroundDelayR.assign(static_cast<size_t>(maxSurroundDelayFrames), 0.0f);
+    surroundDelay.assign(static_cast<size_t>(maxSurroundDelayFrames), 0);
     surroundWritePos = 0;
     surroundConfiguredDelayMs = 20;
     surroundConfiguredDepth = 8;
     surroundHpX1 = 0;
     surroundHpY1 = 0;
     surroundLpY1 = 0;
-    surroundOutputGain = 1.0f;
     shelfEq(1024, surroundHpA1, surroundHpB0, surroundHpB1, 200, safeRate, 0.0f, 0.5f, 1.0f);
     shelfEq(1024, surroundLpA1, surroundLpB0, surroundLpB1, 7000, safeRate, 1.0f, 0.75f, 0.0f);
     surroundHpB0 = (surroundHpB0 * surroundConfiguredDepth) >> 5;
@@ -518,7 +513,7 @@ void OpenMptDspEffects::applySurround(
         int channels,
         int sampleRate,
         const OpenMptDspParams& params) {
-    if (channels < 2 || surroundDelayL.empty()) {
+    if (channels < 2 || surroundDelay.empty()) {
         return;
     }
 
@@ -527,7 +522,7 @@ void OpenMptDspEffects::applySurround(
     const int depth = std::clamp(params.surroundDepth, 1, 16);
     if (delayMs != surroundConfiguredDelayMs || depth != surroundConfiguredDepth) {
         const int safeRate = std::max(sampleRate, 8000);
-        std::fill(surroundDelayL.begin(), surroundDelayL.end(), 0.0f);
+        std::fill(surroundDelay.begin(), surroundDelay.end(), 0);
         surroundWritePos = 0;
         surroundConfiguredDelayMs = delayMs;
         surroundConfiguredDepth = depth;
@@ -540,34 +535,35 @@ void OpenMptDspEffects::applySurround(
         surroundHpB1 = (surroundHpB1 * depth) >> 5;
         surroundLpB0 *= 2;
         surroundLpB1 *= 2;
-        // OpenMPT's integer mixer has more headroom than this float path.
-        // Apply depth-aware compensation to avoid hard clipping without a limiter.
-        surroundOutputGain = 1.0f / (1.0f + (static_cast<float>(depth) / 90.0f));
     }
 
     for (int frame = 0; frame < frames; ++frame) {
         const int idx = frame * channels;
-        const int32_t inL = static_cast<int32_t>(std::lrint(std::clamp(buffer[idx], -1.0f, 1.0f) * 32767.0f));
-        const int32_t inR = static_cast<int32_t>(std::lrint(std::clamp(buffer[idx + 1], -1.0f, 1.0f) * 32767.0f));
+        const int32_t inL = static_cast<int32_t>(std::lrint(std::clamp(buffer[idx], -1.0f, 1.0f) * kMixScale));
+        const int32_t inR = static_cast<int32_t>(std::lrint(std::clamp(buffer[idx + 1], -1.0f, 1.0f) * kMixScale));
 
-        const int32_t secho = static_cast<int32_t>(std::lrint(surroundDelayL[static_cast<size_t>(surroundWritePos)]));
-        surroundDelayL[static_cast<size_t>(surroundWritePos)] = static_cast<float>((inL + inR + 256) >> 9);
+        const int32_t secho = surroundDelay[static_cast<size_t>(surroundWritePos)];
+        surroundDelay[static_cast<size_t>(surroundWritePos)] = (inL + inR + 256) >> 9;
 
-        int32_t v0 = (surroundHpB0 * secho + surroundHpB1 * surroundHpX1 + surroundHpA1 * surroundHpY1) >> 10;
+        const int64_t hpAcc = static_cast<int64_t>(surroundHpB0) * secho
+                              + static_cast<int64_t>(surroundHpB1) * surroundHpX1
+                              + static_cast<int64_t>(surroundHpA1) * surroundHpY1;
+        int32_t v0 = static_cast<int32_t>(hpAcc >> 10);
         surroundHpX1 = secho;
-        int32_t v = (surroundLpB0 * v0 + surroundLpB1 * surroundHpY1 + surroundLpA1 * surroundLpY1) >> 2;
+        const int64_t lpAcc = static_cast<int64_t>(surroundLpB0) * v0
+                              + static_cast<int64_t>(surroundLpB1) * surroundHpY1
+                              + static_cast<int64_t>(surroundLpA1) * surroundLpY1;
+        int32_t v = static_cast<int32_t>(lpAcc >> 2);
         surroundHpY1 = v0;
         surroundLpY1 = v >> 8;
 
         const int32_t outL = inL + v;
         const int32_t outR = inR - v;
-        const float scaledL = (static_cast<float>(outL) * surroundOutputGain) / 32767.0f;
-        const float scaledR = (static_cast<float>(outR) * surroundOutputGain) / 32767.0f;
-        buffer[idx] = clampSample(scaledL);
-        buffer[idx + 1] = clampSample(scaledR);
+        buffer[idx] = clampSample(static_cast<float>(outL) / kMixScale);
+        buffer[idx + 1] = clampSample(static_cast<float>(outR) / kMixScale);
 
         surroundWritePos++;
-        if (surroundWritePos >= std::clamp((sampleRate * delayMs) / 1000, 1, static_cast<int>(surroundDelayL.size()) - 1)) {
+        if (surroundWritePos >= std::clamp((sampleRate * delayMs) / 1000, 1, static_cast<int>(surroundDelay.size()) - 1)) {
             surroundWritePos = 0;
         }
     }
@@ -606,8 +602,7 @@ void OpenMptDspEffects::applyReverb(
         const int idx = frame * channels;
         const int32_t inL = static_cast<int32_t>(std::lrint(std::clamp(buffer[idx], -1.0f, 1.0f) * kMixScale));
         const int32_t inR = static_cast<int32_t>(std::lrint(std::clamp(buffer[idx + 1], -1.0f, 1.0f) * kMixScale));
-        // Global path: route signal through a dedicated reverb send and rebuild dry mix
-        // from that send to avoid direct-path double counting.
+        // Route signal through a dedicated reverb send and rebuild dry mix from send.
         reverbWetWork[static_cast<size_t>(frame) * 2] = static_cast<int32_t>(std::lrint(static_cast<float>(inL) * kGlobalReverbSendGain));
         reverbWetWork[static_cast<size_t>(frame) * 2 + 1] = static_cast<int32_t>(std::lrint(static_cast<float>(inR) * kGlobalReverbSendGain));
         reverbDryWork[static_cast<size_t>(frame) * 2] = 0;
@@ -639,8 +634,8 @@ void OpenMptDspEffects::applyReverb(
 
     for (int frame = 0; frame < frames; ++frame) {
         const int idx = frame * channels;
-        const float outL = static_cast<float>(reverbDryWork[static_cast<size_t>(frame) * 2] / kMixScale) * kGlobalReverbReturnMakeupGain;
-        const float outR = static_cast<float>(reverbDryWork[static_cast<size_t>(frame) * 2 + 1] / kMixScale) * kGlobalReverbReturnMakeupGain;
+        const float outL = static_cast<float>(reverbDryWork[static_cast<size_t>(frame) * 2] / kMixScale);
+        const float outR = static_cast<float>(reverbDryWork[static_cast<size_t>(frame) * 2 + 1] / kMixScale);
         buffer[idx] = clampSample(outL);
         buffer[idx + 1] = clampSample(outR);
     }

@@ -75,8 +75,7 @@ private:
     int32_t bassDcrY1R = 0;
     int32_t bassDcrX1R = 0;
 
-    std::vector<float> surroundDelayL;
-    std::vector<float> surroundDelayR;
+    std::vector<int32_t> surroundDelay;
     int surroundWritePos = 0;
     int surroundConfiguredDelayMs = 20;
     int32_t surroundHpA1 = 0;
@@ -89,7 +88,6 @@ private:
     int32_t surroundHpY1 = 0;
     int32_t surroundLpY1 = 0;
     int surroundConfiguredDepth = 8;
-    float surroundOutputGain = 1.0f;
 
     int reverbConfiguredPreset = -1;
     int reverbConfiguredDepth = -1;

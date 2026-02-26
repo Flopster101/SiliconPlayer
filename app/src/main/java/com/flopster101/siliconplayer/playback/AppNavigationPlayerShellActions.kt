@@ -8,6 +8,7 @@ internal fun stopAndEmptyTrackAction(
     playbackStateDelegates: AppNavigationPlaybackStateDelegates
 ) {
     playbackStateDelegates.resetAndOptionallyKeepLastTrack(keepLastTrack = true)
+    clearManualSmbSessionCredentialCache()
     context.startService(
         Intent(context, PlaybackService::class.java).setAction(PlaybackService.ACTION_STOP_CLEAR)
     )

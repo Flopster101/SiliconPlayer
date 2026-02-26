@@ -37,19 +37,35 @@ internal fun buildSmbSourceSpec(
 }
 
 internal fun parseSmbSourceSpecFromInput(input: String): SmbSourceSpec? {
-    val parsed = Uri.parse(input.trim())
-    val scheme = parsed.scheme?.lowercase()
-    if (scheme != "smb") return null
-    val host = parsed.host?.trim().orEmpty()
+    val trimmed = input.trim()
+    if (!trimmed.startsWith("smb://", ignoreCase = true)) return null
+    val withoutScheme = trimmed.substringAfter("://", missingDelimiterValue = "")
+    if (withoutScheme.isBlank()) return null
+
+    val authorityAndPath = withoutScheme
+        .substringBefore('#')
+        .substringBefore('?')
+    val authorityPart = authorityAndPath.substringBefore('/').trim()
+    val rawPathPart = authorityAndPath.substringAfter('/', missingDelimiterValue = "").trim()
+    if (authorityPart.isBlank()) return null
+
+    val userInfoPart = authorityPart.substringBefore('@', missingDelimiterValue = "")
+        .takeIf { authorityPart.contains('@') }
+    val hostPartRaw = authorityPart.substringAfter('@', authorityPart).trim()
+    val host = hostPartRaw
+        .removePrefix("[")
+        .removeSuffix("]")
+        .trim()
     if (host.isBlank()) return null
-    val segments = parsed.pathSegments.orEmpty()
-    val share = segments.firstOrNull()?.trim().orEmpty()
-    val relativePath = if (share.isBlank()) {
-        null
-    } else {
-        segments.drop(1).joinToString("/").trim().ifBlank { null }
-    }
-    val (username, password) = parseSmbUserInfo(parsed.encodedUserInfo)
+
+    val segments = rawPathPart
+        .replace('\\', '/')
+        .split('/')
+        .map { segment -> Uri.decode(segment).trim() }
+        .filter { it.isNotBlank() }
+    val share = segments.firstOrNull().orEmpty()
+    val relativePath = if (share.isBlank()) null else segments.drop(1).joinToString("/").ifBlank { null }
+    val (username, password) = parseSmbUserInfo(userInfoPart)
     return buildSmbSourceSpec(
         host = host,
         share = share,

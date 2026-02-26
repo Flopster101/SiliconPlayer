@@ -9,7 +9,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
 import java.io.File
+import com.flopster101.siliconplayer.ui.dialogs.ManualHttpAuthenticationDialog
+import com.flopster101.siliconplayer.ui.dialogs.ManualSmbAuthenticationDialog
 
 private enum class DspSettingsNamespace {
     Global,
@@ -575,4 +578,101 @@ internal fun AppNavigationPlaybackDialogsSection(
             onShowAudioEffectsDialogChanged(false)
         }
     )
+
+    ManualSmbAuthCoordinator.pendingPrompt?.let { prompt ->
+        key(prompt.resolved.sourceId, prompt.host, prompt.share, prompt.failureMessage) {
+            var username by remember(prompt.initialUsername) { mutableStateOf(prompt.initialUsername.orEmpty()) }
+            var password by remember { mutableStateOf("") }
+            var passwordVisible by remember { mutableStateOf(false) }
+
+            ManualSmbAuthenticationDialog(
+                host = prompt.host,
+                share = prompt.share,
+                failureMessage = prompt.failureMessage,
+                username = username,
+                password = password,
+                passwordVisible = passwordVisible,
+                onUsernameChange = { username = it },
+                onPasswordChange = { password = it },
+                onPasswordVisibilityChange = { passwordVisible = it },
+                onDismiss = {
+                    ManualSmbAuthCoordinator.clearPrompt()
+                },
+                onConfirm = {
+                    val smbSpec = prompt.resolved.smbSpec ?: run {
+                        ManualSmbAuthCoordinator.clearPrompt()
+                        return@ManualSmbAuthenticationDialog
+                    }
+                    val normalizedUsername = username.trim().ifBlank { null }
+                    val normalizedPassword = password.trim().ifBlank { null }
+                    val updatedSpec = smbSpec.copy(
+                        username = normalizedUsername,
+                        password = normalizedPassword
+                    )
+                    ManualSmbAuthCoordinator.rememberCredentials(
+                        smbSpec,
+                        normalizedUsername,
+                        normalizedPassword
+                    )
+                    ManualSmbAuthCoordinator.clearPrompt()
+                    manualOpenDelegates.launchManualRemoteSelection(
+                        resolved = prompt.resolved.copy(
+                            requestUrl = buildSmbRequestUri(updatedSpec),
+                            smbSpec = updatedSpec
+                        ),
+                        options = prompt.options,
+                        expandOverride = prompt.expandOverride
+                    )
+                }
+            )
+        }
+    }
+
+    ManualSmbAuthCoordinator.pendingHttpPrompt?.let { prompt ->
+        key(
+            prompt.resolved.sourceId,
+            prompt.requestSpec.scheme,
+            prompt.requestSpec.host,
+            prompt.requestSpec.port ?: -1,
+            prompt.failureMessage
+        ) {
+            var username by remember(prompt.initialUsername) { mutableStateOf(prompt.initialUsername.orEmpty()) }
+            var password by remember { mutableStateOf("") }
+            var passwordVisible by remember { mutableStateOf(false) }
+
+            ManualHttpAuthenticationDialog(
+                requestSpec = prompt.requestSpec,
+                failureMessage = prompt.failureMessage,
+                username = username,
+                password = password,
+                passwordVisible = passwordVisible,
+                onUsernameChange = { username = it },
+                onPasswordChange = { password = it },
+                onPasswordVisibilityChange = { passwordVisible = it },
+                onDismiss = { ManualSmbAuthCoordinator.clearHttpPrompt() },
+                onConfirm = {
+                    val normalizedUsername = username.trim().ifBlank { null }
+                    val normalizedPassword = password.trim().ifBlank { null }
+                    val updatedSpec = prompt.requestSpec.copy(
+                        username = normalizedUsername,
+                        password = normalizedPassword
+                    )
+                    ManualSmbAuthCoordinator.rememberCredentials(
+                        prompt.requestSpec,
+                        normalizedUsername,
+                        normalizedPassword
+                    )
+                    ManualSmbAuthCoordinator.clearHttpPrompt()
+                    manualOpenDelegates.launchManualRemoteSelection(
+                        resolved = prompt.resolved.copy(
+                            sourceId = buildHttpSourceId(updatedSpec),
+                            requestUrl = buildHttpRequestUri(updatedSpec)
+                        ),
+                        options = prompt.options,
+                        expandOverride = prompt.expandOverride
+                    )
+                }
+            )
+        }
+    }
 }

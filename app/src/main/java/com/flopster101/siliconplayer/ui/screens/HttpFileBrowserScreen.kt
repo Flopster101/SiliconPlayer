@@ -86,6 +86,7 @@ import com.flopster101.siliconplayer.HttpSourceSpec
 import com.flopster101.siliconplayer.RemoteExportCancelledException
 import com.flopster101.siliconplayer.AppDefaults
 import com.flopster101.siliconplayer.AppPreferenceKeys
+import com.flopster101.siliconplayer.ManualSmbAuthCoordinator
 import com.flopster101.siliconplayer.buildHttpDisplayUri
 import com.flopster101.siliconplayer.buildHttpRequestUri
 import com.flopster101.siliconplayer.buildHttpSourceId
@@ -176,16 +177,26 @@ internal fun HttpFileBrowserScreen(
     val coroutineScope = rememberCoroutineScope()
     val httpListingAdapter = remember { HttpBrowserListingAdapter() }
     val allowCredentialRemember = sourceNodeId != null
+    val adhocSessionCredentials: Pair<String?, String?>? = remember(
+        sourceNodeId,
+        sourceSpec.scheme,
+        sourceSpec.host,
+        sourceSpec.port
+    ) {
+        if (sourceNodeId == null) {
+            ManualSmbAuthCoordinator.credentialsFor(sourceSpec)
+        } else {
+            null
+        }
+    }
     val screenSessionKey = remember(
         sourceNodeId,
         sourceSpec.scheme,
         sourceSpec.host,
         sourceSpec.port,
-        sourceSpec.username,
-        sourceSpec.password,
         browserRootPath
     ) {
-        "node=${sourceNodeId ?: "adhoc"}|scheme=${sourceSpec.scheme}|host=${sourceSpec.host}|port=${sourceSpec.port ?: -1}|user=${sourceSpec.username.orEmpty()}|root=${browserRootPath.orEmpty()}"
+        "node=${sourceNodeId ?: "adhoc"}|scheme=${sourceSpec.scheme}|host=${sourceSpec.host}|port=${sourceSpec.port ?: -1}|root=${browserRootPath.orEmpty()}"
     }
     var currentSpec by remember(screenSessionKey) { mutableStateOf(sourceSpec) }
     var entries by remember(screenSessionKey) { mutableStateOf<List<HttpBrowserEntry>>(emptyList()) }
@@ -195,12 +206,18 @@ internal fun HttpFileBrowserScreen(
     val loadingLogLines = remember(screenSessionKey) { mutableStateListOf<String>() }
     var authDialogVisible by remember(screenSessionKey) { mutableStateOf(false) }
     var authDialogErrorMessage by remember(screenSessionKey) { mutableStateOf<String?>(null) }
-    var authDialogUsername by remember(screenSessionKey) { mutableStateOf(sourceSpec.username.orEmpty()) }
+    var authDialogUsername by remember(screenSessionKey) {
+        mutableStateOf(sourceSpec.username ?: adhocSessionCredentials?.first ?: "")
+    }
     var authDialogPassword by remember(screenSessionKey) { mutableStateOf("") }
     var authDialogPasswordVisible by remember(screenSessionKey) { mutableStateOf(false) }
     var authRememberPassword by remember(screenSessionKey, sourceNodeId) { mutableStateOf(allowCredentialRemember) }
-    var sessionUsername by remember(screenSessionKey) { mutableStateOf(sourceSpec.username) }
-    var sessionPassword by remember(screenSessionKey) { mutableStateOf(sourceSpec.password) }
+    var sessionUsername by remember(screenSessionKey) {
+        mutableStateOf<String?>(sourceSpec.username ?: adhocSessionCredentials?.first)
+    }
+    var sessionPassword by remember(screenSessionKey) {
+        mutableStateOf<String?>(sourceSpec.password ?: adhocSessionCredentials?.second)
+    }
     var loadRequestSequence by remember(screenSessionKey) { mutableStateOf(0) }
     var isPullRefreshing by remember(screenSessionKey) { mutableStateOf(false) }
     var loadingPartialEntries by remember(screenSessionKey) { mutableStateOf<List<HttpBrowserEntry>>(emptyList()) }
@@ -491,7 +508,9 @@ internal fun HttpFileBrowserScreen(
                 currentSpec.port == desiredSpec.port &&
                 currentNormalizedPath == desiredSpec.path &&
                 currentSpec.query == desiredSpec.query
-        val sameCredentials = sessionUsername == sourceSpec.username && sessionPassword == sourceSpec.password
+        val desiredUsername = sourceSpec.username ?: sessionUsername ?: adhocSessionCredentials?.first
+        val desiredPassword = sourceSpec.password ?: sessionPassword ?: adhocSessionCredentials?.second
+        val sameCredentials = sessionUsername == desiredUsername && sessionPassword == desiredPassword
         if (sameNavigation && sameCredentials && hasLoadedInitialDirectory) {
             return@LaunchedEffect
         }
@@ -503,12 +522,12 @@ internal fun HttpFileBrowserScreen(
         loadCancelState = null
         authDialogVisible = false
         authDialogErrorMessage = null
-        authDialogUsername = sourceSpec.username.orEmpty()
+        authDialogUsername = desiredUsername.orEmpty()
         authDialogPassword = ""
         authDialogPasswordVisible = false
         authRememberPassword = allowCredentialRemember
-        sessionUsername = sourceSpec.username
-        sessionPassword = sourceSpec.password
+        sessionUsername = desiredUsername
+        sessionPassword = desiredPassword
         hasLoadedInitialDirectory = true
         openDirectory(
             targetSpec = desiredSpec,
@@ -1404,6 +1423,15 @@ internal fun HttpFileBrowserScreen(
                             onRememberHttpCredentials(
                                 sourceNodeId,
                                 currentDirectorySourceId(),
+                                normalizedUsername,
+                                normalizedPassword
+                            )
+                        } else if (sourceNodeId == null) {
+                            ManualSmbAuthCoordinator.rememberCredentials(
+                                currentSpec.copy(
+                                    username = normalizedUsername,
+                                    password = normalizedPassword
+                                ),
                                 normalizedUsername,
                                 normalizedPassword
                             )

@@ -91,6 +91,7 @@ import com.flopster101.siliconplayer.BrowserLaunchState
 import com.flopster101.siliconplayer.joinSmbRelativePath
 import com.flopster101.siliconplayer.SmbBrowserListLocation
 import com.flopster101.siliconplayer.SmbBrowserListingAdapter
+import com.flopster101.siliconplayer.ManualSmbAuthCoordinator
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.normalizeSmbPathForShare
 import com.flopster101.siliconplayer.resolveSmbAuthenticationFailureReason
@@ -163,14 +164,23 @@ internal fun SmbFileBrowserScreen(
     val coroutineScope = rememberCoroutineScope()
     val smbListingAdapter = remember { SmbBrowserListingAdapter() }
     val allowCredentialRemember = sourceNodeId != null
+    val adhocSessionCredentials: Pair<String?, String?>? = remember(
+        sourceNodeId,
+        sourceSpec.host,
+        sourceSpec.share
+    ) {
+        if (sourceNodeId == null) {
+            ManualSmbAuthCoordinator.credentialsFor(sourceSpec)
+        } else {
+            null
+        }
+    }
     val screenSessionKey = remember(
         sourceNodeId,
         sourceSpec.host,
-        sourceSpec.share,
-        sourceSpec.username,
-        sourceSpec.password
+        sourceSpec.share
     ) {
-        "node=${sourceNodeId ?: "adhoc"}|host=${sourceSpec.host}|share=${sourceSpec.share}|user=${sourceSpec.username.orEmpty()}"
+        "node=${sourceNodeId ?: "adhoc"}|host=${sourceSpec.host}|share=${sourceSpec.share}"
     }
     val launchShare = remember(sourceSpec.share) { sourceSpec.share.trim() }
     val canBrowseHostShares = allowHostShareNavigation || launchShare.isBlank()
@@ -187,12 +197,19 @@ internal fun SmbFileBrowserScreen(
     val loadingLogLines = remember(screenSessionKey) { mutableStateListOf<String>() }
     var authDialogVisible by remember(screenSessionKey) { mutableStateOf(false) }
     var authDialogErrorMessage by remember(screenSessionKey) { mutableStateOf<String?>(null) }
-    var authDialogUsername by remember(screenSessionKey) { mutableStateOf(sourceSpec.username.orEmpty()) }
+    var authDialogUsername by remember(screenSessionKey) {
+        mutableStateOf(sourceSpec.username ?: adhocSessionCredentials?.first ?: "")
+    }
     var authDialogPassword by remember(screenSessionKey) { mutableStateOf("") }
     var authDialogPasswordVisible by remember(screenSessionKey) { mutableStateOf(false) }
     var authRememberPassword by remember(screenSessionKey, sourceNodeId) { mutableStateOf(allowCredentialRemember) }
-    var sessionUsername by remember(screenSessionKey) { mutableStateOf(sourceSpec.username) }
-    var sessionPassword by remember(screenSessionKey) { mutableStateOf(sourceSpec.password) }
+    var pendingReloadAfterAuth by remember(screenSessionKey) { mutableStateOf(false) }
+    var sessionUsername by remember(screenSessionKey) {
+        mutableStateOf(sourceSpec.username ?: adhocSessionCredentials?.first)
+    }
+    var sessionPassword by remember(screenSessionKey) {
+        mutableStateOf(sourceSpec.password ?: adhocSessionCredentials?.second)
+    }
     var loadRequestSequence by remember(screenSessionKey) { mutableStateOf(0) }
     var browserNavDirection by remember(screenSessionKey) { mutableStateOf(BrowserPageNavDirection.Neutral) }
     var hasLoadedInitialDirectory by remember(screenSessionKey) { mutableStateOf(false) }
@@ -362,7 +379,11 @@ internal fun SmbFileBrowserScreen(
                 RemotePlayableSourceIdsHolder.current = emptyList()
                 val authFailureReason = resolveSmbAuthenticationFailureReason(throwable)?.let { reason ->
                     if (
-                        reason == SmbAuthenticationFailureReason.Unknown &&
+                        (
+                            reason == SmbAuthenticationFailureReason.Unknown ||
+                                reason == SmbAuthenticationFailureReason.WrongPassword ||
+                                reason == SmbAuthenticationFailureReason.WrongCredentials
+                            ) &&
                         credentialsSpec.username.isNullOrBlank() &&
                         credentialsSpec.password.isNullOrBlank()
                     ) {
@@ -471,7 +492,9 @@ internal fun SmbFileBrowserScreen(
         val desiredShare = sourceSpec.share.trim()
         val desiredSubPath = if (desiredShare.isBlank()) "" else normalizeSmbPathForShare(sourceSpec.path).orEmpty()
         val sameNavigation = currentShare == desiredShare && normalizeSmbPathForShare(currentSubPath).orEmpty() == desiredSubPath
-        val sameCredentials = sessionUsername == sourceSpec.username && sessionPassword == sourceSpec.password
+        val desiredUsername = sourceSpec.username ?: sessionUsername ?: adhocSessionCredentials?.first
+        val desiredPassword = sourceSpec.password ?: sessionPassword ?: adhocSessionCredentials?.second
+        val sameCredentials = sessionUsername == desiredUsername && sessionPassword == desiredPassword
         if (sameNavigation && sameCredentials && hasLoadedInitialDirectory) {
             return@LaunchedEffect
         }
@@ -480,17 +503,28 @@ internal fun SmbFileBrowserScreen(
         currentSubPath = desiredSubPath
         authDialogVisible = false
         authDialogErrorMessage = null
-        authDialogUsername = sourceSpec.username.orEmpty()
+        authDialogUsername = desiredUsername.orEmpty()
         authDialogPassword = ""
         authDialogPasswordVisible = false
         authRememberPassword = allowCredentialRemember
-        sessionUsername = sourceSpec.username
-        sessionPassword = sourceSpec.password
+        sessionUsername = desiredUsername
+        sessionPassword = desiredPassword
         hasLoadedInitialDirectory = true
         openDirectory(
             targetShare = desiredShare,
             targetSubPath = desiredSubPath,
             navigationDirection = BrowserPageNavDirection.Neutral
+        )
+    }
+
+    LaunchedEffect(pendingReloadAfterAuth, sessionUsername, sessionPassword) {
+        if (!pendingReloadAfterAuth) return@LaunchedEffect
+        pendingReloadAfterAuth = false
+        openDirectory(
+            targetShare = currentShare,
+            targetSubPath = currentSubPath,
+            navigationDirection = BrowserPageNavDirection.Neutral,
+            forceReload = true
         )
     }
 
@@ -1362,15 +1396,20 @@ internal fun SmbFileBrowserScreen(
                                 normalizedUsername,
                                 normalizedPassword
                             )
+                        } else if (sourceNodeId == null) {
+                            ManualSmbAuthCoordinator.rememberCredentials(
+                                credentialsSpec.copy(
+                                    share = currentShare,
+                                    username = normalizedUsername,
+                                    password = normalizedPassword
+                                ),
+                                normalizedUsername,
+                                normalizedPassword
+                            )
                         }
                         authDialogVisible = false
                         authDialogPasswordVisible = false
-                        openDirectory(
-                            targetShare = currentShare,
-                            targetSubPath = currentSubPath,
-                            navigationDirection = BrowserPageNavDirection.Neutral,
-                            forceReload = true
-                        )
+                        pendingReloadAfterAuth = true
                     }
                 ) {
                     Text("Continue")

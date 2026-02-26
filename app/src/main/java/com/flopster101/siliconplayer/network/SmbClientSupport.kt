@@ -14,10 +14,11 @@ internal enum class SmbAuthenticationFailureReason {
 }
 
 internal fun authenticateSmbSession(connection: Connection, spec: SmbSourceSpec): Session {
+    val username = spec.username?.trim().orEmpty()
+    val hasExplicitCredentials = username.isNotBlank()
     val attempts = buildList {
-        val username = spec.username?.trim().orEmpty()
         val passwordChars = spec.password?.toCharArray() ?: CharArray(0)
-        if (username.isNotBlank()) {
+        if (hasExplicitCredentials) {
             add(AuthenticationContext(username, passwordChars, ""))
         } else {
             add(AuthenticationContext("", CharArray(0), ""))
@@ -31,6 +32,9 @@ internal fun authenticateSmbSession(connection: Connection, spec: SmbSourceSpec)
         } catch (t: Throwable) {
             lastFailure = t
         }
+    }
+    if (!hasExplicitCredentials) {
+        throw IllegalStateException("Unable to authenticate SMB session")
     }
     throw lastFailure ?: IllegalStateException("Unable to authenticate SMB session")
 }
@@ -61,7 +65,7 @@ internal fun resolveSmbAuthenticationFailureReason(
         if (message.contains("Authentication failed", ignoreCase = true)) {
             return SmbAuthenticationFailureReason.Unknown
         }
-        if (current.message == "Unable to authenticate SMB session") {
+        if (message.contains("Unable to authenticate SMB session", ignoreCase = true)) {
             return SmbAuthenticationFailureReason.AuthenticationRequired
         }
         current = current.cause

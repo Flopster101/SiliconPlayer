@@ -188,6 +188,14 @@ internal fun FileBrowserRouteContent(
             )
         )
     }
+    var showPreviewFiles by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                AppPreferenceKeys.BROWSER_SHOW_PREVIEW_FILES,
+                AppDefaults.Browser.showPreviewFiles
+            )
+        )
+    }
     var showHiddenFilesAndFolders by remember {
         mutableStateOf(
             prefs.getBoolean(
@@ -226,6 +234,16 @@ internal fun FileBrowserRouteContent(
         onCheckedChange = {
             showUnsupportedFiles = it
             prefs.edit().putBoolean(AppPreferenceKeys.BROWSER_SHOW_UNSUPPORTED_FILES, it).apply()
+        }
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Show text and image files",
+        description = "Display previewable text/image files in browser lists.",
+        checked = showPreviewFiles,
+        onCheckedChange = {
+            showPreviewFiles = it
+            prefs.edit().putBoolean(AppPreferenceKeys.BROWSER_SHOW_PREVIEW_FILES, it).apply()
         }
     )
     Spacer(modifier = Modifier.height(10.dp))

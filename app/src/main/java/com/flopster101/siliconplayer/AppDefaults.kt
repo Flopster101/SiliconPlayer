@@ -6,6 +6,7 @@ object AppDefaults {
         const val showParentDirectoryEntry = true
         const val showFileIconChipBackground = true
         const val showUnsupportedFiles = false
+        const val showPreviewFiles = true
         const val showHiddenFilesAndFolders = false
     }
 

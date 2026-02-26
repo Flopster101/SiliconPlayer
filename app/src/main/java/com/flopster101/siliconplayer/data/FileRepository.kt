@@ -2,6 +2,8 @@ package com.flopster101.siliconplayer.data
 
 import com.flopster101.siliconplayer.BrowserNameSortMode
 import com.flopster101.siliconplayer.AppPreferenceKeys
+import com.flopster101.siliconplayer.AppDefaults
+import com.flopster101.siliconplayer.detectFilePreviewKind
 import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import android.content.SharedPreferences
 import java.io.File
@@ -30,12 +32,18 @@ class FileRepository(
                     AppPreferenceKeys.BROWSER_SHOW_HIDDEN_FILES_AND_FOLDERS,
                     false
                 )
+                val showPreviewFiles = prefs.getBoolean(
+                    AppPreferenceKeys.BROWSER_SHOW_PREVIEW_FILES,
+                    AppDefaults.Browser.showPreviewFiles
+                )
                 val isHidden = file.isHidden || file.name.startsWith(".")
                 if (!showHiddenFilesAndFolders && isHidden) {
                     return@filter false
                 }
+                val isPreviewable = detectFilePreviewKind(file.name) != null
                 file.isDirectory ||
                     isSupportedArchive(file) ||
+                    (showPreviewFiles && isPreviewable) ||
                     fileMatchesSupportedExtensions(file, supportedExtensions) ||
                     showUnsupportedFiles
             }

@@ -96,6 +96,7 @@ import com.flopster101.siliconplayer.httpAuthenticationFailureMessage
 import com.flopster101.siliconplayer.HttpBrowserListLocation
 import com.flopster101.siliconplayer.HttpBrowserListingAdapter
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.FilePreviewKind
 import com.flopster101.siliconplayer.DecoderArtworkHint
 import com.flopster101.siliconplayer.BrowserLaunchState
 import com.flopster101.siliconplayer.NativeBridge
@@ -169,6 +170,10 @@ internal fun HttpFileBrowserScreen(
     val showUnsupportedFiles = browserPrefs.getBoolean(
         AppPreferenceKeys.BROWSER_SHOW_UNSUPPORTED_FILES,
         AppDefaults.Browser.showUnsupportedFiles
+    )
+    val showPreviewFiles = browserPrefs.getBoolean(
+        AppPreferenceKeys.BROWSER_SHOW_PREVIEW_FILES,
+        AppDefaults.Browser.showPreviewFiles
     )
     val showHiddenFilesAndFolders = browserPrefs.getBoolean(
         AppPreferenceKeys.BROWSER_SHOW_HIDDEN_FILES_AND_FOLDERS,
@@ -245,11 +250,15 @@ internal fun HttpFileBrowserScreen(
     val browserSelectionController = rememberBrowserSelectionController<String>()
     var browserInfoFields by remember(screenSessionKey) { mutableStateOf<List<BrowserInfoField>>(emptyList()) }
     var showBrowserInfoDialog by remember(screenSessionKey) { mutableStateOf(false) }
+    var textPreviewDialogState by remember(screenSessionKey) { mutableStateOf<Pair<String, String>?>(null) }
+    var imagePreviewDialogState by remember(screenSessionKey) { mutableStateOf<Pair<String, File>?>(null) }
     var pendingExportTargets by remember(screenSessionKey) { mutableStateOf<List<HttpSelectionFileTarget>>(emptyList()) }
     var exportConflictDialogState by remember(screenSessionKey) { mutableStateOf<BrowserExportConflictDialogState?>(null) }
     var exportDownloadProgressState by remember(screenSessionKey) { mutableStateOf<BrowserRemoteExportProgressState?>(null) }
     var exportDownloadJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
     var archiveOpenJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
+    var previewDownloadProgressState by remember(screenSessionKey) { mutableStateOf<BrowserRemoteExportProgressState?>(null) }
+    var previewLoadJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
 
     fun updatePlayableRemoteSources(entriesForNavigation: List<HttpBrowserEntry>) {
         RemotePlayableSourceIdsHolder.current = entriesForNavigation
@@ -496,6 +505,7 @@ internal fun HttpFileBrowserScreen(
             listJob?.cancel()
             exportDownloadJob?.cancel()
             archiveOpenJob?.cancel()
+            previewLoadJob?.cancel()
         }
     }
 
@@ -562,6 +572,7 @@ internal fun HttpFileBrowserScreen(
         entries,
         supportedExtensions,
         showUnsupportedFiles,
+        showPreviewFiles,
         showHiddenFilesAndFolders
     ) {
         entries.filter { entry ->
@@ -570,6 +581,7 @@ internal fun HttpFileBrowserScreen(
                 isDirectory = entry.isDirectory,
                 supportedExtensions = supportedExtensions,
                 showUnsupportedFiles = showUnsupportedFiles,
+                showPreviewFiles = showPreviewFiles,
                 showHiddenFilesAndFolders = showHiddenFilesAndFolders
             )
         }
@@ -728,6 +740,65 @@ internal fun HttpFileBrowserScreen(
                 )
             )
         }
+    }
+
+    fun openPreviewEntry(entry: HttpBrowserEntry): Boolean {
+        val previewKind = browserPreviewKindForName(entry.name) ?: return false
+        val parsedSpec = parseHttpSourceSpecFromInput(entry.requestUrl) ?: return false
+        val authSpec = parsedSpec.copy(
+            username = sessionUsername,
+            password = sessionPassword
+        )
+        val sourceId = buildHttpSourceId(authSpec)
+        val requestUrl = stripUrlFragment(buildHttpRequestUri(authSpec))
+        previewLoadJob?.cancel()
+        previewLoadJob = coroutineScope.launch {
+            previewDownloadProgressState = BrowserRemoteExportProgressState(
+                currentIndex = 1,
+                totalCount = 1,
+                currentFileName = entry.name,
+                loadState = null
+            )
+            val prepared = prepareRemoteExportFile(
+                context = context,
+                request = HttpRemoteExportRequest(
+                    sourceId = sourceId,
+                    requestUrl = requestUrl,
+                    preferredFileName = entry.name
+                ),
+                onStatus = { loadState ->
+                    previewDownloadProgressState = BrowserRemoteExportProgressState(
+                        currentIndex = 1,
+                        totalCount = 1,
+                        currentFileName = entry.name,
+                        loadState = loadState
+                    )
+                }
+            )
+            previewDownloadProgressState = null
+            val cachedItem = prepared.getOrNull()
+            if (cachedItem == null) {
+                val error = prepared.exceptionOrNull()
+                if (error !is RemoteExportCancelledException && error !is CancellationException) {
+                    Toast.makeText(context, "Failed to preview file", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+            when (previewKind) {
+                FilePreviewKind.Image -> {
+                    imagePreviewDialogState = entry.name to cachedItem.sourceFile
+                }
+                FilePreviewKind.Text -> {
+                    val textPreviewContent = readRemoteTextPreviewContent(cachedItem.sourceFile)
+                    if (textPreviewContent == null) {
+                        Toast.makeText(context, "Unable to preview text file", Toast.LENGTH_SHORT).show()
+                    } else {
+                        textPreviewDialogState = entry.name to textPreviewContent
+                    }
+                }
+            }
+        }
+        return true
     }
 
     fun showSelectionInfoDialog() {
@@ -1266,6 +1337,9 @@ internal fun HttpFileBrowserScreen(
                                                 navigationDirection = BrowserPageNavDirection.Forward
                                             )
                                         } else {
+                                            if (openPreviewEntry(entry)) {
+                                                return@HttpEntryRow
+                                            }
                                             when (browserArchiveCapabilityForName(entry.name)) {
                                                 BrowserArchiveCapability.Browsable -> openArchiveEntry(entry)
                                                 BrowserArchiveCapability.KnownUnsupported -> {
@@ -1468,6 +1542,20 @@ internal fun HttpFileBrowserScreen(
             onDismiss = { showBrowserInfoDialog = false }
         )
     }
+    textPreviewDialogState?.let { (fileName, textContent) ->
+        BrowserTextPreviewDialog(
+            fileName = fileName,
+            textContent = textContent,
+            onDismiss = { textPreviewDialogState = null }
+        )
+    }
+    imagePreviewDialogState?.let { (fileName, imageFile) ->
+        BrowserImagePreviewDialog(
+            fileName = fileName,
+            imageFile = imageFile,
+            onDismiss = { imagePreviewDialogState = null }
+        )
+    }
 
     exportConflictDialogState?.let { state ->
         BrowserExportConflictDialog(state = state)
@@ -1480,6 +1568,15 @@ internal fun HttpFileBrowserScreen(
                 exportDownloadProgressState = null
                 exportDownloadJob?.cancel()
                 archiveOpenJob?.cancel()
+            }
+        )
+    }
+    previewDownloadProgressState?.let { state ->
+        BrowserRemoteExportProgressDialog(
+            state = state,
+            onCancel = {
+                previewDownloadProgressState = null
+                previewLoadJob?.cancel()
             }
         )
     }
@@ -1739,4 +1836,31 @@ private fun appendHttpDisplayNameFragment(
     } catch (_: Throwable) {
         sourceUrl
     }
+}
+
+private fun readRemoteTextPreviewContent(
+    file: File,
+    maxBytes: Int = 512 * 1024
+): String? {
+    if (!file.exists() || !file.isFile) return null
+    return runCatching {
+        val bytes = file.inputStream().use { input ->
+            val buffer = ByteArray(maxBytes + 1)
+            var totalRead = 0
+            while (totalRead < buffer.size) {
+                val read = input.read(buffer, totalRead, buffer.size - totalRead)
+                if (read <= 0) break
+                totalRead += read
+            }
+            buffer.copyOf(totalRead)
+        }
+        val wasTruncated = bytes.size > maxBytes
+        val previewBytes = if (wasTruncated) bytes.copyOf(maxBytes) else bytes
+        val text = previewBytes.toString(Charsets.UTF_8)
+        if (wasTruncated) {
+            "$text\n\n[Preview truncated at ${maxBytes / 1024} KB]"
+        } else {
+            text
+        }
+    }.getOrNull()
 }

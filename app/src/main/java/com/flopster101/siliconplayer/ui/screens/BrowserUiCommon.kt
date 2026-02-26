@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import android.graphics.BitmapFactory
 import android.webkit.MimeTypeMap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
@@ -22,11 +23,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -45,13 +48,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Image
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.VideoFile
@@ -71,6 +77,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -79,12 +86,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
@@ -104,11 +118,15 @@ import com.flopster101.siliconplayer.formatByteCount
 import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.resolveDecoderArtworkHintForFileName
+import com.flopster101.siliconplayer.FilePreviewKind
+import com.flopster101.siliconplayer.detectFilePreviewKind
 import com.flopster101.siliconplayer.RemoteLoadPhase
 import com.flopster101.siliconplayer.RemoteLoadUiState
 import com.flopster101.siliconplayer.R
 import com.flopster101.siliconplayer.rememberDialogScrollbarAlpha
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.flopster101.siliconplayer.session.ExportConflictAction
 import java.util.Locale
 import java.io.File
@@ -228,6 +246,8 @@ internal enum class BrowserRemoteEntryVisualKind {
     ArchiveFile,
     TrackedFile,
     GameFile,
+    TextFile,
+    ImageFile,
     AudioFile,
     VideoFile,
     UnsupportedFile
@@ -282,6 +302,24 @@ internal fun BrowserRemoteEntryIcon(
             Icon(
                 painter = painterResource(id = R.drawable.ic_file_game),
                 contentDescription = "Game file",
+                tint = tint,
+                modifier = modifier
+            )
+        }
+
+        BrowserRemoteEntryVisualKind.TextFile -> {
+            Icon(
+                imageVector = Icons.Default.Description,
+                contentDescription = null,
+                tint = tint,
+                modifier = modifier
+            )
+        }
+
+        BrowserRemoteEntryVisualKind.ImageFile -> {
+            Icon(
+                imageVector = Icons.Default.Photo,
+                contentDescription = null,
                 tint = tint,
                 modifier = modifier
             )
@@ -542,6 +580,164 @@ internal fun BrowserInfoDialog(
 }
 
 @Composable
+internal fun BrowserTextPreviewDialog(
+    fileName: String,
+    textContent: String,
+    onDismiss: () -> Unit
+) {
+    val clipboardManager = LocalClipboardManager.current
+    val contentScrollState = rememberScrollState()
+    val scrollbarAlpha = rememberDialogScrollbarAlpha(
+        enabled = true,
+        scrollState = contentScrollState,
+        label = "browserTextPreviewScrollbarAlpha"
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = decodePercentEncodedForDisplay(fileName) ?: fileName) },
+        text = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 360.dp)
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(contentScrollState)
+                        .padding(end = 10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    SelectionContainer {
+                        Text(
+                            text = textContent,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                BrowserScrollStateScrollbar(
+                    scrollState = contentScrollState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 2.dp)
+                        .fillMaxHeight()
+                        .width(4.dp)
+                        .alpha(scrollbarAlpha)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    clipboardManager.setText(AnnotatedString(textContent))
+                }
+            ) {
+                Text("Copy all")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+internal fun BrowserImagePreviewDialog(
+    fileName: String,
+    imageFile: File,
+    onDismiss: () -> Unit
+) {
+    var imageBitmap by androidx.compose.runtime.remember(imageFile.absolutePath) {
+        mutableStateOf<ImageBitmap?>(null)
+    }
+    var isLoaded by androidx.compose.runtime.remember(imageFile.absolutePath) {
+        mutableStateOf(false)
+    }
+    LaunchedEffect(imageFile.absolutePath) {
+        imageBitmap = withContext(Dispatchers.IO) {
+            BitmapFactory.decodeFile(imageFile.absolutePath)?.asImageBitmap()
+        }
+        isLoaded = true
+    }
+
+    var scale by androidx.compose.runtime.remember(imageFile.absolutePath) { mutableStateOf(1f) }
+    var offset by androidx.compose.runtime.remember(imageFile.absolutePath) { mutableStateOf(Offset.Zero) }
+    val imageAspectRatio = remember(imageBitmap) {
+        val bitmap = imageBitmap ?: return@remember 1f
+        val width = bitmap.width.toFloat()
+        val height = bitmap.height.toFloat()
+        if (width <= 0f || height <= 0f) 1f else (width / height).coerceIn(0.4f, 2.5f)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = decodePercentEncodedForDisplay(fileName) ?: fileName) },
+        text = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(imageAspectRatio)
+                    .heightIn(min = 180.dp, max = 420.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)),
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    !isLoaded -> {
+                        CircularProgressIndicator()
+                    }
+                    imageBitmap == null -> {
+                        Text(
+                            text = "Unable to load image preview.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    else -> {
+                        Image(
+                            bitmap = imageBitmap ?: return@Box,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clipToBounds()
+                                .pointerInput(imageFile.absolutePath) {
+                                    detectTransformGestures { _, pan, zoom, _ ->
+                                        val nextScale = (scale * zoom).coerceIn(1f, 5f)
+                                        scale = nextScale
+                                        offset = if (nextScale <= 1.01f) {
+                                            Offset.Zero
+                                        } else {
+                                            offset + pan
+                                        }
+                                    }
+                                }
+                                .graphicsLayer(
+                                    scaleX = scale,
+                                    scaleY = scale,
+                                    translationX = offset.x,
+                                    translationY = offset.y
+                                )
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
 private fun BrowserScrollStateScrollbar(
     scrollState: ScrollState,
     modifier: Modifier = Modifier
@@ -751,6 +947,7 @@ internal fun shouldShowRemoteBrowserEntry(
     isDirectory: Boolean,
     supportedExtensions: Set<String>,
     showUnsupportedFiles: Boolean = false,
+    showPreviewFiles: Boolean = true,
     showHiddenFilesAndFolders: Boolean = false,
     isHiddenHint: Boolean = false
 ): Boolean {
@@ -758,6 +955,7 @@ internal fun shouldShowRemoteBrowserEntry(
     if (!showHiddenFilesAndFolders && (isHiddenHint || isHiddenName)) return false
     if (isDirectory) return true
     if (browserArchiveCapabilityForName(name) != BrowserArchiveCapability.None) return true
+    if (showPreviewFiles && browserPreviewKindForName(name) != null) return true
     return showUnsupportedFiles || fileMatchesSupportedExtensions(File(name), supportedExtensions)
 }
 
@@ -778,6 +976,11 @@ internal fun browserRemoteEntryVisualKind(
     if (decoderArtworkHint == DecoderArtworkHint.GameFile) {
         return BrowserRemoteEntryVisualKind.GameFile
     }
+    when (browserPreviewKindForName(name)) {
+        FilePreviewKind.Text -> return BrowserRemoteEntryVisualKind.TextFile
+        FilePreviewKind.Image -> return BrowserRemoteEntryVisualKind.ImageFile
+        null -> Unit
+    }
     val extension = inferredPrimaryExtensionForName(name)?.lowercase(Locale.ROOT)
     val mimeType = extension
         ?.let { ext -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) }
@@ -793,6 +996,10 @@ internal fun browserRemoteEntryVisualKind(
     } else {
         BrowserRemoteEntryVisualKind.UnsupportedFile
     }
+}
+
+internal fun browserPreviewKindForName(name: String): FilePreviewKind? {
+    return detectFilePreviewKind(name)
 }
 
 private val REMOTE_FALLBACK_VIDEO_EXTENSIONS = setOf(
@@ -819,6 +1026,7 @@ private val KNOWN_ARCHIVE_EXTENSIONS = setOf(
     "lha",
     "lzh"
 )
+
 
 internal fun browserPageContentTransform(
     navDirection: BrowserPageNavDirection

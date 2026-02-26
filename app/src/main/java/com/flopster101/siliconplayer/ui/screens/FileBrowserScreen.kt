@@ -30,9 +30,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.SdCard
@@ -68,6 +70,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.extensionCandidatesForName
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.FilePreviewKind
 import com.flopster101.siliconplayer.DecoderArtworkHint
 import com.flopster101.siliconplayer.BrowserLaunchState
 import com.flopster101.siliconplayer.BrowserLocationModel
@@ -207,6 +210,8 @@ internal fun FileBrowserScreen(
     val browserSelectionController = rememberBrowserSelectionController<String>()
     var browserInfoFields by remember { mutableStateOf<List<BrowserInfoField>>(emptyList()) }
     var showBrowserInfoDialog by remember { mutableStateOf(false) }
+    var textPreviewDialogState by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var imagePreviewDialogState by remember { mutableStateOf<Pair<String, File>?>(null) }
     var pendingExportFiles by remember { mutableStateOf<List<ExportFileItem>>(emptyList()) }
     var exportConflictDialogState by remember { mutableStateOf<BrowserExportConflictDialogState?>(null) }
     var pendingDeleteFilePaths by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -661,6 +666,22 @@ internal fun FileBrowserScreen(
         if (item.isDirectory) {
             navigateTo(item.file)
             return
+        }
+        when (browserPreviewKindForName(item.name)) {
+            FilePreviewKind.Text -> {
+                val textPreviewContent = readTextPreviewContent(item.file)
+                if (textPreviewContent != null) {
+                    textPreviewDialogState = item.name to textPreviewContent
+                } else {
+                    Toast.makeText(context, "Unable to preview text file", Toast.LENGTH_SHORT).show()
+                }
+                return
+            }
+            FilePreviewKind.Image -> {
+                imagePreviewDialogState = item.name to item.file
+                return
+            }
+            null -> Unit
         }
         val mounted = findArchiveMount(item.file.absolutePath)
         val sourceIdOverride = if (mounted != null) {
@@ -1437,6 +1458,20 @@ internal fun FileBrowserScreen(
             onDismiss = { showBrowserInfoDialog = false }
         )
     }
+    textPreviewDialogState?.let { (fileName, textContent) ->
+        BrowserTextPreviewDialog(
+            fileName = fileName,
+            textContent = textContent,
+            onDismiss = { textPreviewDialogState = null }
+        )
+    }
+    imagePreviewDialogState?.let { (fileName, imageFile) ->
+        BrowserImagePreviewDialog(
+            fileName = fileName,
+            imageFile = imageFile,
+            onDismiss = { imagePreviewDialogState = null }
+        )
+    }
 
     exportConflictDialogState?.let { state ->
         BrowserExportConflictDialog(state = state)
@@ -2038,10 +2073,13 @@ fun FileItemRow(
                         )
                     }
                 } else {
+                    val previewKind = browserPreviewKindForName(item.name)
                     val contentDescription = when {
                         isVideoFile -> "Video file"
                         decoderArtworkHint == DecoderArtworkHint.TrackedFile -> "Tracked file"
                         decoderArtworkHint == DecoderArtworkHint.GameFile -> "Game file"
+                        previewKind == FilePreviewKind.Text -> "Text file"
+                        previewKind == FilePreviewKind.Image -> "Image file"
                         item.kind == FileItem.Kind.UnsupportedFile -> "File"
                         else -> "Audio file"
                     }
@@ -2062,6 +2100,20 @@ fun FileItemRow(
                     } else if (decoderArtworkHint == DecoderArtworkHint.GameFile) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_file_game),
+                            contentDescription = contentDescription,
+                            tint = iconTint,
+                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                        )
+                    } else if (previewKind == FilePreviewKind.Text) {
+                        Icon(
+                            imageVector = Icons.Default.Description,
+                            contentDescription = contentDescription,
+                            tint = iconTint,
+                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                        )
+                    } else if (previewKind == FilePreviewKind.Image) {
+                        Icon(
+                            imageVector = Icons.Default.Photo,
                             contentDescription = contentDescription,
                             tint = iconTint,
                             modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
@@ -2227,4 +2279,31 @@ private fun buildFolderSummary(folder: File): String {
 private fun pluralize(count: Int, singular: String): String {
     val word = if (count == 1) singular else "${singular}s"
     return "$count $word"
+}
+
+private fun readTextPreviewContent(
+    file: File,
+    maxBytes: Int = 512 * 1024
+): String? {
+    if (!file.exists() || !file.isFile) return null
+    return runCatching {
+        val bytes = file.inputStream().use { input ->
+            val buffer = ByteArray(maxBytes + 1)
+            var totalRead = 0
+            while (totalRead < buffer.size) {
+                val read = input.read(buffer, totalRead, buffer.size - totalRead)
+                if (read <= 0) break
+                totalRead += read
+            }
+            buffer.copyOf(totalRead)
+        }
+        val wasTruncated = bytes.size > maxBytes
+        val previewBytes = if (wasTruncated) bytes.copyOf(maxBytes) else bytes
+        val text = previewBytes.toString(Charsets.UTF_8)
+        if (wasTruncated) {
+            "$text\n\n[Preview truncated at ${maxBytes / 1024} KB]"
+        } else {
+            text
+        }
+    }.getOrNull()
 }

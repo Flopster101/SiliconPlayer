@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer.playback
 
 import com.flopster101.siliconplayer.ManualSourceOpenOptions
 import com.flopster101.siliconplayer.NativeBridge
+import com.flopster101.siliconplayer.RemotePlayableSourceIdsHolder
 import java.io.File
 
 internal class AppNavigationTrackNavDelegates(
@@ -23,6 +24,11 @@ internal class AppNavigationTrackNavDelegates(
     private val onApplyTrackSelection: (file: File, autoStart: Boolean, expandOverride: Boolean?) -> Unit,
     private val onApplyManualInputSelection: (String, ManualSourceOpenOptions, Boolean?) -> Unit
 ) {
+    private fun resolvedVisiblePlayableSourceIds(): List<String> {
+        val currentIds = visiblePlayableSourceIdsProvider()
+        return if (currentIds.isNotEmpty()) currentIds else RemotePlayableSourceIdsHolder.lastNonEmpty
+    }
+
     fun resumeLastStoppedTrack(autoStart: Boolean = true): Boolean {
         return resumeLastStoppedTrackAction(
             lastStoppedFile = lastStoppedFileProvider(),
@@ -45,7 +51,7 @@ internal class AppNavigationTrackNavDelegates(
             selectedFile = selectedFileProvider(),
             currentPlaybackSourceId = currentPlaybackSourceIdProvider(),
             visiblePlayableFiles = visiblePlayableFilesProvider(),
-            visiblePlayableSourceIds = visiblePlayableSourceIdsProvider(),
+            visiblePlayableSourceIds = resolvedVisiblePlayableSourceIds(),
             urlOrPathForceCaching = urlOrPathForceCachingProvider(),
             isPlayerExpanded = isPlayerExpandedProvider(),
             offset = offset,
@@ -64,7 +70,7 @@ internal class AppNavigationTrackNavDelegates(
             selectedFile = selectedFileProvider(),
             currentPlaybackSourceId = currentPlaybackSourceIdProvider(),
             visiblePlayableFiles = visiblePlayableFilesProvider(),
-            visiblePlayableSourceIds = visiblePlayableSourceIdsProvider(),
+            visiblePlayableSourceIds = resolvedVisiblePlayableSourceIds(),
             positionSeconds = positionSecondsProvider(),
             onRestartCurrent = {
                 NativeBridge.seekTo(0.0)

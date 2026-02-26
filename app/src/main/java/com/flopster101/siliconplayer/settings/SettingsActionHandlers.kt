@@ -750,6 +750,7 @@ internal fun clearAllSettingsAction(
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
     onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
+    onPreloadNextCachedRemoteTrackChanged: (Boolean) -> Unit,
     onPlaylistWrapNavigationChanged: (Boolean) -> Unit,
     onPreviousRestartsAfterThresholdChanged: (Boolean) -> Unit,
     onFadePauseResumeChanged: (Boolean) -> Unit,
@@ -920,6 +921,7 @@ internal fun clearAllSettingsAction(
     onAutoPlayOnTrackSelectChanged(true)
     onOpenPlayerOnTrackSelectChanged(true)
     onAutoPlayNextTrackOnEndChanged(true)
+    onPreloadNextCachedRemoteTrackChanged(AppDefaults.Player.preloadNextCachedRemoteTrack)
     onPlaylistWrapNavigationChanged(true)
     onPreviousRestartsAfterThresholdChanged(true)
     onFadePauseResumeChanged(AppDefaults.Player.fadePauseResume)

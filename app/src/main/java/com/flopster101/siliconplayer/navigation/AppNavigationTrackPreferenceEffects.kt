@@ -20,6 +20,7 @@ internal fun AppNavigationTrackPreferenceEffects(
     autoPlayOnTrackSelect: Boolean,
     openPlayerOnTrackSelect: Boolean,
     autoPlayNextTrackOnEnd: Boolean,
+    preloadNextCachedRemoteTrack: Boolean,
     playlistWrapNavigation: Boolean,
     previousRestartsAfterThreshold: Boolean,
     fadePauseResume: Boolean,
@@ -74,6 +75,15 @@ internal fun AppNavigationTrackPreferenceEffects(
     LaunchedEffect(autoPlayNextTrackOnEnd) {
         prefs.edit()
             .putBoolean(AppPreferenceKeys.AUTO_PLAY_NEXT_TRACK_ON_END, autoPlayNextTrackOnEnd)
+            .apply()
+    }
+
+    LaunchedEffect(preloadNextCachedRemoteTrack) {
+        prefs.edit()
+            .putBoolean(
+                AppPreferenceKeys.PRELOAD_NEXT_CACHED_REMOTE_TRACK,
+                preloadNextCachedRemoteTrack
+            )
             .apply()
     }
 

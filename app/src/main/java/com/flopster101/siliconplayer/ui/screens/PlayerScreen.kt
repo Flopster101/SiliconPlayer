@@ -120,6 +120,7 @@ import com.flopster101.siliconplayer.pluginNameForCoreName
 import com.flopster101.siliconplayer.RemoteLoadPhase
 import com.flopster101.siliconplayer.RemoteLoadUiState
 import com.flopster101.siliconplayer.RemoteLoadUiStateHolder
+import com.flopster101.siliconplayer.RemotePreloadUiStateHolder
 import com.flopster101.siliconplayer.rememberDialogScrollbarAlpha
 import com.flopster101.siliconplayer.sanitizeRemoteCachedMetadataTitle
 import com.flopster101.siliconplayer.stripRemoteCacheHashPrefix
@@ -2111,6 +2112,7 @@ private fun TransportControls(
     actionStripFirstFocusRequester: FocusRequester? = null
 ) {
     val remoteLoadActive = remoteLoadUiState != null
+    val remotePreloadUiState = RemotePreloadUiStateHolder.current
     val showLoadingIndicator = playbackStartInProgress || remoteLoadActive
     val controlsBusy = seekInProgress || playbackStartInProgress
     val canFocusPreviousTrack = hasTrack && canPreviousTrack
@@ -2443,45 +2445,77 @@ private fun TransportControls(
 
                     Spacer(modifier = Modifier.width(rowGap))
 
-                    FilledTonalIconButton(
-                        onClick = onNextTrack,
-                        enabled = hasTrack && canNextTrack,
-                        modifier = Modifier
-                            .focusRequester(nextTrackFocusRequester)
-                            .size(sideButtonSize)
-                            .focusProperties {
-                                left = firstAvailableRequester(
-                                    canFocusStop to stopFocusRequester,
-                                    canFocusPlayPause to playPauseFocusRequester,
-                                    canFocusRepeatMode to repeatModeFocusRequester,
-                                    canFocusPreviousTrack to previousTrackFocusRequester,
-                                    canFocusNextTrack to nextTrackFocusRequester
-                                ) ?: nextTrackFocusRequester
-                                right = firstAvailableRequester(
-                                    canFocusPreviousTrack to previousTrackFocusRequester,
-                                    canFocusRepeatMode to repeatModeFocusRequester,
-                                    canFocusPlayPause to playPauseFocusRequester,
-                                    canFocusStop to stopFocusRequester,
-                                    canFocusNextTrack to nextTrackFocusRequester
-                                ) ?: nextTrackFocusRequester
-                                down = firstAvailableRequester(
-                                    canFocusNextSubtune to nextSubtuneFocusRequester,
-                                    canFocusSubtuneSelector to subtuneSelectorFocusRequester,
-                                    canFocusPreviousSubtune to previousSubtuneFocusRequester,
-                                    (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: nextTrackFocusRequester)
-                                ) ?: nextTrackFocusRequester
-                            }
-                            .playerFocusHalo(enabled = hasTrack && canNextTrack)
-                            .focusable(enabled = hasTrack && canNextTrack),
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
+                    Box(
+                        modifier = Modifier.size(sideButtonSize),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipNext,
-                            contentDescription = "Next track"
-                        )
+                        FilledTonalIconButton(
+                            onClick = onNextTrack,
+                            enabled = hasTrack && canNextTrack,
+                            modifier = Modifier
+                                .focusRequester(nextTrackFocusRequester)
+                                .matchParentSize()
+                                .focusProperties {
+                                    left = firstAvailableRequester(
+                                        canFocusStop to stopFocusRequester,
+                                        canFocusPlayPause to playPauseFocusRequester,
+                                        canFocusRepeatMode to repeatModeFocusRequester,
+                                        canFocusPreviousTrack to previousTrackFocusRequester,
+                                        canFocusNextTrack to nextTrackFocusRequester
+                                    ) ?: nextTrackFocusRequester
+                                    right = firstAvailableRequester(
+                                        canFocusPreviousTrack to previousTrackFocusRequester,
+                                        canFocusRepeatMode to repeatModeFocusRequester,
+                                        canFocusPlayPause to playPauseFocusRequester,
+                                        canFocusStop to stopFocusRequester,
+                                        canFocusNextTrack to nextTrackFocusRequester
+                                    ) ?: nextTrackFocusRequester
+                                    down = firstAvailableRequester(
+                                        canFocusNextSubtune to nextSubtuneFocusRequester,
+                                        canFocusSubtuneSelector to subtuneSelectorFocusRequester,
+                                        canFocusPreviousSubtune to previousSubtuneFocusRequester,
+                                        (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: nextTrackFocusRequester)
+                                    ) ?: nextTrackFocusRequester
+                                }
+                                .playerFocusHalo(enabled = hasTrack && canNextTrack)
+                                .focusable(enabled = hasTrack && canNextTrack),
+                            shape = CircleShape,
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SkipNext,
+                                contentDescription = "Next track"
+                            )
+                        }
+                        if (remotePreloadUiState != null) {
+                            val preloadPercent = remotePreloadUiState.percent
+                                ?.takeIf { it in 0..100 }
+                                ?.div(100f)
+                            val preloadDeterminate =
+                                remotePreloadUiState.phase != RemoteLoadPhase.Connecting &&
+                                    remotePreloadUiState.indeterminate != true &&
+                                    preloadPercent != null
+                            if (preloadDeterminate) {
+                                CircularProgressIndicator(
+                                    progress = { preloadPercent ?: 0f },
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .offset(y = 16.dp)
+                                        .size(12.dp),
+                                    strokeWidth = 1.5.dp
+                                )
+                            } else {
+                                CircularProgressIndicator(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .offset(y = 16.dp)
+                                        .size(12.dp),
+                                    strokeWidth = 1.5.dp
+                                )
+                            }
+                        }
                     }
                 }
             }

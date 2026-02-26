@@ -75,6 +75,7 @@ internal data class PlayerRouteState(
     val autoPlayOnTrackSelect: Boolean,
     val openPlayerOnTrackSelect: Boolean,
     val autoPlayNextTrackOnEnd: Boolean,
+    val preloadNextCachedRemoteTrack: Boolean,
     val playlistWrapNavigation: Boolean,
     val previousRestartsAfterThreshold: Boolean,
     val fadePauseResume: Boolean,
@@ -94,6 +95,7 @@ internal data class PlayerRouteActions(
     val onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     val onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
     val onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
+    val onPreloadNextCachedRemoteTrackChanged: (Boolean) -> Unit,
     val onPlaylistWrapNavigationChanged: (Boolean) -> Unit,
     val onPreviousRestartsAfterThresholdChanged: (Boolean) -> Unit,
     val onFadePauseResumeChanged: (Boolean) -> Unit,
@@ -148,6 +150,8 @@ internal fun PlayerRouteContent(
     val onOpenPlayerOnTrackSelectChanged = actions.onOpenPlayerOnTrackSelectChanged
     val autoPlayNextTrackOnEnd = state.autoPlayNextTrackOnEnd
     val onAutoPlayNextTrackOnEndChanged = actions.onAutoPlayNextTrackOnEndChanged
+    val preloadNextCachedRemoteTrack = state.preloadNextCachedRemoteTrack
+    val onPreloadNextCachedRemoteTrackChanged = actions.onPreloadNextCachedRemoteTrackChanged
     val playlistWrapNavigation = state.playlistWrapNavigation
     val onPlaylistWrapNavigationChanged = actions.onPlaylistWrapNavigationChanged
     val previousRestartsAfterThreshold = state.previousRestartsAfterThreshold
@@ -282,6 +286,13 @@ internal fun PlayerRouteContent(
         description = "Automatically start the next visible track after natural playback end.",
         checked = autoPlayNextTrackOnEnd,
         onCheckedChange = onAutoPlayNextTrackOnEndChanged
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Preload next cached remote track",
+        description = "Downloads the next remote track in advance for cached playback modes.",
+        checked = preloadNextCachedRemoteTrack,
+        onCheckedChange = onPreloadNextCachedRemoteTrackChanged
     )
     Spacer(modifier = Modifier.height(10.dp))
     PlayerSettingToggleCard(

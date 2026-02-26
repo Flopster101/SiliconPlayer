@@ -501,6 +501,14 @@ private fun AppNavigation(
             prefs.getBoolean(AppPreferenceKeys.AUTO_PLAY_NEXT_TRACK_ON_END, true)
         )
     }
+    var preloadNextCachedRemoteTrack by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                AppPreferenceKeys.PRELOAD_NEXT_CACHED_REMOTE_TRACK,
+                AppDefaults.Player.preloadNextCachedRemoteTrack
+            )
+        )
+    }
     var playlistWrapNavigation by remember {
         mutableStateOf(
             prefs.getBoolean(AppPreferenceKeys.PLAYLIST_WRAP_NAVIGATION, true)
@@ -1366,6 +1374,7 @@ private fun AppNavigation(
         autoPlayOnTrackSelect = autoPlayOnTrackSelect,
         openPlayerOnTrackSelect = openPlayerOnTrackSelect,
         autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
+        preloadNextCachedRemoteTrack = preloadNextCachedRemoteTrack,
         playlistWrapNavigation = playlistWrapNavigation,
         previousRestartsAfterThreshold = previousRestartsAfterThreshold,
         fadePauseResume = fadePauseResume,
@@ -1387,6 +1396,18 @@ private fun AppNavigation(
             lastBrowserLocationId = null
             lastBrowserDirectoryPath = null
         }
+    )
+
+    val cancelRemoteNextTrackPreload = rememberRemoteNextTrackPreloadCanceller(
+        context = context,
+        isPlaying,
+        selectedFile = selectedFile,
+        currentPlaybackSourceId = currentPlaybackSourceId,
+        preloadNextCachedRemoteTrack = preloadNextCachedRemoteTrack,
+        playlistWrapNavigation = playlistWrapNavigation,
+        urlOrPathForceCaching = urlOrPathForceCaching,
+        visiblePlayableFiles = visiblePlayableFiles,
+        visiblePlayableSourceIds = RemotePlayableSourceIdsHolder.current
     )
 
     AppNavigationCoreEffects(
@@ -1534,6 +1555,7 @@ private fun AppNavigation(
     val stopAndEmptyTrack: () -> Unit = {
         trackLoadDelegates.cancelPendingTrackSelection()
         deferredPlaybackSeek = null
+        cancelRemoteNextTrackPreload()
         remoteLoadJob?.cancel()
         remoteLoadJob = null
         remoteLoadUiState = null
@@ -2039,6 +2061,7 @@ private fun AppNavigation(
                                     autoPlayOnTrackSelect = autoPlayOnTrackSelect,
                                     openPlayerOnTrackSelect = openPlayerOnTrackSelect,
                                     autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
+                                    preloadNextCachedRemoteTrack = preloadNextCachedRemoteTrack,
                                     playlistWrapNavigation = playlistWrapNavigation,
                                     previousRestartsAfterThreshold = previousRestartsAfterThreshold,
                                     fadePauseResume = fadePauseResume,
@@ -2153,6 +2176,7 @@ private fun AppNavigation(
                                     onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
                                     onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
                                     onAutoPlayNextTrackOnEndChanged = { autoPlayNextTrackOnEnd = it },
+                                    onPreloadNextCachedRemoteTrackChanged = { preloadNextCachedRemoteTrack = it },
                                     onPlaylistWrapNavigationChanged = { playlistWrapNavigation = it },
                                     onPreviousRestartsAfterThresholdChanged = { previousRestartsAfterThreshold = it },
                                     onFadePauseResumeChanged = { fadePauseResume = it },
@@ -2477,6 +2501,7 @@ private fun AppNavigation(
                                 onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
                                 onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },
                                 onAutoPlayNextTrackOnEndChanged = { autoPlayNextTrackOnEnd = it },
+                                onPreloadNextCachedRemoteTrackChanged = { preloadNextCachedRemoteTrack = it },
                                 onPlaylistWrapNavigationChanged = { playlistWrapNavigation = it },
                                 onPreviousRestartsAfterThresholdChanged = { previousRestartsAfterThreshold = it },
                                 onFadePauseResumeChanged = { fadePauseResume = it },

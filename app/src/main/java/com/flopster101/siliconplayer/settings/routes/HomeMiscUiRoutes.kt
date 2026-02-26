@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -175,6 +176,27 @@ internal fun FileBrowserRouteContent(
     state: FileBrowserRouteState,
     actions: FileBrowserRouteActions
 ) {
+    val context = LocalContext.current
+    val prefs = remember(context) {
+        context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+    }
+    var showUnsupportedFiles by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                AppPreferenceKeys.BROWSER_SHOW_UNSUPPORTED_FILES,
+                AppDefaults.Browser.showUnsupportedFiles
+            )
+        )
+    }
+    var showHiddenFilesAndFolders by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                AppPreferenceKeys.BROWSER_SHOW_HIDDEN_FILES_AND_FOLDERS,
+                AppDefaults.Browser.showHiddenFilesAndFolders
+            )
+        )
+    }
+
     SettingsSectionLabel("Browser behavior")
     PlayerSettingToggleCard(
         title = "Remember browser location",
@@ -195,6 +217,26 @@ internal fun FileBrowserRouteContent(
         description = "Draw the same rounded chip background behind file icons as folders.",
         checked = state.showFileIconChipBackground,
         onCheckedChange = actions.onShowFileIconChipBackgroundChanged
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Show unsupported files",
+        description = "Display files that no enabled decoder core can open.",
+        checked = showUnsupportedFiles,
+        onCheckedChange = {
+            showUnsupportedFiles = it
+            prefs.edit().putBoolean(AppPreferenceKeys.BROWSER_SHOW_UNSUPPORTED_FILES, it).apply()
+        }
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Show hidden files and folders",
+        description = "Display hidden entries (such as dot-prefixed names).",
+        checked = showHiddenFilesAndFolders,
+        onCheckedChange = {
+            showHiddenFilesAndFolders = it
+            prefs.edit().putBoolean(AppPreferenceKeys.BROWSER_SHOW_HIDDEN_FILES_AND_FOLDERS, it).apply()
+        }
     )
     Spacer(modifier = Modifier.height(10.dp))
     BrowserNameSortModeSelectorCard(

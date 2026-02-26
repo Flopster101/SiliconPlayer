@@ -84,6 +84,8 @@ import com.flopster101.siliconplayer.HttpBrowserEntry
 import com.flopster101.siliconplayer.HttpRemoteExportRequest
 import com.flopster101.siliconplayer.HttpSourceSpec
 import com.flopster101.siliconplayer.RemoteExportCancelledException
+import com.flopster101.siliconplayer.AppDefaults
+import com.flopster101.siliconplayer.AppPreferenceKeys
 import com.flopster101.siliconplayer.buildHttpDisplayUri
 import com.flopster101.siliconplayer.buildHttpRequestUri
 import com.flopster101.siliconplayer.buildHttpSourceId
@@ -160,6 +162,17 @@ internal fun HttpFileBrowserScreen(
     onBrowserLocationChanged: (BrowserLaunchState) -> Unit
 ) {
     val context = LocalContext.current
+    val browserPrefs = remember(context) {
+        context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+    }
+    val showUnsupportedFiles = browserPrefs.getBoolean(
+        AppPreferenceKeys.BROWSER_SHOW_UNSUPPORTED_FILES,
+        AppDefaults.Browser.showUnsupportedFiles
+    )
+    val showHiddenFilesAndFolders = browserPrefs.getBoolean(
+        AppPreferenceKeys.BROWSER_SHOW_HIDDEN_FILES_AND_FOLDERS,
+        AppDefaults.Browser.showHiddenFilesAndFolders
+    )
     val coroutineScope = rememberCoroutineScope()
     val httpListingAdapter = remember { HttpBrowserListingAdapter() }
     val allowCredentialRemember = sourceNodeId != null
@@ -226,6 +239,7 @@ internal fun HttpFileBrowserScreen(
             .asSequence()
             .filter { entry ->
                 !entry.isDirectory &&
+                    (showHiddenFilesAndFolders || !entry.name.startsWith(".")) &&
                     browserArchiveCapabilityForName(entry.name) == BrowserArchiveCapability.None &&
                     fileMatchesSupportedExtensions(File(entry.name), supportedExtensions)
             }
@@ -525,12 +539,19 @@ internal fun HttpFileBrowserScreen(
         currentPath = currentSpec.path,
         rootPath = effectiveRootPath
     )
-    val browsableEntries = remember(entries, supportedExtensions) {
+    val browsableEntries = remember(
+        entries,
+        supportedExtensions,
+        showUnsupportedFiles,
+        showHiddenFilesAndFolders
+    ) {
         entries.filter { entry ->
             shouldShowRemoteBrowserEntry(
                 name = entry.name,
                 isDirectory = entry.isDirectory,
-                supportedExtensions = supportedExtensions
+                supportedExtensions = supportedExtensions,
+                showUnsupportedFiles = showUnsupportedFiles,
+                showHiddenFilesAndFolders = showHiddenFilesAndFolders
             )
         }
     }
@@ -1036,7 +1057,9 @@ internal fun HttpFileBrowserScreen(
                             shouldShowRemoteBrowserEntry(
                                 name = entry.name,
                                 isDirectory = entry.isDirectory,
-                                supportedExtensions = supportedExtensions
+                                supportedExtensions = supportedExtensions,
+                                showUnsupportedFiles = showUnsupportedFiles,
+                                showHiddenFilesAndFolders = showHiddenFilesAndFolders
                             )
                         }
                         .orEmpty()
@@ -1180,6 +1203,7 @@ internal fun HttpFileBrowserScreen(
                                 }
                                 HttpEntryRow(
                                     entry = entry,
+                                    supportedExtensions = supportedExtensions,
                                     decoderExtensionArtworkHints = decoderExtensionArtworkHints,
                                     isSelected = browserSelectionController.selectedKeys.contains(entrySelectionKey),
                                     hasSelectedAbove = hasSelectedAbove,
@@ -1503,6 +1527,7 @@ private fun HttpParentDirectoryRow(
 @Composable
 private fun HttpEntryRow(
     entry: HttpBrowserEntry,
+    supportedExtensions: Set<String>,
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint>,
     isSelected: Boolean,
     hasSelectedAbove: Boolean = false,
@@ -1513,6 +1538,7 @@ private fun HttpEntryRow(
     val visualKind = browserRemoteEntryVisualKind(
         name = entry.name,
         isDirectory = entry.isDirectory,
+        supportedExtensions = supportedExtensions,
         decoderExtensionArtworkHints = decoderExtensionArtworkHints
     )
     val selectionShape = RoundedCornerShape(

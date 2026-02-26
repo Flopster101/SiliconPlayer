@@ -77,6 +77,8 @@ import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.SmbBrowserEntry
 import com.flopster101.siliconplayer.SmbSourceSpec
 import com.flopster101.siliconplayer.SmbAuthenticationFailureReason
+import com.flopster101.siliconplayer.AppDefaults
+import com.flopster101.siliconplayer.AppPreferenceKeys
 import com.flopster101.siliconplayer.buildSmbEntrySourceSpec
 import com.flopster101.siliconplayer.buildSmbDisplayUri
 import com.flopster101.siliconplayer.buildSmbRequestUri
@@ -147,6 +149,17 @@ internal fun SmbFileBrowserScreen(
     onBrowserLocationChanged: (BrowserLaunchState) -> Unit
 ) {
     val context = LocalContext.current
+    val browserPrefs = remember(context) {
+        context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+    }
+    val showUnsupportedFiles = browserPrefs.getBoolean(
+        AppPreferenceKeys.BROWSER_SHOW_UNSUPPORTED_FILES,
+        AppDefaults.Browser.showUnsupportedFiles
+    )
+    val showHiddenFilesAndFolders = browserPrefs.getBoolean(
+        AppPreferenceKeys.BROWSER_SHOW_HIDDEN_FILES_AND_FOLDERS,
+        AppDefaults.Browser.showHiddenFilesAndFolders
+    )
     val coroutineScope = rememberCoroutineScope()
     val smbListingAdapter = remember { SmbBrowserListingAdapter() }
     val allowCredentialRemember = sourceNodeId != null
@@ -267,6 +280,7 @@ internal fun SmbFileBrowserScreen(
             .asSequence()
             .filter { entry ->
                 !entry.isDirectory &&
+                    (showHiddenFilesAndFolders || (!entry.isHidden && !entry.name.startsWith("."))) &&
                     browserArchiveCapabilityForName(entry.name) == BrowserArchiveCapability.None &&
                     fileMatchesSupportedExtensions(File(entry.name), supportedExtensions)
             }
@@ -492,12 +506,20 @@ internal fun SmbFileBrowserScreen(
 
     val canNavigateUp = currentSubPath.isNotBlank() || (canBrowseHostShares && currentShare.isNotBlank())
     val sharePickerMode = isSharePickerMode()
-    val browsableEntries = remember(entries, supportedExtensions) {
+    val browsableEntries = remember(
+        entries,
+        supportedExtensions,
+        showUnsupportedFiles,
+        showHiddenFilesAndFolders
+    ) {
         entries.filter { entry ->
             shouldShowRemoteBrowserEntry(
                 name = entry.name,
                 isDirectory = entry.isDirectory,
-                supportedExtensions = supportedExtensions
+                supportedExtensions = supportedExtensions,
+                showUnsupportedFiles = showUnsupportedFiles,
+                showHiddenFilesAndFolders = showHiddenFilesAndFolders,
+                isHiddenHint = entry.isHidden
             )
         }
     }
@@ -997,7 +1019,10 @@ internal fun SmbFileBrowserScreen(
                             shouldShowRemoteBrowserEntry(
                                 name = entry.name,
                                 isDirectory = entry.isDirectory,
-                                supportedExtensions = supportedExtensions
+                                supportedExtensions = supportedExtensions,
+                                showUnsupportedFiles = showUnsupportedFiles,
+                                showHiddenFilesAndFolders = showHiddenFilesAndFolders,
+                                isHiddenHint = entry.isHidden
                             )
                         }
                         .orEmpty()
@@ -1143,6 +1168,7 @@ internal fun SmbFileBrowserScreen(
                             }
                             SmbEntryRow(
                                 entry = entry,
+                                supportedExtensions = supportedExtensions,
                                 decoderExtensionArtworkHints = decoderExtensionArtworkHints,
                                 isSelected = browserSelectionController.selectedKeys.contains(entrySelectionKey),
                                 hasSelectedAbove = hasSelectedAbove,
@@ -1455,6 +1481,7 @@ private fun SmbParentDirectoryRow(
 @Composable
 private fun SmbEntryRow(
     entry: SmbBrowserEntry,
+    supportedExtensions: Set<String>,
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint>,
     isSelected: Boolean,
     hasSelectedAbove: Boolean = false,
@@ -1469,6 +1496,7 @@ private fun SmbEntryRow(
         browserRemoteEntryVisualKind(
             name = entry.name,
             isDirectory = entry.isDirectory,
+            supportedExtensions = supportedExtensions,
             decoderExtensionArtworkHints = decoderExtensionArtworkHints
         )
     }
@@ -1537,7 +1565,8 @@ private fun SmbEntryRow(
                     BrowserRemoteEntryVisualKind.TrackedFile,
                     BrowserRemoteEntryVisualKind.GameFile,
                     BrowserRemoteEntryVisualKind.VideoFile,
-                    BrowserRemoteEntryVisualKind.AudioFile -> BrowserRemoteEntryIcon(
+                    BrowserRemoteEntryVisualKind.AudioFile,
+                    BrowserRemoteEntryVisualKind.UnsupportedFile -> BrowserRemoteEntryIcon(
                         visualKind = visualKind,
                         tint = chipContentColor,
                         modifier = Modifier.size(SMB_ICON_GLYPH_SIZE)

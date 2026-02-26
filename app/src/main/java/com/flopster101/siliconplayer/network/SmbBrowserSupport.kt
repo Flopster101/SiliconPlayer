@@ -18,7 +18,8 @@ import java.util.Locale
 internal data class SmbBrowserEntry(
     val name: String,
     val isDirectory: Boolean,
-    val sizeBytes: Long
+    val sizeBytes: Long,
+    val isHidden: Boolean = false
 )
 
 internal suspend fun listSmbDirectoryEntries(
@@ -48,11 +49,13 @@ internal suspend fun listSmbDirectoryEntries(
                                 if (name.isBlank() || name == "." || name == "..") return@mapNotNull null
                                 val attributes = entry.fileAttributes
                                 val isDirectory = (attributes and FileAttributes.FILE_ATTRIBUTE_DIRECTORY.value) != 0L
+                                val isHidden = (attributes and FileAttributes.FILE_ATTRIBUTE_HIDDEN.value) != 0L
                                 val size = entry.endOfFile
                                 SmbBrowserEntry(
                                     name = name,
                                     isDirectory = isDirectory,
-                                    sizeBytes = if (isDirectory) 0L else size
+                                    sizeBytes = if (isDirectory) 0L else size,
+                                    isHidden = isHidden
                                 )
                             }
                             .sortedWith(
@@ -92,7 +95,8 @@ internal suspend fun listSmbHostShareEntries(
                             SmbBrowserEntry(
                                 name = name,
                                 isDirectory = true,
-                                sizeBytes = 0L
+                                sizeBytes = 0L,
+                                isHidden = name.endsWith("$")
                             )
                         }
                         .sortedWith(

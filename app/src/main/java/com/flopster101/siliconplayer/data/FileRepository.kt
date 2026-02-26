@@ -1,11 +1,14 @@
 package com.flopster101.siliconplayer.data
 
 import com.flopster101.siliconplayer.BrowserNameSortMode
+import com.flopster101.siliconplayer.AppPreferenceKeys
 import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
+import android.content.SharedPreferences
 import java.io.File
 
 class FileRepository(
     private val supportedExtensions: Set<String>,
+    private val prefs: SharedPreferences,
     private val sortArchivesBeforeFiles: Boolean,
     private val nameSortMode: BrowserNameSortMode
 ) {
@@ -18,10 +21,23 @@ class FileRepository(
                 return emptyList()
             }
         return files
-            .filter {
-                it.isDirectory ||
-                    fileMatchesSupportedExtensions(it, supportedExtensions) ||
-                    isSupportedArchive(it)
+            .filter { file ->
+                val showUnsupportedFiles = prefs.getBoolean(
+                    AppPreferenceKeys.BROWSER_SHOW_UNSUPPORTED_FILES,
+                    false
+                )
+                val showHiddenFilesAndFolders = prefs.getBoolean(
+                    AppPreferenceKeys.BROWSER_SHOW_HIDDEN_FILES_AND_FOLDERS,
+                    false
+                )
+                val isHidden = file.isHidden || file.name.startsWith(".")
+                if (!showHiddenFilesAndFolders && isHidden) {
+                    return@filter false
+                }
+                file.isDirectory ||
+                    isSupportedArchive(file) ||
+                    fileMatchesSupportedExtensions(file, supportedExtensions) ||
+                    showUnsupportedFiles
             }
             .map { file ->
                 val isArchive = isSupportedArchive(file)
@@ -29,7 +45,8 @@ class FileRepository(
                 val kind = when {
                     file.isDirectory -> FileItem.Kind.Directory
                     isArchive -> FileItem.Kind.ArchiveZip
-                    else -> FileItem.Kind.AudioFile
+                    fileMatchesSupportedExtensions(file, supportedExtensions) -> FileItem.Kind.AudioFile
+                    else -> FileItem.Kind.UnsupportedFile
                 }
                 FileItem(
                     file = file,
@@ -39,6 +56,7 @@ class FileRepository(
                         FileItem.Kind.Directory -> 0L
                         FileItem.Kind.ArchiveZip -> file.length()
                         FileItem.Kind.AudioFile -> file.length()
+                        FileItem.Kind.UnsupportedFile -> file.length()
                     },
                     kind = kind
                 )
@@ -56,6 +74,12 @@ class FileRepository(
                 }
                 left.name.compareTo(right.name)
             }
+    }
+
+    fun isPlayableFile(file: File): Boolean {
+        return !file.isDirectory &&
+            !isSupportedArchive(file) &&
+            fileMatchesSupportedExtensions(file, supportedExtensions)
     }
 
     private fun buildRootFallbackEntries(): List<File> {
@@ -81,7 +105,8 @@ class FileRepository(
         return when {
             kind == FileItem.Kind.Directory -> 0
             sortArchivesBeforeFiles && kind == FileItem.Kind.ArchiveZip -> 1
-            sortArchivesBeforeFiles && kind == FileItem.Kind.AudioFile -> 2
+            sortArchivesBeforeFiles &&
+                (kind == FileItem.Kind.AudioFile || kind == FileItem.Kind.UnsupportedFile) -> 2
             else -> 1
         }
     }

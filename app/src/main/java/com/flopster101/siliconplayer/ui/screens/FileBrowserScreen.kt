@@ -322,7 +322,7 @@ internal fun FileBrowserScreen(
                 onVisiblePlayableFilesChanged(
                     loadedFiles
                         .asSequence()
-                        .filter { !it.isDirectory }
+                        .filter { item -> repository.isPlayableFile(item.file) }
                         .map { it.file }
                         .toList()
                 )
@@ -2042,6 +2042,7 @@ fun FileItemRow(
                         isVideoFile -> "Video file"
                         decoderArtworkHint == DecoderArtworkHint.TrackedFile -> "Tracked file"
                         decoderArtworkHint == DecoderArtworkHint.GameFile -> "Game file"
+                        item.kind == FileItem.Kind.UnsupportedFile -> "File"
                         else -> "Audio file"
                     }
                     if (isVideoFile) {
@@ -2061,6 +2062,13 @@ fun FileItemRow(
                     } else if (decoderArtworkHint == DecoderArtworkHint.GameFile) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_file_game),
+                            contentDescription = contentDescription,
+                            tint = iconTint,
+                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                        )
+                    } else if (item.kind == FileItem.Kind.UnsupportedFile) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_file_unsupported),
                             contentDescription = contentDescription,
                             tint = iconTint,
                             modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)

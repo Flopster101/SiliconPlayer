@@ -12,7 +12,8 @@ data class FileItem(
     enum class Kind {
         Directory,
         AudioFile,
-        ArchiveZip
+        ArchiveZip,
+        UnsupportedFile
     }
 
     val isArchive: Boolean

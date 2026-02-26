@@ -229,7 +229,8 @@ internal enum class BrowserRemoteEntryVisualKind {
     TrackedFile,
     GameFile,
     AudioFile,
-    VideoFile
+    VideoFile,
+    UnsupportedFile
 }
 
 internal enum class BrowserArchiveCapability {
@@ -298,6 +299,15 @@ internal fun BrowserRemoteEntryIcon(
         BrowserRemoteEntryVisualKind.AudioFile -> {
             Icon(
                 imageVector = Icons.Default.AudioFile,
+                contentDescription = null,
+                tint = tint,
+                modifier = modifier
+            )
+        }
+
+        BrowserRemoteEntryVisualKind.UnsupportedFile -> {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_file_unsupported),
                 contentDescription = null,
                 tint = tint,
                 modifier = modifier
@@ -739,16 +749,22 @@ internal fun isBrowsableArchiveName(name: String): Boolean {
 internal fun shouldShowRemoteBrowserEntry(
     name: String,
     isDirectory: Boolean,
-    supportedExtensions: Set<String>
+    supportedExtensions: Set<String>,
+    showUnsupportedFiles: Boolean = false,
+    showHiddenFilesAndFolders: Boolean = false,
+    isHiddenHint: Boolean = false
 ): Boolean {
+    val isHiddenName = name.startsWith(".")
+    if (!showHiddenFilesAndFolders && (isHiddenHint || isHiddenName)) return false
     if (isDirectory) return true
     if (browserArchiveCapabilityForName(name) != BrowserArchiveCapability.None) return true
-    return fileMatchesSupportedExtensions(File(name), supportedExtensions)
+    return showUnsupportedFiles || fileMatchesSupportedExtensions(File(name), supportedExtensions)
 }
 
 internal fun browserRemoteEntryVisualKind(
     name: String,
     isDirectory: Boolean,
+    supportedExtensions: Set<String>,
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint> = emptyMap()
 ): BrowserRemoteEntryVisualKind {
     if (isDirectory) return BrowserRemoteEntryVisualKind.Directory
@@ -772,8 +788,10 @@ internal fun browserRemoteEntryVisualKind(
         (extension != null && extension in REMOTE_FALLBACK_VIDEO_EXTENSIONS)
     ) {
         BrowserRemoteEntryVisualKind.VideoFile
-    } else {
+    } else if (fileMatchesSupportedExtensions(File(name), supportedExtensions)) {
         BrowserRemoteEntryVisualKind.AudioFile
+    } else {
+        BrowserRemoteEntryVisualKind.UnsupportedFile
     }
 }
 

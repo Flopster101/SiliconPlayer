@@ -894,6 +894,7 @@ private fun AppNavigation(
     val repository = remember(supportedExtensions, sortArchivesBeforeFiles, browserNameSortMode) {
         com.flopster101.siliconplayer.data.FileRepository(
             supportedExtensions = supportedExtensions,
+            prefs = prefs,
             sortArchivesBeforeFiles = sortArchivesBeforeFiles,
             nameSortMode = browserNameSortMode
         )

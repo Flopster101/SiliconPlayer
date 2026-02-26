@@ -59,6 +59,7 @@ internal object AppPreferenceKeys {
     const val AUDIO_DSP_REVERB_PRESET = "audio_dsp_reverb_preset"
     const val AUDIO_DSP_BITCRUSH_ENABLED = "audio_dsp_bitcrush_enabled"
     const val AUDIO_DSP_BITCRUSH_BITS = "audio_dsp_bitcrush_bits"
+    const val AUDIO_DSP_EDITOR_NAMESPACE = "audio_dsp_editor_namespace"
     const val URL_PATH_FORCE_CACHING = "url_path_force_caching"
     const val URL_CACHE_CLEAR_ON_LAUNCH = "url_cache_clear_on_launch"
     const val URL_CACHE_MAX_TRACKS = "url_cache_max_tracks"
@@ -155,6 +156,30 @@ internal object AppPreferenceKeys {
     fun decoderPriorityKey(decoderName: String) = "decoder_${decoderName}_priority"
     fun decoderEnabledExtensionsKey(decoderName: String) = "decoder_${decoderName}_enabled_extensions"
     fun decoderPluginVolumeDbKey(decoderName: String) = "decoder_${decoderName}_plugin_volume_db"
+    private fun sanitizeKeyToken(token: String): String {
+        val normalized = token
+            .trim()
+            .lowercase()
+            .replace(Regex("[^a-z0-9]+"), "_")
+            .trim('_')
+        return if (normalized.isBlank()) "unknown" else normalized
+    }
+    private fun audioDspCoreKey(decoderName: String, suffix: String): String {
+        val coreToken = sanitizeKeyToken(decoderName)
+        return "audio_dsp_core_${coreToken}_$suffix"
+    }
+    fun audioDspCoreBassEnabledKey(decoderName: String) = audioDspCoreKey(decoderName, "bass_enabled")
+    fun audioDspCoreBassDepthKey(decoderName: String) = audioDspCoreKey(decoderName, "bass_depth")
+    fun audioDspCoreBassRangeKey(decoderName: String) = audioDspCoreKey(decoderName, "bass_range")
+    fun audioDspCoreSurroundEnabledKey(decoderName: String) = audioDspCoreKey(decoderName, "surround_enabled")
+    fun audioDspCoreSurroundDepthKey(decoderName: String) = audioDspCoreKey(decoderName, "surround_depth")
+    fun audioDspCoreSurroundDelayMsKey(decoderName: String) = audioDspCoreKey(decoderName, "surround_delay_ms")
+    fun audioDspCoreReverbEnabledKey(decoderName: String) = audioDspCoreKey(decoderName, "reverb_enabled")
+    fun audioDspCoreReverbDepthKey(decoderName: String) = audioDspCoreKey(decoderName, "reverb_depth")
+    fun audioDspCoreReverbPresetKey(decoderName: String) = audioDspCoreKey(decoderName, "reverb_preset")
+    fun audioDspCoreBitCrushEnabledKey(decoderName: String) = audioDspCoreKey(decoderName, "bitcrush_enabled")
+    fun audioDspCoreBitCrushBitsKey(decoderName: String) = audioDspCoreKey(decoderName, "bitcrush_bits")
+    fun audioDspCoreIgnoreGlobalKey(decoderName: String) = audioDspCoreKey(decoderName, "ignore_global")
     fun audioPerformanceModeForBackend(backend: AudioBackendPreference) =
         "${AUDIO_PERFORMANCE_MODE}_${backend.storageValue}"
     fun audioBufferPresetForBackend(backend: AudioBackendPreference) =

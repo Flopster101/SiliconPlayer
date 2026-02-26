@@ -27,6 +27,7 @@ internal fun clearAllAudioParametersAction(
     prefs.edit().apply {
         remove(AppPreferenceKeys.AUDIO_MASTER_VOLUME_DB)
         remove(AppPreferenceKeys.AUDIO_FORCE_MONO)
+        remove(AppPreferenceKeys.AUDIO_DSP_EDITOR_NAMESPACE)
         remove(AppPreferenceKeys.AUDIO_DSP_BASS_ENABLED)
         remove(AppPreferenceKeys.AUDIO_DSP_BASS_DEPTH)
         remove(AppPreferenceKeys.AUDIO_DSP_BASS_RANGE)
@@ -38,6 +39,9 @@ internal fun clearAllAudioParametersAction(
         remove(AppPreferenceKeys.AUDIO_DSP_REVERB_PRESET)
         remove(AppPreferenceKeys.AUDIO_DSP_BITCRUSH_ENABLED)
         remove(AppPreferenceKeys.AUDIO_DSP_BITCRUSH_BITS)
+        prefs.all.keys
+            .filter { it.startsWith("audio_dsp_core_") }
+            .forEach { remove(it) }
         apply()
     }
     clearAllDecoderPluginVolumes(prefs)

@@ -79,6 +79,8 @@ fun AudioEffectsDialog(
     onSongVolumeChange: (Float) -> Unit,
     onIgnoreCoreVolumeForSongChange: (Boolean) -> Unit,
     onForceMonoChange: (Boolean) -> Unit,
+    onDspNamespaceSelectionChange: (String) -> Unit,
+    onDspIgnoreGlobalForCurrentCoreChange: (Boolean) -> Unit,
     dspBassEnabled: Boolean,
     dspBassDepth: Int,
     dspBassRange: Int,
@@ -90,6 +92,8 @@ fun AudioEffectsDialog(
     dspReverbPreset: Int,
     dspBitCrushEnabled: Boolean,
     dspBitCrushBits: Int,
+    dspNamespaceSelection: String,
+    dspIgnoreGlobalForCurrentCore: Boolean,
     onDspBassEnabledChange: (Boolean) -> Unit,
     onDspBassDepthChange: (Int) -> Unit,
     onDspBassRangeChange: (Int) -> Unit,
@@ -101,7 +105,8 @@ fun AudioEffectsDialog(
     onDspReverbPresetChange: (Int) -> Unit,
     onDspBitCrushEnabledChange: (Boolean) -> Unit,
     onDspBitCrushBitsChange: (Int) -> Unit,
-    onReset: () -> Unit,
+    onResetVolumeTab: () -> Unit,
+    onResetDspScope: (String) -> Unit,
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
@@ -149,6 +154,7 @@ fun AudioEffectsDialog(
                     )
                     else -> DspTabContent(
                         currentCoreName = currentCoreName,
+                        hasActiveCore = hasActiveCore,
                         dspBassEnabled = dspBassEnabled,
                         dspBassDepth = dspBassDepth,
                         dspBassRange = dspBassRange,
@@ -160,6 +166,8 @@ fun AudioEffectsDialog(
                         dspReverbPreset = dspReverbPreset,
                         dspBitCrushEnabled = dspBitCrushEnabled,
                         dspBitCrushBits = dspBitCrushBits,
+                        dspNamespaceSelection = dspNamespaceSelection,
+                        dspIgnoreGlobalForCurrentCore = dspIgnoreGlobalForCurrentCore,
                         onDspBassEnabledChange = onDspBassEnabledChange,
                         onDspBassDepthChange = onDspBassDepthChange,
                         onDspBassRangeChange = onDspBassRangeChange,
@@ -170,7 +178,9 @@ fun AudioEffectsDialog(
                         onDspReverbDepthChange = onDspReverbDepthChange,
                         onDspReverbPresetChange = onDspReverbPresetChange,
                         onDspBitCrushEnabledChange = onDspBitCrushEnabledChange,
-                        onDspBitCrushBitsChange = onDspBitCrushBitsChange
+                        onDspBitCrushBitsChange = onDspBitCrushBitsChange,
+                        onDspNamespaceSelectionChange = onDspNamespaceSelectionChange,
+                        onDspIgnoreGlobalForCurrentCoreChange = onDspIgnoreGlobalForCurrentCoreChange
                     )
                 }
             }
@@ -182,7 +192,15 @@ fun AudioEffectsDialog(
         },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onReset) {
+                TextButton(
+                    onClick = {
+                        if (selectedTabIndex == 0) {
+                            onResetVolumeTab()
+                        } else {
+                            onResetDspScope(dspNamespaceSelection)
+                        }
+                    }
+                ) {
                     Text("Reset")
                 }
                 TextButton(onClick = onDismiss) {
@@ -284,6 +302,7 @@ private fun VolumeTabContent(
 @Composable
 private fun DspTabContent(
     currentCoreName: String?,
+    hasActiveCore: Boolean,
     dspBassEnabled: Boolean,
     dspBassDepth: Int,
     dspBassRange: Int,
@@ -295,6 +314,8 @@ private fun DspTabContent(
     dspReverbPreset: Int,
     dspBitCrushEnabled: Boolean,
     dspBitCrushBits: Int,
+    dspNamespaceSelection: String,
+    dspIgnoreGlobalForCurrentCore: Boolean,
     onDspBassEnabledChange: (Boolean) -> Unit,
     onDspBassDepthChange: (Int) -> Unit,
     onDspBassRangeChange: (Int) -> Unit,
@@ -305,7 +326,9 @@ private fun DspTabContent(
     onDspReverbDepthChange: (Int) -> Unit,
     onDspReverbPresetChange: (Int) -> Unit,
     onDspBitCrushEnabledChange: (Boolean) -> Unit,
-    onDspBitCrushBitsChange: (Int) -> Unit
+    onDspBitCrushBitsChange: (Int) -> Unit,
+    onDspNamespaceSelectionChange: (String) -> Unit,
+    onDspIgnoreGlobalForCurrentCoreChange: (Boolean) -> Unit
 ) {
     val scrollState = rememberScrollState()
     var openMptDspExpanded by rememberSaveable { mutableStateOf(false) }
@@ -342,6 +365,25 @@ private fun DspTabContent(
                     .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilterChip(
+                        selected = dspNamespaceSelection != "core",
+                        onClick = { onDspNamespaceSelectionChange("global") },
+                        label = { Text("Global") }
+                    )
+                    FilterChip(
+                        selected = dspNamespaceSelection == "core",
+                        onClick = {
+                            if (hasActiveCore) onDspNamespaceSelectionChange("core")
+                        },
+                        enabled = hasActiveCore,
+                        label = { Text("Current core") }
+                    )
+                }
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -488,6 +530,22 @@ private fun DspTabContent(
                                 enabled = dspBitCrushEnabled
                             )
                         }
+                    }
+                }
+                if (hasActiveCore) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Ignore global settings for this core",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Switch(
+                            checked = dspIgnoreGlobalForCurrentCore,
+                            onCheckedChange = onDspIgnoreGlobalForCurrentCoreChange
+                        )
                     }
                 }
                 Text(

@@ -24,15 +24,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -72,12 +76,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -101,6 +107,7 @@ import com.flopster101.siliconplayer.resolveDecoderArtworkHintForFileName
 import com.flopster101.siliconplayer.RemoteLoadPhase
 import com.flopster101.siliconplayer.RemoteLoadUiState
 import com.flopster101.siliconplayer.R
+import com.flopster101.siliconplayer.rememberDialogScrollbarAlpha
 import kotlinx.coroutines.delay
 import com.flopster101.siliconplayer.session.ExportConflictAction
 import java.util.Locale
@@ -440,28 +447,52 @@ internal fun BrowserInfoDialog(
     fields: List<BrowserInfoField>,
     onDismiss: () -> Unit
 ) {
+    val contentScrollState = rememberScrollState()
+    val scrollbarAlpha = rememberDialogScrollbarAlpha(
+        enabled = true,
+        scrollState = contentScrollState,
+        label = "browserInfoDialogScrollbarAlpha"
+    )
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .heightIn(max = 320.dp)
             ) {
-                fields.forEach { field ->
-                    Text(
-                        text = buildAnnotatedString {
-                            withStyle(style = SpanStyle(fontWeight = FontWeight.SemiBold)) {
-                                append("${field.label}: ")
-                            }
-                            append(field.value)
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                SelectionContainer {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(contentScrollState)
+                            .padding(end = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        fields.forEach { field ->
+                            Text(
+                                text = buildAnnotatedString {
+                                    withStyle(style = SpanStyle(fontWeight = FontWeight.SemiBold)) {
+                                        append("${field.label}: ")
+                                    }
+                                    append(field.value)
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
+                BrowserScrollStateScrollbar(
+                    scrollState = contentScrollState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 2.dp)
+                        .fillMaxHeight()
+                        .width(4.dp)
+                        .alpha(scrollbarAlpha)
+                )
             }
         },
         confirmButton = {
@@ -470,6 +501,43 @@ internal fun BrowserInfoDialog(
             }
         }
     )
+}
+
+@Composable
+private fun BrowserScrollStateScrollbar(
+    scrollState: ScrollState,
+    modifier: Modifier = Modifier
+) {
+    val maxScrollPx = scrollState.maxValue.toFloat()
+    if (maxScrollPx <= 0f) return
+
+    val density = LocalDensity.current
+    BoxWithConstraints(
+        modifier = modifier.background(
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+            shape = RoundedCornerShape(999.dp)
+        )
+    ) {
+        val viewportPx = with(density) { maxHeight.toPx() }.coerceAtLeast(1f)
+        val contentPx = (viewportPx + maxScrollPx).coerceAtLeast(viewportPx)
+        val thumbHeightFraction = (viewportPx / contentPx).coerceIn(0.08f, 1f)
+        val offsetFraction = (scrollState.value.toFloat() / maxScrollPx).coerceIn(0f, 1f)
+
+        val thumbHeight = (maxHeight * thumbHeightFraction).coerceAtLeast(18.dp)
+        val thumbMaxOffset = (maxHeight - thumbHeight).coerceAtLeast(0.dp)
+        val thumbOffset = thumbMaxOffset * offsetFraction
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(thumbHeight)
+                .offset(y = thumbOffset)
+                .background(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                    shape = RoundedCornerShape(999.dp)
+                )
+        )
+    }
 }
 
 @Composable

@@ -109,7 +109,7 @@ internal fun AppNavigationPlaybackPollEffects(
                 ) {
                     onSubtuneCursorChanged(currentFile)
                     val recentSourceId = currentPlaybackSourceIdProvider() ?: currentFile?.absolutePath
-                    if (recentSourceId != null) {
+                    if (nextIsPlaying && recentSourceId != null) {
                         onAddRecentPlayedTrack(
                             recentSourceId,
                             if (isLocalPlayableFile(currentFile)) lastBrowserLocationId else null,

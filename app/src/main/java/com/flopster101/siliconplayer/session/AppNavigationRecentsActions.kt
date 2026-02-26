@@ -12,6 +12,7 @@ import com.flopster101.siliconplayer.ensureRecentArtworkThumbnailCached
 import com.flopster101.siliconplayer.mergeRecentPlayedTrackMetadata
 import com.flopster101.siliconplayer.mergeRecentPlayedTrackArtworkCacheKey
 import com.flopster101.siliconplayer.normalizeSourceIdentity
+import com.flopster101.siliconplayer.sourceLeafNameForDisplay
 import java.util.Locale
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -56,6 +57,7 @@ internal fun addRecentPlayedTrackEntry(
     update: (List<RecentPathEntry>) -> Unit,
     write: (List<RecentPathEntry>, Int) -> Unit
 ) {
+    if (!isValidRecentPlayedSourcePath(path)) return
     val next = buildUpdatedRecentPlayedTracks(
         current = current,
         newPath = path,
@@ -68,6 +70,18 @@ internal fun addRecentPlayedTrackEntry(
     )
     update(next)
     write(next, limit)
+}
+
+private fun isValidRecentPlayedSourcePath(path: String): Boolean {
+    val normalized = normalizeSourceIdentity(path)?.trim() ?: path.trim()
+    if (normalized.isBlank()) return false
+    val uri = Uri.parse(normalized)
+    val scheme = uri.scheme?.lowercase(Locale.ROOT)
+    if (scheme == "http" || scheme == "https" || scheme == "smb") {
+        val leaf = sourceLeafNameForDisplay(normalized)?.trim().orEmpty()
+        if (leaf.isBlank()) return false
+    }
+    return true
 }
 
 internal fun scheduleRecentTrackMetadataRefresh(

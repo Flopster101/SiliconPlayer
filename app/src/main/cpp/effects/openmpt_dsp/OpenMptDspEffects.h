@@ -89,6 +89,7 @@ private:
     int32_t surroundHpY1 = 0;
     int32_t surroundLpY1 = 0;
     int surroundConfiguredDepth = 8;
+    float surroundOutputGain = 1.0f;
 
     int reverbConfiguredPreset = -1;
     int reverbConfiguredDepth = -1;

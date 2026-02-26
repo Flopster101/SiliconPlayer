@@ -293,6 +293,7 @@ void OpenMptDspEffects::reset() {
     surroundDelayL.clear();
     surroundDelayR.clear();
     surroundWritePos = 0;
+    surroundOutputGain = 1.0f;
     reverbConfiguredPreset = -1;
     reverbConfiguredDepth = -1;
     reverbInputY1L = 0;
@@ -366,6 +367,7 @@ void OpenMptDspEffects::resetForSampleRate(int sampleRate) {
     surroundHpX1 = 0;
     surroundHpY1 = 0;
     surroundLpY1 = 0;
+    surroundOutputGain = 1.0f;
     shelfEq(1024, surroundHpA1, surroundHpB0, surroundHpB1, 200, safeRate, 0.0f, 0.5f, 1.0f);
     shelfEq(1024, surroundLpA1, surroundLpB0, surroundLpB1, 7000, safeRate, 1.0f, 0.75f, 0.0f);
     surroundHpB0 = (surroundHpB0 * surroundConfiguredDepth) >> 5;
@@ -536,6 +538,9 @@ void OpenMptDspEffects::applySurround(
         surroundHpB1 = (surroundHpB1 * depth) >> 5;
         surroundLpB0 *= 2;
         surroundLpB1 *= 2;
+        // OpenMPT's integer mixer has more headroom than this float path.
+        // Apply depth-aware compensation to avoid hard clipping without a limiter.
+        surroundOutputGain = 1.0f / (1.0f + (static_cast<float>(depth) / 35.0f));
     }
 
     for (int frame = 0; frame < frames; ++frame) {
@@ -554,8 +559,10 @@ void OpenMptDspEffects::applySurround(
 
         const int32_t outL = inL + v;
         const int32_t outR = inR - v;
-        buffer[idx] = clampSample(static_cast<float>(outL) / 32767.0f);
-        buffer[idx + 1] = clampSample(static_cast<float>(outR) / 32767.0f);
+        const float scaledL = (static_cast<float>(outL) * surroundOutputGain) / 32767.0f;
+        const float scaledR = (static_cast<float>(outR) * surroundOutputGain) / 32767.0f;
+        buffer[idx] = clampSample(scaledL);
+        buffer[idx + 1] = clampSample(scaledR);
 
         surroundWritePos++;
         if (surroundWritePos >= std::clamp((sampleRate * delayMs) / 1000, 1, static_cast<int>(surroundDelayL.size()) - 1)) {

@@ -241,6 +241,13 @@ internal fun AppNavigationBrowserContentSection(
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
     onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit
 ) {
+    val initialSmbAllowHostShareNavigation = browserLaunchSmbSourceNodeId
+        ?.let { sourceNodeId -> networkNodes.firstOrNull { it.id == sourceNodeId } }
+        ?.let(::resolveNetworkNodeSmbSpec)
+        ?.share
+        ?.trim()
+        ?.isEmpty() == true
+
     AppNavigationBrowserRouteSection(
         mainPadding = mainPadding,
         repository = repository,
@@ -250,6 +257,7 @@ internal fun AppNavigationBrowserContentSection(
         initialDirectoryPath = browserLaunchDirectoryPath
             ?: if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
         initialSmbSourceNodeId = browserLaunchSmbSourceNodeId,
+        initialSmbAllowHostShareNavigation = initialSmbAllowHostShareNavigation,
         initialHttpSourceNodeId = browserLaunchHttpSourceNodeId,
         initialHttpRootPath = browserLaunchHttpRootPath,
         restoreFocusedItemRequestToken = browserFocusRestoreRequestToken,

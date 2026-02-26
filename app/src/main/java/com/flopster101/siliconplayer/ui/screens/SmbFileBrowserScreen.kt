@@ -136,6 +136,7 @@ internal fun SmbFileBrowserScreen(
     sourceSpec: SmbSourceSpec,
     bottomContentPadding: Dp,
     backHandlingEnabled: Boolean,
+    allowHostShareNavigation: Boolean,
     onExitBrowser: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
     onOpenRemoteSourceAsCached: (String) -> Unit,
@@ -147,7 +148,7 @@ internal fun SmbFileBrowserScreen(
     val coroutineScope = rememberCoroutineScope()
     val allowCredentialRemember = sourceNodeId != null
     val launchShare = remember(sourceSpec.share) { sourceSpec.share.trim() }
-    val canBrowseHostShares = launchShare.isBlank()
+    val canBrowseHostShares = allowHostShareNavigation || launchShare.isBlank()
     val sourceId = remember(sourceSpec) { buildSmbSourceId(sourceSpec) }
     val rootPath = remember(sourceSpec.path, launchShare) {
         if (launchShare.isBlank()) "" else normalizeSmbPathForShare(sourceSpec.path).orEmpty()

@@ -2045,6 +2045,83 @@ Java_com_flopster101_siliconplayer_NativeBridge_setOutputLimiterEnabled(
     audioEngine->setOutputLimiterEnabled(enabled == JNI_TRUE);
 }
 
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDspBassEnabled(
+        JNIEnv*, jobject, jboolean enabled) {
+    ensureEngine();
+    audioEngine->setDspBassEnabled(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDspBassDepth(
+        JNIEnv*, jobject, jint depth) {
+    ensureEngine();
+    audioEngine->setDspBassDepth(static_cast<int>(depth));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDspBassRange(
+        JNIEnv*, jobject, jint range) {
+    ensureEngine();
+    audioEngine->setDspBassRange(static_cast<int>(range));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDspSurroundEnabled(
+        JNIEnv*, jobject, jboolean enabled) {
+    ensureEngine();
+    audioEngine->setDspSurroundEnabled(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDspSurroundDepth(
+        JNIEnv*, jobject, jint depth) {
+    ensureEngine();
+    audioEngine->setDspSurroundDepth(static_cast<int>(depth));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDspSurroundDelayMs(
+        JNIEnv*, jobject, jint delayMs) {
+    ensureEngine();
+    audioEngine->setDspSurroundDelayMs(static_cast<int>(delayMs));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDspReverbEnabled(
+        JNIEnv*, jobject, jboolean enabled) {
+    ensureEngine();
+    audioEngine->setDspReverbEnabled(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDspReverbDepth(
+        JNIEnv*, jobject, jint depth) {
+    ensureEngine();
+    audioEngine->setDspReverbDepth(static_cast<int>(depth));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDspReverbPreset(
+        JNIEnv*, jobject, jint preset) {
+    ensureEngine();
+    audioEngine->setDspReverbPreset(static_cast<int>(preset));
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDspBitCrushEnabled(
+        JNIEnv*, jobject, jboolean enabled) {
+    ensureEngine();
+    audioEngine->setDspBitCrushEnabled(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setDspBitCrushBits(
+        JNIEnv*, jobject, jint bits) {
+    ensureEngine();
+    audioEngine->setDspBitCrushBits(static_cast<int>(bits));
+}
+
 extern "C" JNIEXPORT jfloat JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_getMasterGain(
         JNIEnv* env, jobject thiz) {
@@ -2079,6 +2156,83 @@ Java_com_flopster101_siliconplayer_NativeBridge_getForceMono(
         return JNI_FALSE;
     }
     return audioEngine->getForceMono() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDspBassEnabled(
+        JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return JNI_FALSE;
+    return audioEngine->getDspBassEnabled() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDspBassDepth(
+        JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 6;
+    return static_cast<jint>(audioEngine->getDspBassDepth());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDspBassRange(
+        JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 14;
+    return static_cast<jint>(audioEngine->getDspBassRange());
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDspSurroundEnabled(
+        JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return JNI_FALSE;
+    return audioEngine->getDspSurroundEnabled() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDspSurroundDepth(
+        JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 8;
+    return static_cast<jint>(audioEngine->getDspSurroundDepth());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDspSurroundDelayMs(
+        JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 20;
+    return static_cast<jint>(audioEngine->getDspSurroundDelayMs());
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDspReverbEnabled(
+        JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return JNI_FALSE;
+    return audioEngine->getDspReverbEnabled() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDspReverbDepth(
+        JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 8;
+    return static_cast<jint>(audioEngine->getDspReverbDepth());
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDspReverbPreset(
+        JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 0;
+    return static_cast<jint>(audioEngine->getDspReverbPreset());
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDspBitCrushEnabled(
+        JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return JNI_FALSE;
+    return audioEngine->getDspBitCrushEnabled() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_getDspBitCrushBits(
+        JNIEnv*, jobject) {
+    if (audioEngine == nullptr) return 16;
+    return static_cast<jint>(audioEngine->getDspBitCrushBits());
 }
 
 extern "C" JNIEXPORT void JNICALL

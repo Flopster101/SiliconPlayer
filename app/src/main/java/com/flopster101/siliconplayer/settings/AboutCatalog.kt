@@ -229,6 +229,22 @@ internal object AboutCatalog {
 
     private val libraryEntries: List<AboutEntity> = listOf(
         AboutEntity(
+            id = "lib.openmpt_dsp_effects",
+            kind = AboutEntityKind.Library,
+            name = "OpenMPT DSP effects",
+            description = "Audio DSP effect implementations adapted from OpenMPT sounddsp components (Bass Expansion, Reverb, Surround, BitCrush).",
+            author = "OpenMPT Project developers and contributors",
+            license = "BSD-3-Clause",
+            links = listOf(
+                AboutEntityLink("Project", "https://openmpt.org/"),
+                AboutEntityLink("Source", "https://github.com/OpenMPT/openmpt.git")
+            ),
+            integrationNotes = listOf(
+                "Integrated under app/src/main/cpp/effects/openmpt_dsp/ with local attribution and license copy.",
+                "Silicon Player uses a native port of OpenMPT DSP routines in the app audio processing pipeline."
+            )
+        ),
+        AboutEntity(
             id = "lib.psflib",
             kind = AboutEntityKind.Library,
             name = "PSFLib",

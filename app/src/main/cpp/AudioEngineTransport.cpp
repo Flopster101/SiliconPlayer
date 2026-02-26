@@ -281,6 +281,7 @@ void AudioEngine::setUrl(const char* url) {
         decoder.reset();
         cachedDurationSeconds.store(0.0);
         resetResamplerStateLocked();
+        openMptDspEffects.reset();
         outputLimiterGain = 1.0f;
         decoderRenderSampleRate = streamSampleRate;
         positionSeconds.store(0.0);

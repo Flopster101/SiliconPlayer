@@ -18,6 +18,20 @@ object AppDefaults {
 
     object AudioProcessing {
         const val outputLimiterEnabled = false
+
+        object Dsp {
+            const val bassEnabled = false
+            const val bassDepth = 6
+            const val bassRange = 14
+            const val surroundEnabled = false
+            const val surroundDepth = 8
+            const val surroundDelayMs = 20
+            const val reverbEnabled = false
+            const val reverbDepth = 8
+            const val reverbPreset = 0
+            const val bitCrushEnabled = false
+            const val bitCrushBits = 16
+        }
     }
 
     object Visualization {

@@ -28,6 +28,7 @@ add_library(
         AudioEngineTransport.cpp
         AudioEnginePipeline.cpp
         AudioEngineEffects.cpp
+        effects/openmpt_dsp/OpenMptDspEffects.cpp
         decoders/sid/ReSidBuilder.cpp
         decoders/sid/ReSidEmu.cpp
         decoders/FFmpegDecoder.cpp

@@ -15,6 +15,7 @@
 #include <array>
 #include <chrono>
 #include "decoders/AudioDecoder.h"
+#include "effects/openmpt_dsp/OpenMptDspEffects.h"
 
 struct SwrContext;
 
@@ -227,6 +228,17 @@ public:
     void setSongGain(float gainDb);
     void setForceMono(bool enabled);
     void setOutputLimiterEnabled(bool enabled);
+    void setDspBassEnabled(bool enabled);
+    void setDspBassDepth(int depth);
+    void setDspBassRange(int range);
+    void setDspSurroundEnabled(bool enabled);
+    void setDspSurroundDepth(int depth);
+    void setDspSurroundDelayMs(int delayMs);
+    void setDspReverbEnabled(bool enabled);
+    void setDspReverbDepth(int depth);
+    void setDspReverbPreset(int preset);
+    void setDspBitCrushEnabled(bool enabled);
+    void setDspBitCrushBits(int bits);
     void setMasterChannelMute(int channelIndex, bool enabled);
     void setMasterChannelSolo(int channelIndex, bool enabled);
     void setEndFadeApplyToAllTracks(bool enabled);
@@ -242,6 +254,17 @@ public:
     bool getForceMono() const;
     bool getMasterChannelMute(int channelIndex) const;
     bool getMasterChannelSolo(int channelIndex) const;
+    bool getDspBassEnabled() const;
+    int getDspBassDepth() const;
+    int getDspBassRange() const;
+    bool getDspSurroundEnabled() const;
+    int getDspSurroundDepth() const;
+    int getDspSurroundDelayMs() const;
+    bool getDspReverbEnabled() const;
+    int getDspReverbDepth() const;
+    int getDspReverbPreset() const;
+    bool getDspBitCrushEnabled() const;
+    int getDspBitCrushBits() const;
 
 private:
     AAudioStream *stream = nullptr;
@@ -315,6 +338,18 @@ private:
     std::atomic<bool> masterSoloLeft { false };
     std::atomic<bool> masterSoloRight { false };
     std::atomic<bool> outputLimiterEnabled { false };
+    std::atomic<bool> dspBassEnabled { false };
+    std::atomic<int> dspBassDepth { 6 };
+    std::atomic<int> dspBassRange { 14 };
+    std::atomic<bool> dspSurroundEnabled { false };
+    std::atomic<int> dspSurroundDepth { 8 };
+    std::atomic<int> dspSurroundDelayMs { 20 };
+    std::atomic<bool> dspReverbEnabled { false };
+    std::atomic<int> dspReverbDepth { 8 };
+    std::atomic<int> dspReverbPreset { 0 };
+    std::atomic<bool> dspBitCrushEnabled { false };
+    std::atomic<int> dspBitCrushBits { 16 };
+    siliconplayer::effects::OpenMptDspEffects openMptDspEffects;
     float outputLimiterGain = 1.0f;
     std::atomic<bool> endFadeApplyToAllTracks { false };
     std::atomic<int> endFadeDurationMs { 10000 };
@@ -379,6 +414,7 @@ private:
     void applyGain(float* buffer, int numFrames, int channels, float extraGain = 1.0f);
     void applyMasterChannelRouting(float* buffer, int numFrames, int channels);
     void applyMonoDownmix(float* buffer, int numFrames, int channels);
+    void applyOpenMptDspEffects(float* buffer, int numFrames, int channels, int sampleRate);
     void applyOutputLimiter(float* buffer, int numFrames, int channels);
     void updateVisualizationDataFromOutputCallback(const float* buffer, int numFrames, int channels);
     void updateVisualizationDataLocked(const float* buffer, int numFrames, int channels);

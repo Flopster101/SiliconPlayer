@@ -275,10 +275,32 @@ object NativeBridge {
     external fun setSongGain(gainDb: Float)
     external fun setForceMono(enabled: Boolean)
     external fun setOutputLimiterEnabled(enabled: Boolean)
+    external fun setDspBassEnabled(enabled: Boolean)
+    external fun setDspBassDepth(depth: Int)
+    external fun setDspBassRange(range: Int)
+    external fun setDspSurroundEnabled(enabled: Boolean)
+    external fun setDspSurroundDepth(depth: Int)
+    external fun setDspSurroundDelayMs(delayMs: Int)
+    external fun setDspReverbEnabled(enabled: Boolean)
+    external fun setDspReverbDepth(depth: Int)
+    external fun setDspReverbPreset(preset: Int)
+    external fun setDspBitCrushEnabled(enabled: Boolean)
+    external fun setDspBitCrushBits(bits: Int)
     external fun getMasterGain(): Float
     external fun getPluginGain(): Float
     external fun getSongGain(): Float
     external fun getForceMono(): Boolean
+    external fun getDspBassEnabled(): Boolean
+    external fun getDspBassDepth(): Int
+    external fun getDspBassRange(): Int
+    external fun getDspSurroundEnabled(): Boolean
+    external fun getDspSurroundDepth(): Int
+    external fun getDspSurroundDelayMs(): Int
+    external fun getDspReverbEnabled(): Boolean
+    external fun getDspReverbDepth(): Int
+    external fun getDspReverbPreset(): Int
+    external fun getDspBitCrushEnabled(): Boolean
+    external fun getDspBitCrushBits(): Int
     external fun setMasterChannelMute(channelIndex: Int, enabled: Boolean)
     external fun setMasterChannelSolo(channelIndex: Int, enabled: Boolean)
     external fun getMasterChannelMute(channelIndex: Int): Boolean

@@ -740,6 +740,7 @@ void AudioEngine::renderWorkerLoop() {
             const float endFadeGain = computeEndFadeGainLocked(gainTimelinePosition);
             applyGain(localBuffer.data(), chunkFrames, channels, endFadeGain);
             applyMasterChannelRouting(localBuffer.data(), chunkFrames, channels);
+            applyOpenMptDspEffects(localBuffer.data(), chunkFrames, channels, outputSampleRate);
             applyMonoDownmix(localBuffer.data(), chunkFrames, channels);
             applyOutputLimiter(localBuffer.data(), chunkFrames, channels);
 

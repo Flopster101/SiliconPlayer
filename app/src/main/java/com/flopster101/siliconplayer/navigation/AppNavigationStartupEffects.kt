@@ -51,15 +51,69 @@ internal fun AppNavigationStartupEffects(
             AppPreferenceKeys.AUDIO_OUTPUT_LIMITER_ENABLED,
             AppDefaults.AudioProcessing.outputLimiterEnabled
         )
+        val dspBassEnabled = prefs.getBoolean(
+            AppPreferenceKeys.AUDIO_DSP_BASS_ENABLED,
+            AppDefaults.AudioProcessing.Dsp.bassEnabled
+        )
+        val dspBassDepth = prefs.getInt(
+            AppPreferenceKeys.AUDIO_DSP_BASS_DEPTH,
+            AppDefaults.AudioProcessing.Dsp.bassDepth
+        ).coerceIn(4, 8)
+        val dspBassRange = prefs.getInt(
+            AppPreferenceKeys.AUDIO_DSP_BASS_RANGE,
+            AppDefaults.AudioProcessing.Dsp.bassRange
+        ).coerceIn(5, 21)
+        val dspSurroundEnabled = prefs.getBoolean(
+            AppPreferenceKeys.AUDIO_DSP_SURROUND_ENABLED,
+            AppDefaults.AudioProcessing.Dsp.surroundEnabled
+        )
+        val dspSurroundDepth = prefs.getInt(
+            AppPreferenceKeys.AUDIO_DSP_SURROUND_DEPTH,
+            AppDefaults.AudioProcessing.Dsp.surroundDepth
+        ).coerceIn(1, 16)
+        val dspSurroundDelayMs = prefs.getInt(
+            AppPreferenceKeys.AUDIO_DSP_SURROUND_DELAY_MS,
+            AppDefaults.AudioProcessing.Dsp.surroundDelayMs
+        ).coerceIn(5, 45)
+        val dspReverbEnabled = prefs.getBoolean(
+            AppPreferenceKeys.AUDIO_DSP_REVERB_ENABLED,
+            AppDefaults.AudioProcessing.Dsp.reverbEnabled
+        )
+        val dspReverbDepth = prefs.getInt(
+            AppPreferenceKeys.AUDIO_DSP_REVERB_DEPTH,
+            AppDefaults.AudioProcessing.Dsp.reverbDepth
+        ).coerceIn(1, 16)
+        val dspReverbPreset = prefs.getInt(
+            AppPreferenceKeys.AUDIO_DSP_REVERB_PRESET,
+            AppDefaults.AudioProcessing.Dsp.reverbPreset
+        ).coerceIn(0, 28)
+        val dspBitCrushEnabled = prefs.getBoolean(
+            AppPreferenceKeys.AUDIO_DSP_BITCRUSH_ENABLED,
+            AppDefaults.AudioProcessing.Dsp.bitCrushEnabled
+        )
+        val dspBitCrushBits = prefs.getInt(
+            AppPreferenceKeys.AUDIO_DSP_BITCRUSH_BITS,
+            AppDefaults.AudioProcessing.Dsp.bitCrushBits
+        ).coerceIn(1, 24)
 
         onMasterVolumeDbChanged(masterVolumeDb)
         onPluginVolumeDbChanged(0f)
         onForceMonoChanged(forceMono)
-
         NativeBridge.setMasterGain(masterVolumeDb)
         NativeBridge.setPluginGain(0f)
         NativeBridge.setForceMono(forceMono)
         NativeBridge.setOutputLimiterEnabled(outputLimiterEnabled)
+        NativeBridge.setDspBassEnabled(dspBassEnabled)
+        NativeBridge.setDspBassDepth(dspBassDepth)
+        NativeBridge.setDspBassRange(dspBassRange)
+        NativeBridge.setDspSurroundEnabled(dspSurroundEnabled)
+        NativeBridge.setDspSurroundDepth(dspSurroundDepth)
+        NativeBridge.setDspSurroundDelayMs(dspSurroundDelayMs)
+        NativeBridge.setDspReverbEnabled(dspReverbEnabled)
+        NativeBridge.setDspReverbDepth(dspReverbDepth)
+        NativeBridge.setDspReverbPreset(dspReverbPreset)
+        NativeBridge.setDspBitCrushEnabled(dspBitCrushEnabled)
+        NativeBridge.setDspBitCrushBits(dspBitCrushBits)
 
         withContext(Dispatchers.IO) {
             loadPluginConfigurations(prefs)

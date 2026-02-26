@@ -112,6 +112,7 @@ fun AudioEffectsDialog(
 ) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabTitles = remember { listOf("Volume", "DSP") }
+    var pendingResetTarget by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         modifier = adaptiveDialogModifier(),
@@ -194,10 +195,12 @@ fun AudioEffectsDialog(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(
                     onClick = {
-                        if (selectedTabIndex == 0) {
-                            onResetVolumeTab()
+                        pendingResetTarget = if (selectedTabIndex == 0) {
+                            "volume"
+                        } else if (dspNamespaceSelection == "core") {
+                            "dsp_core"
                         } else {
-                            onResetDspScope(dspNamespaceSelection)
+                            "dsp_global"
                         }
                     }
                 ) {
@@ -209,6 +212,40 @@ fun AudioEffectsDialog(
             }
         }
     )
+
+    if (pendingResetTarget != null) {
+        val resetLabel = when (pendingResetTarget) {
+            "volume" -> "Volume parameters"
+            "dsp_core" -> "DSP parameters for the current core"
+            else -> "Global DSP parameters"
+        }
+        AlertDialog(
+            modifier = adaptiveDialogModifier(),
+            properties = adaptiveDialogProperties(),
+            onDismissRequest = { pendingResetTarget = null },
+            title = { Text("Confirm reset") },
+            text = { Text("Reset $resetLabel? This only affects the current section.") },
+            dismissButton = {
+                TextButton(onClick = { pendingResetTarget = null }) {
+                    Text("Cancel")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        when (pendingResetTarget) {
+                            "volume" -> onResetVolumeTab()
+                            "dsp_core" -> onResetDspScope("core")
+                            else -> onResetDspScope("global")
+                        }
+                        pendingResetTarget = null
+                    }
+                ) {
+                    Text("Reset")
+                }
+            }
+        )
+    }
 }
 
 @Composable

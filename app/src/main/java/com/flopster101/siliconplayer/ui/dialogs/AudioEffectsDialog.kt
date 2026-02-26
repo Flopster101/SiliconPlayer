@@ -202,7 +202,9 @@ private fun VolumeTabContent(
     onForceMonoChange: (Boolean) -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         VolumeSliderRow(
@@ -261,8 +263,6 @@ private fun VolumeTabContent(
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(8.dp))
 
         Text(
             text = "Core: ${currentCoreName ?: "(none)"}",

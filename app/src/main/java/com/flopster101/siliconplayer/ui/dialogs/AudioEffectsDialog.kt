@@ -94,6 +94,7 @@ fun AudioEffectsDialog(
     dspBitCrushBits: Int,
     dspNamespaceSelection: String,
     dspIgnoreGlobalForCurrentCore: Boolean,
+    hasActiveCurrentCoreDspParameters: Boolean,
     onDspBassEnabledChange: (Boolean) -> Unit,
     onDspBassDepthChange: (Int) -> Unit,
     onDspBassRangeChange: (Int) -> Unit,
@@ -113,6 +114,21 @@ fun AudioEffectsDialog(
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabTitles = remember { listOf("Volume", "DSP") }
     var pendingResetTarget by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(
+        selectedTabIndex,
+        hasActiveCore,
+        hasActiveCurrentCoreDspParameters,
+        dspNamespaceSelection
+    ) {
+        if (
+            selectedTabIndex == 1 &&
+            hasActiveCore &&
+            hasActiveCurrentCoreDspParameters &&
+            dspNamespaceSelection != "core"
+        ) {
+            onDspNamespaceSelectionChange("core")
+        }
+    }
 
     AlertDialog(
         modifier = adaptiveDialogModifier(),

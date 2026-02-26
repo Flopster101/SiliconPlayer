@@ -354,6 +354,7 @@ internal fun AppNavigationPlaybackDialogsSection(
         tempDspBitCrushBits = tempEditedDspSettings.bitCrushBits,
         tempDspNamespaceSelection = if (tempDspNamespaceSelection == DspSettingsNamespace.CurrentCore) "core" else "global",
         tempDspIgnoreGlobalForCore = tempCoreIgnoreGlobalDsp,
+        hasActiveCurrentCoreDspParameters = lastUsedCoreName != null && (coreDspHasOverrides || coreIgnoreGlobalDsp),
         hasActiveCore = lastUsedCoreName != null,
         hasActiveSong = selectedFile != null,
         currentCoreName = lastUsedCoreName,

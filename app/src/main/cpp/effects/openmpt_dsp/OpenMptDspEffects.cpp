@@ -45,6 +45,8 @@ constexpr int kRvbMaxRvbDelay = 3800;
 constexpr int kTankLengthAvg = (kRvbDif1LLen + kRvbDif1RLen + kRvbDif2LLen + kRvbDif2RLen + kRvbDly1LLen + kRvbDly1RLen + kRvbDly2LLen + kRvbDly2RLen) / 2;
 constexpr int kDcrAmount = 9;
 constexpr float kMixScale = static_cast<float>(1 << 24);
+constexpr float kGlobalReverbSendGain = 0.70f;
+constexpr float kGlobalReverbReturnMakeupGain = 1.14f;
 
 float clampSample(float sample) {
     return std::clamp(sample, -1.0f, 1.0f);
@@ -540,7 +542,7 @@ void OpenMptDspEffects::applySurround(
         surroundLpB1 *= 2;
         // OpenMPT's integer mixer has more headroom than this float path.
         // Apply depth-aware compensation to avoid hard clipping without a limiter.
-        surroundOutputGain = 1.0f / (1.0f + (static_cast<float>(depth) / 35.0f));
+        surroundOutputGain = 1.0f / (1.0f + (static_cast<float>(depth) / 90.0f));
     }
 
     for (int frame = 0; frame < frames; ++frame) {
@@ -604,10 +606,12 @@ void OpenMptDspEffects::applyReverb(
         const int idx = frame * channels;
         const int32_t inL = static_cast<int32_t>(std::lrint(std::clamp(buffer[idx], -1.0f, 1.0f) * kMixScale));
         const int32_t inR = static_cast<int32_t>(std::lrint(std::clamp(buffer[idx + 1], -1.0f, 1.0f) * kMixScale));
-        reverbWetWork[static_cast<size_t>(frame) * 2] = inL;
-        reverbWetWork[static_cast<size_t>(frame) * 2 + 1] = inR;
-        reverbDryWork[static_cast<size_t>(frame) * 2] = inL;
-        reverbDryWork[static_cast<size_t>(frame) * 2 + 1] = inR;
+        // Global path: route signal through a dedicated reverb send and rebuild dry mix
+        // from that send to avoid direct-path double counting.
+        reverbWetWork[static_cast<size_t>(frame) * 2] = static_cast<int32_t>(std::lrint(static_cast<float>(inL) * kGlobalReverbSendGain));
+        reverbWetWork[static_cast<size_t>(frame) * 2 + 1] = static_cast<int32_t>(std::lrint(static_cast<float>(inR) * kGlobalReverbSendGain));
+        reverbDryWork[static_cast<size_t>(frame) * 2] = 0;
+        reverbDryWork[static_cast<size_t>(frame) * 2 + 1] = 0;
     }
 
     int32_t maxRvbGain = (reverbRefMasterGain > reverbLateMasterGain) ? reverbRefMasterGain : reverbLateMasterGain;
@@ -635,8 +639,10 @@ void OpenMptDspEffects::applyReverb(
 
     for (int frame = 0; frame < frames; ++frame) {
         const int idx = frame * channels;
-        buffer[idx] = clampSample(static_cast<float>(reverbDryWork[static_cast<size_t>(frame) * 2] / kMixScale));
-        buffer[idx + 1] = clampSample(static_cast<float>(reverbDryWork[static_cast<size_t>(frame) * 2 + 1] / kMixScale));
+        const float outL = static_cast<float>(reverbDryWork[static_cast<size_t>(frame) * 2] / kMixScale) * kGlobalReverbReturnMakeupGain;
+        const float outR = static_cast<float>(reverbDryWork[static_cast<size_t>(frame) * 2 + 1] / kMixScale) * kGlobalReverbReturnMakeupGain;
+        buffer[idx] = clampSample(outL);
+        buffer[idx + 1] = clampSample(outR);
     }
 }
 

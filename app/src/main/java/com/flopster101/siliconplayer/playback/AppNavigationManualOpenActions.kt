@@ -54,6 +54,7 @@ internal fun applyManualRemoteOpenSuccessAction(
     onPlayerSurfaceVisibleChanged: (Boolean) -> Unit,
     onSongVolumeDbChanged: (Float) -> Unit,
     onSongGainChanged: (Float) -> Unit,
+    onResolvedDecoderState: (String?) -> Unit,
     applyNativeTrackSnapshot: (NativeTrackSnapshot) -> Unit,
     refreshSubtuneState: () -> Unit,
     onPositionChanged: (Double) -> Unit,
@@ -76,6 +77,7 @@ internal fun applyManualRemoteOpenSuccessAction(
     onPlayerSurfaceVisibleChanged(true)
     onSongVolumeDbChanged(0f)
     onSongGainChanged(0f)
+    onResolvedDecoderState(result.decoderName)
     applyNativeTrackSnapshot(result.snapshot)
     refreshSubtuneState()
     onPositionChanged(0.0)

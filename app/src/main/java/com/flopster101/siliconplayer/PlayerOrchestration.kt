@@ -17,7 +17,7 @@ internal data class NativeTrackSnapshot(
 )
 
 internal fun readNativeTrackSnapshot(): NativeTrackSnapshot {
-    val decoder = NativeBridge.getCurrentDecoderName().takeIf { it.isNotBlank() }
+    val decoder = readCurrentDecoderName()
     return NativeTrackSnapshot(
         decoderName = decoder,
         title = NativeBridge.getTrackTitle(),
@@ -29,6 +29,10 @@ internal fun readNativeTrackSnapshot(): NativeTrackSnapshot {
         playbackCapabilitiesFlags = NativeBridge.getPlaybackCapabilities(),
         durationSeconds = NativeBridge.getDuration()
     )
+}
+
+internal fun readCurrentDecoderName(): String? {
+    return NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() }
 }
 
 internal fun syncPlaybackServiceForState(

@@ -7,6 +7,7 @@ import com.flopster101.siliconplayer.PreviousTrackAction
 import com.flopster101.siliconplayer.ResumeTarget
 import com.flopster101.siliconplayer.NativeTrackSnapshot
 import com.flopster101.siliconplayer.currentTrackIndexForList
+import com.flopster101.siliconplayer.readCurrentDecoderName
 import com.flopster101.siliconplayer.readNativeTrackSnapshot
 import com.flopster101.siliconplayer.runWithNativeAudioSession
 import com.flopster101.siliconplayer.resolvePreviousTrackAction
@@ -34,6 +35,7 @@ internal suspend fun applyTrackSelectionAction(
     loadSongVolumeForFile: (String) -> Unit,
     onSongVolumeDbChanged: (Float) -> Unit,
     onSongGainChanged: (Float) -> Unit,
+    onResolvedDecoderState: (String?) -> Unit,
     applyNativeTrackSnapshot: (NativeTrackSnapshot) -> Unit,
     refreshSubtuneState: () -> Unit,
     onPositionChanged: (Double) -> Unit,
@@ -61,8 +63,13 @@ internal suspend fun applyTrackSelectionAction(
         onSongVolumeDbChanged(0f)
         onSongGainChanged(0f)
     }
-    val nativeSnapshot = runWithNativeAudioSession {
+    val resolvedDecoderName = runWithNativeAudioSession {
         NativeBridge.loadAudio(loadFile.absolutePath)
+        readCurrentDecoderName()
+    }
+    coroutineContext.ensureActive()
+    onResolvedDecoderState(resolvedDecoderName)
+    val nativeSnapshot = runWithNativeAudioSession {
         readNativeTrackSnapshot()
     }
     coroutineContext.ensureActive()

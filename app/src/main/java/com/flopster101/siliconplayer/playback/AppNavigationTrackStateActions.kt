@@ -30,13 +30,16 @@ internal fun applyNativeTrackSnapshotAction(
 ) {
     val applied = buildSnapshotApplicationResult(snapshot, prefs)
     val sanitizedTitle = sanitizeRemoteCachedMetadataTitle(applied.title, selectedFile)
-    applied.decoderName?.let { decoderName ->
-        onLastUsedCoreNameChanged(decoderName)
-        applied.pluginVolumeDb?.let { decoderPluginVolumeDb ->
-            onPluginVolumeDbChanged(decoderPluginVolumeDb)
-            onPluginGainChanged(if (ignoreCoreVolumeForCurrentSong) 0f else decoderPluginVolumeDb)
-        }
-    }
+    val resolvedDecoderName = applied.decoderName?.takeIf { it.isNotBlank() }
+        ?: readCurrentDecoderName()
+    applyResolvedDecoderStateAction(
+        decoderName = resolvedDecoderName,
+        prefs = prefs,
+        ignoreCoreVolumeForCurrentSong = ignoreCoreVolumeForCurrentSong,
+        onLastUsedCoreNameChanged = onLastUsedCoreNameChanged,
+        onPluginVolumeDbChanged = onPluginVolumeDbChanged,
+        onPluginGainChanged = onPluginGainChanged
+    )
     onMetadataTitleChanged(sanitizedTitle)
     onMetadataArtistChanged(applied.artist)
     onMetadataSampleRateChanged(applied.sampleRateHz)
@@ -45,6 +48,157 @@ internal fun applyNativeTrackSnapshotAction(
     onRepeatModeCapabilitiesFlagsChanged(applied.repeatModeCapabilitiesFlags)
     onPlaybackCapabilitiesFlagsChanged(applied.playbackCapabilitiesFlags)
     onDurationChanged(applied.durationSeconds)
+}
+
+internal fun applyResolvedDecoderStateAction(
+    decoderName: String?,
+    prefs: SharedPreferences,
+    ignoreCoreVolumeForCurrentSong: Boolean,
+    onLastUsedCoreNameChanged: (String) -> Unit,
+    onPluginVolumeDbChanged: (Float) -> Unit,
+    onPluginGainChanged: (Float) -> Unit
+) {
+    val resolvedDecoderName = decoderName?.trim().takeIf { !it.isNullOrEmpty() } ?: return
+    applyEffectiveDspSettingsForCoreAction(prefs, resolvedDecoderName)
+    onLastUsedCoreNameChanged(resolvedDecoderName)
+    val decoderPluginVolumeDb = readPluginVolumeForDecoder(prefs, resolvedDecoderName)
+    onPluginVolumeDbChanged(decoderPluginVolumeDb)
+    onPluginGainChanged(if (ignoreCoreVolumeForCurrentSong) 0f else decoderPluginVolumeDb)
+}
+
+private data class ImmediateDspSettings(
+    val bassEnabled: Boolean,
+    val bassDepth: Int,
+    val bassRange: Int,
+    val surroundEnabled: Boolean,
+    val surroundDepth: Int,
+    val surroundDelayMs: Int,
+    val reverbEnabled: Boolean,
+    val reverbDepth: Int,
+    val reverbPreset: Int,
+    val bitCrushEnabled: Boolean,
+    val bitCrushBits: Int
+)
+
+private fun normalizeBassDepthPref(value: Int): Int {
+    return if (value in 0..4) {
+        value
+    } else {
+        (8 - value.coerceIn(4, 8)).coerceIn(0, 4)
+    }
+}
+
+private fun normalizeBassRangePref(value: Int): Int {
+    return if (value in 0..4) {
+        value
+    } else {
+        (4 - ((value.coerceIn(5, 21) - 1) / 5)).coerceIn(0, 4)
+    }
+}
+
+private fun normalizeSurroundDelayMsPref(value: Int): Int {
+    if (value in 5..45 && value % 5 == 0) return value
+    val clamped = value.coerceIn(5, 45)
+    val step = ((clamped - 5) + 2) / 5
+    return 5 + (step * 5)
+}
+
+private fun defaultImmediateDspSettings(): ImmediateDspSettings {
+    return ImmediateDspSettings(
+        bassEnabled = AppDefaults.AudioProcessing.Dsp.bassEnabled,
+        bassDepth = AppDefaults.AudioProcessing.Dsp.bassDepth,
+        bassRange = AppDefaults.AudioProcessing.Dsp.bassRange,
+        surroundEnabled = AppDefaults.AudioProcessing.Dsp.surroundEnabled,
+        surroundDepth = AppDefaults.AudioProcessing.Dsp.surroundDepth,
+        surroundDelayMs = AppDefaults.AudioProcessing.Dsp.surroundDelayMs,
+        reverbEnabled = AppDefaults.AudioProcessing.Dsp.reverbEnabled,
+        reverbDepth = AppDefaults.AudioProcessing.Dsp.reverbDepth,
+        reverbPreset = AppDefaults.AudioProcessing.Dsp.reverbPreset,
+        bitCrushEnabled = AppDefaults.AudioProcessing.Dsp.bitCrushEnabled,
+        bitCrushBits = AppDefaults.AudioProcessing.Dsp.bitCrushBits
+    )
+}
+
+private fun readGlobalImmediateDspSettings(prefs: SharedPreferences): ImmediateDspSettings {
+    val defaults = defaultImmediateDspSettings()
+    return ImmediateDspSettings(
+        bassEnabled = prefs.getBoolean(AppPreferenceKeys.AUDIO_DSP_BASS_ENABLED, defaults.bassEnabled),
+        bassDepth = normalizeBassDepthPref(prefs.getInt(AppPreferenceKeys.AUDIO_DSP_BASS_DEPTH, defaults.bassDepth)),
+        bassRange = normalizeBassRangePref(prefs.getInt(AppPreferenceKeys.AUDIO_DSP_BASS_RANGE, defaults.bassRange)),
+        surroundEnabled = prefs.getBoolean(AppPreferenceKeys.AUDIO_DSP_SURROUND_ENABLED, defaults.surroundEnabled),
+        surroundDepth = prefs.getInt(AppPreferenceKeys.AUDIO_DSP_SURROUND_DEPTH, defaults.surroundDepth).coerceIn(1, 16),
+        surroundDelayMs = normalizeSurroundDelayMsPref(
+            prefs.getInt(AppPreferenceKeys.AUDIO_DSP_SURROUND_DELAY_MS, defaults.surroundDelayMs)
+        ),
+        reverbEnabled = prefs.getBoolean(AppPreferenceKeys.AUDIO_DSP_REVERB_ENABLED, defaults.reverbEnabled),
+        reverbDepth = prefs.getInt(AppPreferenceKeys.AUDIO_DSP_REVERB_DEPTH, defaults.reverbDepth).coerceIn(1, 16),
+        reverbPreset = prefs.getInt(AppPreferenceKeys.AUDIO_DSP_REVERB_PRESET, defaults.reverbPreset).coerceIn(0, 28),
+        bitCrushEnabled = prefs.getBoolean(AppPreferenceKeys.AUDIO_DSP_BITCRUSH_ENABLED, defaults.bitCrushEnabled),
+        bitCrushBits = prefs.getInt(AppPreferenceKeys.AUDIO_DSP_BITCRUSH_BITS, defaults.bitCrushBits).coerceIn(1, 24)
+    )
+}
+
+private fun readCoreImmediateDspSettings(prefs: SharedPreferences, coreName: String): ImmediateDspSettings {
+    val defaults = defaultImmediateDspSettings()
+    return ImmediateDspSettings(
+        bassEnabled = prefs.getBoolean(AppPreferenceKeys.audioDspCoreBassEnabledKey(coreName), defaults.bassEnabled),
+        bassDepth = normalizeBassDepthPref(prefs.getInt(AppPreferenceKeys.audioDspCoreBassDepthKey(coreName), defaults.bassDepth)),
+        bassRange = normalizeBassRangePref(prefs.getInt(AppPreferenceKeys.audioDspCoreBassRangeKey(coreName), defaults.bassRange)),
+        surroundEnabled = prefs.getBoolean(AppPreferenceKeys.audioDspCoreSurroundEnabledKey(coreName), defaults.surroundEnabled),
+        surroundDepth = prefs.getInt(AppPreferenceKeys.audioDspCoreSurroundDepthKey(coreName), defaults.surroundDepth).coerceIn(1, 16),
+        surroundDelayMs = normalizeSurroundDelayMsPref(
+            prefs.getInt(AppPreferenceKeys.audioDspCoreSurroundDelayMsKey(coreName), defaults.surroundDelayMs)
+        ),
+        reverbEnabled = prefs.getBoolean(AppPreferenceKeys.audioDspCoreReverbEnabledKey(coreName), defaults.reverbEnabled),
+        reverbDepth = prefs.getInt(AppPreferenceKeys.audioDspCoreReverbDepthKey(coreName), defaults.reverbDepth).coerceIn(1, 16),
+        reverbPreset = prefs.getInt(AppPreferenceKeys.audioDspCoreReverbPresetKey(coreName), defaults.reverbPreset).coerceIn(0, 28),
+        bitCrushEnabled = prefs.getBoolean(AppPreferenceKeys.audioDspCoreBitCrushEnabledKey(coreName), defaults.bitCrushEnabled),
+        bitCrushBits = prefs.getInt(AppPreferenceKeys.audioDspCoreBitCrushBitsKey(coreName), defaults.bitCrushBits).coerceIn(1, 24)
+    )
+}
+
+private fun hasCoreImmediateDspOverrides(prefs: SharedPreferences, coreName: String): Boolean {
+    return prefs.contains(AppPreferenceKeys.audioDspCoreBassEnabledKey(coreName)) ||
+            prefs.contains(AppPreferenceKeys.audioDspCoreBassDepthKey(coreName)) ||
+            prefs.contains(AppPreferenceKeys.audioDspCoreBassRangeKey(coreName)) ||
+            prefs.contains(AppPreferenceKeys.audioDspCoreSurroundEnabledKey(coreName)) ||
+            prefs.contains(AppPreferenceKeys.audioDspCoreSurroundDepthKey(coreName)) ||
+            prefs.contains(AppPreferenceKeys.audioDspCoreSurroundDelayMsKey(coreName)) ||
+            prefs.contains(AppPreferenceKeys.audioDspCoreReverbEnabledKey(coreName)) ||
+            prefs.contains(AppPreferenceKeys.audioDspCoreReverbDepthKey(coreName)) ||
+            prefs.contains(AppPreferenceKeys.audioDspCoreReverbPresetKey(coreName)) ||
+            prefs.contains(AppPreferenceKeys.audioDspCoreBitCrushEnabledKey(coreName)) ||
+            prefs.contains(AppPreferenceKeys.audioDspCoreBitCrushBitsKey(coreName))
+}
+
+private fun applyImmediateDspSettingsToNative(settings: ImmediateDspSettings) {
+    NativeBridge.setDspBassEnabled(settings.bassEnabled)
+    NativeBridge.setDspBassDepth(settings.bassDepth)
+    NativeBridge.setDspBassRange(settings.bassRange)
+    NativeBridge.setDspSurroundEnabled(settings.surroundEnabled)
+    NativeBridge.setDspSurroundDepth(settings.surroundDepth)
+    NativeBridge.setDspSurroundDelayMs(settings.surroundDelayMs)
+    NativeBridge.setDspReverbEnabled(settings.reverbEnabled)
+    NativeBridge.setDspReverbDepth(settings.reverbDepth)
+    NativeBridge.setDspReverbPreset(settings.reverbPreset)
+    NativeBridge.setDspBitCrushEnabled(settings.bitCrushEnabled)
+    NativeBridge.setDspBitCrushBits(settings.bitCrushBits)
+}
+
+private fun applyEffectiveDspSettingsForCoreAction(
+    prefs: SharedPreferences,
+    coreName: String
+) {
+    val globalSettings = readGlobalImmediateDspSettings(prefs)
+    val coreSettings = readCoreImmediateDspSettings(prefs, coreName)
+    val coreHasOverrides = hasCoreImmediateDspOverrides(prefs, coreName)
+    val ignoreGlobalForCore = prefs.getBoolean(AppPreferenceKeys.audioDspCoreIgnoreGlobalKey(coreName), false)
+    val effectiveSettings = if (ignoreGlobalForCore || coreHasOverrides) {
+        coreSettings
+    } else {
+        globalSettings
+    }
+    applyImmediateDspSettingsToNative(effectiveSettings)
 }
 
 internal fun selectSubtuneAction(

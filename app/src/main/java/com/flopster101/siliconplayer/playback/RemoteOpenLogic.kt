@@ -8,7 +8,10 @@ import kotlinx.coroutines.withTimeout
 import java.io.File
 
 internal sealed class DirectStreamOpenResult {
-    data class Success(val snapshot: NativeTrackSnapshot) : DirectStreamOpenResult()
+    data class Success(
+        val snapshot: NativeTrackSnapshot,
+        val decoderName: String?
+    ) : DirectStreamOpenResult()
     data class Fallback(val reason: String) : DirectStreamOpenResult()
 }
 
@@ -16,7 +19,8 @@ internal data class ManualRemoteOpenSuccess(
     val displayFile: File,
     val sourceId: String,
     val requestUrl: String,
-    val snapshot: NativeTrackSnapshot
+    val snapshot: NativeTrackSnapshot,
+    val decoderName: String?
 )
 
 internal sealed class ManualRemoteOpenResult {
@@ -30,16 +34,18 @@ internal suspend fun tryOpenDirectStreamForManualSource(
     timeoutMs: Long = 20_000L
 ): DirectStreamOpenResult {
     return try {
-        val snapshot = withContext(Dispatchers.IO) {
+        val openResult = withContext(Dispatchers.IO) {
             withTimeout(timeoutMs) {
                 runWithNativeAudioSession {
                     NativeBridge.loadAudio(requestUrl)
-                    readNativeTrackSnapshot()
+                    Pair(readCurrentDecoderName(), readNativeTrackSnapshot())
                 }
             }
         }
+        val decoderName = openResult.first
+        val snapshot = openResult.second
         if (snapshotAppearsValid(snapshot)) {
-            DirectStreamOpenResult.Success(snapshot)
+            DirectStreamOpenResult.Success(snapshot, decoderName)
         } else {
             DirectStreamOpenResult.Fallback("direct streaming returned no playable metadata")
         }
@@ -91,7 +97,8 @@ internal suspend fun executeManualRemoteOpen(
                         displayFile = resolved.displayFile ?: File("/virtual/remote/stream"),
                         sourceId = resolved.sourceId,
                         requestUrl = resolved.requestUrl,
-                        snapshot = directResult.snapshot
+                        snapshot = directResult.snapshot,
+                        decoderName = directResult.decoderName
                     )
                 )
             }
@@ -144,14 +151,16 @@ internal suspend fun executeManualRemoteOpen(
         )
     )
 
-    val cachedSnapshot = withContext(Dispatchers.IO) {
+    val cachedOpenResult = withContext(Dispatchers.IO) {
         withTimeout(20_000L) {
             runWithNativeAudioSession {
                 NativeBridge.loadAudio(cachedFile.absolutePath)
-                readNativeTrackSnapshot()
+                Pair(readCurrentDecoderName(), readNativeTrackSnapshot())
             }
         }
     }
+    val cachedDecoderName = cachedOpenResult.first
+    val cachedSnapshot = cachedOpenResult.second
     if (!snapshotAppearsValid(cachedSnapshot)) {
         return ManualRemoteOpenResult.Failed("cached file opened but returned no playable metadata")
     }
@@ -161,7 +170,8 @@ internal suspend fun executeManualRemoteOpen(
             displayFile = cachedFile,
             sourceId = resolved.sourceId,
             requestUrl = resolved.requestUrl,
-            snapshot = cachedSnapshot
+            snapshot = cachedSnapshot,
+            decoderName = cachedDecoderName
         )
     )
 }

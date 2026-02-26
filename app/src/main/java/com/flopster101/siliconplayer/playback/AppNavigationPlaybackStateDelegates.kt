@@ -87,6 +87,17 @@ internal class AppNavigationPlaybackStateDelegates(
         )
     }
 
+    fun applyResolvedDecoderState(decoderName: String?) {
+        applyResolvedDecoderStateAction(
+            decoderName = decoderName,
+            prefs = prefs,
+            ignoreCoreVolumeForCurrentSong = ignoreCoreVolumeForCurrentSongProvider(),
+            onLastUsedCoreNameChanged = { onLastUsedCoreNameChanged(it) },
+            onPluginVolumeDbChanged = onPluginVolumeDbChanged,
+            onPluginGainChanged = onPluginGainChanged
+        )
+    }
+
     fun selectSubtune(index: Int): Boolean {
         return selectSubtuneAction(
             context = context,

@@ -1145,6 +1145,9 @@ private fun AppNavigation(
         loadSongVolumeForFile = loadSongVolumeForFile,
         onSongVolumeDbChanged = { songVolumeDb = it },
         onSongGainChanged = { NativeBridge.setSongGain(it) },
+        onResolvedDecoderState = { decoderName ->
+            playbackStateDelegates.applyResolvedDecoderState(decoderName)
+        },
         readNativeTrackSnapshot = { readNativeTrackSnapshot() },
         applyNativeTrackSnapshot = { snapshot -> playbackStateDelegates.applyNativeTrackSnapshot(snapshot) },
         refreshSubtuneState = { runtimeDelegates.refreshSubtuneState() },
@@ -1210,6 +1213,9 @@ private fun AppNavigation(
         onPlayerSurfaceVisibleChanged = { isPlayerSurfaceVisible = it },
         onSongVolumeDbChanged = { songVolumeDb = it },
         onSongGainChanged = { NativeBridge.setSongGain(it) },
+        onResolvedDecoderState = { decoderName ->
+            playbackStateDelegates.applyResolvedDecoderState(decoderName)
+        },
         applyNativeTrackSnapshot = { snapshot -> playbackStateDelegates.applyNativeTrackSnapshot(snapshot) },
         refreshSubtuneState = { runtimeDelegates.refreshSubtuneState() },
         onPositionChanged = { position = it },

@@ -984,6 +984,32 @@ internal fun SmbFileBrowserScreen(
                 label = "smbBrowserLoadingTransition",
                 modifier = Modifier.fillMaxSize()
             ) { state ->
+                val statePathParts = state.pathKey.split('|', limit = 2)
+                val stateShare = statePathParts.firstOrNull().orEmpty()
+                val stateSubPath = statePathParts.getOrNull(1).orEmpty()
+                val stateSharePickerMode = stateShare.isBlank()
+                val stateBrowsableEntries = if (state.pathKey == "$currentShare|$currentSubPath") {
+                    browsableEntries
+                } else {
+                    directoryEntriesCache[directoryCacheKeyFor(stateShare, stateSubPath)]
+                        ?.filter { entry ->
+                            shouldShowRemoteBrowserEntry(
+                                name = entry.name,
+                                isDirectory = entry.isDirectory,
+                                supportedExtensions = supportedExtensions
+                            )
+                        }
+                        .orEmpty()
+                }
+                val stateFilteredEntries = if (browserSearchController.debouncedQuery.isBlank()) {
+                    stateBrowsableEntries
+                } else {
+                    stateBrowsableEntries.filter { entry ->
+                        matchesBrowserSearchQuery(entry.name, browserSearchController.debouncedQuery)
+                    }
+                }
+                val stateCanNavigateUp = stateSubPath.isNotBlank() ||
+                    (canBrowseHostShares && stateShare.isNotBlank())
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     state = if (state.pane == SmbBrowserPane.Entries) {
@@ -993,7 +1019,7 @@ internal fun SmbFileBrowserScreen(
                     },
                     contentPadding = PaddingValues(bottom = bottomContentPadding)
                 ) {
-                if (canNavigateUp && state.pane != SmbBrowserPane.Loading) {
+                if (stateCanNavigateUp && state.pane != SmbBrowserPane.Loading) {
                     item("parent") {
                         SmbParentDirectoryRow(
                             onClick = {
@@ -1006,12 +1032,12 @@ internal fun SmbFileBrowserScreen(
                 if (state.pane == SmbBrowserPane.Loading) {
                     item("loading") {
                         SmbLoadingCard(
-                            title = if (sharePickerMode) {
+                            title = if (stateSharePickerMode) {
                                 "Loading SMB shares..."
                             } else {
                                 "Loading SMB directory..."
                             },
-                            subtitle = if (sharePickerMode) {
+                            subtitle = if (stateSharePickerMode) {
                                 "Fetching available shares from host"
                             } else {
                                 "Fetching folder entries"
@@ -1048,7 +1074,7 @@ internal fun SmbFileBrowserScreen(
                                         modifier = Modifier.size(20.dp)
                                     )
                                     Text(
-                                        text = if (sharePickerMode) {
+                                        text = if (stateSharePickerMode) {
                                             "Unable to list SMB shares"
                                         } else {
                                             "Unable to open SMB directory"
@@ -1079,12 +1105,12 @@ internal fun SmbFileBrowserScreen(
                 } else if (state.pane == SmbBrowserPane.Empty) {
                     item("empty") {
                         SmbInfoCard(
-                            title = if (sharePickerMode) {
+                            title = if (stateSharePickerMode) {
                                 "No SMB shares found"
                             } else {
                                 "This directory is empty"
                             },
-                            subtitle = if (sharePickerMode) {
+                            subtitle = if (stateSharePickerMode) {
                                 "No accessible disk shares on this host"
                             } else {
                                 "No files or folders found"
@@ -1092,24 +1118,24 @@ internal fun SmbFileBrowserScreen(
                         )
                     }
                 } else {
-                    if (filteredEntries.isEmpty() && browserSearchController.debouncedQuery.isNotBlank()) {
+                    if (stateFilteredEntries.isEmpty() && browserSearchController.debouncedQuery.isNotBlank()) {
                         item("search-empty") {
                             BrowserSearchNoResultsCard(query = browserSearchController.debouncedQuery)
                         }
                     } else {
                         itemsIndexed(
-                            filteredEntries,
+                            stateFilteredEntries,
                             key = { _, entry -> "${entry.isDirectory}:${entry.name}" }
                         ) { index, entry ->
                             val entrySelectionKey = entrySelectionKeyFor(entry)
                             val hasSelectedAbove = if (index > 0) {
-                                val aboveKey = entrySelectionKeyFor(filteredEntries[index - 1])
+                                val aboveKey = entrySelectionKeyFor(stateFilteredEntries[index - 1])
                                 browserSelectionController.selectedKeys.contains(aboveKey)
                             } else {
                                 false
                             }
-                            val hasSelectedBelow = if (index < filteredEntries.lastIndex) {
-                                val belowKey = entrySelectionKeyFor(filteredEntries[index + 1])
+                            val hasSelectedBelow = if (index < stateFilteredEntries.lastIndex) {
+                                val belowKey = entrySelectionKeyFor(stateFilteredEntries[index + 1])
                                 browserSelectionController.selectedKeys.contains(belowKey)
                             } else {
                                 false
@@ -1120,7 +1146,7 @@ internal fun SmbFileBrowserScreen(
                                 isSelected = browserSelectionController.selectedKeys.contains(entrySelectionKey),
                                 hasSelectedAbove = hasSelectedAbove,
                                 hasSelectedBelow = hasSelectedBelow,
-                                showAsShare = sharePickerMode,
+                                showAsShare = stateSharePickerMode,
                                 onLongClick = {
                                     if (browserSelectionController.isSelectionMode) {
                                         browserSelectionController.toggleSelection(entrySelectionKey)
@@ -1133,7 +1159,7 @@ internal fun SmbFileBrowserScreen(
                                         browserSelectionController.toggleSelection(entrySelectionKey)
                                         return@SmbEntryRow
                                     }
-                                    if (sharePickerMode) {
+                                    if (stateSharePickerMode) {
                                         openDirectory(
                                             targetShare = entry.name,
                                             targetSubPath = "",
@@ -1141,8 +1167,8 @@ internal fun SmbFileBrowserScreen(
                                         )
                                     } else if (entry.isDirectory) {
                                         openDirectory(
-                                            targetShare = currentShare,
-                                            targetSubPath = joinSmbRelativePath(currentSubPath, entry.name),
+                                            targetShare = stateShare,
+                                            targetSubPath = joinSmbRelativePath(stateSubPath, entry.name),
                                             navigationDirection = BrowserPageNavDirection.Forward
                                         )
                                     } else {
@@ -1156,9 +1182,9 @@ internal fun SmbFileBrowserScreen(
                                                 ).show()
                                             }
                                             BrowserArchiveCapability.None -> {
-                                                val targetPath = joinSmbRelativePath(effectivePath().orEmpty(), entry.name)
+                                                val targetPath = joinSmbRelativePath(stateSubPath, entry.name)
                                                 val targetSpec = buildSmbEntrySourceSpec(
-                                                    credentialsSpec.copy(share = currentShare),
+                                                    credentialsSpec.copy(share = stateShare),
                                                     targetPath
                                                 )
                                                 onOpenRemoteSource(buildSmbRequestUri(targetSpec))

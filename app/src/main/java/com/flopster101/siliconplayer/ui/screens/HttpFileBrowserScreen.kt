@@ -1021,6 +1021,36 @@ internal fun HttpFileBrowserScreen(
                 label = "httpBrowserLoadingTransition",
                 modifier = Modifier.fillMaxSize()
             ) { state ->
+                val stateBrowsableEntries = if (state.path == normalizeHttpDirectoryPath(currentSpec.path)) {
+                    browsableEntries
+                } else {
+                    val cachedSpec = currentSpec.copy(
+                        path = state.path,
+                        query = null,
+                        username = sessionUsername,
+                        password = sessionPassword
+                    )
+                    directoryEntriesCache[directoryCacheKeyFor(cachedSpec)]
+                        ?.filter { entry ->
+                            shouldShowRemoteBrowserEntry(
+                                name = entry.name,
+                                isDirectory = entry.isDirectory,
+                                supportedExtensions = supportedExtensions
+                            )
+                        }
+                        .orEmpty()
+                }
+                val stateFilteredEntries = if (browserSearchController.debouncedQuery.isBlank()) {
+                    stateBrowsableEntries
+                } else {
+                    stateBrowsableEntries.filter { entry ->
+                        matchesBrowserSearchQuery(entry.name, browserSearchController.debouncedQuery)
+                    }
+                }
+                val stateCanNavigateUp = canNavigateUpWithinHttpBrowser(
+                    currentPath = state.path,
+                    rootPath = effectiveRootPath
+                )
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     state = if (state.pane == HttpBrowserPane.Entries) {
@@ -1030,7 +1060,7 @@ internal fun HttpFileBrowserScreen(
                     },
                     contentPadding = PaddingValues(bottom = bottomContentPadding)
                 ) {
-                    if (canNavigateUp && state.pane != HttpBrowserPane.Loading) {
+                    if (stateCanNavigateUp && state.pane != HttpBrowserPane.Loading) {
                         item("parent") {
                             HttpParentDirectoryRow(
                                 onClick = {
@@ -1125,24 +1155,24 @@ internal fun HttpFileBrowserScreen(
                             )
                         }
                     } else {
-                        if (filteredEntries.isEmpty() && browserSearchController.debouncedQuery.isNotBlank()) {
+                        if (stateFilteredEntries.isEmpty() && browserSearchController.debouncedQuery.isNotBlank()) {
                             item("search-empty") {
                                 BrowserSearchNoResultsCard(query = browserSearchController.debouncedQuery)
                             }
                         } else {
                             itemsIndexed(
-                                filteredEntries,
+                                stateFilteredEntries,
                                 key = { _, entry -> entry.sourceId }
                             ) { index, entry ->
                                 val entrySelectionKey = entrySelectionKeyFor(entry)
                                 val hasSelectedAbove = if (index > 0) {
-                                    val aboveKey = entrySelectionKeyFor(filteredEntries[index - 1])
+                                    val aboveKey = entrySelectionKeyFor(stateFilteredEntries[index - 1])
                                     browserSelectionController.selectedKeys.contains(aboveKey)
                                 } else {
                                     false
                                 }
-                                val hasSelectedBelow = if (index < filteredEntries.lastIndex) {
-                                    val belowKey = entrySelectionKeyFor(filteredEntries[index + 1])
+                                val hasSelectedBelow = if (index < stateFilteredEntries.lastIndex) {
+                                    val belowKey = entrySelectionKeyFor(stateFilteredEntries[index + 1])
                                     browserSelectionController.selectedKeys.contains(belowKey)
                                 } else {
                                     false

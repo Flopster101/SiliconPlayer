@@ -187,6 +187,18 @@ private fun resolveNetworkBrowserLaunchPathForRestore(
     )
 }
 
+private fun sanitizeNetworkPathForRecents(
+    directoryPath: String
+): String {
+    parseSmbSourceSpecFromInput(directoryPath)?.let { smbSpec ->
+        return buildSmbSourceId(smbSpec)
+    }
+    parseHttpSourceSpecFromInput(directoryPath)?.let { httpSpec ->
+        return buildHttpSourceId(httpSpec)
+    }
+    return directoryPath
+}
+
 private fun handleBrowserLocationChangedAction(
     locationId: String?,
     directoryPath: String?,
@@ -214,7 +226,11 @@ private fun handleBrowserLocationChangedAction(
             parseHttpSourceSpecFromInput(directoryPath) != null -> currentHttpSourceNodeId
             else -> null
         }
-        addRecentFolder(directoryPath, locationId, sourceNodeId)
+        addRecentFolder(
+            sanitizeNetworkPathForRecents(directoryPath),
+            locationId,
+            sourceNodeId
+        )
     }
     if (directoryPath != null) {
         if (isNetworkBrowserDirectoryPath(directoryPath)) {
@@ -1351,9 +1367,14 @@ private fun AppNavigation(
         onBrowserLaunchTargetChanged = { locationId, directoryPath ->
             browserLaunchLocationId = locationId
             browserLaunchDirectoryPath = directoryPath
-            browserLaunchSmbSourceNodeId = null
-            browserLaunchHttpSourceNodeId = null
-            browserLaunchHttpRootPath = null
+            val isArchiveMountDirectory = directoryPath
+                ?.replace('\\', '/')
+                ?.contains("/archive_mounts/") == true
+            if (!isArchiveMountDirectory) {
+                browserLaunchSmbSourceNodeId = null
+                browserLaunchHttpSourceNodeId = null
+                browserLaunchHttpRootPath = null
+            }
         },
         onCurrentViewChanged = { currentView = it },
         onAddRecentFolder = { path, locationId, sourceNodeId ->

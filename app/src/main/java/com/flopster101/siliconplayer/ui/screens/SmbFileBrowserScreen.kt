@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
@@ -65,6 +66,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,6 +83,7 @@ import com.flopster101.siliconplayer.buildSmbSourceId
 import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.DecoderArtworkHint
 import com.flopster101.siliconplayer.joinSmbRelativePath
 import com.flopster101.siliconplayer.listSmbDirectoryEntries
 import com.flopster101.siliconplayer.listSmbHostShareEntries
@@ -92,8 +95,11 @@ import com.flopster101.siliconplayer.smbAuthenticationFailureMessage
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
 import com.flopster101.siliconplayer.RemotePlayableSourceIdsHolder
+import com.flopster101.siliconplayer.R
 import com.flopster101.siliconplayer.SmbRemoteExportRequest
 import com.flopster101.siliconplayer.RemoteExportCancelledException
+import com.flopster101.siliconplayer.data.ensureArchiveMounted
+import com.flopster101.siliconplayer.data.registerArchiveBrowserReturnTarget
 import com.flopster101.siliconplayer.prepareRemoteExportFile
 import com.flopster101.siliconplayer.session.exportFilesToTree
 import com.flopster101.siliconplayer.session.ExportConflictDecision
@@ -179,6 +185,7 @@ internal fun SmbFileBrowserScreen(
             .filter { it.isNotBlank() }
             .toSet()
     }
+    val decoderExtensionArtworkHints = rememberBrowserDecoderArtworkHints()
     val browserSearchController = rememberBrowserSearchController()
     val browserSelectionController = rememberBrowserSelectionController<String>()
     var browserInfoFields by remember(sourceSpec) { mutableStateOf<List<BrowserInfoField>>(emptyList()) }
@@ -187,6 +194,7 @@ internal fun SmbFileBrowserScreen(
     var exportConflictDialogState by remember(sourceSpec) { mutableStateOf<BrowserExportConflictDialogState?>(null) }
     var exportDownloadProgressState by remember(sourceSpec) { mutableStateOf<BrowserRemoteExportProgressState?>(null) }
     var exportDownloadJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
+    var archiveOpenJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
 
     fun appendLoadingLog(message: String) {
         val lineNumber = loadingLogLines.size + 1
@@ -265,7 +273,9 @@ internal fun SmbFileBrowserScreen(
                     val playableSourceIds = resolved
                         .asSequence()
                         .filter { entry ->
-                            !entry.isDirectory && fileMatchesSupportedExtensions(File(entry.name), supportedExtensions)
+                            !entry.isDirectory &&
+                                browserArchiveCapabilityForName(entry.name) == BrowserArchiveCapability.None &&
+                                fileMatchesSupportedExtensions(File(entry.name), supportedExtensions)
                         }
                         .map { entry ->
                             val targetPath = joinSmbRelativePath(effectivePath().orEmpty(), entry.name)
@@ -345,6 +355,7 @@ internal fun SmbFileBrowserScreen(
         onDispose {
             listJob?.cancel()
             exportDownloadJob?.cancel()
+            archiveOpenJob?.cancel()
         }
     }
 
@@ -376,22 +387,31 @@ internal fun SmbFileBrowserScreen(
 
     val canNavigateUp = currentSubPath.isNotBlank() || (canBrowseHostShares && currentShare.isNotBlank())
     val sharePickerMode = isSharePickerMode()
-    val filteredEntries = remember(entries, browserSearchController.debouncedQuery) {
+    val browsableEntries = remember(entries, supportedExtensions) {
+        entries.filter { entry ->
+            shouldShowRemoteBrowserEntry(
+                name = entry.name,
+                isDirectory = entry.isDirectory,
+                supportedExtensions = supportedExtensions
+            )
+        }
+    }
+    val filteredEntries = remember(browsableEntries, browserSearchController.debouncedQuery) {
         if (browserSearchController.debouncedQuery.isBlank()) {
-            entries
+            browsableEntries
         } else {
-            entries.filter { entry ->
+            browsableEntries.filter { entry ->
                 matchesBrowserSearchQuery(entry.name, browserSearchController.debouncedQuery)
             }
         }
     }
-    val browserContentState = remember(currentShare, currentSubPath, isLoading, errorMessage, entries.isEmpty()) {
+    val browserContentState = remember(currentShare, currentSubPath, isLoading, errorMessage, browsableEntries.isEmpty()) {
         val key = "$currentShare|$currentSubPath"
         SmbBrowserContentState(
             pane = when {
                 isLoading -> SmbBrowserPane.Loading
                 !errorMessage.isNullOrBlank() -> SmbBrowserPane.Error
-                entries.isEmpty() -> SmbBrowserPane.Empty
+                browsableEntries.isEmpty() -> SmbBrowserPane.Empty
                 else -> SmbBrowserPane.Entries
             },
             pathKey = key
@@ -437,8 +457,8 @@ internal fun SmbFileBrowserScreen(
         }
     }
 
-    fun selectedFileTargets(): List<SmbSelectionFileTarget> {
-        val selectedEntries = entries.filter { entry ->
+    fun selectedDownloadFileTargets(): List<SmbSelectionFileTarget> {
+        val selectedEntries = browsableEntries.filter { entry ->
             browserSelectionController.selectedKeys.contains(entrySelectionKeyFor(entry))
         }
         if (sharePickerMode) return emptyList()
@@ -459,6 +479,80 @@ internal fun SmbFileBrowserScreen(
                 )
             }
             .toList()
+    }
+
+    fun selectedPlayableFileTargets(): List<SmbSelectionFileTarget> {
+        return selectedDownloadFileTargets().filter { target ->
+            browserArchiveCapabilityForName(target.displayName) == BrowserArchiveCapability.None
+        }
+    }
+
+    fun openArchiveEntry(entry: SmbBrowserEntry) {
+        val targetPath = joinSmbRelativePath(effectivePath().orEmpty(), entry.name)
+        val targetSpec = buildSmbEntrySourceSpec(
+            credentialsSpec.copy(share = currentShare),
+            targetPath
+        )
+        val sourceId = buildSmbSourceId(targetSpec)
+        exportDownloadJob?.cancel()
+        archiveOpenJob?.cancel()
+        archiveOpenJob = coroutineScope.launch {
+            exportDownloadProgressState = BrowserRemoteExportProgressState(
+                currentIndex = 1,
+                totalCount = 1,
+                currentFileName = entry.name,
+                loadState = null
+            )
+            val prepared = prepareRemoteExportFile(
+                context = context,
+                request = SmbRemoteExportRequest(
+                    sourceId = sourceId,
+                    smbSpec = targetSpec,
+                    preferredFileName = entry.name
+                ),
+                onStatus = { loadState ->
+                    exportDownloadProgressState = BrowserRemoteExportProgressState(
+                        currentIndex = 1,
+                        totalCount = 1,
+                        currentFileName = entry.name,
+                        loadState = loadState
+                    )
+                }
+            )
+            val cachedItem = prepared.getOrNull()
+            if (cachedItem == null) {
+                exportDownloadProgressState = null
+                val error = prepared.exceptionOrNull()
+                if (error is RemoteExportCancelledException || error is CancellationException) {
+                    Toast.makeText(context, "Archive open cancelled", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                Toast.makeText(context, "Failed to open archive", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val capability = browserArchiveCapabilityForName(cachedItem.sourceFile.name)
+            if (capability != BrowserArchiveCapability.Browsable) {
+                exportDownloadProgressState = null
+                Toast.makeText(context, "Archive format not supported yet", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val mountDirectory = withContext(Dispatchers.IO) {
+                ensureArchiveMounted(context, cachedItem.sourceFile)
+            }
+            val returnTarget = buildSmbRequestUri(
+                credentialsSpec.copy(
+                    share = currentShare,
+                    path = effectivePath()
+                )
+            )
+            registerArchiveBrowserReturnTarget(
+                mountRootPath = mountDirectory.absolutePath,
+                returnTargetPath = returnTarget,
+                logicalArchivePath = sourceId
+            )
+            exportDownloadProgressState = null
+            onOpenRemoteSource(mountDirectory.absolutePath)
+        }
     }
 
     fun showSelectionInfoDialog() {
@@ -616,6 +710,7 @@ internal fun SmbFileBrowserScreen(
 
     LaunchedEffect(currentShare, currentSubPath) {
         exportDownloadJob?.cancel()
+        archiveOpenJob?.cancel()
         exportDownloadProgressState = null
         exportConflictDialogState = null
         browserSelectionController.exitSelectionMode()
@@ -704,9 +799,9 @@ internal fun SmbFileBrowserScreen(
                                 BrowserSelectionActionItem(
                                     label = "Play",
                                     icon = Icons.Default.PlayArrow,
-                                    enabled = selectedFileTargets().size == 1,
+                                    enabled = selectedPlayableFileTargets().size == 1,
                                     onClick = {
-                                        val target = selectedFileTargets().singleOrNull()
+                                        val target = selectedPlayableFileTargets().singleOrNull()
                                         if (target != null) {
                                             browserSelectionController.exitSelectionMode()
                                             onOpenRemoteSource(target.requestUri)
@@ -716,9 +811,9 @@ internal fun SmbFileBrowserScreen(
                                 BrowserSelectionActionItem(
                                     label = "Play as cached",
                                     icon = Icons.Default.Save,
-                                    enabled = selectedFileTargets().size == 1,
+                                    enabled = selectedPlayableFileTargets().size == 1,
                                     onClick = {
-                                        val target = selectedFileTargets().singleOrNull()
+                                        val target = selectedPlayableFileTargets().singleOrNull()
                                         if (target != null) {
                                             browserSelectionController.exitSelectionMode()
                                             onOpenRemoteSourceAsCached(target.requestUri)
@@ -726,15 +821,15 @@ internal fun SmbFileBrowserScreen(
                                     }
                                 ),
                                 BrowserSelectionActionItem(
-                                    label = if (selectedFileTargets().size == 1) {
+                                    label = if (selectedDownloadFileTargets().size == 1) {
                                         "Download file"
                                     } else {
                                         "Download files"
                                     },
                                     icon = Icons.Default.Link,
-                                    enabled = selectedFileTargets().isNotEmpty(),
+                                    enabled = selectedDownloadFileTargets().isNotEmpty(),
                                     onClick = {
-                                        val targets = selectedFileTargets()
+                                        val targets = selectedDownloadFileTargets()
                                         if (targets.isNotEmpty()) {
                                             pendingExportTargets = targets
                                             exportDirectoryLauncher.launch(null)
@@ -918,6 +1013,7 @@ internal fun SmbFileBrowserScreen(
                             }
                             SmbEntryRow(
                                 entry = entry,
+                                decoderExtensionArtworkHints = decoderExtensionArtworkHints,
                                 isSelected = browserSelectionController.selectedKeys.contains(entrySelectionKey),
                                 hasSelectedAbove = hasSelectedAbove,
                                 hasSelectedBelow = hasSelectedBelow,
@@ -944,12 +1040,24 @@ internal fun SmbFileBrowserScreen(
                                         currentSubPath = joinSmbRelativePath(currentSubPath, entry.name)
                                         loadCurrentDirectory()
                                     } else {
-                                        val targetPath = joinSmbRelativePath(effectivePath().orEmpty(), entry.name)
-                                        val targetSpec = buildSmbEntrySourceSpec(
-                                            credentialsSpec.copy(share = currentShare),
-                                            targetPath
-                                        )
-                                        onOpenRemoteSource(buildSmbRequestUri(targetSpec))
+                                        when (browserArchiveCapabilityForName(entry.name)) {
+                                            BrowserArchiveCapability.Browsable -> openArchiveEntry(entry)
+                                            BrowserArchiveCapability.KnownUnsupported -> {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Archive format not supported yet",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                            BrowserArchiveCapability.None -> {
+                                                val targetPath = joinSmbRelativePath(effectivePath().orEmpty(), entry.name)
+                                                val targetSpec = buildSmbEntrySourceSpec(
+                                                    credentialsSpec.copy(share = currentShare),
+                                                    targetPath
+                                                )
+                                                onOpenRemoteSource(buildSmbRequestUri(targetSpec))
+                                            }
+                                        }
                                     }
                                 }
                             )
@@ -1197,6 +1305,7 @@ private fun SmbParentDirectoryRow(
 @Composable
 private fun SmbEntryRow(
     entry: SmbBrowserEntry,
+    decoderExtensionArtworkHints: Map<String, DecoderArtworkHint>,
     isSelected: Boolean,
     hasSelectedAbove: Boolean = false,
     hasSelectedBelow: Boolean = false,
@@ -1204,6 +1313,15 @@ private fun SmbEntryRow(
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
+    val visualKind = if (showAsShare) {
+        BrowserRemoteEntryVisualKind.Directory
+    } else {
+        browserRemoteEntryVisualKind(
+            name = entry.name,
+            isDirectory = entry.isDirectory,
+            decoderExtensionArtworkHints = decoderExtensionArtworkHints
+        )
+    }
     val selectionShape = RoundedCornerShape(
         topStart = if (hasSelectedAbove) 0.dp else 18.dp,
         topEnd = if (hasSelectedAbove) 0.dp else 18.dp,
@@ -1228,12 +1346,13 @@ private fun SmbEntryRow(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val chipContainerColor = if (entry.isDirectory) {
+        val treatAsContainer = showAsShare || entry.isDirectory
+        val chipContainerColor = if (treatAsContainer) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
             MaterialTheme.colorScheme.secondaryContainer
         }
-        val chipContentColor = if (entry.isDirectory) {
+        val chipContentColor = if (treatAsContainer) {
             MaterialTheme.colorScheme.onPrimaryContainer
         } else {
             MaterialTheme.colorScheme.onSecondaryContainer
@@ -1247,12 +1366,34 @@ private fun SmbEntryRow(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = if (entry.isDirectory) Icons.Default.Folder else Icons.Default.AudioFile,
-                contentDescription = null,
-                tint = chipContentColor,
-                modifier = Modifier.size(SMB_ICON_GLYPH_SIZE)
-            )
+            if (showAsShare) {
+                Icon(
+                    imageVector = NetworkIcons.SmbShare,
+                    contentDescription = null,
+                    tint = chipContentColor,
+                    modifier = Modifier.size(SMB_ICON_GLYPH_SIZE)
+                )
+            } else {
+                when (visualKind) {
+                    BrowserRemoteEntryVisualKind.Directory -> {
+                        BrowserRemoteEntryIcon(
+                            visualKind = BrowserRemoteEntryVisualKind.Directory,
+                            tint = chipContentColor,
+                            modifier = Modifier.size(SMB_ICON_GLYPH_SIZE)
+                        )
+                    }
+
+                    BrowserRemoteEntryVisualKind.ArchiveFile,
+                    BrowserRemoteEntryVisualKind.TrackedFile,
+                    BrowserRemoteEntryVisualKind.GameFile,
+                    BrowserRemoteEntryVisualKind.VideoFile,
+                    BrowserRemoteEntryVisualKind.AudioFile -> BrowserRemoteEntryIcon(
+                        visualKind = visualKind,
+                        tint = chipContentColor,
+                        modifier = Modifier.size(SMB_ICON_GLYPH_SIZE)
+                    )
+                }
+            }
         }
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -1267,6 +1408,8 @@ private fun SmbEntryRow(
                     "Share"
                 } else if (entry.isDirectory) {
                     "Folder"
+                } else if (browserArchiveCapabilityForName(entry.name) != BrowserArchiveCapability.None) {
+                    "Archive • ${formatSmbFileSize(entry.sizeBytes)}"
                 } else {
                     "${inferSmbFormatLabel(entry.name)} • ${formatSmbFileSize(entry.sizeBytes)}"
                 },

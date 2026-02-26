@@ -98,15 +98,19 @@ internal fun normalizeHttpDirectoryPath(path: String?): String {
 private fun buildHttpUri(spec: HttpSourceSpec, includePassword: Boolean): String {
     val scheme = spec.scheme.lowercase(Locale.ROOT)
     val host = spec.host.trim().removePrefix("[").removeSuffix("]")
+    val username = spec.username?.trim().takeUnless { it.isNullOrBlank() }
+    val password = spec.password?.trim().takeUnless { it.isNullOrBlank() }
     val userInfo = buildString {
-        val username = spec.username?.trim().takeUnless { it.isNullOrBlank() }
-        val password = spec.password?.trim().takeUnless { it.isNullOrBlank() }
         if (username != null) {
             append(username)
             if (includePassword && password != null) {
                 append(':')
                 append(password)
             }
+        } else if (includePassword && password != null) {
+            // Preserve password-only credentials as ":password".
+            append(':')
+            append(password)
         }
     }.ifBlank { null }
     val uri = URI(

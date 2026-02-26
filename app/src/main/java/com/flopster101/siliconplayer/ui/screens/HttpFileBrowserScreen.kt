@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.WarningAmber
@@ -71,6 +72,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -89,6 +91,7 @@ import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import com.flopster101.siliconplayer.httpAuthenticationFailureMessage
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.DecoderArtworkHint
 import com.flopster101.siliconplayer.listHttpDirectoryEntries
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.normalizeHttpDirectoryPath
@@ -101,6 +104,9 @@ import com.flopster101.siliconplayer.stripUrlFragment
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
 import com.flopster101.siliconplayer.RemotePlayableSourceIdsHolder
+import com.flopster101.siliconplayer.R
+import com.flopster101.siliconplayer.data.ensureArchiveMounted
+import com.flopster101.siliconplayer.data.registerArchiveBrowserReturnTarget
 import com.flopster101.siliconplayer.session.exportFilesToTree
 import com.flopster101.siliconplayer.session.ExportConflictDecision
 import com.flopster101.siliconplayer.session.ExportNameConflict
@@ -189,6 +195,7 @@ internal fun HttpFileBrowserScreen(
             .filter { it.isNotBlank() }
             .toSet()
     }
+    val decoderExtensionArtworkHints = rememberBrowserDecoderArtworkHints()
     val browserSearchController = rememberBrowserSearchController()
     val browserSelectionController = rememberBrowserSelectionController<String>()
     var browserInfoFields by remember(sourceSpec) { mutableStateOf<List<BrowserInfoField>>(emptyList()) }
@@ -197,12 +204,15 @@ internal fun HttpFileBrowserScreen(
     var exportConflictDialogState by remember(sourceSpec) { mutableStateOf<BrowserExportConflictDialogState?>(null) }
     var exportDownloadProgressState by remember(sourceSpec) { mutableStateOf<BrowserRemoteExportProgressState?>(null) }
     var exportDownloadJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
+    var archiveOpenJob by remember(sourceSpec) { mutableStateOf<Job?>(null) }
 
     fun updatePlayableRemoteSources(entriesForNavigation: List<HttpBrowserEntry>) {
         RemotePlayableSourceIdsHolder.current = entriesForNavigation
             .asSequence()
             .filter { entry ->
-                !entry.isDirectory && fileMatchesSupportedExtensions(File(entry.name), supportedExtensions)
+                !entry.isDirectory &&
+                    browserArchiveCapabilityForName(entry.name) == BrowserArchiveCapability.None &&
+                    fileMatchesSupportedExtensions(File(entry.name), supportedExtensions)
             }
             .map { entry -> entry.requestUrl }
             .toList()
@@ -421,6 +431,7 @@ internal fun HttpFileBrowserScreen(
         onDispose {
             listJob?.cancel()
             exportDownloadJob?.cancel()
+            archiveOpenJob?.cancel()
         }
     }
 
@@ -468,22 +479,31 @@ internal fun HttpFileBrowserScreen(
         currentPath = currentSpec.path,
         rootPath = effectiveRootPath
     )
-    val browserContentState = remember(currentSpec.path, isLoading, errorMessage, entries.isEmpty()) {
+    val browsableEntries = remember(entries, supportedExtensions) {
+        entries.filter { entry ->
+            shouldShowRemoteBrowserEntry(
+                name = entry.name,
+                isDirectory = entry.isDirectory,
+                supportedExtensions = supportedExtensions
+            )
+        }
+    }
+    val browserContentState = remember(currentSpec.path, isLoading, errorMessage, browsableEntries.isEmpty()) {
         HttpBrowserContentState(
             pane = when {
                 isLoading -> HttpBrowserPane.Loading
                 !errorMessage.isNullOrBlank() -> HttpBrowserPane.Error
-                entries.isEmpty() -> HttpBrowserPane.Empty
+                browsableEntries.isEmpty() -> HttpBrowserPane.Empty
                 else -> HttpBrowserPane.Entries
             },
             path = normalizeHttpDirectoryPath(currentSpec.path)
         )
     }
-    val filteredEntries = remember(entries, browserSearchController.debouncedQuery) {
+    val filteredEntries = remember(browsableEntries, browserSearchController.debouncedQuery) {
         if (browserSearchController.debouncedQuery.isBlank()) {
-            entries
+            browsableEntries
         } else {
-            entries.filter { entry ->
+            browsableEntries.filter { entry ->
                 matchesBrowserSearchQuery(entry.name, browserSearchController.debouncedQuery)
             }
         }
@@ -528,8 +548,8 @@ internal fun HttpFileBrowserScreen(
         label = "httpBrowserDirectoryScrollbarAlpha"
     )
 
-    fun selectedFileTargets(): List<HttpSelectionFileTarget> {
-        val selectedEntries = entries.filter { entry ->
+    fun selectedDownloadFileTargets(): List<HttpSelectionFileTarget> {
+        val selectedEntries = browsableEntries.filter { entry ->
             browserSelectionController.selectedKeys.contains(entrySelectionKeyFor(entry))
         }
         return selectedEntries
@@ -552,6 +572,81 @@ internal fun HttpFileBrowserScreen(
                 )
             }
             .toList()
+    }
+
+    fun selectedPlayableFileTargets(): List<HttpSelectionFileTarget> {
+        return selectedDownloadFileTargets().filter { target ->
+            browserArchiveCapabilityForName(target.displayName) == BrowserArchiveCapability.None
+        }
+    }
+
+    fun openArchiveEntry(entry: HttpBrowserEntry) {
+        val parsedSpec = parseHttpSourceSpecFromInput(entry.requestUrl) ?: return
+        val authSpec = parsedSpec.copy(
+            username = sessionUsername,
+            password = sessionPassword
+        )
+        val sourceId = buildHttpSourceId(authSpec)
+        val requestUrl = stripUrlFragment(buildHttpRequestUri(authSpec))
+        exportDownloadJob?.cancel()
+        archiveOpenJob?.cancel()
+        archiveOpenJob = coroutineScope.launch {
+            exportDownloadProgressState = BrowserRemoteExportProgressState(
+                currentIndex = 1,
+                totalCount = 1,
+                currentFileName = entry.name,
+                loadState = null
+            )
+            val prepared = prepareRemoteExportFile(
+                context = context,
+                request = HttpRemoteExportRequest(
+                    sourceId = sourceId,
+                    requestUrl = requestUrl,
+                    preferredFileName = entry.name
+                ),
+                onStatus = { loadState ->
+                    exportDownloadProgressState = BrowserRemoteExportProgressState(
+                        currentIndex = 1,
+                        totalCount = 1,
+                        currentFileName = entry.name,
+                        loadState = loadState
+                    )
+                }
+            )
+            val cachedItem = prepared.getOrNull()
+            if (cachedItem == null) {
+                exportDownloadProgressState = null
+                val error = prepared.exceptionOrNull()
+                if (error is RemoteExportCancelledException || error is CancellationException) {
+                    Toast.makeText(context, "Archive open cancelled", Toast.LENGTH_SHORT).show()
+                    return@launch
+                }
+                Toast.makeText(context, "Failed to open archive", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val capability = browserArchiveCapabilityForName(cachedItem.sourceFile.name)
+            if (capability != BrowserArchiveCapability.Browsable) {
+                exportDownloadProgressState = null
+                Toast.makeText(context, "Archive format not supported yet", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val mountDirectory = withContext(Dispatchers.IO) {
+                ensureArchiveMounted(context, cachedItem.sourceFile)
+            }
+            val returnTarget = buildHttpRequestUri(
+                currentSpec.copy(
+                    username = sessionUsername,
+                    password = sessionPassword
+                )
+            )
+            registerArchiveBrowserReturnTarget(
+                mountRootPath = mountDirectory.absolutePath,
+                returnTargetPath = returnTarget,
+                logicalArchivePath = sourceId
+            )
+            exportDownloadProgressState = null
+            onOpenRemoteSource(mountDirectory.absolutePath)
+        }
     }
 
     fun showSelectionInfoDialog() {
@@ -703,6 +798,7 @@ internal fun HttpFileBrowserScreen(
 
     LaunchedEffect(currentSpec.path) {
         exportDownloadJob?.cancel()
+        archiveOpenJob?.cancel()
         exportDownloadProgressState = null
         exportConflictDialogState = null
         browserSelectionController.exitSelectionMode()
@@ -797,9 +893,9 @@ internal fun HttpFileBrowserScreen(
                                 BrowserSelectionActionItem(
                                     label = "Play",
                                     icon = Icons.Default.PlayArrow,
-                                    enabled = selectedFileTargets().size == 1,
+                                    enabled = selectedPlayableFileTargets().size == 1,
                                     onClick = {
-                                        val target = selectedFileTargets().singleOrNull()
+                                        val target = selectedPlayableFileTargets().singleOrNull()
                                         if (target != null) {
                                             browserSelectionController.exitSelectionMode()
                                             onOpenRemoteSource(target.openInput)
@@ -809,9 +905,9 @@ internal fun HttpFileBrowserScreen(
                                 BrowserSelectionActionItem(
                                     label = "Play as cached",
                                     icon = Icons.Default.Save,
-                                    enabled = selectedFileTargets().size == 1,
+                                    enabled = selectedPlayableFileTargets().size == 1,
                                     onClick = {
-                                        val target = selectedFileTargets().singleOrNull()
+                                        val target = selectedPlayableFileTargets().singleOrNull()
                                         if (target != null) {
                                             browserSelectionController.exitSelectionMode()
                                             onOpenRemoteSourceAsCached(target.openInput)
@@ -819,15 +915,15 @@ internal fun HttpFileBrowserScreen(
                                     }
                                 ),
                                 BrowserSelectionActionItem(
-                                    label = if (selectedFileTargets().size == 1) {
+                                    label = if (selectedDownloadFileTargets().size == 1) {
                                         "Download file"
                                     } else {
                                         "Download files"
                                     },
                                     icon = Icons.Default.Link,
-                                    enabled = selectedFileTargets().isNotEmpty(),
+                                    enabled = selectedDownloadFileTargets().isNotEmpty(),
                                     onClick = {
-                                        val targets = selectedFileTargets()
+                                        val targets = selectedDownloadFileTargets()
                                         if (targets.isNotEmpty()) {
                                             pendingExportTargets = targets
                                             exportDirectoryLauncher.launch(null)
@@ -1012,6 +1108,7 @@ internal fun HttpFileBrowserScreen(
                                 }
                                 HttpEntryRow(
                                     entry = entry,
+                                    decoderExtensionArtworkHints = decoderExtensionArtworkHints,
                                     isSelected = browserSelectionController.selectedKeys.contains(entrySelectionKey),
                                     hasSelectedAbove = hasSelectedAbove,
                                     hasSelectedBelow = hasSelectedBelow,
@@ -1044,12 +1141,24 @@ internal fun HttpFileBrowserScreen(
                                                 navigationDirection = BrowserPageNavDirection.Forward
                                             )
                                         } else {
-                                            onOpenRemoteSource(
-                                                appendHttpDisplayNameFragment(
-                                                    sourceUrl = entry.requestUrl,
-                                                    displayName = entry.name
-                                                )
-                                            )
+                                            when (browserArchiveCapabilityForName(entry.name)) {
+                                                BrowserArchiveCapability.Browsable -> openArchiveEntry(entry)
+                                                BrowserArchiveCapability.KnownUnsupported -> {
+                                                    Toast.makeText(
+                                                        context,
+                                                        "Archive format not supported yet",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+                                                BrowserArchiveCapability.None -> {
+                                                    onOpenRemoteSource(
+                                                        appendHttpDisplayNameFragment(
+                                                            sourceUrl = entry.requestUrl,
+                                                            displayName = entry.name
+                                                        )
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 )
@@ -1310,12 +1419,18 @@ private fun HttpParentDirectoryRow(
 @Composable
 private fun HttpEntryRow(
     entry: HttpBrowserEntry,
+    decoderExtensionArtworkHints: Map<String, DecoderArtworkHint>,
     isSelected: Boolean,
     hasSelectedAbove: Boolean = false,
     hasSelectedBelow: Boolean = false,
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
+    val visualKind = browserRemoteEntryVisualKind(
+        name = entry.name,
+        isDirectory = entry.isDirectory,
+        decoderExtensionArtworkHints = decoderExtensionArtworkHints
+    )
     val selectionShape = RoundedCornerShape(
         topStart = if (hasSelectedAbove) 0.dp else 18.dp,
         topEnd = if (hasSelectedAbove) 0.dp else 18.dp,
@@ -1359,9 +1474,8 @@ private fun HttpEntryRow(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = if (entry.isDirectory) Icons.Default.Folder else Icons.Default.AudioFile,
-                contentDescription = null,
+            BrowserRemoteEntryIcon(
+                visualKind = visualKind,
                 tint = chipContentColor,
                 modifier = Modifier.size(HTTP_ICON_GLYPH_SIZE)
             )
@@ -1377,6 +1491,8 @@ private fun HttpEntryRow(
             Text(
                 text = if (entry.isDirectory) {
                     "Folder"
+                } else if (browserArchiveCapabilityForName(entry.name) != BrowserArchiveCapability.None) {
+                    "Archive"
                 } else {
                     inferHttpFormatLabel(entry.name)
                 },

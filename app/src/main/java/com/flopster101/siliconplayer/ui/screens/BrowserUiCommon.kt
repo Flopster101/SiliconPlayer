@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import android.webkit.MimeTypeMap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.Crossfade
@@ -41,12 +42,15 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -72,7 +76,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
@@ -82,16 +88,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.NativeBridge
+import com.flopster101.siliconplayer.buildDecoderExtensionArtworkHintMap
 import com.flopster101.siliconplayer.canonicalDecoderNameForAlias
+import com.flopster101.siliconplayer.DecoderArtworkHint
 import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.extensionCandidatesForName
 import com.flopster101.siliconplayer.formatByteCount
+import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.resolveDecoderArtworkHintForFileName
 import com.flopster101.siliconplayer.RemoteLoadPhase
 import com.flopster101.siliconplayer.RemoteLoadUiState
+import com.flopster101.siliconplayer.R
 import kotlinx.coroutines.delay
 import com.flopster101.siliconplayer.session.ExportConflictAction
 import java.util.Locale
+import java.io.File
 
 internal enum class BrowserPageNavDirection {
     Forward,
@@ -174,6 +186,89 @@ internal data class BrowserSelectionActionItem(
     val enabled: Boolean = true,
     val onClick: () -> Unit
 )
+
+internal enum class BrowserRemoteEntryVisualKind {
+    Directory,
+    ArchiveFile,
+    TrackedFile,
+    GameFile,
+    AudioFile,
+    VideoFile
+}
+
+internal enum class BrowserArchiveCapability {
+    None,
+    Browsable,
+    KnownUnsupported
+}
+
+@Composable
+internal fun rememberBrowserDecoderArtworkHints(): Map<String, DecoderArtworkHint> {
+    return androidx.compose.runtime.remember { buildDecoderExtensionArtworkHintMap() }
+}
+
+@Composable
+internal fun BrowserRemoteEntryIcon(
+    visualKind: BrowserRemoteEntryVisualKind,
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    when (visualKind) {
+        BrowserRemoteEntryVisualKind.Directory -> {
+            Icon(
+                imageVector = Icons.Default.Folder,
+                contentDescription = null,
+                tint = tint,
+                modifier = modifier
+            )
+        }
+
+        BrowserRemoteEntryVisualKind.ArchiveFile -> {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_folder_zip),
+                contentDescription = "Archive file",
+                tint = tint,
+                modifier = modifier
+            )
+        }
+
+        BrowserRemoteEntryVisualKind.TrackedFile -> {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_file_tracked),
+                contentDescription = "Tracked file",
+                tint = tint,
+                modifier = modifier
+            )
+        }
+
+        BrowserRemoteEntryVisualKind.GameFile -> {
+            Icon(
+                painter = painterResource(id = R.drawable.ic_file_game),
+                contentDescription = "Game file",
+                tint = tint,
+                modifier = modifier
+            )
+        }
+
+        BrowserRemoteEntryVisualKind.VideoFile -> {
+            Icon(
+                imageVector = Icons.Default.VideoFile,
+                contentDescription = null,
+                tint = tint,
+                modifier = modifier
+            )
+        }
+
+        BrowserRemoteEntryVisualKind.AudioFile -> {
+            Icon(
+                imageVector = Icons.Default.AudioFile,
+                contentDescription = null,
+                tint = tint,
+                modifier = modifier
+            )
+        }
+    }
+}
 
 internal data class BrowserExportConflictDialogState(
     val fileName: String,
@@ -528,6 +623,87 @@ internal fun matchesBrowserSearchQuery(
     if (query.isBlank()) return true
     return candidate.contains(query, ignoreCase = true)
 }
+
+internal fun browserArchiveCapabilityForName(name: String): BrowserArchiveCapability {
+    val extension = inferredPrimaryExtensionForName(name)
+        ?.lowercase(Locale.ROOT)
+        ?: return BrowserArchiveCapability.None
+    return when {
+        extension in BROWSABLE_ARCHIVE_EXTENSIONS -> BrowserArchiveCapability.Browsable
+        extension in KNOWN_ARCHIVE_EXTENSIONS -> BrowserArchiveCapability.KnownUnsupported
+        else -> BrowserArchiveCapability.None
+    }
+}
+
+internal fun isBrowsableArchiveName(name: String): Boolean {
+    return browserArchiveCapabilityForName(name) == BrowserArchiveCapability.Browsable
+}
+
+internal fun shouldShowRemoteBrowserEntry(
+    name: String,
+    isDirectory: Boolean,
+    supportedExtensions: Set<String>
+): Boolean {
+    if (isDirectory) return true
+    if (browserArchiveCapabilityForName(name) != BrowserArchiveCapability.None) return true
+    return fileMatchesSupportedExtensions(File(name), supportedExtensions)
+}
+
+internal fun browserRemoteEntryVisualKind(
+    name: String,
+    isDirectory: Boolean,
+    decoderExtensionArtworkHints: Map<String, DecoderArtworkHint> = emptyMap()
+): BrowserRemoteEntryVisualKind {
+    if (isDirectory) return BrowserRemoteEntryVisualKind.Directory
+    if (browserArchiveCapabilityForName(name) != BrowserArchiveCapability.None) {
+        return BrowserRemoteEntryVisualKind.ArchiveFile
+    }
+    val decoderArtworkHint = resolveDecoderArtworkHintForFileName(name, decoderExtensionArtworkHints)
+    if (decoderArtworkHint == DecoderArtworkHint.TrackedFile) {
+        return BrowserRemoteEntryVisualKind.TrackedFile
+    }
+    if (decoderArtworkHint == DecoderArtworkHint.GameFile) {
+        return BrowserRemoteEntryVisualKind.GameFile
+    }
+    val extension = inferredPrimaryExtensionForName(name)?.lowercase(Locale.ROOT)
+    val mimeType = extension
+        ?.let { ext -> MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) }
+        .orEmpty()
+        .lowercase(Locale.ROOT)
+    return if (
+        mimeType.startsWith("video/") ||
+        (extension != null && extension in REMOTE_FALLBACK_VIDEO_EXTENSIONS)
+    ) {
+        BrowserRemoteEntryVisualKind.VideoFile
+    } else {
+        BrowserRemoteEntryVisualKind.AudioFile
+    }
+}
+
+private val REMOTE_FALLBACK_VIDEO_EXTENSIONS = setOf(
+    "3g2", "3gp", "asf", "avi", "divx", "f4v", "flv", "m2ts", "m2v", "m4v",
+    "mkv", "mov", "mp4", "mpeg", "mpg", "mts", "ogm", "ogv", "rm", "rmvb",
+    "ts", "vob", "webm", "wmv"
+)
+
+private val BROWSABLE_ARCHIVE_EXTENSIONS = setOf(
+    "zip"
+)
+
+private val KNOWN_ARCHIVE_EXTENSIONS = setOf(
+    "zip",
+    "7z",
+    "rar",
+    "tar",
+    "gz",
+    "bz2",
+    "xz",
+    "lz",
+    "lzma",
+    "zst",
+    "lha",
+    "lzh"
+)
 
 internal fun browserPageContentTransform(
     navDirection: BrowserPageNavDirection

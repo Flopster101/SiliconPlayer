@@ -558,8 +558,17 @@ internal fun resolveStorageLocationForPath(
     path: String,
     descriptors: List<StorageDescriptor>
 ): String? {
+    val normalizedPath = path.trim()
+    if (normalizedPath.isBlank()) return null
     return descriptors
-        .filter { path == it.rootPath || path.startsWith("${it.rootPath}/") }
+        .filter { descriptor ->
+            val root = descriptor.rootPath.trimEnd('/')
+            if (root.isEmpty()) {
+                normalizedPath.startsWith("/")
+            } else {
+                normalizedPath == root || normalizedPath.startsWith("$root/")
+            }
+        }
         .maxByOrNull { it.rootPath.length }
         ?.rootPath
 }

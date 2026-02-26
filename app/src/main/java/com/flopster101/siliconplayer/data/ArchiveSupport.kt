@@ -25,6 +25,12 @@ internal data class ArchiveSourceRef(
     val entryPath: String
 )
 
+internal data class ArchiveMountedPathOrigin(
+    val mountRootPath: String,
+    val archivePath: String,
+    val parentPath: String
+)
+
 internal data class ResolvedArchiveDirectory(
     val archivePath: String,
     val parentPath: String,
@@ -236,6 +242,19 @@ internal fun resolveArchiveMountedCompanionPath(
     } else {
         null
     }
+}
+
+internal fun resolveArchiveMountedPathOrigin(path: File): ArchiveMountedPathOrigin? {
+    val mountRoot = findArchiveMountRoot(path) ?: return null
+    val readyMarker = File(mountRoot, ARCHIVE_READY_MARKER)
+    if (!readyMarker.exists() || !readyMarker.isFile) return null
+    val archivePath = parseArchivePathFromReadyMarker(readyMarker) ?: return null
+    val parentPath = File(archivePath).parentFile?.absolutePath ?: return null
+    return ArchiveMountedPathOrigin(
+        mountRootPath = mountRoot.absolutePath,
+        archivePath = archivePath,
+        parentPath = parentPath
+    )
 }
 
 internal fun parseArchiveLogicalPath(path: String?): Pair<String, String?>? {

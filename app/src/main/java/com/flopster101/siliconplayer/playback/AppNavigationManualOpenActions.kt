@@ -224,9 +224,10 @@ internal fun applyManualInputSelectionAction(
         }
 
         is ManualInputAction.OpenDirectory -> {
-            onBrowserLaunchTargetChanged(action.locationId, action.directoryPath)
+            val launchLocationId = action.locationId ?: "/"
+            onBrowserLaunchTargetChanged(launchLocationId, action.directoryPath)
             onCurrentViewChanged(MainView.Browser)
-            onAddRecentFolder(action.directoryPath, action.locationId, null)
+            onAddRecentFolder(action.directoryPath, launchLocationId, null)
             return
         }
 

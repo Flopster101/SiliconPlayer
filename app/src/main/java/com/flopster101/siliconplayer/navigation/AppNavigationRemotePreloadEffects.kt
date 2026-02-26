@@ -18,6 +18,7 @@ internal fun rememberRemoteNextTrackPreloadCanceller(
     isPlaying: Boolean,
     selectedFile: File?,
     currentPlaybackSourceId: String?,
+    activeRepeatMode: RepeatMode,
     preloadNextCachedRemoteTrack: Boolean,
     playlistWrapNavigation: Boolean,
     urlOrPathForceCaching: Boolean,
@@ -31,6 +32,7 @@ internal fun rememberRemoteNextTrackPreloadCanceller(
         isPlaying,
         selectedFile?.absolutePath,
         currentPlaybackSourceId,
+        activeRepeatMode,
         preloadNextCachedRemoteTrack,
         playlistWrapNavigation,
         urlOrPathForceCaching,
@@ -39,7 +41,14 @@ internal fun rememberRemoteNextTrackPreloadCanceller(
         remotePreloadJob?.cancel()
         remotePreloadJob = null
         RemotePreloadUiStateHolder.current = null
-        if (!isPlaying || !preloadNextCachedRemoteTrack) return@LaunchedEffect
+        val repeatModeCanAdvanceToNextTrack = when (activeRepeatMode) {
+            RepeatMode.None,
+            RepeatMode.Playlist -> true
+            else -> false
+        }
+        if (!isPlaying || !preloadNextCachedRemoteTrack || !repeatModeCanAdvanceToNextTrack) {
+            return@LaunchedEffect
+        }
         val nextSourceId = resolveNextRemoteSourceIdForPreload(
             selectedFile = selectedFile,
             currentPlaybackSourceId = currentPlaybackSourceId,

@@ -1403,6 +1403,7 @@ private fun AppNavigation(
         isPlaying,
         selectedFile = selectedFile,
         currentPlaybackSourceId = currentPlaybackSourceId,
+        activeRepeatMode = activeRepeatMode,
         preloadNextCachedRemoteTrack = preloadNextCachedRemoteTrack,
         playlistWrapNavigation = playlistWrapNavigation,
         urlOrPathForceCaching = urlOrPathForceCaching,

@@ -8,6 +8,7 @@ import com.flopster101.siliconplayer.playback.resolveSubtuneUiState
 import com.flopster101.siliconplayer.playback.syncPlaybackServiceFromUiState
 import com.flopster101.siliconplayer.session.addRecentFolderEntry
 import com.flopster101.siliconplayer.session.addRecentPlayedTrackEntry
+import com.flopster101.siliconplayer.session.scheduleRecentPlayedArtworkCacheBackfill as scheduleRecentPlayedArtworkCacheBackfillInSession
 import com.flopster101.siliconplayer.session.scheduleRecentPlayedMetadataBackfill as scheduleRecentPlayedMetadataBackfillInSession
 import com.flopster101.siliconplayer.session.scheduleRecentTrackMetadataRefresh as scheduleRecentTrackMetadataRefreshInSession
 import java.io.File
@@ -84,17 +85,22 @@ internal fun addRecentFolderAction(
 }
 
 internal fun addRecentPlayedTrackAction(
-    current: List<RecentPathEntry>,
+    context: Context,
+    appScope: CoroutineScope,
+    currentProvider: () -> List<RecentPathEntry>,
     path: String,
+    requestUrl: String? = null,
     locationId: String?,
     sourceNodeId: Long? = null,
     title: String?,
     artist: String?,
     decoderName: String?,
-    limit: Int,
+    limitProvider: () -> Int,
     onRecentPlayedChanged: (List<RecentPathEntry>) -> Unit,
     prefs: SharedPreferences
 ) {
+    val current = currentProvider()
+    val limit = limitProvider()
     addRecentPlayedTrackEntry(
         current = current,
         path = path,
@@ -106,6 +112,18 @@ internal fun addRecentPlayedTrackAction(
         limit = limit,
         update = onRecentPlayedChanged,
         write = { entries, max ->
+            writeRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, entries, max)
+        }
+    )
+    scheduleRecentPlayedArtworkCacheBackfillInSession(
+        context = context,
+        scope = appScope,
+        sourceId = path,
+        requestUrlHint = requestUrl,
+        currentProvider = currentProvider,
+        limitProvider = limitProvider,
+        onRecentPlayedChanged = onRecentPlayedChanged,
+        writeRecentPlayed = { entries, max ->
             writeRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, entries, max)
         }
     )

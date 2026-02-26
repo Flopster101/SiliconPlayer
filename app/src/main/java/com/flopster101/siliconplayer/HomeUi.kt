@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer
 
+import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -28,6 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Link
@@ -38,6 +40,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.Image
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -54,11 +57,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -72,9 +78,14 @@ import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
 import com.flopster101.siliconplayer.data.parseArchiveSourceId
 import com.flopster101.siliconplayer.ui.screens.NetworkIcons
 import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 private val HomeCardShape = RoundedCornerShape(16.dp)
+private val HomeRecentIconChipShape = RoundedCornerShape(11.dp)
+private val HomeRecentIconChipSize = 38.dp
+private val HomeRecentIconGlyphSize = 26.dp
 private const val HOME_RECENTS_INSERT_ANIM_DURATION_MS = 360
 private const val HOME_RECENTS_PROMOTE_INITIAL_EXPAND_FRACTION = 0.9f
 private const val HOME_INTRO_BASE_DELAY_MS = 0L
@@ -156,6 +167,7 @@ internal fun HomeScreen(
     onRecentFileAction: (RecentPathEntry, SourceEntryAction) -> Unit,
     canShareRecentFile: (RecentPathEntry) -> Boolean
 ) {
+    val context = LocalContext.current
     var folderActionTargetEntry by remember { mutableStateOf<RecentPathEntry?>(null) }
     var fileActionTargetEntry by remember { mutableStateOf<RecentPathEntry?>(null) }
     var requestedPlayedPromoteKey by remember { mutableStateOf<String?>(null) }
@@ -470,25 +482,19 @@ internal fun HomeScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     val isSmbRecentFolder = parseSmbSourceSpecFromInput(entry.path) != null
-                                    if (isArchiveLogicalFolderPath(entry.path)) {
-                                        Icon(
-                                            painter = painterResource(id = R.drawable.ic_folder_zip),
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    } else if (isSmbRecentFolder) {
-                                        Icon(
-                                            imageVector = NetworkIcons.SmbShare,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    } else {
-                                        Icon(
-                                            imageVector = Icons.Default.Folder,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
+                                    val isHttpRecentFolder = parseHttpSourceSpecFromInput(entry.path) != null
+                                    RecentIconChip(
+                                        icon = when {
+                                            isSmbRecentFolder -> NetworkIcons.SmbShare
+                                            isHttpRecentFolder -> NetworkIcons.WorldCode
+                                            else -> Icons.Default.Folder
+                                        },
+                                        iconPainterResId = if (isArchiveLogicalFolderPath(entry.path)) {
+                                            R.drawable.ic_folder_zip
+                                        } else {
+                                            null
+                                        }
+                                    )
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
@@ -695,10 +701,10 @@ internal fun HomeScreen(
                                             .padding(horizontal = 14.dp, vertical = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(
-                                            imageVector = fallbackIcon,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
+                                        RecentTrackArtworkChip(
+                                            context = context,
+                                            artworkThumbnailCacheKey = entry.artworkThumbnailCacheKey,
+                                            fallbackIcon = fallbackIcon
                                         )
                                         Spacer(modifier = Modifier.width(12.dp))
                                         Column(modifier = Modifier.weight(1f)) {
@@ -765,6 +771,79 @@ internal fun HomeScreen(
         }
     }
 
+}
+
+@Composable
+private fun RecentIconChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconPainterResId: Int? = null
+) {
+    Box(
+        modifier = Modifier
+            .size(HomeRecentIconChipSize)
+            .background(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = HomeRecentIconChipShape
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        if (iconPainterResId != null) {
+            Icon(
+                painter = painterResource(id = iconPainterResId),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(HomeRecentIconGlyphSize)
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(HomeRecentIconGlyphSize)
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecentTrackArtworkChip(
+    context: android.content.Context,
+    artworkThumbnailCacheKey: String?,
+    fallbackIcon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    val artwork = androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(
+        initialValue = null,
+        key1 = artworkThumbnailCacheKey
+    ) {
+        value = withContext(Dispatchers.IO) {
+            val artworkFile = recentArtworkThumbnailFile(context, artworkThumbnailCacheKey)
+                ?: return@withContext null
+            BitmapFactory.decodeFile(artworkFile.absolutePath)?.asImageBitmap()
+        }
+    }.value
+    Box(
+        modifier = Modifier
+            .size(HomeRecentIconChipSize)
+            .clip(HomeRecentIconChipShape)
+            .background(MaterialTheme.colorScheme.secondaryContainer),
+        contentAlignment = Alignment.Center
+    ) {
+        if (artwork != null) {
+            Image(
+                bitmap = artwork,
+                contentDescription = "Album artwork",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Icon(
+                imageVector = fallbackIcon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(HomeRecentIconGlyphSize)
+            )
+        }
+    }
 }
 
 @Composable

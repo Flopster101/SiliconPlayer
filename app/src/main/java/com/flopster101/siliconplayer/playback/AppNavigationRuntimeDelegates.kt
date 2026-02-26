@@ -30,6 +30,7 @@ internal fun buildAppNavigationRuntimeDelegates(
     onRecentPlayedChanged: (List<RecentPathEntry>) -> Unit,
     selectedFileProvider: () -> File?,
     currentPlaybackSourceIdProvider: () -> String?,
+    currentPlaybackRequestUrlProvider: () -> String?,
     metadataTitleProvider: () -> String,
     metadataArtistProvider: () -> String,
     durationProvider: () -> Double,
@@ -52,13 +53,16 @@ internal fun buildAppNavigationRuntimeDelegates(
     val addRecentPlayedTrack: (String, String?, String?, String?) -> Unit = { path, locationId, title, artist ->
         val currentDecoderName = NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() }
         addRecentPlayedTrackAction(
-            current = recentPlayedFilesProvider(),
+            context = context,
+            appScope = appScope,
+            currentProvider = recentPlayedFilesProvider,
             path = path,
+            requestUrl = currentPlaybackRequestUrlProvider(),
             locationId = locationId,
             title = title,
             artist = artist,
             decoderName = currentDecoderName,
-            limit = recentFilesLimitProvider(),
+            limitProvider = recentFilesLimitProvider,
             onRecentPlayedChanged = onRecentPlayedChanged,
             prefs = prefs
         )

@@ -258,7 +258,8 @@ internal data class RecentPathEntry(
     val title: String? = null,
     val artist: String? = null,
     val decoderName: String? = null,
-    val sourceNodeId: Long? = null
+    val sourceNodeId: Long? = null,
+    val artworkThumbnailCacheKey: String? = null
 )
 
 internal data class StorageDescriptor(
@@ -455,6 +456,9 @@ internal fun readRecentEntries(
             val title = objectValue.optString("title", "").ifBlank { null }
             val artist = objectValue.optString("artist", "").ifBlank { null }
             val decoderName = objectValue.optString("decoderName", "").ifBlank { null }
+            val artworkThumbnailCacheKey = objectValue
+                .optString("artworkThumbnailCacheKey", "")
+                .ifBlank { null }
             val sourceNodeId = if (
                 objectValue.has("sourceNodeId") &&
                 !objectValue.isNull("sourceNodeId")
@@ -471,7 +475,8 @@ internal fun readRecentEntries(
                     title = existing.title ?: title,
                     artist = existing.artist ?: artist,
                     decoderName = existing.decoderName ?: decoderName,
-                    sourceNodeId = existing.sourceNodeId ?: sourceNodeId
+                    sourceNodeId = existing.sourceNodeId ?: sourceNodeId,
+                    artworkThumbnailCacheKey = existing.artworkThumbnailCacheKey ?: artworkThumbnailCacheKey
                 )
                 continue
             }
@@ -481,7 +486,8 @@ internal fun readRecentEntries(
                 title = title,
                 artist = artist,
                 decoderName = decoderName,
-                sourceNodeId = sourceNodeId
+                sourceNodeId = sourceNodeId,
+                artworkThumbnailCacheKey = artworkThumbnailCacheKey
             )
             if (deduped.size >= maxItems) break
         }
@@ -507,7 +513,8 @@ internal fun writeRecentEntries(
                 title = existing.title ?: entry.title,
                 artist = existing.artist ?: entry.artist,
                 decoderName = existing.decoderName ?: entry.decoderName,
-                sourceNodeId = existing.sourceNodeId ?: entry.sourceNodeId
+                sourceNodeId = existing.sourceNodeId ?: entry.sourceNodeId,
+                artworkThumbnailCacheKey = existing.artworkThumbnailCacheKey ?: entry.artworkThumbnailCacheKey
             )
         } else {
             deduped += entry
@@ -524,6 +531,7 @@ internal fun writeRecentEntries(
                 .put("artist", entry.artist ?: "")
                 .put("decoderName", entry.decoderName ?: "")
                 .put("sourceNodeId", entry.sourceNodeId)
+                .put("artworkThumbnailCacheKey", entry.artworkThumbnailCacheKey ?: "")
         )
     }
     prefs.edit().putString(key, array.toString()).apply()
@@ -558,6 +566,7 @@ internal fun buildUpdatedRecentPlayedTracks(
     title: String? = null,
     artist: String? = null,
     decoderName: String? = null,
+    artworkThumbnailCacheKey: String? = null,
     clearBlankMetadataOnUpdate: Boolean = false,
     limit: Int
 ): List<RecentPathEntry> {
@@ -574,6 +583,10 @@ internal fun buildUpdatedRecentPlayedTracks(
         else -> trimmedArtist.takeUnless { it.isNullOrBlank() } ?: existing?.artist
     }
     val resolvedDecoderName = decoderName?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.decoderName
+    val resolvedArtworkThumbnailCacheKey = artworkThumbnailCacheKey
+        ?.trim()
+        .takeUnless { it.isNullOrBlank() }
+        ?: existing?.artworkThumbnailCacheKey
     val updated = listOf(
         RecentPathEntry(
             path = normalized,
@@ -581,10 +594,32 @@ internal fun buildUpdatedRecentPlayedTracks(
             title = resolvedTitle,
             artist = resolvedArtist,
             decoderName = resolvedDecoderName,
-            sourceNodeId = sourceNodeId ?: existing?.sourceNodeId
+            sourceNodeId = sourceNodeId ?: existing?.sourceNodeId,
+            artworkThumbnailCacheKey = resolvedArtworkThumbnailCacheKey
         )
     ) + current.filterNot { samePath(it.path, normalized) }
     return updated.take(limit)
+}
+
+internal fun mergeRecentPlayedTrackArtworkCacheKey(
+    current: List<RecentPathEntry>,
+    path: String,
+    artworkThumbnailCacheKey: String?
+): List<RecentPathEntry> {
+    val normalized = normalizeSourceIdentity(path) ?: path
+    val normalizedCacheKey = artworkThumbnailCacheKey?.trim().takeUnless { it.isNullOrBlank() }
+        ?: return current
+    var changed = false
+    val updated = current.map { entry ->
+        if (!samePath(entry.path, normalized)) return@map entry
+        if (entry.artworkThumbnailCacheKey == normalizedCacheKey) {
+            entry
+        } else {
+            changed = true
+            entry.copy(artworkThumbnailCacheKey = normalizedCacheKey)
+        }
+    }
+    return if (changed) updated else current
 }
 
 internal fun mergeRecentPlayedTrackMetadata(

@@ -999,6 +999,7 @@ private fun AppNavigation(
         onRecentPlayedChanged = { recentPlayedFiles = it },
         selectedFileProvider = { selectedFile },
         currentPlaybackSourceIdProvider = { currentPlaybackSourceId },
+        currentPlaybackRequestUrlProvider = { currentPlaybackRequestUrl },
         metadataTitleProvider = { metadataTitle },
         metadataArtistProvider = { metadataArtist },
         durationProvider = { duration },

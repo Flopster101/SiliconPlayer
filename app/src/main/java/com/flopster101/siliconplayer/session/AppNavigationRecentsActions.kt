@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer.session
 
+import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import com.flopster101.siliconplayer.RecentPathEntry
@@ -7,7 +8,9 @@ import com.flopster101.siliconplayer.samePath
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.buildUpdatedRecentFolders
 import com.flopster101.siliconplayer.buildUpdatedRecentPlayedTracks
+import com.flopster101.siliconplayer.ensureRecentArtworkThumbnailCached
 import com.flopster101.siliconplayer.mergeRecentPlayedTrackMetadata
+import com.flopster101.siliconplayer.mergeRecentPlayedTrackArtworkCacheKey
 import com.flopster101.siliconplayer.normalizeSourceIdentity
 import java.util.Locale
 import java.io.File
@@ -19,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private var recentPlayedMetadataBackfillJob: Job? = null
+private val recentArtworkCacheJobs = mutableMapOf<String, Job>()
 
 internal fun addRecentFolderEntry(
     current: List<RecentPathEntry>,
@@ -132,6 +136,43 @@ internal fun scheduleRecentPlayedMetadataBackfill(
             onRecentPlayedChanged(working)
         }
         writeRecentPlayed(working, limit)
+    }
+}
+
+internal fun scheduleRecentPlayedArtworkCacheBackfill(
+    context: Context,
+    scope: CoroutineScope,
+    sourceId: String,
+    requestUrlHint: String?,
+    currentProvider: () -> List<RecentPathEntry>,
+    limitProvider: () -> Int,
+    onRecentPlayedChanged: (List<RecentPathEntry>) -> Unit,
+    writeRecentPlayed: (List<RecentPathEntry>, Int) -> Unit
+) {
+    val normalizedSourceId = normalizeSourceIdentity(sourceId) ?: sourceId
+    val existingJob = recentArtworkCacheJobs.remove(normalizedSourceId)
+    existingJob?.cancel()
+    recentArtworkCacheJobs[normalizedSourceId] = scope.launch(Dispatchers.IO) {
+        try {
+            val thumbnailCacheKey = ensureRecentArtworkThumbnailCached(
+                context = context,
+                sourceId = normalizedSourceId,
+                requestUrlHint = requestUrlHint
+            ) ?: return@launch
+            val merged = mergeRecentPlayedTrackArtworkCacheKey(
+                current = currentProvider(),
+                path = normalizedSourceId,
+                artworkThumbnailCacheKey = thumbnailCacheKey
+            )
+            if (merged == currentProvider()) return@launch
+            val limit = limitProvider().coerceAtLeast(1)
+            withContext(Dispatchers.Main.immediate) {
+                onRecentPlayedChanged(merged)
+            }
+            writeRecentPlayed(merged, limit)
+        } finally {
+            recentArtworkCacheJobs.remove(normalizedSourceId)
+        }
     }
 }
 

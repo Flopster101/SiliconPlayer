@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 import android.content.Context
 import com.hierynomus.msdtyp.AccessMask
+import com.hierynomus.msfscc.fileinformation.FileStandardInformation
 import com.hierynomus.mssmb2.SMB2CreateDisposition
 import com.hierynomus.mssmb2.SMB2ShareAccess
 import com.hierynomus.smbj.SMBClient
@@ -73,11 +74,42 @@ internal suspend fun downloadSmbSourceToCache(
                             SMB2CreateDisposition.FILE_OPEN,
                             null
                         ).use { smbFile ->
+                            val expectedBytes = runCatching {
+                                smbFile.getFileInformation(FileStandardInformation::class.java)
+                                    .getEndOfFile()
+                                    .coerceAtLeast(0L)
+                            }.getOrNull()?.takeIf { it > 0L }
                             BufferedInputStream(smbFile.inputStream).use { input ->
                                 FileOutputStream(temp).use { output ->
                                     val buffer = ByteArray(16 * 1024)
                                     var totalBytes = 0L
+                                    var latestBytesPerSecond: Long? = null
+                                    val startedAtMs = System.currentTimeMillis()
+                                    var lastSpeedSampleBytes = 0L
+                                    var lastSpeedSampleMs = startedAtMs
                                     var lastUiUpdateMs = 0L
+
+                                    suspend fun publishDownloadStatus(force: Boolean = false) {
+                                        val now = System.currentTimeMillis()
+                                        if (!force && now - lastUiUpdateMs < 120L) return
+                                        lastUiUpdateMs = now
+                                        val percentValue = expectedBytes?.let { expected ->
+                                            ((totalBytes * 100L) / expected).toInt().coerceIn(0, 100)
+                                        }
+                                        emitStatus(
+                                            RemoteLoadUiState(
+                                                sourceId = sourceId,
+                                                phase = RemoteLoadPhase.Downloading,
+                                                downloadedBytes = totalBytes,
+                                                totalBytes = expectedBytes,
+                                                bytesPerSecond = latestBytesPerSecond,
+                                                percent = percentValue,
+                                                indeterminate = expectedBytes == null
+                                            )
+                                        )
+                                    }
+
+                                    publishDownloadStatus(force = true)
                                     while (true) {
                                         kotlin.coroutines.coroutineContext.ensureActive()
                                         val read = input.read(buffer)
@@ -85,21 +117,31 @@ internal suspend fun downloadSmbSourceToCache(
                                         output.write(buffer, 0, read)
                                         totalBytes += read
                                         val now = System.currentTimeMillis()
-                                        if (now - lastUiUpdateMs >= 120L) {
-                                            lastUiUpdateMs = now
-                                            emitStatus(
-                                                RemoteLoadUiState(
-                                                    sourceId = sourceId,
-                                                    phase = RemoteLoadPhase.Downloading,
-                                                    downloadedBytes = totalBytes,
-                                                    totalBytes = null,
-                                                    percent = null,
-                                                    indeterminate = true
-                                                )
-                                            )
+                                        val deltaMs = now - lastSpeedSampleMs
+                                        if (deltaMs >= 350L) {
+                                            val deltaBytes = totalBytes - lastSpeedSampleBytes
+                                            latestBytesPerSecond =
+                                                ((deltaBytes * 1000L) / deltaMs).coerceAtLeast(0L)
+                                            lastSpeedSampleBytes = totalBytes
+                                            lastSpeedSampleMs = now
                                         }
+                                        publishDownloadStatus()
                                     }
                                     output.flush()
+                                    publishDownloadStatus(force = true)
+                                    val elapsedMs = (System.currentTimeMillis() - startedAtMs).coerceAtLeast(1L)
+                                    val avgSpeed = (totalBytes * 1000L) / elapsedMs
+                                    emitStatus(
+                                        RemoteLoadUiState(
+                                            sourceId = sourceId,
+                                            phase = RemoteLoadPhase.Downloading,
+                                            downloadedBytes = totalBytes,
+                                            totalBytes = expectedBytes,
+                                            bytesPerSecond = latestBytesPerSecond ?: avgSpeed,
+                                            percent = expectedBytes?.let { 100 },
+                                            indeterminate = expectedBytes == null
+                                        )
+                                    )
                                 }
                             }
                         }

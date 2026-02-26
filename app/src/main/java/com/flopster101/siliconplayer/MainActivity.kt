@@ -2662,7 +2662,12 @@ private fun AppNavigation(
                     networkNodes = networkNodes
                 )
                 update.recentFolderUpdate?.let { recent ->
-                    runtimeDelegates.addRecentFolder(recent.path, recent.locationId, recent.sourceNodeId)
+                    runtimeDelegates.addRecentFolderWithTitle(
+                        recent.path,
+                        recent.locationId,
+                        recent.sourceNodeId,
+                        recent.title
+                    )
                 }
                 browserNavigator.updateLaunchState(
                     launchState.copy(

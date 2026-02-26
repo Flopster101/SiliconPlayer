@@ -5,7 +5,8 @@ import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
 internal data class BrowserRecentFolderUpdate(
     val path: String,
     val locationId: String?,
-    val sourceNodeId: Long?
+    val sourceNodeId: Long?,
+    val title: String?
 )
 
 internal data class BrowserLocationChangedUpdate(
@@ -94,7 +95,12 @@ internal fun buildBrowserLocationChangedUpdate(
         BrowserRecentFolderUpdate(
             path = recentPath,
             locationId = launchState.locationId,
-            sourceNodeId = sourceNodeId
+            sourceNodeId = sourceNodeId,
+            title = resolveRecentFolderTitleForNetworkModel(
+                model = model,
+                sourceNodeId = sourceNodeId,
+                networkNodes = networkNodes
+            )
         )
     } else {
         null
@@ -142,6 +148,32 @@ internal fun buildBrowserLocationChangedUpdate(
         rememberedLocationId = launchLocationId,
         rememberedDirectoryPath = launchDirectoryPath
     )
+}
+
+private fun resolveRecentFolderTitleForNetworkModel(
+    model: BrowserLocationModel,
+    sourceNodeId: Long?,
+    networkNodes: List<NetworkNode>
+): String? {
+    val shouldUseNetworkRootTitle = when (model) {
+        is BrowserLocationModel.Smb -> {
+            model.spec.share.isBlank() && model.spec.path.isNullOrBlank()
+        }
+        is BrowserLocationModel.Http -> normalizeHttpPath(model.spec.path) == "/"
+        else -> false
+    }
+    if (!shouldUseNetworkRootTitle) return null
+    val nodeTitle = sourceNodeId
+        ?.let { id -> networkNodes.firstOrNull { it.id == id } }
+        ?.let(::resolveNetworkNodeDisplayTitle)
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+    if (nodeTitle != null) return nodeTitle
+    return when (model) {
+        is BrowserLocationModel.Smb -> model.spec.host.takeIf { it.isNotBlank() }
+        is BrowserLocationModel.Http -> model.spec.host.takeIf { it.isNotBlank() }
+        else -> null
+    }
 }
 
 private fun isEligibleForRecentFolderUpdate(model: BrowserLocationModel): Boolean {

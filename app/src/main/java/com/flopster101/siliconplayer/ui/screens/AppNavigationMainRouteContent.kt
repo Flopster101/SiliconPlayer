@@ -44,7 +44,7 @@ internal fun AppNavigationHomeContentSection(
         recentFolders = recentFolders,
         recentPlayedFiles = recentPlayedFiles,
         storagePresentationForEntry = { entry ->
-            storagePresentationForEntry(context, entry, storageDescriptors)
+            storagePresentationForEntry(context, entry, storageDescriptors, networkNodes)
         },
         bottomContentPadding = bottomContentPadding,
         onOpenLibrary = {

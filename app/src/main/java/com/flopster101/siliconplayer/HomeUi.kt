@@ -498,7 +498,7 @@ internal fun HomeScreen(
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = folderTitleForDisplay(entry.path),
+                                            text = resolvedRecentFolderTitle(entry),
                                             style = MaterialTheme.typography.titleSmall,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis
@@ -771,6 +771,22 @@ internal fun HomeScreen(
         }
     }
 
+}
+
+private fun resolvedRecentFolderTitle(entry: RecentPathEntry): String {
+    val fallback = folderTitleForDisplay(entry.path)
+    val title = entry.title?.trim().takeUnless { it.isNullOrBlank() } ?: return fallback
+    val smbSpec = parseSmbSourceSpecFromInput(entry.path)
+    if (smbSpec != null) {
+        val isHostRoot = smbSpec.share.isBlank() && smbSpec.path.isNullOrBlank()
+        return if (isHostRoot) title else fallback
+    }
+    val httpSpec = parseHttpSourceSpecFromInput(entry.path)
+    if (httpSpec != null) {
+        val isRoot = normalizeHttpPath(httpSpec.path) == "/"
+        return if (isRoot) title else fallback
+    }
+    return fallback
 }
 
 @Composable

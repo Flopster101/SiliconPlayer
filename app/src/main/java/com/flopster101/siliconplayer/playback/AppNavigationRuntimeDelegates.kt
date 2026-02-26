@@ -11,6 +11,7 @@ internal data class AppNavigationRuntimeDelegates(
     val refreshSubtuneEntries: () -> Unit,
     val resolveShareableFileForRecent: (RecentPathEntry) -> File?,
     val addRecentFolder: (String, String?, Long?) -> Unit,
+    val addRecentFolderWithTitle: (String, String?, Long?, String?) -> Unit,
     val addRecentPlayedTrack: (String, String?, String?, String?) -> Unit,
     val scheduleRecentTrackMetadataRefresh: (String, String?) -> Unit,
     val scheduleRecentPlayedMetadataBackfill: () -> Unit,
@@ -105,6 +106,19 @@ internal fun buildAppNavigationRuntimeDelegates(
                 path = path,
                 locationId = locationId,
                 sourceNodeId = sourceNodeId,
+                title = null,
+                limit = recentFoldersLimitProvider(),
+                onRecentFoldersChanged = onRecentFoldersChanged,
+                prefs = prefs
+            )
+        },
+        addRecentFolderWithTitle = { path, locationId, sourceNodeId, title ->
+            addRecentFolderAction(
+                current = recentFoldersProvider(),
+                path = path,
+                locationId = locationId,
+                sourceNodeId = sourceNodeId,
+                title = title,
                 limit = recentFoldersLimitProvider(),
                 onRecentFoldersChanged = onRecentFoldersChanged,
                 prefs = prefs

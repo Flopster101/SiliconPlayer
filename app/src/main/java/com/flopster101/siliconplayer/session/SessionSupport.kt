@@ -321,7 +321,8 @@ internal fun detectStorageDescriptors(context: Context): List<StorageDescriptor>
 internal fun storagePresentationForEntry(
     context: Context,
     entry: RecentPathEntry,
-    descriptors: List<StorageDescriptor>
+    descriptors: List<StorageDescriptor>,
+    networkNodes: List<NetworkNode> = emptyList()
 ): StoragePresentation {
     val rawPath = entry.path.trim()
     val normalizedPath = normalizeSourceIdentity(rawPath) ?: rawPath
@@ -349,10 +350,15 @@ internal fun storagePresentationForEntry(
                 val smbLabel = if (smbSpec == null) {
                     "SMB"
                 } else {
+                    val hostLabel = resolveRecentSmbHostDisplayLabel(
+                        entry = entry,
+                        smbSpec = smbSpec,
+                        networkNodes = networkNodes
+                    )
                     val smbTarget = if (smbSpec.share.isBlank()) {
-                        smbSpec.host
+                        hostLabel
                     } else {
-                        "${smbSpec.host}/${smbSpec.share}"
+                        "$hostLabel/${smbSpec.share}"
                     }
                     "SMB ($smbTarget)"
                 }
@@ -389,10 +395,15 @@ internal fun storagePresentationForEntry(
         val smbLabel = if (smbSpec == null) {
             "SMB"
         } else {
+            val hostLabel = resolveRecentSmbHostDisplayLabel(
+                entry = entry,
+                smbSpec = smbSpec,
+                networkNodes = networkNodes
+            )
             val smbTarget = if (smbSpec.share.isBlank()) {
-                smbSpec.host
+                hostLabel
             } else {
-                "${smbSpec.host}/${smbSpec.share}"
+                "$hostLabel/${smbSpec.share}"
             }
             "SMB ($smbTarget)"
         }
@@ -437,6 +448,27 @@ internal fun storagePresentationForEntry(
     } else {
         StoragePresentation(label = "Unknown storage", icon = Icons.Default.Folder)
     }
+}
+
+private fun resolveRecentSmbHostDisplayLabel(
+    entry: RecentPathEntry,
+    smbSpec: SmbSourceSpec,
+    networkNodes: List<NetworkNode>
+): String {
+    val sourceNode = entry.sourceNodeId
+        ?.let { sourceId -> networkNodes.firstOrNull { it.id == sourceId } }
+        ?.takeIf { it.type == NetworkNodeType.RemoteSource && it.sourceKind == NetworkSourceKind.Smb }
+    val resolved = sourceNode?.smbDiscoveredHostName
+        ?.trim()
+        .takeUnless { it.isNullOrBlank() }
+        ?: sourceNode?.title
+            ?.trim()
+            .takeUnless { it.isNullOrBlank() }
+        ?: sourceNode?.smbHost
+            ?.trim()
+            .takeUnless { it.isNullOrBlank() }
+        ?: smbSpec.host.trim()
+    return resolved.ifBlank { smbSpec.host }
 }
 
 internal fun readRecentEntries(
@@ -542,6 +574,7 @@ internal fun buildUpdatedRecentFolders(
     newPath: String,
     locationId: String?,
     sourceNodeId: Long? = null,
+    title: String? = null,
     limit: Int
 ): List<RecentPathEntry> {
     val normalized = normalizeSourceIdentity(newPath) ?: newPath
@@ -550,7 +583,7 @@ internal fun buildUpdatedRecentFolders(
         RecentPathEntry(
             path = normalized,
             locationId = locationId ?: existing?.locationId,
-            title = null,
+            title = title?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.title,
             artist = null,
             sourceNodeId = sourceNodeId ?: existing?.sourceNodeId
         )

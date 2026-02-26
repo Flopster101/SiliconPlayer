@@ -67,6 +67,7 @@ internal fun addRecentFolderAction(
     path: String,
     locationId: String?,
     sourceNodeId: Long?,
+    title: String?,
     limit: Int,
     onRecentFoldersChanged: (List<RecentPathEntry>) -> Unit,
     prefs: SharedPreferences
@@ -76,6 +77,7 @@ internal fun addRecentFolderAction(
         path = path,
         locationId = locationId,
         sourceNodeId = sourceNodeId,
+        title = title,
         limit = limit,
         update = onRecentFoldersChanged,
         write = { entries, max ->

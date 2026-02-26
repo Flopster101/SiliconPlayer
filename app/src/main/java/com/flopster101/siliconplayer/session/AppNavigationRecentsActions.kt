@@ -30,6 +30,7 @@ internal fun addRecentFolderEntry(
     path: String,
     locationId: String?,
     sourceNodeId: Long?,
+    title: String?,
     limit: Int,
     update: (List<RecentPathEntry>) -> Unit,
     write: (List<RecentPathEntry>, Int) -> Unit
@@ -39,6 +40,7 @@ internal fun addRecentFolderEntry(
         newPath = path,
         locationId = locationId,
         sourceNodeId = sourceNodeId,
+        title = title,
         limit = limit
     )
     update(next)

@@ -16,6 +16,7 @@ internal fun primeManualRemoteOpenStateAction(
     onResetPlayback: () -> Unit,
     onSelectedFileChanged: (File?) -> Unit,
     onCurrentPlaybackSourceIdChanged: (String) -> Unit,
+    onCurrentPlaybackRequestUrlChanged: (String) -> Unit,
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
     onPlayerSurfaceVisibleChanged: (Boolean) -> Unit,
     onSongVolumeDbChanged: (Float) -> Unit,
@@ -25,6 +26,7 @@ internal fun primeManualRemoteOpenStateAction(
     onResetPlayback()
     onSelectedFileChanged(resolved.displayFile)
     onCurrentPlaybackSourceIdChanged(resolved.sourceId)
+    onCurrentPlaybackRequestUrlChanged(resolved.requestUrl)
     onVisiblePlayableFilesChanged(emptyList())
     onPlayerSurfaceVisibleChanged(true)
     onSongVolumeDbChanged(0f)
@@ -45,6 +47,7 @@ internal fun applyManualRemoteOpenSuccessAction(
     activeRepeatMode: RepeatMode,
     onSelectedFileChanged: (File) -> Unit,
     onCurrentPlaybackSourceIdChanged: (String) -> Unit,
+    onCurrentPlaybackRequestUrlChanged: (String) -> Unit,
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
     onPlayerSurfaceVisibleChanged: (Boolean) -> Unit,
     onSongVolumeDbChanged: (Float) -> Unit,
@@ -66,6 +69,7 @@ internal fun applyManualRemoteOpenSuccessAction(
 ) {
     onSelectedFileChanged(result.displayFile)
     onCurrentPlaybackSourceIdChanged(result.sourceId)
+    onCurrentPlaybackRequestUrlChanged(result.requestUrl)
     onVisiblePlayableFilesChanged(emptyList())
     onPlayerSurfaceVisibleChanged(true)
     onSongVolumeDbChanged(0f)

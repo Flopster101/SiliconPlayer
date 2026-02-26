@@ -114,6 +114,7 @@ import com.flopster101.siliconplayer.VisualizationRenderBackend
 import com.flopster101.siliconplayer.VisualizationVuAnchor
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
+import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.formatByteCount
 import com.flopster101.siliconplayer.pluginNameForCoreName
 import com.flopster101.siliconplayer.RemoteLoadPhase
@@ -1418,7 +1419,8 @@ private fun PlayerTopBar(
 }
 
 private fun toDisplayFilename(file: File): String {
-    return stripRemoteCacheHashPrefix(file.name)
+    val stripped = stripRemoteCacheHashPrefix(file.name)
+    return decodePercentEncodedForDisplay(stripped) ?: stripped
 }
 
 private fun normalizedScale(valueDp: Dp, compactDp: Dp, roomyDp: Dp): Float {

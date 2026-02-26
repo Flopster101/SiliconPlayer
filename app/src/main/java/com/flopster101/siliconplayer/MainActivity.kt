@@ -883,6 +883,7 @@ private fun AppNavigation(
     var openPlayerFromNotification by settingsStates.openPlayerFromNotification
     var playbackWatchPath by settingsStates.playbackWatchPath
     var currentPlaybackSourceId by settingsStates.currentPlaybackSourceId
+    var currentPlaybackRequestUrl by remember { mutableStateOf<String?>(null) }
     val currentTrackPathOrUrl = currentPlaybackSourceId ?: selectedFile?.absolutePath
     val playbackSourceLabel = remember(selectedFile, currentPlaybackSourceId) {
         resolvePlaybackSourceLabel(selectedFile, currentPlaybackSourceId)
@@ -1075,7 +1076,10 @@ private fun AppNavigation(
         selectedFileProvider = { selectedFile },
         onSelectedFileChanged = { selectedFile = it },
         currentPlaybackSourceIdProvider = { currentPlaybackSourceId },
-        onCurrentPlaybackSourceIdChanged = { currentPlaybackSourceId = it },
+        onCurrentPlaybackSourceIdChanged = {
+            currentPlaybackSourceId = it
+            currentPlaybackRequestUrl = null
+        },
         isPlayingProvider = { isPlaying },
         lastBrowserLocationIdProvider = { lastBrowserLocationId },
         isLocalPlayableFile = isLocalPlayableFile,
@@ -1131,7 +1135,10 @@ private fun AppNavigation(
         isPlayingProvider = { isPlaying },
         onResetPlayback = { playbackStateDelegates.resetAndOptionallyKeepLastTrack(keepLastTrack = false) },
         onSelectedFileChanged = { selectedFile = it },
-        onCurrentPlaybackSourceIdChanged = { currentPlaybackSourceId = it },
+        onCurrentPlaybackSourceIdChanged = {
+            currentPlaybackSourceId = it
+            currentPlaybackRequestUrl = null
+        },
         onVisiblePlayableFilesChanged = { visiblePlayableFiles = it },
         onPlayerSurfaceVisibleChanged = { isPlayerSurfaceVisible = it },
         loadSongVolumeForFile = loadSongVolumeForFile,
@@ -1196,6 +1203,7 @@ private fun AppNavigation(
         onResetPlayback = { playbackStateDelegates.resetAndOptionallyKeepLastTrack(keepLastTrack = false) },
         onSelectedFileChanged = { selectedFile = it },
         onCurrentPlaybackSourceIdChanged = { currentPlaybackSourceId = it },
+        onCurrentPlaybackRequestUrlChanged = { currentPlaybackRequestUrl = it },
         onVisiblePlayableFilesChanged = { visiblePlayableFiles = it },
         onPlayerSurfaceVisibleChanged = { isPlayerSurfaceVisible = it },
         onSongVolumeDbChanged = { songVolumeDb = it },
@@ -1334,6 +1342,7 @@ private fun AppNavigation(
         prefs = prefs,
         selectedFile = selectedFile,
         currentPlaybackSourceId = currentPlaybackSourceId,
+        currentPlaybackRequestUrl = currentPlaybackRequestUrl,
         preferredRepeatMode = preferredRepeatMode,
         isPlayerSurfaceVisible = isPlayerSurfaceVisible,
         autoPlayOnTrackSelect = autoPlayOnTrackSelect,

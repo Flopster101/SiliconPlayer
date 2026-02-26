@@ -15,6 +15,7 @@ internal sealed class DirectStreamOpenResult {
 internal data class ManualRemoteOpenSuccess(
     val displayFile: File,
     val sourceId: String,
+    val requestUrl: String,
     val snapshot: NativeTrackSnapshot
 )
 
@@ -89,6 +90,7 @@ internal suspend fun executeManualRemoteOpen(
                     ManualRemoteOpenSuccess(
                         displayFile = resolved.displayFile ?: File("/virtual/remote/stream"),
                         sourceId = resolved.sourceId,
+                        requestUrl = resolved.requestUrl,
                         snapshot = directResult.snapshot
                     )
                 )
@@ -158,6 +160,7 @@ internal suspend fun executeManualRemoteOpen(
         ManualRemoteOpenSuccess(
             displayFile = cachedFile,
             sourceId = resolved.sourceId,
+            requestUrl = resolved.requestUrl,
             snapshot = cachedSnapshot
         )
     )

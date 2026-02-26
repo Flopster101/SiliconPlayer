@@ -14,6 +14,7 @@ internal fun AppNavigationTrackPreferenceEffects(
     prefs: SharedPreferences,
     selectedFile: File?,
     currentPlaybackSourceId: String?,
+    currentPlaybackRequestUrl: String?,
     preferredRepeatMode: RepeatMode,
     isPlayerSurfaceVisible: Boolean,
     autoPlayOnTrackSelect: Boolean,
@@ -37,13 +38,14 @@ internal fun AppNavigationTrackPreferenceEffects(
         refreshRepeatModeForTrack()
     }
 
-    LaunchedEffect(selectedFile, currentPlaybackSourceId) {
+    LaunchedEffect(selectedFile, currentPlaybackSourceId, currentPlaybackRequestUrl) {
         onArtworkBitmapChanged(
             withContext(Dispatchers.IO) {
                 loadArtworkForSource(
                     context = context,
                     displayFile = selectedFile,
-                    sourceId = currentPlaybackSourceId
+                    sourceId = currentPlaybackSourceId,
+                    requestUrl = currentPlaybackRequestUrl
                 )
             }
         )

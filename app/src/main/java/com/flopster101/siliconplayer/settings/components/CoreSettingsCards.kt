@@ -86,7 +86,7 @@ internal fun CoreDialogSliderCard(
     valueRange: IntRange,
     step: Int,
     valueLabel: (Int) -> String,
-    showNudgeButtons: Boolean = false,
+    showNudgeButtons: Boolean = true,
     nudgeStep: Int = step,
     onValueChanged: (Int) -> Unit
 ) {

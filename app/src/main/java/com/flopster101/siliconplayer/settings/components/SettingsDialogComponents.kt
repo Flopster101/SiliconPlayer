@@ -596,12 +596,15 @@ internal fun SettingsSwitchSliderDialog(
     currentValueLabel: (Boolean, Int) -> String,
     onDismiss: () -> Unit,
     onConfirm: (Boolean, Int) -> Unit,
+    showNudgeButtons: Boolean = true,
+    nudgeStep: Int = 1,
     confirmLabel: String = "Apply"
 ) {
     var checked by remember(title, switchChecked) { mutableStateOf(switchChecked) }
     var sliderValue by remember(title, currentValue, valueRange) {
         mutableIntStateOf(currentValue.coerceIn(valueRange.first, valueRange.last))
     }
+    val safeNudgeStep = nudgeStep.coerceAtLeast(1)
     AlertDialog(
         modifier = adaptiveDialogModifier(),
         properties = adaptiveDialogProperties(),
@@ -632,15 +635,50 @@ internal fun SettingsSwitchSliderDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                Slider(
-                    value = sliderValue.toFloat(),
-                    onValueChange = { raw ->
-                        sliderValue = raw.roundToInt().coerceIn(valueRange.first, valueRange.last)
-                    },
-                    valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
-                    steps = (valueRange.last - valueRange.first - 1).coerceAtLeast(0),
-                    enabled = !checked
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (showNudgeButtons) {
+                        OutlinedButton(
+                            onClick = {
+                                sliderValue = (sliderValue - safeNudgeStep).coerceIn(valueRange.first, valueRange.last)
+                            },
+                            enabled = !checked && sliderValue > valueRange.first,
+                            modifier = Modifier.width(56.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Remove,
+                                contentDescription = "Decrease"
+                            )
+                        }
+                    }
+                    Slider(
+                        value = sliderValue.toFloat(),
+                        onValueChange = { raw ->
+                            sliderValue = raw.roundToInt().coerceIn(valueRange.first, valueRange.last)
+                        },
+                        valueRange = valueRange.first.toFloat()..valueRange.last.toFloat(),
+                        steps = (valueRange.last - valueRange.first - 1).coerceAtLeast(0),
+                        enabled = !checked,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (showNudgeButtons) {
+                        OutlinedButton(
+                            onClick = {
+                                sliderValue = (sliderValue + safeNudgeStep).coerceIn(valueRange.first, valueRange.last)
+                            },
+                            enabled = !checked && sliderValue < valueRange.last,
+                            modifier = Modifier.width(56.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Increase"
+                            )
+                        }
+                    }
+                }
             }
         },
         dismissButton = {

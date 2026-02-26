@@ -1516,6 +1516,9 @@ private fun AppNavigation(
     val stopAndEmptyTrack: () -> Unit = {
         trackLoadDelegates.cancelPendingTrackSelection()
         deferredPlaybackSeek = null
+        remoteLoadJob?.cancel()
+        remoteLoadJob = null
+        remoteLoadUiState = null
         stopAndEmptyTrackBase()
     }
     val activeCoreNameForUi = lastUsedCoreName

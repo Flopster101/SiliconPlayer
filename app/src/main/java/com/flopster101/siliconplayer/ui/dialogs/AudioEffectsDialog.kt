@@ -1,15 +1,24 @@
 package com.flopster101.siliconplayer.ui.dialogs
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -299,6 +308,7 @@ private fun DspTabContent(
     onDspBitCrushBitsChange: (Int) -> Unit
 ) {
     val scrollState = rememberScrollState()
+    var openMptDspExpanded by rememberSaveable { mutableStateOf(false) }
     var viewportHeightPx by remember { mutableFloatStateOf(0f) }
     val thumbFraction = remember(scrollState.maxValue, viewportHeightPx) {
         if (viewportHeightPx <= 0f) 1f else {
@@ -332,106 +342,154 @@ private fun DspTabContent(
                     .verticalScroll(scrollState),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = "DSP attribution: About -> Libraries -> OpenMPT DSP effects.",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { openMptDspExpanded = !openMptDspExpanded }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = "OpenMPT DSP effects",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                text = if (openMptDspExpanded) "Tap to collapse" else "Tap to expand",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Icon(
+                            imageVector = if (openMptDspExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null
+                        )
+                    }
+
+                    AnimatedVisibility(
+                        visible = openMptDspExpanded,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "DSP attribution: About -> Libraries -> OpenMPT DSP effects.",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            DspToggleRow(
+                                label = "Bass Expansion",
+                                checked = dspBassEnabled,
+                                onCheckedChange = onDspBassEnabledChange
+                            )
+                            DspIntSliderRow(
+                                label = "Bass Depth",
+                                value = dspBassDepth,
+                                valueRange = 0..4,
+                                onValueChange = onDspBassDepthChange,
+                                enabled = dspBassEnabled
+                            )
+                            DspIntSliderRow(
+                                label = "Bass Range",
+                                value = dspBassRange,
+                                valueRange = 0..4,
+                                onValueChange = onDspBassRangeChange,
+                                enabled = dspBassEnabled
+                            )
+
+                            HorizontalDivider()
+
+                            DspToggleRow(
+                                label = "Surround",
+                                checked = dspSurroundEnabled,
+                                onCheckedChange = onDspSurroundEnabledChange
+                            )
+                            DspIntSliderRow(
+                                label = "Surround Depth",
+                                value = dspSurroundDepth,
+                                valueRange = 1..16,
+                                onValueChange = onDspSurroundDepthChange,
+                                enabled = dspSurroundEnabled
+                            )
+                            DspIntSliderRow(
+                                label = "Surround Delay (ms)",
+                                value = dspSurroundDelayMs,
+                                valueRange = 5..45,
+                                step = 5,
+                                onValueChange = onDspSurroundDelayMsChange,
+                                enabled = dspSurroundEnabled
+                            )
+
+                            HorizontalDivider()
+
+                            DspToggleRow(
+                                label = "Reverb",
+                                checked = dspReverbEnabled,
+                                onCheckedChange = onDspReverbEnabledChange
+                            )
+                            DspIntSliderRow(
+                                label = "Reverb Depth",
+                                value = dspReverbDepth,
+                                valueRange = 1..16,
+                                onValueChange = onDspReverbDepthChange,
+                                enabled = dspReverbEnabled
+                            )
+                            DspReverbPresetDropdownRow(
+                                label = "Reverb Preset",
+                                value = dspReverbPreset,
+                                onValueChange = onDspReverbPresetChange,
+                                enabled = dspReverbEnabled
+                            )
+
+                            HorizontalDivider()
+
+                            DspToggleRow(
+                                label = "Bit Crush",
+                                checked = dspBitCrushEnabled,
+                                onCheckedChange = onDspBitCrushEnabledChange
+                            )
+                            DspIntSliderRow(
+                                label = "Bit Crush Bits",
+                                value = dspBitCrushBits,
+                                valueRange = 1..24,
+                                onValueChange = onDspBitCrushBitsChange,
+                                enabled = dspBitCrushEnabled
+                            )
+                        }
+                    }
                 }
-
-                DspToggleRow(
-                    label = "Bass Expansion",
-                    checked = dspBassEnabled,
-                    onCheckedChange = onDspBassEnabledChange
-                )
-                DspIntSliderRow(
-                    label = "Bass Depth",
-                    value = dspBassDepth,
-                    valueRange = 0..4,
-                    onValueChange = onDspBassDepthChange,
-                    enabled = dspBassEnabled
-                )
-                DspIntSliderRow(
-                    label = "Bass Range",
-                    value = dspBassRange,
-                    valueRange = 0..4,
-                    onValueChange = onDspBassRangeChange,
-                    enabled = dspBassEnabled
-                )
-
-                HorizontalDivider()
-
-                DspToggleRow(
-                    label = "Surround",
-                    checked = dspSurroundEnabled,
-                    onCheckedChange = onDspSurroundEnabledChange
-                )
-                DspIntSliderRow(
-                    label = "Surround Depth",
-                    value = dspSurroundDepth,
-                    valueRange = 1..16,
-                    onValueChange = onDspSurroundDepthChange,
-                    enabled = dspSurroundEnabled
-                )
-                DspIntSliderRow(
-                    label = "Surround Delay (ms)",
-                    value = dspSurroundDelayMs,
-                    valueRange = 5..45,
-                    step = 5,
-                    onValueChange = onDspSurroundDelayMsChange,
-                    enabled = dspSurroundEnabled
-                )
-
-                HorizontalDivider()
-
-                DspToggleRow(
-                    label = "Reverb",
-                    checked = dspReverbEnabled,
-                    onCheckedChange = onDspReverbEnabledChange
-                )
-                DspIntSliderRow(
-                    label = "Reverb Depth",
-                    value = dspReverbDepth,
-                    valueRange = 1..16,
-                    onValueChange = onDspReverbDepthChange,
-                    enabled = dspReverbEnabled
-                )
-                DspReverbPresetDropdownRow(
-                    label = "Reverb Preset",
-                    value = dspReverbPreset,
-                    onValueChange = onDspReverbPresetChange,
-                    enabled = dspReverbEnabled
-                )
-
-                HorizontalDivider()
-
-                DspToggleRow(
-                    label = "Bit Crush",
-                    checked = dspBitCrushEnabled,
-                    onCheckedChange = onDspBitCrushEnabledChange
-                )
-                DspIntSliderRow(
-                    label = "Bit Crush Bits",
-                    value = dspBitCrushBits,
-                    valueRange = 1..24,
-                    onValueChange = onDspBitCrushBitsChange,
-                    enabled = dspBitCrushEnabled
-                )
                 Text(
                     text = "Core: ${currentCoreName ?: "(none)"}",
                     style = MaterialTheme.typography.labelMedium,

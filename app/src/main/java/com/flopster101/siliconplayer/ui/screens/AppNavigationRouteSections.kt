@@ -116,7 +116,7 @@ internal fun AppNavigationBrowserRouteSection(
     playingFile: File?,
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
     onExitBrowser: () -> Unit,
-    onBrowserLocationChanged: (String?, String?) -> Unit,
+    onBrowserLocationChanged: (BrowserLaunchState) -> Unit,
     onFileSelected: (File, String?) -> Unit,
     onOpenRemoteSource: (String) -> Unit,
     onOpenRemoteSourceAsCached: (String) -> Unit,

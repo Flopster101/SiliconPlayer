@@ -84,9 +84,10 @@ import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.DecoderArtworkHint
+import com.flopster101.siliconplayer.BrowserLaunchState
 import com.flopster101.siliconplayer.joinSmbRelativePath
-import com.flopster101.siliconplayer.listSmbDirectoryEntries
-import com.flopster101.siliconplayer.listSmbHostShareEntries
+import com.flopster101.siliconplayer.SmbBrowserListLocation
+import com.flopster101.siliconplayer.SmbBrowserListingAdapter
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.normalizeSmbPathForShare
 import com.flopster101.siliconplayer.resolveSmbAuthenticationFailureReason
@@ -99,7 +100,7 @@ import com.flopster101.siliconplayer.R
 import com.flopster101.siliconplayer.SmbRemoteExportRequest
 import com.flopster101.siliconplayer.RemoteExportCancelledException
 import com.flopster101.siliconplayer.data.ensureArchiveMounted
-import com.flopster101.siliconplayer.data.registerArchiveBrowserReturnTarget
+import com.flopster101.siliconplayer.data.buildArchiveDirectoryPath
 import com.flopster101.siliconplayer.prepareRemoteExportFile
 import com.flopster101.siliconplayer.session.exportFilesToTree
 import com.flopster101.siliconplayer.session.ExportConflictDecision
@@ -142,10 +143,11 @@ internal fun SmbFileBrowserScreen(
     onOpenRemoteSourceAsCached: (String) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
     sourceNodeId: Long?,
-    onBrowserLocationChanged: (String) -> Unit
+    onBrowserLocationChanged: (BrowserLaunchState) -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val smbListingAdapter = remember { SmbBrowserListingAdapter() }
     val allowCredentialRemember = sourceNodeId != null
     val launchShare = remember(sourceSpec.share) { sourceSpec.share.trim() }
     val canBrowseHostShares = allowHostShareNavigation || launchShare.isBlank()
@@ -253,21 +255,25 @@ internal fun SmbFileBrowserScreen(
             )
         }
         listJob = coroutineScope.launch {
-            val result = if (share.isBlank()) {
-                listSmbHostShareEntries(credentialsSpec)
-            } else {
-                listSmbDirectoryEntries(
-                    credentialsSpec.copy(share = share),
-                    pathInsideShare
+            val result = smbListingAdapter.list(
+                location = SmbBrowserListLocation(
+                    spec = credentialsSpec.copy(share = share),
+                    pathInsideShare = pathInsideShare,
+                    listHostShares = share.isBlank()
                 )
-            }
+            ).map { it.entries }
             if (requestSequence != loadRequestSequence) {
                 return@launch
             }
             result.onSuccess { resolved ->
                 entries = resolved
                 errorMessage = null
-                onBrowserLocationChanged(currentDirectorySourceId())
+                onBrowserLocationChanged(
+                    BrowserLaunchState(
+                        directoryPath = currentDirectorySourceId(),
+                        smbSourceNodeId = sourceNodeId
+                    )
+                )
                 if (share.isBlank()) {
                     RemotePlayableSourceIdsHolder.current = emptyList()
                 } else {
@@ -540,19 +546,13 @@ internal fun SmbFileBrowserScreen(
             val mountDirectory = withContext(Dispatchers.IO) {
                 ensureArchiveMounted(context, cachedItem.sourceFile)
             }
-            val returnTarget = buildSmbRequestUri(
-                credentialsSpec.copy(
-                    share = currentShare,
-                    path = effectivePath()
+            exportDownloadProgressState = null
+            onBrowserLocationChanged(
+                BrowserLaunchState(
+                    directoryPath = buildArchiveDirectoryPath(sourceId),
+                    smbSourceNodeId = sourceNodeId
                 )
             )
-            registerArchiveBrowserReturnTarget(
-                mountRootPath = mountDirectory.absolutePath,
-                returnTargetPath = returnTarget,
-                logicalArchivePath = sourceId
-            )
-            exportDownloadProgressState = null
-            onOpenRemoteSource(mountDirectory.absolutePath)
         }
     }
 

@@ -197,7 +197,7 @@ internal fun applyManualInputSelectionAction(
     expandOverride: Boolean?,
     storageDescriptors: List<StorageDescriptor>,
     openPlayerOnTrackSelect: Boolean,
-    onBrowserLaunchTargetChanged: (String?, String?) -> Unit,
+    onBrowserLaunchTargetChanged: (BrowserLaunchState) -> Unit,
     onCurrentViewChanged: (MainView) -> Unit,
     onAddRecentFolder: (String, String?, Long?) -> Unit,
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
@@ -225,7 +225,12 @@ internal fun applyManualInputSelectionAction(
 
         is ManualInputAction.OpenDirectory -> {
             val launchLocationId = action.locationId ?: "/"
-            onBrowserLaunchTargetChanged(launchLocationId, action.directoryPath)
+            onBrowserLaunchTargetChanged(
+                BrowserLaunchState(
+                    locationId = launchLocationId,
+                    directoryPath = action.directoryPath
+                )
+            )
             onCurrentViewChanged(MainView.Browser)
             onAddRecentFolder(action.directoryPath, launchLocationId, null)
             return

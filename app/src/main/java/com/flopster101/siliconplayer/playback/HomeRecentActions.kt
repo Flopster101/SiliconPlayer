@@ -7,8 +7,10 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import com.flopster101.siliconplayer.data.buildArchiveDirectoryPath
 import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
 import com.flopster101.siliconplayer.data.parseArchiveSourceId
+import com.flopster101.siliconplayer.data.resolveArchiveContainerParentLocation
 import java.io.File
 import java.util.Locale
 
@@ -183,16 +185,17 @@ private fun resolveBrowserFolderForRecentSource(
             .replace('\\', '/')
             .substringBeforeLast('/', "")
             .trim('/')
-        val logicalDirectory = if (parentInArchive.isBlank()) {
-            archiveSource.archivePath
-        } else {
-            "${archiveSource.archivePath}/$parentInArchive"
-        }
+        val logicalDirectory = buildArchiveDirectoryPath(
+            archivePath = archiveSource.archivePath,
+            inArchiveDirectoryPath = parentInArchive.ifBlank { null }
+        )
+        val archiveSmb = parseSmbSourceSpecFromInput(archiveSource.archivePath)
+        val archiveHttp = parseHttpSourceSpecFromInput(archiveSource.archivePath)
         return BrowserOpenTarget(
             locationId = entry.locationId,
             directoryPath = logicalDirectory,
-            smbSourceNodeId = null,
-            httpSourceNodeId = null
+            smbSourceNodeId = if (archiveSmb != null) entry.sourceNodeId else null,
+            httpSourceNodeId = if (archiveHttp != null) entry.sourceNodeId else null
         )
     }
 
@@ -267,12 +270,14 @@ private fun resolveBrowserParentForRecentFolder(
 ): BrowserOpenTarget? {
     parseArchiveLogicalPath(entry.path)?.let { (archivePath, entryPath) ->
         if (entryPath.isNullOrBlank()) {
-            val archiveParent = File(archivePath).parentFile?.absolutePath ?: return null
+            val archiveParent = resolveArchiveContainerParentLocation(archivePath) ?: return null
+            val archiveSmb = parseSmbSourceSpecFromInput(archivePath)
+            val archiveHttp = parseHttpSourceSpecFromInput(archivePath)
             return BrowserOpenTarget(
                 locationId = entry.locationId,
                 directoryPath = archiveParent,
-                smbSourceNodeId = null,
-                httpSourceNodeId = null
+                smbSourceNodeId = if (archiveSmb != null) entry.sourceNodeId else null,
+                httpSourceNodeId = if (archiveHttp != null) entry.sourceNodeId else null
             )
         }
         val parentInArchive = entryPath
@@ -280,16 +285,17 @@ private fun resolveBrowserParentForRecentFolder(
             .trim('/')
             .substringBeforeLast('/', "")
             .trim('/')
-        val logicalParent = if (parentInArchive.isBlank()) {
-            archivePath
-        } else {
-            "$archivePath/$parentInArchive"
-        }
+        val logicalParent = buildArchiveDirectoryPath(
+            archivePath = archivePath,
+            inArchiveDirectoryPath = parentInArchive.ifBlank { null }
+        )
+        val archiveSmb = parseSmbSourceSpecFromInput(archivePath)
+        val archiveHttp = parseHttpSourceSpecFromInput(archivePath)
         return BrowserOpenTarget(
             locationId = entry.locationId,
             directoryPath = logicalParent,
-            smbSourceNodeId = null,
-            httpSourceNodeId = null
+            smbSourceNodeId = if (archiveSmb != null) entry.sourceNodeId else null,
+            httpSourceNodeId = if (archiveHttp != null) entry.sourceNodeId else null
         )
     }
 

@@ -41,12 +41,29 @@ internal fun normalizeSourceIdentity(path: String?): String? {
         }
         "archive" -> {
             val parsedArchive = parseArchiveSourceId(trimmed) ?: return trimmed
-            val canonicalArchivePath = try {
-                File(parsedArchive.archivePath).canonicalFile.absolutePath
-            } catch (_: Exception) {
-                File(parsedArchive.archivePath).absoluteFile.normalize().path
+            val normalizedArchivePath = when (
+                Uri.parse(parsedArchive.archivePath).scheme?.lowercase(Locale.ROOT)
+            ) {
+                "http", "https", "smb" -> normalizeSourceIdentity(parsedArchive.archivePath)
+                    ?: parsedArchive.archivePath
+                "file" -> {
+                    val uriPath = Uri.parse(parsedArchive.archivePath).path
+                    val localPath = uriPath?.takeIf { it.isNotBlank() } ?: parsedArchive.archivePath
+                    try {
+                        File(localPath).canonicalFile.absolutePath
+                    } catch (_: Exception) {
+                        File(localPath).absoluteFile.normalize().path
+                    }
+                }
+                else -> {
+                    try {
+                        File(parsedArchive.archivePath).canonicalFile.absolutePath
+                    } catch (_: Exception) {
+                        File(parsedArchive.archivePath).absoluteFile.normalize().path
+                    }
+                }
             }
-            buildArchiveSourceId(canonicalArchivePath, parsedArchive.entryPath)
+            buildArchiveSourceId(normalizedArchivePath, parsedArchive.entryPath)
         }
         "file" -> {
             val localPath = uri.path?.takeIf { it.isNotBlank() } ?: return null

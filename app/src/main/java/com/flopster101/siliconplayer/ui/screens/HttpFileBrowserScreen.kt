@@ -90,9 +90,11 @@ import com.flopster101.siliconplayer.buildHttpSourceId
 import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import com.flopster101.siliconplayer.httpAuthenticationFailureMessage
+import com.flopster101.siliconplayer.HttpBrowserListLocation
+import com.flopster101.siliconplayer.HttpBrowserListingAdapter
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.DecoderArtworkHint
-import com.flopster101.siliconplayer.listHttpDirectoryEntries
+import com.flopster101.siliconplayer.BrowserLaunchState
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.normalizeHttpDirectoryPath
 import com.flopster101.siliconplayer.normalizeHttpPath
@@ -106,7 +108,7 @@ import com.flopster101.siliconplayer.adaptiveDialogProperties
 import com.flopster101.siliconplayer.RemotePlayableSourceIdsHolder
 import com.flopster101.siliconplayer.R
 import com.flopster101.siliconplayer.data.ensureArchiveMounted
-import com.flopster101.siliconplayer.data.registerArchiveBrowserReturnTarget
+import com.flopster101.siliconplayer.data.buildArchiveDirectoryPath
 import com.flopster101.siliconplayer.session.exportFilesToTree
 import com.flopster101.siliconplayer.session.ExportConflictDecision
 import com.flopster101.siliconplayer.session.ExportNameConflict
@@ -155,10 +157,11 @@ internal fun HttpFileBrowserScreen(
     onOpenRemoteSourceAsCached: (String) -> Unit,
     onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit,
     sourceNodeId: Long?,
-    onBrowserLocationChanged: (String) -> Unit
+    onBrowserLocationChanged: (BrowserLaunchState) -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val httpListingAdapter = remember { HttpBrowserListingAdapter() }
     val allowCredentialRemember = sourceNodeId != null
     var currentSpec by remember(sourceSpec) { mutableStateOf(sourceSpec) }
     var entries by remember(sourceSpec) { mutableStateOf<List<HttpBrowserEntry>>(emptyList()) }
@@ -265,7 +268,13 @@ internal fun HttpFileBrowserScreen(
         loadingPartialEntries = emptyList()
         loadingLoadedCount = 0
         loadCancelState = null
-        onBrowserLocationChanged(currentDirectorySourceId())
+        onBrowserLocationChanged(
+            BrowserLaunchState(
+                directoryPath = currentDirectorySourceId(),
+                httpSourceNodeId = sourceNodeId,
+                httpRootPath = browserRootPath
+            )
+        )
     }
 
     fun loadCurrentDirectory(cancelState: HttpLoadingCancelState?) {
@@ -285,10 +294,10 @@ internal fun HttpFileBrowserScreen(
         appendLoadingLog("Listing directory page")
         listJob = coroutineScope.launch {
             var lastLoggedCount = 0
-            val result = listHttpDirectoryEntries(
-                spec = requestSpec,
+            val result = httpListingAdapter.list(
+                location = HttpBrowserListLocation(requestSpec),
                 onProgress = { loadedCount, partialEntries ->
-                    if (requestSequence != loadRequestSequence) return@listHttpDirectoryEntries
+                    if (requestSequence != loadRequestSequence) return@list
                     loadingLoadedCount = loadedCount
                     loadingPartialEntries = partialEntries
                     if (loadedCount > 0 && (loadedCount - lastLoggedCount) >= 50) {
@@ -301,7 +310,7 @@ internal fun HttpFileBrowserScreen(
                 return@launch
             }
             result.onSuccess { listing ->
-                currentSpec = listing.resolvedDirectorySpec.copy(
+                currentSpec = listing.metadata.copy(
                     username = sessionUsername,
                     password = sessionPassword
                 )
@@ -309,7 +318,13 @@ internal fun HttpFileBrowserScreen(
                 updatePlayableRemoteSources(listing.entries)
                 directoryEntriesCache[directoryCacheKeyFor(currentSpec)] = listing.entries
                 errorMessage = null
-                onBrowserLocationChanged(currentDirectorySourceId())
+                onBrowserLocationChanged(
+                    BrowserLaunchState(
+                        directoryPath = currentDirectorySourceId(),
+                        httpSourceNodeId = sourceNodeId,
+                        httpRootPath = browserRootPath
+                    )
+                )
                 val folders = listing.entries.count { it.isDirectory }
                 val files = listing.entries.size - folders
                 appendLoadingLog("Found ${listing.entries.size} entries")
@@ -383,7 +398,13 @@ internal fun HttpFileBrowserScreen(
             loadingPartialEntries = emptyList()
             loadingLoadedCount = 0
             loadCancelState = null
-            onBrowserLocationChanged(currentDirectorySourceId())
+            onBrowserLocationChanged(
+                BrowserLaunchState(
+                    directoryPath = currentDirectorySourceId(),
+                    httpSourceNodeId = sourceNodeId,
+                    httpRootPath = browserRootPath
+                )
+            )
             return
         }
         loadCurrentDirectory(cancelState)
@@ -633,19 +654,14 @@ internal fun HttpFileBrowserScreen(
             val mountDirectory = withContext(Dispatchers.IO) {
                 ensureArchiveMounted(context, cachedItem.sourceFile)
             }
-            val returnTarget = buildHttpRequestUri(
-                currentSpec.copy(
-                    username = sessionUsername,
-                    password = sessionPassword
+            exportDownloadProgressState = null
+            onBrowserLocationChanged(
+                BrowserLaunchState(
+                    directoryPath = buildArchiveDirectoryPath(sourceId),
+                    httpSourceNodeId = sourceNodeId,
+                    httpRootPath = browserRootPath
                 )
             )
-            registerArchiveBrowserReturnTarget(
-                mountRootPath = mountDirectory.absolutePath,
-                returnTargetPath = returnTarget,
-                logicalArchivePath = sourceId
-            )
-            exportDownloadProgressState = null
-            onOpenRemoteSource(mountDirectory.absolutePath)
         }
     }
 

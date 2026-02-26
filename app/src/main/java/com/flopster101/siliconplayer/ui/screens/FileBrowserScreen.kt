@@ -69,17 +69,23 @@ import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.extensionCandidatesForName
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.DecoderArtworkHint
+import com.flopster101.siliconplayer.BrowserLaunchState
+import com.flopster101.siliconplayer.BrowserLocationModel
 import com.flopster101.siliconplayer.R
 import com.flopster101.siliconplayer.rememberDialogLazyListScrollbarAlpha
 import com.flopster101.siliconplayer.resolveDecoderArtworkHintForFileName
+import com.flopster101.siliconplayer.resolveBrowserLocationModel
+import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
+import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
 import com.flopster101.siliconplayer.data.buildArchiveSourceId
-import com.flopster101.siliconplayer.data.resolveArchiveBrowserLogicalArchivePath
-import com.flopster101.siliconplayer.data.resolveArchiveBrowserReturnTarget
+import com.flopster101.siliconplayer.data.buildArchiveDirectoryPath
+import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
+import com.flopster101.siliconplayer.LocalBrowserListLocation
+import com.flopster101.siliconplayer.LocalBrowserListingAdapter
 import com.flopster101.siliconplayer.data.FileItem
 import com.flopster101.siliconplayer.data.FileRepository
 import com.flopster101.siliconplayer.data.ensureArchiveMounted
 import com.flopster101.siliconplayer.data.resolveArchiveLogicalDirectory
-import com.flopster101.siliconplayer.data.resolveArchiveMountedPathOrigin
 import com.flopster101.siliconplayer.session.ExportFileItem
 import com.flopster101.siliconplayer.session.ExportConflictDecision
 import com.flopster101.siliconplayer.session.ExportNameConflict
@@ -127,7 +133,10 @@ private data class ArchiveMountInfo(
     val archivePath: String,
     val parentPath: String,
     val returnTargetPath: String? = null,
-    val logicalArchivePath: String? = null
+    val logicalArchivePath: String? = null,
+    val smbSourceNodeId: Long? = null,
+    val httpSourceNodeId: Long? = null,
+    val httpRootPath: String? = null
 )
 
 private const val LOCAL_BROWSER_SHOW_INTERMEDIARY_LOADING_PAGE = false
@@ -138,15 +147,18 @@ private const val LOCAL_BROWSER_SHOW_INTERMEDIARY_LOADING_PAGE = false
     ExperimentalFoundationApi::class
 )
 @Composable
-fun FileBrowserScreen(
+internal fun FileBrowserScreen(
     repository: FileRepository,
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint> = emptyMap(),
     initialLocationId: String? = null,
     initialDirectoryPath: String? = null,
+    initialSmbSourceNodeId: Long? = null,
+    initialHttpSourceNodeId: Long? = null,
+    initialHttpRootPath: String? = null,
     restoreFocusedItemRequestToken: Int = 0,
     onFileSelected: (File, String?) -> Unit,
     onVisiblePlayableFilesChanged: (List<File>) -> Unit = {},
-    onBrowserLocationChanged: (String?, String?) -> Unit = { _, _ -> },
+    onBrowserLocationChanged: (BrowserLaunchState) -> Unit = {},
     bottomContentPadding: Dp = 0.dp,
     showParentDirectoryEntry: Boolean = true,
     showFileIconChipBackground: Boolean = true,
@@ -157,6 +169,7 @@ fun FileBrowserScreen(
     playingFile: File? = null
 ) {
     val context = LocalContext.current
+    val localListingAdapter = remember(repository) { LocalBrowserListingAdapter(repository) }
     var storageLocationsRefreshToken by remember { mutableIntStateOf(0) }
     val storageLocations = remember(context, storageLocationsRefreshToken) { detectStorageLocations(context) }
     var selectedLocationId by remember { mutableStateOf<String?>(null) }
@@ -246,7 +259,10 @@ fun FileBrowserScreen(
                 withFrameNanos { }
                 delay(16)
                 val loadedFiles = withContext(Dispatchers.IO) {
-                    val baseFiles = repository.getFiles(directory)
+                    val baseFiles = localListingAdapter
+                        .list(LocalBrowserListLocation(directory))
+                        .getOrThrow()
+                        .entries
                     if (mountedForTarget == null) {
                         baseFiles
                     } else {
@@ -353,7 +369,7 @@ fun FileBrowserScreen(
         fileList.clear()
         loadingLogLines.clear()
         onVisiblePlayableFilesChanged(emptyList())
-        onBrowserLocationChanged(null, null)
+        onBrowserLocationChanged(BrowserLaunchState())
     }
 
     fun openLocation(location: StorageLocation) {
@@ -362,7 +378,12 @@ fun FileBrowserScreen(
         selectedLocationId = location.id
         currentDirectory = location.directory
         loadDirectoryAsync(location.directory)
-        onBrowserLocationChanged(location.id, location.directory.absolutePath)
+        onBrowserLocationChanged(
+            BrowserLaunchState(
+                locationId = location.id,
+                directoryPath = location.directory.absolutePath
+            )
+        )
     }
 
     fun normalizePathForArchiveMountLookup(path: String): String {
@@ -383,26 +404,6 @@ fun FileBrowserScreen(
             ?.toPair()
     }
 
-    fun registerArchiveMountInfoFromPath(path: String) {
-        val origin = resolveArchiveMountedPathOrigin(File(path)) ?: return
-        val mountRootKey = normalizePathForArchiveMountLookup(origin.mountRootPath)
-        val resolvedReturnTarget = resolveArchiveBrowserReturnTarget(origin.mountRootPath)
-        val resolvedLogicalArchivePath = resolveArchiveBrowserLogicalArchivePath(origin.mountRootPath)
-        archiveMountRoots[mountRootKey]?.let { existing ->
-            archiveMountRoots[mountRootKey] = existing.copy(
-                returnTargetPath = existing.returnTargetPath ?: resolvedReturnTarget,
-                logicalArchivePath = existing.logicalArchivePath ?: resolvedLogicalArchivePath
-            )
-            return
-        }
-        archiveMountRoots[mountRootKey] = ArchiveMountInfo(
-            archivePath = origin.archivePath,
-            parentPath = origin.parentPath,
-            returnTargetPath = resolvedReturnTarget,
-            logicalArchivePath = resolvedLogicalArchivePath
-        )
-    }
-
     fun resolveLogicalArchivePath(directory: File?): String? {
         val dir = directory ?: return null
         val mounted = findArchiveMount(dir.absolutePath) ?: return null
@@ -410,10 +411,10 @@ fun FileBrowserScreen(
         val archivePath = mounted.second.logicalArchivePath ?: mounted.second.archivePath
         val normalizedDirectoryPath = normalizePathForArchiveMountLookup(dir.absolutePath)
         if (normalizedDirectoryPath == mountRoot) {
-            return archivePath
+            return buildArchiveDirectoryPath(archivePath)
         }
         val relative = normalizedDirectoryPath.removePrefix("$mountRoot/").replace('\\', '/').trimStart('/')
-        return if (relative.isBlank()) archivePath else "$archivePath/$relative"
+        return buildArchiveDirectoryPath(archivePath, relative)
     }
 
     fun resolveArchiveRelativePath(absolutePath: String, mountRoot: String): String? {
@@ -423,11 +424,37 @@ fun FileBrowserScreen(
     }
 
     fun emitBrowserLocationChange(directory: File) {
-        onBrowserLocationChanged(selectedLocationId, directory.absolutePath)
+        val mounted = findArchiveMount(directory.absolutePath)?.second
+        val logicalArchivePath = resolveLogicalArchivePath(directory)
+        val archiveOriginPath = logicalArchivePath?.let { path -> parseArchiveLogicalPath(path)?.first }
+        val isArchiveSmb = archiveOriginPath != null &&
+            parseSmbSourceSpecFromInput(archiveOriginPath) != null
+        val isArchiveHttp = archiveOriginPath != null &&
+            parseHttpSourceSpecFromInput(archiveOriginPath) != null
+        onBrowserLocationChanged(
+            BrowserLaunchState(
+                locationId = selectedLocationId,
+                directoryPath = logicalArchivePath ?: directory.absolutePath,
+                smbSourceNodeId = if (isArchiveSmb) {
+                    mounted?.smbSourceNodeId ?: initialSmbSourceNodeId
+                } else {
+                    null
+                },
+                httpSourceNodeId = if (isArchiveHttp) {
+                    mounted?.httpSourceNodeId ?: initialHttpSourceNodeId
+                } else {
+                    null
+                },
+                httpRootPath = if (isArchiveHttp) {
+                    mounted?.httpRootPath ?: initialHttpRootPath
+                } else {
+                    null
+                }
+            )
+        )
     }
 
     fun navigateTo(directory: File) {
-        registerArchiveMountInfoFromPath(directory.absolutePath)
         launchAutoScrollTargetKey = null
         val root = selectedLocation?.directory
         val previousDepth = relativeDepth(currentDirectory, root)
@@ -444,9 +471,11 @@ fun FileBrowserScreen(
 
     fun openArchive(item: FileItem) {
         val archiveFile = item.file
-        if (!item.isArchive || currentDirectory == null) {
+        val activeDirectory = currentDirectory
+        if (!item.isArchive || activeDirectory == null) {
             return
         }
+        val parentMountInfo = findArchiveMount(activeDirectory.absolutePath)?.second
         directoryLoadJob?.cancel()
         isLoadingDirectory = true
         directoryLoadJob = coroutineScope.launch {
@@ -460,8 +489,17 @@ fun FileBrowserScreen(
                     archiveMountRoots[mountRootKey] = ArchiveMountInfo(
                         archivePath = archiveFile.absolutePath,
                         parentPath = parentPath,
-                        returnTargetPath = existing?.returnTargetPath,
-                        logicalArchivePath = existing?.logicalArchivePath
+                        returnTargetPath = existing?.returnTargetPath ?: parentPath,
+                        logicalArchivePath = existing?.logicalArchivePath ?: archiveFile.absolutePath,
+                        smbSourceNodeId = existing?.smbSourceNodeId
+                            ?: parentMountInfo?.smbSourceNodeId
+                            ?: initialSmbSourceNodeId,
+                        httpSourceNodeId = existing?.httpSourceNodeId
+                            ?: parentMountInfo?.httpSourceNodeId
+                            ?: initialHttpSourceNodeId,
+                        httpRootPath = existing?.httpRootPath
+                            ?: parentMountInfo?.httpRootPath
+                            ?: initialHttpRootPath
                     )
                 }
                 navigateTo(mountDirectory)
@@ -483,21 +521,51 @@ fun FileBrowserScreen(
             if (normalizedDirectoryPath != mountRoot) {
                 val archiveParent = directory.parentFile
                 if (archiveParent != null && archiveParent.exists() && archiveParent.isDirectory) {
-                browserNavDirection = BrowserPageNavDirection.Backward
-                navigateTo(archiveParent)
-                return
+                    browserNavDirection = BrowserPageNavDirection.Backward
+                    navigateTo(archiveParent)
+                    return
+                }
             }
+            val returnTarget = mountInfo.returnTargetPath ?: mountInfo.parentPath
+            val returnModel = resolveBrowserLocationModel(
+                initialLocationId = null,
+                initialDirectoryPath = returnTarget,
+                initialSmbSourceNodeId = null,
+                initialHttpSourceNodeId = null,
+                initialHttpRootPath = null
+            )
+            when (returnModel) {
+                is BrowserLocationModel.Local -> {
+                    val parentDirectory = returnTarget
+                        ?.let(::File)
+                        ?.takeIf { it.exists() && it.isDirectory }
+                    if (parentDirectory != null) {
+                        browserNavDirection = BrowserPageNavDirection.Backward
+                        navigateTo(parentDirectory)
+                    } else {
+                        openBrowserHome()
+                    }
+                }
+                is BrowserLocationModel.Smb -> {
+                    onBrowserLocationChanged(
+                        BrowserLaunchState(
+                            directoryPath = returnTarget,
+                            smbSourceNodeId = mountInfo.smbSourceNodeId ?: initialSmbSourceNodeId
+                        )
+                    )
+                }
+                is BrowserLocationModel.Http -> {
+                    onBrowserLocationChanged(
+                        BrowserLaunchState(
+                            directoryPath = returnTarget,
+                            httpSourceNodeId = mountInfo.httpSourceNodeId ?: initialHttpSourceNodeId,
+                            httpRootPath = mountInfo.httpRootPath ?: initialHttpRootPath
+                        )
+                    )
+                }
+                else -> openBrowserHome()
             }
-            mountInfo.returnTargetPath?.let { returnTarget ->
-                onBrowserLocationChanged(null, returnTarget)
-                return
-            }
-            val parentDirectory = File(mountInfo.parentPath)
-            if (parentDirectory.exists() && parentDirectory.isDirectory) {
-                browserNavDirection = BrowserPageNavDirection.Backward
-                navigateTo(parentDirectory)
-                return
-            }
+            return
         }
 
         if (directory.absolutePath == root.absolutePath) {
@@ -573,7 +641,7 @@ fun FileBrowserScreen(
         val mounted = findArchiveMount(item.file.absolutePath)
         val sourceIdOverride = if (mounted != null) {
             val mountRoot = mounted.first
-            val archivePath = mounted.second.archivePath
+            val archivePath = mounted.second.logicalArchivePath ?: mounted.second.archivePath
             val relativePath = resolveArchiveRelativePath(item.file.absolutePath, mountRoot)
             if (relativePath.isNullOrBlank()) {
                 null
@@ -672,7 +740,6 @@ fun FileBrowserScreen(
 
         val restoredDirectory = initialDirectoryPath
             ?.let { path ->
-                registerArchiveMountInfoFromPath(path)
                 File(path).takeIf { file ->
                     file.exists() && file.isDirectory && isWithinRoot(file, initialLocation.directory)
                 } ?: withContext(Dispatchers.IO) {
@@ -682,11 +749,18 @@ fun FileBrowserScreen(
                         parent.exists() && parent.isDirectory && isWithinRoot(parent, initialLocation.directory)
                     }
                 }?.also { resolved ->
-                    archiveMountRoots[resolved.mountDirectory.absolutePath] = ArchiveMountInfo(
-                        archivePath = resolved.archivePath,
+                    val archiveLocation = resolved.archivePath
+                    val archiveIsSmb = parseSmbSourceSpecFromInput(archiveLocation) != null
+                    val archiveIsHttp = parseHttpSourceSpecFromInput(archiveLocation) != null
+                    archiveMountRoots[normalizePathForArchiveMountLookup(resolved.mountDirectory.absolutePath)] =
+                        ArchiveMountInfo(
+                        archivePath = archiveLocation,
                         parentPath = resolved.parentPath,
-                        returnTargetPath = resolveArchiveBrowserReturnTarget(resolved.mountDirectory.absolutePath),
-                        logicalArchivePath = resolveArchiveBrowserLogicalArchivePath(resolved.mountDirectory.absolutePath)
+                        returnTargetPath = resolved.parentPath,
+                        logicalArchivePath = archiveLocation,
+                        smbSourceNodeId = if (archiveIsSmb) initialSmbSourceNodeId else null,
+                        httpSourceNodeId = if (archiveIsHttp) initialHttpSourceNodeId else null,
+                        httpRootPath = if (archiveIsHttp) initialHttpRootPath else null
                     )
                 }?.targetDirectory
             } ?: initialLocation.directory
@@ -695,7 +769,34 @@ fun FileBrowserScreen(
         selectedLocationId = initialLocation.id
         currentDirectory = restoredDirectory
         loadDirectoryAsync(restoredDirectory)
-        onBrowserLocationChanged(initialLocation.id, restoredDirectory.absolutePath)
+        val restoredMountInfo = findArchiveMount(restoredDirectory.absolutePath)?.second
+        val restoredLogicalArchivePath = resolveLogicalArchivePath(restoredDirectory)
+        val restoredArchiveOriginPath = restoredLogicalArchivePath?.let { path -> parseArchiveLogicalPath(path)?.first }
+        val restoredIsArchiveSmb = restoredArchiveOriginPath != null &&
+            parseSmbSourceSpecFromInput(restoredArchiveOriginPath) != null
+        val restoredIsArchiveHttp = restoredArchiveOriginPath != null &&
+            parseHttpSourceSpecFromInput(restoredArchiveOriginPath) != null
+        onBrowserLocationChanged(
+            BrowserLaunchState(
+                locationId = initialLocation.id,
+                directoryPath = restoredLogicalArchivePath ?: restoredDirectory.absolutePath,
+                smbSourceNodeId = if (restoredIsArchiveSmb) {
+                    restoredMountInfo?.smbSourceNodeId ?: initialSmbSourceNodeId
+                } else {
+                    null
+                },
+                httpSourceNodeId = if (restoredIsArchiveHttp) {
+                    restoredMountInfo?.httpSourceNodeId ?: initialHttpSourceNodeId
+                } else {
+                    null
+                },
+                httpRootPath = if (restoredIsArchiveHttp) {
+                    restoredMountInfo?.httpRootPath ?: initialHttpRootPath
+                } else {
+                    null
+                }
+            )
+        )
 
         val playingPath = playingFile?.absolutePath
         val playingParentPath = playingFile?.parentFile?.absolutePath

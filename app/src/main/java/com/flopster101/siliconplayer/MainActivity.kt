@@ -140,121 +140,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
 
-private fun isNetworkBrowserDirectoryPath(path: String?): Boolean {
-    val candidate = path?.trim().takeUnless { it.isNullOrBlank() } ?: return false
-    val scheme = Uri.parse(candidate).scheme?.lowercase(Locale.ROOT)
-    return scheme == "smb" || scheme == "http" || scheme == "https"
-}
-
-private fun resolveNetworkBrowserLaunchPathForRestore(
-    directoryPath: String,
-    smbSourceNodeId: Long?,
-    httpSourceNodeId: Long?,
-    networkNodes: List<NetworkNode>
-): String {
-    val smbPathSpec = parseSmbSourceSpecFromInput(directoryPath)
-    if (smbPathSpec != null) {
-        val nodeSpec = smbSourceNodeId
-            ?.let { sourceNodeId ->
-                networkNodes.firstOrNull { it.id == sourceNodeId }
-            }
-            ?.let(::resolveNetworkNodeSmbSpec)
-        return if (nodeSpec != null) {
-            buildSmbRequestUri(
-                smbPathSpec.copy(
-                    username = nodeSpec.username ?: smbPathSpec.username,
-                    password = nodeSpec.password
-                )
-            )
-        } else {
-            directoryPath
-        }
-    }
-
-    val httpPathSpec = parseHttpSourceSpecFromInput(directoryPath) ?: return directoryPath
-    val nodeHttpSpec = httpSourceNodeId
-        ?.let { sourceNodeId ->
-            networkNodes.firstOrNull { it.id == sourceNodeId }
-        }
-        ?.let(::resolveNetworkNodeSourceId)
-        ?.let(::parseHttpSourceSpecFromInput)
-        ?: return directoryPath
-    return buildHttpRequestUri(
-        httpPathSpec.copy(
-            username = nodeHttpSpec.username ?: httpPathSpec.username,
-            password = nodeHttpSpec.password ?: httpPathSpec.password
-        )
-    )
-}
-
-private fun sanitizeNetworkPathForRecents(
-    directoryPath: String
-): String {
-    parseSmbSourceSpecFromInput(directoryPath)?.let { smbSpec ->
-        return buildSmbSourceId(smbSpec)
-    }
-    parseHttpSourceSpecFromInput(directoryPath)?.let { httpSpec ->
-        return buildHttpSourceId(httpSpec)
-    }
-    return directoryPath
-}
-
-private fun handleBrowserLocationChangedAction(
-    locationId: String?,
-    directoryPath: String?,
-    rememberBrowserLocation: Boolean,
-    currentSmbSourceNodeId: Long?,
-    currentHttpSourceNodeId: Long?,
-    networkNodes: List<NetworkNode>,
-    addRecentFolder: (String, String?, Long?) -> Unit,
-    setBrowserLaunchLocationId: (String?) -> Unit,
-    setBrowserLaunchDirectoryPath: (String?) -> Unit,
-    setLastBrowserLocationId: (String?) -> Unit,
-    setLastBrowserDirectoryPath: (String?) -> Unit,
-    persistBrowserLocation: (String?, String?) -> Unit
-) {
-    if (
-        directoryPath != null &&
-        (
-            locationId != null ||
-                parseSmbSourceSpecFromInput(directoryPath) != null ||
-                parseHttpSourceSpecFromInput(directoryPath) != null
-            )
-    ) {
-        val sourceNodeId = when {
-            parseSmbSourceSpecFromInput(directoryPath) != null -> currentSmbSourceNodeId
-            parseHttpSourceSpecFromInput(directoryPath) != null -> currentHttpSourceNodeId
-            else -> null
-        }
-        addRecentFolder(
-            sanitizeNetworkPathForRecents(directoryPath),
-            locationId,
-            sourceNodeId
-        )
-    }
-    if (directoryPath != null) {
-        if (isNetworkBrowserDirectoryPath(directoryPath)) {
-            setBrowserLaunchLocationId(null)
-            setBrowserLaunchDirectoryPath(
-                resolveNetworkBrowserLaunchPathForRestore(
-                    directoryPath = directoryPath,
-                    smbSourceNodeId = currentSmbSourceNodeId,
-                    httpSourceNodeId = currentHttpSourceNodeId,
-                    networkNodes = networkNodes
-                )
-            )
-        } else {
-            setBrowserLaunchLocationId(locationId)
-            setBrowserLaunchDirectoryPath(directoryPath)
-        }
-    }
-    val shouldRememberBrowserLocation = !isNetworkBrowserDirectoryPath(directoryPath)
-    if (!rememberBrowserLocation || !shouldRememberBrowserLocation) return
-    setLastBrowserLocationId(locationId)
-    setLastBrowserDirectoryPath(directoryPath)
-    persistBrowserLocation(locationId, directoryPath)
-}
-
 class MainActivity : ComponentActivity() {
     private var initialFileToOpen: File? = null
     private var initialFileFromExternalIntent: Boolean = false
@@ -493,13 +378,8 @@ private fun AppNavigation(
     var lastUsedCoreName by remember { mutableStateOf<String?>(null) }
     var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var visiblePlayableFiles by remember { mutableStateOf<List<File>>(emptyList()) }
-    var browserLaunchLocationId by remember { mutableStateOf<String?>(null) }
-    var browserLaunchDirectoryPath by remember { mutableStateOf<String?>(null) }
-    var browserLaunchSmbSourceNodeId by remember { mutableStateOf<Long?>(null) }
-    var browserLaunchHttpSourceNodeId by remember { mutableStateOf<Long?>(null) }
-    var browserLaunchHttpRootPath by remember { mutableStateOf<String?>(null) }
+    val browserNavigator = remember { BrowserNavigatorState() }
     var networkCurrentFolderId by remember { mutableStateOf<Long?>(null) }
-    var returnToNetworkOnBrowserExit by remember { mutableStateOf(false) }
     val storageDescriptors = remember(context) { detectStorageDescriptors(context) }
     val appScope = rememberCoroutineScope()
 
@@ -697,40 +577,14 @@ private fun AppNavigation(
             )
         )
     }
-    val persistedBrowserLocationId = remember {
-        prefs.getString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, null)
-    }
-    val persistedBrowserDirectoryPath = remember {
-        prefs.getString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, null)
-    }
-    val persistedBrowserDirectoryPathIsNetwork = remember(persistedBrowserDirectoryPath) {
-        isNetworkBrowserDirectoryPath(persistedBrowserDirectoryPath)
+    val persistedRememberedBrowserState = remember {
+        readRememberedBrowserLaunchState(prefs)
     }
     var lastBrowserLocationId by remember {
-        mutableStateOf(
-            if (persistedBrowserDirectoryPathIsNetwork) {
-                null
-            } else {
-                persistedBrowserLocationId
-            }
-        )
+        mutableStateOf(persistedRememberedBrowserState.locationId)
     }
     var lastBrowserDirectoryPath by remember {
-        mutableStateOf(
-            if (persistedBrowserDirectoryPathIsNetwork) {
-                null
-            } else {
-                persistedBrowserDirectoryPath
-            }
-        )
-    }
-    LaunchedEffect(persistedBrowserDirectoryPathIsNetwork) {
-        if (persistedBrowserDirectoryPathIsNetwork) {
-            prefs.edit()
-                .putString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, null)
-                .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, null)
-                .apply()
-        }
+        mutableStateOf(persistedRememberedBrowserState.directoryPath)
     }
     var keepScreenOn by remember {
         mutableStateOf(
@@ -1364,17 +1218,23 @@ private fun AppNavigation(
         },
         onPlayerExpandedChanged = { isPlayerExpanded = it },
         syncPlaybackService = playbackSessionCoordinator.syncPlaybackService,
-        onBrowserLaunchTargetChanged = { locationId, directoryPath ->
-            browserLaunchLocationId = locationId
-            browserLaunchDirectoryPath = directoryPath
-            val isArchiveMountDirectory = directoryPath
-                ?.replace('\\', '/')
-                ?.contains("/archive_mounts/") == true
-            if (!isArchiveMountDirectory) {
-                browserLaunchSmbSourceNodeId = null
-                browserLaunchHttpSourceNodeId = null
-                browserLaunchHttpRootPath = null
+        onBrowserLaunchTargetChanged = { launchState ->
+            var normalizedLaunchState = launchState
+            val isArchiveLogicalLocation = resolveBrowserLocationModel(
+                initialLocationId = launchState.locationId,
+                initialDirectoryPath = launchState.directoryPath,
+                initialSmbSourceNodeId = launchState.smbSourceNodeId,
+                initialHttpSourceNodeId = launchState.httpSourceNodeId,
+                initialHttpRootPath = launchState.httpRootPath
+            ) is BrowserLocationModel.ArchiveLogical
+            if (!isArchiveLogicalLocation) {
+                normalizedLaunchState = normalizedLaunchState.copy(
+                    smbSourceNodeId = null,
+                    httpSourceNodeId = null,
+                    httpRootPath = null
+                )
             }
+            browserNavigator.updateLaunchState(normalizedLaunchState)
         },
         onCurrentViewChanged = { currentView = it },
         onAddRecentFolder = { path, locationId, sourceNodeId ->
@@ -2649,20 +2509,11 @@ private fun AppNavigation(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        val openBrowser: (
-            locationId: String?,
-            directoryPath: String?,
-            smbSourceNodeId: Long?,
-            httpSourceNodeId: Long?,
-            httpRootPath: String?,
-            returnToNetworkOnExit: Boolean
-        ) -> Unit = { locationId, directoryPath, smbSourceNodeId, httpSourceNodeId, httpRootPath, returnToNetworkOnExit ->
-            browserLaunchLocationId = locationId
-            browserLaunchDirectoryPath = directoryPath
-            browserLaunchSmbSourceNodeId = smbSourceNodeId
-            browserLaunchHttpSourceNodeId = httpSourceNodeId
-            browserLaunchHttpRootPath = httpRootPath
-            returnToNetworkOnBrowserExit = returnToNetworkOnExit
+        val openBrowser: (BrowserOpenRequest) -> Unit = { request ->
+            browserNavigator.open(
+                request = request,
+                keepHistory = currentView == MainView.Browser
+            )
         }
         AppNavigationMainContentHost(
             currentView = currentView,
@@ -2738,46 +2589,42 @@ private fun AppNavigation(
             rememberBrowserLocation = rememberBrowserLocation,
             lastBrowserLocationId = lastBrowserLocationId,
             lastBrowserDirectoryPath = lastBrowserDirectoryPath,
-            browserLaunchLocationId = browserLaunchLocationId,
-            browserLaunchDirectoryPath = browserLaunchDirectoryPath,
-            browserLaunchSmbSourceNodeId = browserLaunchSmbSourceNodeId,
-            browserLaunchHttpSourceNodeId = browserLaunchHttpSourceNodeId,
-            browserLaunchHttpRootPath = browserLaunchHttpRootPath,
+            browserLaunchState = browserNavigator.launchState,
             browserFocusRestoreRequestToken = browserFocusRestoreRequestToken,
             showParentDirectoryEntry = showParentDirectoryEntry,
             showFileIconChipBackground = showFileIconChipBackground,
             onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
-            onBrowserLaunchLocationIdChanged = { browserLaunchLocationId = it },
-            onBrowserLaunchDirectoryPathChanged = { browserLaunchDirectoryPath = it },
-            onBrowserLaunchSmbSourceNodeIdChanged = { browserLaunchSmbSourceNodeId = it },
-            onBrowserLaunchHttpSourceNodeIdChanged = { browserLaunchHttpSourceNodeId = it },
-            onBrowserLaunchHttpRootPathChanged = { browserLaunchHttpRootPath = it },
-            onReturnToNetworkOnBrowserExitChanged = { returnToNetworkOnBrowserExit = it },
-            returnToNetworkOnBrowserExit = returnToNetworkOnBrowserExit,
+            onBrowserLaunchStateChanged = { browserNavigator.updateLaunchState(it) },
+            onReturnToNetworkOnBrowserExitChanged = { browserNavigator.updateReturnTarget(it) },
+            returnToNetworkOnBrowserExit = browserNavigator.returnToNetworkOnExit,
             onLastBrowserLocationIdChanged = { lastBrowserLocationId = it },
             onLastBrowserDirectoryPathChanged = { lastBrowserDirectoryPath = it },
-            onBrowserLocationChanged = { locationId, directoryPath ->
-                handleBrowserLocationChangedAction(
-                    locationId = locationId,
-                    directoryPath = directoryPath,
+            onBrowserLocationChanged = { launchState ->
+                val update = buildBrowserLocationChangedUpdate(
+                    launchState = launchState,
                     rememberBrowserLocation = rememberBrowserLocation,
-                    currentSmbSourceNodeId = browserLaunchSmbSourceNodeId,
-                    currentHttpSourceNodeId = browserLaunchHttpSourceNodeId,
-                    networkNodes = networkNodes,
-                    addRecentFolder = { path, targetLocationId, sourceNodeId ->
-                        runtimeDelegates.addRecentFolder(path, targetLocationId, sourceNodeId)
-                    },
-                    setBrowserLaunchLocationId = { browserLaunchLocationId = it },
-                    setBrowserLaunchDirectoryPath = { browserLaunchDirectoryPath = it },
-                    setLastBrowserLocationId = { lastBrowserLocationId = it },
-                    setLastBrowserDirectoryPath = { lastBrowserDirectoryPath = it },
-                    persistBrowserLocation = { targetLocationId, targetDirectoryPath ->
-                        prefs.edit()
-                            .putString(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID, targetLocationId)
-                            .putString(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH, targetDirectoryPath)
-                            .apply()
-                    }
+                    networkNodes = networkNodes
                 )
+                update.recentFolderUpdate?.let { recent ->
+                    runtimeDelegates.addRecentFolder(recent.path, recent.locationId, recent.sourceNodeId)
+                }
+                browserNavigator.updateLaunchState(
+                    launchState.copy(
+                        locationId = update.launchLocationId,
+                        directoryPath = update.launchDirectoryPath
+                    )
+                )
+                if (update.shouldPersistRememberedLocation) {
+                    lastBrowserLocationId = update.rememberedLocationId
+                    lastBrowserDirectoryPath = update.rememberedDirectoryPath
+                    persistRememberedBrowserLaunchState(
+                        prefs = prefs,
+                        state = BrowserLaunchState(
+                            locationId = update.rememberedLocationId,
+                            directoryPath = update.rememberedDirectoryPath
+                        )
+                    )
+                }
             },
             onRememberSmbCredentials = { sourceNodeId, sourceId, username, password ->
                 rememberNetworkSmbCredentials(sourceNodeId, sourceId, username, password)

@@ -103,6 +103,7 @@ internal fun AppNavigationTrackPreferenceEffects(
         if (!rememberBrowserLocation) {
             onRememberBrowserLocationCleared()
             editor
+                .remove(AppPreferenceKeys.BROWSER_LAST_LOCATION_STATE_JSON)
                 .remove(AppPreferenceKeys.BROWSER_LAST_LOCATION_ID)
                 .remove(AppPreferenceKeys.BROWSER_LAST_DIRECTORY_PATH)
         }

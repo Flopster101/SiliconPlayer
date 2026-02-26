@@ -31,7 +31,7 @@ internal fun AppNavigationHomeContentSection(
     runtimeDelegates: AppNavigationRuntimeDelegates,
     onRecentFoldersChanged: (List<RecentPathEntry>) -> Unit,
     onRecentPlayedFilesChanged: (List<RecentPathEntry>) -> Unit,
-    onOpenBrowser: (locationId: String?, directoryPath: String?, smbSourceNodeId: Long?, httpSourceNodeId: Long?, httpRootPath: String?, returnToNetworkOnExit: Boolean) -> Unit,
+    onOpenBrowser: (BrowserOpenRequest) -> Unit,
     onCurrentViewChanged: (MainView) -> Unit,
     onOpenUrlOrPathDialog: () -> Unit
 ) {
@@ -47,7 +47,7 @@ internal fun AppNavigationHomeContentSection(
         },
         bottomContentPadding = bottomContentPadding,
         onOpenLibrary = {
-            onOpenBrowser(null, null, null, null, null, false)
+            onOpenBrowser(browserOpenRequest())
             onCurrentViewChanged(MainView.Browser)
         },
         onOpenNetwork = {
@@ -63,17 +63,25 @@ internal fun AppNavigationHomeContentSection(
                     preferredSourceNodeId = entry.sourceNodeId
                 )
                 onOpenBrowser(
-                    null,
-                    smbTarget.requestUri,
-                    smbTarget.sourceNodeId,
-                    null,
-                    null,
-                    false
+                    browserOpenRequest(
+                        directoryPath = smbTarget.requestUri,
+                        smbSourceNodeId = smbTarget.sourceNodeId
+                    )
                 )
             } else if (parseHttpSourceSpecFromInput(entry.path) != null) {
-                onOpenBrowser(null, entry.path, null, entry.sourceNodeId, null, false)
+                onOpenBrowser(
+                    browserOpenRequest(
+                        directoryPath = entry.path,
+                        httpSourceNodeId = entry.sourceNodeId
+                    )
+                )
             } else {
-                onOpenBrowser(entry.locationId, entry.path, null, null, null, false)
+                onOpenBrowser(
+                    browserOpenRequest(
+                        locationId = entry.locationId,
+                        directoryPath = entry.path
+                    )
+                )
             }
             onCurrentViewChanged(MainView.Browser)
         },
@@ -130,7 +138,14 @@ internal fun AppNavigationHomeContentSection(
                 networkNodes = networkNodes,
                 onRecentFoldersChanged = onRecentFoldersChanged,
                 onOpenInBrowser = { locationId, directoryPath, smbSourceNodeId, httpSourceNodeId ->
-                    onOpenBrowser(locationId, directoryPath, smbSourceNodeId, httpSourceNodeId, null, false)
+                    onOpenBrowser(
+                        browserOpenRequest(
+                            locationId = locationId,
+                            directoryPath = directoryPath,
+                            smbSourceNodeId = smbSourceNodeId,
+                            httpSourceNodeId = httpSourceNodeId
+                        )
+                    )
                     onCurrentViewChanged(MainView.Browser)
                 }
             )
@@ -149,7 +164,14 @@ internal fun AppNavigationHomeContentSection(
                     runtimeDelegates.resolveShareableFileForRecent(recent)
                 },
                 onOpenInBrowser = { locationId, directoryPath, smbSourceNodeId, httpSourceNodeId ->
-                    onOpenBrowser(locationId, directoryPath, smbSourceNodeId, httpSourceNodeId, null, false)
+                    onOpenBrowser(
+                        browserOpenRequest(
+                            locationId = locationId,
+                            directoryPath = directoryPath,
+                            smbSourceNodeId = smbSourceNodeId,
+                            httpSourceNodeId = httpSourceNodeId
+                        )
+                    )
                     onCurrentViewChanged(MainView.Browser)
                 }
             )
@@ -173,7 +195,7 @@ internal fun AppNavigationNetworkContentSection(
     onNetworkNodesChanged: (List<NetworkNode>) -> Unit,
     onResolveRemoteSourceMetadata: (String, () -> Unit) -> Unit,
     onCancelPendingMetadataBackfill: () -> Unit,
-    onOpenBrowser: (locationId: String?, directoryPath: String?, smbSourceNodeId: Long?, httpSourceNodeId: Long?, httpRootPath: String?, returnToNetworkOnExit: Boolean) -> Unit
+    onOpenBrowser: (BrowserOpenRequest) -> Unit
 ) {
     AppNavigationNetworkRouteSection(
         mainPadding = mainPadding,
@@ -190,11 +212,24 @@ internal fun AppNavigationNetworkContentSection(
             manualOpenDelegates.applyManualInputSelection(rawInput)
         },
         onBrowseSmbSource = { rawInput, sourceNodeId ->
-            onOpenBrowser(null, rawInput, sourceNodeId, null, null, true)
+            onOpenBrowser(
+                browserOpenRequest(
+                    directoryPath = rawInput,
+                    smbSourceNodeId = sourceNodeId,
+                    returnToNetworkOnExit = true
+                )
+            )
             onCurrentViewChanged(MainView.Browser)
         },
         onBrowseHttpSource = { rawInput, sourceNodeId, rootPath ->
-            onOpenBrowser(null, rawInput, null, sourceNodeId, rootPath, true)
+            onOpenBrowser(
+                browserOpenRequest(
+                    directoryPath = rawInput,
+                    httpSourceNodeId = sourceNodeId,
+                    httpRootPath = rootPath,
+                    returnToNetworkOnExit = true
+                )
+            )
             onCurrentViewChanged(MainView.Browser)
         }
     )
@@ -209,11 +244,7 @@ internal fun AppNavigationBrowserContentSection(
     rememberBrowserLocation: Boolean,
     lastBrowserLocationId: String?,
     lastBrowserDirectoryPath: String?,
-    browserLaunchLocationId: String?,
-    browserLaunchDirectoryPath: String?,
-    browserLaunchSmbSourceNodeId: Long?,
-    browserLaunchHttpSourceNodeId: Long?,
-    browserLaunchHttpRootPath: String?,
+    browserLaunchState: BrowserLaunchState,
     browserFocusRestoreRequestToken: Int,
     bottomContentPadding: Dp,
     showParentDirectoryEntry: Boolean,
@@ -228,20 +259,16 @@ internal fun AppNavigationBrowserContentSection(
     runtimeDelegates: AppNavigationRuntimeDelegates,
     onCurrentViewChanged: (MainView) -> Unit,
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
-    onBrowserLaunchLocationIdChanged: (String?) -> Unit,
-    onBrowserLaunchDirectoryPathChanged: (String?) -> Unit,
-    onBrowserLaunchSmbSourceNodeIdChanged: (Long?) -> Unit,
-    onBrowserLaunchHttpSourceNodeIdChanged: (Long?) -> Unit,
-    onBrowserLaunchHttpRootPathChanged: (String?) -> Unit,
+    onBrowserLaunchStateChanged: (BrowserLaunchState) -> Unit,
     onReturnToNetworkOnBrowserExitChanged: (Boolean) -> Unit,
     returnToNetworkOnBrowserExit: Boolean,
     onLastBrowserLocationIdChanged: (String?) -> Unit,
     onLastBrowserDirectoryPathChanged: (String?) -> Unit,
-    onBrowserLocationChanged: (String?, String?) -> Unit,
+    onBrowserLocationChanged: (BrowserLaunchState) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
     onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit
 ) {
-    val initialSmbAllowHostShareNavigation = browserLaunchSmbSourceNodeId
+    val initialSmbAllowHostShareNavigation = browserLaunchState.smbSourceNodeId
         ?.let { sourceNodeId -> networkNodes.firstOrNull { it.id == sourceNodeId } }
         ?.let(::resolveNetworkNodeSmbSpec)
         ?.share
@@ -252,14 +279,14 @@ internal fun AppNavigationBrowserContentSection(
         mainPadding = mainPadding,
         repository = repository,
         decoderExtensionArtworkHints = decoderExtensionArtworkHints,
-        initialLocationId = browserLaunchLocationId
+        initialLocationId = browserLaunchState.locationId
             ?: if (rememberBrowserLocation) lastBrowserLocationId else null,
-        initialDirectoryPath = browserLaunchDirectoryPath
+        initialDirectoryPath = browserLaunchState.directoryPath
             ?: if (rememberBrowserLocation) lastBrowserDirectoryPath else null,
-        initialSmbSourceNodeId = browserLaunchSmbSourceNodeId,
+        initialSmbSourceNodeId = browserLaunchState.smbSourceNodeId,
         initialSmbAllowHostShareNavigation = initialSmbAllowHostShareNavigation,
-        initialHttpSourceNodeId = browserLaunchHttpSourceNodeId,
-        initialHttpRootPath = browserLaunchHttpRootPath,
+        initialHttpSourceNodeId = browserLaunchState.httpSourceNodeId,
+        initialHttpRootPath = browserLaunchState.httpRootPath,
         restoreFocusedItemRequestToken = browserFocusRestoreRequestToken,
         bottomContentPadding = bottomContentPadding,
         showParentDirectoryEntry = showParentDirectoryEntry,
@@ -270,9 +297,7 @@ internal fun AppNavigationBrowserContentSection(
         onExitBrowser = {
             onCurrentViewChanged(if (returnToNetworkOnBrowserExit) MainView.Network else MainView.Home)
             onReturnToNetworkOnBrowserExitChanged(false)
-            onBrowserLaunchSmbSourceNodeIdChanged(null)
-            onBrowserLaunchHttpSourceNodeIdChanged(null)
-            onBrowserLaunchHttpRootPathChanged(null)
+            onBrowserLaunchStateChanged(BrowserLaunchState())
         },
         onBrowserLocationChanged = onBrowserLocationChanged,
         onFileSelected = { file, sourceIdOverride ->
@@ -329,7 +354,7 @@ internal fun AppNavigationMainContentHost(
     runtimeDelegates: AppNavigationRuntimeDelegates,
     onRecentFoldersChanged: (List<RecentPathEntry>) -> Unit,
     onRecentPlayedFilesChanged: (List<RecentPathEntry>) -> Unit,
-    onOpenBrowser: (locationId: String?, directoryPath: String?, smbSourceNodeId: Long?, httpSourceNodeId: Long?, httpRootPath: String?, returnToNetworkOnExit: Boolean) -> Unit,
+    onOpenBrowser: (BrowserOpenRequest) -> Unit,
     onCurrentViewChanged: (MainView) -> Unit,
     onOpenUrlOrPathDialog: () -> Unit,
     isPlayerExpanded: Boolean,
@@ -343,25 +368,17 @@ internal fun AppNavigationMainContentHost(
     rememberBrowserLocation: Boolean,
     lastBrowserLocationId: String?,
     lastBrowserDirectoryPath: String?,
-    browserLaunchLocationId: String?,
-    browserLaunchDirectoryPath: String?,
-    browserLaunchSmbSourceNodeId: Long?,
-    browserLaunchHttpSourceNodeId: Long?,
-    browserLaunchHttpRootPath: String?,
+    browserLaunchState: BrowserLaunchState,
     browserFocusRestoreRequestToken: Int,
     showParentDirectoryEntry: Boolean,
     showFileIconChipBackground: Boolean,
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
-    onBrowserLaunchLocationIdChanged: (String?) -> Unit,
-    onBrowserLaunchDirectoryPathChanged: (String?) -> Unit,
-    onBrowserLaunchSmbSourceNodeIdChanged: (Long?) -> Unit,
-    onBrowserLaunchHttpSourceNodeIdChanged: (Long?) -> Unit,
-    onBrowserLaunchHttpRootPathChanged: (String?) -> Unit,
+    onBrowserLaunchStateChanged: (BrowserLaunchState) -> Unit,
     onReturnToNetworkOnBrowserExitChanged: (Boolean) -> Unit,
     returnToNetworkOnBrowserExit: Boolean,
     onLastBrowserLocationIdChanged: (String?) -> Unit,
     onLastBrowserDirectoryPathChanged: (String?) -> Unit,
-    onBrowserLocationChanged: (String?, String?) -> Unit,
+    onBrowserLocationChanged: (BrowserLaunchState) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
     onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit,
     settingsContent: @Composable (PaddingValues) -> Unit
@@ -428,11 +445,7 @@ internal fun AppNavigationMainContentHost(
                 rememberBrowserLocation = rememberBrowserLocation,
                 lastBrowserLocationId = lastBrowserLocationId,
                 lastBrowserDirectoryPath = lastBrowserDirectoryPath,
-                browserLaunchLocationId = browserLaunchLocationId,
-                browserLaunchDirectoryPath = browserLaunchDirectoryPath,
-                browserLaunchSmbSourceNodeId = browserLaunchSmbSourceNodeId,
-                browserLaunchHttpSourceNodeId = browserLaunchHttpSourceNodeId,
-                browserLaunchHttpRootPath = browserLaunchHttpRootPath,
+                browserLaunchState = browserLaunchState,
                 browserFocusRestoreRequestToken = browserFocusRestoreRequestToken,
                 bottomContentPadding = miniPlayerListInset,
                 showParentDirectoryEntry = showParentDirectoryEntry,
@@ -447,11 +460,7 @@ internal fun AppNavigationMainContentHost(
                 runtimeDelegates = runtimeDelegates,
                 onCurrentViewChanged = onCurrentViewChanged,
                 onVisiblePlayableFilesChanged = onVisiblePlayableFilesChanged,
-                onBrowserLaunchLocationIdChanged = onBrowserLaunchLocationIdChanged,
-                onBrowserLaunchDirectoryPathChanged = onBrowserLaunchDirectoryPathChanged,
-                onBrowserLaunchSmbSourceNodeIdChanged = onBrowserLaunchSmbSourceNodeIdChanged,
-                onBrowserLaunchHttpSourceNodeIdChanged = onBrowserLaunchHttpSourceNodeIdChanged,
-                onBrowserLaunchHttpRootPathChanged = onBrowserLaunchHttpRootPathChanged,
+                onBrowserLaunchStateChanged = onBrowserLaunchStateChanged,
                 onReturnToNetworkOnBrowserExitChanged = onReturnToNetworkOnBrowserExitChanged,
                 returnToNetworkOnBrowserExit = returnToNetworkOnBrowserExit,
                 onLastBrowserLocationIdChanged = onLastBrowserLocationIdChanged,

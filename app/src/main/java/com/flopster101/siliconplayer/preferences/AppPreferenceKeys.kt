@@ -14,6 +14,7 @@ internal object AppPreferenceKeys {
     const val BROWSER_NAME_SORT_MODE = "browser_name_sort_mode"
     const val BROWSER_LAST_LOCATION_ID = "browser_last_location_id"
     const val BROWSER_LAST_DIRECTORY_PATH = "browser_last_directory_path"
+    const val BROWSER_LAST_LOCATION_STATE_JSON = "browser_last_location_state_json"
     const val RESPOND_HEADPHONE_MEDIA_BUTTONS = "respond_headphone_media_buttons"
     const val PAUSE_ON_HEADPHONE_DISCONNECT = "pause_on_headphone_disconnect"
     const val AUDIO_BACKEND_PREFERENCE = "audio_backend_preference"

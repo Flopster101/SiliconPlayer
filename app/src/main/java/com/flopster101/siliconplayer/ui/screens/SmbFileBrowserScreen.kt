@@ -57,6 +57,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -208,6 +209,7 @@ internal fun SmbFileBrowserScreen(
     var exportDownloadProgressState by remember(screenSessionKey) { mutableStateOf<BrowserRemoteExportProgressState?>(null) }
     var exportDownloadJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
     var archiveOpenJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
+    val directoryEntriesCache = remember(screenSessionKey) { mutableStateMapOf<String, List<SmbBrowserEntry>>() }
 
     fun appendLoadingLog(message: String) {
         val lineNumber = loadingLogLines.size + 1
@@ -235,6 +237,56 @@ internal fun SmbFileBrowserScreen(
                 path = effectivePath()
             )
         )
+    }
+
+    fun directoryCacheKeyFor(share: String, subPath: String): String {
+        val normalizedShare = share.trim()
+        val normalizedSubPath = if (normalizedShare.isBlank()) {
+            ""
+        } else {
+            normalizeSmbPathForShare(subPath).orEmpty()
+        }
+        return buildSmbSourceId(
+            credentialsSpec.copy(
+                share = normalizedShare,
+                path = normalizedSubPath.ifBlank { null }
+            )
+        )
+    }
+
+    fun updatePlayableRemoteSources(
+        entriesForNavigation: List<SmbBrowserEntry>,
+        share: String,
+        pathInsideShare: String?
+    ) {
+        if (share.isBlank()) {
+            RemotePlayableSourceIdsHolder.current = emptyList()
+            return
+        }
+        val playableSourceIds = entriesForNavigation
+            .asSequence()
+            .filter { entry ->
+                !entry.isDirectory &&
+                    browserArchiveCapabilityForName(entry.name) == BrowserArchiveCapability.None &&
+                    fileMatchesSupportedExtensions(File(entry.name), supportedExtensions)
+            }
+            .map { entry ->
+                val targetPath = joinSmbRelativePath(pathInsideShare.orEmpty(), entry.name)
+                val targetSpec = buildSmbEntrySourceSpec(
+                    credentialsSpec.copy(share = share),
+                    targetPath
+                )
+                buildSmbRequestUri(targetSpec)
+            }
+            .toList()
+        RemotePlayableSourceIdsHolder.current = playableSourceIds
+    }
+
+    fun abortActiveLoad() {
+        listJob?.cancel()
+        listJob = null
+        loadRequestSequence += 1
+        isLoading = false
     }
 
     fun loadCurrentDirectory() {
@@ -274,33 +326,18 @@ internal fun SmbFileBrowserScreen(
             result.onSuccess { resolved ->
                 entries = resolved
                 errorMessage = null
+                directoryEntriesCache[directoryCacheKeyFor(share, pathInsideShare.orEmpty())] = resolved
                 onBrowserLocationChanged(
                     BrowserLaunchState(
                         directoryPath = currentDirectorySourceId(),
                         smbSourceNodeId = sourceNodeId
                     )
                 )
-                if (share.isBlank()) {
-                    RemotePlayableSourceIdsHolder.current = emptyList()
-                } else {
-                    val playableSourceIds = resolved
-                        .asSequence()
-                        .filter { entry ->
-                            !entry.isDirectory &&
-                                browserArchiveCapabilityForName(entry.name) == BrowserArchiveCapability.None &&
-                                fileMatchesSupportedExtensions(File(entry.name), supportedExtensions)
-                        }
-                        .map { entry ->
-                            val targetPath = joinSmbRelativePath(effectivePath().orEmpty(), entry.name)
-                            val targetSpec = buildSmbEntrySourceSpec(
-                                credentialsSpec.copy(share = share),
-                                targetPath
-                            )
-                            buildSmbRequestUri(targetSpec)
-                        }
-                        .toList()
-                    RemotePlayableSourceIdsHolder.current = playableSourceIds
-                }
+                updatePlayableRemoteSources(
+                    entriesForNavigation = resolved,
+                    share = share,
+                    pathInsideShare = pathInsideShare
+                )
                 val folders = resolved.count { it.isDirectory }
                 val files = resolved.size - folders
                 appendLoadingLog("Found ${resolved.size} entries")
@@ -347,18 +384,62 @@ internal fun SmbFileBrowserScreen(
         }
     }
 
+    fun openDirectory(
+        targetShare: String,
+        targetSubPath: String,
+        navigationDirection: BrowserPageNavDirection = BrowserPageNavDirection.Forward,
+        forceReload: Boolean = false
+    ) {
+        browserNavDirection = navigationDirection
+        val normalizedShare = targetShare.trim()
+        val normalizedSubPath = if (normalizedShare.isBlank()) {
+            ""
+        } else {
+            normalizeSmbPathForShare(targetSubPath).orEmpty()
+        }
+        currentShare = normalizedShare
+        currentSubPath = normalizedSubPath
+
+        val cacheKey = directoryCacheKeyFor(normalizedShare, normalizedSubPath)
+        val cachedEntries = directoryEntriesCache[cacheKey]
+        if (!forceReload && cachedEntries != null) {
+            abortActiveLoad()
+            entries = cachedEntries
+            errorMessage = null
+            loadingLogLines.clear()
+            val pathInsideShare = if (normalizedShare.isBlank()) null else normalizedSubPath.ifBlank { null }
+            updatePlayableRemoteSources(
+                entriesForNavigation = cachedEntries,
+                share = normalizedShare,
+                pathInsideShare = pathInsideShare
+            )
+            onBrowserLocationChanged(
+                BrowserLaunchState(
+                    directoryPath = currentDirectorySourceId(),
+                    smbSourceNodeId = sourceNodeId
+                )
+            )
+            return
+        }
+
+        loadCurrentDirectory()
+    }
+
     fun navigateUpWithinBrowser(): Boolean {
         if (currentSubPath.isNotBlank()) {
-            browserNavDirection = BrowserPageNavDirection.Backward
-            currentSubPath = currentSubPath.substringBeforeLast('/', missingDelimiterValue = "")
-            loadCurrentDirectory()
+            openDirectory(
+                targetShare = currentShare,
+                targetSubPath = currentSubPath.substringBeforeLast('/', missingDelimiterValue = ""),
+                navigationDirection = BrowserPageNavDirection.Backward
+            )
             return true
         }
         if (canBrowseHostShares && currentShare.isNotBlank()) {
-            browserNavDirection = BrowserPageNavDirection.Backward
-            currentShare = ""
-            currentSubPath = ""
-            loadCurrentDirectory()
+            openDirectory(
+                targetShare = "",
+                targetSubPath = "",
+                navigationDirection = BrowserPageNavDirection.Backward
+            )
             return true
         }
         return false
@@ -391,9 +472,12 @@ internal fun SmbFileBrowserScreen(
         authRememberPassword = allowCredentialRemember
         sessionUsername = sourceSpec.username
         sessionPassword = sourceSpec.password
-        browserNavDirection = BrowserPageNavDirection.Neutral
         hasLoadedInitialDirectory = true
-        loadCurrentDirectory()
+        openDirectory(
+            targetShare = desiredShare,
+            targetSubPath = desiredSubPath,
+            navigationDirection = BrowserPageNavDirection.Neutral
+        )
     }
 
     BackHandler(enabled = backHandlingEnabled) {
@@ -980,8 +1064,12 @@ internal fun SmbFileBrowserScreen(
                                     color = MaterialTheme.colorScheme.error
                                 )
                                 TextButton(onClick = {
-                                    browserNavDirection = BrowserPageNavDirection.Neutral
-                                    loadCurrentDirectory()
+                                    openDirectory(
+                                        targetShare = currentShare,
+                                        targetSubPath = currentSubPath,
+                                        navigationDirection = BrowserPageNavDirection.Neutral,
+                                        forceReload = true
+                                    )
                                 }) {
                                     Text("Retry")
                                 }
@@ -1046,14 +1134,17 @@ internal fun SmbFileBrowserScreen(
                                         return@SmbEntryRow
                                     }
                                     if (sharePickerMode) {
-                                        browserNavDirection = BrowserPageNavDirection.Forward
-                                        currentShare = entry.name
-                                        currentSubPath = ""
-                                        loadCurrentDirectory()
+                                        openDirectory(
+                                            targetShare = entry.name,
+                                            targetSubPath = "",
+                                            navigationDirection = BrowserPageNavDirection.Forward
+                                        )
                                     } else if (entry.isDirectory) {
-                                        browserNavDirection = BrowserPageNavDirection.Forward
-                                        currentSubPath = joinSmbRelativePath(currentSubPath, entry.name)
-                                        loadCurrentDirectory()
+                                        openDirectory(
+                                            targetShare = currentShare,
+                                            targetSubPath = joinSmbRelativePath(currentSubPath, entry.name),
+                                            navigationDirection = BrowserPageNavDirection.Forward
+                                        )
                                     } else {
                                         when (browserArchiveCapabilityForName(entry.name)) {
                                             BrowserArchiveCapability.Browsable -> openArchiveEntry(entry)
@@ -1211,7 +1302,12 @@ internal fun SmbFileBrowserScreen(
                         }
                         authDialogVisible = false
                         authDialogPasswordVisible = false
-                        loadCurrentDirectory()
+                        openDirectory(
+                            targetShare = currentShare,
+                            targetSubPath = currentSubPath,
+                            navigationDirection = BrowserPageNavDirection.Neutral,
+                            forceReload = true
+                        )
                     }
                 ) {
                     Text("Continue")

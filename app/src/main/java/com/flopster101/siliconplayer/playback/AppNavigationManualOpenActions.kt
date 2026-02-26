@@ -43,6 +43,8 @@ internal fun primeManualRemoteOpenStateAction(
 internal fun applyManualRemoteOpenSuccessAction(
     result: ManualRemoteOpenSuccess,
     expandOverride: Boolean?,
+    playerExpandedAtLaunch: Boolean,
+    currentPlayerExpanded: Boolean,
     openPlayerOnTrackSelect: Boolean,
     activeRepeatMode: RepeatMode,
     onSelectedFileChanged: (File) -> Unit,
@@ -84,7 +86,11 @@ internal fun applyManualRemoteOpenSuccessAction(
     onStartEngine()
     onIsPlayingChanged(true)
     scheduleRecentTrackMetadataRefresh(result.sourceId, null)
-    onPlayerExpandedChanged(expandOverride ?: openPlayerOnTrackSelect)
+    // If the user changed expanded/collapsed state while the remote load was in progress,
+    // preserve that explicit choice instead of applying the stale launch-time target.
+    if (currentPlayerExpanded == playerExpandedAtLaunch) {
+        onPlayerExpandedChanged(expandOverride ?: openPlayerOnTrackSelect)
+    }
     syncPlaybackService()
 }
 
@@ -101,15 +107,17 @@ internal fun launchManualRemoteSelectionAction(
     expandOverride: Boolean?,
     cacheRoot: File,
     selectedFileAbsolutePathProvider: () -> String?,
+    currentPlayerExpandedProvider: () -> Boolean,
     urlCacheMaxTracks: Int,
     urlCacheMaxBytes: Long,
     onRemoteLoadUiStateChanged: (RemoteLoadUiState?) -> Unit,
     onRemoteLoadJobChanged: (Job?) -> Unit,
     onPrimeManualRemoteOpenState: (ManualSourceResolution) -> Unit,
-    onApplyManualRemoteOpenSuccess: (ManualRemoteOpenSuccess, Boolean?) -> Unit,
+    onApplyManualRemoteOpenSuccess: (ManualRemoteOpenSuccess, Boolean?, Boolean) -> Unit,
     onFailManualOpen: (String) -> Unit
 ) {
     currentJob?.cancel()
+    val playerExpandedAtLaunch = currentPlayerExpandedProvider()
     val launchedJob = appScope.launch {
         try {
             onPrimeManualRemoteOpenState(resolved)
@@ -165,7 +173,11 @@ internal fun launchManualRemoteSelectionAction(
             }
             when (remoteResult) {
                 is ManualRemoteOpenResult.Success -> {
-                    onApplyManualRemoteOpenSuccess(remoteResult.value, expandOverride)
+                    onApplyManualRemoteOpenSuccess(
+                        remoteResult.value,
+                        expandOverride,
+                        playerExpandedAtLaunch
+                    )
                 }
 
                 ManualRemoteOpenResult.DownloadCancelled -> {

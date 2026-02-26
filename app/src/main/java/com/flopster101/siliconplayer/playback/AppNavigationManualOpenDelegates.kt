@@ -12,6 +12,7 @@ internal class AppNavigationManualOpenDelegates(
     private val repository: FileRepository,
     private val storageDescriptors: List<StorageDescriptor>,
     private val openPlayerOnTrackSelectProvider: () -> Boolean,
+    private val isPlayerExpandedProvider: () -> Boolean,
     private val activeRepeatModeProvider: () -> RepeatMode,
     private val selectedFileAbsolutePathProvider: () -> String?,
     private val urlCacheMaxTracksProvider: () -> Int,
@@ -63,11 +64,14 @@ internal class AppNavigationManualOpenDelegates(
 
     fun applyManualRemoteOpenSuccess(
         result: ManualRemoteOpenSuccess,
-        expandOverride: Boolean?
+        expandOverride: Boolean?,
+        playerExpandedAtLaunch: Boolean
     ) {
         applyManualRemoteOpenSuccessAction(
             result = result,
             expandOverride = expandOverride,
+            playerExpandedAtLaunch = playerExpandedAtLaunch,
+            currentPlayerExpanded = isPlayerExpandedProvider(),
             openPlayerOnTrackSelect = openPlayerOnTrackSelectProvider(),
             activeRepeatMode = activeRepeatModeProvider(),
             onSelectedFileChanged = onSelectedFileChanged,
@@ -117,8 +121,9 @@ internal class AppNavigationManualOpenDelegates(
             onRemoteLoadUiStateChanged = onRemoteLoadUiStateChanged,
             onRemoteLoadJobChanged = onRemoteLoadJobChanged,
             onPrimeManualRemoteOpenState = { source -> primeManualRemoteOpenState(source) },
-            onApplyManualRemoteOpenSuccess = { success, expandTarget ->
-                applyManualRemoteOpenSuccess(success, expandTarget)
+            currentPlayerExpandedProvider = isPlayerExpandedProvider,
+            onApplyManualRemoteOpenSuccess = { success, expandTarget, playerExpandedAtLaunch ->
+                applyManualRemoteOpenSuccess(success, expandTarget, playerExpandedAtLaunch)
             },
             onFailManualOpen = { failReason -> failManualOpen(failReason) }
         )

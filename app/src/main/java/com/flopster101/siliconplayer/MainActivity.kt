@@ -1194,6 +1194,7 @@ private fun AppNavigation(
         repository = repository,
         storageDescriptors = storageDescriptors,
         openPlayerOnTrackSelectProvider = { openPlayerOnTrackSelect },
+        isPlayerExpandedProvider = { isPlayerExpanded },
         activeRepeatModeProvider = { activeRepeatMode },
         selectedFileAbsolutePathProvider = { selectedFile?.absolutePath },
         urlCacheMaxTracksProvider = { urlCacheMaxTracks },

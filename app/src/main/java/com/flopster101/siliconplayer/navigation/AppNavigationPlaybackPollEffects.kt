@@ -19,12 +19,12 @@ internal fun AppNavigationPlaybackPollEffects(
     duration: Double,
     subtuneCountProvider: () -> Int,
     currentSubtuneIndexProvider: () -> Int,
+    activeRepeatModeProvider: () -> RepeatMode,
     currentPlaybackSourceIdProvider: () -> String?,
     playbackWatchPath: String?,
     metadataTitleProvider: () -> String,
     metadataArtistProvider: () -> String,
     lastBrowserLocationId: String?,
-    autoPlayNextTrackOnEnd: Boolean,
     onSeekInProgressChanged: (Boolean) -> Unit,
     onSeekStartedAtMsChanged: (Long) -> Unit,
     onSeekRequestedAtMsChanged: (Long) -> Unit,
@@ -37,7 +37,8 @@ internal fun AppNavigationPlaybackPollEffects(
     onMetadataArtistChanged: (String) -> Unit,
     onSubtuneCursorChanged: (File?) -> Unit,
     onAddRecentPlayedTrack: (path: String, locationId: String?, title: String?, artist: String?) -> Unit,
-    onPlayAdjacentTrack: (Int) -> Boolean,
+    onPlayAdjacentTrack: (offset: Int, wrapOverride: Boolean?, notifyWrap: Boolean) -> Boolean,
+    onStopPlaybackAndUnload: () -> Unit,
     isLocalPlayableFile: (File?) -> Boolean
 ) {
     LaunchedEffect(selectedFile) {
@@ -124,8 +125,19 @@ internal fun AppNavigationPlaybackPollEffects(
                     onPlaybackWatchPathChanged(currentPath)
                 } else {
                     val endedNaturally = NativeBridge.consumeNaturalEndEvent()
-                    if (endedNaturally && autoPlayNextTrackOnEnd && onPlayAdjacentTrack(1)) {
-                        continue
+                    if (endedNaturally) {
+                        val repeatMode = activeRepeatModeProvider()
+                        val moved = when (repeatMode) {
+                            RepeatMode.None -> onPlayAdjacentTrack(1, false, false)
+                            RepeatMode.Playlist -> onPlayAdjacentTrack(1, true, true)
+                            else -> false
+                        }
+                        if (moved) {
+                            continue
+                        }
+                        if (repeatMode == RepeatMode.None) {
+                            onStopPlaybackAndUnload()
+                        }
                     }
                 }
                 metadataPollElapsedMs += pollDelayMs

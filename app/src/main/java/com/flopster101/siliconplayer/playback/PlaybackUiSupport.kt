@@ -139,6 +139,7 @@ internal fun applyRepeatModeToNative(mode: RepeatMode) {
             RepeatMode.Track -> 1
             RepeatMode.LoopPoint -> 2
             RepeatMode.Subtune -> 3
+            RepeatMode.Playlist -> 0
         }
     )
 }

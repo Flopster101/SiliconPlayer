@@ -28,6 +28,10 @@ enum class RepeatMode(
         storageValue = "subtune",
         label = "Repeat subtune"
     ),
+    Playlist(
+        storageValue = "playlist",
+        label = "Repeat playlist"
+    ),
     LoopPoint(
         storageValue = "loop_point",
         label = "Repeat at loop point"
@@ -77,6 +81,7 @@ fun availableRepeatModesForFlags(
         if (includeSubtuneRepeat) {
             add(RepeatMode.Subtune)
         }
+        add(RepeatMode.Playlist)
         if (supportsLoopPointRepeat) {
             add(RepeatMode.LoopPoint)
         }
@@ -99,10 +104,8 @@ fun resolveRepeatModeForFlags(
         RepeatMode.Track -> {
             if (includeTrackRepeat) {
                 RepeatMode.Track
-            } else if (supportsLoopPointRepeat) {
-                RepeatMode.LoopPoint
             } else {
-                RepeatMode.None
+                RepeatMode.Playlist
             }
         }
         RepeatMode.Subtune -> {
@@ -110,17 +113,18 @@ fun resolveRepeatModeForFlags(
                 RepeatMode.Subtune
             } else if (includeTrackRepeat) {
                 RepeatMode.Track
-            } else if (supportsLoopPointRepeat) {
-                RepeatMode.LoopPoint
             } else {
-                RepeatMode.None
+                RepeatMode.Playlist
             }
+        }
+        RepeatMode.Playlist -> {
+            RepeatMode.Playlist
         }
         RepeatMode.LoopPoint -> {
             if (supportsLoopPointRepeat) {
                 RepeatMode.LoopPoint
             } else {
-                if (includeTrackRepeat) RepeatMode.Track else RepeatMode.None
+                RepeatMode.Playlist
             }
         }
     }

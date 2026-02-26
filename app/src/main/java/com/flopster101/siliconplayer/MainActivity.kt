@@ -1305,12 +1305,12 @@ private fun AppNavigation(
         duration = duration,
         subtuneCountProvider = { subtuneCount },
         currentSubtuneIndexProvider = { currentSubtuneIndex },
+        activeRepeatModeProvider = { activeRepeatMode },
         currentPlaybackSourceIdProvider = { currentPlaybackSourceId },
         playbackWatchPath = playbackWatchPath,
         metadataTitleProvider = { metadataTitle },
         metadataArtistProvider = { metadataArtist },
         lastBrowserLocationId = lastBrowserLocationId,
-        autoPlayNextTrackOnEnd = autoPlayNextTrackOnEnd,
         onSeekInProgressChanged = { seekInProgress = it },
         onSeekStartedAtMsChanged = { seekStartedAtMs = it },
         onSeekRequestedAtMsChanged = { seekRequestedAtMs = it },
@@ -1334,7 +1334,16 @@ private fun AppNavigation(
                 artist
             )
         },
-        onPlayAdjacentTrack = { trackNavDelegates.playAdjacentTrack(it, notifyWrap = false) },
+        onPlayAdjacentTrack = { offset, wrapOverride, notifyWrap ->
+            trackNavDelegates.playAdjacentTrack(
+                offset = offset,
+                notifyWrap = notifyWrap,
+                wrapOverride = wrapOverride
+            )
+        },
+        onStopPlaybackAndUnload = {
+            stopAndEmptyTrackAction(context, playbackStateDelegates)
+        },
         isLocalPlayableFile = isLocalPlayableFile
     )
 

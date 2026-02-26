@@ -136,6 +136,7 @@ internal fun playAdjacentTrackAction(
     isPlayerExpanded: Boolean,
     offset: Int,
     playlistWrapNavigation: Boolean,
+    wrapOverride: Boolean? = null,
     onPlaylistWrapped: (Int) -> Unit,
     onApplyTrackSelection: (file: File, autoStart: Boolean, expandOverride: Boolean?) -> Unit,
     onApplyManualInputSelection: (rawInput: String, options: ManualSourceOpenOptions, expandOverride: Boolean?) -> Unit
@@ -165,7 +166,8 @@ internal fun playAdjacentTrackAction(
     if (currentIndex < 0) return false
 
     val rawTargetIndex = currentIndex + offset
-    val targetIndex = if (playlistWrapNavigation) {
+    val shouldWrap = wrapOverride ?: playlistWrapNavigation
+    val targetIndex = if (shouldWrap) {
         val wrappedTargetIndex = ((rawTargetIndex % playlistSize) + playlistSize) % playlistSize
         val wrapped = rawTargetIndex !in (0 until playlistSize) && playlistSize > 1
         if (wrapped) {

@@ -2276,11 +2276,16 @@ private fun TransportControls(
                             }
                         )
                     ) {
-                        val modeBadge = when (repeatMode) {
+                        val modeBadgeText = when (repeatMode) {
                             RepeatMode.None -> ""
                             RepeatMode.Track -> "1"
                             RepeatMode.Subtune -> "ST"
+                            RepeatMode.Playlist -> ""
                             RepeatMode.LoopPoint -> "LP"
+                        }
+                        val modeBadgeIcon = when (repeatMode) {
+                            RepeatMode.Playlist -> Icons.AutoMirrored.Filled.List
+                            else -> null
                         }
                         Box(
                             modifier = Modifier.fillMaxSize(),
@@ -2291,7 +2296,7 @@ private fun TransportControls(
                                 contentDescription = "Repeat mode: ${repeatMode.label}",
                                 modifier = Modifier.size(repeatIconSize)
                             )
-                            if (modeBadge.isNotEmpty()) {
+                            if (modeBadgeText.isNotEmpty() || modeBadgeIcon != null) {
                                 Surface(
                                     color = MaterialTheme.colorScheme.primaryContainer,
                                     contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -2303,16 +2308,29 @@ private fun TransportControls(
                                             y = repeatBadgeCenterOffsetY
                                         )
                                 ) {
-                                    Text(
-                                        text = modeBadge,
-                                        fontSize = repeatBadgeTextSize,
-                                        lineHeight = repeatBadgeTextSize,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(
-                                            horizontal = repeatBadgeHorizontalPadding,
-                                            vertical = repeatBadgeVerticalPadding
+                                    if (modeBadgeIcon != null) {
+                                        Icon(
+                                            imageVector = modeBadgeIcon,
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .padding(
+                                                    horizontal = repeatBadgeHorizontalPadding,
+                                                    vertical = repeatBadgeVerticalPadding
+                                                )
+                                                .size(repeatBadgeTextSize.value.dp + 2.dp)
                                         )
-                                    )
+                                    } else {
+                                        Text(
+                                            text = modeBadgeText,
+                                            fontSize = repeatBadgeTextSize,
+                                            lineHeight = repeatBadgeTextSize,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(
+                                                horizontal = repeatBadgeHorizontalPadding,
+                                                vertical = repeatBadgeVerticalPadding
+                                            )
+                                        )
+                                    }
                                 }
                             }
                         }

@@ -36,7 +36,11 @@ internal class AppNavigationTrackNavDelegates(
         )
     }
 
-    fun playAdjacentTrack(offset: Int, notifyWrap: Boolean = true): Boolean {
+    fun playAdjacentTrack(
+        offset: Int,
+        notifyWrap: Boolean = true,
+        wrapOverride: Boolean? = null
+    ): Boolean {
         return playAdjacentTrackAction(
             selectedFile = selectedFileProvider(),
             currentPlaybackSourceId = currentPlaybackSourceIdProvider(),
@@ -46,6 +50,7 @@ internal class AppNavigationTrackNavDelegates(
             isPlayerExpanded = isPlayerExpandedProvider(),
             offset = offset,
             playlistWrapNavigation = playlistWrapNavigationProvider(),
+            wrapOverride = wrapOverride,
             onPlaylistWrapped = if (notifyWrap) onPlaylistWrapped else { _ -> },
             onApplyTrackSelection = onApplyTrackSelection,
             onApplyManualInputSelection = onApplyManualInputSelection

@@ -981,6 +981,9 @@ internal fun FileBrowserScreen(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
+                                .clickable(enabled = showLocalStorageSelector) {
+                                    selectorExpanded = true
+                                }
                                 .padding(horizontal = 2.dp)
                         ) {
                             Box {

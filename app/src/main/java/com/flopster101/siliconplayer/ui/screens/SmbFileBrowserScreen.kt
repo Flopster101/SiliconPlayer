@@ -831,6 +831,7 @@ internal fun SmbFileBrowserScreen(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
+                                .clickable { selectorExpanded = true }
                                 .padding(horizontal = 2.dp)
                         ) {
                             Box {

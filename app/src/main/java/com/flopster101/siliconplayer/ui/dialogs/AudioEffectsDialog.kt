@@ -32,6 +32,9 @@ fun AudioEffectsDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit
 ) {
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val tabTitles = remember { listOf("Volume", "DSP") }
+
     AlertDialog(
         modifier = adaptiveDialogModifier(),
         properties = adaptiveDialogProperties(),
@@ -39,75 +42,36 @@ fun AudioEffectsDialog(
         title = { Text("Audio effects") },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    VolumeSliderRow(
-                        label = "Master Volume",
-                        valueDb = masterVolumeDb,
-                        onValueChange = onMasterVolumeChange
-                    )
-
-                    VolumeSliderRow(
-                        label = "Core Volume",
-                        valueDb = pluginVolumeDb,
-                        onValueChange = onPluginVolumeChange,
-                        enabled = hasActiveCore
-                    )
-
-                    VolumeSliderRow(
-                        label = "Song Volume",
-                        valueDb = songVolumeDb,
-                        onValueChange = onSongVolumeChange,
-                        enabled = hasActiveSong
-                    )
-
-                    CompositionLocalProvider(
-                        LocalMinimumInteractiveComponentEnforcement provides false
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    "Ignore Core volume for this song",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Switch(
-                                    checked = ignoreCoreVolumeForSong,
-                                    onCheckedChange = onIgnoreCoreVolumeForSongChange,
-                                    enabled = hasActiveSong
-                                )
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Force Mono", style = MaterialTheme.typography.bodyMedium)
-                                Switch(
-                                    checked = forceMono,
-                                    onCheckedChange = onForceMonoChange
-                                )
-                            }
-                        }
+                TabRow(selectedTabIndex = selectedTabIndex) {
+                    tabTitles.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            text = { Text(title) }
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                Text(
-                    text = "Core: ${currentCoreName ?: "(none)"}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                when (selectedTabIndex) {
+                    0 -> VolumeTabContent(
+                        masterVolumeDb = masterVolumeDb,
+                        pluginVolumeDb = pluginVolumeDb,
+                        songVolumeDb = songVolumeDb,
+                        ignoreCoreVolumeForSong = ignoreCoreVolumeForSong,
+                        forceMono = forceMono,
+                        hasActiveCore = hasActiveCore,
+                        hasActiveSong = hasActiveSong,
+                        currentCoreName = currentCoreName,
+                        onMasterVolumeChange = onMasterVolumeChange,
+                        onPluginVolumeChange = onPluginVolumeChange,
+                        onSongVolumeChange = onSongVolumeChange,
+                        onIgnoreCoreVolumeForSongChange = onIgnoreCoreVolumeForSongChange,
+                        onForceMonoChange = onForceMonoChange
+                    )
+                    else -> DspTabContent(currentCoreName = currentCoreName)
+                }
             }
         },
         confirmButton = {
@@ -126,6 +90,117 @@ fun AudioEffectsDialog(
             }
         }
     )
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun VolumeTabContent(
+    masterVolumeDb: Float,
+    pluginVolumeDb: Float,
+    songVolumeDb: Float,
+    ignoreCoreVolumeForSong: Boolean,
+    forceMono: Boolean,
+    hasActiveCore: Boolean,
+    hasActiveSong: Boolean,
+    currentCoreName: String?,
+    onMasterVolumeChange: (Float) -> Unit,
+    onPluginVolumeChange: (Float) -> Unit,
+    onSongVolumeChange: (Float) -> Unit,
+    onIgnoreCoreVolumeForSongChange: (Boolean) -> Unit,
+    onForceMonoChange: (Boolean) -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        VolumeSliderRow(
+            label = "Master Volume",
+            valueDb = masterVolumeDb,
+            onValueChange = onMasterVolumeChange
+        )
+
+        VolumeSliderRow(
+            label = "Core Volume",
+            valueDb = pluginVolumeDb,
+            onValueChange = onPluginVolumeChange,
+            enabled = hasActiveCore
+        )
+
+        VolumeSliderRow(
+            label = "Song Volume",
+            valueDb = songVolumeDb,
+            onValueChange = onSongVolumeChange,
+            enabled = hasActiveSong
+        )
+
+        CompositionLocalProvider(
+            LocalMinimumInteractiveComponentEnforcement provides false
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Ignore Core volume for this song",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Switch(
+                        checked = ignoreCoreVolumeForSong,
+                        onCheckedChange = onIgnoreCoreVolumeForSongChange,
+                        enabled = hasActiveSong
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Force Mono", style = MaterialTheme.typography.bodyMedium)
+                    Switch(
+                        checked = forceMono,
+                        onCheckedChange = onForceMonoChange
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Core: ${currentCoreName ?: "(none)"}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun DspTabContent(currentCoreName: String?) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = "DSP effects are coming soon.",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        Text(
+            text = "This tab will be enabled in a future build...",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = "Core: ${currentCoreName ?: "(none)"}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @Composable

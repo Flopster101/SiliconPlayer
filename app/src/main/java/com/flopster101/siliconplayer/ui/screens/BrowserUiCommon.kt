@@ -86,6 +86,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.buildDecoderExtensionArtworkHintMap
@@ -951,12 +952,13 @@ internal fun BrowserToolbarPathRow(
     icon: ImageVector,
     subtitle: String,
     iconPainterResId: Int? = null,
+    contentStartPadding: Dp = 6.dp,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(start = 6.dp),
+            .padding(start = contentStartPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (iconPainterResId != null) {

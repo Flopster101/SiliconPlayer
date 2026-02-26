@@ -991,6 +991,7 @@ internal fun FileBrowserScreen(
                                             selectorExpanded = true
                                         }
                                     },
+                                    modifier = Modifier.padding(start = 6.dp),
                                     enabled = showLocalStorageSelector,
                                     focusRequester = selectorButtonFocusRequester
                                 )
@@ -1097,7 +1098,8 @@ internal fun FileBrowserScreen(
                             BrowserToolbarPathRow(
                                 icon = subtitleIcon,
                                 subtitle = subtitle,
-                                iconPainterResId = subtitleIconPainterResId
+                                iconPainterResId = subtitleIconPainterResId,
+                                contentStartPadding = 12.dp
                             )
                         }
                         if (selectedLocationId != null) {

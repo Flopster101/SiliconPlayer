@@ -84,7 +84,7 @@ object OpenMptDefaults {
     const val amigaResamplerApplyAllModules = false
     const val volumeRampingStrength = 1
     const val ft2XmVolumeRamping = false
-    const val masterGainMilliBel = 0
+    const val masterGainMilliBel = 100
     const val surroundEnabled = true
 }
 

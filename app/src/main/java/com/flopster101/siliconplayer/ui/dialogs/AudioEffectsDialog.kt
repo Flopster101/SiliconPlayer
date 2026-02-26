@@ -22,6 +22,38 @@ import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
 import com.flopster101.siliconplayer.rememberDialogScrollbarAlpha
 
+private val reverbPresetNames = listOf(
+    "GM Plate",
+    "GM Small Room",
+    "GM Medium Room",
+    "GM Large Room",
+    "GM Medium Hall",
+    "GM Large Hall",
+    "Generic",
+    "Padded Cell",
+    "Room",
+    "Bathroom",
+    "Living Room",
+    "Stone Room",
+    "Auditorium",
+    "Concert Hall",
+    "Cave",
+    "Arena",
+    "Hangar",
+    "Carpeted Hallway",
+    "Hallway",
+    "Stone Corridor",
+    "Alley",
+    "Forest",
+    "City",
+    "Mountains",
+    "Quarry",
+    "Plain",
+    "Parking Lot",
+    "Sewer Pipe",
+    "Underwater"
+)
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun AudioEffectsDialog(
@@ -378,10 +410,9 @@ private fun DspTabContent(
                     onValueChange = onDspReverbDepthChange,
                     enabled = dspReverbEnabled
                 )
-                DspIntSliderRow(
+                DspReverbPresetDropdownRow(
                     label = "Reverb Preset",
                     value = dspReverbPreset,
-                    valueRange = 0..28,
                     onValueChange = onDspReverbPresetChange,
                     enabled = dspReverbEnabled
                 )
@@ -447,6 +478,68 @@ private fun DspToggleRow(
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium)
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun DspReverbPresetDropdownRow(
+    label: String,
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    enabled: Boolean = true
+) {
+    val contentAlpha = if (enabled) 1f else 0.38f
+    var expanded by remember { mutableStateOf(false) }
+    val safeValue = value.coerceIn(0, reverbPresetNames.lastIndex)
+    val selectedName = reverbPresetNames[safeValue]
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
+        )
+
+        ExposedDropdownMenuBox(
+            expanded = expanded && enabled,
+            onExpandedChange = { if (enabled) expanded = !expanded }
+        ) {
+            OutlinedTextField(
+                value = "$safeValue - $selectedName",
+                onValueChange = {},
+                readOnly = true,
+                enabled = enabled,
+                textStyle = MaterialTheme.typography.bodySmall,
+                shape = RoundedCornerShape(14.dp),
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded && enabled) },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor()
+            )
+            ExposedDropdownMenu(
+                expanded = expanded && enabled,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            ) {
+                reverbPresetNames.forEachIndexed { index, name ->
+                    DropdownMenuItem(
+                        text = { Text("$index - $name") },
+                        colors = MenuDefaults.itemColors(),
+                        onClick = {
+                            onValueChange(index)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 

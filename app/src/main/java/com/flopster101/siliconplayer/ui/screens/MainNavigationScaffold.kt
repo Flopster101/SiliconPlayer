@@ -52,15 +52,16 @@ internal fun MainNavigationScaffold(
     mainContentModifier: Modifier = Modifier,
     content: @Composable (mainPadding: PaddingValues, targetView: MainView) -> Unit
 ) {
-    var lastNonSettingsView by remember { mutableStateOf(currentView) }
-    val topBarView = if (currentView == MainView.Settings) lastNonSettingsView else currentView
-    val shouldShowBrowserHomeAction = topBarView == MainView.Browser || topBarView == MainView.Network
-    val shouldShowSettingsAction = topBarView != MainView.Settings
+    val isMainTopBarVisible = currentView != MainView.Settings && currentView != MainView.Network
+    var lastVisibleTopBarView by remember { mutableStateOf(currentView) }
+    val displayedTopBarView = if (isMainTopBarVisible) currentView else lastVisibleTopBarView
+    val shouldShowBrowserHomeAction = displayedTopBarView == MainView.Browser || displayedTopBarView == MainView.Network
+    val shouldShowSettingsAction = displayedTopBarView != MainView.Settings
     val homeScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     LaunchedEffect(currentView) {
-        if (currentView != MainView.Settings) {
-            lastNonSettingsView = currentView
+        if (isMainTopBarVisible) {
+            lastVisibleTopBarView = currentView
         }
         if (currentView != MainView.Home) {
             homeScrollBehavior.state.heightOffset = 0f
@@ -72,7 +73,7 @@ internal fun MainNavigationScaffold(
         modifier = Modifier
             .fillMaxSize()
             .then(
-                if (currentView == MainView.Home) {
+                if (displayedTopBarView == MainView.Home) {
                     Modifier.nestedScroll(homeScrollBehavior.nestedScrollConnection)
                 } else {
                     Modifier
@@ -80,7 +81,7 @@ internal fun MainNavigationScaffold(
             ),
         topBar = {
             AnimatedVisibility(
-                visible = currentView != MainView.Settings,
+                visible = isMainTopBarVisible,
                 enter = fadeIn(animationSpec = tween(160)) + slideInVertically(
                     initialOffsetY = { fullHeight -> -fullHeight / 3 },
                     animationSpec = tween(220, easing = LinearOutSlowInEasing)
@@ -90,7 +91,7 @@ internal fun MainNavigationScaffold(
                     animationSpec = tween(150, easing = FastOutLinearInEasing)
                 )
             ) {
-                if (topBarView == MainView.Home) {
+                if (displayedTopBarView == MainView.Home) {
                     LargeTopAppBar(
                         title = {
                             Text(
@@ -197,7 +198,7 @@ internal fun MainNavigationScaffold(
                 label = "mainViewTransition",
                 modifier = mainContentModifier
             ) { targetView ->
-                val routePadding = if (targetView == MainView.Settings) {
+                val routePadding = if (targetView == MainView.Settings || targetView == MainView.Network) {
                     PaddingValues(0.dp)
                 } else {
                     mainPadding

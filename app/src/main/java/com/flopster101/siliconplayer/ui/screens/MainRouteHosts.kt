@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -98,7 +99,7 @@ internal fun MainNetworkRouteHost(
     pinnedHomeEntries: List<HomePinnedEntry>,
     onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit
 ) {
-    Box(modifier = Modifier.padding(mainPadding)) {
+    Box(modifier = Modifier.fillMaxSize().padding(mainPadding)) {
         NetworkBrowserScreen(
             bottomContentPadding = bottomContentPadding,
             backHandlingEnabled = backHandlingEnabled,

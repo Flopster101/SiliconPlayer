@@ -325,17 +325,6 @@ internal fun HomeScreen(
             .padding(horizontal = 20.dp, vertical = 16.dp)
             .padding(bottom = bottomContentPadding)
     ) {
-        Text(
-            text = "Select a song",
-            style = MaterialTheme.typography.headlineSmall
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Open audio from files, URLs, or direct paths.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(18.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)

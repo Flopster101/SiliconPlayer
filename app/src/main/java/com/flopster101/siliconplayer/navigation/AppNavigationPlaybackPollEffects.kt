@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import java.io.File
+import kotlin.math.abs
 import kotlinx.coroutines.delay
 
 @Composable
@@ -43,17 +44,27 @@ internal fun AppNavigationPlaybackPollEffects(
 ) {
     LaunchedEffect(selectedFile) {
         var metadataPollElapsedMs = 0L
+        var subtunePollElapsedMs = 0L
         var localSeekInProgress = seekInProgress
         var localSeekStartedAtMs = seekStartedAtMs
         var localSeekRequestedAtMs = seekRequestedAtMs
         var localDuration = duration
+        var localPosition = 0.0
+        var hasPublishedPosition = false
+        var localIsPlaying = isPlayingProvider()
         var localPlaybackWatchPath = playbackWatchPath
+        var durationRefreshCountdown = 0
         var lastPersistedRecentMetadata: Triple<String, String, String>? = null
 
         while (selectedFileProvider() != null) {
             val currentFile = selectedFileProvider()
-            val pollDelayMs = if (isPlayingProvider()) 180L else 320L
             val nextSeekInProgress = NativeBridge.isSeekInProgress()
+            val nextIsPlaying = NativeBridge.isEnginePlaying()
+            val pollDelayMs = when {
+                nextSeekInProgress -> 120L
+                nextIsPlaying -> 180L
+                else -> 320L
+            }
             val nowMs = SystemClock.elapsedRealtime()
             if (nextSeekInProgress) {
                 if (!localSeekInProgress) {
@@ -74,7 +85,20 @@ internal fun AppNavigationPlaybackPollEffects(
                 onSeekRequestedAtMsChanged(0L)
                 onSeekUiBusyChanged(false)
             }
-            val nextDuration = if (nextSeekInProgress) localDuration else NativeBridge.getDuration()
+            val nextDuration = if (nextSeekInProgress) {
+                localDuration
+            } else if (
+                durationRefreshCountdown <= 0 ||
+                !(localDuration > 0.0) ||
+                !localDuration.isFinite()
+            ) {
+                val refreshed = NativeBridge.getDuration()
+                durationRefreshCountdown = if (nextIsPlaying) 6 else 2
+                refreshed
+            } else {
+                durationRefreshCountdown -= 1
+                localDuration
+            }
             val activeSourceId = currentPlaybackSourceIdProvider() ?: currentFile?.absolutePath
             val deferredPlaybackSeek = deferredPlaybackSeekProvider()
             val nextPosition = if (
@@ -91,31 +115,45 @@ internal fun AppNavigationPlaybackPollEffects(
             } else {
                 NativeBridge.getPosition()
             }
-            val nextIsPlaying = NativeBridge.isEnginePlaying()
+            val previousDuration = localDuration
             localSeekInProgress = nextSeekInProgress
             localDuration = nextDuration
             onSeekInProgressChanged(nextSeekInProgress)
-            onDurationChanged(nextDuration)
-            onPositionChanged(nextPosition)
-            onIsPlayingChanged(nextIsPlaying)
+            if (abs(nextDuration - previousDuration) > 0.0001) {
+                onDurationChanged(nextDuration)
+            }
+            if (!hasPublishedPosition || abs(nextPosition - localPosition) > 0.001) {
+                onPositionChanged(nextPosition)
+                localPosition = nextPosition
+                hasPublishedPosition = true
+            }
+            if (nextIsPlaying != localIsPlaying) {
+                onIsPlayingChanged(nextIsPlaying)
+                localIsPlaying = nextIsPlaying
+            }
 
             if (!nextSeekInProgress) {
-                val nativeSubtuneCursor = readNativeSubtuneCursor()
-                if (hasNativeSubtuneCursorChanged(
-                        nativeSubtuneCursor,
-                        subtuneCountProvider(),
-                        currentSubtuneIndexProvider()
-                    )
-                ) {
-                    onSubtuneCursorChanged(currentFile)
-                    val recentSourceId = currentPlaybackSourceIdProvider() ?: currentFile?.absolutePath
-                    if (nextIsPlaying && recentSourceId != null) {
-                        onAddRecentPlayedTrack(
-                            recentSourceId,
-                            if (isLocalPlayableFile(currentFile)) lastBrowserLocationId else null,
-                            metadataTitleProvider(),
-                            metadataArtistProvider()
+                subtunePollElapsedMs += pollDelayMs
+                val subtunePollIntervalMs = if (nextIsPlaying) 360L else 900L
+                if (subtunePollElapsedMs >= subtunePollIntervalMs) {
+                    subtunePollElapsedMs = 0L
+                    val nativeSubtuneCursor = readNativeSubtuneCursor()
+                    if (hasNativeSubtuneCursorChanged(
+                            nativeSubtuneCursor,
+                            subtuneCountProvider(),
+                            currentSubtuneIndexProvider()
                         )
+                    ) {
+                        onSubtuneCursorChanged(currentFile)
+                        val recentSourceId = currentPlaybackSourceIdProvider() ?: currentFile?.absolutePath
+                        if (nextIsPlaying && recentSourceId != null) {
+                            onAddRecentPlayedTrack(
+                                recentSourceId,
+                                if (isLocalPlayableFile(currentFile)) lastBrowserLocationId else null,
+                                metadataTitleProvider(),
+                                metadataArtistProvider()
+                            )
+                        }
                     }
                 }
 
@@ -187,6 +225,7 @@ internal fun AppNavigationPlaybackPollEffects(
                 }
             } else {
                 metadataPollElapsedMs = 0L
+                subtunePollElapsedMs = 0L
             }
             delay(pollDelayMs)
         }

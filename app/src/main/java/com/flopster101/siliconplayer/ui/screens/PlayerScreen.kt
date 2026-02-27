@@ -626,11 +626,6 @@ internal fun PlayerScreen(
         animationSpec = tween(durationMillis = 180, easing = LinearOutSlowInEasing),
         label = "playerCollapseDragOffset"
     )
-    val animatedSliderPosition by animateFloatAsState(
-        targetValue = sliderPosition.toFloat(),
-        animationSpec = tween(durationMillis = 90, easing = LinearOutSlowInEasing),
-        label = "playerTimelinePosition"
-    )
     val panelOffsetPx = if (isDraggingDown) downwardDragPx else animatedPanelOffsetPx
     val dragFadeProgress = (panelOffsetPx / (collapseThresholdPx * 1.4f)).coerceIn(0f, 1f)
     val panelAlpha = 1f - (0.22f * dragFadeProgress)
@@ -897,7 +892,7 @@ internal fun PlayerScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     TimelineSection(
-                                        sliderPosition = if (isSeeking) sliderPosition else animatedSliderPosition.toDouble(),
+                                        sliderPosition = if (isSeeking) sliderPosition else positionSeconds,
                                         elapsedPositionSeconds = if (isSeeking) sliderPosition else positionSeconds,
                                         durationSeconds = durationSeconds,
                                         canSeek = canSeek,
@@ -1170,7 +1165,7 @@ internal fun PlayerScreen(
                                     )
                                     Spacer(modifier = Modifier.height(metadataSpacer))
                                     TimelineSection(
-                                        sliderPosition = if (isSeeking) sliderPosition else animatedSliderPosition.toDouble(),
+                                        sliderPosition = if (isSeeking) sliderPosition else positionSeconds,
                                         elapsedPositionSeconds = if (isSeeking) sliderPosition else positionSeconds,
                                         durationSeconds = durationSeconds,
                                         canSeek = canSeek,

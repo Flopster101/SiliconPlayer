@@ -42,6 +42,7 @@ internal object AppPreferenceKeys {
     const val THEME_MODE = "theme_mode"
     const val RECENT_FOLDERS = "recent_folders"
     const val RECENT_PLAYED_FILES = "recent_played_files"
+    const val PINNED_HOME_ENTRIES = "pinned_home_entries"
     const val RECENT_FOLDERS_LIMIT = "recent_folders_limit"
     const val RECENT_PLAYED_FILES_LIMIT = "recent_played_files_limit"
     const val KEEP_SCREEN_ON = "keep_screen_on"

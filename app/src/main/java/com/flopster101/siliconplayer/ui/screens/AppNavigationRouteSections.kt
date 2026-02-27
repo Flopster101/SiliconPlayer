@@ -29,38 +29,56 @@ internal fun AppNavigationHomeRouteSection(
     currentTrackPath: String?,
     currentTrackTitle: String,
     currentTrackArtist: String,
+    pinnedHomeEntries: List<HomePinnedEntry>,
     recentFolders: List<RecentPathEntry>,
     recentPlayedFiles: List<RecentPathEntry>,
     storagePresentationForEntry: (RecentPathEntry) -> StoragePresentation,
+    storagePresentationForPinnedEntry: (HomePinnedEntry) -> StoragePresentation,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     onOpenLibrary: () -> Unit,
     onOpenNetwork: () -> Unit,
     onOpenUrlOrPath: () -> Unit,
+    onOpenPinnedFolder: (HomePinnedEntry) -> Unit,
+    onPlayPinnedFile: (HomePinnedEntry) -> Unit,
     onOpenRecentFolder: (RecentPathEntry) -> Unit,
     onPlayRecentFile: (RecentPathEntry) -> Unit,
+    onPinRecentFolder: (RecentPathEntry) -> Unit,
+    onPinRecentFile: (RecentPathEntry) -> Unit,
+    onPinnedFolderAction: (HomePinnedEntry, FolderEntryAction) -> Unit,
+    onPinnedFileAction: (HomePinnedEntry, SourceEntryAction) -> Unit,
     onPersistRecentFileMetadata: (RecentPathEntry, String, String) -> Unit,
     onRecentFolderAction: (RecentPathEntry, FolderEntryAction) -> Unit,
     onRecentFileAction: (RecentPathEntry, SourceEntryAction) -> Unit,
-    canShareRecentFile: (RecentPathEntry) -> Boolean
+    canShareRecentFile: (RecentPathEntry) -> Boolean,
+    canSharePinnedFile: (HomePinnedEntry) -> Boolean
 ) {
     MainHomeRouteHost(
         mainPadding = mainPadding,
         currentTrackPath = currentTrackPath,
         currentTrackTitle = currentTrackTitle,
         currentTrackArtist = currentTrackArtist,
+        pinnedHomeEntries = pinnedHomeEntries,
         recentFolders = recentFolders,
         recentPlayedFiles = recentPlayedFiles,
         storagePresentationForEntry = storagePresentationForEntry,
+        storagePresentationForPinnedEntry = storagePresentationForPinnedEntry,
         bottomContentPadding = bottomContentPadding,
         onOpenLibrary = onOpenLibrary,
         onOpenNetwork = onOpenNetwork,
         onOpenUrlOrPath = onOpenUrlOrPath,
+        onOpenPinnedFolder = onOpenPinnedFolder,
+        onPlayPinnedFile = onPlayPinnedFile,
         onOpenRecentFolder = onOpenRecentFolder,
         onPlayRecentFile = onPlayRecentFile,
+        onPinRecentFolder = onPinRecentFolder,
+        onPinRecentFile = onPinRecentFile,
+        onPinnedFolderAction = onPinnedFolderAction,
+        onPinnedFileAction = onPinnedFileAction,
         onPersistRecentFileMetadata = onPersistRecentFileMetadata,
         onRecentFolderAction = onRecentFolderAction,
         onRecentFileAction = onRecentFileAction,
-        canShareRecentFile = canShareRecentFile
+        canShareRecentFile = canShareRecentFile,
+        canSharePinnedFile = canSharePinnedFile
     )
 }
 
@@ -78,7 +96,9 @@ internal fun AppNavigationNetworkRouteSection(
     onCancelPendingMetadataBackfill: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
     onBrowseSmbSource: (String, Long?) -> Unit,
-    onBrowseHttpSource: (String, Long?, String?) -> Unit
+    onBrowseHttpSource: (String, Long?, String?) -> Unit,
+    pinnedHomeEntries: List<HomePinnedEntry>,
+    onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit
 ) {
     MainNetworkRouteHost(
         mainPadding = mainPadding,
@@ -93,7 +113,9 @@ internal fun AppNavigationNetworkRouteSection(
         onCancelPendingMetadataBackfill = onCancelPendingMetadataBackfill,
         onOpenRemoteSource = onOpenRemoteSource,
         onBrowseSmbSource = onBrowseSmbSource,
-        onBrowseHttpSource = onBrowseHttpSource
+        onBrowseHttpSource = onBrowseHttpSource,
+        pinnedHomeEntries = pinnedHomeEntries,
+        onPinHomeEntry = onPinHomeEntry
     )
 }
 
@@ -121,7 +143,9 @@ internal fun AppNavigationBrowserRouteSection(
     onOpenRemoteSource: (String) -> Unit,
     onOpenRemoteSourceAsCached: (String) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
-    onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit
+    onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit,
+    pinnedHomeEntries: List<HomePinnedEntry>,
+    onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit
 ) {
     MainBrowserRouteHost(
         mainPadding = mainPadding,
@@ -146,7 +170,9 @@ internal fun AppNavigationBrowserRouteSection(
         onOpenRemoteSource = onOpenRemoteSource,
         onOpenRemoteSourceAsCached = onOpenRemoteSourceAsCached,
         onRememberSmbCredentials = onRememberSmbCredentials,
-        onRememberHttpCredentials = onRememberHttpCredentials
+        onRememberHttpCredentials = onRememberHttpCredentials,
+        pinnedHomeEntries = pinnedHomeEntries,
+        onPinHomeEntry = onPinHomeEntry
     )
 }
 

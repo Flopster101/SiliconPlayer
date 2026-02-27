@@ -41,9 +41,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.Image
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -153,25 +155,38 @@ internal fun HomeScreen(
     currentTrackPath: String?,
     currentTrackTitle: String,
     currentTrackArtist: String,
+    pinnedHomeEntries: List<HomePinnedEntry>,
     recentFolders: List<RecentPathEntry>,
     recentPlayedFiles: List<RecentPathEntry>,
     storagePresentationForEntry: (RecentPathEntry) -> StoragePresentation,
+    storagePresentationForPinnedEntry: (HomePinnedEntry) -> StoragePresentation,
     bottomContentPadding: Dp = 0.dp,
     onOpenLibrary: () -> Unit,
     onOpenNetwork: () -> Unit,
     onOpenUrlOrPath: () -> Unit,
+    onOpenPinnedFolder: (HomePinnedEntry) -> Unit,
+    onPlayPinnedFile: (HomePinnedEntry) -> Unit,
     onOpenRecentFolder: (RecentPathEntry) -> Unit,
     onPlayRecentFile: (RecentPathEntry) -> Unit,
+    onPinRecentFolder: (RecentPathEntry) -> Unit,
+    onPinRecentFile: (RecentPathEntry) -> Unit,
     onPersistRecentFileMetadata: (RecentPathEntry, String, String) -> Unit,
+    onPinnedFolderAction: (HomePinnedEntry, FolderEntryAction) -> Unit,
+    onPinnedFileAction: (HomePinnedEntry, SourceEntryAction) -> Unit,
     onRecentFolderAction: (RecentPathEntry, FolderEntryAction) -> Unit,
     onRecentFileAction: (RecentPathEntry, SourceEntryAction) -> Unit,
-    canShareRecentFile: (RecentPathEntry) -> Boolean
+    canShareRecentFile: (RecentPathEntry) -> Boolean,
+    canSharePinnedFile: (HomePinnedEntry) -> Boolean
 ) {
     val context = LocalContext.current
     var folderActionTargetEntry by remember { mutableStateOf<RecentPathEntry?>(null) }
     var fileActionTargetEntry by remember { mutableStateOf<RecentPathEntry?>(null) }
     var requestedPlayedPromoteKey by remember { mutableStateOf<String?>(null) }
     var activePlayedPromoteKey by remember { mutableStateOf<String?>(null) }
+    var pinnedFolderActionTarget by remember { mutableStateOf<HomePinnedEntry?>(null) }
+    var pinnedFileActionTarget by remember { mutableStateOf<HomePinnedEntry?>(null) }
+    var pendingPinRecentEntry by remember { mutableStateOf<Pair<RecentPathEntry, Boolean>?>(null) }
+    var pendingPinEvictionCandidate by remember { mutableStateOf<HomePinnedEntry?>(null) }
     val playedEntryKey: (RecentPathEntry) -> String = { entry ->
         "${entry.locationId.orEmpty()}|${entry.path}"
     }
@@ -224,6 +239,31 @@ internal fun HomeScreen(
                     if (playedEntryKey(entry) != promotedPlayedKey) add(entry)
                 }
             }
+        }
+    }
+    val sortedPinnedEntries = remember(pinnedHomeEntries) { sortPinnedHomeEntriesForDisplay(pinnedHomeEntries) }
+    val pinnedFolders = remember(sortedPinnedEntries) { sortedPinnedEntries.filter { it.isFolder } }
+    val pinnedFiles = remember(sortedPinnedEntries) { sortedPinnedEntries.filterNot { it.isFolder } }
+    fun requestPinRecentEntry(entry: RecentPathEntry, isFolder: Boolean) {
+        val preview = previewPinnedHomeEntryInsertion(
+            current = pinnedHomeEntries,
+            candidate = HomePinnedEntry(
+                path = entry.path,
+                isFolder = isFolder,
+                locationId = entry.locationId,
+                title = entry.title,
+                artist = entry.artist,
+                decoderName = entry.decoderName,
+                sourceNodeId = entry.sourceNodeId,
+                artworkThumbnailCacheKey = entry.artworkThumbnailCacheKey
+            ),
+            maxItems = PINNED_HOME_ENTRIES_LIMIT
+        )
+        if (preview.requiresConfirmation) {
+            pendingPinRecentEntry = entry to isFolder
+            pendingPinEvictionCandidate = preview.evictionCandidate
+        } else {
+            if (isFolder) onPinRecentFolder(entry) else onPinRecentFile(entry)
         }
     }
     val recentLiveMetadataSnapshots = remember {
@@ -441,6 +481,206 @@ internal fun HomeScreen(
                 }
             }
         }
+        if (sortedPinnedEntries.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Pinned songs and locations",
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            pinnedFolders.forEach { pinnedEntry ->
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(HomeCardShape)
+                            .combinedClickable(
+                                onClick = { onOpenPinnedFolder(pinnedEntry) },
+                                onLongClick = {
+                                    pinnedFileActionTarget = null
+                                    pinnedFolderActionTarget = pinnedEntry
+                                }
+                            ),
+                        shape = HomeCardShape
+                    ) {
+                        val storagePresentation = storagePresentationForPinnedEntry(pinnedEntry)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val isSmbPinnedFolder = parseSmbSourceSpecFromInput(pinnedEntry.path) != null
+                            val isHttpPinnedFolder = parseHttpSourceSpecFromInput(pinnedEntry.path) != null
+                            RecentIconChip(
+                                icon = when {
+                                    isSmbPinnedFolder -> NetworkIcons.SmbShare
+                                    isHttpPinnedFolder -> NetworkIcons.WorldCode
+                                    else -> Icons.Default.Folder
+                                },
+                                iconPainterResId = if (isArchiveLogicalFolderPath(pinnedEntry.path)) {
+                                    R.drawable.ic_folder_zip
+                                } else {
+                                    null
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = resolvedRecentFolderTitle(pinnedEntry.asRecentPathEntry()),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = storagePresentation.icon,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = storagePresentation.label,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = pinnedFolderActionTarget == pinnedEntry,
+                        onDismissRequest = { pinnedFolderActionTarget = null }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Open location") },
+                            onClick = {
+                                onPinnedFolderAction(pinnedEntry, FolderEntryAction.OpenInBrowser)
+                                pinnedFolderActionTarget = null
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Unpin folder") },
+                            onClick = {
+                                onPinnedFolderAction(pinnedEntry, FolderEntryAction.DeleteFromRecents)
+                                pinnedFolderActionTarget = null
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Copy path") },
+                            onClick = {
+                                onPinnedFolderAction(pinnedEntry, FolderEntryAction.CopyPath)
+                                pinnedFolderActionTarget = null
+                            }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            pinnedFiles.forEach { pinnedEntry ->
+                val recentEntry = pinnedEntry.asRecentPathEntry()
+                val archiveSource = parseArchiveSourceId(recentEntry.path)
+                val trackFile = if (archiveSource != null) {
+                    File(archiveSource.entryPath)
+                } else {
+                    val normalizedSourcePath = normalizeSourceIdentity(recentEntry.path) ?: recentEntry.path
+                    val parsedSource = Uri.parse(normalizedSourcePath)
+                    if (parsedSource.scheme.equals("file", ignoreCase = true)) {
+                        File(parsedSource.path ?: normalizedSourcePath)
+                    } else if (!parsedSource.scheme.isNullOrBlank()) {
+                        val decodedLeaf = sourceLeafNameForDisplay(normalizedSourcePath)
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() }
+                        File(decodedLeaf ?: normalizedSourcePath)
+                    } else {
+                        File(normalizedSourcePath)
+                    }
+                }
+                val storagePresentation = storagePresentationForPinnedEntry(pinnedEntry)
+                val extensionLabel = inferredPrimaryExtensionForName(trackFile.name)?.uppercase() ?: "UNKNOWN"
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(HomeCardShape)
+                            .combinedClickable(
+                                onClick = { onPlayPinnedFile(pinnedEntry) },
+                                onLongClick = {
+                                    pinnedFolderActionTarget = null
+                                    pinnedFileActionTarget = pinnedEntry
+                                }
+                            ),
+                        shape = HomeCardShape
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RecentTrackArtworkChip(
+                                context = context,
+                                artworkThumbnailCacheKey = pinnedEntry.artworkThumbnailCacheKey,
+                                fallbackIcon = placeholderArtworkIconForFile(
+                                    file = trackFile,
+                                    decoderName = pinnedEntry.decoderName,
+                                    allowCurrentDecoderFallback = false
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                RecentTrackSummaryText(
+                                    file = trackFile,
+                                    cachedTitle = pinnedEntry.title.orEmpty(),
+                                    cachedArtist = pinnedEntry.artist.orEmpty(),
+                                    storagePresentation = storagePresentation,
+                                    extensionLabel = extensionLabel,
+                                    isArchiveSource = archiveSource != null
+                                )
+                            }
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = pinnedFileActionTarget == pinnedEntry,
+                        onDismissRequest = { pinnedFileActionTarget = null }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Open location") },
+                            onClick = {
+                                onPinnedFileAction(pinnedEntry, SourceEntryAction.OpenInBrowser)
+                                pinnedFileActionTarget = null
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Unpin file") },
+                            onClick = {
+                                onPinnedFileAction(pinnedEntry, SourceEntryAction.DeleteFromRecents)
+                                pinnedFileActionTarget = null
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Share file") },
+                            onClick = {
+                                onPinnedFileAction(pinnedEntry, SourceEntryAction.ShareFile)
+                                pinnedFileActionTarget = null
+                            },
+                            enabled = canSharePinnedFile(pinnedEntry)
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Copy URL/path") },
+                            onClick = {
+                                onPinnedFileAction(pinnedEntry, SourceEntryAction.CopySource)
+                                pinnedFileActionTarget = null
+                            }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
         if (recentFolders.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(
@@ -547,6 +787,13 @@ internal fun HomeScreen(
                                     text = { Text("Delete from recents") },
                                     onClick = {
                                         onRecentFolderAction(entry, FolderEntryAction.DeleteFromRecents)
+                                        folderActionTargetEntry = null
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Pin folder to home") },
+                                    onClick = {
+                                        requestPinRecentEntry(entry, true)
                                         folderActionTargetEntry = null
                                     }
                                 )
@@ -747,6 +994,13 @@ internal fun HomeScreen(
                                         }
                                     )
                                     DropdownMenuItem(
+                                        text = { Text("Pin file to home") },
+                                        onClick = {
+                                            requestPinRecentEntry(entry, false)
+                                            fileActionTargetEntry = null
+                                        }
+                                    )
+                                    DropdownMenuItem(
                                         text = { Text("Share file") },
                                         onClick = {
                                             onRecentFileAction(entry, SourceEntryAction.ShareFile)
@@ -769,6 +1023,48 @@ internal fun HomeScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
+    }
+    pendingPinRecentEntry?.let { (entry, isFolder) ->
+        AlertDialog(
+            onDismissRequest = {
+                pendingPinRecentEntry = null
+                pendingPinEvictionCandidate = null
+            },
+            title = { Text("Pin limit reached") },
+            text = {
+                Text(
+                    text = buildString {
+                        append("You can pin up to $PINNED_HOME_ENTRIES_LIMIT entries. ")
+                        val eviction = pendingPinEvictionCandidate
+                        if (eviction != null) {
+                            append("The oldest pinned ")
+                            append(if (eviction.isFolder) "folder" else "file")
+                            append(" will be removed to make space.")
+                        } else {
+                            append("The oldest pinned entry will be removed to make space.")
+                        }
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        if (isFolder) onPinRecentFolder(entry) else onPinRecentFile(entry)
+                        pendingPinRecentEntry = null
+                        pendingPinEvictionCandidate = null
+                    }
+                ) { Text("Continue") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        pendingPinRecentEntry = null
+                        pendingPinEvictionCandidate = null
+                    }
+                ) { Text("Cancel") }
+            }
+        )
     }
 
 }

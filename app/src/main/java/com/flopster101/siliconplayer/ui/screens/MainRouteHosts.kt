@@ -20,38 +20,56 @@ internal fun MainHomeRouteHost(
     currentTrackPath: String?,
     currentTrackTitle: String,
     currentTrackArtist: String,
+    pinnedHomeEntries: List<HomePinnedEntry>,
     recentFolders: List<RecentPathEntry>,
     recentPlayedFiles: List<RecentPathEntry>,
     storagePresentationForEntry: (RecentPathEntry) -> StoragePresentation,
+    storagePresentationForPinnedEntry: (HomePinnedEntry) -> StoragePresentation,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     onOpenLibrary: () -> Unit,
     onOpenNetwork: () -> Unit,
     onOpenUrlOrPath: () -> Unit,
+    onOpenPinnedFolder: (HomePinnedEntry) -> Unit,
+    onPlayPinnedFile: (HomePinnedEntry) -> Unit,
     onOpenRecentFolder: (RecentPathEntry) -> Unit,
     onPlayRecentFile: (RecentPathEntry) -> Unit,
+    onPinRecentFolder: (RecentPathEntry) -> Unit,
+    onPinRecentFile: (RecentPathEntry) -> Unit,
+    onPinnedFolderAction: (HomePinnedEntry, FolderEntryAction) -> Unit,
+    onPinnedFileAction: (HomePinnedEntry, SourceEntryAction) -> Unit,
     onPersistRecentFileMetadata: (RecentPathEntry, String, String) -> Unit,
     onRecentFolderAction: (RecentPathEntry, FolderEntryAction) -> Unit,
     onRecentFileAction: (RecentPathEntry, SourceEntryAction) -> Unit,
-    canShareRecentFile: (RecentPathEntry) -> Boolean
+    canShareRecentFile: (RecentPathEntry) -> Boolean,
+    canSharePinnedFile: (HomePinnedEntry) -> Boolean
 ) {
     Box(modifier = Modifier.padding(mainPadding)) {
         HomeScreen(
             currentTrackPath = currentTrackPath,
             currentTrackTitle = currentTrackTitle,
             currentTrackArtist = currentTrackArtist,
+            pinnedHomeEntries = pinnedHomeEntries,
             recentFolders = recentFolders,
             recentPlayedFiles = recentPlayedFiles,
             storagePresentationForEntry = storagePresentationForEntry,
+            storagePresentationForPinnedEntry = storagePresentationForPinnedEntry,
             bottomContentPadding = bottomContentPadding,
             onOpenLibrary = onOpenLibrary,
             onOpenNetwork = onOpenNetwork,
             onOpenUrlOrPath = onOpenUrlOrPath,
+            onOpenPinnedFolder = onOpenPinnedFolder,
+            onPlayPinnedFile = onPlayPinnedFile,
             onOpenRecentFolder = onOpenRecentFolder,
             onPlayRecentFile = onPlayRecentFile,
+            onPinRecentFolder = onPinRecentFolder,
+            onPinRecentFile = onPinRecentFile,
+            onPinnedFolderAction = onPinnedFolderAction,
+            onPinnedFileAction = onPinnedFileAction,
             onPersistRecentFileMetadata = onPersistRecentFileMetadata,
             onRecentFolderAction = onRecentFolderAction,
             onRecentFileAction = onRecentFileAction,
-            canShareRecentFile = canShareRecentFile
+            canShareRecentFile = canShareRecentFile,
+            canSharePinnedFile = canSharePinnedFile
         )
     }
 }
@@ -70,7 +88,9 @@ internal fun MainNetworkRouteHost(
     onCancelPendingMetadataBackfill: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
     onBrowseSmbSource: (String, Long?) -> Unit,
-    onBrowseHttpSource: (String, Long?, String?) -> Unit
+    onBrowseHttpSource: (String, Long?, String?) -> Unit,
+    pinnedHomeEntries: List<HomePinnedEntry>,
+    onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit
 ) {
     Box(modifier = Modifier.padding(mainPadding)) {
         NetworkBrowserScreen(
@@ -85,7 +105,9 @@ internal fun MainNetworkRouteHost(
             onCancelPendingMetadataBackfill = onCancelPendingMetadataBackfill,
             onOpenRemoteSource = onOpenRemoteSource,
             onBrowseSmbSource = onBrowseSmbSource,
-            onBrowseHttpSource = onBrowseHttpSource
+            onBrowseHttpSource = onBrowseHttpSource,
+            pinnedHomeEntries = pinnedHomeEntries,
+            onPinHomeEntry = onPinHomeEntry
         )
     }
 }
@@ -114,7 +136,9 @@ internal fun MainBrowserRouteHost(
     onOpenRemoteSource: (String) -> Unit,
     onOpenRemoteSourceAsCached: (String) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
-    onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit
+    onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit,
+    pinnedHomeEntries: List<HomePinnedEntry>,
+    onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit
 ) {
     val routeResolution = remember(
         initialLocationId,
@@ -149,7 +173,9 @@ internal fun MainBrowserRouteHost(
                 onOpenRemoteSourceAsCached = onOpenRemoteSourceAsCached,
                 onRememberSmbCredentials = onRememberSmbCredentials,
                 sourceNodeId = routeResolution.requestedSmbSourceNodeId,
-                onBrowserLocationChanged = onBrowserLocationChanged
+                onBrowserLocationChanged = onBrowserLocationChanged,
+                pinnedHomeEntries = pinnedHomeEntries,
+                onPinHomeEntry = onPinHomeEntry
             )
         } else if (renderState.renderMode == BrowserRouteMode.Http && renderState.renderHttpSpec != null) {
             val httpSpec = requireNotNull(renderState.renderHttpSpec)
@@ -166,7 +192,9 @@ internal fun MainBrowserRouteHost(
                 onOpenRemoteSourceAsCached = onOpenRemoteSourceAsCached,
                 onRememberHttpCredentials = onRememberHttpCredentials,
                 sourceNodeId = routeResolution.requestedHttpSourceNodeId,
-                onBrowserLocationChanged = onBrowserLocationChanged
+                onBrowserLocationChanged = onBrowserLocationChanged,
+                pinnedHomeEntries = pinnedHomeEntries,
+                onPinHomeEntry = onPinHomeEntry
             )
         } else {
             LaunchedEffect(routeResolution.requestedLocalLocationId, routeResolution.requestedLocalDirectoryPath) {
@@ -191,7 +219,9 @@ internal fun MainBrowserRouteHost(
                 showPrimaryTopBar = false,
                 playingFile = playingFile,
                 onBrowserLocationChanged = onBrowserLocationChanged,
-                onFileSelected = onFileSelected
+                onFileSelected = onFileSelected,
+                pinnedHomeEntries = pinnedHomeEntries,
+                onPinHomeEntry = onPinHomeEntry
             )
         }
     }

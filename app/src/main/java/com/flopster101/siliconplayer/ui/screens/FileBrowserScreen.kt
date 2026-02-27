@@ -81,6 +81,10 @@ import com.flopster101.siliconplayer.resolveBrowserLocationModel
 import com.flopster101.siliconplayer.buildHttpDisplayUri
 import com.flopster101.siliconplayer.buildSmbDisplayUri
 import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
+import com.flopster101.siliconplayer.HomePinnedEntry
+import com.flopster101.siliconplayer.RecentPathEntry
+import com.flopster101.siliconplayer.previewPinnedHomeEntryInsertion
+import com.flopster101.siliconplayer.PINNED_HOME_ENTRIES_LIMIT
 import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
 import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
 import com.flopster101.siliconplayer.data.buildArchiveSourceId
@@ -182,7 +186,9 @@ internal fun FileBrowserScreen(
     onExitBrowser: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
     showPrimaryTopBar: Boolean = true,
-    playingFile: File? = null
+    playingFile: File? = null,
+    pinnedHomeEntries: List<HomePinnedEntry> = emptyList(),
+    onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val localListingAdapter = remember(repository) { LocalBrowserListingAdapter(repository) }
@@ -215,6 +221,8 @@ internal fun FileBrowserScreen(
     var pendingExportFiles by remember { mutableStateOf<List<ExportFileItem>>(emptyList()) }
     var exportConflictDialogState by remember { mutableStateOf<BrowserExportConflictDialogState?>(null) }
     var pendingDeleteFilePaths by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pendingPinConfirmation by remember { mutableStateOf<Pair<RecentPathEntry, Boolean>?>(null) }
+    var pendingPinEvictionCandidate by remember { mutableStateOf<HomePinnedEntry?>(null) }
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val hasActiveDirectory = currentDirectory != null
@@ -655,6 +663,12 @@ internal fun FileBrowserScreen(
                 !item.isDirectory &&
                 item.file.exists() &&
                 item.file.isFile
+        }
+    }
+
+    fun selectedAnyItems(): List<FileItem> {
+        return fileList.filter { item ->
+            browserSelectionController.selectedKeys.contains(item.file.absolutePath)
         }
     }
 
@@ -1171,6 +1185,39 @@ internal fun FileBrowserScreen(
                                         }
                                     ),
                                     BrowserSelectionActionItem(
+                                        label = selectedAnyItems().singleOrNull()?.let { item ->
+                                            if (item.isDirectory) "Pin folder to home" else "Pin file to home"
+                                        } ?: "Pin to home",
+                                        icon = Icons.Default.Home,
+                                        enabled = selectedAnyItems().size == 1,
+                                        onClick = {
+                                            val selectedItem = selectedAnyItems().singleOrNull() ?: return@BrowserSelectionActionItem
+                                            val recentEntry = RecentPathEntry(
+                                                path = selectedItem.file.absolutePath,
+                                                locationId = selectedLocationId,
+                                                title = if (selectedItem.isDirectory) selectedItem.name else null
+                                            )
+                                            val isFolder = selectedItem.isDirectory
+                                            val preview = previewPinnedHomeEntryInsertion(
+                                                current = pinnedHomeEntries,
+                                                candidate = HomePinnedEntry(
+                                                    path = recentEntry.path,
+                                                    isFolder = isFolder,
+                                                    locationId = recentEntry.locationId,
+                                                    title = recentEntry.title
+                                                ),
+                                                maxItems = PINNED_HOME_ENTRIES_LIMIT
+                                            )
+                                            if (preview.requiresConfirmation) {
+                                                pendingPinEvictionCandidate = preview.evictionCandidate
+                                                pendingPinConfirmation = recentEntry to isFolder
+                                            } else {
+                                                onPinHomeEntry(recentEntry, isFolder)
+                                                Toast.makeText(context, if (isFolder) "Pinned folder to home" else "Pinned file to home", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    ),
+                                    BrowserSelectionActionItem(
                                         label = "Delete",
                                         icon = Icons.Default.Delete,
                                         enabled = selectedRegularFileItems().isNotEmpty(),
@@ -1520,6 +1567,53 @@ internal fun FileBrowserScreen(
             },
             dismissButton = {
                 TextButton(onClick = { pendingDeleteFilePaths = emptyList() }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    pendingPinConfirmation?.let { (entry, isFolder) ->
+        val evictionCandidate = pendingPinEvictionCandidate
+        AlertDialog(
+            onDismissRequest = {
+                pendingPinConfirmation = null
+                pendingPinEvictionCandidate = null
+            },
+            title = { Text("Pin limit reached") },
+            text = {
+                Text(
+                    text = buildString {
+                        append("You can pin up to $PINNED_HOME_ENTRIES_LIMIT entries. ")
+                        if (evictionCandidate != null) {
+                            append("The oldest pinned ")
+                            append(if (evictionCandidate.isFolder) "folder" else "file")
+                            append(" will be removed to make space.")
+                        } else {
+                            append("The oldest pinned entry will be removed to make space.")
+                        }
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onPinHomeEntry(entry, isFolder)
+                        pendingPinConfirmation = null
+                        pendingPinEvictionCandidate = null
+                        Toast.makeText(context, if (isFolder) "Pinned folder to home" else "Pinned file to home", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Text("Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingPinConfirmation = null
+                        pendingPinEvictionCandidate = null
+                    }
+                ) {
                     Text("Cancel")
                 }
             }

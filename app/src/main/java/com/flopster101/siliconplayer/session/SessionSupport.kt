@@ -262,6 +262,35 @@ internal data class RecentPathEntry(
     val artworkThumbnailCacheKey: String? = null
 )
 
+internal data class HomePinnedEntry(
+    val path: String,
+    val isFolder: Boolean,
+    val locationId: String? = null,
+    val title: String? = null,
+    val artist: String? = null,
+    val decoderName: String? = null,
+    val sourceNodeId: Long? = null,
+    val artworkThumbnailCacheKey: String? = null,
+    val pinnedAtEpochMs: Long = System.currentTimeMillis()
+) {
+    fun asRecentPathEntry(): RecentPathEntry {
+        return RecentPathEntry(
+            path = path,
+            locationId = locationId,
+            title = title,
+            artist = artist,
+            decoderName = decoderName,
+            sourceNodeId = sourceNodeId,
+            artworkThumbnailCacheKey = artworkThumbnailCacheKey
+        )
+    }
+}
+
+internal data class HomePinInsertPreview(
+    val requiresConfirmation: Boolean,
+    val evictionCandidate: HomePinnedEntry?
+)
+
 internal data class StorageDescriptor(
     val rootPath: String,
     val label: String,
@@ -529,6 +558,192 @@ internal fun readRecentEntries(
     }
 }
 
+internal fun readPinnedHomeEntries(
+    prefs: android.content.SharedPreferences,
+    key: String = AppPreferenceKeys.PINNED_HOME_ENTRIES,
+    maxItems: Int = PINNED_HOME_ENTRIES_LIMIT
+): List<HomePinnedEntry> {
+    val raw = prefs.getString(key, null) ?: return emptyList()
+    return try {
+        val array = JSONArray(raw)
+        val deduped = mutableListOf<HomePinnedEntry>()
+        for (index in 0 until array.length()) {
+            val objectValue = array.optJSONObject(index) ?: continue
+            val path = objectValue.optString("path", "").trim()
+            if (path.isBlank()) continue
+            val isFolder = objectValue.optBoolean("isFolder", false)
+            val locationId = objectValue.optString("locationId", "").ifBlank { null }
+            val title = objectValue.optString("title", "").ifBlank { null }
+            val artist = objectValue.optString("artist", "").ifBlank { null }
+            val decoderName = objectValue.optString("decoderName", "").ifBlank { null }
+            val artworkThumbnailCacheKey = objectValue
+                .optString("artworkThumbnailCacheKey", "")
+                .ifBlank { null }
+            val sourceNodeId = if (
+                objectValue.has("sourceNodeId") &&
+                !objectValue.isNull("sourceNodeId")
+            ) {
+                objectValue.optLong("sourceNodeId").takeIf { it > 0L }
+            } else {
+                null
+            }
+            val pinnedAtEpochMs = objectValue
+                .optLong("pinnedAtEpochMs", 0L)
+                .takeIf { it > 0L }
+                ?: (System.currentTimeMillis() - index)
+            val existingIndex = deduped.indexOfFirst { samePath(it.path, path) }
+            if (existingIndex >= 0) {
+                val existing = deduped[existingIndex]
+                deduped[existingIndex] = existing.copy(
+                    isFolder = existing.isFolder || isFolder,
+                    locationId = existing.locationId ?: locationId,
+                    title = existing.title ?: title,
+                    artist = existing.artist ?: artist,
+                    decoderName = existing.decoderName ?: decoderName,
+                    sourceNodeId = existing.sourceNodeId ?: sourceNodeId,
+                    artworkThumbnailCacheKey = existing.artworkThumbnailCacheKey ?: artworkThumbnailCacheKey,
+                    pinnedAtEpochMs = maxOf(existing.pinnedAtEpochMs, pinnedAtEpochMs)
+                )
+                continue
+            }
+            deduped += HomePinnedEntry(
+                path = path,
+                isFolder = isFolder,
+                locationId = locationId,
+                title = title,
+                artist = artist,
+                decoderName = decoderName,
+                sourceNodeId = sourceNodeId,
+                artworkThumbnailCacheKey = artworkThumbnailCacheKey,
+                pinnedAtEpochMs = pinnedAtEpochMs
+            )
+            if (deduped.size >= maxItems) break
+        }
+        deduped
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+internal fun writePinnedHomeEntries(
+    prefs: android.content.SharedPreferences,
+    entries: List<HomePinnedEntry>,
+    key: String = AppPreferenceKeys.PINNED_HOME_ENTRIES,
+    maxItems: Int = PINNED_HOME_ENTRIES_LIMIT
+) {
+    val deduped = mutableListOf<HomePinnedEntry>()
+    entries.forEach { entry ->
+        val existingIndex = deduped.indexOfFirst { samePath(it.path, entry.path) }
+        if (existingIndex >= 0) {
+            val existing = deduped[existingIndex]
+            deduped[existingIndex] = existing.copy(
+                isFolder = existing.isFolder || entry.isFolder,
+                locationId = existing.locationId ?: entry.locationId,
+                title = existing.title ?: entry.title,
+                artist = existing.artist ?: entry.artist,
+                decoderName = existing.decoderName ?: entry.decoderName,
+                sourceNodeId = existing.sourceNodeId ?: entry.sourceNodeId,
+                artworkThumbnailCacheKey = existing.artworkThumbnailCacheKey ?: entry.artworkThumbnailCacheKey,
+                pinnedAtEpochMs = maxOf(existing.pinnedAtEpochMs, entry.pinnedAtEpochMs)
+            )
+        } else {
+            deduped += entry
+        }
+    }
+    val trimmed = deduped.take(maxItems)
+    val array = JSONArray()
+    trimmed.forEach { entry ->
+        array.put(
+            JSONObject()
+                .put("path", entry.path)
+                .put("isFolder", entry.isFolder)
+                .put("locationId", entry.locationId ?: "")
+                .put("title", entry.title ?: "")
+                .put("artist", entry.artist ?: "")
+                .put("decoderName", entry.decoderName ?: "")
+                .put("sourceNodeId", entry.sourceNodeId)
+                .put("artworkThumbnailCacheKey", entry.artworkThumbnailCacheKey ?: "")
+                .put("pinnedAtEpochMs", entry.pinnedAtEpochMs)
+        )
+    }
+    prefs.edit().putString(key, array.toString()).apply()
+}
+
+internal fun sortPinnedHomeEntriesForDisplay(
+    entries: List<HomePinnedEntry>
+): List<HomePinnedEntry> {
+    return entries.sortedWith(
+        compareByDescending<HomePinnedEntry> { it.isFolder }
+            .thenByDescending { it.pinnedAtEpochMs }
+    )
+}
+
+private fun resolvePinnedEvictionCandidate(
+    entries: List<HomePinnedEntry>
+): HomePinnedEntry? {
+    val files = entries.filterNot { it.isFolder }
+    val oldestFile = files.minByOrNull { it.pinnedAtEpochMs }
+    if (oldestFile != null) return oldestFile
+    return entries.minByOrNull { it.pinnedAtEpochMs }
+}
+
+internal fun previewPinnedHomeEntryInsertion(
+    current: List<HomePinnedEntry>,
+    candidate: HomePinnedEntry,
+    maxItems: Int = PINNED_HOME_ENTRIES_LIMIT
+): HomePinInsertPreview {
+    val normalizedPath = normalizeSourceIdentity(candidate.path) ?: candidate.path
+    val alreadyExists = current.any { existing -> samePath(existing.path, normalizedPath) }
+    if (alreadyExists || current.size < maxItems) {
+        return HomePinInsertPreview(
+            requiresConfirmation = false,
+            evictionCandidate = null
+        )
+    }
+    val evictionCandidate = resolvePinnedEvictionCandidate(current)
+    return HomePinInsertPreview(
+        requiresConfirmation = evictionCandidate != null,
+        evictionCandidate = evictionCandidate
+    )
+}
+
+internal fun buildUpdatedPinnedHomeEntries(
+    current: List<HomePinnedEntry>,
+    candidate: HomePinnedEntry,
+    maxItems: Int = PINNED_HOME_ENTRIES_LIMIT
+): List<HomePinnedEntry> {
+    val normalizedPath = normalizeSourceIdentity(candidate.path) ?: candidate.path
+    val existing = current.firstOrNull { existing -> samePath(existing.path, normalizedPath) }
+    val normalizedCandidate = candidate.copy(
+        path = normalizedPath,
+        locationId = candidate.locationId ?: existing?.locationId,
+        title = candidate.title?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.title,
+        artist = candidate.artist?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.artist,
+        decoderName = candidate.decoderName?.trim().takeUnless { it.isNullOrBlank() } ?: existing?.decoderName,
+        sourceNodeId = candidate.sourceNodeId ?: existing?.sourceNodeId,
+        artworkThumbnailCacheKey = candidate.artworkThumbnailCacheKey
+            ?.trim()
+            .takeUnless { it.isNullOrBlank() }
+            ?: existing?.artworkThumbnailCacheKey,
+        pinnedAtEpochMs = System.currentTimeMillis()
+    )
+    val withoutExisting = current.filterNot { entry -> samePath(entry.path, normalizedPath) }
+    val combined = listOf(normalizedCandidate) + withoutExisting
+    if (combined.size <= maxItems) {
+        return combined
+    }
+    val evictionCandidate = resolvePinnedEvictionCandidate(withoutExisting) ?: return combined.take(maxItems)
+    var removed = false
+    return combined.filter { entry ->
+        if (!removed && samePath(entry.path, evictionCandidate.path)) {
+            removed = true
+            false
+        } else {
+            true
+        }
+    }.take(maxItems)
+}
+
 internal fun writeRecentEntries(
     prefs: android.content.SharedPreferences,
     key: String,
@@ -650,6 +865,38 @@ internal fun mergeRecentPlayedTrackArtworkCacheKey(
         } else {
             changed = true
             entry.copy(artworkThumbnailCacheKey = normalizedCacheKey)
+        }
+    }
+    return if (changed) updated else current
+}
+
+internal fun mergePinnedFileMetadataAndArtwork(
+    current: List<HomePinnedEntry>,
+    path: String,
+    title: String?,
+    artist: String?,
+    decoderName: String?,
+    artworkThumbnailCacheKey: String?
+): List<HomePinnedEntry> {
+    val normalizedTitle = title?.trim().takeUnless { it.isNullOrBlank() }
+    val normalizedArtist = artist?.trim().takeUnless { it.isNullOrBlank() }
+    val normalizedDecoder = decoderName?.trim().takeUnless { it.isNullOrBlank() }
+    val normalizedArtworkKey = artworkThumbnailCacheKey?.trim().takeUnless { it.isNullOrBlank() }
+    var changed = false
+    val updated = current.map { entry ->
+        if (entry.isFolder || !samePath(entry.path, path)) {
+            entry
+        } else {
+            val next = entry.copy(
+                title = normalizedTitle ?: entry.title,
+                artist = normalizedArtist ?: entry.artist,
+                decoderName = normalizedDecoder ?: entry.decoderName,
+                artworkThumbnailCacheKey = normalizedArtworkKey ?: entry.artworkThumbnailCacheKey
+            )
+            if (next != entry) {
+                changed = true
+            }
+            next
         }
     }
     return if (changed) updated else current

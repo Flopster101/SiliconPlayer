@@ -3,12 +3,15 @@ package com.flopster101.siliconplayer
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.Dp
 import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
 import com.flopster101.siliconplayer.data.FileRepository
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun AppNavigationHomeContentSection(
@@ -19,6 +22,7 @@ internal fun AppNavigationHomeContentSection(
     metadataTitle: String,
     metadataArtist: String,
     isPlaying: Boolean,
+    pinnedHomeEntries: List<HomePinnedEntry>,
     recentFolders: List<RecentPathEntry>,
     recentPlayedFiles: List<RecentPathEntry>,
     recentFoldersLimit: Int,
@@ -30,6 +34,7 @@ internal fun AppNavigationHomeContentSection(
     trackLoadDelegates: AppNavigationTrackLoadDelegates,
     manualOpenDelegates: AppNavigationManualOpenDelegates,
     runtimeDelegates: AppNavigationRuntimeDelegates,
+    onPinnedHomeEntriesChanged: (List<HomePinnedEntry>) -> Unit,
     onRecentFoldersChanged: (List<RecentPathEntry>) -> Unit,
     onRecentPlayedFilesChanged: (List<RecentPathEntry>) -> Unit,
     onOpenBrowser: (BrowserOpenRequest) -> Unit,
@@ -41,10 +46,14 @@ internal fun AppNavigationHomeContentSection(
         currentTrackPath = currentTrackPath,
         currentTrackTitle = metadataTitle,
         currentTrackArtist = metadataArtist,
+        pinnedHomeEntries = pinnedHomeEntries,
         recentFolders = recentFolders,
         recentPlayedFiles = recentPlayedFiles,
         storagePresentationForEntry = { entry ->
             storagePresentationForEntry(context, entry, storageDescriptors, networkNodes)
+        },
+        storagePresentationForPinnedEntry = { entry ->
+            storagePresentationForEntry(context, entry.asRecentPathEntry(), storageDescriptors, networkNodes)
         },
         bottomContentPadding = bottomContentPadding,
         onOpenLibrary = {
@@ -55,58 +64,41 @@ internal fun AppNavigationHomeContentSection(
             onCurrentViewChanged(MainView.Network)
         },
         onOpenUrlOrPath = onOpenUrlOrPathDialog,
-        onOpenRecentFolder = { entry ->
-            val archiveLogicalPath = parseArchiveLogicalPath(entry.path)
-            if (archiveLogicalPath != null) {
-                val archiveSourcePath = archiveLogicalPath.first
-                val isArchiveSmb = parseSmbSourceSpecFromInput(archiveSourcePath) != null
-                val isArchiveHttp = parseHttpSourceSpecFromInput(archiveSourcePath) != null
-                onOpenBrowser(
-                    browserOpenRequest(
-                        locationId = null,
-                        directoryPath = entry.path,
-                        smbSourceNodeId = if (isArchiveSmb) entry.sourceNodeId else null,
-                        httpSourceNodeId = if (isArchiveHttp) entry.sourceNodeId else null
+        onOpenPinnedFolder = { entry ->
+            onOpenRecentFolderFromEntry(
+                entry = entry.asRecentPathEntry(),
+                networkNodes = networkNodes,
+                onOpenBrowser = onOpenBrowser
+            )
+            onCurrentViewChanged(MainView.Browser)
+        },
+        onPlayPinnedFile = { entry ->
+            playRecentFileEntryAction(
+                cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
+                entry = entry.asRecentPathEntry(),
+                networkNodes = networkNodes,
+                openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                onApplyTrackSelection = { file, autoStart, expandOverride, sourceIdOverride, locationIdOverride, useSongVolumeLookup ->
+                    trackLoadDelegates.applyTrackSelection(
+                        file,
+                        autoStart,
+                        expandOverride,
+                        sourceIdOverride,
+                        locationIdOverride,
+                        useSongVolumeLookup = useSongVolumeLookup
                     )
-                )
-            } else {
-                val smbSpec = parseSmbSourceSpecFromInput(entry.path)
-                if (smbSpec != null) {
-                    val smbTarget = resolveSmbRecentOpenTarget(
-                        targetSpec = smbSpec,
-                        networkNodes = networkNodes,
-                        preferredSourceNodeId = entry.sourceNodeId
-                    )
-                    onOpenBrowser(
-                        browserOpenRequest(
-                            directoryPath = smbTarget.requestUri,
-                            smbSourceNodeId = smbTarget.sourceNodeId
-                        )
-                    )
-                } else {
-                    val httpSpec = parseHttpSourceSpecFromInput(entry.path)
-                    if (httpSpec != null) {
-                        val httpTarget = resolveHttpRecentOpenTarget(
-                            targetSpec = httpSpec,
-                            networkNodes = networkNodes,
-                            preferredSourceNodeId = entry.sourceNodeId
-                        )
-                        onOpenBrowser(
-                            browserOpenRequest(
-                                directoryPath = httpTarget.requestUri,
-                                httpSourceNodeId = httpTarget.sourceNodeId
-                            )
-                        )
-                    } else {
-                        onOpenBrowser(
-                            browserOpenRequest(
-                                locationId = entry.locationId,
-                                directoryPath = entry.path
-                            )
-                        )
-                    }
+                },
+                onApplyManualInputSelection = { rawInput ->
+                    manualOpenDelegates.applyManualInputSelection(rawInput)
                 }
-            }
+            )
+        },
+        onOpenRecentFolder = { entry ->
+            onOpenRecentFolderFromEntry(
+                entry = entry,
+                networkNodes = networkNodes,
+                onOpenBrowser = onOpenBrowser
+            )
             onCurrentViewChanged(MainView.Browser)
         },
         onPlayRecentFile = { entry ->
@@ -128,6 +120,82 @@ internal fun AppNavigationHomeContentSection(
                 onApplyManualInputSelection = { rawInput ->
                     manualOpenDelegates.applyManualInputSelection(rawInput)
                 }
+            )
+        },
+        onPinRecentFolder = { entry ->
+            val updated = buildUpdatedPinnedHomeEntries(
+                current = pinnedHomeEntries,
+                candidate = HomePinnedEntry(
+                    path = entry.path,
+                    isFolder = true,
+                    locationId = entry.locationId,
+                    title = entry.title,
+                    sourceNodeId = entry.sourceNodeId
+                ),
+                maxItems = PINNED_HOME_ENTRIES_LIMIT
+            )
+            onPinnedHomeEntriesChanged(updated)
+        },
+        onPinRecentFile = { entry ->
+            val updated = buildUpdatedPinnedHomeEntries(
+                current = pinnedHomeEntries,
+                candidate = HomePinnedEntry(
+                    path = entry.path,
+                    isFolder = false,
+                    locationId = entry.locationId,
+                    title = entry.title,
+                    artist = entry.artist,
+                    decoderName = entry.decoderName,
+                    sourceNodeId = entry.sourceNodeId,
+                    artworkThumbnailCacheKey = entry.artworkThumbnailCacheKey
+                ),
+                maxItems = PINNED_HOME_ENTRIES_LIMIT
+            )
+            onPinnedHomeEntriesChanged(updated)
+        },
+        onPinnedFolderAction = { entry, action ->
+            applyPinnedFolderAction(
+                context = context,
+                entry = entry,
+                action = action,
+                pinnedEntries = pinnedHomeEntries,
+                onPinnedEntriesChanged = onPinnedHomeEntriesChanged,
+                onOpenInBrowser = { locationId, directoryPath, smbSourceNodeId, httpSourceNodeId ->
+                    onOpenBrowser(
+                        browserOpenRequest(
+                            locationId = locationId,
+                            directoryPath = directoryPath,
+                            smbSourceNodeId = smbSourceNodeId,
+                            httpSourceNodeId = httpSourceNodeId
+                        )
+                    )
+                    onCurrentViewChanged(MainView.Browser)
+                },
+                networkNodes = networkNodes
+            )
+        },
+        onPinnedFileAction = { entry, action ->
+            applyPinnedSourceAction(
+                context = context,
+                entry = entry,
+                action = action,
+                pinnedEntries = pinnedHomeEntries,
+                onPinnedEntriesChanged = onPinnedHomeEntriesChanged,
+                resolveShareableFileForRecent = { pinned ->
+                    runtimeDelegates.resolveShareableFileForRecent(pinned.asRecentPathEntry())
+                },
+                onOpenInBrowser = { locationId, directoryPath, smbSourceNodeId, httpSourceNodeId ->
+                    onOpenBrowser(
+                        browserOpenRequest(
+                            locationId = locationId,
+                            directoryPath = directoryPath,
+                            smbSourceNodeId = smbSourceNodeId,
+                            httpSourceNodeId = httpSourceNodeId
+                        )
+                    )
+                    onCurrentViewChanged(MainView.Browser)
+                },
+                networkNodes = networkNodes
             )
         },
         onPersistRecentFileMetadata = { entry, title, artist ->
@@ -203,6 +271,9 @@ internal fun AppNavigationHomeContentSection(
         },
         canShareRecentFile = { entry ->
             runtimeDelegates.resolveShareableFileForRecent(entry) != null
+        },
+        canSharePinnedFile = { entry ->
+            runtimeDelegates.resolveShareableFileForRecent(entry.asRecentPathEntry()) != null
         }
     )
 }
@@ -212,6 +283,8 @@ internal fun AppNavigationNetworkContentSection(
     mainPadding: PaddingValues,
     bottomContentPadding: Dp,
     isPlayerExpanded: Boolean,
+    pinnedHomeEntries: List<HomePinnedEntry>,
+    onPinnedHomeEntriesChanged: (List<HomePinnedEntry>) -> Unit,
     networkNodes: List<NetworkNode>,
     networkCurrentFolderId: Long?,
     manualOpenDelegates: AppNavigationManualOpenDelegates,
@@ -256,6 +329,24 @@ internal fun AppNavigationNetworkContentSection(
                 )
             )
             onCurrentViewChanged(MainView.Browser)
+        },
+        pinnedHomeEntries = pinnedHomeEntries,
+        onPinHomeEntry = { recentEntry, isFolder ->
+            val updated = buildUpdatedPinnedHomeEntries(
+                current = pinnedHomeEntries,
+                candidate = HomePinnedEntry(
+                    path = recentEntry.path,
+                    isFolder = isFolder,
+                    locationId = recentEntry.locationId,
+                    title = recentEntry.title,
+                    artist = recentEntry.artist,
+                    decoderName = recentEntry.decoderName,
+                    sourceNodeId = recentEntry.sourceNodeId,
+                    artworkThumbnailCacheKey = recentEntry.artworkThumbnailCacheKey
+                ),
+                maxItems = PINNED_HOME_ENTRIES_LIMIT
+            )
+            onPinnedHomeEntriesChanged(updated)
         }
     )
 }
@@ -282,6 +373,8 @@ internal fun AppNavigationBrowserContentSection(
     trackLoadDelegates: AppNavigationTrackLoadDelegates,
     manualOpenDelegates: AppNavigationManualOpenDelegates,
     runtimeDelegates: AppNavigationRuntimeDelegates,
+    pinnedHomeEntries: List<HomePinnedEntry>,
+    onPinnedHomeEntriesChanged: (List<HomePinnedEntry>) -> Unit,
     onCurrentViewChanged: (MainView) -> Unit,
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
     onBrowserLaunchStateChanged: (BrowserLaunchState) -> Unit,
@@ -343,7 +436,25 @@ internal fun AppNavigationBrowserContentSection(
             )
         },
         onRememberSmbCredentials = onRememberSmbCredentials,
-        onRememberHttpCredentials = onRememberHttpCredentials
+        onRememberHttpCredentials = onRememberHttpCredentials,
+        pinnedHomeEntries = pinnedHomeEntries,
+        onPinHomeEntry = { recentEntry, isFolder ->
+            val updated = buildUpdatedPinnedHomeEntries(
+                current = pinnedHomeEntries,
+                candidate = HomePinnedEntry(
+                    path = recentEntry.path,
+                    isFolder = isFolder,
+                    locationId = recentEntry.locationId,
+                    title = recentEntry.title,
+                    artist = recentEntry.artist,
+                    decoderName = recentEntry.decoderName,
+                    sourceNodeId = recentEntry.sourceNodeId,
+                    artworkThumbnailCacheKey = recentEntry.artworkThumbnailCacheKey
+                ),
+                maxItems = PINNED_HOME_ENTRIES_LIMIT
+            )
+            onPinnedHomeEntriesChanged(updated)
+        }
     )
 }
 
@@ -361,6 +472,7 @@ internal fun AppNavigationMainContentHost(
     context: Context,
     prefs: SharedPreferences,
     currentPlaybackSourceId: String?,
+    currentPlaybackRequestUrl: String?,
     selectedFile: File?,
     metadataTitle: String,
     metadataArtist: String,
@@ -408,6 +520,60 @@ internal fun AppNavigationMainContentHost(
     onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit,
     settingsContent: @Composable (PaddingValues) -> Unit
 ) {
+    val pinnedHomeEntriesState = androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(readPinnedHomeEntries(prefs))
+    }
+    val pinnedHomeEntries = pinnedHomeEntriesState.value
+    val onPinnedHomeEntriesChanged: (List<HomePinnedEntry>) -> Unit = { updated ->
+        pinnedHomeEntriesState.value = updated
+        writePinnedHomeEntries(prefs, updated)
+    }
+    val activePlaybackSource = currentPlaybackSourceId ?: selectedFile?.absolutePath
+    LaunchedEffect(
+        activePlaybackSource,
+        currentPlaybackRequestUrl,
+        metadataTitle,
+        metadataArtist,
+        isPlaying,
+        pinnedHomeEntries
+    ) {
+        if (!isPlaying) return@LaunchedEffect
+        val sourceId = activePlaybackSource ?: return@LaunchedEffect
+        val targetPinned = pinnedHomeEntries.firstOrNull { entry ->
+            !entry.isFolder && samePath(entry.path, sourceId)
+        } ?: return@LaunchedEffect
+        val normalizedTitle = metadataTitle.trim()
+        val normalizedArtist = metadataArtist.trim()
+        val decoderName = NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() }
+        var updatedPinned = mergePinnedFileMetadataAndArtwork(
+            current = pinnedHomeEntries,
+            path = sourceId,
+            title = normalizedTitle,
+            artist = normalizedArtist,
+            decoderName = decoderName,
+            artworkThumbnailCacheKey = null
+        )
+        if (targetPinned.artworkThumbnailCacheKey.isNullOrBlank()) {
+            val artworkCacheKey = withContext(Dispatchers.IO) {
+                ensureRecentArtworkThumbnailCached(
+                    context = context.applicationContext,
+                    sourceId = sourceId,
+                    requestUrlHint = currentPlaybackRequestUrl
+                )
+            }
+            updatedPinned = mergePinnedFileMetadataAndArtwork(
+                current = updatedPinned,
+                path = sourceId,
+                title = null,
+                artist = null,
+                decoderName = null,
+                artworkThumbnailCacheKey = artworkCacheKey
+            )
+        }
+        if (updatedPinned != pinnedHomeEntries) {
+            onPinnedHomeEntriesChanged(updatedPinned)
+        }
+    }
     AppNavigationMainScaffoldSection(
         currentView = currentView,
         mainContentFocusRequester = mainContentFocusRequester,
@@ -427,6 +593,7 @@ internal fun AppNavigationMainContentHost(
                 metadataTitle = metadataTitle,
                 metadataArtist = metadataArtist,
                 isPlaying = isPlaying,
+                pinnedHomeEntries = pinnedHomeEntries,
                 recentFolders = recentFolders,
                 recentPlayedFiles = recentPlayedFiles,
                 recentFoldersLimit = recentFoldersLimit,
@@ -438,6 +605,7 @@ internal fun AppNavigationMainContentHost(
                 trackLoadDelegates = trackLoadDelegates,
                 manualOpenDelegates = manualOpenDelegates,
                 runtimeDelegates = runtimeDelegates,
+                onPinnedHomeEntriesChanged = onPinnedHomeEntriesChanged,
                 onRecentFoldersChanged = onRecentFoldersChanged,
                 onRecentPlayedFilesChanged = onRecentPlayedFilesChanged,
                 onOpenBrowser = onOpenBrowser,
@@ -450,6 +618,8 @@ internal fun AppNavigationMainContentHost(
                 mainPadding = mainPadding,
                 bottomContentPadding = miniPlayerListInset,
                 isPlayerExpanded = isPlayerExpanded,
+                pinnedHomeEntries = pinnedHomeEntries,
+                onPinnedHomeEntriesChanged = onPinnedHomeEntriesChanged,
                 networkNodes = networkNodes,
                 networkCurrentFolderId = networkCurrentFolderId,
                 manualOpenDelegates = manualOpenDelegates,
@@ -483,6 +653,8 @@ internal fun AppNavigationMainContentHost(
                 trackLoadDelegates = trackLoadDelegates,
                 manualOpenDelegates = manualOpenDelegates,
                 runtimeDelegates = runtimeDelegates,
+                pinnedHomeEntries = pinnedHomeEntries,
+                onPinnedHomeEntriesChanged = onPinnedHomeEntriesChanged,
                 onCurrentViewChanged = onCurrentViewChanged,
                 onVisiblePlayableFilesChanged = onVisiblePlayableFilesChanged,
                 onBrowserLaunchStateChanged = onBrowserLaunchStateChanged,
@@ -496,5 +668,63 @@ internal fun AppNavigationMainContentHost(
             )
         },
         settingsContent = settingsContent
+    )
+}
+
+private fun onOpenRecentFolderFromEntry(
+    entry: RecentPathEntry,
+    networkNodes: List<NetworkNode>,
+    onOpenBrowser: (BrowserOpenRequest) -> Unit
+) {
+    val archiveLogicalPath = parseArchiveLogicalPath(entry.path)
+    if (archiveLogicalPath != null) {
+        val archiveSourcePath = archiveLogicalPath.first
+        val isArchiveSmb = parseSmbSourceSpecFromInput(archiveSourcePath) != null
+        val isArchiveHttp = parseHttpSourceSpecFromInput(archiveSourcePath) != null
+        onOpenBrowser(
+            browserOpenRequest(
+                locationId = null,
+                directoryPath = entry.path,
+                smbSourceNodeId = if (isArchiveSmb) entry.sourceNodeId else null,
+                httpSourceNodeId = if (isArchiveHttp) entry.sourceNodeId else null
+            )
+        )
+        return
+    }
+    val smbSpec = parseSmbSourceSpecFromInput(entry.path)
+    if (smbSpec != null) {
+        val smbTarget = resolveSmbRecentOpenTarget(
+            targetSpec = smbSpec,
+            networkNodes = networkNodes,
+            preferredSourceNodeId = entry.sourceNodeId
+        )
+        onOpenBrowser(
+            browserOpenRequest(
+                directoryPath = smbTarget.requestUri,
+                smbSourceNodeId = smbTarget.sourceNodeId
+            )
+        )
+        return
+    }
+    val httpSpec = parseHttpSourceSpecFromInput(entry.path)
+    if (httpSpec != null) {
+        val httpTarget = resolveHttpRecentOpenTarget(
+            targetSpec = httpSpec,
+            networkNodes = networkNodes,
+            preferredSourceNodeId = entry.sourceNodeId
+        )
+        onOpenBrowser(
+            browserOpenRequest(
+                directoryPath = httpTarget.requestUri,
+                httpSourceNodeId = httpTarget.sourceNodeId
+            )
+        )
+        return
+    }
+    onOpenBrowser(
+        browserOpenRequest(
+            locationId = entry.locationId,
+            directoryPath = entry.path
+        )
     )
 }

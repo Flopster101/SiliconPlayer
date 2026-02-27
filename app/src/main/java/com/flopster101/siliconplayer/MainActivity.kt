@@ -2598,6 +2598,7 @@ private fun AppNavigation(
             context = context,
             prefs = prefs,
             currentPlaybackSourceId = currentPlaybackSourceId,
+            currentPlaybackRequestUrl = currentPlaybackRequestUrl,
             selectedFile = selectedFile,
             metadataTitle = metadataTitle,
             metadataArtist = metadataArtist,

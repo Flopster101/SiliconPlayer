@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Public
@@ -104,6 +105,7 @@ import com.flopster101.siliconplayer.NetworkNodeType
 import com.flopster101.siliconplayer.NetworkSourceKind
 import com.flopster101.siliconplayer.SmbSourceSpec
 import com.flopster101.siliconplayer.HttpSourceSpec
+import com.flopster101.siliconplayer.HomePinnedEntry
 import com.flopster101.siliconplayer.buildRecentTrackDisplay
 import com.flopster101.siliconplayer.buildHttpDisplayUri
 import com.flopster101.siliconplayer.buildHttpRequestUri
@@ -120,9 +122,12 @@ import com.flopster101.siliconplayer.listSmbHostShareEntries
 import com.flopster101.siliconplayer.normalizeHttpDirectoryPath
 import com.flopster101.siliconplayer.normalizeHttpPath
 import com.flopster101.siliconplayer.nextNetworkNodeId
+import com.flopster101.siliconplayer.PINNED_HOME_ENTRIES_LIMIT
 import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
 import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
 import com.flopster101.siliconplayer.placeholderArtworkIconForFile
+import com.flopster101.siliconplayer.previewPinnedHomeEntryInsertion
+import com.flopster101.siliconplayer.RecentPathEntry
 import com.flopster101.siliconplayer.resolveNetworkNodeDisplaySource
 import com.flopster101.siliconplayer.resolveNetworkNodeDisplayTitle
 import com.flopster101.siliconplayer.resolveNetworkNodeHttpRootPath
@@ -182,7 +187,9 @@ internal fun NetworkBrowserScreen(
     onCancelPendingMetadataBackfill: () -> Unit,
     onOpenRemoteSource: (String) -> Unit,
     onBrowseSmbSource: (String, Long?) -> Unit,
-    onBrowseHttpSource: (String, Long?, String?) -> Unit
+    onBrowseHttpSource: (String, Long?, String?) -> Unit,
+    pinnedHomeEntries: List<HomePinnedEntry> = emptyList(),
+    onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit = { _, _ -> }
 ) {
     var showAddMenu by remember { mutableStateOf(false) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
@@ -215,6 +222,8 @@ internal fun NetworkBrowserScreen(
     var infoRemoteFetchInProgress by remember { mutableStateOf(false) }
     var infoRemoteError by remember { mutableStateOf<String?>(null) }
     var infoFetchJob by remember { mutableStateOf<Job?>(null) }
+    var pendingPinConfirmation by remember { mutableStateOf<Pair<RecentPathEntry, Boolean>?>(null) }
+    var pendingPinEvictionCandidate by remember { mutableStateOf<HomePinnedEntry?>(null) }
 
     var newFolderName by remember { mutableStateOf("") }
     var newSourceName by remember { mutableStateOf("") }
@@ -856,6 +865,49 @@ internal fun NetworkBrowserScreen(
                 infoFetchJob = null
             }
         }
+    }
+
+    fun requestPin(entry: NetworkNode) {
+        expandedEntryMenuNodeId = null
+        if (entry.type != NetworkNodeType.RemoteSource) {
+            blockedOperationMessage = "Only remote entries can be pinned to home."
+            return
+        }
+        val sourceId = resolveNetworkNodeSourceId(entry).orEmpty()
+        if (sourceId.isBlank()) {
+            blockedOperationMessage = "This entry cannot be pinned."
+            return
+        }
+        val isFolder = isSmbFolderLikeSource(entry, sourceId) ||
+            isHttpFolderLikeSource(entry, sourceId)
+        val recentEntry = RecentPathEntry(
+            path = sourceId,
+            locationId = null,
+            title = if (isFolder) resolveNetworkNodeDisplayTitle(entry) else null,
+            sourceNodeId = entry.id
+        )
+        val preview = previewPinnedHomeEntryInsertion(
+            current = pinnedHomeEntries,
+            candidate = HomePinnedEntry(
+                path = recentEntry.path,
+                isFolder = isFolder,
+                locationId = recentEntry.locationId,
+                title = recentEntry.title,
+                sourceNodeId = recentEntry.sourceNodeId
+            ),
+            maxItems = PINNED_HOME_ENTRIES_LIMIT
+        )
+        if (preview.requiresConfirmation) {
+            pendingPinEvictionCandidate = preview.evictionCandidate
+            pendingPinConfirmation = recentEntry to isFolder
+            return
+        }
+        onPinHomeEntry(recentEntry, isFolder)
+        Toast.makeText(
+            context,
+            if (isFolder) "Pinned folder to home" else "Pinned file to home",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     fun requestInfo(nodeIds: Set<Long>) {
@@ -1996,6 +2048,31 @@ internal fun NetworkBrowserScreen(
                                         }
                                     )
                                     DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                if (
+                                                    entry.type == NetworkNodeType.RemoteSource &&
+                                                    (
+                                                        isSmbFolderLikeSource(entry, resolveNetworkNodeSourceId(entry).orEmpty()) ||
+                                                            isHttpFolderLikeSource(entry, resolveNetworkNodeSourceId(entry).orEmpty())
+                                                        )
+                                                ) {
+                                                    "Pin folder to home"
+                                                } else {
+                                                    "Pin file to home"
+                                                }
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Home,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        enabled = entry.type == NetworkNodeType.RemoteSource,
+                                        onClick = { requestPin(entry) }
+                                    )
+                                    DropdownMenuItem(
                                         text = { Text("Delete") },
                                         leadingIcon = {
                                             Icon(
@@ -2294,6 +2371,49 @@ internal fun NetworkBrowserScreen(
                 TextButton(onClick = { refreshPopupHidden = true }) {
                     Text("Hide")
                 }
+            }
+        )
+    }
+
+    pendingPinConfirmation?.let { (entry, isFolder) ->
+        AlertDialog(
+            onDismissRequest = {
+                pendingPinConfirmation = null
+                pendingPinEvictionCandidate = null
+            },
+            title = { Text("Pin limit reached") },
+            text = {
+                Text(
+                    text = buildString {
+                        append("You can pin up to $PINNED_HOME_ENTRIES_LIMIT entries. ")
+                        val eviction = pendingPinEvictionCandidate
+                        if (eviction != null) {
+                            append("The oldest pinned ")
+                            append(if (eviction.isFolder) "folder" else "file")
+                            append(" will be removed to make space.")
+                        } else {
+                            append("The oldest pinned entry will be removed to make space.")
+                        }
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onPinHomeEntry(entry, isFolder)
+                        pendingPinConfirmation = null
+                        pendingPinEvictionCandidate = null
+                    }
+                ) { Text("Continue") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingPinConfirmation = null
+                        pendingPinEvictionCandidate = null
+                    }
+                ) { Text("Cancel") }
             }
         )
     }

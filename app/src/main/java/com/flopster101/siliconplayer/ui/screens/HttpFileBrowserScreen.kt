@@ -35,6 +35,7 @@ import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PlayArrow
@@ -86,6 +87,9 @@ import com.flopster101.siliconplayer.HttpSourceSpec
 import com.flopster101.siliconplayer.RemoteExportCancelledException
 import com.flopster101.siliconplayer.AppDefaults
 import com.flopster101.siliconplayer.AppPreferenceKeys
+import com.flopster101.siliconplayer.HomePinnedEntry
+import com.flopster101.siliconplayer.PINNED_HOME_ENTRIES_LIMIT
+import com.flopster101.siliconplayer.RecentPathEntry
 import com.flopster101.siliconplayer.ManualSmbAuthCoordinator
 import com.flopster101.siliconplayer.buildHttpDisplayUri
 import com.flopster101.siliconplayer.buildHttpRequestUri
@@ -107,6 +111,7 @@ import com.flopster101.siliconplayer.prepareRemoteExportFile
 import com.flopster101.siliconplayer.resolveHttpAuthenticationFailureReason
 import com.flopster101.siliconplayer.rememberDialogLazyListScrollbarAlpha
 import com.flopster101.siliconplayer.stripUrlFragment
+import com.flopster101.siliconplayer.previewPinnedHomeEntryInsertion
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
 import com.flopster101.siliconplayer.RemotePlayableSourceIdsHolder
@@ -161,7 +166,9 @@ internal fun HttpFileBrowserScreen(
     onOpenRemoteSourceAsCached: (String) -> Unit,
     onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit,
     sourceNodeId: Long?,
-    onBrowserLocationChanged: (BrowserLaunchState) -> Unit
+    onBrowserLocationChanged: (BrowserLaunchState) -> Unit,
+    pinnedHomeEntries: List<HomePinnedEntry> = emptyList(),
+    onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val browserPrefs = remember(context) {
@@ -259,6 +266,8 @@ internal fun HttpFileBrowserScreen(
     var archiveOpenJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
     var previewDownloadProgressState by remember(screenSessionKey) { mutableStateOf<BrowserRemoteExportProgressState?>(null) }
     var previewLoadJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
+    var pendingPinConfirmation by remember(screenSessionKey) { mutableStateOf<Pair<RecentPathEntry, Boolean>?>(null) }
+    var pendingPinEvictionCandidate by remember(screenSessionKey) { mutableStateOf<HomePinnedEntry?>(null) }
 
     fun updatePlayableRemoteSources(entriesForNavigation: List<HttpBrowserEntry>) {
         RemotePlayableSourceIdsHolder.current = entriesForNavigation
@@ -678,6 +687,45 @@ internal fun HttpFileBrowserScreen(
         }
     }
 
+    fun selectedAnyEntries(): List<HttpBrowserEntry> {
+        return browsableEntries.filter { entry ->
+            browserSelectionController.selectedKeys.contains(entrySelectionKeyFor(entry))
+        }
+    }
+
+    fun requestPinSelectedEntry() {
+        val selectedEntry = selectedAnyEntries().singleOrNull() ?: return
+        val isFolder = selectedEntry.isDirectory
+        val recentEntry = RecentPathEntry(
+            path = selectedEntry.sourceId,
+            locationId = null,
+            title = selectedEntry.name.takeIf { isFolder },
+            sourceNodeId = sourceNodeId
+        )
+        val preview = previewPinnedHomeEntryInsertion(
+            current = pinnedHomeEntries,
+            candidate = HomePinnedEntry(
+                path = recentEntry.path,
+                isFolder = isFolder,
+                locationId = recentEntry.locationId,
+                title = recentEntry.title,
+                sourceNodeId = recentEntry.sourceNodeId
+            ),
+            maxItems = PINNED_HOME_ENTRIES_LIMIT
+        )
+        if (preview.requiresConfirmation) {
+            pendingPinEvictionCandidate = preview.evictionCandidate
+            pendingPinConfirmation = recentEntry to isFolder
+            return
+        }
+        onPinHomeEntry(recentEntry, isFolder)
+        Toast.makeText(
+            context,
+            if (isFolder) "Pinned folder to home" else "Pinned file to home",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
     fun openArchiveEntry(entry: HttpBrowserEntry) {
         val parsedSpec = parseHttpSourceSpecFromInput(entry.requestUrl) ?: return
         val authSpec = parsedSpec.copy(
@@ -1082,6 +1130,14 @@ internal fun HttpFileBrowserScreen(
                                             exportDirectoryLauncher.launch(null)
                                         }
                                     }
+                                ),
+                                BrowserSelectionActionItem(
+                                    label = selectedAnyEntries().singleOrNull()?.let { entry ->
+                                        if (entry.isDirectory) "Pin folder to home" else "Pin file to home"
+                                    } ?: "Pin to home",
+                                    icon = Icons.Default.Home,
+                                    enabled = selectedAnyEntries().size == 1,
+                                    onClick = { requestPinSelectedEntry() }
                                 ),
                                 BrowserSelectionActionItem(
                                     label = "Info",
@@ -1540,6 +1596,47 @@ internal fun HttpFileBrowserScreen(
             title = "Info",
             fields = browserInfoFields,
             onDismiss = { showBrowserInfoDialog = false }
+        )
+    }
+    pendingPinConfirmation?.let { (entry, isFolder) ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {
+                pendingPinConfirmation = null
+                pendingPinEvictionCandidate = null
+            },
+            title = { Text("Pin limit reached") },
+            text = {
+                Text(
+                    text = buildString {
+                        append("You can pin up to $PINNED_HOME_ENTRIES_LIMIT entries. ")
+                        val eviction = pendingPinEvictionCandidate
+                        if (eviction != null) {
+                            append("The oldest pinned ")
+                            append(if (eviction.isFolder) "folder" else "file")
+                            append(" will be removed to make space.")
+                        } else {
+                            append("The oldest pinned entry will be removed to make space.")
+                        }
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onPinHomeEntry(entry, isFolder)
+                        pendingPinConfirmation = null
+                        pendingPinEvictionCandidate = null
+                    }
+                ) { Text("Continue") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingPinConfirmation = null
+                        pendingPinEvictionCandidate = null
+                    }
+                ) { Text("Cancel") }
+            }
         )
     }
     textPreviewDialogState?.let { (fileName, textContent) ->

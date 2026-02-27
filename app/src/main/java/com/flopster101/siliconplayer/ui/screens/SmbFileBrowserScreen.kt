@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PlayArrow
@@ -79,6 +80,9 @@ import com.flopster101.siliconplayer.SmbSourceSpec
 import com.flopster101.siliconplayer.SmbAuthenticationFailureReason
 import com.flopster101.siliconplayer.AppDefaults
 import com.flopster101.siliconplayer.AppPreferenceKeys
+import com.flopster101.siliconplayer.HomePinnedEntry
+import com.flopster101.siliconplayer.PINNED_HOME_ENTRIES_LIMIT
+import com.flopster101.siliconplayer.RecentPathEntry
 import com.flopster101.siliconplayer.buildSmbEntrySourceSpec
 import com.flopster101.siliconplayer.buildSmbDisplayUri
 import com.flopster101.siliconplayer.buildSmbRequestUri
@@ -98,6 +102,7 @@ import com.flopster101.siliconplayer.normalizeSmbPathForShare
 import com.flopster101.siliconplayer.resolveSmbAuthenticationFailureReason
 import com.flopster101.siliconplayer.rememberDialogLazyListScrollbarAlpha
 import com.flopster101.siliconplayer.smbAuthenticationFailureMessage
+import com.flopster101.siliconplayer.previewPinnedHomeEntryInsertion
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
 import com.flopster101.siliconplayer.RemotePlayableSourceIdsHolder
@@ -148,7 +153,9 @@ internal fun SmbFileBrowserScreen(
     onOpenRemoteSourceAsCached: (String) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
     sourceNodeId: Long?,
-    onBrowserLocationChanged: (BrowserLaunchState) -> Unit
+    onBrowserLocationChanged: (BrowserLaunchState) -> Unit,
+    pinnedHomeEntries: List<HomePinnedEntry> = emptyList(),
+    onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val browserPrefs = remember(context) {
@@ -249,6 +256,8 @@ internal fun SmbFileBrowserScreen(
     var previewDownloadProgressState by remember(screenSessionKey) { mutableStateOf<BrowserRemoteExportProgressState?>(null) }
     var previewLoadJob by remember(screenSessionKey) { mutableStateOf<Job?>(null) }
     val directoryEntriesCache = remember(screenSessionKey) { mutableStateMapOf<String, List<SmbBrowserEntry>>() }
+    var pendingPinConfirmation by remember(screenSessionKey) { mutableStateOf<Pair<RecentPathEntry, Boolean>?>(null) }
+    var pendingPinEvictionCandidate by remember(screenSessionKey) { mutableStateOf<HomePinnedEntry?>(null) }
 
     fun appendLoadingLog(message: String) {
         val lineNumber = loadingLogLines.size + 1
@@ -660,6 +669,60 @@ internal fun SmbFileBrowserScreen(
         }
     }
 
+    fun selectedAnyEntries(): List<SmbBrowserEntry> {
+        return browsableEntries.filter { entry ->
+            browserSelectionController.selectedKeys.contains(entrySelectionKeyFor(entry))
+        }
+    }
+
+    fun requestPinSelectedEntry() {
+        val selectedEntry = selectedAnyEntries().singleOrNull() ?: return
+        val isFolder = selectedEntry.isDirectory
+        val path = if (sharePickerMode) {
+            buildSmbSourceId(
+                credentialsSpec.copy(
+                    share = selectedEntry.name,
+                    path = null
+                )
+            )
+        } else {
+            val targetPath = joinSmbRelativePath(effectivePath().orEmpty(), selectedEntry.name)
+            val targetSpec = buildSmbEntrySourceSpec(
+                credentialsSpec.copy(share = currentShare),
+                targetPath
+            )
+            buildSmbSourceId(targetSpec)
+        }
+        val recentEntry = RecentPathEntry(
+            path = path,
+            locationId = null,
+            title = selectedEntry.name.takeIf { isFolder },
+            sourceNodeId = sourceNodeId
+        )
+        val preview = previewPinnedHomeEntryInsertion(
+            current = pinnedHomeEntries,
+            candidate = HomePinnedEntry(
+                path = recentEntry.path,
+                isFolder = isFolder,
+                locationId = recentEntry.locationId,
+                title = recentEntry.title,
+                sourceNodeId = recentEntry.sourceNodeId
+            ),
+            maxItems = PINNED_HOME_ENTRIES_LIMIT
+        )
+        if (preview.requiresConfirmation) {
+            pendingPinEvictionCandidate = preview.evictionCandidate
+            pendingPinConfirmation = recentEntry to isFolder
+            return
+        }
+        onPinHomeEntry(recentEntry, isFolder)
+        Toast.makeText(
+            context,
+            if (isFolder) "Pinned folder to home" else "Pinned file to home",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
     fun openArchiveEntry(entry: SmbBrowserEntry) {
         val targetPath = joinSmbRelativePath(effectivePath().orEmpty(), entry.name)
         val targetSpec = buildSmbEntrySourceSpec(
@@ -1061,6 +1124,14 @@ internal fun SmbFileBrowserScreen(
                                             exportDirectoryLauncher.launch(null)
                                         }
                                     }
+                                ),
+                                BrowserSelectionActionItem(
+                                    label = selectedAnyEntries().singleOrNull()?.let { entry ->
+                                        if (entry.isDirectory) "Pin folder to home" else "Pin file to home"
+                                    } ?: "Pin to home",
+                                    icon = Icons.Default.Home,
+                                    enabled = selectedAnyEntries().size == 1,
+                                    onClick = { requestPinSelectedEntry() }
                                 ),
                                 BrowserSelectionActionItem(
                                     label = "Info",
@@ -1504,6 +1575,47 @@ internal fun SmbFileBrowserScreen(
             title = "Info",
             fields = browserInfoFields,
             onDismiss = { showBrowserInfoDialog = false }
+        )
+    }
+    pendingPinConfirmation?.let { (entry, isFolder) ->
+        AlertDialog(
+            onDismissRequest = {
+                pendingPinConfirmation = null
+                pendingPinEvictionCandidate = null
+            },
+            title = { Text("Pin limit reached") },
+            text = {
+                Text(
+                    text = buildString {
+                        append("You can pin up to $PINNED_HOME_ENTRIES_LIMIT entries. ")
+                        val eviction = pendingPinEvictionCandidate
+                        if (eviction != null) {
+                            append("The oldest pinned ")
+                            append(if (eviction.isFolder) "folder" else "file")
+                            append(" will be removed to make space.")
+                        } else {
+                            append("The oldest pinned entry will be removed to make space.")
+                        }
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onPinHomeEntry(entry, isFolder)
+                        pendingPinConfirmation = null
+                        pendingPinEvictionCandidate = null
+                    }
+                ) { Text("Continue") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingPinConfirmation = null
+                        pendingPinEvictionCandidate = null
+                    }
+                ) { Text("Cancel") }
+            }
         )
     }
     textPreviewDialogState?.let { (fileName, textContent) ->

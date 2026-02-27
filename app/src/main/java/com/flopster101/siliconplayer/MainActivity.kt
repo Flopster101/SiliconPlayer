@@ -107,6 +107,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -1550,6 +1551,8 @@ private fun AppNavigation(
     var miniExpandPreviewProgress by remember { mutableFloatStateOf(0f) }
     var expandFromMiniDrag by remember { mutableStateOf(false) }
     var collapseFromSwipe by remember { mutableStateOf(false) }
+    var collapseDragInProgress by remember { mutableStateOf(false) }
+    var expandedOverlaySettledVisible by remember { mutableStateOf(false) }
     val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val miniPreviewLiftPx = with(LocalDensity.current) { 28.dp.toPx() }
     val stopAndEmptyTrackBase = buildStopAndEmptyTrackDelegate(
@@ -1646,6 +1649,10 @@ private fun AppNavigation(
                     restoreMiniPlayerFocusOnCollapse = true
                 }
                 isPlayerExpanded = expanded
+                if (!expanded) {
+                    collapseDragInProgress = false
+                    expandedOverlaySettledVisible = false
+                }
             },
             popSettingsRoute = popSettingsRoute,
             exitSettingsToReturnView = exitSettingsToReturnView
@@ -1740,6 +1747,8 @@ private fun AppNavigation(
             onExpandFromMiniDragChanged = { expandFromMiniDrag = it },
             collapseFromSwipe = collapseFromSwipe,
             onCollapseFromSwipeChanged = { collapseFromSwipe = it },
+            onCollapseDragProgressChanged = { collapseDragInProgress = it },
+            onExpandedOverlaySettledVisibleChanged = { expandedOverlaySettledVisible = it },
             onPlayerExpandedChanged = { expanded ->
                 if (
                     isPlayerExpanded &&
@@ -1750,6 +1759,10 @@ private fun AppNavigation(
                     restoreMiniPlayerFocusOnCollapse = true
                 }
                 isPlayerExpanded = expanded
+                if (!expanded) {
+                    collapseDragInProgress = false
+                    expandedOverlaySettledVisible = false
+                }
             },
             screenHeightPx = screenHeightPx,
             miniPreviewLiftPx = miniPreviewLiftPx,
@@ -2572,137 +2585,151 @@ private fun AppNavigation(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        val shouldRenderBackgroundContent =
+            !isPlayerExpanded || collapseDragInProgress || !expandedOverlaySettledVisible
         val openBrowser: (BrowserOpenRequest) -> Unit = { request ->
             browserNavigator.open(
                 request = request,
                 keepHistory = currentView == MainView.Browser
             )
         }
-        AppNavigationMainContentHost(
-            currentView = currentView,
-            mainContentFocusRequester = mainContentFocusRequester,
-            canFocusMiniPlayer = isPlayerSurfaceVisible && !isPlayerExpanded,
-            requestMiniPlayerFocus = { miniPlayerFocusRequester.requestFocus() },
-            onHardwareNavigationInput = { showMiniPlayerFocusHighlight = true },
-            onTouchInteraction = { showMiniPlayerFocusHighlight = false },
-            onOpenPlayerSurface = {
-                isPlayerSurfaceVisible = true
-                isPlayerExpanded = true
-                collapseFromSwipe = false
-                expandFromMiniDrag = false
-                miniExpandPreviewProgress = 0f
-            },
-            onHomeRequested = { currentView = MainView.Home },
-            onSettingsRequested = {
-                settingsLaunchedFromPlayer = false
-                settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
-                openSettingsRoute(SettingsRoute.Root, true)
-                currentView = MainView.Settings
-            },
-            context = context,
-            prefs = prefs,
-            currentPlaybackSourceId = currentPlaybackSourceId,
-            currentPlaybackRequestUrl = currentPlaybackRequestUrl,
-            selectedFile = selectedFile,
-            metadataTitle = metadataTitle,
-            metadataArtist = metadataArtist,
-            isPlaying = isPlaying,
-            recentFolders = recentFolders,
-            recentPlayedFiles = recentPlayedFiles,
-            recentFoldersLimit = recentFoldersLimit,
-            recentFilesLimit = recentFilesLimit,
-            networkNodes = networkNodes,
-            storageDescriptors = storageDescriptors,
-            miniPlayerListInset = miniPlayerListInset,
-            openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-            autoPlayOnTrackSelect = autoPlayOnTrackSelect,
-            trackLoadDelegates = trackLoadDelegates,
-            manualOpenDelegates = manualOpenDelegates,
-            runtimeDelegates = runtimeDelegates,
-            onRecentFoldersChanged = { recentFolders = it },
-            onRecentPlayedFilesChanged = { recentPlayedFiles = it },
-            onOpenBrowser = openBrowser,
-            onCurrentViewChanged = { currentView = it },
-            onOpenUrlOrPathDialog = {
-                urlOrPathInput = ""
-                showUrlOrPathDialog = true
-            },
-            isPlayerExpanded = isPlayerExpanded,
-            networkCurrentFolderId = networkCurrentFolderId,
-            onNetworkCurrentFolderIdChanged = { networkCurrentFolderId = it },
-            onNetworkNodesChanged = { updatedNodes ->
-                networkNodes = updatedNodes
-                writeNetworkNodes(prefs, updatedNodes)
-            },
-            onResolveRemoteSourceMetadata = { sourceId, onSettled ->
-                scheduleNetworkSourceMetadataBackfill(
-                    scope = appScope,
-                    context = context.applicationContext,
-                    sourceId = sourceId,
-                    onResolved = { resolvedSource, resolvedTitle, resolvedArtist ->
-                        applyNetworkSourceMetadata(resolvedSource, resolvedTitle, resolvedArtist)
-                    },
-                    onSettled = { onSettled() }
-                )
-            },
-            onCancelPendingMetadataBackfill = {
-                cancelPendingNetworkSourceMetadataBackfillJobs()
-            },
-            repository = repository,
-            decoderExtensionArtworkHints = decoderExtensionArtworkHints,
-            rememberBrowserLocation = rememberBrowserLocation,
-            lastBrowserLocationId = lastBrowserLocationId,
-            lastBrowserDirectoryPath = lastBrowserDirectoryPath,
-            browserLaunchState = browserNavigator.launchState,
-            browserFocusRestoreRequestToken = browserFocusRestoreRequestToken,
-            showParentDirectoryEntry = showParentDirectoryEntry,
-            showFileIconChipBackground = showFileIconChipBackground,
-            onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
-            onBrowserLaunchStateChanged = { browserNavigator.updateLaunchState(it) },
-            onReturnToNetworkOnBrowserExitChanged = { browserNavigator.updateReturnTarget(it) },
-            returnToNetworkOnBrowserExit = browserNavigator.returnToNetworkOnExit,
-            onLastBrowserLocationIdChanged = { lastBrowserLocationId = it },
-            onLastBrowserDirectoryPathChanged = { lastBrowserDirectoryPath = it },
-            onBrowserLocationChanged = { launchState ->
-                val update = buildBrowserLocationChangedUpdate(
-                    launchState = launchState,
-                    rememberBrowserLocation = rememberBrowserLocation,
-                    networkNodes = networkNodes
-                )
-                update.recentFolderUpdate?.let { recent ->
-                    runtimeDelegates.addRecentFolderWithTitle(
-                        recent.path,
-                        recent.locationId,
-                        recent.sourceNodeId,
-                        recent.title
-                    )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithContent {
+                    if (shouldRenderBackgroundContent) {
+                        drawContent()
+                    }
                 }
-                browserNavigator.updateLaunchState(
-                    launchState.copy(
-                        locationId = update.launchLocationId,
-                        directoryPath = update.launchDirectoryPath
+        ) {
+            AppNavigationMainContentHost(
+                currentView = currentView,
+                mainContentFocusRequester = mainContentFocusRequester,
+                canFocusMiniPlayer = isPlayerSurfaceVisible && !isPlayerExpanded,
+                requestMiniPlayerFocus = { miniPlayerFocusRequester.requestFocus() },
+                onHardwareNavigationInput = { showMiniPlayerFocusHighlight = true },
+                onTouchInteraction = { showMiniPlayerFocusHighlight = false },
+                onOpenPlayerSurface = {
+                    isPlayerSurfaceVisible = true
+                    isPlayerExpanded = true
+                    collapseFromSwipe = false
+                    collapseDragInProgress = false
+                    expandedOverlaySettledVisible = false
+                    expandFromMiniDrag = false
+                    miniExpandPreviewProgress = 0f
+                },
+                onHomeRequested = { currentView = MainView.Home },
+                onSettingsRequested = {
+                    settingsLaunchedFromPlayer = false
+                    settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
+                    openSettingsRoute(SettingsRoute.Root, true)
+                    currentView = MainView.Settings
+                },
+                context = context,
+                prefs = prefs,
+                currentPlaybackSourceId = currentPlaybackSourceId,
+                currentPlaybackRequestUrl = currentPlaybackRequestUrl,
+                selectedFile = selectedFile,
+                metadataTitle = metadataTitle,
+                metadataArtist = metadataArtist,
+                isPlaying = isPlaying,
+                recentFolders = recentFolders,
+                recentPlayedFiles = recentPlayedFiles,
+                recentFoldersLimit = recentFoldersLimit,
+                recentFilesLimit = recentFilesLimit,
+                networkNodes = networkNodes,
+                storageDescriptors = storageDescriptors,
+                miniPlayerListInset = miniPlayerListInset,
+                openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+                trackLoadDelegates = trackLoadDelegates,
+                manualOpenDelegates = manualOpenDelegates,
+                runtimeDelegates = runtimeDelegates,
+                onRecentFoldersChanged = { recentFolders = it },
+                onRecentPlayedFilesChanged = { recentPlayedFiles = it },
+                onOpenBrowser = openBrowser,
+                onCurrentViewChanged = { currentView = it },
+                onOpenUrlOrPathDialog = {
+                    urlOrPathInput = ""
+                    showUrlOrPathDialog = true
+                },
+                isPlayerExpanded = isPlayerExpanded,
+                networkCurrentFolderId = networkCurrentFolderId,
+                onNetworkCurrentFolderIdChanged = { networkCurrentFolderId = it },
+                onNetworkNodesChanged = { updatedNodes ->
+                    networkNodes = updatedNodes
+                    writeNetworkNodes(prefs, updatedNodes)
+                },
+                onResolveRemoteSourceMetadata = { sourceId, onSettled ->
+                    scheduleNetworkSourceMetadataBackfill(
+                        scope = appScope,
+                        context = context.applicationContext,
+                        sourceId = sourceId,
+                        onResolved = { resolvedSource, resolvedTitle, resolvedArtist ->
+                            applyNetworkSourceMetadata(resolvedSource, resolvedTitle, resolvedArtist)
+                        },
+                        onSettled = { onSettled() }
                     )
-                )
-                if (update.shouldPersistRememberedLocation) {
-                    lastBrowserLocationId = update.rememberedLocationId
-                    lastBrowserDirectoryPath = update.rememberedDirectoryPath
-                    persistRememberedBrowserLaunchState(
-                        prefs = prefs,
-                        state = BrowserLaunchState(
-                            locationId = update.rememberedLocationId,
-                            directoryPath = update.rememberedDirectoryPath
+                },
+                onCancelPendingMetadataBackfill = {
+                    cancelPendingNetworkSourceMetadataBackfillJobs()
+                },
+                repository = repository,
+                decoderExtensionArtworkHints = decoderExtensionArtworkHints,
+                rememberBrowserLocation = rememberBrowserLocation,
+                lastBrowserLocationId = lastBrowserLocationId,
+                lastBrowserDirectoryPath = lastBrowserDirectoryPath,
+                browserLaunchState = browserNavigator.launchState,
+                browserFocusRestoreRequestToken = browserFocusRestoreRequestToken,
+                showParentDirectoryEntry = showParentDirectoryEntry,
+                showFileIconChipBackground = showFileIconChipBackground,
+                onVisiblePlayableFilesChanged = { files -> visiblePlayableFiles = files },
+                onBrowserLaunchStateChanged = { browserNavigator.updateLaunchState(it) },
+                onReturnToNetworkOnBrowserExitChanged = { browserNavigator.updateReturnTarget(it) },
+                returnToNetworkOnBrowserExit = browserNavigator.returnToNetworkOnExit,
+                onLastBrowserLocationIdChanged = { lastBrowserLocationId = it },
+                onLastBrowserDirectoryPathChanged = { lastBrowserDirectoryPath = it },
+                onBrowserLocationChanged = { launchState ->
+                    val update = buildBrowserLocationChangedUpdate(
+                        launchState = launchState,
+                        rememberBrowserLocation = rememberBrowserLocation,
+                        networkNodes = networkNodes
+                    )
+                    update.recentFolderUpdate?.let { recent ->
+                        runtimeDelegates.addRecentFolderWithTitle(
+                            recent.path,
+                            recent.locationId,
+                            recent.sourceNodeId,
+                            recent.title
+                        )
+                    }
+                    browserNavigator.updateLaunchState(
+                        launchState.copy(
+                            locationId = update.launchLocationId,
+                            directoryPath = update.launchDirectoryPath
                         )
                     )
-                }
-            },
-            onRememberSmbCredentials = { sourceNodeId, sourceId, username, password ->
-                rememberNetworkSmbCredentials(sourceNodeId, sourceId, username, password)
-            },
-            onRememberHttpCredentials = { sourceNodeId, sourceId, username, password ->
-                rememberNetworkHttpCredentials(sourceNodeId, sourceId, username, password)
-            },
-            settingsContent = settingsRouteContent
-        )
+                    if (update.shouldPersistRememberedLocation) {
+                        lastBrowserLocationId = update.rememberedLocationId
+                        lastBrowserDirectoryPath = update.rememberedDirectoryPath
+                        persistRememberedBrowserLaunchState(
+                            prefs = prefs,
+                            state = BrowserLaunchState(
+                                locationId = update.rememberedLocationId,
+                                directoryPath = update.rememberedDirectoryPath
+                            )
+                        )
+                    }
+                },
+                onRememberSmbCredentials = { sourceNodeId, sourceId, username, password ->
+                    rememberNetworkSmbCredentials(sourceNodeId, sourceId, username, password)
+                },
+                onRememberHttpCredentials = { sourceNodeId, sourceId, username, password ->
+                    rememberNetworkHttpCredentials(sourceNodeId, sourceId, username, password)
+                },
+                settingsContent = settingsRouteContent
+            )
+        }
         PlayerOverlayAndDialogsSection()
     }
     }

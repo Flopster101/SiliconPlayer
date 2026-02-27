@@ -8,10 +8,14 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.key.Key
@@ -34,6 +38,8 @@ internal fun ExpandedPlayerOverlayHost(
     expandFromMiniDrag: Boolean,
     collapseFromSwipe: Boolean,
     onCollapseFromSwipeChanged: (Boolean) -> Unit,
+    onCollapseDragProgressChanged: (Boolean) -> Unit,
+    onExpandedOverlaySettledVisibleChanged: (Boolean) -> Unit,
     onMiniExpandPreviewProgressChanged: (Float) -> Unit,
     onPlayerExpandedChanged: (Boolean) -> Unit,
     selectedFile: File?,
@@ -99,8 +105,35 @@ internal fun ExpandedPlayerOverlayHost(
     onHardwareNavigationInput: () -> Unit,
     onTouchInteraction: () -> Unit
 ) {
+    val expandedOverlayVisible = isPlayerSurfaceVisible && isPlayerExpanded
+    val expandedVisibilityState = remember { MutableTransitionState(false) }
+
+    LaunchedEffect(expandedOverlayVisible) {
+        expandedVisibilityState.targetState = expandedOverlayVisible
+    }
+    LaunchedEffect(
+        expandedVisibilityState.isIdle,
+        expandedVisibilityState.currentState,
+        expandedVisibilityState.targetState
+    ) {
+        onExpandedOverlaySettledVisibleChanged(
+            expandedVisibilityState.isIdle &&
+                expandedVisibilityState.currentState &&
+                expandedVisibilityState.targetState
+        )
+    }
+    DisposableEffect(Unit) {
+        onDispose { onExpandedOverlaySettledVisibleChanged(false) }
+    }
+
+    LaunchedEffect(isPlayerSurfaceVisible, isPlayerExpanded) {
+        if (!isPlayerSurfaceVisible || !isPlayerExpanded) {
+            onCollapseDragProgressChanged(false)
+        }
+    }
+
     AnimatedVisibility(
-        visible = isPlayerSurfaceVisible && isPlayerExpanded,
+        visibleState = expandedVisibilityState,
         enter = if (expandFromMiniDrag) {
             EnterTransition.None
         } else {
@@ -143,11 +176,13 @@ internal fun ExpandedPlayerOverlayHost(
                     file = selectedFile,
                     onBack = {
                         onCollapseFromSwipeChanged(false)
+                        onCollapseDragProgressChanged(false)
                         onMiniExpandPreviewProgressChanged(0f)
                         onPlayerExpandedChanged(false)
                     },
                     onCollapseBySwipe = {
                         onCollapseFromSwipeChanged(true)
+                        onCollapseDragProgressChanged(false)
                         onMiniExpandPreviewProgressChanged(0f)
                         onPlayerExpandedChanged(false)
                     },
@@ -211,7 +246,8 @@ internal fun ExpandedPlayerOverlayHost(
                     artworkCornerRadiusDp = artworkCornerRadiusDp,
                     onOpenAudioEffects = onOpenAudioEffects,
                     filenameDisplayMode = filenameDisplayMode,
-                    filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
+                    filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
+                    onCollapseDragProgressChanged = onCollapseDragProgressChanged
                 )
             }
         }

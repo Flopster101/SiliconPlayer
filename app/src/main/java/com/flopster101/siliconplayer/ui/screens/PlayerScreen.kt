@@ -624,7 +624,8 @@ internal fun PlayerScreen(
     artworkCornerRadiusDp: Int = 3,
     onOpenAudioEffects: () -> Unit,
     filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode = com.flopster101.siliconplayer.FilenameDisplayMode.Always,
-    filenameOnlyWhenTitleMissing: Boolean = false
+    filenameOnlyWhenTitleMissing: Boolean = false,
+    onCollapseDragProgressChanged: (Boolean) -> Unit = {}
 ) {
     var sliderPosition by remember(file?.absolutePath, durationSeconds) {
         mutableDoubleStateOf(positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0)))
@@ -654,6 +655,15 @@ internal fun PlayerScreen(
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
     val isTabletLike = configuration.smallestScreenWidthDp >= 600
     val collapseThresholdPx = with(density) { 132.dp.toPx() }
+
+    LaunchedEffect(isDraggingDown) {
+        onCollapseDragProgressChanged(isDraggingDown)
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            onCollapseDragProgressChanged(false)
+        }
+    }
 
     LaunchedEffect(positionSeconds, isSeeking) {
         if (!isSeeking) {
@@ -741,6 +751,8 @@ internal fun PlayerScreen(
                                 if (isTimelineTouchActive) return@detectVerticalDragGestures
                                 val shouldCollapse = downwardDragPx >= collapseThresholdPx
                                 if (shouldCollapse) {
+                                    isDraggingDown = false
+                                    downwardDragPx = 0f
                                     onCollapseBySwipe()
                                 } else {
                                     isDraggingDown = false

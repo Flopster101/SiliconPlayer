@@ -68,6 +68,7 @@ internal fun VisualizationBasicBarsRouteContent(
     val barColorModeNoArtworkKey = "visualization_bar_color_mode_no_artwork"
     val barColorModeWithArtworkKey = "visualization_bar_color_mode_with_artwork"
     val barCustomColorKey = "visualization_bar_custom_color_argb"
+    val barRenderBackendKey = AppPreferenceKeys.VISUALIZATION_BAR_RENDER_BACKEND
     val barFpsModeKey = AppPreferenceKeys.VISUALIZATION_BAR_FPS_MODE
     val barFrequencyGridEnabledKey = AppPreferenceKeys.VISUALIZATION_BAR_FREQUENCY_GRID_ENABLED
     val context = LocalContext.current
@@ -268,7 +269,11 @@ internal fun VisualizationBasicBarsRouteContent(
                     label = VisualizationRenderBackend.OpenGlTexture.label
                 )
             ),
-            onSelected = onVisualizationBarRenderBackendChanged,
+            onSelected = { backend ->
+                onVisualizationBarRenderBackendChanged(backend)
+                prefs.edit().putString(barRenderBackendKey, backend.storageValue).apply()
+                showBarRenderBackendDialog = false
+            },
             onDismiss = { showBarRenderBackendDialog = false }
         )
     }
@@ -353,6 +358,7 @@ internal fun VisualizationBasicVuMetersRouteContent(
     val vuColorModeNoArtworkKey = "visualization_vu_color_mode_no_artwork"
     val vuColorModeWithArtworkKey = "visualization_vu_color_mode_with_artwork"
     val vuCustomColorKey = "visualization_vu_custom_color_argb"
+    val vuRenderBackendKey = AppPreferenceKeys.VISUALIZATION_VU_RENDER_BACKEND
     val vuFpsModeKey = AppPreferenceKeys.VISUALIZATION_VU_FPS_MODE
     val context = LocalContext.current
     val prefs = remember(context) {
@@ -477,7 +483,11 @@ internal fun VisualizationBasicVuMetersRouteContent(
                     label = VisualizationRenderBackend.OpenGlTexture.label
                 )
             ),
-            onSelected = onVisualizationVuRenderBackendChanged,
+            onSelected = { backend ->
+                onVisualizationVuRenderBackendChanged(backend)
+                prefs.edit().putString(vuRenderBackendKey, backend.storageValue).apply()
+                showVuRenderBackendDialog = false
+            },
             onDismiss = { showVuRenderBackendDialog = false }
         )
     }

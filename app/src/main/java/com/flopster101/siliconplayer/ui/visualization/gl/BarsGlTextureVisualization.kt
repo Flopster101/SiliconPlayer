@@ -186,6 +186,8 @@ private class BarsTextureRenderThread(
     private val lock = Object()
     private var running = true
     private var frameData: BarsGlTextureFrame? = null
+    private var frameSequence: Long = 0L
+    private var renderedFrameSequence: Long = -1L
     private var surfaceWidth = initialWidth
     private var surfaceHeight = initialHeight
     private var surfaceSizeChanged = true
@@ -196,6 +198,7 @@ private class BarsTextureRenderThread(
     private val renderer = BarsGlCoreRenderer()
     private data class LoopState(
         val frame: BarsGlTextureFrame?,
+        val frameSequence: Long,
         val width: Int,
         val height: Int,
         val surfaceSizeChanged: Boolean,
@@ -211,12 +214,17 @@ private class BarsTextureRenderThread(
         try {
             while (true) {
                 val state = synchronized(lock) {
-                    while (running && frameData == null) {
-                        lock.wait(8L)
+                    while (
+                        running &&
+                        !surfaceSizeChanged &&
+                        (frameData == null || frameSequence == renderedFrameSequence)
+                    ) {
+                        lock.wait()
                     }
                     if (!running) {
                         LoopState(
                             frame = null,
+                            frameSequence = frameSequence,
                             width = 0,
                             height = 0,
                             surfaceSizeChanged = false,
@@ -225,6 +233,7 @@ private class BarsTextureRenderThread(
                     } else {
                         LoopState(
                             frame = frameData,
+                            frameSequence = frameSequence,
                             width = surfaceWidth,
                             height = surfaceHeight,
                             surfaceSizeChanged = surfaceSizeChanged,
@@ -241,6 +250,9 @@ private class BarsTextureRenderThread(
                 }
                 renderer.drawFrame(frame)
                 EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+                synchronized(lock) {
+                    renderedFrameSequence = state.frameSequence
+                }
             }
         } finally {
             releaseEgl()
@@ -251,6 +263,7 @@ private class BarsTextureRenderThread(
     fun setFrameData(frame: BarsGlTextureFrame) {
         synchronized(lock) {
             frameData = frame
+            frameSequence += 1L
             lock.notifyAll()
         }
     }

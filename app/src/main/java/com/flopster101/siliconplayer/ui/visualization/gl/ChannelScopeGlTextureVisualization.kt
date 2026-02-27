@@ -196,6 +196,8 @@ private class ChannelScopeTextureRenderThread(
     private val lock = Object()
     private var running = true
     private var frameData: ChannelScopeGlTextureFrame? = null
+    private var frameSequence: Long = 0L
+    private var renderedFrameSequence: Long = -1L
     private var surfaceWidth = initialWidth
     private var surfaceHeight = initialHeight
     private var surfaceSizeChanged = true
@@ -206,6 +208,7 @@ private class ChannelScopeTextureRenderThread(
     private val coreRenderer = ChannelScopeGlCoreRenderer()
     private data class LoopState(
         val frame: ChannelScopeGlTextureFrame?,
+        val frameSequence: Long,
         val width: Int,
         val height: Int,
         val surfaceSizeChanged: Boolean,
@@ -221,12 +224,17 @@ private class ChannelScopeTextureRenderThread(
         try {
             while (true) {
                 val state = synchronized(lock) {
-                    while (running && frameData == null) {
-                        lock.wait(8L)
+                    while (
+                        running &&
+                        !surfaceSizeChanged &&
+                        (frameData == null || frameSequence == renderedFrameSequence)
+                    ) {
+                        lock.wait()
                     }
                     if (!running) {
                         LoopState(
                             frame = null,
+                            frameSequence = frameSequence,
                             width = 0,
                             height = 0,
                             surfaceSizeChanged = false,
@@ -235,6 +243,7 @@ private class ChannelScopeTextureRenderThread(
                     } else {
                         LoopState(
                             frame = frameData,
+                            frameSequence = frameSequence,
                             width = surfaceWidth,
                             height = surfaceHeight,
                             surfaceSizeChanged = surfaceSizeChanged,
@@ -251,6 +260,9 @@ private class ChannelScopeTextureRenderThread(
                 }
                 coreRenderer.drawFrame(frame)
                 EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+                synchronized(lock) {
+                    renderedFrameSequence = state.frameSequence
+                }
             }
         } finally {
             releaseEgl()
@@ -261,6 +273,7 @@ private class ChannelScopeTextureRenderThread(
     fun setFrameData(frame: ChannelScopeGlTextureFrame) {
         synchronized(lock) {
             frameData = frame
+            frameSequence += 1L
             lock.notifyAll()
         }
     }

@@ -242,6 +242,8 @@ private class VuMetersTextureRenderThread(
     private val lock = Object()
     private var running = true
     private var frameData: VuMetersGlTextureFrame? = null
+    private var frameSequence: Long = 0L
+    private var renderedFrameSequence: Long = -1L
     private var surfaceWidth = initialWidth
     private var surfaceHeight = initialHeight
     private var surfaceSizeChanged = true
@@ -252,6 +254,7 @@ private class VuMetersTextureRenderThread(
     private val renderer = VuMetersGlCoreRenderer()
     private data class LoopState(
         val frame: VuMetersGlTextureFrame?,
+        val frameSequence: Long,
         val width: Int,
         val height: Int,
         val surfaceSizeChanged: Boolean,
@@ -267,12 +270,17 @@ private class VuMetersTextureRenderThread(
         try {
             while (true) {
                 val state = synchronized(lock) {
-                    while (running && frameData == null) {
-                        lock.wait(8L)
+                    while (
+                        running &&
+                        !surfaceSizeChanged &&
+                        (frameData == null || frameSequence == renderedFrameSequence)
+                    ) {
+                        lock.wait()
                     }
                     if (!running) {
                         LoopState(
                             frame = null,
+                            frameSequence = frameSequence,
                             width = 0,
                             height = 0,
                             surfaceSizeChanged = false,
@@ -281,6 +289,7 @@ private class VuMetersTextureRenderThread(
                     } else {
                         LoopState(
                             frame = frameData,
+                            frameSequence = frameSequence,
                             width = surfaceWidth,
                             height = surfaceHeight,
                             surfaceSizeChanged = surfaceSizeChanged,
@@ -297,6 +306,9 @@ private class VuMetersTextureRenderThread(
                 }
                 renderer.drawFrame(frame)
                 EGL14.eglSwapBuffers(eglDisplay, eglSurface)
+                synchronized(lock) {
+                    renderedFrameSequence = state.frameSequence
+                }
             }
         } finally {
             releaseEgl()
@@ -307,6 +319,7 @@ private class VuMetersTextureRenderThread(
     fun setFrameData(frame: VuMetersGlTextureFrame) {
         synchronized(lock) {
             frameData = frame
+            frameSequence += 1L
             lock.notifyAll()
         }
     }

@@ -114,7 +114,7 @@ private class ChannelScopeGlSurfaceView(context: Context) : GLSurfaceView(contex
     init {
         setEGLContextClientVersion(2)
         setRenderer(renderer)
-        renderMode = RENDERMODE_CONTINUOUSLY
+        renderMode = RENDERMODE_WHEN_DIRTY
         preserveEGLContextOnPause = true
     }
 
@@ -148,6 +148,7 @@ private class ChannelScopeGlSurfaceView(context: Context) : GLSurfaceView(contex
                 outerCornerRadiusPx = outerCornerRadiusPx.coerceAtLeast(0f)
             )
         )
+        requestRender()
     }
 
     fun dispatchFrameStats(fps: Int, frameMs: Int) {

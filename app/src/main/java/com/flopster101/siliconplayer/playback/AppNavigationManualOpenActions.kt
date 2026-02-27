@@ -10,6 +10,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -115,6 +117,7 @@ internal fun launchManualRemoteSelectionAction(
     urlCacheMaxTracks: Int,
     urlCacheMaxBytes: Long,
     onRemoteLoadUiStateChanged: (RemoteLoadUiState?) -> Unit,
+    currentRemoteLoadJobProvider: () -> Job?,
     onRemoteLoadJobChanged: (Job?) -> Unit,
     onPrimeManualRemoteOpenState: (ManualSourceResolution) -> Unit,
     onApplyManualRemoteOpenSuccess: (ManualRemoteOpenSuccess, Boolean?, Boolean) -> Unit,
@@ -123,6 +126,7 @@ internal fun launchManualRemoteSelectionAction(
     currentJob?.cancel()
     val playerExpandedAtLaunch = currentPlayerExpandedProvider()
     val launchedJob = appScope.launch {
+        val thisJob = currentCoroutineContext()[Job]
         try {
             onPrimeManualRemoteOpenState(resolved)
             val remoteResult = when (resolved.type) {
@@ -267,6 +271,7 @@ internal fun launchManualRemoteSelectionAction(
                     ManualRemoteOpenResult.Failed("Unsupported manual source type")
                 }
             }
+            currentCoroutineContext().ensureActive()
             when (remoteResult) {
                 is ManualRemoteOpenResult.Success -> {
                     onApplyManualRemoteOpenSuccess(
@@ -299,8 +304,10 @@ internal fun launchManualRemoteSelectionAction(
         } catch (_: CancellationException) {
             Log.d(URL_SOURCE_TAG, "Remote open cancelled for source=${resolved.sourceId}")
         } finally {
-            onRemoteLoadUiStateChanged(null)
-            onRemoteLoadJobChanged(null)
+            if (thisJob != null && currentRemoteLoadJobProvider() == thisJob) {
+                onRemoteLoadUiStateChanged(null)
+                onRemoteLoadJobChanged(null)
+            }
         }
     }
     onRemoteLoadJobChanged(launchedJob)
@@ -403,9 +410,8 @@ private fun resolveHttpAuthenticationFailureReasonFromErrorMessage(
     }
 }
 
-internal fun applyManualInputSelectionAction(
+internal suspend fun applyManualInputSelectionAction(
     context: Context,
-    appScope: CoroutineScope,
     repository: FileRepository,
     rawInput: String,
     options: ManualSourceOpenOptions,
@@ -421,14 +427,13 @@ internal fun applyManualInputSelectionAction(
 ) {
     val archiveFile = resolveArchiveSourceToMountedFile(context, rawInput)
     if (archiveFile != null) {
-        appScope.launch {
-            val contextualPlayableFiles = loadContextualPlayableFilesForManualSelection(
-                repository = repository,
-                localFile = archiveFile
-            )
-            onVisiblePlayableFilesChanged(contextualPlayableFiles)
-            onApplyTrackSelection(archiveFile, true, openPlayerOnTrackSelect, rawInput.trim())
-        }
+        val contextualPlayableFiles = loadContextualPlayableFilesForManualSelection(
+            repository = repository,
+            localFile = archiveFile
+        )
+        currentCoroutineContext().ensureActive()
+        onVisiblePlayableFilesChanged(contextualPlayableFiles)
+        onApplyTrackSelection(archiveFile, true, openPlayerOnTrackSelect, rawInput.trim())
         return
     }
 
@@ -452,38 +457,68 @@ internal fun applyManualInputSelectionAction(
         }
 
         is ManualInputAction.OpenLocalFile -> {
-            appScope.launch {
-                val localFile = action.file
-                val contextualPlayableFiles = loadContextualPlayableFilesForManualSelection(
-                    repository = repository,
-                    localFile = localFile
-                )
-                onVisiblePlayableFilesChanged(contextualPlayableFiles)
-                onApplyTrackSelection(localFile, true, openPlayerOnTrackSelect, action.sourceId)
-            }
+            val localFile = action.file
+            val contextualPlayableFiles = loadContextualPlayableFilesForManualSelection(
+                repository = repository,
+                localFile = localFile
+            )
+            currentCoroutineContext().ensureActive()
+            onVisiblePlayableFilesChanged(contextualPlayableFiles)
+            onApplyTrackSelection(localFile, true, openPlayerOnTrackSelect, action.sourceId)
             return
         }
 
         is ManualInputAction.OpenRemote -> {
-            appScope.launch {
-                val directoryLaunch = resolveRemoteDirectoryLaunchAction(
+            val directoryLaunch = if (
+                shouldProbeRemoteDirectoryBeforeOpen(
                     rawInput = rawInput,
                     resolved = action.resolved
                 )
-                if (directoryLaunch != null) {
-                    onBrowserLaunchTargetChanged(directoryLaunch.launchState)
-                    onCurrentViewChanged(MainView.Browser)
-                    onAddRecentFolder(
-                        directoryLaunch.recentFolderSourceId,
-                        null,
-                        null
-                    )
-                    return@launch
-                }
-                onLaunchManualRemoteSelection(action.resolved, options, expandOverride)
+            ) {
+                resolveRemoteDirectoryLaunchAction(
+                    rawInput = rawInput,
+                    resolved = action.resolved
+                )
+            } else {
+                null
             }
+            currentCoroutineContext().ensureActive()
+            if (directoryLaunch != null) {
+                onBrowserLaunchTargetChanged(directoryLaunch.launchState)
+                onCurrentViewChanged(MainView.Browser)
+                onAddRecentFolder(
+                    directoryLaunch.recentFolderSourceId,
+                    null,
+                    null
+                )
+                return
+            }
+            onLaunchManualRemoteSelection(action.resolved, options, expandOverride)
             return
         }
+    }
+}
+
+private fun shouldProbeRemoteDirectoryBeforeOpen(
+    rawInput: String,
+    resolved: ManualSourceResolution
+): Boolean {
+    val normalizedInput = rawInput.trim()
+    if (normalizedInput.endsWith("/")) return true
+    return when (resolved.type) {
+        ManualSourceType.Smb -> {
+            val smbPath = normalizeSmbPathForShare(resolved.smbSpec?.path)
+            val leaf = smbPath?.substringAfterLast('/').orEmpty()
+            !looksLikeFileLeaf(leaf)
+        }
+
+        ManualSourceType.RemoteUrl -> {
+            val requestSpec = parseHttpSourceSpecFromInput(resolved.requestUrl) ?: return true
+            val leaf = requestSpec.path.substringAfterLast('/')
+            !looksLikeFileLeaf(leaf)
+        }
+
+        else -> false
     }
 }
 

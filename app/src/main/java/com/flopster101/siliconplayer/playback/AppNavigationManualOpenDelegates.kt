@@ -5,6 +5,7 @@ import com.flopster101.siliconplayer.data.FileRepository
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 internal class AppNavigationManualOpenDelegates(
     private val context: Context,
@@ -48,6 +49,14 @@ internal class AppNavigationManualOpenDelegates(
     private val onAddRecentFolder: (String, String?, Long?) -> Unit,
     private val onApplyTrackSelection: (file: File, autoStart: Boolean, expandOverride: Boolean?, sourceIdOverride: String?) -> Unit
 ) {
+    private var manualInputSelectionJob: Job? = null
+
+    init {
+        ManualRemoteOpenCoordinator.registerCancellationCallback {
+            cancelPendingOpenWork()
+        }
+    }
+
     fun primeManualRemoteOpenState(resolved: ManualSourceResolution) {
         primeManualRemoteOpenStateAction(
             resolved = resolved,
@@ -121,6 +130,7 @@ internal class AppNavigationManualOpenDelegates(
             urlCacheMaxTracks = urlCacheMaxTracksProvider(),
             urlCacheMaxBytes = urlCacheMaxBytesProvider(),
             onRemoteLoadUiStateChanged = onRemoteLoadUiStateChanged,
+            currentRemoteLoadJobProvider = currentRemoteLoadJobProvider,
             onRemoteLoadJobChanged = onRemoteLoadJobChanged,
             onPrimeManualRemoteOpenState = { source -> primeManualRemoteOpenState(source) },
             currentPlayerExpandedProvider = isPlayerExpandedProvider,
@@ -136,23 +146,43 @@ internal class AppNavigationManualOpenDelegates(
         options: ManualSourceOpenOptions = ManualSourceOpenOptions(),
         expandOverride: Boolean? = null
     ) {
-        applyManualInputSelectionAction(
-            context = context,
-            appScope = appScope,
-            repository = repository,
-            rawInput = rawInput,
-            options = options,
-            expandOverride = expandOverride,
-            storageDescriptors = storageDescriptors,
-            openPlayerOnTrackSelect = openPlayerOnTrackSelectProvider(),
-            onBrowserLaunchTargetChanged = onBrowserLaunchTargetChanged,
-            onCurrentViewChanged = onCurrentViewChanged,
-            onAddRecentFolder = onAddRecentFolder,
-            onVisiblePlayableFilesChanged = onVisiblePlayableFilesChanged,
-            onApplyTrackSelection = onApplyTrackSelection,
-            onLaunchManualRemoteSelection = { source, openOpts, expandTarget ->
-                launchManualRemoteSelection(source, openOpts, expandTarget)
+        manualInputSelectionJob?.cancel()
+        manualInputSelectionJob = appScope.launch {
+            applyManualInputSelectionAction(
+                context = context,
+                repository = repository,
+                rawInput = rawInput,
+                options = options,
+                expandOverride = expandOverride,
+                storageDescriptors = storageDescriptors,
+                openPlayerOnTrackSelect = openPlayerOnTrackSelectProvider(),
+                onBrowserLaunchTargetChanged = onBrowserLaunchTargetChanged,
+                onCurrentViewChanged = onCurrentViewChanged,
+                onAddRecentFolder = onAddRecentFolder,
+                onVisiblePlayableFilesChanged = onVisiblePlayableFilesChanged,
+                onApplyTrackSelection = onApplyTrackSelection,
+                onLaunchManualRemoteSelection = { source, openOpts, expandTarget ->
+                    launchManualRemoteSelection(source, openOpts, expandTarget)
+                }
+            )
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (manualInputSelectionJob == job) {
+                    manualInputSelectionJob = null
+                }
             }
-        )
+        }
+    }
+
+    fun cancelPendingManualInputSelection() {
+        manualInputSelectionJob?.cancel()
+        manualInputSelectionJob = null
+    }
+
+    fun cancelPendingOpenWork() {
+        cancelPendingManualInputSelection()
+        currentRemoteLoadJobProvider()?.cancel()
+        onRemoteLoadJobChanged(null)
+        onRemoteLoadUiStateChanged(null)
     }
 }

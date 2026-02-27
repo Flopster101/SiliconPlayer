@@ -56,6 +56,7 @@ internal class AppNavigationTrackLoadDelegates(
         initialSeekSeconds: Double? = null,
         useSongVolumeLookup: Boolean = true
     ) {
+        ManualRemoteOpenCoordinator.cancelPendingOpenWork()
         trackSelectionRequestId += 1L
         val requestId = trackSelectionRequestId
         onDeferredPlaybackSeekChanged(null)

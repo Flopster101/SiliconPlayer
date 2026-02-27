@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 import android.app.Notification
 import android.app.NotificationChannel
+import android.app.ForegroundServiceStartNotAllowedException
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
@@ -40,6 +41,7 @@ class PlaybackService : Service() {
     private var resumeOnFocusGain = false
     private var isDucked = false
     private var originalMasterVolume = 0f
+    private var isForegroundNotificationShown = false
 
     private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         if (!prefs.getBoolean(PREF_AUDIO_FOCUS_INTERRUPT, true)) return@OnAudioFocusChangeListener
@@ -200,6 +202,7 @@ class PlaybackService : Service() {
 
         if (currentPath == null) {
             stopForegroundCompat(removeNotification = true)
+            isForegroundNotificationShown = false
             notificationManager.cancel(NOTIFICATION_ID)
             stopSelf()
             return
@@ -267,6 +270,7 @@ class PlaybackService : Service() {
         clearResumeCheckpoint()
         updateMediaSessionState()
         stopForegroundCompat(removeNotification = true)
+        isForegroundNotificationShown = false
         notificationManager.cancel(NOTIFICATION_ID)
         sendBroadcast(Intent(ACTION_BROADCAST_CLEARED).setPackage(packageName))
         stopSelf()
@@ -508,7 +512,24 @@ class PlaybackService : Service() {
     private fun pushNotification() {
         if (currentPath == null) return
         val notification = buildNotification()
-        startForeground(NOTIFICATION_ID, notification)
+        if (!isPlaying) {
+            if (isForegroundNotificationShown) {
+                stopForegroundCompat(removeNotification = false)
+                isForegroundNotificationShown = false
+            }
+            notificationManager.notify(NOTIFICATION_ID, notification)
+            return
+        }
+        try {
+            startForeground(NOTIFICATION_ID, notification)
+            isForegroundNotificationShown = true
+        } catch (error: RuntimeException) {
+            val blockedForegroundStart =
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    error is ForegroundServiceStartNotAllowedException
+            if (!blockedForegroundStart) throw error
+            notificationManager.notify(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun buildNotification(): Notification {

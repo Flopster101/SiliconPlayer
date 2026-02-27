@@ -1558,6 +1558,7 @@ private fun AppNavigation(
     )
     val stopAndEmptyTrack: () -> Unit = {
         trackLoadDelegates.cancelPendingTrackSelection()
+        manualOpenDelegates.cancelPendingManualInputSelection()
         deferredPlaybackSeek = null
         cancelRemoteNextTrackPreload()
         remoteLoadJob?.cancel()
@@ -1911,7 +1912,10 @@ private fun AppNavigation(
             lastUsedCoreName = lastUsedCoreName,
             manualOpenDelegates = manualOpenDelegates,
             playbackStateDelegates = playbackStateDelegates,
-            onCancelRemoteLoadJob = { remoteLoadJob?.cancel() },
+            onCancelRemoteLoadJob = {
+                manualOpenDelegates.cancelPendingManualInputSelection()
+                remoteLoadJob?.cancel()
+            },
             showUrlOrPathDialog = showUrlOrPathDialog,
             urlOrPathInput = urlOrPathInput,
             urlOrPathForceCaching = urlOrPathForceCaching,

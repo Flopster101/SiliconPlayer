@@ -406,11 +406,6 @@ float AudioEngine::computeEndFadeGainLocked(double playbackPositionSeconds) cons
         return 1.0f;
     }
 
-    const double durationNow = decoder->getDuration();
-    if (!(durationNow > 0.0) || !std::isfinite(durationNow)) {
-        return 1.0f;
-    }
-
     const int fadeMs = endFadeDurationMs.load();
     if (fadeMs <= 0) {
         return 1.0f;
@@ -424,6 +419,11 @@ float AudioEngine::computeEndFadeGainLocked(double playbackPositionSeconds) cons
     const bool reliableDuration =
             (decoder->getPlaybackCapabilities() & AudioDecoder::PLAYBACK_CAP_RELIABLE_DURATION) != 0;
     if (reliableDuration && !applyToAll) {
+        return 1.0f;
+    }
+
+    const double durationNow = decoder->getDuration();
+    if (!(durationNow > 0.0) || !std::isfinite(durationNow)) {
         return 1.0f;
     }
 
@@ -558,23 +558,24 @@ void AudioEngine::applyOutputLimiter(float* buffer, int numFrames, int channels)
     }
 
     const bool limiterEnabledNow = outputLimiterEnabled.load(std::memory_order_relaxed);
+    if (!limiterEnabledNow) {
+        outputLimiterGain = 1.0f;
+        return;
+    }
+
     const int totalSamples = numFrames * channels;
     float limiterGain = 1.0f;
-    if (limiterEnabledNow) {
-        float peak = 0.0f;
-        for (int i = 0; i < totalSamples; ++i) {
-            peak = std::max(peak, std::abs(buffer[i]));
-        }
-        const float targetGain = (peak > 1.0f) ? (1.0f / peak) : 1.0f;
-        const float attack = 0.45f;
-        const float release = 0.04f;
-        const float coeff = (targetGain < outputLimiterGain) ? attack : release;
-        outputLimiterGain += (targetGain - outputLimiterGain) * coeff;
-        outputLimiterGain = std::clamp(outputLimiterGain, 0.1f, 1.0f);
-        limiterGain = outputLimiterGain;
-    } else {
-        outputLimiterGain = 1.0f;
+    float peak = 0.0f;
+    for (int i = 0; i < totalSamples; ++i) {
+        peak = std::max(peak, std::abs(buffer[i]));
     }
+    const float targetGain = (peak > 1.0f) ? (1.0f / peak) : 1.0f;
+    const float attack = 0.45f;
+    const float release = 0.04f;
+    const float coeff = (targetGain < outputLimiterGain) ? attack : release;
+    outputLimiterGain += (targetGain - outputLimiterGain) * coeff;
+    outputLimiterGain = std::clamp(outputLimiterGain, 0.1f, 1.0f);
+    limiterGain = outputLimiterGain;
 
     constexpr float kSoftClipStart = 0.92f;
     constexpr float kSoftClipDrive = 1.45f;

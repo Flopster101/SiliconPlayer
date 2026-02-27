@@ -576,7 +576,7 @@ int AudioEngine::popRenderQueue(float* outputData, int numFrames, int channels) 
         if (renderQueueOffset >= renderQueueSamples.size()) {
             renderQueueSamples.clear();
             renderQueueOffset = 0;
-        } else if (renderQueueOffset > 8192u) {
+        } else if (renderQueueOffset > 65536u) {
             const size_t remaining = renderQueueSamples.size() - renderQueueOffset;
             std::memmove(
                     renderQueueSamples.data(),
@@ -622,7 +622,7 @@ void AudioEngine::renderWorkerLoop() {
         bool needsFill = false;
         {
             std::unique_lock<std::mutex> lock(renderQueueMutex);
-            renderWorkerCv.wait_for(lock, std::chrono::milliseconds(8), [this, targetFrames]() {
+            renderWorkerCv.wait(lock, [this, targetFrames]() {
                 if (renderWorkerStop) return true;
                 if (!isPlaying.load() || seekInProgress.load()) return false;
                 const size_t availableSamples = renderQueueSamples.size() > renderQueueOffset
@@ -679,10 +679,11 @@ void AudioEngine::renderWorkerLoop() {
                     calculatedPosition = 0.0;
                 }
             }
-            double decoderPosition = decoder->getPlaybackPositionSeconds();
             const AudioDecoder::TimelineMode timelineMode = decoder->getTimelineMode();
+            double decoderPosition = -1.0;
 
             if (timelineMode == AudioDecoder::TimelineMode::Discontinuous) {
+                decoderPosition = decoder->getPlaybackPositionSeconds();
                 if (!timelineSmootherInitialized) {
                     timelineSmoothedSeconds = (calculatedPosition >= 0.0 && sharedAbsoluteInputPosition > 0)
                             ? calculatedPosition
@@ -730,10 +731,13 @@ void AudioEngine::renderWorkerLoop() {
                 positionSeconds.store(nextPosition);
             } else if (calculatedPosition >= 0.0 && sharedAbsoluteInputPosition > 0) {
                 positionSeconds.store(calculatedPosition);
-            } else if (decoderPosition >= 0.0) {
-                positionSeconds.store(decoderPosition);
             } else if (!reachedEnd && callbackDeltaSeconds > 0.0) {
-                positionSeconds.fetch_add(callbackDeltaSeconds);
+                decoderPosition = decoder->getPlaybackPositionSeconds();
+                if (decoderPosition >= 0.0) {
+                    positionSeconds.store(decoderPosition);
+                } else {
+                    positionSeconds.fetch_add(callbackDeltaSeconds);
+                }
             }
 
             const double gainTimelinePosition = positionSeconds.load();

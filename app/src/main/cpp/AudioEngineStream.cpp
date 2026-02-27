@@ -542,12 +542,14 @@ bool AudioEngine::renderOutputCallbackFrames(float* outputData, int32_t numFrame
         );
     }
 
-    for (int frame = 0; frame < numFrames; ++frame) {
-        const float fadeGain = nextPauseResumeFadeGainLocked();
-        if (fadeGain == 1.0f) continue;
-        const size_t base = static_cast<size_t>(frame) * 2u;
-        outputData[base] *= fadeGain;
-        outputData[base + 1u] *= fadeGain;
+    if (pauseResumeFadeTotalFrames > 0) {
+        for (int frame = 0; frame < numFrames; ++frame) {
+            const float fadeGain = nextPauseResumeFadeGainLocked();
+            if (fadeGain == 1.0f) continue;
+            const size_t base = static_cast<size_t>(frame) * 2u;
+            outputData[base] *= fadeGain;
+            outputData[base + 1u] *= fadeGain;
+        }
     }
     uint32_t visualizationFeatures = 0u;
     if (shouldUpdateVisualization(&visualizationFeatures)) {
@@ -568,7 +570,14 @@ bool AudioEngine::renderOutputCallbackFrames(float* outputData, int32_t numFrame
         return true;
     }
 
-    renderWorkerCv.notify_one();
+    const int bufferedFrames = renderQueueFrames();
+    const int targetFramesHint = std::max(
+            renderWorkerChunkFrames.load(std::memory_order_relaxed) * 2,
+            renderWorkerTargetFrames.load(std::memory_order_relaxed)
+    );
+    if (framesCopied < numFrames || bufferedFrames < targetFramesHint) {
+        renderWorkerCv.notify_one();
+    }
     return false;
 }
 

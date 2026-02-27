@@ -526,7 +526,7 @@ internal fun HomeScreen(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             pinnedFolders.forEach { pinnedEntry ->
                 Box(modifier = Modifier.fillMaxWidth()) {
                     ElevatedCard(
@@ -752,7 +752,7 @@ internal fun HomeScreen(
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             recentFolders.forEachIndexed { index, entry ->
                 val itemKey = "${entry.locationId.orEmpty()}|${entry.path}"
                 AnimatedHomeIntroItem(
@@ -909,12 +909,6 @@ internal fun HomeScreen(
                 }
             }
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Tip: Hold a song for more actions.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
             renderedRecentPlayedFiles.forEachIndexed { index, entry ->
                 val itemKey = playedEntryKey(entry)
                 val isPendingPromotedCard = index == 0 && itemKey == promotedPlayedKey

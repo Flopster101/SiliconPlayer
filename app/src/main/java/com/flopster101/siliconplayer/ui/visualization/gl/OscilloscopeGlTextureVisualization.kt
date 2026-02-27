@@ -61,7 +61,7 @@ fun OscilloscopeGlTextureVisualization(
                     channelCount = channelCount,
                     stereo = oscStereo && channelCount > 1,
                     lineColorArgb = lineColor.toArgb(),
-                    rightLineColorArgb = lineColor.copy(alpha = 0.78f).toArgb(),
+                    rightLineColorArgb = lineColor.copy(alpha = 0.90f).toArgb(),
                     gridColorArgb = gridColor.toArgb(),
                     lineWidthPx = lineWidthPx.coerceAtLeast(1f),
                     gridWidthPx = gridWidthPx.coerceAtLeast(0.5f),

@@ -383,6 +383,10 @@ internal fun resetVisualizationBarsSettingsAction(
             AppPreferenceKeys.VISUALIZATION_BAR_FREQUENCY_GRID_ENABLED,
             AppDefaults.Visualization.Bars.frequencyGridEnabled
         )
+        .putBoolean(
+            AppPreferenceKeys.VISUALIZATION_BAR_CONTRAST_BACKDROP_ENABLED,
+            AppDefaults.Visualization.Bars.contrastBackdropEnabled
+        )
         .putString(
             AppPreferenceKeys.VISUALIZATION_BAR_FPS_MODE,
             AppDefaults.Visualization.Bars.fpsMode.storageValue
@@ -415,6 +419,10 @@ internal fun resetVisualizationOscilloscopeSettingsAction(
         .putInt(
             AppPreferenceKeys.VISUALIZATION_OSC_WINDOW_MS,
             AppDefaults.Visualization.Oscilloscope.windowMs
+        )
+        .putBoolean(
+            AppPreferenceKeys.VISUALIZATION_OSC_CONTRAST_BACKDROP_ENABLED,
+            AppDefaults.Visualization.Oscilloscope.contrastBackdropEnabled
         )
         .putString(
             AppPreferenceKeys.VISUALIZATION_OSC_TRIGGER_MODE,
@@ -487,6 +495,10 @@ internal fun resetVisualizationVuSettingsAction(
             AppPreferenceKeys.VISUALIZATION_VU_FPS_MODE,
             AppDefaults.Visualization.Vu.fpsMode.storageValue
         )
+        .putBoolean(
+            AppPreferenceKeys.VISUALIZATION_VU_CONTRAST_BACKDROP_ENABLED,
+            AppDefaults.Visualization.Vu.contrastBackdropEnabled
+        )
         .putString(
             AppPreferenceKeys.VISUALIZATION_VU_RENDER_BACKEND,
             AppDefaults.Visualization.Vu.renderBackend.storageValue
@@ -526,6 +538,10 @@ internal fun resetVisualizationChannelScopeSettingsAction(
         .putInt(
             AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_GAIN_PERCENT,
             AppDefaults.Visualization.ChannelScope.gainPercent
+        )
+        .putBoolean(
+            AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CONTRAST_BACKDROP_ENABLED,
+            AppDefaults.Visualization.ChannelScope.contrastBackdropEnabled
         )
         .putString(
             AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TRIGGER_MODE,

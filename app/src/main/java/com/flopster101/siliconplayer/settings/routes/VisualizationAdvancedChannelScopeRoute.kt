@@ -27,6 +27,8 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                         val scopeRenderBackendKey = "visualization_channel_scope_render_backend"
                         val scopeDcRemovalEnabledKey = "visualization_channel_scope_dc_removal_enabled"
                         val scopeGainPercentKey = "visualization_channel_scope_gain_percent"
+                        val scopeContrastBackdropEnabledKey =
+                            AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CONTRAST_BACKDROP_ENABLED
                         val scopeTriggerKey = "visualization_channel_scope_trigger_mode"
                         val scopeFpsModeKey = "visualization_channel_scope_fps_mode"
                         val scopeLineWidthKey = "visualization_channel_scope_line_width_dp"
@@ -114,6 +116,14 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                 ).coerceIn(
                                     AppDefaults.Visualization.ChannelScope.gainRangePercent.first,
                                     AppDefaults.Visualization.ChannelScope.gainRangePercent.last
+                                )
+                            )
+                        }
+                        var scopeContrastBackdropEnabled by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeContrastBackdropEnabledKey,
+                                    AppDefaults.Visualization.ChannelScope.contrastBackdropEnabled
                                 )
                             )
                         }
@@ -553,6 +563,16 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                             onCheckedChange = { enabled ->
                                 scopeShowArtworkBackground = enabled
                                 prefs.edit().putBoolean(scopeShowArtworkBackgroundKey, enabled).apply()
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        PlayerSettingToggleCard(
+                            title = "Contrast backdrop",
+                            description = "Add a subtle center-weighted dim backdrop for better trace readability.",
+                            checked = scopeContrastBackdropEnabled,
+                            onCheckedChange = { enabled ->
+                                scopeContrastBackdropEnabled = enabled
+                                prefs.edit().putBoolean(scopeContrastBackdropEnabledKey, enabled).apply()
                             }
                         )
                         if (!scopeShowArtworkBackground) {

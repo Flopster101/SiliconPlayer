@@ -146,7 +146,7 @@ fun BasicVisualizationOverlay(
     val monetOscLineColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)
     val monetOscGridColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.34f)
     val artworkBaseColor = remember(artwork) {
-        extractArtworkAccentColor(artwork)?.let(::invertColor)
+        extractArtworkColorProfile(artwork)?.let(::deriveReadableArtworkVisualizationColor)
     } ?: monetOscLineColor
     val artworkGridColor = artworkBaseColor.copy(alpha = 0.34f)
     val hasArtwork = artwork != null
@@ -980,7 +980,14 @@ private fun resolveOscColor(
     }
 }
 
-private fun extractArtworkAccentColor(artwork: ImageBitmap?): Color? {
+private data class ArtworkColorProfile(
+    val accent: Color,
+    val averageLuminance: Float,
+    val minLuminance: Float,
+    val maxLuminance: Float
+)
+
+private fun extractArtworkColorProfile(artwork: ImageBitmap?): ArtworkColorProfile? {
     if (artwork == null) return null
     val pixels = artwork.toPixelMap()
     val width = pixels.width
@@ -997,6 +1004,8 @@ private fun extractArtworkAccentColor(artwork: ImageBitmap?): Color? {
     var avgR = 0.0
     var avgG = 0.0
     var avgB = 0.0
+    var vividBestScore = -1.0
+    var vividBestColor = Color.White
     var sampleCount = 0
 
     var y = 0
@@ -1012,6 +1021,7 @@ private fun extractArtworkAccentColor(artwork: ImageBitmap?): Color? {
             val sat = if (maxCh <= 1e-6) 0.0 else (maxCh - minCh) / maxCh
             val value = maxCh
             val weight = (0.2 + (sat * 0.8)) * (0.3 + (value * 0.7))
+            val vividScore = sat * (0.55 + (value * 0.45))
 
             weightedR += r * weight
             weightedG += g * weight
@@ -1021,6 +1031,15 @@ private fun extractArtworkAccentColor(artwork: ImageBitmap?): Color? {
             avgR += r
             avgG += g
             avgB += b
+            if (vividScore > vividBestScore) {
+                vividBestScore = vividScore
+                vividBestColor = Color(
+                    red = r.toFloat().coerceIn(0f, 1f),
+                    green = g.toFloat().coerceIn(0f, 1f),
+                    blue = b.toFloat().coerceIn(0f, 1f),
+                    alpha = 1f
+                )
+            }
             sampleCount++
             x += stepX
         }
@@ -1028,21 +1047,215 @@ private fun extractArtworkAccentColor(artwork: ImageBitmap?): Color? {
     }
 
     if (sampleCount <= 0) return null
-    if (weightSum > 1e-6) {
-        return Color(
+    var accent = if (weightSum > 1e-6) {
+        Color(
             red = (weightedR / weightSum).toFloat().coerceIn(0f, 1f),
             green = (weightedG / weightSum).toFloat().coerceIn(0f, 1f),
             blue = (weightedB / weightSum).toFloat().coerceIn(0f, 1f),
-            alpha = 0.92f
+            alpha = 1f
+        )
+    } else {
+        Color(
+            red = (avgR / sampleCount.toDouble()).toFloat().coerceIn(0f, 1f),
+            green = (avgG / sampleCount.toDouble()).toFloat().coerceIn(0f, 1f),
+            blue = (avgB / sampleCount.toDouble()).toFloat().coerceIn(0f, 1f),
+            alpha = 1f
         )
     }
-
-    return Color(
+    val vividSat = colorSaturation(vividBestColor)
+    if (vividSat > 0.24f && vividBestScore > 0.22) {
+        val t = ((vividSat - 0.24f) / 0.56f).coerceIn(0f, 1f)
+        val vividBlend = (0.42f + (t * 0.38f)).coerceIn(0.42f, 0.80f)
+        accent = lerp(accent, vividBestColor, vividBlend)
+    }
+    val averageColor = Color(
         red = (avgR / sampleCount.toDouble()).toFloat().coerceIn(0f, 1f),
         green = (avgG / sampleCount.toDouble()).toFloat().coerceIn(0f, 1f),
         blue = (avgB / sampleCount.toDouble()).toFloat().coerceIn(0f, 1f),
-        alpha = 0.92f
+        alpha = 1f
     )
+    var minLuma = 1f
+    var maxLuma = 0f
+    y = 0
+    while (y < height) {
+        var x = 0
+        while (x < width) {
+            val l = pixels[x, y].luminance().coerceIn(0f, 1f)
+            if (l < minLuma) minLuma = l
+            if (l > maxLuma) maxLuma = l
+            x += stepX
+        }
+        y += stepY
+    }
+
+    return ArtworkColorProfile(
+        accent = accent,
+        averageLuminance = averageColor.luminance().coerceIn(0f, 1f),
+        minLuminance = minLuma.coerceIn(0f, 1f),
+        maxLuminance = maxLuma.coerceIn(0f, 1f)
+    )
+}
+
+private fun deriveReadableArtworkVisualizationColor(profile: ArtworkColorProfile): Color {
+    val bgLuma = profile.averageLuminance.coerceIn(0f, 1f)
+    val bg = Color(bgLuma, bgLuma, bgLuma, 1f)
+    val original = profile.accent.copy(alpha = 1f)
+    val inverted = invertColor(original).copy(alpha = 1f)
+    val preferred = if (contrastRatio(original, bg) >= contrastRatio(inverted, bg)) {
+        original
+    } else {
+        inverted
+    }
+    val darkBiased = retargetLuminance(preferred, 0.14f)
+    val lightBiased = retargetLuminance(preferred, 0.90f)
+    val darkReadable = forceMinimumContrast(
+        color = darkBiased,
+        background = bg,
+        minContrast = 4.2f
+    )
+    val lightReadable = forceMinimumContrast(
+        color = lightBiased,
+        background = bg,
+        minContrast = 4.2f
+    )
+    val neutralLight = forceMinimumContrast(
+        color = Color.White,
+        background = bg,
+        minContrast = 4.2f
+    )
+    val neutralDark = forceMinimumContrast(
+        color = Color.Black,
+        background = bg,
+        minContrast = 4.2f
+    )
+
+    val minBg = Color(profile.minLuminance, profile.minLuminance, profile.minLuminance, 1f)
+    val avgBg = Color(profile.averageLuminance, profile.averageLuminance, profile.averageLuminance, 1f)
+    // Center contrast backdrop already dims bright artwork behind the waveform area.
+    val effectiveMaxLuma = min(profile.maxLuminance, 0.74f)
+    val maxBg = Color(effectiveMaxLuma, effectiveMaxLuma, effectiveMaxLuma, 1f)
+    fun score(candidate: Color): Float {
+        val darkRegion = contrastRatio(candidate, minBg)
+        val avgRegion = contrastRatio(candidate, avgBg)
+        val brightRegion = contrastRatio(candidate, maxBg)
+        return darkRegion * 0.58f + avgRegion * 0.32f + brightRegion * 0.10f
+    }
+
+    val accentSaturation = colorSaturation(profile.accent)
+    val allowNeutralCandidates = accentSaturation < 0.22f
+    val baseCandidates = buildList {
+        add(darkReadable)
+        add(lightReadable)
+        if (allowNeutralCandidates) {
+            add(neutralLight)
+            add(neutralDark)
+        }
+    }
+    val readableBase = baseCandidates.maxBy { candidate ->
+        val neutralBonus = if (accentSaturation < 0.14f && (candidate == neutralLight || candidate == neutralDark)) {
+            0.45f
+        } else {
+            0f
+        }
+        val chromaBonus = if (accentSaturation > 0.26f) {
+            colorSaturation(candidate) * 0.35f
+        } else {
+            0f
+        }
+        score(candidate) + neutralBonus + chromaBonus
+    }
+    fun minContrastAcross(candidate: Color): Float {
+        return min(
+            contrastRatio(candidate, minBg),
+            min(contrastRatio(candidate, avgBg), contrastRatio(candidate, maxBg))
+        )
+    }
+
+    // Keep a visible hue hint where possible without sacrificing readability.
+    val maxTint = if (accentSaturation < 0.16f) {
+        0f
+    } else {
+        (0.30f + (accentSaturation * 0.45f)).coerceIn(0.30f, 0.72f)
+    }
+    var tinted = readableBase
+    if (maxTint > 0f) {
+        var t = maxTint
+        val minAllowedContrast = 3.4f
+        val saturationFloor = when {
+            accentSaturation >= 0.50f -> 0.32f
+            accentSaturation >= 0.36f -> 0.24f
+            else -> 0.16f
+        }
+        while (t >= 0.02f) {
+            val candidate = lerp(readableBase, preferred, t)
+            if (minContrastAcross(candidate) >= minAllowedContrast) {
+                tinted = candidate
+                if (colorSaturation(candidate) >= saturationFloor) break
+            }
+            t -= 0.04f
+        }
+    }
+    if (accentSaturation >= 0.30f && colorSaturation(tinted) < 0.18f) {
+        val boosted = lerp(tinted, preferred, 0.24f)
+        if (minContrastAcross(boosted) >= 3.2f) {
+            tinted = boosted
+        }
+    }
+    return tinted.copy(alpha = 1f)
+}
+
+private fun contrastRatio(a: Color, b: Color): Float {
+    val l1 = a.luminance() + 0.05f
+    val l2 = b.luminance() + 0.05f
+    return if (l1 >= l2) l1 / l2 else l2 / l1
+}
+
+private fun forceMinimumContrast(
+    color: Color,
+    background: Color,
+    minContrast: Float
+): Color {
+    if (contrastRatio(color, background) >= minContrast) return color
+    val toward = if (background.luminance() < 0.5f) Color.White else Color.Black
+    var t = 0.08f
+    while (t <= 1f) {
+        val candidate = lerp(color, toward, t)
+        if (contrastRatio(candidate, background) >= minContrast) {
+            return candidate
+        }
+        t += 0.08f
+    }
+    return toward
+}
+
+private fun retargetLuminance(color: Color, targetLuminance: Float): Color {
+    val target = targetLuminance.coerceIn(0f, 1f)
+    var low = 0f
+    var high = 1f
+    val toward = if (color.luminance() < target) Color.White else Color.Black
+    var best = color
+    repeat(10) {
+        val t = (low + high) * 0.5f
+        val candidate = lerp(color, toward, t)
+        val l = candidate.luminance()
+        best = candidate
+        if (l < target) {
+            low = t
+        } else {
+            high = t
+        }
+    }
+    return best
+}
+
+private fun colorSaturation(color: Color): Float {
+    val r = color.red.coerceIn(0f, 1f)
+    val g = color.green.coerceIn(0f, 1f)
+    val b = color.blue.coerceIn(0f, 1f)
+    val maxCh = max(r, max(g, b))
+    val minCh = min(r, min(g, b))
+    if (maxCh <= 1e-6f) return 0f
+    return ((maxCh - minCh) / maxCh).coerceIn(0f, 1f)
 }
 
 private fun invertColor(color: Color): Color {

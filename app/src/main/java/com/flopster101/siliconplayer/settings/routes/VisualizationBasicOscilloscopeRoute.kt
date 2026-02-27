@@ -34,6 +34,7 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
     val oscGridArtworkColorModeKey = "visualization_osc_grid_color_mode_with_artwork"
     val oscCustomLineColorKey = "visualization_osc_custom_line_color_argb"
     val oscCustomGridColorKey = "visualization_osc_custom_grid_color_argb"
+    val oscContrastBackdropEnabledKey = AppPreferenceKeys.VISUALIZATION_OSC_CONTRAST_BACKDROP_ENABLED
     val context = LocalContext.current
     val prefs = remember(context) {
         context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -175,6 +176,14 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
             )
         )
     }
+    var oscContrastBackdropEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                oscContrastBackdropEnabledKey,
+                AppDefaults.Visualization.Oscilloscope.contrastBackdropEnabled
+            )
+        )
+    }
     var showWindowDialog by remember { mutableStateOf(false) }
     var showTriggerDialog by remember { mutableStateOf(false) }
     var showFpsModeDialog by remember { mutableStateOf(false) }
@@ -255,6 +264,16 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
         onCheckedChange = { enabled ->
             visualizationOscCenterLineEnabled = enabled
             prefs.edit().putBoolean(oscCenterLineEnabledKey, enabled).apply()
+        }
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Contrast backdrop",
+        description = "Add a dark backdrop behind waveforms for better readability over artwork.",
+        checked = oscContrastBackdropEnabled,
+        onCheckedChange = { enabled ->
+            oscContrastBackdropEnabled = enabled
+            prefs.edit().putBoolean(oscContrastBackdropEnabledKey, enabled).apply()
         }
     )
     Spacer(modifier = Modifier.height(16.dp))

@@ -152,14 +152,17 @@ private const val PREF_KEY_VIS_OSC_LINE_COLOR_WITH_ARTWORK = "visualization_osc_
 private const val PREF_KEY_VIS_OSC_GRID_COLOR_WITH_ARTWORK = "visualization_osc_grid_color_mode_with_artwork"
 private const val PREF_KEY_VIS_OSC_CUSTOM_LINE_COLOR = "visualization_osc_custom_line_color_argb"
 private const val PREF_KEY_VIS_OSC_CUSTOM_GRID_COLOR = "visualization_osc_custom_grid_color_argb"
+private const val PREF_KEY_VIS_OSC_CONTRAST_BACKDROP_ENABLED = "visualization_osc_contrast_backdrop_enabled"
 private const val PREF_KEY_VIS_BAR_RENDER_BACKEND = "visualization_bar_render_backend"
 private const val PREF_KEY_VIS_BAR_FPS_MODE = "visualization_bar_fps_mode"
 private const val PREF_KEY_VIS_BAR_FREQUENCY_GRID_ENABLED = "visualization_bar_frequency_grid_enabled"
+private const val PREF_KEY_VIS_BAR_CONTRAST_BACKDROP_ENABLED = "visualization_bar_contrast_backdrop_enabled"
 private const val PREF_KEY_VIS_BAR_COLOR_NO_ARTWORK = "visualization_bar_color_mode_no_artwork"
 private const val PREF_KEY_VIS_BAR_COLOR_WITH_ARTWORK = "visualization_bar_color_mode_with_artwork"
 private const val PREF_KEY_VIS_BAR_CUSTOM_COLOR = "visualization_bar_custom_color_argb"
 private const val PREF_KEY_VIS_VU_RENDER_BACKEND = "visualization_vu_render_backend"
 private const val PREF_KEY_VIS_VU_FPS_MODE = "visualization_vu_fps_mode"
+private const val PREF_KEY_VIS_VU_CONTRAST_BACKDROP_ENABLED = "visualization_vu_contrast_backdrop_enabled"
 private const val PREF_KEY_VIS_VU_COLOR_NO_ARTWORK = "visualization_vu_color_mode_no_artwork"
 private const val PREF_KEY_VIS_VU_COLOR_WITH_ARTWORK = "visualization_vu_color_mode_with_artwork"
 private const val PREF_KEY_VIS_VU_CUSTOM_COLOR = "visualization_vu_custom_color_argb"
@@ -179,15 +182,18 @@ private class PlayerVisualizationPreferenceState(
     oscGridColorModeWithArtwork: VisualizationOscColorMode,
     oscCustomLineColorArgb: Int,
     oscCustomGridColorArgb: Int,
+    oscContrastBackdropEnabled: Boolean,
     barColorModeNoArtwork: VisualizationOscColorMode,
     barColorModeWithArtwork: VisualizationOscColorMode,
     barCustomColorArgb: Int,
     barFrequencyGridEnabled: Boolean,
+    barContrastBackdropEnabled: Boolean,
     barFpsMode: VisualizationOscFpsMode,
     barRuntimeRenderBackend: VisualizationRenderBackend,
     vuColorModeNoArtwork: VisualizationOscColorMode,
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
+    vuContrastBackdropEnabled: Boolean,
     vuFpsMode: VisualizationOscFpsMode,
     vuRuntimeRenderBackend: VisualizationRenderBackend
 ) {
@@ -205,15 +211,18 @@ private class PlayerVisualizationPreferenceState(
     var oscGridColorModeWithArtwork by mutableStateOf(oscGridColorModeWithArtwork)
     var oscCustomLineColorArgb by mutableIntStateOf(oscCustomLineColorArgb)
     var oscCustomGridColorArgb by mutableIntStateOf(oscCustomGridColorArgb)
+    var oscContrastBackdropEnabled by mutableStateOf(oscContrastBackdropEnabled)
     var barColorModeNoArtwork by mutableStateOf(barColorModeNoArtwork)
     var barColorModeWithArtwork by mutableStateOf(barColorModeWithArtwork)
     var barCustomColorArgb by mutableIntStateOf(barCustomColorArgb)
     var barFrequencyGridEnabled by mutableStateOf(barFrequencyGridEnabled)
+    var barContrastBackdropEnabled by mutableStateOf(barContrastBackdropEnabled)
     var barFpsMode by mutableStateOf(barFpsMode)
     var barRuntimeRenderBackend by mutableStateOf(barRuntimeRenderBackend)
     var vuColorModeNoArtwork by mutableStateOf(vuColorModeNoArtwork)
     var vuColorModeWithArtwork by mutableStateOf(vuColorModeWithArtwork)
     var vuCustomColorArgb by mutableIntStateOf(vuCustomColorArgb)
+    var vuContrastBackdropEnabled by mutableStateOf(vuContrastBackdropEnabled)
     var vuFpsMode by mutableStateOf(vuFpsMode)
     var vuRuntimeRenderBackend by mutableStateOf(vuRuntimeRenderBackend)
 }
@@ -282,6 +291,10 @@ private fun rememberPlayerVisualizationPreferenceState(
             ),
             oscCustomLineColorArgb = prefs.getInt(PREF_KEY_VIS_OSC_CUSTOM_LINE_COLOR, 0xFF6BD8FF.toInt()),
             oscCustomGridColorArgb = prefs.getInt(PREF_KEY_VIS_OSC_CUSTOM_GRID_COLOR, 0x66FFFFFF),
+            oscContrastBackdropEnabled = prefs.getBoolean(
+                PREF_KEY_VIS_OSC_CONTRAST_BACKDROP_ENABLED,
+                AppDefaults.Visualization.Oscilloscope.contrastBackdropEnabled
+            ),
             barColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
                 prefs.getString(
                     PREF_KEY_VIS_BAR_COLOR_NO_ARTWORK,
@@ -300,6 +313,10 @@ private fun rememberPlayerVisualizationPreferenceState(
             barFrequencyGridEnabled = prefs.getBoolean(
                 PREF_KEY_VIS_BAR_FREQUENCY_GRID_ENABLED,
                 AppDefaults.Visualization.Bars.frequencyGridEnabled
+            ),
+            barContrastBackdropEnabled = prefs.getBoolean(
+                PREF_KEY_VIS_BAR_CONTRAST_BACKDROP_ENABLED,
+                AppDefaults.Visualization.Bars.contrastBackdropEnabled
             ),
             barFpsMode = VisualizationOscFpsMode.fromStorage(
                 prefs.getString(
@@ -326,6 +343,10 @@ private fun rememberPlayerVisualizationPreferenceState(
                 VisualizationOscColorMode.Artwork
             ),
             vuCustomColorArgb = prefs.getInt(PREF_KEY_VIS_VU_CUSTOM_COLOR, 0xFF6BD8FF.toInt()),
+            vuContrastBackdropEnabled = prefs.getBoolean(
+                PREF_KEY_VIS_VU_CONTRAST_BACKDROP_ENABLED,
+                AppDefaults.Visualization.Vu.contrastBackdropEnabled
+            ),
             vuFpsMode = VisualizationOscFpsMode.fromStorage(
                 prefs.getString(
                     PREF_KEY_VIS_VU_FPS_MODE,
@@ -424,6 +445,12 @@ private fun rememberPlayerVisualizationPreferenceState(
                     state.oscCustomGridColorArgb =
                         sharedPrefs.getInt(PREF_KEY_VIS_OSC_CUSTOM_GRID_COLOR, 0x66FFFFFF)
                 }
+                PREF_KEY_VIS_OSC_CONTRAST_BACKDROP_ENABLED -> {
+                    state.oscContrastBackdropEnabled = sharedPrefs.getBoolean(
+                        PREF_KEY_VIS_OSC_CONTRAST_BACKDROP_ENABLED,
+                        AppDefaults.Visualization.Oscilloscope.contrastBackdropEnabled
+                    )
+                }
                 PREF_KEY_VIS_BAR_COLOR_NO_ARTWORK -> {
                     state.barColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
                         sharedPrefs.getString(
@@ -450,6 +477,12 @@ private fun rememberPlayerVisualizationPreferenceState(
                     state.barFrequencyGridEnabled = sharedPrefs.getBoolean(
                         PREF_KEY_VIS_BAR_FREQUENCY_GRID_ENABLED,
                         AppDefaults.Visualization.Bars.frequencyGridEnabled
+                    )
+                }
+                PREF_KEY_VIS_BAR_CONTRAST_BACKDROP_ENABLED -> {
+                    state.barContrastBackdropEnabled = sharedPrefs.getBoolean(
+                        PREF_KEY_VIS_BAR_CONTRAST_BACKDROP_ENABLED,
+                        AppDefaults.Visualization.Bars.contrastBackdropEnabled
                     )
                 }
                 PREF_KEY_VIS_BAR_FPS_MODE -> {
@@ -490,6 +523,12 @@ private fun rememberPlayerVisualizationPreferenceState(
                 PREF_KEY_VIS_VU_CUSTOM_COLOR -> {
                     state.vuCustomColorArgb =
                         sharedPrefs.getInt(PREF_KEY_VIS_VU_CUSTOM_COLOR, 0xFF6BD8FF.toInt())
+                }
+                PREF_KEY_VIS_VU_CONTRAST_BACKDROP_ENABLED -> {
+                    state.vuContrastBackdropEnabled = sharedPrefs.getBoolean(
+                        PREF_KEY_VIS_VU_CONTRAST_BACKDROP_ENABLED,
+                        AppDefaults.Visualization.Vu.contrastBackdropEnabled
+                    )
                 }
                 PREF_KEY_VIS_VU_FPS_MODE -> {
                     state.vuFpsMode = VisualizationOscFpsMode.fromStorage(
@@ -818,12 +857,15 @@ internal fun PlayerScreen(
                                 oscGridColorModeWithArtwork = visualizationPrefsState.oscGridColorModeWithArtwork,
                                 oscCustomLineColorArgb = visualizationPrefsState.oscCustomLineColorArgb,
                                 oscCustomGridColorArgb = visualizationPrefsState.oscCustomGridColorArgb,
+                                oscContrastBackdropEnabled = visualizationPrefsState.oscContrastBackdropEnabled,
                                 vuAnchor = visualizationVuAnchor,
                                 vuUseThemeColor = visualizationVuUseThemeColor,
                                 vuRenderBackend = visualizationPrefsState.vuRuntimeRenderBackend,
                                 vuColorModeNoArtwork = visualizationPrefsState.vuColorModeNoArtwork,
                                 vuColorModeWithArtwork = visualizationPrefsState.vuColorModeWithArtwork,
                                 vuCustomColorArgb = visualizationPrefsState.vuCustomColorArgb,
+                                vuContrastBackdropEnabled = visualizationPrefsState.vuContrastBackdropEnabled,
+                                barContrastBackdropEnabled = visualizationPrefsState.barContrastBackdropEnabled,
                                 channelScopePrefs = channelScopePrefs,
                                 artworkCornerRadiusDp = artworkCornerRadiusDp,
                                 modifier = Modifier
@@ -1109,12 +1151,15 @@ internal fun PlayerScreen(
                                         oscGridColorModeWithArtwork = visualizationPrefsState.oscGridColorModeWithArtwork,
                                         oscCustomLineColorArgb = visualizationPrefsState.oscCustomLineColorArgb,
                                         oscCustomGridColorArgb = visualizationPrefsState.oscCustomGridColorArgb,
+                                        oscContrastBackdropEnabled = visualizationPrefsState.oscContrastBackdropEnabled,
                                         vuAnchor = visualizationVuAnchor,
                                         vuUseThemeColor = visualizationVuUseThemeColor,
                                         vuRenderBackend = visualizationPrefsState.vuRuntimeRenderBackend,
                                         vuColorModeNoArtwork = visualizationPrefsState.vuColorModeNoArtwork,
                                         vuColorModeWithArtwork = visualizationPrefsState.vuColorModeWithArtwork,
                                         vuCustomColorArgb = visualizationPrefsState.vuCustomColorArgb,
+                                        vuContrastBackdropEnabled = visualizationPrefsState.vuContrastBackdropEnabled,
+                                        barContrastBackdropEnabled = visualizationPrefsState.barContrastBackdropEnabled,
                                         channelScopePrefs = channelScopePrefs,
                                         artworkCornerRadiusDp = artworkCornerRadiusDp,
                                         modifier = Modifier.size(artworkSize)

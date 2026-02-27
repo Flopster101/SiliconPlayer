@@ -46,6 +46,7 @@ object AppDefaults {
             const val smoothingPercent = 60
             const val roundnessDp = 6
             const val frequencyGridEnabled = false
+            const val contrastBackdropEnabled = true
             val fpsMode = VisualizationOscFpsMode.Fps60
             const val overlayArtwork = true
             const val useThemeColor = true
@@ -61,6 +62,7 @@ object AppDefaults {
         object Oscilloscope {
             const val stereo = true
             const val windowMs = 30
+            const val contrastBackdropEnabled = true
             val triggerMode = VisualizationOscTriggerMode.Rising
             val fpsMode = VisualizationOscFpsMode.Default
             val renderBackend = VisualizationRenderBackend.OpenGlTexture
@@ -83,6 +85,7 @@ object AppDefaults {
             val anchor = VisualizationVuAnchor.Bottom
             const val useThemeColor = true
             const val smoothingPercent = 40
+            const val contrastBackdropEnabled = true
             val fpsMode = VisualizationOscFpsMode.Fps60
             val renderBackend = VisualizationRenderBackend.OpenGlTexture
             val colorModeNoArtwork = VisualizationOscColorMode.Monet
@@ -96,6 +99,7 @@ object AppDefaults {
             val renderBackend = VisualizationRenderBackend.OpenGlTexture
             const val dcRemovalEnabled = true
             const val gainPercent = 240
+            const val contrastBackdropEnabled = true
             val triggerMode = VisualizationOscTriggerMode.Rising
             val fpsMode = VisualizationOscFpsMode.Default
             const val lineWidthDp = 3

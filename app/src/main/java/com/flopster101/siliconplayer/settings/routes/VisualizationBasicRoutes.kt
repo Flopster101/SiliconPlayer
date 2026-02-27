@@ -71,6 +71,7 @@ internal fun VisualizationBasicBarsRouteContent(
     val barRenderBackendKey = AppPreferenceKeys.VISUALIZATION_BAR_RENDER_BACKEND
     val barFpsModeKey = AppPreferenceKeys.VISUALIZATION_BAR_FPS_MODE
     val barFrequencyGridEnabledKey = AppPreferenceKeys.VISUALIZATION_BAR_FREQUENCY_GRID_ENABLED
+    val barContrastBackdropEnabledKey = AppPreferenceKeys.VISUALIZATION_BAR_CONTRAST_BACKDROP_ENABLED
     val context = LocalContext.current
     val prefs = remember(context) {
         context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -117,6 +118,14 @@ internal fun VisualizationBasicBarsRouteContent(
             prefs.getBoolean(
                 barFrequencyGridEnabledKey,
                 AppDefaults.Visualization.Bars.frequencyGridEnabled
+            )
+        )
+    }
+    var barContrastBackdropEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                barContrastBackdropEnabledKey,
+                AppDefaults.Visualization.Bars.contrastBackdropEnabled
             )
         )
     }
@@ -186,6 +195,16 @@ internal fun VisualizationBasicBarsRouteContent(
         onCheckedChange = { enabled ->
             barFrequencyGridEnabled = enabled
             prefs.edit().putBoolean(barFrequencyGridEnabledKey, enabled).apply()
+        }
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Contrast backdrop",
+        description = "Add a dark backdrop behind bars for better readability over artwork.",
+        checked = barContrastBackdropEnabled,
+        onCheckedChange = { enabled ->
+            barContrastBackdropEnabled = enabled
+            prefs.edit().putBoolean(barContrastBackdropEnabledKey, enabled).apply()
         }
     )
     Spacer(modifier = Modifier.height(16.dp))
@@ -360,6 +379,7 @@ internal fun VisualizationBasicVuMetersRouteContent(
     val vuCustomColorKey = "visualization_vu_custom_color_argb"
     val vuRenderBackendKey = AppPreferenceKeys.VISUALIZATION_VU_RENDER_BACKEND
     val vuFpsModeKey = AppPreferenceKeys.VISUALIZATION_VU_FPS_MODE
+    val vuContrastBackdropEnabledKey = AppPreferenceKeys.VISUALIZATION_VU_CONTRAST_BACKDROP_ENABLED
     val context = LocalContext.current
     val prefs = remember(context) {
         context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
@@ -398,6 +418,14 @@ internal fun VisualizationBasicVuMetersRouteContent(
                     vuFpsModeKey,
                     AppDefaults.Visualization.Vu.fpsMode.storageValue
                 )
+            )
+        )
+    }
+    var vuContrastBackdropEnabled by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                vuContrastBackdropEnabledKey,
+                AppDefaults.Visualization.Vu.contrastBackdropEnabled
             )
         )
     }
@@ -443,6 +471,16 @@ internal fun VisualizationBasicVuMetersRouteContent(
         description = "Use app theme color for VU bars instead of alternate accent.",
         checked = visualizationVuUseThemeColor,
         onCheckedChange = onVisualizationVuUseThemeColorChanged
+    )
+    Spacer(modifier = Modifier.height(10.dp))
+    PlayerSettingToggleCard(
+        title = "Contrast backdrop",
+        description = "Add a dark backdrop behind VU meters for better readability over artwork.",
+        checked = vuContrastBackdropEnabled,
+        onCheckedChange = { enabled ->
+            vuContrastBackdropEnabled = enabled
+            prefs.edit().putBoolean(vuContrastBackdropEnabledKey, enabled).apply()
+        }
     )
     Spacer(modifier = Modifier.height(16.dp))
     SettingsSectionLabel("Colors (no artwork)")

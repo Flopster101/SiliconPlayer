@@ -104,7 +104,7 @@ fun OscilloscopeVisualization(
                 val y0Right = centerRight - (right[i - 1].coerceIn(-1f, 1f) * ampScale)
                 val y1Right = centerRight - (right[i].coerceIn(-1f, 1f) * ampScale)
                 drawLine(
-                    color = oscColor.copy(alpha = 0.78f),
+                    color = oscColor.copy(alpha = 0.90f),
                     start = Offset(x0, y0Right),
                     end = Offset(x1, y1Right),
                     strokeWidth = scopeLineWidth

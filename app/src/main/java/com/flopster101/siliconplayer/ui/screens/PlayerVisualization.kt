@@ -635,6 +635,7 @@ internal data class ChannelScopePrefs(
     val renderBackend: VisualizationRenderBackend,
     val dcRemovalEnabled: Boolean,
     val gainPercent: Int,
+    val contrastBackdropEnabled: Boolean,
     val triggerModeNative: Int,
     val fpsMode: VisualizationOscFpsMode,
     val lineWidthDp: Int,
@@ -676,6 +677,7 @@ internal data class ChannelScopePrefs(
         private const val KEY_RENDER_BACKEND = "visualization_channel_scope_render_backend"
         private const val KEY_DC_REMOVAL_ENABLED = "visualization_channel_scope_dc_removal_enabled"
         private const val KEY_GAIN_PERCENT = "visualization_channel_scope_gain_percent"
+        private const val KEY_CONTRAST_BACKDROP_ENABLED = "visualization_channel_scope_contrast_backdrop_enabled"
         private const val KEY_TRIGGER_MODE = "visualization_channel_scope_trigger_mode"
         private const val KEY_FPS_MODE = "visualization_channel_scope_fps_mode"
         private const val KEY_LINE_WIDTH_DP = "visualization_channel_scope_line_width_dp"
@@ -744,6 +746,10 @@ internal data class ChannelScopePrefs(
                 ).coerceIn(
                     AppDefaults.Visualization.ChannelScope.gainRangePercent.first,
                     AppDefaults.Visualization.ChannelScope.gainRangePercent.last
+                ),
+                contrastBackdropEnabled = sharedPrefs.getBoolean(
+                    KEY_CONTRAST_BACKDROP_ENABLED,
+                    AppDefaults.Visualization.ChannelScope.contrastBackdropEnabled
                 ),
                 triggerModeNative = triggerModeNative,
                 fpsMode = VisualizationOscFpsMode.fromStorage(
@@ -1021,6 +1027,7 @@ internal fun AlbumArtPlaceholder(
     barColorModeNoArtwork: VisualizationOscColorMode,
     barColorModeWithArtwork: VisualizationOscColorMode,
     barCustomColorArgb: Int,
+    barContrastBackdropEnabled: Boolean,
     oscStereo: Boolean,
     oscLineWidthDp: Int,
     oscGridWidthDp: Int,
@@ -1032,12 +1039,14 @@ internal fun AlbumArtPlaceholder(
     oscGridColorModeWithArtwork: VisualizationOscColorMode,
     oscCustomLineColorArgb: Int,
     oscCustomGridColorArgb: Int,
+    oscContrastBackdropEnabled: Boolean,
     vuAnchor: VisualizationVuAnchor,
     vuUseThemeColor: Boolean,
     vuRenderBackend: VisualizationRenderBackend,
     vuColorModeNoArtwork: VisualizationOscColorMode,
     vuColorModeWithArtwork: VisualizationOscColorMode,
     vuCustomColorArgb: Int,
+    vuContrastBackdropEnabled: Boolean,
     channelScopePrefs: ChannelScopePrefs,
     artworkCornerRadiusDp: Int = AppDefaults.Player.artworkCornerRadiusDp,
     modifier: Modifier = Modifier
@@ -1500,6 +1509,74 @@ internal fun AlbumArtPlaceholder(
             }
         }
     }
+    val oscStereoActive = oscStereo && visChannelCount > 1
+    val vuTopAnchor = vuAnchor == VisualizationVuAnchor.Top
+    val visualizationContrastBrush = remember(visualizationMode, oscStereoActive) {
+        when (visualizationMode) {
+            VisualizationMode.Bars -> if (barContrastBackdropEnabled) {
+                // Subtle bottom-up darkening improves bar readability on busy artwork.
+                Brush.verticalGradient(
+                    colorStops = arrayOf(
+                        0.00f to Color.Black.copy(alpha = 0.10f),
+                        0.45f to Color.Black.copy(alpha = 0.28f),
+                        1.00f to Color.Black.copy(alpha = 0.55f)
+                    )
+                )
+            } else null
+            VisualizationMode.Oscilloscope -> if (oscContrastBackdropEnabled) {
+                // Keep contrast strongest around waveform centerline(s).
+                // Stereo lanes center around ~25% and ~75% of height.
+                Brush.verticalGradient(
+                    colorStops = if (oscStereoActive) {
+                        arrayOf(
+                            0.00f to Color.Black.copy(alpha = 0.08f),
+                            0.25f to Color.Black.copy(alpha = 0.42f),
+                            0.50f to Color.Black.copy(alpha = 0.10f),
+                            0.75f to Color.Black.copy(alpha = 0.42f),
+                            1.00f to Color.Black.copy(alpha = 0.08f)
+                        )
+                    } else {
+                        arrayOf(
+                            0.00f to Color.Black.copy(alpha = 0.08f),
+                            0.50f to Color.Black.copy(alpha = 0.42f),
+                            1.00f to Color.Black.copy(alpha = 0.08f)
+                        )
+                    }
+                )
+            } else null
+            VisualizationMode.VuMeters -> if (vuContrastBackdropEnabled) {
+                // Emphasize contrast near the active VU anchor area.
+                if (vuTopAnchor) {
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0.00f to Color.Black.copy(alpha = 0.48f),
+                            0.42f to Color.Black.copy(alpha = 0.24f),
+                            1.00f to Color.Black.copy(alpha = 0.08f)
+                        )
+                    )
+                } else {
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0.00f to Color.Black.copy(alpha = 0.08f),
+                            0.58f to Color.Black.copy(alpha = 0.24f),
+                            1.00f to Color.Black.copy(alpha = 0.48f)
+                        )
+                    )
+                }
+            } else null
+            VisualizationMode.ChannelScope -> if (channelScopePrefs.contrastBackdropEnabled) {
+                // Slightly stronger dim at center, tapering softly toward sides.
+                Brush.horizontalGradient(
+                    colorStops = arrayOf(
+                        0.00f to Color.Black.copy(alpha = 0.22f),
+                        0.50f to Color.Black.copy(alpha = 0.30f),
+                        1.00f to Color.Black.copy(alpha = 0.22f)
+                    )
+                )
+            } else null
+            else -> null
+        }
+    }
 
     ElevatedCard(
         modifier = modifier,
@@ -1561,6 +1638,13 @@ internal fun AlbumArtPlaceholder(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(scopeBackgroundColor)
+                )
+            }
+            if (visualizationContrastBrush != null) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(brush = visualizationContrastBrush)
                 )
             }
             BasicVisualizationOverlay(

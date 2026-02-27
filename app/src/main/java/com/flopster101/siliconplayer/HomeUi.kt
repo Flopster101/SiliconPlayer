@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -534,7 +535,7 @@ internal fun HomeScreen(
                                                 pinnedFolderActionTarget = pinnedEntry
                                             }
                                         )
-                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        .padding(start = 14.dp, top = 10.dp, end = 34.dp, bottom = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     val isSmbPinnedFolder = parseSmbSourceSpecFromInput(pinnedEntry.path) != null
@@ -606,6 +607,11 @@ internal fun HomeScreen(
                                         }
                                     )
                                 }
+                                PinnedEntryCornerBadge(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 8.dp, end = 10.dp)
+                                )
                             }
                         } else {
                             val recentEntry = pinnedEntry.asRecentPathEntry()
@@ -640,7 +646,7 @@ internal fun HomeScreen(
                                                 pinnedFileActionTarget = pinnedEntry
                                             }
                                         )
-                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        .padding(start = 14.dp, top = 10.dp, end = 34.dp, bottom = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     RecentTrackArtworkChip(
@@ -701,6 +707,11 @@ internal fun HomeScreen(
                                         }
                                     )
                                 }
+                                PinnedEntryCornerBadge(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 8.dp, end = 10.dp)
+                                )
                             }
                         }
                         if (index < sortedPinnedEntries.lastIndex) {
@@ -1241,6 +1252,26 @@ private fun resolvedRecentFolderTitle(entry: RecentPathEntry): String {
         return if (isRoot) title else fallback
     }
     return fallback
+}
+
+@Composable
+private fun PinnedEntryCornerBadge(
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.size(18.dp),
+        shape = RoundedCornerShape(999.dp),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Icons.Default.PushPin,
+                contentDescription = "Pinned",
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(10.dp)
+            )
+        }
+    }
 }
 
 @Composable

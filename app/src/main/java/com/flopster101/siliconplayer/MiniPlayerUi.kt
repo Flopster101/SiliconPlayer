@@ -10,7 +10,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -256,20 +255,11 @@ internal fun MiniPlayerBar(
                         },
                         label = "miniTitleSwap"
                     ) { animatedTitle ->
-                        val marquee = animatedTitle.length > 26
                         Text(
                             text = animatedTitle,
                             style = MaterialTheme.typography.titleSmall,
                             maxLines = 1,
-                            overflow = if (marquee) TextOverflow.Clip else TextOverflow.Ellipsis,
-                            modifier = if (marquee) {
-                                Modifier.basicMarquee(
-                                    iterations = 3,
-                                    initialDelayMillis = 900
-                                )
-                            } else {
-                                Modifier
-                            }
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                     AnimatedContent(
@@ -280,21 +270,13 @@ internal fun MiniPlayerBar(
                         },
                         label = "miniArtistSwap"
                     ) { animatedArtist ->
-                        val marquee = animatedArtist.length > 30
                         Text(
                             text = animatedArtist,
                             style = MaterialTheme.typography.bodySmall,
                             maxLines = 1,
-                            overflow = if (marquee) TextOverflow.Clip else TextOverflow.Ellipsis,
+                            overflow = TextOverflow.Ellipsis,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = if (marquee) {
-                                Modifier.basicMarquee(
-                                    iterations = 3,
-                                    initialDelayMillis = 1100
-                                )
-                            } else {
-                                Modifier
-                            }
+                            modifier = Modifier
                         )
                     }
                     Text(

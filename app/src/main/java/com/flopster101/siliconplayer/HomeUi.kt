@@ -12,8 +12,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.MarqueeSpacing
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -1374,35 +1372,13 @@ internal fun RecentTrackSummaryText(
         )
     }
 
-    val shouldMarquee = renderedDisplay.primaryText.length > 28
-    if (shouldMarquee) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clipToBounds()
-                .graphicsLayer { alpha = metadataAlpha.value }
-        ) {
-            Text(
-                text = renderedDisplay.primaryText,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Clip,
-                    modifier = Modifier.basicMarquee(
-                        iterations = Int.MAX_VALUE,
-                        initialDelayMillis = 900,
-                        spacing = MarqueeSpacing(24.dp)
-                    )
-            )
-        }
-    } else {
-        Text(
-            text = renderedDisplay.primaryText,
-            style = MaterialTheme.typography.titleSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.graphicsLayer { alpha = metadataAlpha.value }
-        )
-    }
+    Text(
+        text = renderedDisplay.primaryText,
+        style = MaterialTheme.typography.titleSmall,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.graphicsLayer { alpha = metadataAlpha.value }
+    )
     val isNetworkSource = storagePresentation.icon == Icons.Default.Public ||
         storagePresentation.icon == NetworkIcons.WorldCode ||
         storagePresentation.icon == NetworkIcons.SmbShare
@@ -1423,7 +1399,6 @@ internal fun RecentTrackSummaryText(
             append(fallback)
         }
     }
-    val shouldMarqueeSubtitle = subtitleText.length > 44
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (isArchiveSource) {
             Icon(
@@ -1452,16 +1427,7 @@ internal fun RecentTrackSummaryText(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
-                overflow = if (shouldMarqueeSubtitle) TextOverflow.Clip else TextOverflow.Ellipsis,
-                modifier = if (shouldMarqueeSubtitle) {
-                    Modifier.basicMarquee(
-                        iterations = Int.MAX_VALUE,
-                        initialDelayMillis = 900,
-                        spacing = MarqueeSpacing(24.dp)
-                    )
-                } else {
-                    Modifier
-                }
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

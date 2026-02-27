@@ -2003,7 +2003,7 @@ private fun TrackMetadataBlock(
                     modifier = Modifier
                         .fillMaxWidth()
                         .basicMarquee(
-                            iterations = Int.MAX_VALUE,
+                            iterations = 3,
                             initialDelayMillis = 450
                         )
                 )
@@ -2087,7 +2087,7 @@ private fun TrackMetadataBlock(
                     .then(
                         if (shouldMarqueeFilename) {
                             Modifier.basicMarquee(
-                                iterations = Int.MAX_VALUE,
+                                iterations = 3,
                                 initialDelayMillis = 550
                             )
                         } else {
@@ -3371,15 +3371,19 @@ private fun LineageStyleSeekBar(
     var draggingThumb by remember { mutableStateOf(false) }
     var thumbPressed by remember { mutableStateOf(false) }
     var thumbHovered by remember { mutableStateOf(false) }
-    val seekFlowTransition = rememberInfiniteTransition(label = "seekFlowTransition")
-    val seekFlowPhase by seekFlowTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = LinearEasing)
-        ),
-        label = "seekFlowPhase"
-    )
+    val seekFlowPhase = if (seekInProgress) {
+        val seekFlowTransition = rememberInfiniteTransition(label = "seekFlowTransition")
+        seekFlowTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 900, easing = LinearEasing)
+            ),
+            label = "seekFlowPhase"
+        ).value
+    } else {
+        0f
+    }
 
     fun xToValue(x: Float): Float {
         if (barWidthPx <= 0f || maxValue <= 0f) return 0f

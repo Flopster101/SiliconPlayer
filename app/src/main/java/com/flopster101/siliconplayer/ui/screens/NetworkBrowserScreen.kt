@@ -18,9 +18,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.MarqueeSpacing
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
@@ -1866,33 +1864,12 @@ internal fun NetworkBrowserScreen(
                                 )
                             }
 
-                            val shouldMarqueePrimary = isRemoteSource && displayTitle.length > 28
-                            if (shouldMarqueePrimary) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clipToBounds()
-                                ) {
-                                    Text(
-                                        text = displayTitle,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Clip,
-                                        modifier = Modifier.basicMarquee(
-                                            iterations = Int.MAX_VALUE,
-                                            initialDelayMillis = 900,
-                                            spacing = MarqueeSpacing(24.dp)
-                                        )
-                                    )
-                                }
-                            } else {
-                                Text(
-                                    text = displayTitle,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                            Text(
+                                text = displayTitle,
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
 
                             if (isMetadataLoading) {
                                 Spacer(modifier = Modifier.height(2.dp))
@@ -1914,7 +1891,6 @@ internal fun NetworkBrowserScreen(
 
                             if (subtitle.isNotBlank()) {
                                 if (isRemoteSource) {
-                                    val shouldMarqueeSubtitle = subtitle.length > 44
                                     val subtitleIcon = when (sourceScheme) {
                                         "smb" -> NetworkIcons.SmbShare
                                         "http", "https" -> NetworkIcons.WorldCode
@@ -1938,20 +1914,7 @@ internal fun NetworkBrowserScreen(
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 maxLines = 1,
-                                                overflow = if (shouldMarqueeSubtitle) {
-                                                    TextOverflow.Clip
-                                                } else {
-                                                    TextOverflow.Ellipsis
-                                                },
-                                                modifier = if (shouldMarqueeSubtitle) {
-                                                    Modifier.basicMarquee(
-                                                        iterations = Int.MAX_VALUE,
-                                                        initialDelayMillis = 900,
-                                                        spacing = MarqueeSpacing(24.dp)
-                                                    )
-                                                } else {
-                                                    Modifier
-                                                }
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                         }
                                     }

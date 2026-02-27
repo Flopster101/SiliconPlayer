@@ -20,7 +20,6 @@ import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -1236,36 +1235,14 @@ internal fun BrowserToolbarSubtitle(
     modifier: Modifier = Modifier
 ) {
     Crossfade(targetState = subtitle, label = "browserToolbarSubtitle") { text ->
-        val shouldMarquee = text.length > 52
-        if (shouldMarquee) {
-            Box(
-                modifier = modifier
-                    .fillMaxWidth()
-                    .clipToBounds()
-            ) {
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Clip,
-                    modifier = Modifier.basicMarquee(
-                        iterations = Int.MAX_VALUE,
-                        initialDelayMillis = 900
-                    )
-                )
-            }
-        } else {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = modifier.fillMaxWidth()
-            )
-        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = modifier.fillMaxWidth()
+        )
     }
 }
 

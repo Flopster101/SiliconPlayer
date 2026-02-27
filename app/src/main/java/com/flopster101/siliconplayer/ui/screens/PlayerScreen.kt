@@ -1507,14 +1507,28 @@ private fun TrackInfoChips(
     val formatLabel = file?.name?.let(::inferredPrimaryExtensionForName)?.uppercase() ?: "EMPTY"
 
     // Bitrate or file size based on decoder
-    val bitrateOrSize = remember(file, decoderName, fileSizeBytes) {
-        when {
+    val bitrateOrSize by produceState<String?>(
+        initialValue = null,
+        file?.absolutePath,
+        decoderName,
+        fileSizeBytes,
+        sampleRateHz
+    ) {
+        value = when {
             decoderName.equals(DecoderNames.FFMPEG, ignoreCase = true) -> {
-                val bitrate = NativeBridge.getTrackBitrate()
-                val isVBR = NativeBridge.isTrackVBR()
-                if (bitrate > 0) {
-                    formatBitrate(bitrate, isVBR)
-                } else null
+                var resolved: String? = null
+                repeat(8) { attempt ->
+                    val bitrate = NativeBridge.getTrackBitrate()
+                    val isVBR = NativeBridge.isTrackVBR()
+                    if (bitrate > 0) {
+                        resolved = formatBitrate(bitrate, isVBR)
+                        return@repeat
+                    }
+                    if (attempt < 7) {
+                        delay(120L)
+                    }
+                }
+                resolved
             }
             fileSizeBytes > 0 -> formatFileSize(fileSizeBytes)
             else -> null
@@ -1597,11 +1611,12 @@ private fun TrackInfoChips(
                 chipScale = visualChipScale,
                 tabletWidthScale = tabletWidthScale
             )
-            if (bitrateOrSize != null) {
+            val bitrateOrSizeValue = bitrateOrSize
+            if (bitrateOrSizeValue != null) {
                 TrackInfoChip(
                     icon = if (decoderName.equals(DecoderNames.FFMPEG, ignoreCase = true))
                         PlayerChipIcons.WaveSawTool else PlayerChipIcons.HardDrive,
-                    text = bitrateOrSize,
+                    text = bitrateOrSizeValue,
                     chipScale = visualChipScale,
                     tabletWidthScale = tabletWidthScale
                 )

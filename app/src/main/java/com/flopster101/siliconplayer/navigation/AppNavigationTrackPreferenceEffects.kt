@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -40,8 +41,9 @@ internal fun AppNavigationTrackPreferenceEffects(
     }
 
     LaunchedEffect(selectedFile, currentPlaybackSourceId, currentPlaybackRequestUrl) {
-        onArtworkBitmapChanged(
-            withContext(Dispatchers.IO) {
+        var resolvedArtwork: androidx.compose.ui.graphics.ImageBitmap? = null
+        repeat(8) { attempt ->
+            resolvedArtwork = withContext(Dispatchers.IO) {
                 loadArtworkForSource(
                     context = context,
                     displayFile = selectedFile,
@@ -49,7 +51,12 @@ internal fun AppNavigationTrackPreferenceEffects(
                     requestUrl = currentPlaybackRequestUrl
                 )
             }
-        )
+            if (resolvedArtwork != null) return@repeat
+            if (attempt < 7) {
+                delay(130L)
+            }
+        }
+        onArtworkBitmapChanged(resolvedArtwork)
     }
 
     LaunchedEffect(selectedFile, currentPlaybackSourceId, isPlayerSurfaceVisible) {

@@ -103,42 +103,42 @@ internal fun RootRouteContent(
         icon = Icons.Default.GraphicEq,
         onClick = onOpenAudioPlugins
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "General audio settings",
         description = "Global output and playback behavior.",
         icon = Icons.Default.Tune,
         onClick = onOpenGeneralAudio
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Player settings",
         description = "Player behavior and interaction preferences.",
         icon = Icons.Default.Slideshow,
         onClick = onOpenPlayer
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Home settings",
         description = "Configure recents shown on the Home page.",
         icon = Icons.Default.Home,
         onClick = onOpenHome
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "File browser settings",
         description = "Sorting and behavior preferences for the library browser.",
         icon = Icons.Default.Folder,
         onClick = onOpenFileBrowser
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Network settings",
         description = "Manage network source behavior and saved entries.",
         icon = Icons.Default.Public,
         onClick = onOpenNetwork
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Visualization settings",
         description = "Configure player visualizers and rendering style.",
@@ -154,7 +154,7 @@ internal fun RootRouteContent(
         icon = Icons.Default.Link,
         onClick = onOpenUrlCache
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Misc settings",
         description = "Other app-wide preferences and utilities.",
@@ -263,7 +263,7 @@ internal fun PluginOpenMptRouteContent(
         valueLabel = { "$it%" },
         onValueChanged = onOpenMptStereoSeparationPercentChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     CoreDialogSliderCard(
         title = "Amiga stereo separation",
         description = "Stereo separation used specifically for Amiga modules.",
@@ -273,7 +273,7 @@ internal fun PluginOpenMptRouteContent(
         valueLabel = { "$it%" },
         onValueChanged = onOpenMptStereoSeparationAmigaPercentChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     CoreChoiceSelectorCard(
         title = "Interpolation filter",
         description = "Selects interpolation quality for module playback.",
@@ -287,7 +287,7 @@ internal fun PluginOpenMptRouteContent(
         ),
         onSelected = onOpenMptInterpolationFilterLengthChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     CoreChoiceSelectorCard(
         title = "Amiga resampler",
         description = "Choose Amiga resampler mode. None uses interpolation filter.",
@@ -300,28 +300,28 @@ internal fun PluginOpenMptRouteContent(
         ),
         onSelected = onOpenMptAmigaResamplerModeChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Apply Amiga resampler to all modules",
         description = "When disabled, Amiga resampler is used only on Amiga module formats.",
         checked = openMptAmigaResamplerApplyAllModules,
         onCheckedChange = onOpenMptAmigaResamplerApplyAllModulesChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     CoreVolumeRampingCard(
         title = "Volume ramping strength",
         description = "Controls smoothing strength for volume changes.",
         value = openMptVolumeRampingStrength,
         onValueChanged = onOpenMptVolumeRampingStrengthChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "FT2 5ms XM ramping",
         description = "Apply classic FT2-style 5ms ramping for XM modules only.",
         checked = openMptFt2XmVolumeRamping,
         onCheckedChange = onOpenMptFt2XmVolumeRampingChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     CoreDialogSliderCard(
         title = "Master gain",
         description = "Applies decoder gain before output.",
@@ -331,7 +331,7 @@ internal fun PluginOpenMptRouteContent(
         valueLabel = { formatMilliBelAsDbLabel(it) },
         onValueChanged = onOpenMptMasterGainMilliBelChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Enable surround sound",
         description = "Enable surround rendering mode when supported by the playback path.",

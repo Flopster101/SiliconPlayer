@@ -78,7 +78,7 @@ internal fun CacheManagerSettingsRouteContent(
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -110,7 +110,7 @@ internal fun CacheManagerSettingsRouteContent(
             Text("Export (${selectedPaths.size})")
         }
     }
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -212,7 +212,7 @@ internal fun CacheManagerSettingsRouteContent(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
+            SettingsRowSpacer()
         }
     }
 

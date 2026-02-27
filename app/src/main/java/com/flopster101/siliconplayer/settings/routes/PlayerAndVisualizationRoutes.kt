@@ -212,14 +212,14 @@ internal fun PlayerRouteContent(
         checked = endFadeApplyToAllTracks,
         onCheckedChange = onEndFadeApplyToAllTracksChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Fade duration",
         description = String.format(Locale.US, "%.1f seconds", endFadeDurationMs / 1000.0),
         icon = Icons.Default.MoreHoriz,
         onClick = { showEndFadeDurationDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Fade curve",
         description = endFadeCurve.label,
@@ -273,70 +273,70 @@ internal fun PlayerRouteContent(
         checked = autoPlayOnTrackSelect,
         onCheckedChange = onAutoPlayOnTrackSelectChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Open player on track select",
         description = "Open full player when selecting a file. Disable to keep mini-player only.",
         checked = openPlayerOnTrackSelect,
         onCheckedChange = onOpenPlayerOnTrackSelectChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Auto-play next track when current ends",
         description = "Automatically start the next visible track after natural playback end.",
         checked = autoPlayNextTrackOnEnd,
         onCheckedChange = onAutoPlayNextTrackOnEndChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Preload next cached remote track",
         description = "Downloads the next remote track in advance for cached playback modes.",
         checked = preloadNextCachedRemoteTrack,
         onCheckedChange = onPreloadNextCachedRemoteTrackChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Wrap prev/next across playlist",
         description = "When enabled, Previous on first jumps to last and Next on last jumps to first.",
         checked = playlistWrapNavigation,
         onCheckedChange = onPlaylistWrapNavigationChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Previous track button behavior",
         description = "If more than 3 seconds have elapsed, the Previous track button restarts the current track instead of moving to the previous track.",
         checked = previousRestartsAfterThreshold,
         onCheckedChange = onPreviousRestartsAfterThresholdChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Fade on pause/resume",
         description = "Apply a brief volume attenuation when pausing and resuming playback.",
         checked = fadePauseResume,
         onCheckedChange = onFadePauseResumeChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Open player from notification",
         description = "When tapping playback notification, open the full player instead of normal app start destination.",
         checked = openPlayerFromNotification,
         onCheckedChange = onOpenPlayerFromNotificationChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Persist repeat mode",
         description = "Keep selected repeat mode across app restarts.",
         checked = persistRepeatMode,
         onCheckedChange = onPersistRepeatModeChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Keep screen on",
         description = "Prevent screen from turning off when the player is expanded.",
         checked = keepScreenOn,
         onCheckedChange = onKeepScreenOnChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Artwork corner radius",
         description = "Rounded corner size for the player artwork/scope container.",
@@ -357,7 +357,7 @@ internal fun PlayerRouteContent(
             }
         )
     }
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     var showFilenameDisplayDialog by remember { mutableStateOf(false) }
     SettingsItemCard(
         title = "Show filename",
@@ -379,7 +379,7 @@ internal fun PlayerRouteContent(
             onDismiss = { showFilenameDisplayDialog = false }
         )
     }
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Show filename only when title missing",
         description = "Only display filename when track has no title metadata.",
@@ -416,14 +416,14 @@ internal fun VisualizationRouteContent(
         icon = Icons.Default.GraphicEq,
         onClick = { showModeDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Enabled visualizations",
         description = "${enabledVisualizationModes.size}/${allPages.size} modes enabled",
         icon = Icons.Default.Tune,
         onClick = { showEnabledDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Show debug info overlay",
         description = "Show renderer backend and frame timing/FPS overlay for visualizations.",
@@ -437,7 +437,7 @@ internal fun VisualizationRouteContent(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Basic visualization settings",
         description = "Configure Bars, Oscilloscope, and VU meters.",
@@ -451,7 +451,7 @@ internal fun VisualizationRouteContent(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Advanced visualization settings",
         description = "Configure specialized visualizations per core.",
@@ -523,7 +523,7 @@ internal fun VisualizationBasicRouteContent(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     basicPages.forEachIndexed { index, page ->
         SettingsItemCard(
             title = page.title,
@@ -539,7 +539,7 @@ internal fun VisualizationBasicRouteContent(
             }
         )
         if (index < basicPages.lastIndex) {
-            Spacer(modifier = Modifier.height(10.dp))
+            SettingsRowSpacer()
         }
     }
 }
@@ -557,7 +557,7 @@ internal fun VisualizationAdvancedRouteContent(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     advancedPages.forEachIndexed { index, page ->
         SettingsItemCard(
             title = page.title,
@@ -571,7 +571,7 @@ internal fun VisualizationAdvancedRouteContent(
             }
         )
         if (index < advancedPages.lastIndex) {
-            Spacer(modifier = Modifier.height(10.dp))
+            SettingsRowSpacer()
         }
     }
 }

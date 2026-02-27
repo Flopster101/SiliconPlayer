@@ -82,21 +82,21 @@ internal fun GeneralAudioRouteContent(
         checked = state.respondHeadphoneMediaButtons,
         onCheckedChange = actions.onRespondHeadphoneMediaButtonsChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Pause on output disconnect",
         description = "Pause playback when headphones/output device disconnects.",
         checked = state.pauseOnHeadphoneDisconnect,
         onCheckedChange = actions.onPauseOnHeadphoneDisconnectChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Allow interruption by other apps",
         description = "Pause playback when another app starts playing audio.",
         checked = state.audioFocusInterrupt,
         onCheckedChange = actions.onAudioFocusInterruptChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Duck audio instead of pausing",
         description = "Lower volume temporarily for brief interruptions (e.g., notifications) instead of pausing.",
@@ -111,14 +111,14 @@ internal fun GeneralAudioRouteContent(
         icon = Icons.Default.Tune,
         onClick = actions.onOpenAudioEffects
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Output limiter",
         description = "Enable dynamic limiting before soft-clip to reduce hard clipping crackle at high gain.",
         checked = state.audioOutputLimiterEnabled,
         onCheckedChange = actions.onAudioOutputLimiterEnabledChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     ClearAudioParametersCard(
         onClearAll = actions.onClearAllAudioParameters,
         onClearPlugins = actions.onClearPluginAudioParameters,
@@ -133,13 +133,13 @@ internal fun GeneralAudioRouteContent(
     val selectedBackend = state.audioBackendPreference
     when (selectedBackend) {
         AudioBackendPreference.AAudio -> {
-            Spacer(modifier = Modifier.height(10.dp))
+            SettingsRowSpacer()
             AudioPerformanceModeSelectorCard(
                 selectedMode = state.audioPerformanceMode,
                 onSelectedModeChanged = actions.onAudioPerformanceModeChanged,
                 description = "AAudio stream mode. Low latency is recommended for responsive playback."
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            SettingsRowSpacer()
             AudioBufferPresetSelectorCard(
                 selectedPreset = state.audioBufferPreset,
                 onSelectedPresetChanged = actions.onAudioBufferPresetChanged,
@@ -148,7 +148,7 @@ internal fun GeneralAudioRouteContent(
             )
         }
         AudioBackendPreference.OpenSLES -> {
-            Spacer(modifier = Modifier.height(10.dp))
+            SettingsRowSpacer()
             AudioBufferPresetSelectorCard(
                 selectedPreset = state.audioBufferPreset,
                 onSelectedPresetChanged = actions.onAudioBufferPresetChanged,
@@ -157,7 +157,7 @@ internal fun GeneralAudioRouteContent(
             )
         }
         AudioBackendPreference.AudioTrack -> {
-            Spacer(modifier = Modifier.height(10.dp))
+            SettingsRowSpacer()
             AudioBufferPresetSelectorCard(
                 selectedPreset = state.audioBufferPreset,
                 onSelectedPresetChanged = actions.onAudioBufferPresetChanged,
@@ -166,13 +166,13 @@ internal fun GeneralAudioRouteContent(
             )
         }
     }
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     AudioResamplerSelectorCard(
         selectedPreference = state.audioResamplerPreference,
         onSelectedPreferenceChanged = actions.onAudioResamplerPreferenceChanged,
         description = "Applies before backend output. SoX is experimental and falls back to built-in for discontinuous timeline cores."
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Allow backend fallback",
         description = "If selected backend is unavailable, fall back automatically to a working output backend.",
@@ -218,28 +218,28 @@ internal fun UrlCacheRouteContent(
         checked = urlCacheClearOnLaunch,
         onCheckedChange = onUrlCacheClearOnLaunchChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Cache song limit",
         description = "$urlCacheMaxTracks songs",
         icon = Icons.Default.MoreHoriz,
         onClick = { showCacheTrackLimitDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Cache size limit",
         description = String.format(Locale.US, "%.2f GB", urlCacheMaxBytes / (1024.0 * 1024.0 * 1024.0)),
         icon = Icons.Default.MoreHoriz,
         onClick = { showCacheSizeLimitDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Manage cached files",
         description = "Browse cached files, long-press multi-select, delete, and export.",
         icon = Icons.Default.MoreHoriz,
         onClick = onOpenCacheManager
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Clear cache now",
         description = "Delete all currently cached files immediately.",
@@ -254,28 +254,28 @@ internal fun UrlCacheRouteContent(
         checked = archiveCacheClearOnLaunch,
         onCheckedChange = onArchiveCacheClearOnLaunchChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Archive mount limit",
         description = "$archiveCacheMaxMounts mounted archives",
         icon = Icons.Default.MoreHoriz,
         onClick = { showArchiveMountLimitDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Archive cache size limit",
         description = String.format(Locale.US, "%.2f GB", archiveCacheMaxBytes / (1024.0 * 1024.0 * 1024.0)),
         icon = Icons.Default.MoreHoriz,
         onClick = { showArchiveSizeLimitDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Archive max age",
         description = "$archiveCacheMaxAgeDays days",
         icon = Icons.Default.MoreHoriz,
         onClick = { showArchiveAgeLimitDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Clear archive cache now",
         description = "Delete mounted ZIP extraction folders immediately.",

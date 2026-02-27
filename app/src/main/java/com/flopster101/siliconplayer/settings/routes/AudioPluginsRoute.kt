@@ -84,7 +84,7 @@ internal fun AudioPluginsRouteContent(
     val rowNudgeOffsetPx = remember { mutableStateMapOf<String, Float>() }
     val rowNudgeNonce = remember { mutableStateMapOf<String, Int>() }
     val rowTopPx = remember { mutableStateMapOf<String, Float>() }
-    val spacerPx = with(LocalDensity.current) { 10.dp.toPx() }
+    val spacerPx = with(LocalDensity.current) { 2.dp.toPx() }
     val fallbackStepPx = with(LocalDensity.current) { 84.dp.toPx() }
     val edgeOverscrollPx = with(LocalDensity.current) { 14.dp.toPx() }
     val itemStepPx = if (rowHeightPx > 0f) rowHeightPx + spacerPx else fallbackStepPx
@@ -132,7 +132,7 @@ internal fun AudioPluginsRouteContent(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(10.dp))
+        SettingsRowSpacer()
     }
 
     LaunchedEffect(pluginPriorityEditMode) {
@@ -219,7 +219,7 @@ internal fun AudioPluginsRouteContent(
                     }
 
                     if (index < orderedPluginNames.size - 1) {
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                     }
                 }
             }
@@ -264,7 +264,7 @@ internal fun AudioPluginsRouteContent(
         icon = Icons.Default.MoreHoriz,
         onClick = onRequestClearPluginSettings
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Reset core priority order",
         description = "Restore core order to built-in defaults and renumber priorities sequentially.",

@@ -138,7 +138,7 @@ internal fun AboutSettingsBody() {
                 onClick = { selectedAboutEntry = entry }
             )
             if (index != coreEntries.lastIndex) {
-                Spacer(modifier = Modifier.size(7.dp))
+                SettingsRowSpacer()
             }
         }
         Spacer(modifier = Modifier.size(8.dp))
@@ -156,7 +156,7 @@ internal fun AboutSettingsBody() {
                 onClick = { selectedAboutEntry = entry }
             )
             if (index != libraryEntries.lastIndex) {
-                Spacer(modifier = Modifier.size(7.dp))
+                SettingsRowSpacer()
             }
         }
     }
@@ -190,41 +190,12 @@ internal fun ClearAudioParametersCard(
     onClearSongs: () -> Unit
 ) {
     var showDialog by remember { mutableStateOf(false) }
-
-    androidx.compose.material3.ElevatedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
+    SettingsItemCard(
+        title = "Clear saved parameters",
+        description = "Reset volume settings for all, cores, or songs",
+        icon = Icons.Default.Delete,
         onClick = { showDialog = true }
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Delete,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Clear saved parameters",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(modifier = Modifier.size(4.dp))
-                Text(
-                    text = "Reset volume settings for all, cores, or songs",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
+    )
 
     if (showDialog) {
         SettingsActionListDialog(

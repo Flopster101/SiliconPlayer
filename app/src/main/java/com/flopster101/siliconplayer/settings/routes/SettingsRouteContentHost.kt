@@ -98,7 +98,8 @@ internal fun SettingsRouteContentHost(
                     .fillMaxSize()
                     .verticalScroll(state = rememberScrollState())
             ) {
-                when (currentRoute) {
+                SettingsRowsHost {
+                    when (currentRoute) {
                     SettingsRoute.Root -> {
                         RootRouteContent(
                             actions = RootRouteActions(
@@ -463,7 +464,8 @@ internal fun SettingsRouteContentHost(
                         )
                     }
 
-                    SettingsRoute.About -> AboutSettingsBody()
+                        SettingsRoute.About -> AboutSettingsBody()
+                    }
                 }
 
                 if (bottomContentPadding > 0.dp) {

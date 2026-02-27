@@ -204,49 +204,49 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
         checked = visualizationOscStereo,
         onCheckedChange = onVisualizationOscStereoChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Visible window",
         description = "Time span shown across the oscilloscope view.",
         value = "${visualizationOscWindowMs} ms",
         onClick = { showWindowDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Trigger",
         description = "Sync mode used to stabilize waveform start point.",
         value = visualizationOscTriggerMode.label,
         onClick = { showTriggerDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Scope frame rate",
         description = "Rendering rate for oscilloscope updates.",
         value = visualizationOscFpsMode.label,
         onClick = { showFpsModeDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Renderer backend",
         description = "Rendering backend used for oscilloscope drawing.",
         value = visualizationOscRenderBackend.label,
         onClick = { showRenderBackendDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Line width",
         description = "Stroke width for waveform lines.",
         value = "${visualizationOscLineWidthDp}dp",
         onClick = { showLineWidthDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Grid width",
         description = "Stroke width for grid lines.",
         value = "${visualizationOscGridWidthDp}dp",
         onClick = { showGridWidthDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Show vertical grid lines",
         description = "Display vertical time divisions in the oscilloscope.",
@@ -256,7 +256,7 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
             prefs.edit().putBoolean(oscVerticalGridEnabledKey, enabled).apply()
         }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Show centerline",
         description = "Display the waveform center reference line.",
@@ -266,7 +266,7 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
             prefs.edit().putBoolean(oscCenterLineEnabledKey, enabled).apply()
         }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Contrast backdrop",
         description = "Add a dark backdrop behind waveforms for better readability over artwork.",
@@ -284,7 +284,7 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
         value = oscLineColorModeNoArtwork.label,
         onClick = { showLineNoArtworkColorModeDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Grid color",
         description = "Color source used when no artwork is available.",
@@ -299,7 +299,7 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
         value = oscLineColorModeWithArtwork.label,
         onClick = { showLineArtworkColorModeDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Grid color",
         description = "Color source used when artwork is available.",
@@ -314,7 +314,7 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
         value = String.format(Locale.US, "#%06X", oscCustomLineColorArgb and 0xFFFFFF),
         onClick = { showCustomLineColorDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Custom grid color",
         description = "RGB color used when grid color mode is Custom.",

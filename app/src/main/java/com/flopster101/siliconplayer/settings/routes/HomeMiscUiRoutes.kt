@@ -75,7 +75,7 @@ internal fun HomeRouteContent(
         icon = Icons.Default.Folder,
         onClick = { showFolderLimitDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Recent files limit",
         description = "${state.recentFilesLimit} files",
@@ -152,7 +152,7 @@ internal fun NetworkRouteContent(
         icon = Icons.Default.DeleteForever,
         onClick = { showClearSavedSourcesConfirm = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsItemCard(
         title = "Future examples and providers",
         description = "Built-in examples and provider toggles will be added here later.",
@@ -212,21 +212,21 @@ internal fun FileBrowserRouteContent(
         checked = state.rememberBrowserLocation,
         onCheckedChange = actions.onRememberBrowserLocationChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Show parent directory entry (..)",
         description = "Show a '..' row at the top of file lists to go one level up.",
         checked = state.showParentDirectoryEntry,
         onCheckedChange = actions.onShowParentDirectoryEntryChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Show file icon chip background",
         description = "Draw the same rounded chip background behind file icons as folders.",
         checked = state.showFileIconChipBackground,
         onCheckedChange = actions.onShowFileIconChipBackgroundChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Show unsupported files",
         description = "Display files that no enabled decoder core can open.",
@@ -236,7 +236,7 @@ internal fun FileBrowserRouteContent(
             prefs.edit().putBoolean(AppPreferenceKeys.BROWSER_SHOW_UNSUPPORTED_FILES, it).apply()
         }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Show text and image files",
         description = "Display previewable text/image files in browser lists.",
@@ -246,7 +246,7 @@ internal fun FileBrowserRouteContent(
             prefs.edit().putBoolean(AppPreferenceKeys.BROWSER_SHOW_PREVIEW_FILES, it).apply()
         }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Show hidden files and folders",
         description = "Display hidden entries (such as dot-prefixed names).",
@@ -256,12 +256,12 @@ internal fun FileBrowserRouteContent(
             prefs.edit().putBoolean(AppPreferenceKeys.BROWSER_SHOW_HIDDEN_FILES_AND_FOLDERS, it).apply()
         }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     BrowserNameSortModeSelectorCard(
         selectedMode = state.browserNameSortMode,
         onSelectedModeChanged = actions.onBrowserNameSortModeChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Sort ZIP archives before files",
         description = "List ZIP archives after folders but before regular files.",

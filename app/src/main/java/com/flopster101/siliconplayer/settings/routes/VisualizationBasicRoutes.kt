@@ -145,49 +145,49 @@ internal fun VisualizationBasicBarsRouteContent(
         value = visualizationBarRenderBackend.label,
         onClick = { showBarRenderBackendDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Frame rate",
         description = "Target update cadence for bars.",
         value = barFpsMode.label,
         onClick = { showBarFpsModeDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Bar count",
         description = "Number of frequency bars shown in the spectrum.",
         value = "$visualizationBarCount",
         onClick = { showBarCountDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Smoothing",
         description = "How quickly bars react to level changes.",
         value = "$visualizationBarSmoothingPercent%",
         onClick = { showBarSmoothingDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Roundness",
         description = "Corner radius used for each bar.",
         value = "${visualizationBarRoundnessDp}dp",
         onClick = { showBarRoundnessDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Overlay on artwork",
         description = "When disabled, bars are rendered over a blank background.",
         checked = visualizationBarOverlayArtwork,
         onCheckedChange = onVisualizationBarOverlayArtworkChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Use theme color",
         description = "Use app theme color for bars instead of alternate accent.",
         checked = visualizationBarUseThemeColor,
         onCheckedChange = onVisualizationBarUseThemeColorChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Show frequency grid (debug)",
         description = "Draw a behind-bars frequency guide to inspect range distribution.",
@@ -197,7 +197,7 @@ internal fun VisualizationBasicBarsRouteContent(
             prefs.edit().putBoolean(barFrequencyGridEnabledKey, enabled).apply()
         }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Contrast backdrop",
         description = "Add a dark backdrop behind bars for better readability over artwork.",
@@ -215,7 +215,7 @@ internal fun VisualizationBasicBarsRouteContent(
         value = barColorModeNoArtwork.label,
         onClick = { showBarColorModeNoArtworkDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsSectionLabel("Colors (with artwork)")
     SettingsValuePickerCard(
         title = "Bar color",
@@ -223,7 +223,7 @@ internal fun VisualizationBasicBarsRouteContent(
         value = barColorModeWithArtwork.label,
         onClick = { showBarColorModeWithArtworkDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsSectionLabel("Custom color")
     SettingsValuePickerCard(
         title = "Custom bar color",
@@ -444,35 +444,35 @@ internal fun VisualizationBasicVuMetersRouteContent(
         value = visualizationVuRenderBackend.label,
         onClick = { showVuRenderBackendDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Anchor position",
         description = "Where VU meter rows are aligned in the artwork area.",
         value = visualizationVuAnchor.label,
         onClick = { showVuAnchorDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Frame rate",
         description = "Target update cadence for VU meters.",
         value = vuFpsMode.label,
         onClick = { showVuFpsModeDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsValuePickerCard(
         title = "Smoothing",
         description = "How quickly VU levels react to level changes.",
         value = "$visualizationVuSmoothingPercent%",
         onClick = { showVuSmoothingDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Use theme color",
         description = "Use app theme color for VU bars instead of alternate accent.",
         checked = visualizationVuUseThemeColor,
         onCheckedChange = onVisualizationVuUseThemeColorChanged
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Contrast backdrop",
         description = "Add a dark backdrop behind VU meters for better readability over artwork.",
@@ -490,7 +490,7 @@ internal fun VisualizationBasicVuMetersRouteContent(
         value = vuColorModeNoArtwork.label,
         onClick = { showVuColorModeNoArtworkDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsSectionLabel("Colors (with artwork)")
     SettingsValuePickerCard(
         title = "VU color",
@@ -498,7 +498,7 @@ internal fun VisualizationBasicVuMetersRouteContent(
         value = vuColorModeWithArtwork.label,
         onClick = { showVuColorModeWithArtworkDialog = true }
     )
-    Spacer(modifier = Modifier.height(10.dp))
+    SettingsRowSpacer()
     SettingsSectionLabel("Custom color")
     SettingsValuePickerCard(
         title = "Custom VU color",

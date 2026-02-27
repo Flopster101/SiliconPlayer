@@ -476,21 +476,21 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                             value = "${scopeWindowMs} ms",
                             onClick = { showWindowDialog = true }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         SettingsValuePickerCard(
                             title = "Trigger",
                             description = "Sync mode used to stabilize channel traces.",
                             value = scopeTriggerMode.label,
                             onClick = { showTriggerDialog = true }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         SettingsValuePickerCard(
                             title = "Renderer backend",
                             description = "Select rendering path for Channel scope.",
                             value = scopeRenderBackend.label,
                             onClick = { showRendererBackendDialog = true }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         PlayerSettingToggleCard(
                             title = "DC removal",
                             description = "Center each channel waveform around zero to reduce vertical offset drift.",
@@ -500,42 +500,42 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                 prefs.edit().putBoolean(scopeDcRemovalEnabledKey, enabled).apply()
                             }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         SettingsValuePickerCard(
                             title = "Gain",
                             description = "Output gain applied to channel waveforms.",
                             value = "${scopeGainPercent}%",
                             onClick = { showGainDialog = true }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         SettingsValuePickerCard(
                             title = "Scope frame rate",
                             description = "Rendering rate for channel-scope updates.",
                             value = scopeFpsMode.label,
                             onClick = { showFpsModeDialog = true }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         SettingsValuePickerCard(
                             title = "Layout strategy",
                             description = "Grid arrangement strategy for channel scopes.",
                             value = scopeLayout.label,
                             onClick = { showLayoutDialog = true }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         SettingsValuePickerCard(
                             title = "Line width",
                             description = "Stroke width for channel scope lines.",
                             value = "${scopeLineWidthDp}dp",
                             onClick = { showLineWidthDialog = true }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         SettingsValuePickerCard(
                             title = "Grid width",
                             description = "Stroke width for scope grid lines.",
                             value = "${scopeGridWidthDp}dp",
                             onClick = { showGridWidthDialog = true }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         PlayerSettingToggleCard(
                             title = "Show vertical grid lines",
                             description = "Display vertical time divisions in each channel scope.",
@@ -545,7 +545,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                 prefs.edit().putBoolean(scopeVerticalGridEnabledKey, enabled).apply()
                             }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         PlayerSettingToggleCard(
                             title = "Show centerline",
                             description = "Display center reference line in each channel scope.",
@@ -555,7 +555,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                 prefs.edit().putBoolean(scopeCenterLineEnabledKey, enabled).apply()
                             }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         PlayerSettingToggleCard(
                             title = "Show artwork background",
                             description = "Render album artwork/placeholder behind the channel scope.",
@@ -565,7 +565,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                 prefs.edit().putBoolean(scopeShowArtworkBackgroundKey, enabled).apply()
                             }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         PlayerSettingToggleCard(
                             title = "Contrast backdrop",
                             description = "Add a subtle center-weighted dim backdrop for better trace readability.",
@@ -576,7 +576,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                             }
                         )
                         if (!scopeShowArtworkBackground) {
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             SettingsValuePickerCard(
                                 title = "Background color",
                                 description = "Background source when artwork is hidden.",
@@ -584,7 +584,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                 onClick = { showBackgroundModeDialog = true }
                             )
                             if (scopeBackgroundMode == VisualizationChannelScopeBackgroundMode.Custom) {
-                                Spacer(modifier = Modifier.height(10.dp))
+                                SettingsRowSpacer()
                                 SettingsValuePickerCard(
                                     title = "Custom background color",
                                     description = "RGB color used when background color mode is Custom.",
@@ -601,7 +601,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                             value = scopeLineColorModeNoArtwork.label,
                             onClick = { showLineNoArtworkColorModeDialog = true }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         SettingsValuePickerCard(
                             title = "Grid color",
                             description = "Color source used when no artwork is available.",
@@ -616,7 +616,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                             value = scopeLineColorModeWithArtwork.label,
                             onClick = { showLineArtworkColorModeDialog = true }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         SettingsValuePickerCard(
                             title = "Grid color",
                             description = "Color source used when artwork is available.",
@@ -631,7 +631,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                             value = String.format(Locale.US, "#%06X", scopeCustomLineColorArgb and 0xFFFFFF),
                             onClick = { showCustomLineColorDialog = true }
                         )
-                        Spacer(modifier = Modifier.height(10.dp))
+                        SettingsRowSpacer()
                         SettingsValuePickerCard(
                             title = "Custom grid color",
                             description = "RGB color used when grid color mode is Custom.",
@@ -650,35 +650,35 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                             }
                         )
                         if (scopeTextEnabled) {
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             SettingsValuePickerCard(
                                 title = "Text anchor",
                                 description = "Position of text inside each channel scope.",
                                 value = scopeTextAnchor.label,
                                 onClick = { showTextAnchorDialog = true }
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             SettingsValuePickerCard(
                                 title = "Text padding",
                                 description = "Padding from the selected anchor.",
                                 value = "${scopeTextPaddingDp}dp",
                                 onClick = { showTextPaddingDialog = true }
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             SettingsValuePickerCard(
                                 title = "Text size",
                                 description = "Font size for per-channel overlay text.",
                                 value = "${scopeTextSizeSp}sp",
                                 onClick = { showTextSizeDialog = true }
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             SettingsValuePickerCard(
                                 title = "Text font",
                                 description = "Typeface used for per-channel overlay text.",
                                 value = scopeTextFont.label,
                                 onClick = { showTextFontDialog = true }
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             SettingsValuePickerCard(
                                 title = "Text color",
                                 description = "Color source for channel-scope text overlay.",
@@ -686,7 +686,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                 onClick = { showTextColorModeDialog = true }
                             )
                             if (scopeTextColorMode == VisualizationChannelScopeTextColorMode.Custom) {
-                                Spacer(modifier = Modifier.height(10.dp))
+                                SettingsRowSpacer()
                                 SettingsValuePickerCard(
                                     title = "Custom text color",
                                     description = "RGB color used when text color mode is Custom.",
@@ -694,7 +694,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     onClick = { showCustomTextColorDialog = true }
                                 )
                             }
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             PlayerSettingToggleCard(
                                 title = "Hide when still too large",
                                 description = "Hide text if it still cannot fit after auto downscaling.",
@@ -704,7 +704,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     prefs.edit().putBoolean(scopeTextHideWhenOverflowKey, enabled).apply()
                                 }
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             PlayerSettingToggleCard(
                                 title = "Text shadow",
                                 description = "Render a subtle drop shadow for better contrast on bright or matching backgrounds.",
@@ -714,14 +714,14 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     prefs.edit().putBoolean(scopeTextShadowEnabledKey, enabled).apply()
                                 }
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             SettingsValuePickerCard(
                                 title = "Note naming",
                                 description = "Format used for note names in the overlay.",
                                 value = scopeTextNoteFormat.label,
                                 onClick = { showTextNoteFormatDialog = true }
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             PlayerSettingToggleCard(
                                 title = "Show channel label",
                                 description = "Show channel index or Amiga L/R label.",
@@ -731,7 +731,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     prefs.edit().putBoolean(scopeTextShowChannelKey, enabled).apply()
                                 }
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             PlayerSettingToggleCard(
                                 title = "Show note",
                                 description = "Show current note name.",
@@ -741,7 +741,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     prefs.edit().putBoolean(scopeTextShowNoteKey, enabled).apply()
                                 }
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             PlayerSettingToggleCard(
                                 title = "Show volume",
                                 description = "Show current channel volume value.",
@@ -751,7 +751,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     prefs.edit().putBoolean(scopeTextShowVolumeKey, enabled).apply()
                                 }
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             PlayerSettingToggleCard(
                                 title = "Show effect",
                                 description = "Show active effect command and parameter.",
@@ -761,7 +761,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     prefs.edit().putBoolean(scopeTextShowEffectKey, enabled).apply()
                                 }
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             PlayerSettingToggleCard(
                                 title = "Show instrument/sample",
                                 description = "Show active instrument or sample index.",
@@ -771,7 +771,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     prefs.edit().putBoolean(scopeTextShowInstrumentSampleKey, enabled).apply()
                                 }
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            SettingsRowSpacer()
                             PlayerSettingToggleCard(
                                 title = "Show VU strip",
                                 description = "Show a per-channel VU strip at top or bottom edge.",
@@ -782,14 +782,14 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                 }
                             )
                             if (scopeTextVuEnabled) {
-                                Spacer(modifier = Modifier.height(10.dp))
+                                SettingsRowSpacer()
                                 SettingsValuePickerCard(
                                     title = "VU strip anchor",
                                     description = "Place VU strip at top or bottom of each channel cell.",
                                     value = scopeTextVuAnchor.label,
                                     onClick = { showTextVuAnchorDialog = true }
                                 )
-                                Spacer(modifier = Modifier.height(10.dp))
+                                SettingsRowSpacer()
                                 SettingsValuePickerCard(
                                     title = "VU strip color",
                                     description = "Color source used by the VU strip.",
@@ -797,7 +797,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     onClick = { showTextVuColorModeDialog = true }
                                 )
                                 if (scopeTextVuColorMode == VisualizationChannelScopeTextColorMode.Custom) {
-                                    Spacer(modifier = Modifier.height(10.dp))
+                                    SettingsRowSpacer()
                                     SettingsValuePickerCard(
                                         title = "Custom VU strip color",
                                         description = "RGB color used when VU strip color mode is Custom.",

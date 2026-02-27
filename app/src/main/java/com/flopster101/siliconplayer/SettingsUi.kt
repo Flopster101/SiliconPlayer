@@ -26,7 +26,18 @@ internal fun SettingsScreen(
         }
     }
 
-    SettingsScaffoldShell(onBack = actions.onBack) { paddingValues ->
+    SettingsScaffoldShell(
+        route = route,
+        selectedPluginName = state.selectedPluginName,
+        pluginPriorityEditMode = pluginPriorityEditMode,
+        onBack = actions.onBack,
+        onTogglePluginPriorityEditMode = { pluginPriorityEditMode = !pluginPriorityEditMode },
+        onRequestPluginReset = { pluginName -> pendingPluginResetName = pluginName },
+        onResetVisualizationBarsSettings = actions.onResetVisualizationBarsSettings,
+        onResetVisualizationOscilloscopeSettings = actions.onResetVisualizationOscilloscopeSettings,
+        onResetVisualizationVuSettings = actions.onResetVisualizationVuSettings,
+        onResetVisualizationChannelScopeSettings = actions.onResetVisualizationChannelScopeSettings
+    ) { paddingValues ->
         SettingsRouteContentHost(
             route = route,
             bottomContentPadding = bottomContentPadding,
@@ -34,15 +45,11 @@ internal fun SettingsScreen(
             state = state,
             actions = actions,
             pluginPriorityEditMode = pluginPriorityEditMode,
-            onTogglePluginPriorityEditMode = { pluginPriorityEditMode = !pluginPriorityEditMode },
             onRequestClearAllSettings = {
                 pendingResetAction = SettingsResetAction.ClearAllSettings
             },
             onRequestClearPluginSettings = {
                 pendingResetAction = SettingsResetAction.ClearPluginSettings
-            },
-            onRequestPluginReset = { pluginName ->
-                pendingPluginResetName = pluginName
             }
         )
     }

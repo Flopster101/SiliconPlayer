@@ -33,30 +33,14 @@ internal fun SettingsRouteContentHost(
     state: SettingsScreenState,
     actions: SettingsScreenActions,
     pluginPriorityEditMode: Boolean,
-    onTogglePluginPriorityEditMode: () -> Unit,
     onRequestClearAllSettings: () -> Unit,
-    onRequestClearPluginSettings: () -> Unit,
-    onRequestPluginReset: (String) -> Unit
+    onRequestClearPluginSettings: () -> Unit
 ) {
-    val secondaryTitle = settingsSecondaryTitle(route, state.selectedPluginName)
-
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(scaffoldPaddingValues)
     ) {
-        SettingsSecondaryHeader(
-            secondaryTitle = secondaryTitle,
-            route = route,
-            pluginPriorityEditMode = pluginPriorityEditMode,
-            onTogglePluginPriorityEditMode = onTogglePluginPriorityEditMode,
-            selectedPluginName = state.selectedPluginName,
-            onRequestPluginReset = onRequestPluginReset,
-            onResetVisualizationBarsSettings = actions.onResetVisualizationBarsSettings,
-            onResetVisualizationOscilloscopeSettings = actions.onResetVisualizationOscilloscopeSettings,
-            onResetVisualizationVuSettings = actions.onResetVisualizationVuSettings,
-            onResetVisualizationChannelScopeSettings = actions.onResetVisualizationChannelScopeSettings
-        )
         AnimatedContent(
             targetState = route,
             transitionSpec = {

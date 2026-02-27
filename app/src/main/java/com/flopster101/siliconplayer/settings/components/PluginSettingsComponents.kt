@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntOffset
@@ -46,7 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import kotlin.math.roundToInt
 
-private val PluginSettingsCardShape = RoundedCornerShape(16.dp)
+private val PluginRowTrailingSlotWidth = 52.dp
+private val PluginRowTrailingSlotHeight = 48.dp
 
 @Composable
 internal fun PluginListItemCard(
@@ -63,6 +65,7 @@ internal fun PluginListItemCard(
     contentAlpha: Float,
     enableInteractions: Boolean,
     switchEnabled: Boolean,
+    shape: Shape,
     onMeasuredHeight: (Float) -> Unit,
     onDragStart: () -> Unit,
     onDragDelta: (Float) -> Unit,
@@ -92,7 +95,7 @@ internal fun PluginListItemCard(
             .fillMaxWidth()
             .zIndex(if (isDragging) 100f else 0f)
             .alpha(contentAlpha)
-            .clip(PluginSettingsCardShape)
+            .clip(shape)
             .offset { IntOffset(x = 0, y = displayOffsetY.roundToInt()) }
             .let { base ->
                 if (!editMode && enableInteractions) {
@@ -102,14 +105,14 @@ internal fun PluginListItemCard(
                 }
             },
         color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = PluginSettingsCardShape,
+        shape = shape,
         tonalElevation = 0.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .onSizeChanged { onMeasuredHeight(it.height.toFloat()) }
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -140,37 +143,44 @@ internal fun PluginListItemCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            if (editMode) {
-                Icon(
-                    imageVector = Icons.Default.DragIndicator,
-                    contentDescription = "Drag to reorder",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(28.dp)
-                        .let { base ->
-                            if (enableInteractions) {
-                                base.pointerInput(pluginName, editMode) {
-                                    detectDragGestures(
-                                        onDragStart = { onDragStart() },
-                                        onDragEnd = { onDragEnd() },
-                                        onDragCancel = { onDragEnd() },
-                                        onDrag = { change, dragAmount ->
-                                            change.consume()
-                                            onDragDelta(dragAmount.y)
-                                        }
-                                    )
+            Box(
+                modifier = Modifier
+                    .width(PluginRowTrailingSlotWidth)
+                    .height(PluginRowTrailingSlotHeight),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                if (editMode) {
+                    Icon(
+                        imageVector = Icons.Default.DragIndicator,
+                        contentDescription = "Drag to reorder",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .let { base ->
+                                if (enableInteractions) {
+                                    base.pointerInput(pluginName, editMode) {
+                                        detectDragGestures(
+                                            onDragStart = { onDragStart() },
+                                            onDragEnd = { onDragEnd() },
+                                            onDragCancel = { onDragEnd() },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                onDragDelta(dragAmount.y)
+                                            }
+                                        )
+                                    }
+                                } else {
+                                    base
                                 }
-                            } else {
-                                base
                             }
-                        }
-                )
-            } else {
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = onEnabledChanged,
-                    enabled = switchEnabled
-                )
+                    )
+                } else {
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = onEnabledChanged,
+                        enabled = switchEnabled
+                    )
+                }
             }
         }
     }

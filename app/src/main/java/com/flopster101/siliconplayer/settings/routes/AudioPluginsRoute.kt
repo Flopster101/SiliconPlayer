@@ -1,11 +1,19 @@
 package com.flopster101.siliconplayer
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Tune
@@ -28,6 +36,8 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+
+private const val PLUGIN_EDIT_HINT_ANIM_MS = 180
 
 internal data class AudioPluginsRouteState(
     val pluginPriorityEditMode: Boolean
@@ -84,6 +94,8 @@ internal fun AudioPluginsRouteContent(
     val rowNudgeOffsetPx = remember { mutableStateMapOf<String, Float>() }
     val rowNudgeNonce = remember { mutableStateMapOf<String, Int>() }
     val rowTopPx = remember { mutableStateMapOf<String, Float>() }
+    val pluginRowOuterCorner = 20.dp
+    val pluginRowInnerCorner = 4.dp
     val spacerPx = with(LocalDensity.current) { 2.dp.toPx() }
     val fallbackStepPx = with(LocalDensity.current) { 84.dp.toPx() }
     val edgeOverscrollPx = with(LocalDensity.current) { 14.dp.toPx() }
@@ -92,6 +104,26 @@ internal fun AudioPluginsRouteContent(
 
     fun persistPriorityOrder(order: List<String>) {
         onPluginPriorityOrderChanged(order)
+    }
+
+    fun shapeForIndex(index: Int): RoundedCornerShape {
+        val last = orderedPluginNames.lastIndex
+        return when {
+            last <= 0 -> RoundedCornerShape(pluginRowOuterCorner)
+            index == 0 -> RoundedCornerShape(
+                topStart = pluginRowOuterCorner,
+                topEnd = pluginRowOuterCorner,
+                bottomStart = pluginRowInnerCorner,
+                bottomEnd = pluginRowInnerCorner
+            )
+            index == last -> RoundedCornerShape(
+                topStart = pluginRowInnerCorner,
+                topEnd = pluginRowInnerCorner,
+                bottomStart = pluginRowOuterCorner,
+                bottomEnd = pluginRowOuterCorner
+            )
+            else -> RoundedCornerShape(pluginRowInnerCorner)
+        }
     }
 
     fun movePlugin(pluginName: String, direction: Int): Boolean {
@@ -126,13 +158,28 @@ internal fun AudioPluginsRouteContent(
         orderDirty = false
     }
 
-    if (pluginPriorityEditMode) {
-        Text(
-            text = "Drag cores to set priority order. Top item has highest priority.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+    AnimatedVisibility(
+        visible = pluginPriorityEditMode,
+        enter = expandVertically(
+            animationSpec = tween(durationMillis = PLUGIN_EDIT_HINT_ANIM_MS)
+        ) + fadeIn(
+            animationSpec = tween(durationMillis = PLUGIN_EDIT_HINT_ANIM_MS)
+        ),
+        exit = shrinkVertically(
+            animationSpec = tween(durationMillis = PLUGIN_EDIT_HINT_ANIM_MS)
+        ) + fadeOut(
+            animationSpec = tween(durationMillis = PLUGIN_EDIT_HINT_ANIM_MS)
         )
-        SettingsRowSpacer()
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = "Drag cores to set priority order. Top item has highest priority.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+            SettingsRowSpacer()
+        }
     }
 
     LaunchedEffect(pluginPriorityEditMode) {
@@ -175,6 +222,7 @@ internal fun AudioPluginsRouteContent(
                             contentAlpha = if (isDraggedRow) 0f else 1f,
                             enableInteractions = (draggingPluginName == null || draggingPluginName == pluginName),
                             switchEnabled = !isDraggedRow,
+                            shape = shapeForIndex(index),
                             onMeasuredHeight = { h ->
                                 if (h > 0f) rowHeightPx = h
                             },
@@ -248,6 +296,7 @@ internal fun AudioPluginsRouteContent(
                 contentAlpha = 1f,
                 enableInteractions = false,
                 switchEnabled = false,
+                shape = shapeForIndex(draggedPriority),
                 onMeasuredHeight = { },
                 onDragStart = { },
                 onDragDelta = { },

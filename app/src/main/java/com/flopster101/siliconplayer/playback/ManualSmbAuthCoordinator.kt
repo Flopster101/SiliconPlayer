@@ -51,7 +51,9 @@ internal object ManualSmbAuthCoordinator {
     }
 
     fun credentialsFor(spec: SmbSourceSpec): Pair<String?, String?>? {
-        return smbSessionCredentials[smbCacheKey(spec)]
+        val exactKey = smbCacheKey(spec)
+        return smbSessionCredentials[exactKey]
+            ?: smbSessionCredentials[smbHostCacheKey(spec)]
     }
 
     fun credentialsFor(spec: HttpSourceSpec): Pair<String?, String?>? {
@@ -59,7 +61,11 @@ internal object ManualSmbAuthCoordinator {
     }
 
     fun rememberCredentials(spec: SmbSourceSpec, username: String?, password: String?) {
-        smbSessionCredentials[smbCacheKey(spec)] = Pair(username, password)
+        val credentials = Pair(username, password)
+        smbSessionCredentials[smbCacheKey(spec)] = credentials
+        // Also remember host-level credentials so an auth done at host/share-picker
+        // level can be reused when entering a concrete share path.
+        smbSessionCredentials[smbHostCacheKey(spec)] = credentials
     }
 
     fun rememberCredentials(spec: HttpSourceSpec, username: String?, password: String?) {
@@ -73,6 +79,10 @@ internal object ManualSmbAuthCoordinator {
 
     private fun smbCacheKey(spec: SmbSourceSpec): String {
         return "${spec.host.trim().lowercase()}|${spec.share.trim().lowercase()}"
+    }
+
+    private fun smbHostCacheKey(spec: SmbSourceSpec): String {
+        return "${spec.host.trim().lowercase()}|*"
     }
 
     private fun httpCacheKey(spec: HttpSourceSpec): String {

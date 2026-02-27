@@ -1,5 +1,7 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
@@ -29,6 +31,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
@@ -87,6 +90,7 @@ import com.flopster101.siliconplayer.previewPinnedHomeEntryInsertion
 import com.flopster101.siliconplayer.PINNED_HOME_ENTRIES_LIMIT
 import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
 import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
+import com.flopster101.siliconplayer.folderTitleForDisplay
 import com.flopster101.siliconplayer.data.buildArchiveSourceId
 import com.flopster101.siliconplayer.data.buildArchiveDirectoryPath
 import com.flopster101.siliconplayer.data.parseArchiveSourceId
@@ -198,6 +202,7 @@ internal fun FileBrowserScreen(
     var currentDirectory by remember { mutableStateOf<File?>(null) }
     val fileList = remember { mutableStateListOf<FileItem>() }
     var selectorExpanded by remember { mutableStateOf(false) }
+    var currentFolderMenuExpanded by remember { mutableStateOf(false) }
     var browserNavDirection by remember { mutableStateOf(BrowserPageNavDirection.Forward) }
     var isLoadingDirectory by remember { mutableStateOf(false) }
     var lastAppliedInitialNavigationKey by remember { mutableStateOf<String?>(null) }
@@ -672,6 +677,32 @@ internal fun FileBrowserScreen(
         }
     }
 
+    fun resolveCurrentFolderPathForActions(): String? {
+        return resolveLogicalArchivePath(currentDirectory)
+            ?: currentDirectory?.absolutePath
+            ?: selectedLocation?.directory?.absolutePath
+    }
+
+    fun showCurrentFolderInfoDialog() {
+        val folderPath = resolveCurrentFolderPathForActions() ?: return
+        val folderTitle = folderTitleForDisplay(folderPath)
+        browserInfoFields = buildBrowserInfoFields(
+            entries = listOf(
+                BrowserInfoEntry(
+                    name = folderTitle,
+                    isDirectory = true,
+                    sizeBytes = null
+                )
+            ),
+            path = folderPath,
+            storageOrHostLabel = "Storage",
+            storageOrHost = selectedLocation?.let { location ->
+                "${location.typeLabel} (${location.name})"
+            } ?: "Unknown"
+        )
+        showBrowserInfoDialog = true
+    }
+
     fun openFileItem(item: FileItem) {
         if (item.isArchive) {
             openArchive(item)
@@ -1016,9 +1047,18 @@ internal fun FileBrowserScreen(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .clickable(enabled = showLocalStorageSelector) {
-                                    selectorExpanded = true
-                                }
+                                .combinedClickable(
+                                    onClick = {
+                                        if (showLocalStorageSelector) {
+                                            selectorExpanded = true
+                                        }
+                                    },
+                                    onLongClick = {
+                                        if (resolveCurrentFolderPathForActions() != null) {
+                                            currentFolderMenuExpanded = true
+                                        }
+                                    }
+                                )
                                 .padding(horizontal = 2.dp)
                         ) {
                             Box {
@@ -1131,6 +1171,85 @@ internal fun FileBrowserScreen(
                                             onClick = {}
                                         )
                                     }
+                                }
+                                DropdownMenu(
+                                    expanded = currentFolderMenuExpanded,
+                                    onDismissRequest = { currentFolderMenuExpanded = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Pin folder to home") },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Home,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        onClick = {
+                                            val folderPath = resolveCurrentFolderPathForActions()
+                                            if (folderPath == null) {
+                                                currentFolderMenuExpanded = false
+                                                return@DropdownMenuItem
+                                            }
+                                            val recentEntry = RecentPathEntry(
+                                                path = folderPath,
+                                                locationId = selectedLocationId,
+                                                title = folderTitleForDisplay(folderPath)
+                                            )
+                                            val preview = previewPinnedHomeEntryInsertion(
+                                                current = pinnedHomeEntries,
+                                                candidate = HomePinnedEntry(
+                                                    path = recentEntry.path,
+                                                    isFolder = true,
+                                                    locationId = recentEntry.locationId,
+                                                    title = recentEntry.title
+                                                ),
+                                                maxItems = PINNED_HOME_ENTRIES_LIMIT
+                                            )
+                                            if (preview.requiresConfirmation) {
+                                                pendingPinEvictionCandidate = preview.evictionCandidate
+                                                pendingPinConfirmation = recentEntry to true
+                                            } else {
+                                                onPinHomeEntry(recentEntry, true)
+                                                Toast.makeText(
+                                                    context,
+                                                    "Pinned folder to home",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                            currentFolderMenuExpanded = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Copy path") },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.ContentCopy,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        onClick = {
+                                            val folderPath = resolveCurrentFolderPathForActions()
+                                            if (folderPath != null) {
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                clipboard.setPrimaryClip(ClipData.newPlainText("Path", folderPath))
+                                                Toast.makeText(context, "Copied path", Toast.LENGTH_SHORT).show()
+                                            }
+                                            currentFolderMenuExpanded = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Info") },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Info,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        onClick = {
+                                            showCurrentFolderInfoDialog()
+                                            currentFolderMenuExpanded = false
+                                        }
+                                    )
                                 }
                             }
                             BrowserToolbarPathRow(

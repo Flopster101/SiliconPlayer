@@ -91,7 +91,7 @@ internal fun SettingsRouteContentHost(
             label = "settingsRouteTransition",
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 16.dp, end = 16.dp, top = 12.dp)
+                .padding(start = 16.dp, end = 16.dp)
         ) { currentRoute ->
             Column(
                 modifier = Modifier

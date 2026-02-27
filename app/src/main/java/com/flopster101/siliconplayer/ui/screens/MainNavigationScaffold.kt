@@ -14,11 +14,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,12 +25,20 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -47,73 +52,117 @@ internal fun MainNavigationScaffold(
     mainContentModifier: Modifier = Modifier,
     content: @Composable (mainPadding: PaddingValues, targetView: MainView) -> Unit
 ) {
-    val shouldShowBrowserHomeAction = currentView == MainView.Browser || currentView == MainView.Network
-    val shouldShowSettingsAction = currentView != MainView.Settings
+    var lastNonSettingsView by remember { mutableStateOf(currentView) }
+    val topBarView = if (currentView == MainView.Settings) lastNonSettingsView else currentView
+    val shouldShowBrowserHomeAction = topBarView == MainView.Browser || topBarView == MainView.Network
+    val shouldShowSettingsAction = topBarView != MainView.Settings
+    val homeScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            topBar = {
-                // Keep a stable top-bar slot height so route transition content does not
-                // jump vertically when entering/leaving Settings.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(64.dp)
-                ) {
-                    AnimatedVisibility(
-                        visible = currentView != MainView.Settings,
-                        enter = fadeIn(animationSpec = tween(160)) + slideInVertically(
-                            initialOffsetY = { fullHeight -> -fullHeight / 3 },
-                            animationSpec = tween(220, easing = LinearOutSlowInEasing)
-                        ),
-                        exit = fadeOut(animationSpec = tween(120)) + slideOutVertically(
-                            targetOffsetY = { fullHeight -> -fullHeight / 4 },
-                            animationSpec = tween(150, easing = FastOutLinearInEasing)
-                        )
-                    ) {
-                        TopAppBar(
-                            title = {
-                                Text(
-                                    text = "Silicon Player",
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier
-                                        .focusProperties { canFocus = false }
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .clickable(onClick = onOpenPlayerSurface)
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            },
-                            actions = {
-                                AnimatedVisibility(
-                                    visible = shouldShowBrowserHomeAction,
-                                    enter = fadeIn(animationSpec = tween(150)),
-                                    exit = fadeOut(animationSpec = tween(120))
-                                ) {
-                                    IconButton(onClick = onHomeRequested) {
-                                        Icon(
-                                            imageVector = Icons.Default.Home,
-                                            contentDescription = "Go to app home"
-                                        )
-                                    }
-                                }
-                                AnimatedVisibility(
-                                    visible = shouldShowSettingsAction,
-                                    enter = fadeIn(animationSpec = tween(150)),
-                                    exit = fadeOut(animationSpec = tween(120))
-                                ) {
-                                    IconButton(onClick = onSettingsRequested) {
-                                        Icon(
-                                            imageVector = Icons.Default.Settings,
-                                            contentDescription = "Open settings"
-                                        )
-                                    }
+    LaunchedEffect(currentView) {
+        if (currentView != MainView.Settings) {
+            lastNonSettingsView = currentView
+        }
+        if (currentView != MainView.Home) {
+            homeScrollBehavior.state.heightOffset = 0f
+            homeScrollBehavior.state.contentOffset = 0f
+        }
+    }
+
+    Scaffold(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(
+                if (currentView == MainView.Home) {
+                    Modifier.nestedScroll(homeScrollBehavior.nestedScrollConnection)
+                } else {
+                    Modifier
+                }
+            ),
+        topBar = {
+            AnimatedVisibility(
+                visible = currentView != MainView.Settings,
+                enter = fadeIn(animationSpec = tween(160)) + slideInVertically(
+                    initialOffsetY = { fullHeight -> -fullHeight / 3 },
+                    animationSpec = tween(220, easing = LinearOutSlowInEasing)
+                ),
+                exit = fadeOut(animationSpec = tween(120)) + slideOutVertically(
+                    targetOffsetY = { fullHeight -> -fullHeight / 4 },
+                    animationSpec = tween(150, easing = FastOutLinearInEasing)
+                )
+            ) {
+                if (topBarView == MainView.Home) {
+                    LargeTopAppBar(
+                        title = {
+                            Text(
+                                text = "Silicon Player",
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .focusProperties { canFocus = false }
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .clickable(onClick = onOpenPlayerSurface)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        },
+                        actions = {
+                            AnimatedVisibility(
+                                visible = shouldShowSettingsAction,
+                                enter = fadeIn(animationSpec = tween(150)),
+                                exit = fadeOut(animationSpec = tween(120))
+                            ) {
+                                IconButton(onClick = onSettingsRequested) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Open settings"
+                                    )
                                 }
                             }
-                        )
-                    }
+                        },
+                        scrollBehavior = homeScrollBehavior
+                    )
+                } else {
+                    TopAppBar(
+                        title = {
+                            Text(
+                                text = "Silicon Player",
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .focusProperties { canFocus = false }
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .clickable(onClick = onOpenPlayerSurface)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        },
+                        actions = {
+                            AnimatedVisibility(
+                                visible = shouldShowBrowserHomeAction,
+                                enter = fadeIn(animationSpec = tween(150)),
+                                exit = fadeOut(animationSpec = tween(120))
+                            ) {
+                                IconButton(onClick = onHomeRequested) {
+                                    Icon(
+                                        imageVector = Icons.Default.Home,
+                                        contentDescription = "Go to app home"
+                                    )
+                                }
+                            }
+                            AnimatedVisibility(
+                                visible = shouldShowSettingsAction,
+                                enter = fadeIn(animationSpec = tween(150)),
+                                exit = fadeOut(animationSpec = tween(120))
+                            ) {
+                                IconButton(onClick = onSettingsRequested) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Open settings"
+                                    )
+                                }
+                            }
+                        }
+                    )
                 }
             }
-        ) { mainPadding ->
+        }
+    ) { mainPadding ->
             AnimatedContent(
                 targetState = currentView,
                 transitionSpec = {
@@ -155,6 +204,5 @@ internal fun MainNavigationScaffold(
                 }
                 content(routePadding, targetView)
             }
-        }
     }
 }

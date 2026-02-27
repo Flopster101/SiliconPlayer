@@ -589,8 +589,21 @@ void AudioEngine::applyOutputLimiter(float* buffer, int numFrames, int channels)
     }
 }
 
-void AudioEngine::updateVisualizationDataFromOutputCallback(const float* buffer, int numFrames, int channels) {
+void AudioEngine::updateVisualizationDataFromOutputCallback(
+        const float* buffer,
+        int numFrames,
+        int channels,
+        uint32_t requestedFeatures
+) {
     if (!buffer || numFrames <= 0 || channels <= 0) {
+        return;
+    }
+
+    const bool needsWaveform = (requestedFeatures & kVisualizationFeatureWaveform) != 0u;
+    const bool needsBars = (requestedFeatures & kVisualizationFeatureBars) != 0u;
+    const bool needsVu = (requestedFeatures & kVisualizationFeatureVu) != 0u;
+    const bool needsChannelCount = (requestedFeatures & kVisualizationFeatureChannelCount) != 0u;
+    if (!needsWaveform && !needsBars && !needsVu && !needsChannelCount) {
         return;
     }
 
@@ -598,26 +611,32 @@ void AudioEngine::updateVisualizationDataFromOutputCallback(const float* buffer,
     std::array<float, 256> waveR {};
     double sumSqL = 0.0;
     double sumSqR = 0.0;
-    for (int n = 0; n < kVisualizationWaveformSize; ++n) {
-        const int srcFrame = (n * numFrames) / kVisualizationWaveformSize;
-        const int frameIndex = std::min(srcFrame, numFrames - 1);
-        const int base = frameIndex * channels;
-        const float left = buffer[base];
-        const float right = channels > 1 ? buffer[base + 1] : left;
-        waveL[n] = std::clamp(left, -1.0f, 1.0f);
-        waveR[n] = std::clamp(right, -1.0f, 1.0f);
+    if (needsWaveform) {
+        for (int n = 0; n < kVisualizationWaveformSize; ++n) {
+            const int srcFrame = (n * numFrames) / kVisualizationWaveformSize;
+            const int frameIndex = std::min(srcFrame, numFrames - 1);
+            const int base = frameIndex * channels;
+            const float left = buffer[base];
+            const float right = channels > 1 ? buffer[base + 1] : left;
+            waveL[n] = std::clamp(left, -1.0f, 1.0f);
+            waveR[n] = std::clamp(right, -1.0f, 1.0f);
+        }
     }
-    for (int frame = 0; frame < numFrames; ++frame) {
-        const int base = frame * channels;
-        const float left = buffer[base];
-        const float right = channels > 1 ? buffer[base + 1] : left;
-        sumSqL += static_cast<double>(left) * left;
-        sumSqR += static_cast<double>(right) * right;
+    if (needsVu) {
+        for (int frame = 0; frame < numFrames; ++frame) {
+            const int base = frame * channels;
+            const float left = buffer[base];
+            const float right = channels > 1 ? buffer[base + 1] : left;
+            sumSqL += static_cast<double>(left) * left;
+            sumSqR += static_cast<double>(right) * right;
+        }
     }
-    const double invFrames = 1.0 / static_cast<double>(numFrames);
     std::array<float, 2> vu {};
-    vu[0] = static_cast<float>(std::clamp(std::sqrt(sumSqL * invFrames), 0.0, 1.0));
-    vu[1] = static_cast<float>(std::clamp(std::sqrt(sumSqR * invFrames), 0.0, 1.0));
+    if (needsVu) {
+        const double invFrames = 1.0 / static_cast<double>(numFrames);
+        vu[0] = static_cast<float>(std::clamp(std::sqrt(sumSqL * invFrames), 0.0, 1.0));
+        vu[1] = static_cast<float>(std::clamp(std::sqrt(sumSqR * invFrames), 0.0, 1.0));
+    }
 
     bool shouldAnalyzeSpectrum = false;
     std::array<float, 4096> monoHistorySnapshot {};
@@ -633,34 +652,48 @@ void AudioEngine::updateVisualizationDataFromOutputCallback(const float* buffer,
             return;
         }
         const int safeChannels = std::clamp(channels, 1, 2);
-        for (int frame = 0; frame < numFrames; ++frame) {
-            const int base = frame * safeChannels;
-            const float left = buffer[base];
-            const float right = safeChannels > 1 ? buffer[base + 1] : left;
-            const float mono = 0.5f * (left + right);
-            visualizationScopeHistoryLeft[visualizationScopeWriteIndex] = std::clamp(left, -1.0f, 1.0f);
-            visualizationScopeHistoryRight[visualizationScopeWriteIndex] = std::clamp(right, -1.0f, 1.0f);
-            visualizationMonoHistory[visualizationMonoWriteIndex] = std::clamp(mono, -1.0f, 1.0f);
-            visualizationScopeWriteIndex = (visualizationScopeWriteIndex + 1) % historySize;
-            visualizationMonoWriteIndex =
-                    (visualizationMonoWriteIndex + 1) % static_cast<int>(visualizationMonoHistory.size());
+        if (needsWaveform || needsBars) {
+            for (int frame = 0; frame < numFrames; ++frame) {
+                const int base = frame * safeChannels;
+                const float left = buffer[base];
+                const float right = safeChannels > 1 ? buffer[base + 1] : left;
+                const float mono = 0.5f * (left + right);
+                if (needsWaveform) {
+                    visualizationScopeHistoryLeft[visualizationScopeWriteIndex] = std::clamp(left, -1.0f, 1.0f);
+                    visualizationScopeHistoryRight[visualizationScopeWriteIndex] = std::clamp(right, -1.0f, 1.0f);
+                    visualizationScopeWriteIndex = (visualizationScopeWriteIndex + 1) % historySize;
+                }
+                if (needsBars) {
+                    visualizationMonoHistory[visualizationMonoWriteIndex] = std::clamp(mono, -1.0f, 1.0f);
+                    visualizationMonoWriteIndex =
+                            (visualizationMonoWriteIndex + 1) % static_cast<int>(visualizationMonoHistory.size());
+                }
+            }
         }
-        visualizationWaveformLeft = waveL;
-        visualizationWaveformRight = waveR;
-        visualizationVuLevelsPrev = visualizationVuLevels;
-        visualizationVuLevels = vu;
-        visualizationChannelCount.store(safeChannels);
+        if (needsWaveform) {
+            visualizationWaveformLeft = waveL;
+            visualizationWaveformRight = waveR;
+        }
+        if (needsVu) {
+            visualizationVuLevelsPrev = visualizationVuLevels;
+            visualizationVuLevels = vu;
+        }
+        if (needsChannelCount) {
+            visualizationChannelCount.store(safeChannels);
+        }
         visualizationLastCallbackFrames = numFrames;
         visualizationLastCallbackNs = callbackNowNs;
 
-        sampleRateSnapshot = std::max(streamSampleRate, 8000);
-        const int analysisHopFrames = std::clamp(sampleRateSnapshot / 60, 128, 4096);
-        visualizationFramesSinceAnalysis += numFrames;
-        if (visualizationFramesSinceAnalysis >= analysisHopFrames) {
-            visualizationFramesSinceAnalysis %= analysisHopFrames;
-            monoHistorySnapshot = visualizationMonoHistory;
-            monoWriteIndexSnapshot = visualizationMonoWriteIndex;
-            shouldAnalyzeSpectrum = true;
+        if (needsBars) {
+            sampleRateSnapshot = std::max(streamSampleRate, 8000);
+            const int analysisHopFrames = std::clamp(sampleRateSnapshot / 60, 128, 4096);
+            visualizationFramesSinceAnalysis += numFrames;
+            if (visualizationFramesSinceAnalysis >= analysisHopFrames) {
+                visualizationFramesSinceAnalysis %= analysisHopFrames;
+                monoHistorySnapshot = visualizationMonoHistory;
+                monoWriteIndexSnapshot = visualizationMonoWriteIndex;
+                shouldAnalyzeSpectrum = true;
+            }
         }
     }
     if (!shouldAnalyzeSpectrum) {
@@ -790,23 +823,33 @@ void AudioEngine::updateVisualizationDataLocked(const float* buffer, int numFram
     visualizationChannelCount.store(std::clamp(channels, 1, 2));
 }
 
-void AudioEngine::markVisualizationRequested() const {
+void AudioEngine::markVisualizationRequested(uint32_t features) const {
     const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch()
     ).count();
+    visualizationRequestedFeatures.fetch_or(features, std::memory_order_relaxed);
     visualizationLastRequestNs.store(nowNs, std::memory_order_relaxed);
 }
 
-bool AudioEngine::shouldUpdateVisualization() const {
+bool AudioEngine::shouldUpdateVisualization(uint32_t* outFeatures) const {
     const int64_t lastRequestNs = visualizationLastRequestNs.load(std::memory_order_relaxed);
     if (lastRequestNs <= 0) {
+        if (outFeatures) *outFeatures = 0u;
         return false;
     }
     const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch()
     ).count();
     constexpr int64_t kVisualizationDemandWindowNs = 750'000'000; // 750 ms
-    return (nowNs - lastRequestNs) <= kVisualizationDemandWindowNs;
+    const bool active = (nowNs - lastRequestNs) <= kVisualizationDemandWindowNs;
+    if (!active) {
+        visualizationRequestedFeatures.store(0u, std::memory_order_relaxed);
+        if (outFeatures) *outFeatures = 0u;
+        return false;
+    }
+    const uint32_t features = visualizationRequestedFeatures.load(std::memory_order_relaxed);
+    if (outFeatures) *outFeatures = features;
+    return features != 0u;
 }
 
 std::vector<float> AudioEngine::getVisualizationWaveformScope(
@@ -814,7 +857,7 @@ std::vector<float> AudioEngine::getVisualizationWaveformScope(
         int windowMs,
         int triggerMode
 ) const {
-    markVisualizationRequested();
+    markVisualizationRequested(kVisualizationFeatureWaveform);
     std::lock_guard<std::mutex> lock(visualizationMutex);
     constexpr int kOutputSize = 1024;
     const auto& history = channelIndex == 1 ? visualizationScopeHistoryRight : visualizationScopeHistoryLeft;
@@ -957,7 +1000,7 @@ std::vector<float> AudioEngine::getVisualizationWaveformScope(
 }
 
 std::vector<float> AudioEngine::getVisualizationBars() const {
-    markVisualizationRequested();
+    markVisualizationRequested(kVisualizationFeatureBars);
     std::lock_guard<std::mutex> lock(visualizationMutex);
     const int callbackFrames = std::max(visualizationLastCallbackFrames, 1);
     const int sampleRate = std::max(streamSampleRate, 8000);
@@ -985,7 +1028,7 @@ std::vector<float> AudioEngine::getVisualizationBars() const {
 }
 
 std::vector<float> AudioEngine::getVisualizationVuLevels() const {
-    markVisualizationRequested();
+    markVisualizationRequested(kVisualizationFeatureVu);
     std::lock_guard<std::mutex> lock(visualizationMutex);
     const int callbackFrames = std::max(visualizationLastCallbackFrames, 1);
     const int sampleRate = std::max(streamSampleRate, 8000);
@@ -1013,7 +1056,7 @@ std::vector<float> AudioEngine::getVisualizationVuLevels() const {
 }
 
 int AudioEngine::getVisualizationChannelCount() const {
-    markVisualizationRequested();
+    markVisualizationRequested(kVisualizationFeatureChannelCount);
     return visualizationChannelCount.load();
 }
 

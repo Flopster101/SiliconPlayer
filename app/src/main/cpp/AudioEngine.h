@@ -372,6 +372,12 @@ private:
     int visualizationLastCallbackFrames = 0;
     int64_t visualizationLastCallbackNs = 0;
     mutable std::atomic<int64_t> visualizationLastRequestNs { 0 };
+    mutable std::atomic<uint32_t> visualizationRequestedFeatures { 0 };
+
+    static constexpr uint32_t kVisualizationFeatureWaveform = 1u << 0;
+    static constexpr uint32_t kVisualizationFeatureBars = 1u << 1;
+    static constexpr uint32_t kVisualizationFeatureVu = 1u << 2;
+    static constexpr uint32_t kVisualizationFeatureChannelCount = 1u << 3;
 
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
     void reconfigureStream(bool resumePlayback);
@@ -416,10 +422,10 @@ private:
     void applyMonoDownmix(float* buffer, int numFrames, int channels);
     void applyOpenMptDspEffects(float* buffer, int numFrames, int channels, int sampleRate);
     void applyOutputLimiter(float* buffer, int numFrames, int channels);
-    void updateVisualizationDataFromOutputCallback(const float* buffer, int numFrames, int channels);
+    void updateVisualizationDataFromOutputCallback(const float* buffer, int numFrames, int channels, uint32_t requestedFeatures);
     void updateVisualizationDataLocked(const float* buffer, int numFrames, int channels);
-    void markVisualizationRequested() const;
-    bool shouldUpdateVisualization() const;
+    void markVisualizationRequested(uint32_t features) const;
+    bool shouldUpdateVisualization(uint32_t* outFeatures) const;
 
     // Callback
     static aaudio_data_callback_result_t dataCallback(

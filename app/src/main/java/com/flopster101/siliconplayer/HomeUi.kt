@@ -31,6 +31,7 @@ import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
@@ -38,6 +39,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.foundation.Image
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -114,6 +116,12 @@ internal enum class FolderEntryAction {
     OpenInBrowser
 }
 
+private enum class HomeBulkClearTarget {
+    Pinned,
+    RecentFolders,
+    RecentPlayed
+}
+
 internal fun buildRecentTrackDisplay(
     title: String,
     artist: String,
@@ -173,6 +181,9 @@ internal fun HomeScreen(
     onPinnedFileAction: (HomePinnedEntry, SourceEntryAction) -> Unit,
     onRecentFolderAction: (RecentPathEntry, FolderEntryAction) -> Unit,
     onRecentFileAction: (RecentPathEntry, SourceEntryAction) -> Unit,
+    onClearPinnedEntries: () -> Unit,
+    onClearRecentFolders: () -> Unit,
+    onClearRecentPlayed: () -> Unit,
     canShareRecentFile: (RecentPathEntry) -> Boolean,
     canSharePinnedFile: (HomePinnedEntry) -> Boolean
 ) {
@@ -185,6 +196,10 @@ internal fun HomeScreen(
     var pinnedFileActionTarget by remember { mutableStateOf<HomePinnedEntry?>(null) }
     var pendingPinRecentEntry by remember { mutableStateOf<Pair<RecentPathEntry, Boolean>?>(null) }
     var pendingPinEvictionCandidate by remember { mutableStateOf<HomePinnedEntry?>(null) }
+    var pinnedSectionMenuExpanded by remember { mutableStateOf(false) }
+    var recentFoldersSectionMenuExpanded by remember { mutableStateOf(false) }
+    var recentPlayedSectionMenuExpanded by remember { mutableStateOf(false) }
+    var pendingBulkClearTarget by remember { mutableStateOf<HomeBulkClearTarget?>(null) }
     val playedEntryKey: (RecentPathEntry) -> String = { entry ->
         "${entry.locationId.orEmpty()}|${entry.path}"
     }
@@ -481,10 +496,36 @@ internal fun HomeScreen(
         }
         if (sortedPinnedEntries.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Pinned songs and locations",
-                style = MaterialTheme.typography.titleMedium
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Pinned songs and locations",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Box {
+                    IconButton(onClick = { pinnedSectionMenuExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreHoriz,
+                            contentDescription = "Pinned section actions"
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = pinnedSectionMenuExpanded,
+                        onDismissRequest = { pinnedSectionMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Clear all") },
+                            onClick = {
+                                pinnedSectionMenuExpanded = false
+                                pendingBulkClearTarget = HomeBulkClearTarget.Pinned
+                            }
+                        )
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(8.dp))
             pinnedFolders.forEach { pinnedEntry ->
                 Box(modifier = Modifier.fillMaxWidth()) {
@@ -681,10 +722,36 @@ internal fun HomeScreen(
         }
         if (recentFolders.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Recent folders",
-                style = MaterialTheme.typography.titleMedium
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Recent folders",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Box {
+                    IconButton(onClick = { recentFoldersSectionMenuExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreHoriz,
+                            contentDescription = "Recent folders section actions"
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = recentFoldersSectionMenuExpanded,
+                        onDismissRequest = { recentFoldersSectionMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Clear all") },
+                            onClick = {
+                                recentFoldersSectionMenuExpanded = false
+                                pendingBulkClearTarget = HomeBulkClearTarget.RecentFolders
+                            }
+                        )
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(8.dp))
             recentFolders.forEachIndexed { index, entry ->
                 val itemKey = "${entry.locationId.orEmpty()}|${entry.path}"
@@ -811,10 +878,36 @@ internal fun HomeScreen(
         }
         if (renderedRecentPlayedFiles.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Recently played",
-                style = MaterialTheme.typography.titleMedium
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Recently played",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Box {
+                    IconButton(onClick = { recentPlayedSectionMenuExpanded = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreHoriz,
+                            contentDescription = "Recently played section actions"
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = recentPlayedSectionMenuExpanded,
+                        onDismissRequest = { recentPlayedSectionMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Clear all") },
+                            onClick = {
+                                recentPlayedSectionMenuExpanded = false
+                                pendingBulkClearTarget = HomeBulkClearTarget.RecentPlayed
+                            }
+                        )
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Tip: Hold a song for more actions.",
@@ -1060,6 +1153,61 @@ internal fun HomeScreen(
                         pendingPinRecentEntry = null
                         pendingPinEvictionCandidate = null
                     }
+                ) { Text("Cancel") }
+            }
+        )
+    }
+    pendingBulkClearTarget?.let { target ->
+        val (title, message) = when (target) {
+            HomeBulkClearTarget.Pinned -> {
+                "Clear pinned entries?" to
+                    "This will unpin all songs and locations from Home."
+            }
+            HomeBulkClearTarget.RecentFolders -> {
+                "Clear recent folders?" to
+                    "This will remove all entries from the Recent folders section."
+            }
+            HomeBulkClearTarget.RecentPlayed -> {
+                "Clear recently played?" to
+                    "This will remove all entries from the Recently played section."
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { pendingBulkClearTarget = null },
+            title = { Text(title) },
+            text = {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        when (target) {
+                            HomeBulkClearTarget.Pinned -> {
+                                onClearPinnedEntries()
+                            }
+                            HomeBulkClearTarget.RecentFolders -> {
+                                onClearRecentFolders()
+                            }
+                            HomeBulkClearTarget.RecentPlayed -> {
+                                onClearRecentPlayed()
+                                activePlayedPromoteKey = null
+                                requestedPlayedPromoteKey = null
+                            }
+                        }
+                        folderActionTargetEntry = null
+                        fileActionTargetEntry = null
+                        pinnedFolderActionTarget = null
+                        pinnedFileActionTarget = null
+                        pendingBulkClearTarget = null
+                    }
+                ) { Text("Clear all") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { pendingBulkClearTarget = null }
                 ) { Text("Cancel") }
             }
         )

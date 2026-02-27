@@ -269,6 +269,27 @@ internal fun AppNavigationHomeContentSection(
                 }
             )
         },
+        onClearPinnedEntries = {
+            onPinnedHomeEntriesChanged(emptyList())
+        },
+        onClearRecentFolders = {
+            onRecentFoldersChanged(emptyList())
+            writeRecentEntries(
+                prefs,
+                AppPreferenceKeys.RECENT_FOLDERS,
+                emptyList(),
+                recentFoldersLimit
+            )
+        },
+        onClearRecentPlayed = {
+            onRecentPlayedFilesChanged(emptyList())
+            writeRecentEntries(
+                prefs,
+                AppPreferenceKeys.RECENT_PLAYED_FILES,
+                emptyList(),
+                recentFilesLimit
+            )
+        },
         canShareRecentFile = { entry ->
             runtimeDelegates.resolveShareableFileForRecent(entry) != null
         },

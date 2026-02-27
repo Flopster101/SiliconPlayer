@@ -40,6 +40,9 @@ internal fun MainHomeRouteHost(
     onPersistRecentFileMetadata: (RecentPathEntry, String, String) -> Unit,
     onRecentFolderAction: (RecentPathEntry, FolderEntryAction) -> Unit,
     onRecentFileAction: (RecentPathEntry, SourceEntryAction) -> Unit,
+    onClearPinnedEntries: () -> Unit,
+    onClearRecentFolders: () -> Unit,
+    onClearRecentPlayed: () -> Unit,
     canShareRecentFile: (RecentPathEntry) -> Boolean,
     canSharePinnedFile: (HomePinnedEntry) -> Boolean
 ) {
@@ -68,6 +71,9 @@ internal fun MainHomeRouteHost(
             onPersistRecentFileMetadata = onPersistRecentFileMetadata,
             onRecentFolderAction = onRecentFolderAction,
             onRecentFileAction = onRecentFileAction,
+            onClearPinnedEntries = onClearPinnedEntries,
+            onClearRecentFolders = onClearRecentFolders,
+            onClearRecentPlayed = onClearRecentPlayed,
             canShareRecentFile = canShareRecentFile,
             canSharePinnedFile = canSharePinnedFile
         )

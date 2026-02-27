@@ -466,7 +466,7 @@ internal fun HomeScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Network",
+                                text = "Network sources",
                                 style = MaterialTheme.typography.titleMedium,
                                 maxLines = 1
                             )

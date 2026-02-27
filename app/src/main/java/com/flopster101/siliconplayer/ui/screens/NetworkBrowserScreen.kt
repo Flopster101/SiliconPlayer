@@ -1267,7 +1267,7 @@ internal fun NetworkBrowserScreen(
             .nestedScroll(networkScrollBehavior.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
-                title = { Text("Network") },
+                title = { Text("Network sources") },
                 navigationIcon = {
                     IconButton(
                         onClick = {

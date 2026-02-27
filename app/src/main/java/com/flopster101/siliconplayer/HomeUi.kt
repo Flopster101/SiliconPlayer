@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.foundation.Image
@@ -255,8 +256,6 @@ internal fun HomeScreen(
         }
     }
     val sortedPinnedEntries = remember(pinnedHomeEntries) { sortPinnedHomeEntriesForDisplay(pinnedHomeEntries) }
-    val pinnedFolders = remember(sortedPinnedEntries) { sortedPinnedEntries.filter { it.isFolder } }
-    val pinnedFiles = remember(sortedPinnedEntries) { sortedPinnedEntries.filterNot { it.isFolder } }
     fun requestPinRecentEntry(entry: RecentPathEntry, isFolder: Boolean) {
         val preview = previewPinnedHomeEntryInsertion(
             current = pinnedHomeEntries,
@@ -516,197 +515,202 @@ internal fun HomeScreen(
                 }
             }
             Spacer(modifier = Modifier.height(4.dp))
-            pinnedFolders.forEach { pinnedEntry ->
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    ElevatedCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(HomeCardShape)
-                            .combinedClickable(
-                                onClick = { onOpenPinnedFolder(pinnedEntry) },
-                                onLongClick = {
-                                    pinnedFileActionTarget = null
-                                    pinnedFolderActionTarget = pinnedEntry
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = HomeCardShape
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    sortedPinnedEntries.forEachIndexed { index, pinnedEntry ->
+                        if (pinnedEntry.isFolder) {
+                            val storagePresentation = storagePresentationForPinnedEntry(pinnedEntry)
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .combinedClickable(
+                                            onClick = { onOpenPinnedFolder(pinnedEntry) },
+                                            onLongClick = {
+                                                pinnedFileActionTarget = null
+                                                pinnedFolderActionTarget = pinnedEntry
+                                            }
+                                        )
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val isSmbPinnedFolder = parseSmbSourceSpecFromInput(pinnedEntry.path) != null
+                                    val isHttpPinnedFolder = parseHttpSourceSpecFromInput(pinnedEntry.path) != null
+                                    RecentIconChip(
+                                        icon = when {
+                                            isSmbPinnedFolder -> NetworkIcons.SmbShare
+                                            isHttpPinnedFolder -> NetworkIcons.WorldCode
+                                            else -> Icons.Default.Folder
+                                        },
+                                        iconPainterResId = if (isArchiveLogicalFolderPath(pinnedEntry.path)) {
+                                            R.drawable.ic_folder_zip
+                                        } else {
+                                            null
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = resolvedRecentFolderTitle(pinnedEntry.asRecentPathEntry()),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = storagePresentation.icon,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = storagePresentation.label,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
                                 }
-                            ),
-                        shape = HomeCardShape
-                    ) {
-                        val storagePresentation = storagePresentationForPinnedEntry(pinnedEntry)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val isSmbPinnedFolder = parseSmbSourceSpecFromInput(pinnedEntry.path) != null
-                            val isHttpPinnedFolder = parseHttpSourceSpecFromInput(pinnedEntry.path) != null
-                            RecentIconChip(
-                                icon = when {
-                                    isSmbPinnedFolder -> NetworkIcons.SmbShare
-                                    isHttpPinnedFolder -> NetworkIcons.WorldCode
-                                    else -> Icons.Default.Folder
-                                },
-                                iconPainterResId = if (isArchiveLogicalFolderPath(pinnedEntry.path)) {
-                                    R.drawable.ic_folder_zip
+                                DropdownMenu(
+                                    expanded = pinnedFolderActionTarget == pinnedEntry,
+                                    onDismissRequest = { pinnedFolderActionTarget = null }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Open location") },
+                                        onClick = {
+                                            onPinnedFolderAction(pinnedEntry, FolderEntryAction.OpenInBrowser)
+                                            pinnedFolderActionTarget = null
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Unpin folder") },
+                                        onClick = {
+                                            onPinnedFolderAction(
+                                                pinnedEntry,
+                                                FolderEntryAction.DeleteFromRecents
+                                            )
+                                            pinnedFolderActionTarget = null
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Copy path") },
+                                        onClick = {
+                                            onPinnedFolderAction(pinnedEntry, FolderEntryAction.CopyPath)
+                                            pinnedFolderActionTarget = null
+                                        }
+                                    )
+                                }
+                            }
+                        } else {
+                            val recentEntry = pinnedEntry.asRecentPathEntry()
+                            val archiveSource = parseArchiveSourceId(recentEntry.path)
+                            val trackFile = if (archiveSource != null) {
+                                File(archiveSource.entryPath)
+                            } else {
+                                val normalizedSourcePath = normalizeSourceIdentity(recentEntry.path) ?: recentEntry.path
+                                val parsedSource = Uri.parse(normalizedSourcePath)
+                                if (parsedSource.scheme.equals("file", ignoreCase = true)) {
+                                    File(parsedSource.path ?: normalizedSourcePath)
+                                } else if (!parsedSource.scheme.isNullOrBlank()) {
+                                    val decodedLeaf = sourceLeafNameForDisplay(normalizedSourcePath)
+                                        ?.trim()
+                                        ?.takeIf { it.isNotBlank() }
+                                    File(decodedLeaf ?: normalizedSourcePath)
                                 } else {
-                                    null
+                                    File(normalizedSourcePath)
                                 }
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = resolvedRecentFolderTitle(pinnedEntry.asRecentPathEntry()),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = storagePresentation.icon,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(14.dp)
+                            }
+                            val storagePresentation = storagePresentationForPinnedEntry(pinnedEntry)
+                            val extensionLabel = inferredPrimaryExtensionForName(trackFile.name)?.uppercase()
+                                ?: "UNKNOWN"
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .combinedClickable(
+                                            onClick = { onPlayPinnedFile(pinnedEntry) },
+                                            onLongClick = {
+                                                pinnedFolderActionTarget = null
+                                                pinnedFileActionTarget = pinnedEntry
+                                            }
+                                        )
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RecentTrackArtworkChip(
+                                        context = context,
+                                        artworkThumbnailCacheKey = pinnedEntry.artworkThumbnailCacheKey,
+                                        fallbackIcon = placeholderArtworkIconForFile(
+                                            file = trackFile,
+                                            decoderName = pinnedEntry.decoderName,
+                                            allowCurrentDecoderFallback = false
+                                        )
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = storagePresentation.label,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        RecentTrackSummaryText(
+                                            file = trackFile,
+                                            cachedTitle = pinnedEntry.title.orEmpty(),
+                                            cachedArtist = pinnedEntry.artist.orEmpty(),
+                                            storagePresentation = storagePresentation,
+                                            extensionLabel = extensionLabel,
+                                            isArchiveSource = archiveSource != null
+                                        )
+                                    }
+                                }
+                                DropdownMenu(
+                                    expanded = pinnedFileActionTarget == pinnedEntry,
+                                    onDismissRequest = { pinnedFileActionTarget = null }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Open location") },
+                                        onClick = {
+                                            onPinnedFileAction(pinnedEntry, SourceEntryAction.OpenInBrowser)
+                                            pinnedFileActionTarget = null
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Unpin file") },
+                                        onClick = {
+                                            onPinnedFileAction(
+                                                pinnedEntry,
+                                                SourceEntryAction.DeleteFromRecents
+                                            )
+                                            pinnedFileActionTarget = null
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Share file") },
+                                        onClick = {
+                                            onPinnedFileAction(pinnedEntry, SourceEntryAction.ShareFile)
+                                            pinnedFileActionTarget = null
+                                        },
+                                        enabled = canSharePinnedFile(pinnedEntry)
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Copy URL/path") },
+                                        onClick = {
+                                            onPinnedFileAction(pinnedEntry, SourceEntryAction.CopySource)
+                                            pinnedFileActionTarget = null
+                                        }
                                     )
                                 }
                             }
                         }
-                    }
-                    DropdownMenu(
-                        expanded = pinnedFolderActionTarget == pinnedEntry,
-                        onDismissRequest = { pinnedFolderActionTarget = null }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Open location") },
-                            onClick = {
-                                onPinnedFolderAction(pinnedEntry, FolderEntryAction.OpenInBrowser)
-                                pinnedFolderActionTarget = null
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Unpin folder") },
-                            onClick = {
-                                onPinnedFolderAction(pinnedEntry, FolderEntryAction.DeleteFromRecents)
-                                pinnedFolderActionTarget = null
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Copy path") },
-                            onClick = {
-                                onPinnedFolderAction(pinnedEntry, FolderEntryAction.CopyPath)
-                                pinnedFolderActionTarget = null
-                            }
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-            pinnedFiles.forEach { pinnedEntry ->
-                val recentEntry = pinnedEntry.asRecentPathEntry()
-                val archiveSource = parseArchiveSourceId(recentEntry.path)
-                val trackFile = if (archiveSource != null) {
-                    File(archiveSource.entryPath)
-                } else {
-                    val normalizedSourcePath = normalizeSourceIdentity(recentEntry.path) ?: recentEntry.path
-                    val parsedSource = Uri.parse(normalizedSourcePath)
-                    if (parsedSource.scheme.equals("file", ignoreCase = true)) {
-                        File(parsedSource.path ?: normalizedSourcePath)
-                    } else if (!parsedSource.scheme.isNullOrBlank()) {
-                        val decodedLeaf = sourceLeafNameForDisplay(normalizedSourcePath)
-                            ?.trim()
-                            ?.takeIf { it.isNotBlank() }
-                        File(decodedLeaf ?: normalizedSourcePath)
-                    } else {
-                        File(normalizedSourcePath)
-                    }
-                }
-                val storagePresentation = storagePresentationForPinnedEntry(pinnedEntry)
-                val extensionLabel = inferredPrimaryExtensionForName(trackFile.name)?.uppercase() ?: "UNKNOWN"
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    ElevatedCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(HomeCardShape)
-                            .combinedClickable(
-                                onClick = { onPlayPinnedFile(pinnedEntry) },
-                                onLongClick = {
-                                    pinnedFolderActionTarget = null
-                                    pinnedFileActionTarget = pinnedEntry
-                                }
-                            ),
-                        shape = HomeCardShape
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RecentTrackArtworkChip(
-                                context = context,
-                                artworkThumbnailCacheKey = pinnedEntry.artworkThumbnailCacheKey,
-                                fallbackIcon = placeholderArtworkIconForFile(
-                                    file = trackFile,
-                                    decoderName = pinnedEntry.decoderName,
-                                    allowCurrentDecoderFallback = false
-                                )
+                        if (index < sortedPinnedEntries.lastIndex) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 64.dp, end = 14.dp),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                             )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                RecentTrackSummaryText(
-                                    file = trackFile,
-                                    cachedTitle = pinnedEntry.title.orEmpty(),
-                                    cachedArtist = pinnedEntry.artist.orEmpty(),
-                                    storagePresentation = storagePresentation,
-                                    extensionLabel = extensionLabel,
-                                    isArchiveSource = archiveSource != null
-                                )
-                            }
                         }
                     }
-                    DropdownMenu(
-                        expanded = pinnedFileActionTarget == pinnedEntry,
-                        onDismissRequest = { pinnedFileActionTarget = null }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Open location") },
-                            onClick = {
-                                onPinnedFileAction(pinnedEntry, SourceEntryAction.OpenInBrowser)
-                                pinnedFileActionTarget = null
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Unpin file") },
-                            onClick = {
-                                onPinnedFileAction(pinnedEntry, SourceEntryAction.DeleteFromRecents)
-                                pinnedFileActionTarget = null
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Share file") },
-                            onClick = {
-                                onPinnedFileAction(pinnedEntry, SourceEntryAction.ShareFile)
-                                pinnedFileActionTarget = null
-                            },
-                            enabled = canSharePinnedFile(pinnedEntry)
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Copy URL/path") },
-                            onClick = {
-                                onPinnedFileAction(pinnedEntry, SourceEntryAction.CopySource)
-                                pinnedFileActionTarget = null
-                            }
-                        )
-                    }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
             }
         }
         if (recentFolders.isNotEmpty()) {
@@ -742,131 +746,138 @@ internal fun HomeScreen(
                 }
             }
             Spacer(modifier = Modifier.height(4.dp))
-            recentFolders.forEachIndexed { index, entry ->
-                val itemKey = "${entry.locationId.orEmpty()}|${entry.path}"
-                AnimatedHomeIntroItem(
-                    itemKey = "home_intro_folder_$itemKey",
-                    order = 3 + index,
-                    enabled = runHomeIntroAnimation
-                ) {
-                    AnimatedRecentCardInsertion(
-                        itemKey = itemKey,
-                        animate = itemKey in recentFolderAnimationState.insertedKeys ||
-                            itemKey == recentFolderAnimationState.promotedTopKey
-                    ) {
-                        val storagePresentation = storagePresentationForEntry(entry)
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            ElevatedCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(HomeCardShape)
-                                    .combinedClickable(
-                                        onClick = { onOpenRecentFolder(entry) },
-                                        onLongClick = {
-                                            fileActionTargetEntry = null
-                                            folderActionTargetEntry = entry
-                                        }
-                                    ),
-                                shape = HomeCardShape
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = HomeCardShape
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    recentFolders.forEachIndexed { index, entry ->
+                        val itemKey = "${entry.locationId.orEmpty()}|${entry.path}"
+                        AnimatedHomeIntroItem(
+                            itemKey = "home_intro_folder_$itemKey",
+                            order = 3 + index,
+                            enabled = runHomeIntroAnimation
+                        ) {
+                            AnimatedRecentCardInsertion(
+                                itemKey = itemKey,
+                                animate = itemKey in recentFolderAnimationState.insertedKeys ||
+                                    itemKey == recentFolderAnimationState.promotedTopKey
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    val isSmbRecentFolder = parseSmbSourceSpecFromInput(entry.path) != null
-                                    val isHttpRecentFolder = parseHttpSourceSpecFromInput(entry.path) != null
-                                    RecentIconChip(
-                                        icon = when {
-                                            isSmbRecentFolder -> NetworkIcons.SmbShare
-                                            isHttpRecentFolder -> NetworkIcons.WorldCode
-                                            else -> Icons.Default.Folder
-                                        },
-                                        iconPainterResId = if (isArchiveLogicalFolderPath(entry.path)) {
-                                            R.drawable.ic_folder_zip
-                                        } else {
-                                            null
-                                        }
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = resolvedRecentFolderTitle(entry),
-                                            style = MaterialTheme.typography.titleSmall,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = storagePresentation.icon,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(14.dp)
+                                val storagePresentation = storagePresentationForEntry(entry)
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .combinedClickable(
+                                                    onClick = { onOpenRecentFolder(entry) },
+                                                    onLongClick = {
+                                                        fileActionTargetEntry = null
+                                                        folderActionTargetEntry = entry
+                                                    }
+                                                )
+                                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            val isSmbRecentFolder = parseSmbSourceSpecFromInput(entry.path) != null
+                                            val isHttpRecentFolder = parseHttpSourceSpecFromInput(entry.path) != null
+                                            RecentIconChip(
+                                                icon = when {
+                                                    isSmbRecentFolder -> NetworkIcons.SmbShare
+                                                    isHttpRecentFolder -> NetworkIcons.WorldCode
+                                                    else -> Icons.Default.Folder
+                                                },
+                                                iconPainterResId = if (isArchiveLogicalFolderPath(entry.path)) {
+                                                    R.drawable.ic_folder_zip
+                                                } else {
+                                                    null
+                                                }
                                             )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            val archiveName = parseArchiveLogicalPath(entry.path)
-                                                ?.takeIf { it.second != null }
-                                                ?.first
-                                                ?.let { sourceLeafNameForDisplay(it) }
-                                                ?.takeIf { it.isNotBlank() }
-                                            val storageSubtitle = if (archiveName != null) {
-                                                "${storagePresentation.label} • $archiveName"
-                                            } else {
-                                                storagePresentation.label
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = resolvedRecentFolderTitle(entry),
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(
+                                                        imageVector = storagePresentation.icon,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    val archiveName = parseArchiveLogicalPath(entry.path)
+                                                        ?.takeIf { it.second != null }
+                                                        ?.first
+                                                        ?.let { sourceLeafNameForDisplay(it) }
+                                                        ?.takeIf { it.isNotBlank() }
+                                                    val storageSubtitle = if (archiveName != null) {
+                                                        "${storagePresentation.label} • $archiveName"
+                                                    } else {
+                                                        storagePresentation.label
+                                                    }
+                                                    Text(
+                                                        text = storageSubtitle,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
                                             }
-                                            Text(
-                                                text = storageSubtitle,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
+                                        }
+                                        DropdownMenu(
+                                            expanded = folderActionTargetEntry == entry,
+                                            onDismissRequest = { folderActionTargetEntry = null }
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text("Open location") },
+                                                onClick = {
+                                                    onRecentFolderAction(entry, FolderEntryAction.OpenInBrowser)
+                                                    folderActionTargetEntry = null
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Delete from recents") },
+                                                onClick = {
+                                                    onRecentFolderAction(entry, FolderEntryAction.DeleteFromRecents)
+                                                    folderActionTargetEntry = null
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Pin folder to home") },
+                                                onClick = {
+                                                    requestPinRecentEntry(entry, true)
+                                                    folderActionTargetEntry = null
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Copy path") },
+                                                onClick = {
+                                                    onRecentFolderAction(entry, FolderEntryAction.CopyPath)
+                                                    folderActionTargetEntry = null
+                                                }
                                             )
                                         }
+                                    }
+                                    if (index < recentFolders.lastIndex) {
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(start = 64.dp, end = 14.dp),
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+                                        )
                                     }
                                 }
-                            }
-                            DropdownMenu(
-                                expanded = folderActionTargetEntry == entry,
-                                onDismissRequest = { folderActionTargetEntry = null }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Open location") },
-                                    onClick = {
-                                        onRecentFolderAction(entry, FolderEntryAction.OpenInBrowser)
-                                        folderActionTargetEntry = null
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Delete from recents") },
-                                    onClick = {
-                                        onRecentFolderAction(entry, FolderEntryAction.DeleteFromRecents)
-                                        folderActionTargetEntry = null
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Pin folder to home") },
-                                    onClick = {
-                                        requestPinRecentEntry(entry, true)
-                                        folderActionTargetEntry = null
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Copy path") },
-                                    onClick = {
-                                        onRecentFolderAction(entry, FolderEntryAction.CopyPath)
-                                        folderActionTargetEntry = null
-                                    }
-                                )
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
             }
         }
         if (renderedRecentPlayedFiles.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -898,203 +909,221 @@ internal fun HomeScreen(
                 }
             }
             Spacer(modifier = Modifier.height(4.dp))
-            renderedRecentPlayedFiles.forEachIndexed { index, entry ->
-                val itemKey = playedEntryKey(entry)
-                val isPendingPromotedCard = index == 0 && itemKey == promotedPlayedKey
-                val animationIdentity = if (isPendingPromotedCard) {
-                    "$itemKey#pending_promote"
-                } else {
-                    itemKey
-                }
-                key(animationIdentity) {
-                    AnimatedHomeIntroItem(
-                        itemKey = "home_intro_played_$animationIdentity",
-                        order = 3 + recentFolders.size + index,
-                        enabled = runHomeIntroAnimation
-                    ) {
-                        AnimatedRecentCardInsertion(
-                            itemKey = animationIdentity,
-                            animate = isPendingPromotedCard,
-                            initialExpandFraction = if (isPendingPromotedCard) {
-                                HOME_RECENTS_PROMOTE_INITIAL_EXPAND_FRACTION
-                            } else {
-                                0f
-                            }
-                        ) {
-                            val archiveSource = parseArchiveSourceId(entry.path)
-                            val trackFile = if (archiveSource != null) {
-                                File(archiveSource.entryPath)
-                            } else {
-                                val normalizedSourcePath = normalizeSourceIdentity(entry.path) ?: entry.path
-                                val parsedSource = Uri.parse(normalizedSourcePath)
-                                if (parsedSource.scheme.equals("file", ignoreCase = true)) {
-                                    File(parsedSource.path ?: normalizedSourcePath)
-                                } else if (!parsedSource.scheme.isNullOrBlank()) {
-                                    val decodedLeaf = sourceLeafNameForDisplay(normalizedSourcePath)
-                                        ?.trim()
-                                        ?.takeIf { it.isNotBlank() }
-                                    File(decodedLeaf ?: normalizedSourcePath)
-                                } else {
-                                    File(normalizedSourcePath)
-                                }
-                            }
-                            val storagePresentation = storagePresentationForEntry(entry)
-                            val extensionLabel =
-                                inferredPrimaryExtensionForName(trackFile.name)?.uppercase() ?: "UNKNOWN"
-                            val useLiveMetadata = index == 0 && samePath(currentTrackPath, entry.path)
-                            val liveTitle = currentTrackTitle.trim()
-                            val liveArtist = currentTrackArtist.trim()
-                            val liveMetadataReady = liveTitle.isNotBlank() || liveArtist.isNotBlank()
-                            LaunchedEffect(itemKey, useLiveMetadata, liveTitle, liveArtist) {
-                                if (useLiveMetadata && liveMetadataReady) {
-                                    recentLiveMetadataSnapshots[itemKey] = liveTitle to liveArtist
-                                }
-                            }
-                            var allowLiveMetadataSwap by remember(itemKey, useLiveMetadata) {
-                                mutableStateOf(!useLiveMetadata)
-                            }
-                            LaunchedEffect(itemKey, useLiveMetadata) {
-                                if (!useLiveMetadata) {
-                                    allowLiveMetadataSwap = true
-                                    return@LaunchedEffect
-                                }
-                                allowLiveMetadataSwap = false
-                                delay(HOME_RECENTS_INSERT_ANIM_DURATION_MS.toLong())
-                                allowLiveMetadataSwap = true
-                            }
-                            LaunchedEffect(
-                                itemKey,
-                                useLiveMetadata,
-                                allowLiveMetadataSwap,
-                                liveTitle,
-                                liveArtist,
-                                entry.path,
-                                entry.locationId
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = HomeCardShape
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    renderedRecentPlayedFiles.forEachIndexed { index, entry ->
+                        val itemKey = playedEntryKey(entry)
+                        val isPendingPromotedCard = index == 0 && itemKey == promotedPlayedKey
+                        val animationIdentity = if (isPendingPromotedCard) {
+                            "$itemKey#pending_promote"
+                        } else {
+                            itemKey
+                        }
+                        key(animationIdentity) {
+                            AnimatedHomeIntroItem(
+                                itemKey = "home_intro_played_$animationIdentity",
+                                order = 3 + recentFolders.size + index,
+                                enabled = runHomeIntroAnimation
                             ) {
-                                if (!useLiveMetadata || !allowLiveMetadataSwap || !liveMetadataReady) {
-                                    return@LaunchedEffect
-                                }
-                                val normalizedLiveTitle = liveTitle.trim()
-                                val normalizedLiveArtist = liveArtist.trim()
-                                val persistedSignature = normalizedLiveTitle to normalizedLiveArtist
-                                if (recentPersistedMetadataSnapshots[itemKey] == persistedSignature) {
-                                    return@LaunchedEffect
-                                }
-                                recentPersistedMetadataSnapshots[itemKey] = persistedSignature
-                                onPersistRecentFileMetadata(entry, normalizedLiveTitle, normalizedLiveArtist)
-                            }
-                            val targetDisplayMetadata = if (
-                                useLiveMetadata &&
-                                allowLiveMetadataSwap &&
-                                liveMetadataReady
-                            ) {
-                                liveTitle to liveArtist
-                            } else {
-                                recentLiveMetadataSnapshots[itemKey]
-                                    ?: (entry.title.orEmpty() to entry.artist.orEmpty())
-                            }
-                            val fallbackIcon = placeholderArtworkIconForFile(
-                                file = trackFile,
-                                decoderName = entry.decoderName,
-                                allowCurrentDecoderFallback = false
-                            )
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                ElevatedCard(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(HomeCardShape)
-                                        .combinedClickable(
-                                            onClick = {
-                                                activePlayedPromoteKey = null
-                                                requestedPlayedPromoteKey = itemKey
-                                                onPlayRecentFile(entry)
-                                            },
-                                            onLongClick = {
-                                                folderActionTargetEntry = null
-                                                fileActionTargetEntry = entry
-                                            }
-                                        ),
-                                    shape = HomeCardShape
+                                AnimatedRecentCardInsertion(
+                                    itemKey = animationIdentity,
+                                    animate = isPendingPromotedCard,
+                                    initialExpandFraction = if (isPendingPromotedCard) {
+                                        HOME_RECENTS_PROMOTE_INITIAL_EXPAND_FRACTION
+                                    } else {
+                                        0f
+                                    }
                                 ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        RecentTrackArtworkChip(
-                                            context = context,
-                                            artworkThumbnailCacheKey = entry.artworkThumbnailCacheKey,
-                                            fallbackIcon = fallbackIcon
-                                        )
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            RecentTrackSummaryText(
-                                                file = trackFile,
-                                                cachedTitle = targetDisplayMetadata.first,
-                                                cachedArtist = targetDisplayMetadata.second,
-                                                storagePresentation = storagePresentation,
-                                                extensionLabel = extensionLabel,
-                                                isArchiveSource = archiveSource != null
-                                            )
+                                    val archiveSource = parseArchiveSourceId(entry.path)
+                                    val trackFile = if (archiveSource != null) {
+                                        File(archiveSource.entryPath)
+                                    } else {
+                                        val normalizedSourcePath =
+                                            normalizeSourceIdentity(entry.path) ?: entry.path
+                                        val parsedSource = Uri.parse(normalizedSourcePath)
+                                        if (parsedSource.scheme.equals("file", ignoreCase = true)) {
+                                            File(parsedSource.path ?: normalizedSourcePath)
+                                        } else if (!parsedSource.scheme.isNullOrBlank()) {
+                                            val decodedLeaf = sourceLeafNameForDisplay(normalizedSourcePath)
+                                                ?.trim()
+                                                ?.takeIf { it.isNotBlank() }
+                                            File(decodedLeaf ?: normalizedSourcePath)
+                                        } else {
+                                            File(normalizedSourcePath)
                                         }
-                                        if (useLiveMetadata) {
-                                            Spacer(modifier = Modifier.width(12.dp))
-                                            Icon(
-                                                imageVector = Icons.Default.PlayArrow,
-                                                contentDescription = "Playing",
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(16.dp)
+                                    }
+                                    val storagePresentation = storagePresentationForEntry(entry)
+                                    val extensionLabel =
+                                        inferredPrimaryExtensionForName(trackFile.name)?.uppercase() ?: "UNKNOWN"
+                                    val useLiveMetadata = index == 0 && samePath(currentTrackPath, entry.path)
+                                    val liveTitle = currentTrackTitle.trim()
+                                    val liveArtist = currentTrackArtist.trim()
+                                    val liveMetadataReady = liveTitle.isNotBlank() || liveArtist.isNotBlank()
+                                    LaunchedEffect(itemKey, useLiveMetadata, liveTitle, liveArtist) {
+                                        if (useLiveMetadata && liveMetadataReady) {
+                                            recentLiveMetadataSnapshots[itemKey] = liveTitle to liveArtist
+                                        }
+                                    }
+                                    var allowLiveMetadataSwap by remember(itemKey, useLiveMetadata) {
+                                        mutableStateOf(!useLiveMetadata)
+                                    }
+                                    LaunchedEffect(itemKey, useLiveMetadata) {
+                                        if (!useLiveMetadata) {
+                                            allowLiveMetadataSwap = true
+                                            return@LaunchedEffect
+                                        }
+                                        allowLiveMetadataSwap = false
+                                        delay(HOME_RECENTS_INSERT_ANIM_DURATION_MS.toLong())
+                                        allowLiveMetadataSwap = true
+                                    }
+                                    LaunchedEffect(
+                                        itemKey,
+                                        useLiveMetadata,
+                                        allowLiveMetadataSwap,
+                                        liveTitle,
+                                        liveArtist,
+                                        entry.path,
+                                        entry.locationId
+                                    ) {
+                                        if (!useLiveMetadata || !allowLiveMetadataSwap || !liveMetadataReady) {
+                                            return@LaunchedEffect
+                                        }
+                                        val normalizedLiveTitle = liveTitle.trim()
+                                        val normalizedLiveArtist = liveArtist.trim()
+                                        val persistedSignature = normalizedLiveTitle to normalizedLiveArtist
+                                        if (recentPersistedMetadataSnapshots[itemKey] == persistedSignature) {
+                                            return@LaunchedEffect
+                                        }
+                                        recentPersistedMetadataSnapshots[itemKey] = persistedSignature
+                                        onPersistRecentFileMetadata(
+                                            entry,
+                                            normalizedLiveTitle,
+                                            normalizedLiveArtist
+                                        )
+                                    }
+                                    val targetDisplayMetadata = if (
+                                        useLiveMetadata &&
+                                        allowLiveMetadataSwap &&
+                                        liveMetadataReady
+                                    ) {
+                                        liveTitle to liveArtist
+                                    } else {
+                                        recentLiveMetadataSnapshots[itemKey]
+                                            ?: (entry.title.orEmpty() to entry.artist.orEmpty())
+                                    }
+                                    val fallbackIcon = placeholderArtworkIconForFile(
+                                        file = trackFile,
+                                        decoderName = entry.decoderName,
+                                        allowCurrentDecoderFallback = false
+                                    )
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Box(modifier = Modifier.fillMaxWidth()) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .combinedClickable(
+                                                        onClick = {
+                                                            activePlayedPromoteKey = null
+                                                            requestedPlayedPromoteKey = itemKey
+                                                            onPlayRecentFile(entry)
+                                                        },
+                                                        onLongClick = {
+                                                            folderActionTargetEntry = null
+                                                            fileActionTargetEntry = entry
+                                                        }
+                                                    )
+                                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                RecentTrackArtworkChip(
+                                                    context = context,
+                                                    artworkThumbnailCacheKey = entry.artworkThumbnailCacheKey,
+                                                    fallbackIcon = fallbackIcon
+                                                )
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    RecentTrackSummaryText(
+                                                        file = trackFile,
+                                                        cachedTitle = targetDisplayMetadata.first,
+                                                        cachedArtist = targetDisplayMetadata.second,
+                                                        storagePresentation = storagePresentation,
+                                                        extensionLabel = extensionLabel,
+                                                        isArchiveSource = archiveSource != null
+                                                    )
+                                                }
+                                                if (useLiveMetadata) {
+                                                    Spacer(modifier = Modifier.width(12.dp))
+                                                    Icon(
+                                                        imageVector = Icons.Default.PlayArrow,
+                                                        contentDescription = "Playing",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                            DropdownMenu(
+                                                expanded = fileActionTargetEntry == entry,
+                                                onDismissRequest = { fileActionTargetEntry = null }
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = { Text("Open location") },
+                                                    onClick = {
+                                                        onRecentFileAction(
+                                                            entry,
+                                                            SourceEntryAction.OpenInBrowser
+                                                        )
+                                                        fileActionTargetEntry = null
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Delete from recents") },
+                                                    onClick = {
+                                                        onRecentFileAction(
+                                                            entry,
+                                                            SourceEntryAction.DeleteFromRecents
+                                                        )
+                                                        fileActionTargetEntry = null
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Pin file to home") },
+                                                    onClick = {
+                                                        requestPinRecentEntry(entry, false)
+                                                        fileActionTargetEntry = null
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Share file") },
+                                                    onClick = {
+                                                        onRecentFileAction(entry, SourceEntryAction.ShareFile)
+                                                        fileActionTargetEntry = null
+                                                    },
+                                                    enabled = canShareRecentFile(entry)
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Copy URL/path") },
+                                                    onClick = {
+                                                        onRecentFileAction(entry, SourceEntryAction.CopySource)
+                                                        fileActionTargetEntry = null
+                                                    }
+                                                )
+                                            }
+                                        }
+                                        if (index < renderedRecentPlayedFiles.lastIndex) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(start = 64.dp, end = 14.dp),
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
                                             )
                                         }
                                     }
-                                }
-                                DropdownMenu(
-                                    expanded = fileActionTargetEntry == entry,
-                                    onDismissRequest = { fileActionTargetEntry = null }
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Open location") },
-                                        onClick = {
-                                            onRecentFileAction(entry, SourceEntryAction.OpenInBrowser)
-                                            fileActionTargetEntry = null
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Delete from recents") },
-                                        onClick = {
-                                            onRecentFileAction(entry, SourceEntryAction.DeleteFromRecents)
-                                            fileActionTargetEntry = null
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Pin file to home") },
-                                        onClick = {
-                                            requestPinRecentEntry(entry, false)
-                                            fileActionTargetEntry = null
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Share file") },
-                                        onClick = {
-                                            onRecentFileAction(entry, SourceEntryAction.ShareFile)
-                                            fileActionTargetEntry = null
-                                        },
-                                        enabled = canShareRecentFile(entry)
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text("Copy URL/path") },
-                                        onClick = {
-                                            onRecentFileAction(entry, SourceEntryAction.CopySource)
-                                            fileActionTargetEntry = null
-                                        }
-                                    )
                                 }
                             }
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }

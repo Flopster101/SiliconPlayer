@@ -73,6 +73,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
@@ -332,7 +333,7 @@ internal fun HomeScreen(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(96.dp)
+                    .height(108.dp)
             ) {
                 AnimatedHomeIntroItem(
                     itemKey = "home_intro_files_button",
@@ -343,14 +344,15 @@ internal fun HomeScreen(
                         modifier = Modifier.fillMaxSize(),
                         onClick = onOpenLibrary
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 10.dp, vertical = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
                             Surface(
-                                modifier = Modifier.size(38.dp),
+                                modifier = Modifier.size(34.dp),
                                 shape = MaterialTheme.shapes.medium,
                                 color = MaterialTheme.colorScheme.primaryContainer
                             ) {
@@ -361,20 +363,20 @@ internal fun HomeScreen(
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Files",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1
-                                )
-                                Text(
-                                    text = "Browse local folders",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1
-                                )
-                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Files",
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Browse local folders",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
@@ -382,7 +384,7 @@ internal fun HomeScreen(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(96.dp)
+                    .height(108.dp)
             ) {
                 AnimatedHomeIntroItem(
                     itemKey = "home_intro_url_button",
@@ -393,14 +395,15 @@ internal fun HomeScreen(
                         modifier = Modifier.fillMaxSize(),
                         onClick = onOpenUrlOrPath
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 10.dp, vertical = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
                             Surface(
-                                modifier = Modifier.size(38.dp),
+                                modifier = Modifier.size(34.dp),
                                 shape = MaterialTheme.shapes.medium,
                                 color = MaterialTheme.colorScheme.secondaryContainer
                             ) {
@@ -411,21 +414,21 @@ internal fun HomeScreen(
                                     )
                                 }
                             }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "URL or path",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    maxLines = 1
-                                )
-                                Text(
-                                    text = "Open links or direct paths",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "URL or path",
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = "Open links or direct paths",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
@@ -435,7 +438,7 @@ internal fun HomeScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(86.dp)
+                .height(100.dp)
         ) {
             AnimatedHomeIntroItem(
                 itemKey = "home_intro_network_button",
@@ -446,14 +449,15 @@ internal fun HomeScreen(
                     modifier = Modifier.fillMaxSize(),
                     onClick = onOpenNetwork
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Surface(
-                            modifier = Modifier.size(38.dp),
+                            modifier = Modifier.size(34.dp),
                             shape = MaterialTheme.shapes.medium,
                             color = MaterialTheme.colorScheme.tertiaryContainer
                         ) {
@@ -464,21 +468,21 @@ internal fun HomeScreen(
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Network sources",
-                                style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1
-                            )
-                            Text(
-                                text = "Open network shares and remote sources",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Network sources",
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "Open network shares and remote sources",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }

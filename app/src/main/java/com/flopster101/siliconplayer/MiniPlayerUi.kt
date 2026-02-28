@@ -294,36 +294,11 @@ internal fun MiniPlayerBar(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = onPreviousTrack,
-                        enabled = hasTrack && canPreviousTrack,
-                        modifier = Modifier
-                            .focusRequester(previousButtonFocusRequester)
-                            .onPreviewKeyEvent { keyEvent ->
-                                if (
-                                    keyEvent.type == KeyEventType.KeyDown &&
-                                    keyEvent.key == Key.DirectionLeft
-                                ) {
-                                    miniContainerFocusRequester.requestFocus()
-                                    true
-                                } else {
-                                    false
-                                }
-                            }
-                            .size(controlButtonSize)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipPrevious,
-                            contentDescription = "Previous track",
-                            modifier = Modifier.size(controlIconSize)
-                        )
-                    }
-                    IconButton(
                         onClick = onStopAndClear,
                         modifier = Modifier
                             .focusRequester(stopButtonFocusRequester)
                             .onPreviewKeyEvent { keyEvent ->
                                 if (
-                                    !canPreviousTrack &&
                                     keyEvent.type == KeyEventType.KeyDown &&
                                     keyEvent.key == Key.DirectionLeft
                                 ) {
@@ -338,6 +313,19 @@ internal fun MiniPlayerBar(
                         Icon(
                             imageVector = Icons.Default.Stop,
                             contentDescription = "Stop",
+                            modifier = Modifier.size(controlIconSize)
+                        )
+                    }
+                    IconButton(
+                        onClick = onPreviousTrack,
+                        enabled = hasTrack && canPreviousTrack,
+                        modifier = Modifier
+                            .focusRequester(previousButtonFocusRequester)
+                            .size(controlButtonSize)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SkipPrevious,
+                            contentDescription = "Previous track",
                             modifier = Modifier.size(controlIconSize)
                         )
                     }

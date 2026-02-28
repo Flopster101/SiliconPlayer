@@ -2256,154 +2256,88 @@ private fun TransportControls(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+                FilledTonalIconButton(
+                    onClick = onStopAndClear,
+                    modifier = Modifier
+                        .focusRequester(stopFocusRequester)
+                        .size(sideButtonSize)
+                        .focusProperties {
+                            left = firstAvailableRequester(
+                                canFocusRepeatMode to repeatModeFocusRequester,
+                                canFocusNextTrack to nextTrackFocusRequester,
+                                canFocusPlayPause to playPauseFocusRequester,
+                                canFocusPreviousTrack to previousTrackFocusRequester,
+                                canFocusStop to stopFocusRequester
+                            ) ?: stopFocusRequester
+                            right = firstAvailableRequester(
+                                canFocusPreviousTrack to previousTrackFocusRequester,
+                                canFocusPlayPause to playPauseFocusRequester,
+                                canFocusNextTrack to nextTrackFocusRequester,
+                                canFocusRepeatMode to repeatModeFocusRequester,
+                                canFocusStop to stopFocusRequester
+                            ) ?: stopFocusRequester
+                            down = firstAvailableRequester(
+                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
+                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
+                                canFocusNextSubtune to nextSubtuneFocusRequester,
+                                (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: stopFocusRequester)
+                            ) ?: stopFocusRequester
+                        }
+                        .playerFocusHalo()
+                        .focusable(),
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
                 ) {
-                    FilledTonalIconButton(
-                        onClick = onPreviousTrack,
-                        enabled = hasTrack && canPreviousTrack,
-                        modifier = Modifier
-                            .focusRequester(previousTrackFocusRequester)
-                            .size(sideButtonSize)
-                            .focusProperties {
-                                left = firstAvailableRequester(
-                                    canFocusNextTrack to nextTrackFocusRequester,
-                                    canFocusStop to stopFocusRequester,
-                                    canFocusPlayPause to playPauseFocusRequester,
-                                    canFocusRepeatMode to repeatModeFocusRequester,
-                                    canFocusPreviousTrack to previousTrackFocusRequester
-                                ) ?: previousTrackFocusRequester
-                                right = firstAvailableRequester(
-                                    canFocusRepeatMode to repeatModeFocusRequester,
-                                    canFocusPlayPause to playPauseFocusRequester,
-                                    canFocusStop to stopFocusRequester,
-                                    canFocusNextTrack to nextTrackFocusRequester,
-                                    canFocusPreviousTrack to previousTrackFocusRequester
-                                ) ?: previousTrackFocusRequester
-                                down = firstAvailableRequester(
-                                    canFocusPreviousSubtune to previousSubtuneFocusRequester,
-                                    canFocusSubtuneSelector to subtuneSelectorFocusRequester,
-                                    canFocusNextSubtune to nextSubtuneFocusRequester,
-                                    (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: previousTrackFocusRequester)
-                                ) ?: previousTrackFocusRequester
-                            }
-                            .playerFocusHalo(enabled = hasTrack && canPreviousTrack)
-                            .focusable(enabled = hasTrack && canPreviousTrack),
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipPrevious,
-                            contentDescription = "Previous track"
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(rowGap))
-
-                    FilledTonalIconButton(
-                        onClick = onCycleRepeatMode,
-                        enabled = canCycleRepeatMode && !controlsBusy,
-                        modifier = Modifier
-                            .focusRequester(repeatModeFocusRequester)
-                            .size(sideButtonSize)
-                            .focusProperties {
-                                left = firstAvailableRequester(
-                                    canFocusPreviousTrack to previousTrackFocusRequester,
-                                    canFocusNextTrack to nextTrackFocusRequester,
-                                    canFocusStop to stopFocusRequester,
-                                    canFocusPlayPause to playPauseFocusRequester,
-                                    canFocusRepeatMode to repeatModeFocusRequester
-                                ) ?: repeatModeFocusRequester
-                                right = firstAvailableRequester(
-                                    canFocusPlayPause to playPauseFocusRequester,
-                                    canFocusStop to stopFocusRequester,
-                                    canFocusNextTrack to nextTrackFocusRequester,
-                                    canFocusPreviousTrack to previousTrackFocusRequester,
-                                    canFocusRepeatMode to repeatModeFocusRequester
-                                ) ?: repeatModeFocusRequester
-                                down = firstAvailableRequester(
-                                    canFocusSubtuneSelector to subtuneSelectorFocusRequester,
-                                    canFocusPreviousSubtune to previousSubtuneFocusRequester,
-                                    canFocusNextSubtune to nextSubtuneFocusRequester,
-                                    (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: repeatModeFocusRequester)
-                                ) ?: repeatModeFocusRequester
-                            }
-                            .playerFocusHalo(enabled = canCycleRepeatMode && !controlsBusy)
-                            .focusable(enabled = canCycleRepeatMode && !controlsBusy),
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledTonalIconButtonColors(
-                            containerColor = if (repeatMode != RepeatMode.None) {
-                                MaterialTheme.colorScheme.secondaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant
-                            }
-                        )
-                    ) {
-                        val modeBadgeText = when (repeatMode) {
-                            RepeatMode.None -> ""
-                            RepeatMode.Track -> "1"
-                            RepeatMode.Subtune -> "ST"
-                            RepeatMode.Playlist -> ""
-                            RepeatMode.LoopPoint -> "LP"
+                    Icon(
+                        imageVector = Icons.Default.Stop,
+                        contentDescription = "Stop"
+                    )
+                }
+                Spacer(modifier = Modifier.width(rowGap))
+                FilledTonalIconButton(
+                    onClick = onPreviousTrack,
+                    enabled = hasTrack && canPreviousTrack,
+                    modifier = Modifier
+                        .focusRequester(previousTrackFocusRequester)
+                        .size(sideButtonSize)
+                        .focusProperties {
+                            left = firstAvailableRequester(
+                                canFocusStop to stopFocusRequester,
+                                canFocusRepeatMode to repeatModeFocusRequester,
+                                canFocusNextTrack to nextTrackFocusRequester,
+                                canFocusPlayPause to playPauseFocusRequester,
+                                canFocusPreviousTrack to previousTrackFocusRequester
+                            ) ?: previousTrackFocusRequester
+                            right = firstAvailableRequester(
+                                canFocusPlayPause to playPauseFocusRequester,
+                                canFocusNextTrack to nextTrackFocusRequester,
+                                canFocusRepeatMode to repeatModeFocusRequester,
+                                canFocusStop to stopFocusRequester,
+                                canFocusPreviousTrack to previousTrackFocusRequester
+                            ) ?: previousTrackFocusRequester
+                            down = firstAvailableRequester(
+                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
+                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
+                                canFocusNextSubtune to nextSubtuneFocusRequester,
+                                (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: previousTrackFocusRequester)
+                            ) ?: previousTrackFocusRequester
                         }
-                        val modeBadgeIcon = when (repeatMode) {
-                            RepeatMode.Playlist -> Icons.AutoMirrored.Filled.List
-                            else -> null
-                        }
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Loop,
-                                contentDescription = "Repeat mode: ${repeatMode.label}",
-                                modifier = Modifier.size(repeatIconSize)
-                            )
-                            if (modeBadgeText.isNotEmpty() || modeBadgeIcon != null) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    shape = RoundedCornerShape(percent = 50),
-                                    modifier = Modifier
-                                        .align(Alignment.Center)
-                                        .offset(
-                                            x = repeatBadgeCenterOffsetX,
-                                            y = repeatBadgeCenterOffsetY
-                                        )
-                                ) {
-                                    if (modeBadgeIcon != null) {
-                                        Icon(
-                                            imageVector = modeBadgeIcon,
-                                            contentDescription = null,
-                                            modifier = Modifier
-                                                .padding(
-                                                    horizontal = repeatBadgeHorizontalPadding,
-                                                    vertical = repeatBadgeVerticalPadding
-                                                )
-                                                .size(repeatBadgeTextSize.value.dp + 2.dp)
-                                        )
-                                    } else {
-                                        Text(
-                                            text = modeBadgeText,
-                                            fontSize = repeatBadgeTextSize,
-                                            lineHeight = repeatBadgeTextSize,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(
-                                                horizontal = repeatBadgeHorizontalPadding,
-                                                vertical = repeatBadgeVerticalPadding
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
+                        .playerFocusHalo(enabled = hasTrack && canPreviousTrack)
+                        .focusable(enabled = hasTrack && canPreviousTrack),
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SkipPrevious,
+                        contentDescription = "Previous track"
+                    )
                 }
                 Spacer(modifier = Modifier.width(rowGap))
 
@@ -2415,17 +2349,17 @@ private fun TransportControls(
                         .focusRequester(playPauseFocusRequester)
                         .focusProperties {
                             left = firstAvailableRequester(
-                                canFocusRepeatMode to repeatModeFocusRequester,
                                 canFocusPreviousTrack to previousTrackFocusRequester,
-                                canFocusNextTrack to nextTrackFocusRequester,
                                 canFocusStop to stopFocusRequester,
+                                canFocusRepeatMode to repeatModeFocusRequester,
+                                canFocusNextTrack to nextTrackFocusRequester,
                                 canFocusPlayPause to playPauseFocusRequester
                             ) ?: playPauseFocusRequester
                             right = firstAvailableRequester(
-                                canFocusStop to stopFocusRequester,
                                 canFocusNextTrack to nextTrackFocusRequester,
-                                canFocusPreviousTrack to previousTrackFocusRequester,
                                 canFocusRepeatMode to repeatModeFocusRequester,
+                                canFocusStop to stopFocusRequester,
+                                canFocusPreviousTrack to previousTrackFocusRequester,
                                 canFocusPlayPause to playPauseFocusRequester
                             ) ?: playPauseFocusRequester
                             down = firstAvailableRequester(
@@ -2465,122 +2399,175 @@ private fun TransportControls(
 
                 Spacer(modifier = Modifier.width(rowGap))
 
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.Start,
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier.size(sideButtonSize),
+                    contentAlignment = Alignment.Center
                 ) {
                     FilledTonalIconButton(
-                        onClick = onStopAndClear,
+                        onClick = onNextTrack,
+                        enabled = hasTrack && canNextTrack,
                         modifier = Modifier
-                            .focusRequester(stopFocusRequester)
-                            .size(sideButtonSize)
+                            .focusRequester(nextTrackFocusRequester)
+                            .matchParentSize()
                             .focusProperties {
                                 left = firstAvailableRequester(
                                     canFocusPlayPause to playPauseFocusRequester,
-                                    canFocusRepeatMode to repeatModeFocusRequester,
                                     canFocusPreviousTrack to previousTrackFocusRequester,
-                                    canFocusNextTrack to nextTrackFocusRequester,
-                                    canFocusStop to stopFocusRequester
-                                ) ?: stopFocusRequester
+                                    canFocusStop to stopFocusRequester,
+                                    canFocusRepeatMode to repeatModeFocusRequester,
+                                    canFocusNextTrack to nextTrackFocusRequester
+                                ) ?: nextTrackFocusRequester
                                 right = firstAvailableRequester(
-                                    canFocusNextTrack to nextTrackFocusRequester,
-                                    canFocusPreviousTrack to previousTrackFocusRequester,
                                     canFocusRepeatMode to repeatModeFocusRequester,
+                                    canFocusStop to stopFocusRequester,
+                                    canFocusPreviousTrack to previousTrackFocusRequester,
                                     canFocusPlayPause to playPauseFocusRequester,
-                                    canFocusStop to stopFocusRequester
-                                ) ?: stopFocusRequester
+                                    canFocusNextTrack to nextTrackFocusRequester
+                                ) ?: nextTrackFocusRequester
                                 down = firstAvailableRequester(
+                                    canFocusNextSubtune to nextSubtuneFocusRequester,
                                     canFocusSubtuneSelector to subtuneSelectorFocusRequester,
                                     canFocusPreviousSubtune to previousSubtuneFocusRequester,
-                                    canFocusNextSubtune to nextSubtuneFocusRequester,
-                                    (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: stopFocusRequester)
-                                ) ?: stopFocusRequester
+                                    (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: nextTrackFocusRequester)
+                                ) ?: nextTrackFocusRequester
                             }
-                            .playerFocusHalo()
-                            .focusable(),
+                            .playerFocusHalo(enabled = hasTrack && canNextTrack)
+                            .focusable(enabled = hasTrack && canNextTrack),
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Stop,
-                            contentDescription = "Stop"
+                            imageVector = Icons.Default.SkipNext,
+                            contentDescription = "Next track"
                         )
                     }
-
-                    Spacer(modifier = Modifier.width(rowGap))
-
-                    Box(
-                        modifier = Modifier.size(sideButtonSize),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        FilledTonalIconButton(
-                            onClick = onNextTrack,
-                            enabled = hasTrack && canNextTrack,
-                            modifier = Modifier
-                                .focusRequester(nextTrackFocusRequester)
-                                .matchParentSize()
-                                .focusProperties {
-                                    left = firstAvailableRequester(
-                                        canFocusStop to stopFocusRequester,
-                                        canFocusPlayPause to playPauseFocusRequester,
-                                        canFocusRepeatMode to repeatModeFocusRequester,
-                                        canFocusPreviousTrack to previousTrackFocusRequester,
-                                        canFocusNextTrack to nextTrackFocusRequester
-                                    ) ?: nextTrackFocusRequester
-                                    right = firstAvailableRequester(
-                                        canFocusPreviousTrack to previousTrackFocusRequester,
-                                        canFocusRepeatMode to repeatModeFocusRequester,
-                                        canFocusPlayPause to playPauseFocusRequester,
-                                        canFocusStop to stopFocusRequester,
-                                        canFocusNextTrack to nextTrackFocusRequester
-                                    ) ?: nextTrackFocusRequester
-                                    down = firstAvailableRequester(
-                                        canFocusNextSubtune to nextSubtuneFocusRequester,
-                                        canFocusSubtuneSelector to subtuneSelectorFocusRequester,
-                                        canFocusPreviousSubtune to previousSubtuneFocusRequester,
-                                        (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: nextTrackFocusRequester)
-                                    ) ?: nextTrackFocusRequester
-                                }
-                                .playerFocusHalo(enabled = hasTrack && canNextTrack)
-                                .focusable(enabled = hasTrack && canNextTrack),
-                            shape = CircleShape,
-                            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    if (remotePreloadUiState != null) {
+                        val preloadPercent = remotePreloadUiState.percent
+                            ?.takeIf { it in 0..100 }
+                            ?.div(100f)
+                        val preloadDeterminate =
+                            remotePreloadUiState.phase != RemoteLoadPhase.Connecting &&
+                                remotePreloadUiState.indeterminate != true &&
+                                preloadPercent != null
+                        if (preloadDeterminate) {
+                            CircularProgressIndicator(
+                                progress = { preloadPercent ?: 0f },
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .offset(y = 16.dp)
+                                    .size(12.dp),
+                                strokeWidth = 1.5.dp
                             )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.SkipNext,
-                                contentDescription = "Next track"
+                        } else {
+                            CircularProgressIndicator(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .offset(y = 16.dp)
+                                    .size(12.dp),
+                                strokeWidth = 1.5.dp
                             )
                         }
-                        if (remotePreloadUiState != null) {
-                            val preloadPercent = remotePreloadUiState.percent
-                                ?.takeIf { it in 0..100 }
-                                ?.div(100f)
-                            val preloadDeterminate =
-                                remotePreloadUiState.phase != RemoteLoadPhase.Connecting &&
-                                    remotePreloadUiState.indeterminate != true &&
-                                    preloadPercent != null
-                            if (preloadDeterminate) {
-                                CircularProgressIndicator(
-                                    progress = { preloadPercent ?: 0f },
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .offset(y = 16.dp)
-                                        .size(12.dp),
-                                    strokeWidth = 1.5.dp
-                                )
-                            } else {
-                                CircularProgressIndicator(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .offset(y = 16.dp)
-                                        .size(12.dp),
-                                    strokeWidth = 1.5.dp
-                                )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(rowGap))
+
+                FilledTonalIconButton(
+                    onClick = onCycleRepeatMode,
+                    enabled = canCycleRepeatMode && !controlsBusy,
+                    modifier = Modifier
+                        .focusRequester(repeatModeFocusRequester)
+                        .size(sideButtonSize)
+                        .focusProperties {
+                            left = firstAvailableRequester(
+                                canFocusNextTrack to nextTrackFocusRequester,
+                                canFocusPlayPause to playPauseFocusRequester,
+                                canFocusPreviousTrack to previousTrackFocusRequester,
+                                canFocusStop to stopFocusRequester,
+                                canFocusRepeatMode to repeatModeFocusRequester
+                            ) ?: repeatModeFocusRequester
+                            right = firstAvailableRequester(
+                                canFocusStop to stopFocusRequester,
+                                canFocusPreviousTrack to previousTrackFocusRequester,
+                                canFocusPlayPause to playPauseFocusRequester,
+                                canFocusNextTrack to nextTrackFocusRequester,
+                                canFocusRepeatMode to repeatModeFocusRequester
+                            ) ?: repeatModeFocusRequester
+                            down = firstAvailableRequester(
+                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
+                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
+                                canFocusNextSubtune to nextSubtuneFocusRequester,
+                                (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: repeatModeFocusRequester)
+                            ) ?: repeatModeFocusRequester
+                        }
+                        .playerFocusHalo(enabled = canCycleRepeatMode && !controlsBusy)
+                        .focusable(enabled = canCycleRepeatMode && !controlsBusy),
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = if (repeatMode != RepeatMode.None) {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        }
+                    )
+                ) {
+                    val modeBadgeText = when (repeatMode) {
+                        RepeatMode.None -> ""
+                        RepeatMode.Track -> "1"
+                        RepeatMode.Subtune -> "ST"
+                        RepeatMode.Playlist -> ""
+                        RepeatMode.LoopPoint -> "LP"
+                    }
+                    val modeBadgeIcon = when (repeatMode) {
+                        RepeatMode.Playlist -> Icons.AutoMirrored.Filled.List
+                        else -> null
+                    }
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Loop,
+                            contentDescription = "Repeat mode: ${repeatMode.label}",
+                            modifier = Modifier.size(repeatIconSize)
+                        )
+                        if (modeBadgeText.isNotEmpty() || modeBadgeIcon != null) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                shape = RoundedCornerShape(percent = 50),
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .offset(
+                                        x = repeatBadgeCenterOffsetX,
+                                        y = repeatBadgeCenterOffsetY
+                                    )
+                            ) {
+                                if (modeBadgeIcon != null) {
+                                    Icon(
+                                        imageVector = modeBadgeIcon,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .padding(
+                                                horizontal = repeatBadgeHorizontalPadding,
+                                                vertical = repeatBadgeVerticalPadding
+                                            )
+                                            .size(repeatBadgeTextSize.value.dp + 2.dp)
+                                    )
+                                } else {
+                                    Text(
+                                        text = modeBadgeText,
+                                        fontSize = repeatBadgeTextSize,
+                                        lineHeight = repeatBadgeTextSize,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(
+                                            horizontal = repeatBadgeHorizontalPadding,
+                                            vertical = repeatBadgeVerticalPadding
+                                        )
+                                    )
+                                }
                             }
                         }
                     }

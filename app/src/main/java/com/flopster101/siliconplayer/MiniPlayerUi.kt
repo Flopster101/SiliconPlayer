@@ -11,7 +11,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -58,6 +60,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.io.File
@@ -125,13 +128,21 @@ internal fun MiniPlayerBar(
     positionSeconds: Double,
     durationSeconds: Double,
     hasReliableDuration: Boolean,
+    previousRestartsAfterThreshold: Boolean,
     canPreviousTrack: Boolean,
     canNextTrack: Boolean,
+    canPreviousSubtune: Boolean,
+    canNextSubtune: Boolean,
+    currentSubtuneIndex: Int,
+    subtuneCount: Int,
     onExpand: () -> Unit,
     onExpandDragProgress: (Float) -> Unit,
     onExpandDragCommit: () -> Unit,
     onPreviousTrack: () -> Unit,
+    onForcePreviousTrack: () -> Unit,
     onNextTrack: () -> Unit,
+    onPreviousSubtune: () -> Unit,
+    onNextSubtune: () -> Unit,
     onPlayPause: () -> Unit,
     onStopAndClear: () -> Unit,
     miniContainerFocusRequester: FocusRequester,
@@ -168,6 +179,20 @@ internal fun MiniPlayerBar(
     val artworkCornerRatio = artworkCornerRadiusDp.coerceIn(0, 48) / 48f
     val miniArtworkSize = 46.dp
     val artworkCornerRadius = miniArtworkSize * (0.5f * artworkCornerRatio)
+    val useSubtuneTransport = subtuneCount > 1
+    val hasSubtuneBefore = useSubtuneTransport && currentSubtuneIndex > 0 && canPreviousSubtune
+    val hasSubtuneAfter = useSubtuneTransport && currentSubtuneIndex < (subtuneCount - 1) && canNextSubtune
+    val restartCurrentBeforePrevious = useSubtuneTransport && shouldRestartCurrentTrackOnPrevious(
+        previousRestartsAfterThreshold = previousRestartsAfterThreshold,
+        hasTrackLoaded = hasTrack,
+        positionSeconds = positionSeconds
+    )
+    val previousTransportTapAction: () -> Unit = when {
+        restartCurrentBeforePrevious -> onPreviousTrack
+        hasSubtuneBefore -> onPreviousSubtune
+        else -> onPreviousTrack
+    }
+    val nextTransportTapAction: () -> Unit = if (hasSubtuneAfter) onNextSubtune else onNextTrack
 
     Surface(
         modifier = modifier,
@@ -317,17 +342,29 @@ internal fun MiniPlayerBar(
                         )
                     }
                     IconButton(
-                        onClick = onPreviousTrack,
+                        onClick = previousTransportTapAction,
                         enabled = hasTrack && canPreviousTrack,
                         modifier = Modifier
                             .focusRequester(previousButtonFocusRequester)
                             .size(controlButtonSize)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipPrevious,
-                            contentDescription = "Previous track",
-                            modifier = Modifier.size(controlIconSize)
-                        )
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SkipPrevious,
+                                contentDescription = "Previous track",
+                                modifier = Modifier.size(controlIconSize)
+                            )
+                            if (useSubtuneTransport) {
+                                MiniPlayerLongPressTransportOverlay(
+                                    enabled = hasTrack && canPreviousTrack,
+                                    onClick = previousTransportTapAction,
+                                    onLongClick = onForcePreviousTrack
+                                )
+                            }
+                        }
                     }
                     IconButton(
                         onClick = onPlayPause,
@@ -360,17 +397,29 @@ internal fun MiniPlayerBar(
                         }
                     }
                     IconButton(
-                        onClick = onNextTrack,
+                        onClick = nextTransportTapAction,
                         enabled = hasTrack && canNextTrack,
                         modifier = Modifier
                             .focusRequester(nextButtonFocusRequester)
                             .size(controlButtonSize)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipNext,
-                            contentDescription = "Next track",
-                            modifier = Modifier.size(controlIconSize)
-                        )
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SkipNext,
+                                contentDescription = "Next track",
+                                modifier = Modifier.size(controlIconSize)
+                            )
+                            if (useSubtuneTransport) {
+                                MiniPlayerLongPressTransportOverlay(
+                                    enabled = hasTrack && canNextTrack,
+                                    onClick = nextTransportTapAction,
+                                    onLongClick = onNextTrack
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -421,6 +470,25 @@ internal fun MiniPlayerBar(
             }
         }
     }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BoxScope.MiniPlayerLongPressTransportOverlay(
+    enabled: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .clip(CircleShape)
+            .combinedClickable(
+                enabled = enabled,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+    )
 }
 
 private fun miniRemoteLoadProgressLabel(remoteLoadUiState: RemoteLoadUiState?): String {

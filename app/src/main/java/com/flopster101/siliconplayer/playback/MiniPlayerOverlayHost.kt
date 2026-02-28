@@ -107,12 +107,20 @@ internal fun BoxScope.MiniPlayerOverlayHost(
     canResumeStoppedTrack: Boolean,
     onHidePlayerSurface: () -> Unit,
     onPreviousTrack: () -> Boolean,
+    onForcePreviousTrack: () -> Boolean,
     onNextTrack: () -> Boolean,
     onPlayPause: () -> Unit,
     onStopAndClear: () -> Unit,
     onOpenAudioEffects: () -> Unit,
     canPreviousTrack: Boolean,
-    canNextTrack: Boolean
+    canNextTrack: Boolean,
+    previousRestartsAfterThreshold: Boolean,
+    onPreviousSubtune: () -> Unit,
+    onNextSubtune: () -> Unit,
+    canPreviousSubtune: Boolean,
+    canNextSubtune: Boolean,
+    currentSubtuneIndex: Int,
+    subtuneCount: Int
 ) {
     val uiScope = rememberCoroutineScope()
 
@@ -160,6 +168,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                     seekInProgress = seekUiBusy,
                     onSeek = {},
                     onPreviousTrack = {},
+                    onForcePreviousTrack = {},
                     onNextTrack = {},
                     onPreviousSubtune = {},
                     onNextSubtune = {},
@@ -295,8 +304,13 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 positionSeconds = positionSeconds,
                 durationSeconds = durationSeconds,
                 hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
+                previousRestartsAfterThreshold = previousRestartsAfterThreshold,
                 canPreviousTrack = canPreviousTrack,
                 canNextTrack = canNextTrack,
+                canPreviousSubtune = canPreviousSubtune,
+                canNextSubtune = canNextSubtune,
+                currentSubtuneIndex = currentSubtuneIndex,
+                subtuneCount = subtuneCount,
                 onExpand = {
                     onMiniPlayerExpandRequested()
                     onCollapseFromSwipeChanged(false)
@@ -324,7 +338,10 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                     }
                 },
                 onPreviousTrack = { onPreviousTrack(); Unit },
+                onForcePreviousTrack = { onForcePreviousTrack(); Unit },
                 onNextTrack = { onNextTrack(); Unit },
+                onPreviousSubtune = onPreviousSubtune,
+                onNextSubtune = onNextSubtune,
                 onPlayPause = onPlayPause,
                 onStopAndClear = onStopAndClear,
                 miniContainerFocusRequester = miniPlayerFocusRequester,

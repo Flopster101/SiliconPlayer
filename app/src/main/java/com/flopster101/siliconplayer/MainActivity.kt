@@ -1831,6 +1831,7 @@ private fun AppNavigation(
             canResumeStoppedTrack = canResumeStoppedTrack,
             onHidePlayerSurface = { hidePlayerSurface() },
             onPreviousTrack = { trackNavDelegates.handlePreviousTrackAction() },
+            onForcePreviousTrack = { trackNavDelegates.playAdjacentTrack(-1) },
             onNextTrack = { trackNavDelegates.playAdjacentTrack(1) },
             onPlayPause = {
                 if (selectedFile == null) {
@@ -1855,6 +1856,7 @@ private fun AppNavigation(
             },
             canPreviousTrack = selectedFile != null,
             canNextTrack = selectedFile != null,
+            previousRestartsAfterThreshold = previousRestartsAfterThreshold,
             onSeek = { seconds ->
                 if (!seekInProgress) {
                     val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath

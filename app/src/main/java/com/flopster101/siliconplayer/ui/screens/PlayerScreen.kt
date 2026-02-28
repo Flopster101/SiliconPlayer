@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -123,6 +124,7 @@ import com.flopster101.siliconplayer.RemoteLoadUiStateHolder
 import com.flopster101.siliconplayer.RemotePreloadUiStateHolder
 import com.flopster101.siliconplayer.rememberDialogScrollbarAlpha
 import com.flopster101.siliconplayer.sanitizeRemoteCachedMetadataTitle
+import com.flopster101.siliconplayer.shouldRestartCurrentTrackOnPrevious
 import com.flopster101.siliconplayer.stripRemoteCacheHashPrefix
 import com.flopster101.siliconplayer.ui.dialogs.VisualizationModePickerDialog
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
@@ -589,8 +591,10 @@ internal fun PlayerScreen(
     hasReliableDuration: Boolean,
     playbackStartInProgress: Boolean = false,
     seekInProgress: Boolean = false,
+    previousRestartsAfterThreshold: Boolean = true,
     onSeek: (Double) -> Unit,
     onPreviousTrack: () -> Unit,
+    onForcePreviousTrack: () -> Unit,
     onNextTrack: () -> Unit,
     onPreviousSubtune: () -> Unit,
     onNextSubtune: () -> Unit,
@@ -936,6 +940,7 @@ internal fun PlayerScreen(
                                     centerSupportingMetadata = isLandscape,
                                     currentSubtuneIndex = currentSubtuneIndex,
                                     subtuneCount = subtuneCount,
+                                    onOpenSubtuneSelector = onOpenSubtuneSelector,
                                     layoutScale = landscapeLayoutScale
                                 )
                                 Spacer(modifier = Modifier.height(metadataSpacer))
@@ -978,6 +983,9 @@ internal fun PlayerScreen(
                                     playbackStartInProgress = playbackStartInProgress,
                                     remoteLoadUiState = remoteLoadUiState,
                                     seekInProgress = seekInProgress,
+                                    positionSeconds = positionSeconds,
+                                    previousRestartsAfterThreshold = previousRestartsAfterThreshold,
+                                    onRestartCurrentSelection = { onSeek(0.0) },
                                     canPreviousTrack = canPreviousTrack,
                                     canNextTrack = canNextTrack,
                                     canCycleRepeatMode = canCycleRepeatMode,
@@ -989,10 +997,13 @@ internal fun PlayerScreen(
                                         }
                                     },
                                     onPreviousTrack = onPreviousTrack,
+                                    onForcePreviousTrack = onForcePreviousTrack,
                                     onNextTrack = onNextTrack,
                                     onPreviousSubtune = onPreviousSubtune,
                                     onNextSubtune = onNextSubtune,
                                     onOpenSubtuneSelector = onOpenSubtuneSelector,
+                                    currentSubtuneIndex = currentSubtuneIndex,
+                                    subtuneCount = subtuneCount,
                                     canPreviousSubtune = canPreviousSubtune,
                                     canNextSubtune = canNextSubtune,
                                     canOpenSubtuneSelector = canOpenSubtuneSelector,
@@ -1218,6 +1229,7 @@ internal fun PlayerScreen(
                                         filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
                                         currentSubtuneIndex = currentSubtuneIndex,
                                         subtuneCount = subtuneCount,
+                                        onOpenSubtuneSelector = onOpenSubtuneSelector,
                                         layoutScale = portraitLayoutScale
                                     )
                                     Spacer(modifier = Modifier.height(metadataSpacer))
@@ -1253,6 +1265,9 @@ internal fun PlayerScreen(
                                         playbackStartInProgress = playbackStartInProgress,
                                         remoteLoadUiState = remoteLoadUiState,
                                         seekInProgress = seekInProgress,
+                                        positionSeconds = positionSeconds,
+                                        previousRestartsAfterThreshold = previousRestartsAfterThreshold,
+                                        onRestartCurrentSelection = { onSeek(0.0) },
                                         canPreviousTrack = canPreviousTrack,
                                         canNextTrack = canNextTrack,
                                         canCycleRepeatMode = canCycleRepeatMode,
@@ -1264,10 +1279,13 @@ internal fun PlayerScreen(
                                             }
                                         },
                                         onPreviousTrack = onPreviousTrack,
+                                        onForcePreviousTrack = onForcePreviousTrack,
                                         onNextTrack = onNextTrack,
                                         onPreviousSubtune = onPreviousSubtune,
                                         onNextSubtune = onNextSubtune,
                                         onOpenSubtuneSelector = onOpenSubtuneSelector,
+                                        currentSubtuneIndex = currentSubtuneIndex,
+                                        subtuneCount = subtuneCount,
                                         canPreviousSubtune = canPreviousSubtune,
                                         canNextSubtune = canNextSubtune,
                                         canOpenSubtuneSelector = canOpenSubtuneSelector,
@@ -1985,6 +2003,7 @@ private fun TrackMetadataBlock(
     centerSupportingMetadata: Boolean = false,
     currentSubtuneIndex: Int = 0,
     subtuneCount: Int = 0,
+    onOpenSubtuneSelector: () -> Unit = {},
     layoutScale: Float = 1f
 ) {
     val titleTextStyle = MaterialTheme.typography.headlineSmall.copy(
@@ -2029,6 +2048,32 @@ private fun TrackMetadataBlock(
             null
         }
     }
+    val subtuneTitleClickable = subtuneCount > 1
+    val subtuneTitleFlashAlpha = remember { Animatable(0f) }
+    var lastFlashedSubtuneSong by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(filename, subtuneTitleClickable) {
+        if (!subtuneTitleClickable) {
+            lastFlashedSubtuneSong = null
+            subtuneTitleFlashAlpha.snapTo(0f)
+            return@LaunchedEffect
+        }
+        if (filename == lastFlashedSubtuneSong) return@LaunchedEffect
+        lastFlashedSubtuneSong = filename
+        subtuneTitleFlashAlpha.snapTo(0f)
+        repeat(2) {
+            subtuneTitleFlashAlpha.animateTo(
+                targetValue = 0.18f,
+                animationSpec = tween(durationMillis = 280)
+            )
+            subtuneTitleFlashAlpha.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = 340)
+            )
+            if (it == 0) {
+                delay(140)
+            }
+        }
+    }
 
     AnimatedContent(
         targetState = title to subtuneBadge,
@@ -2062,25 +2107,43 @@ private fun TrackMetadataBlock(
             }
         } else {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = animatedTitle,
-                    style = titleTextStyle,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-                if (animatedSubtuneBadge != null) {
-                    Spacer(modifier = Modifier.width(6.dp))
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = subtuneTitleFlashAlpha.value)
+                        )
+                        .then(
+                            if (subtuneTitleClickable) {
+                                Modifier.clickable(onClick = onOpenSubtuneSelector)
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = animatedSubtuneBadge,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                        maxLines = 1
+                        text = animatedTitle,
+                        style = titleTextStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
                     )
+                    if (animatedSubtuneBadge != null) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = animatedSubtuneBadge,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
@@ -2152,6 +2215,7 @@ private fun TrackMetadataBlock(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun TransportControls(
     hasTrack: Boolean,
     isPlaying: Boolean,
@@ -2160,15 +2224,21 @@ private fun TransportControls(
     playbackStartInProgress: Boolean,
     remoteLoadUiState: RemoteLoadUiState?,
     seekInProgress: Boolean,
+    positionSeconds: Double,
+    previousRestartsAfterThreshold: Boolean,
+    onRestartCurrentSelection: () -> Unit,
     canPreviousTrack: Boolean,
     canNextTrack: Boolean,
     canCycleRepeatMode: Boolean,
     onPlayPause: () -> Unit,
     onPreviousTrack: () -> Unit,
+    onForcePreviousTrack: () -> Unit,
     onNextTrack: () -> Unit,
     onPreviousSubtune: () -> Unit,
     onNextSubtune: () -> Unit,
     onOpenSubtuneSelector: () -> Unit,
+    currentSubtuneIndex: Int,
+    subtuneCount: Int,
     canPreviousSubtune: Boolean,
     canNextSubtune: Boolean,
     canOpenSubtuneSelector: Boolean,
@@ -2182,23 +2252,33 @@ private fun TransportControls(
     val remotePreloadUiState = RemotePreloadUiStateHolder.current
     val showLoadingIndicator = playbackStartInProgress || remoteLoadActive
     val controlsBusy = seekInProgress || playbackStartInProgress
-    val canFocusPreviousTrack = hasTrack && canPreviousTrack
+    val useSubtuneTransport = subtuneCount > 1
+    val hasSubtuneBefore = useSubtuneTransport && currentSubtuneIndex > 0 && canPreviousSubtune
+    val hasSubtuneAfter = useSubtuneTransport && currentSubtuneIndex < (subtuneCount - 1) && canNextSubtune
+    val restartCurrentBeforePrevious = useSubtuneTransport && shouldRestartCurrentTrackOnPrevious(
+        previousRestartsAfterThreshold = previousRestartsAfterThreshold,
+        hasTrackLoaded = hasTrack,
+        positionSeconds = positionSeconds
+    )
+    val previousTransportTapAction = when {
+        restartCurrentBeforePrevious -> onRestartCurrentSelection
+        hasSubtuneBefore -> onPreviousSubtune
+        else -> onPreviousTrack
+    }
+    val nextTransportTapAction = if (hasSubtuneAfter) onNextSubtune else onNextTrack
+    val previousTransportEnabled = if (useSubtuneTransport) hasTrack else hasTrack && canPreviousTrack
+    val nextTransportEnabled = if (useSubtuneTransport) hasTrack else hasTrack && canNextTrack
+    val canFocusPreviousTrack = previousTransportEnabled
     val canFocusRepeatMode = canCycleRepeatMode && !controlsBusy
     val canFocusPlayPause = (hasTrack || canResumeStoppedTrack) && !controlsBusy
     val canFocusStop = true
-    val canFocusNextTrack = hasTrack && canNextTrack
-    val canFocusPreviousSubtune = canPreviousSubtune
-    val canFocusSubtuneSelector = canOpenSubtuneSelector
-    val canFocusNextSubtune = canNextSubtune
+    val canFocusNextTrack = nextTransportEnabled
 
     val previousTrackFocusRequester = remember { FocusRequester() }
     val repeatModeFocusRequester = remember { FocusRequester() }
     val playPauseFocusRequester = transportAnchorFocusRequester ?: remember { FocusRequester() }
     val stopFocusRequester = remember { FocusRequester() }
     val nextTrackFocusRequester = remember { FocusRequester() }
-    val previousSubtuneFocusRequester = remember { FocusRequester() }
-    val subtuneSelectorFocusRequester = remember { FocusRequester() }
-    val nextSubtuneFocusRequester = remember { FocusRequester() }
     var initialTransportFocusAssigned by remember { mutableStateOf(false) }
     fun firstAvailableRequester(vararg options: Pair<Boolean, FocusRequester>): FocusRequester? {
         return options.firstOrNull { it.first }?.second
@@ -2236,7 +2316,6 @@ private fun TransportControls(
         val subtuneButtonSize = scaledDp(sideButtonSize, 1.03f).coerceIn(44.dp, subtuneButtonMax)
         val occupiedWidth = (sideButtonSize.value * 4f + playButtonSize.value).dp
         val rowGap = ((maxWidth - occupiedWidth).coerceAtLeast(0.dp) / 4f).coerceIn(6.dp, lerpDp(14.dp, 22.dp, tabletWidthScale))
-        val subtuneGap = (rowGap * 0.75f).coerceIn(6.dp, lerpDp(11.dp, 16.dp, tabletWidthScale))
         val repeatIconSize = scaledDp(sideButtonSize, 0.42f).coerceIn(18.dp, lerpDp(24.dp, 30.dp, tabletWidthScale))
         val repeatBadgeCenterOffsetX = scaledDp(sideButtonSize, 0.20f)
         val repeatBadgeCenterOffsetY = scaledDp(sideButtonSize, -0.17f)
@@ -2280,9 +2359,6 @@ private fun TransportControls(
                                 canFocusStop to stopFocusRequester
                             ) ?: stopFocusRequester
                             down = firstAvailableRequester(
-                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
-                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
-                                canFocusNextSubtune to nextSubtuneFocusRequester,
                                 (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: stopFocusRequester)
                             ) ?: stopFocusRequester
                         }
@@ -2299,45 +2375,67 @@ private fun TransportControls(
                     )
                 }
                 Spacer(modifier = Modifier.width(rowGap))
-                FilledTonalIconButton(
-                    onClick = onPreviousTrack,
-                    enabled = hasTrack && canPreviousTrack,
-                    modifier = Modifier
-                        .focusRequester(previousTrackFocusRequester)
-                        .size(sideButtonSize)
-                        .focusProperties {
-                            left = firstAvailableRequester(
-                                canFocusStop to stopFocusRequester,
-                                canFocusRepeatMode to repeatModeFocusRequester,
-                                canFocusNextTrack to nextTrackFocusRequester,
-                                canFocusPlayPause to playPauseFocusRequester,
-                                canFocusPreviousTrack to previousTrackFocusRequester
-                            ) ?: previousTrackFocusRequester
-                            right = firstAvailableRequester(
-                                canFocusPlayPause to playPauseFocusRequester,
-                                canFocusNextTrack to nextTrackFocusRequester,
-                                canFocusRepeatMode to repeatModeFocusRequester,
-                                canFocusStop to stopFocusRequester,
-                                canFocusPreviousTrack to previousTrackFocusRequester
-                            ) ?: previousTrackFocusRequester
-                            down = firstAvailableRequester(
-                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
-                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
-                                canFocusNextSubtune to nextSubtuneFocusRequester,
-                                (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: previousTrackFocusRequester)
-                            ) ?: previousTrackFocusRequester
-                        }
-                        .playerFocusHalo(enabled = hasTrack && canPreviousTrack)
-                        .focusable(enabled = hasTrack && canPreviousTrack),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
+                Box(
+                    modifier = Modifier.size(sideButtonSize),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.SkipPrevious,
-                        contentDescription = "Previous track"
-                    )
+                    FilledTonalIconButton(
+                        onClick = previousTransportTapAction,
+                        enabled = previousTransportEnabled,
+                        modifier = Modifier
+                            .focusRequester(previousTrackFocusRequester)
+                            .matchParentSize()
+                            .focusProperties {
+                                left = firstAvailableRequester(
+                                    canFocusStop to stopFocusRequester,
+                                    canFocusRepeatMode to repeatModeFocusRequester,
+                                    canFocusNextTrack to nextTrackFocusRequester,
+                                    canFocusPlayPause to playPauseFocusRequester,
+                                    canFocusPreviousTrack to previousTrackFocusRequester
+                                ) ?: previousTrackFocusRequester
+                                right = firstAvailableRequester(
+                                    canFocusPlayPause to playPauseFocusRequester,
+                                    canFocusNextTrack to nextTrackFocusRequester,
+                                    canFocusRepeatMode to repeatModeFocusRequester,
+                                    canFocusStop to stopFocusRequester,
+                                    canFocusPreviousTrack to previousTrackFocusRequester
+                                ) ?: previousTrackFocusRequester
+                                down = firstAvailableRequester(
+                                    (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: previousTrackFocusRequester)
+                                ) ?: previousTrackFocusRequester
+                            }
+                            .playerFocusHalo(enabled = previousTransportEnabled)
+                            .focusable(enabled = previousTransportEnabled),
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledTonalIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Icon(
+                            imageVector = if (useSubtuneTransport) {
+                                Icons.Default.KeyboardDoubleArrowLeft
+                            } else {
+                                Icons.Default.SkipPrevious
+                            },
+                            contentDescription = if (useSubtuneTransport) {
+                                "Previous subtune"
+                            } else {
+                                "Previous track"
+                            }
+                        )
+                    }
+                    if (useSubtuneTransport) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clip(CircleShape)
+                                .combinedClickable(
+                                    enabled = previousTransportEnabled,
+                                    onClick = previousTransportTapAction,
+                                    onLongClick = onForcePreviousTrack
+                                )
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.width(rowGap))
 
@@ -2363,9 +2461,6 @@ private fun TransportControls(
                                 canFocusPlayPause to playPauseFocusRequester
                             ) ?: playPauseFocusRequester
                             down = firstAvailableRequester(
-                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
-                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
-                                canFocusNextSubtune to nextSubtuneFocusRequester,
                                 (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: playPauseFocusRequester)
                             ) ?: playPauseFocusRequester
                         }
@@ -2404,8 +2499,8 @@ private fun TransportControls(
                     contentAlignment = Alignment.Center
                 ) {
                     FilledTonalIconButton(
-                        onClick = onNextTrack,
-                        enabled = hasTrack && canNextTrack,
+                        onClick = nextTransportTapAction,
+                        enabled = nextTransportEnabled,
                         modifier = Modifier
                             .focusRequester(nextTrackFocusRequester)
                             .matchParentSize()
@@ -2425,22 +2520,39 @@ private fun TransportControls(
                                     canFocusNextTrack to nextTrackFocusRequester
                                 ) ?: nextTrackFocusRequester
                                 down = firstAvailableRequester(
-                                    canFocusNextSubtune to nextSubtuneFocusRequester,
-                                    canFocusSubtuneSelector to subtuneSelectorFocusRequester,
-                                    canFocusPreviousSubtune to previousSubtuneFocusRequester,
                                     (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: nextTrackFocusRequester)
                                 ) ?: nextTrackFocusRequester
                             }
-                            .playerFocusHalo(enabled = hasTrack && canNextTrack)
-                            .focusable(enabled = hasTrack && canNextTrack),
+                            .playerFocusHalo(enabled = nextTransportEnabled)
+                            .focusable(enabled = nextTransportEnabled),
                         shape = CircleShape,
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     ) {
                         Icon(
-                            imageVector = Icons.Default.SkipNext,
-                            contentDescription = "Next track"
+                            imageVector = if (useSubtuneTransport) {
+                                Icons.Default.KeyboardDoubleArrowRight
+                            } else {
+                                Icons.Default.SkipNext
+                            },
+                            contentDescription = if (useSubtuneTransport) {
+                                "Next subtune"
+                            } else {
+                                "Next track"
+                            }
+                        )
+                    }
+                    if (useSubtuneTransport) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clip(CircleShape)
+                                .combinedClickable(
+                                    enabled = nextTransportEnabled,
+                                    onClick = nextTransportTapAction,
+                                    onLongClick = onNextTrack
+                                )
                         )
                     }
                     if (remotePreloadUiState != null) {
@@ -2496,9 +2608,6 @@ private fun TransportControls(
                                 canFocusRepeatMode to repeatModeFocusRequester
                             ) ?: repeatModeFocusRequester
                             down = firstAvailableRequester(
-                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
-                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
-                                canFocusNextSubtune to nextSubtuneFocusRequester,
                                 (actionStripFirstFocusRequester != null) to (actionStripFirstFocusRequester ?: repeatModeFocusRequester)
                             ) ?: repeatModeFocusRequester
                         }
@@ -2583,135 +2692,6 @@ private fun TransportControls(
                 )
             }
 
-            Spacer(modifier = Modifier.height(subtuneRowTopSpacer))
-
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                FilledTonalIconButton(
-                    onClick = onPreviousSubtune,
-                    enabled = canPreviousSubtune,
-                    modifier = Modifier
-                        .focusRequester(previousSubtuneFocusRequester)
-                        .size(subtuneButtonSize)
-                        .focusProperties {
-                            left = firstAvailableRequester(
-                                canFocusNextSubtune to nextSubtuneFocusRequester,
-                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
-                                canFocusPreviousSubtune to previousSubtuneFocusRequester
-                            ) ?: previousSubtuneFocusRequester
-                            right = firstAvailableRequester(
-                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
-                                canFocusNextSubtune to nextSubtuneFocusRequester,
-                                canFocusPreviousSubtune to previousSubtuneFocusRequester
-                            ) ?: previousSubtuneFocusRequester
-                            up = firstAvailableRequester(
-                                canFocusPreviousTrack to previousTrackFocusRequester,
-                                canFocusRepeatMode to repeatModeFocusRequester,
-                                canFocusPlayPause to playPauseFocusRequester,
-                                canFocusStop to stopFocusRequester,
-                                canFocusNextTrack to nextTrackFocusRequester
-                            ) ?: previousSubtuneFocusRequester
-                            if (actionStripFirstFocusRequester != null) {
-                                down = actionStripFirstFocusRequester
-                            }
-                        }
-                        .playerFocusHalo(enabled = canPreviousSubtune)
-                        .focusable(enabled = canPreviousSubtune),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardDoubleArrowLeft,
-                        contentDescription = "Previous subtune"
-                    )
-                }
-                Spacer(modifier = Modifier.width(subtuneGap))
-                FilledTonalIconButton(
-                    onClick = onOpenSubtuneSelector,
-                    enabled = canOpenSubtuneSelector,
-                    modifier = Modifier
-                        .focusRequester(subtuneSelectorFocusRequester)
-                        .size(subtuneButtonSize)
-                        .focusProperties {
-                            left = firstAvailableRequester(
-                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
-                                canFocusNextSubtune to nextSubtuneFocusRequester,
-                                canFocusSubtuneSelector to subtuneSelectorFocusRequester
-                            ) ?: subtuneSelectorFocusRequester
-                            right = firstAvailableRequester(
-                                canFocusNextSubtune to nextSubtuneFocusRequester,
-                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
-                                canFocusSubtuneSelector to subtuneSelectorFocusRequester
-                            ) ?: subtuneSelectorFocusRequester
-                            up = firstAvailableRequester(
-                                canFocusPlayPause to playPauseFocusRequester,
-                                canFocusRepeatMode to repeatModeFocusRequester,
-                                canFocusStop to stopFocusRequester,
-                                canFocusPreviousTrack to previousTrackFocusRequester,
-                                canFocusNextTrack to nextTrackFocusRequester
-                            ) ?: subtuneSelectorFocusRequester
-                            if (actionStripFirstFocusRequester != null) {
-                                down = actionStripFirstFocusRequester
-                            }
-                        }
-                        .playerFocusHalo(enabled = canOpenSubtuneSelector)
-                        .focusable(enabled = canOpenSubtuneSelector),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.List,
-                        contentDescription = "Subtune selector"
-                    )
-                }
-                Spacer(modifier = Modifier.width(subtuneGap))
-                FilledTonalIconButton(
-                    onClick = onNextSubtune,
-                    enabled = canNextSubtune,
-                    modifier = Modifier
-                        .focusRequester(nextSubtuneFocusRequester)
-                        .size(subtuneButtonSize)
-                        .focusProperties {
-                            left = firstAvailableRequester(
-                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
-                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
-                                canFocusNextSubtune to nextSubtuneFocusRequester
-                            ) ?: nextSubtuneFocusRequester
-                            right = firstAvailableRequester(
-                                canFocusPreviousSubtune to previousSubtuneFocusRequester,
-                                canFocusSubtuneSelector to subtuneSelectorFocusRequester,
-                                canFocusNextSubtune to nextSubtuneFocusRequester
-                            ) ?: nextSubtuneFocusRequester
-                            up = firstAvailableRequester(
-                                canFocusNextTrack to nextTrackFocusRequester,
-                                canFocusStop to stopFocusRequester,
-                                canFocusPlayPause to playPauseFocusRequester,
-                                canFocusRepeatMode to repeatModeFocusRequester,
-                                canFocusPreviousTrack to previousTrackFocusRequester
-                            ) ?: nextSubtuneFocusRequester
-                            if (actionStripFirstFocusRequester != null) {
-                                down = actionStripFirstFocusRequester
-                            }
-                        }
-                        .playerFocusHalo(enabled = canNextSubtune)
-                        .focusable(enabled = canNextSubtune),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardDoubleArrowRight,
-                        contentDescription = "Next subtune"
-                    )
-                }
-            }
         }
     }
 }
@@ -2857,6 +2837,20 @@ private fun FutureActionStrip(
                         contentDescription = "Open current core settings",
                         modifier = Modifier.size(coreSettingsIconSize)
                     )
+                }
+                Surface(
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.size(iconButtonSize)
+                ) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.List,
+                            contentDescription = "Subtune list placeholder",
+                            modifier = Modifier.size(genericIconSize),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                        )
+                    }
                 }
                 IconButton(
                     onClick = onOpenAudioEffects,

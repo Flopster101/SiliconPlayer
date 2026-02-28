@@ -14,7 +14,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -69,6 +72,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -99,6 +103,16 @@ private const val HOME_INTRO_ANIM_DURATION_MS = 240
 private data class RecentAnimationState(
     val insertedKeys: Set<String>,
     val promotedTopKey: String?
+)
+
+private data class HomeQuickActionSpec(
+    val itemKey: String,
+    val order: Int,
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val containerColor: androidx.compose.ui.graphics.Color,
+    val onClick: () -> Unit
 )
 
 internal data class RecentTrackDisplay(
@@ -326,163 +340,87 @@ internal fun HomeScreen(
             .padding(horizontal = 20.dp, vertical = 16.dp)
             .padding(bottom = bottomContentPadding)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(108.dp)
-            ) {
-                AnimatedHomeIntroItem(
-                    itemKey = "home_intro_files_button",
-                    order = 0,
-                    enabled = runHomeIntroAnimation
-                ) {
-                    ElevatedCard(
-                        modifier = Modifier.fillMaxSize(),
-                        onClick = onOpenLibrary
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 10.dp, vertical = 10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Surface(
-                                modifier = Modifier.size(34.dp),
-                                shape = MaterialTheme.shapes.medium,
-                                color = MaterialTheme.colorScheme.primaryContainer
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Folder,
-                                        contentDescription = null
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Files",
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
-                                textAlign = TextAlign.Center
-                            )
-                            Text(
-                                text = "Browse local folders",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                }
-            }
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(108.dp)
-            ) {
-                AnimatedHomeIntroItem(
-                    itemKey = "home_intro_url_button",
-                    order = 1,
-                    enabled = runHomeIntroAnimation
-                ) {
-                    ElevatedCard(
-                        modifier = Modifier.fillMaxSize(),
-                        onClick = onOpenUrlOrPath
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 10.dp, vertical = 10.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Surface(
-                                modifier = Modifier.size(34.dp),
-                                shape = MaterialTheme.shapes.medium,
-                                color = MaterialTheme.colorScheme.secondaryContainer
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Link,
-                                        contentDescription = null
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "URL or path",
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
-                                textAlign = TextAlign.Center
-                            )
-                            Text(
-                                text = "Open links or direct paths",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(10.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(100.dp)
-        ) {
-            AnimatedHomeIntroItem(
+        val quickActions = listOf(
+            HomeQuickActionSpec(
+                itemKey = "home_intro_files_button",
+                order = 0,
+                title = "Files",
+                subtitle = "Browse local folders",
+                icon = Icons.Default.Folder,
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                onClick = onOpenLibrary
+            ),
+            HomeQuickActionSpec(
+                itemKey = "home_intro_url_button",
+                order = 1,
+                title = "URL or path",
+                subtitle = "Open links or direct paths",
+                icon = Icons.Default.Link,
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                onClick = onOpenUrlOrPath
+            ),
+            HomeQuickActionSpec(
                 itemKey = "home_intro_network_button",
                 order = 2,
-                enabled = runHomeIntroAnimation
+                title = "Network sources",
+                subtitle = "Open network shares and remote sources",
+                icon = Icons.Default.Public,
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                onClick = onOpenNetwork
+            )
+        )
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val maxColumns = if (maxWidth >= 600.dp) 4 else 2
+            val quickActionRows = remember(quickActions, maxColumns) {
+                quickActions.chunked(maxColumns)
+            }
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                ElevatedCard(
-                    modifier = Modifier.fillMaxSize(),
-                    onClick = onOpenNetwork
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Surface(
-                            modifier = Modifier.size(34.dp),
-                            shape = MaterialTheme.shapes.medium,
-                            color = MaterialTheme.colorScheme.tertiaryContainer
+                quickActionRows.forEach { rowItems ->
+                    val shouldSpanFullRow = maxColumns == 2 && rowItems.size == 1
+                    if (shouldSpanFullRow) {
+                        val action = rowItems.single()
+                        AnimatedHomeIntroItem(
+                            itemKey = action.itemKey,
+                            order = action.order,
+                            enabled = runHomeIntroAnimation
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Public,
-                                    contentDescription = null
-                                )
+                            HomeQuickActionCard(
+                                title = action.title,
+                                subtitle = action.subtitle,
+                                icon = action.icon,
+                                containerColor = action.containerColor,
+                                onClick = action.onClick
+                            )
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            rowItems.forEach { action ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    AnimatedHomeIntroItem(
+                                        itemKey = action.itemKey,
+                                        order = action.order,
+                                        enabled = runHomeIntroAnimation
+                                    ) {
+                                        HomeQuickActionCard(
+                                            title = action.title,
+                                            subtitle = action.subtitle,
+                                            icon = action.icon,
+                                            containerColor = action.containerColor,
+                                            onClick = action.onClick
+                                        )
+                                    }
+                                }
+                            }
+                            repeat(maxColumns - rowItems.size) {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Network sources",
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = "Open network shares and remote sources",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center
-                        )
                     }
                 }
             }
@@ -1256,6 +1194,65 @@ private fun resolvedRecentFolderTitle(entry: RecentPathEntry): String {
         return if (isRoot) title else fallback
     }
     return fallback
+}
+
+@Composable
+private fun HomeQuickActionCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    containerColor: androidx.compose.ui.graphics.Color,
+    onClick: () -> Unit
+) {
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 108.dp),
+        onClick = onClick
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset(y = 5.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Surface(
+                    modifier = Modifier.size(34.dp),
+                    shape = MaterialTheme.shapes.medium,
+                    color = containerColor
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
 }
 
 @Composable

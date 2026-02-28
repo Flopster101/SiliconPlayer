@@ -345,7 +345,7 @@ internal fun HomeScreen(
                 itemKey = "home_intro_files_button",
                 order = 0,
                 title = "Files",
-                subtitle = "Browse local folders",
+                subtitle = "Browse local storage",
                 icon = Icons.Default.Folder,
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 onClick = onOpenLibrary

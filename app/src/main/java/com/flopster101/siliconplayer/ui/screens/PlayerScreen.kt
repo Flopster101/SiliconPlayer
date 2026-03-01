@@ -7,8 +7,11 @@ import com.flopster101.siliconplayer.NativeBridge
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -701,10 +704,37 @@ internal fun PlayerScreen(
         if (file != null) inferredDisplayTitleForName(file.name) else "No track loaded"
     }
     val displayArtist = artist.ifBlank { if (hasTrack) "Unknown Artist" else "Unknown" }
-    val displayAlbum = if (hasTrack) {
+    val rawAlbum = if (hasTrack) {
         NativeBridge.getTrackAlbum().trim()
     } else {
         ""
+    }
+    var displayAlbum by remember { mutableStateOf("") }
+    var lastAlbumTrackKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(file?.absolutePath, rawAlbum, hasTrack) {
+        val trackKey = file?.absolutePath
+        if (!hasTrack || trackKey == null) {
+            lastAlbumTrackKey = null
+            displayAlbum = ""
+            return@LaunchedEffect
+        }
+        val trackChanged = trackKey != lastAlbumTrackKey
+        lastAlbumTrackKey = trackKey
+        when {
+            rawAlbum.isNotBlank() -> {
+                displayAlbum = rawAlbum
+            }
+            trackChanged && displayAlbum.isNotBlank() -> {
+                displayAlbum = "Unknown album"
+                delay(420)
+                if (lastAlbumTrackKey == trackKey && NativeBridge.getTrackAlbum().trim().isBlank()) {
+                    displayAlbum = ""
+                }
+            }
+            else -> {
+                displayAlbum = ""
+            }
+        }
     }
     val displayFilename = file?.let { toDisplayFilename(it) }.orEmpty()
     val fileSizeBytes = file?.length() ?: 0L
@@ -2162,7 +2192,9 @@ private fun PortraitTrackMetadataBlock(
         }
     }
     Column(
-        modifier = modifier,
+        modifier = modifier.animateContentSize(
+            animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing)
+        ),
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.Top
     ) {
@@ -2182,13 +2214,22 @@ private fun PortraitTrackMetadataBlock(
                         .padding(horizontal = 6.dp, vertical = 3.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = title,
-                        style = titleTextStyle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Start
-                    )
+                    AnimatedContent(
+                        targetState = title,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 35)) togetherWith
+                                fadeOut(animationSpec = tween(durationMillis = 120))
+                        },
+                        label = "portraitSubtuneTrackTitleSwap"
+                    ) { animatedTitle ->
+                        Text(
+                            text = animatedTitle,
+                            style = titleTextStyle,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Start
+                        )
+                    }
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = subtuneBadge ?: "",
@@ -2203,31 +2244,37 @@ private fun PortraitTrackMetadataBlock(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.CenterStart
             ) {
-                Text(
-                    text = title,
-                    style = titleTextStyle,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Start,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                AnimatedContent(
+                    targetState = title,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 35)) togetherWith
+                            fadeOut(animationSpec = tween(durationMillis = 120))
+                    },
+                    label = "portraitTrackTitleSwap"
+                ) { animatedTitle ->
+                    Text(
+                        text = animatedTitle,
+                        style = titleTextStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.height(lerpDp(2.dp, 5.dp, layoutScale)))
-        Text(
-            text = artist,
-            style = artistTextStyle,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Start,
-            modifier = Modifier.fillMaxWidth()
-        )
-        if (album.isNotBlank()) {
-            Spacer(modifier = Modifier.height(lerpDp(2.dp, 4.dp, layoutScale)))
+        AnimatedContent(
+            targetState = artist,
+            transitionSpec = {
+                fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 25)) togetherWith
+                    fadeOut(animationSpec = tween(durationMillis = 110))
+            },
+            label = "portraitTrackArtistSwap"
+        ) { animatedArtist ->
             Text(
-                text = album,
-                style = albumTextStyle,
+                text = animatedArtist,
+                style = artistTextStyle,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -2235,68 +2282,143 @@ private fun PortraitTrackMetadataBlock(
                 modifier = Modifier.fillMaxWidth()
             )
         }
-        if (shouldShowFilename) {
-            Spacer(
-                modifier = Modifier.height(
-                    if (album.isNotBlank()) {
-                        lerpDp(2.dp, 5.dp, layoutScale)
-                    } else {
-                        lerpDp(2.dp, 4.dp, layoutScale)
-                    }
-                )
+        AnimatedVisibility(
+            visible = album.isNotBlank(),
+            enter = fadeIn(animationSpec = tween(durationMillis = 180)) + expandVertically(
+                animationSpec = tween(durationMillis = 220),
+                expandFrom = Alignment.Top
+            ),
+            exit = fadeOut(animationSpec = tween(durationMillis = 120)) + shrinkVertically(
+                animationSpec = tween(durationMillis = 220),
+                shrinkTowards = Alignment.Top
             )
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clipToBounds()
-            ) {
-                val textMeasurer = rememberTextMeasurer()
-                val density = LocalDensity.current
-                val maxWidthPx = with(density) { maxWidth.roundToPx().coerceAtLeast(1) }
-                val shouldMarqueeFilename = remember(filename, filenameTextStyle, maxWidthPx) {
-                    textMeasurer.measure(
-                        text = AnnotatedString(filename),
-                        style = filenameTextStyle,
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(lerpDp(2.dp, 4.dp, layoutScale)))
+                AnimatedContent(
+                    targetState = album,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 25)) togetherWith
+                            fadeOut(animationSpec = tween(durationMillis = 110))
+                    },
+                    label = "portraitTrackAlbumSwap"
+                ) { animatedAlbum ->
+                    Text(
+                        text = animatedAlbum,
+                        style = albumTextStyle,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Clip,
-                        constraints = Constraints(maxWidth = maxWidthPx)
-                    ).hasVisualOverflow
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
-                Text(
-                    text = filename,
-                    style = filenameTextStyle,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = if (shouldMarqueeFilename) TextOverflow.Clip else TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Start,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(
-                            if (shouldMarqueeFilename) {
-                                Modifier.basicMarquee(
-                                    iterations = 3,
-                                    initialDelayMillis = 550
-                                )
-                            } else {
-                                Modifier
-                            }
-                        )
-                )
             }
         }
-        if (!technicalSummary.isNullOrBlank()) {
-            Spacer(modifier = Modifier.height(lerpDp(3.dp, 7.dp, layoutScale)))
-            Text(
-                text = technicalSummary,
-                style = technicalSummaryTextStyle,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Start,
-                modifier = Modifier.fillMaxWidth()
+        AnimatedVisibility(
+            visible = shouldShowFilename,
+            enter = fadeIn(animationSpec = tween(durationMillis = 180)) + expandVertically(
+                animationSpec = tween(durationMillis = 220),
+                expandFrom = Alignment.Top
+            ),
+            exit = fadeOut(animationSpec = tween(durationMillis = 120)) + shrinkVertically(
+                animationSpec = tween(durationMillis = 220),
+                shrinkTowards = Alignment.Top
             )
+        ) {
+            Column {
+                Spacer(
+                    modifier = Modifier.height(
+                        if (album.isNotBlank()) {
+                            lerpDp(2.dp, 5.dp, layoutScale)
+                        } else {
+                            lerpDp(2.dp, 4.dp, layoutScale)
+                        }
+                    )
+                )
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clipToBounds()
+                ) {
+                    val textMeasurer = rememberTextMeasurer()
+                    val density = LocalDensity.current
+                    val maxWidthPx = with(density) { maxWidth.roundToPx().coerceAtLeast(1) }
+                    val shouldMarqueeFilename = remember(filename, filenameTextStyle, maxWidthPx) {
+                        textMeasurer.measure(
+                            text = AnnotatedString(filename),
+                            style = filenameTextStyle,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip,
+                            constraints = Constraints(maxWidth = maxWidthPx)
+                        ).hasVisualOverflow
+                    }
+                    AnimatedContent(
+                        targetState = filename,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 20)) togetherWith
+                                fadeOut(animationSpec = tween(durationMillis = 110))
+                        },
+                        label = "portraitTrackFilenameSwap"
+                    ) { animatedFilename ->
+                        Text(
+                            text = animatedFilename,
+                            style = filenameTextStyle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = if (shouldMarqueeFilename) TextOverflow.Clip else TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(
+                                    if (shouldMarqueeFilename) {
+                                        Modifier.basicMarquee(
+                                            iterations = 3,
+                                            initialDelayMillis = 550
+                                        )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        )
+                    }
+                }
+            }
+        }
+        AnimatedVisibility(
+            visible = !technicalSummary.isNullOrBlank(),
+            enter = fadeIn(animationSpec = tween(durationMillis = 180)) + expandVertically(
+                animationSpec = tween(durationMillis = 220),
+                expandFrom = Alignment.Top
+            ),
+            exit = fadeOut(animationSpec = tween(durationMillis = 120)) + shrinkVertically(
+                animationSpec = tween(durationMillis = 220),
+                shrinkTowards = Alignment.Top
+            )
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(lerpDp(3.dp, 7.dp, layoutScale)))
+                AnimatedContent(
+                    targetState = technicalSummary.orEmpty(),
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 20)) togetherWith
+                            fadeOut(animationSpec = tween(durationMillis = 110))
+                    },
+                    label = "portraitTrackTechnicalSummarySwap"
+                ) { animatedTechnicalSummary ->
+                    Text(
+                        text = animatedTechnicalSummary,
+                        style = technicalSummaryTextStyle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
         }
     }
 }
@@ -2390,141 +2512,157 @@ private fun TrackMetadataBlock(
         }
     }
 
-    AnimatedContent(
-        targetState = title to subtuneBadge,
-        transitionSpec = {
-            fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 40)) togetherWith
-                fadeOut(animationSpec = tween(durationMillis = 120))
-        },
-        label = "trackTitleSwap"
-    ) { (animatedTitle, animatedSubtuneBadge) ->
-        val shouldMarquee = animatedTitle.length > 30
-        if (shouldMarquee && animatedSubtuneBadge == null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clipToBounds()
-            ) {
-                Text(
-                    text = animatedTitle,
-                    style = titleTextStyle,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Clip,
-                    textAlign = TextAlign.Start,
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(
+                animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing)
+            ),
+        horizontalAlignment = if (centerSupportingMetadata) Alignment.CenterHorizontally else Alignment.Start,
+        verticalArrangement = Arrangement.Top
+    ) {
+        AnimatedContent(
+            targetState = title to subtuneBadge,
+            transitionSpec = {
+                fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 40)) togetherWith
+                    fadeOut(animationSpec = tween(durationMillis = 120))
+            },
+            label = "trackTitleSwap"
+        ) { (animatedTitle, animatedSubtuneBadge) ->
+            val shouldMarquee = animatedTitle.length > 30
+            if (shouldMarquee && animatedSubtuneBadge == null) {
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .basicMarquee(
-                            iterations = 3,
-                            initialDelayMillis = 450
-                        )
-                )
-            }
-        } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            MaterialTheme.colorScheme.primary.copy(alpha = subtuneTitleFlashAlpha.value)
-                        )
-                        .then(
-                            if (subtuneTitleClickable) {
-                                Modifier.clickable(onClick = onOpenSubtuneSelector)
-                            } else {
-                                Modifier
-                            }
-                        )
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .clipToBounds()
                 ) {
                     Text(
                         text = animatedTitle,
                         style = titleTextStyle,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center
+                        softWrap = false,
+                        overflow = TextOverflow.Clip,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .basicMarquee(
+                                iterations = 3,
+                                initialDelayMillis = 450
+                            )
                     )
-                    if (animatedSubtuneBadge != null) {
-                        Spacer(modifier = Modifier.width(4.dp))
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = subtuneTitleFlashAlpha.value)
+                            )
+                            .then(
+                                if (subtuneTitleClickable) {
+                                    Modifier.clickable(onClick = onOpenSubtuneSelector)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = animatedSubtuneBadge,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                            maxLines = 1
+                            text = animatedTitle,
+                            style = titleTextStyle,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
                         )
+                        if (animatedSubtuneBadge != null) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = animatedSubtuneBadge,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }
         }
-    }
-    Spacer(modifier = Modifier.height(titleArtistSpacer))
-    AnimatedContent(
-        targetState = artist,
-        transitionSpec = {
-            fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 30)) togetherWith
-                fadeOut(animationSpec = tween(durationMillis = 110))
-        },
-        label = "trackArtistSwap"
-    ) { animatedArtist ->
-        Text(
-            text = animatedArtist,
-            style = artistTextStyle,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
-    if (showFilename && shouldShowFilename) {
-        Spacer(modifier = Modifier.height(artistFilenameSpacer))
-        val filenameTextStyle = MaterialTheme.typography.bodySmall
-        val filenameColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f)
-        val textMeasurer = rememberTextMeasurer()
-        val density = LocalDensity.current
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clipToBounds()
-        ) {
-            val maxWidthPx = with(density) { maxWidth.roundToPx().coerceAtLeast(1) }
-            val shouldMarqueeFilename = remember(filename, filenameTextStyle, maxWidthPx) {
-                textMeasurer.measure(
-                    text = AnnotatedString(filename),
-                    style = filenameTextStyle,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Clip,
-                    constraints = Constraints(maxWidth = maxWidthPx)
-                ).hasVisualOverflow
-            }
+        Spacer(modifier = Modifier.height(titleArtistSpacer))
+        AnimatedContent(
+            targetState = artist,
+            transitionSpec = {
+                fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 30)) togetherWith
+                    fadeOut(animationSpec = tween(durationMillis = 110))
+            },
+            label = "trackArtistSwap"
+        ) { animatedArtist ->
             Text(
-                text = filename,
-                style = filenameTextStyle,
-                color = filenameColor,
+                text = animatedArtist,
+                style = artistTextStyle,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
-                softWrap = false,
-                overflow = if (shouldMarqueeFilename) TextOverflow.Clip else TextOverflow.Ellipsis,
-                textAlign = if (shouldMarqueeFilename) TextAlign.Start else TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(
-                        if (shouldMarqueeFilename) {
-                            Modifier.basicMarquee(
-                                iterations = 3,
-                                initialDelayMillis = 550
-                            )
-                        } else {
-                            Modifier
-                        }
-                    )
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
             )
+        }
+        AnimatedVisibility(
+            visible = showFilename && shouldShowFilename,
+            enter = fadeIn(animationSpec = tween(durationMillis = 180)),
+            exit = fadeOut(animationSpec = tween(durationMillis = 120))
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(artistFilenameSpacer))
+                val filenameTextStyle = MaterialTheme.typography.bodySmall
+                val filenameColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f)
+                val textMeasurer = rememberTextMeasurer()
+                val density = LocalDensity.current
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clipToBounds()
+                ) {
+                    val maxWidthPx = with(density) { maxWidth.roundToPx().coerceAtLeast(1) }
+                    val shouldMarqueeFilename = remember(filename, filenameTextStyle, maxWidthPx) {
+                        textMeasurer.measure(
+                            text = AnnotatedString(filename),
+                            style = filenameTextStyle,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip,
+                            constraints = Constraints(maxWidth = maxWidthPx)
+                        ).hasVisualOverflow
+                    }
+                    Text(
+                        text = filename,
+                        style = filenameTextStyle,
+                        color = filenameColor,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = if (shouldMarqueeFilename) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        textAlign = if (shouldMarqueeFilename) TextAlign.Start else TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (shouldMarqueeFilename) {
+                                    Modifier.basicMarquee(
+                                        iterations = 3,
+                                        initialDelayMillis = 550
+                                    )
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    )
+                }
+            }
         }
     }
 }
@@ -2692,7 +2830,11 @@ private fun TransportControls(
         val playIconSize = scaledDp(playButtonSize, 0.42f).coerceIn(30.dp, lerpDp(40.dp, 50.dp, tabletWidthScale))
 
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(
+                    animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing)
+                ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
@@ -3063,13 +3205,37 @@ private fun TransportControls(
                 }
             }
 
-            if (showLoadingIndicator) {
-                Spacer(modifier = Modifier.height(loadingSpacer))
-                Text(
-                    text = remoteLoadProgressLabel(remoteLoadUiState),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
+            AnimatedVisibility(
+                visible = showLoadingIndicator,
+                enter = fadeIn(animationSpec = tween(durationMillis = 180)) + expandVertically(
+                    animationSpec = tween(durationMillis = 220),
+                    expandFrom = Alignment.Top
+                ),
+                exit = fadeOut(animationSpec = tween(durationMillis = 120)) + shrinkVertically(
+                    animationSpec = tween(durationMillis = 220),
+                    shrinkTowards = Alignment.Top
                 )
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Top
+                ) {
+                    Spacer(modifier = Modifier.height(loadingSpacer))
+                    AnimatedContent(
+                        targetState = remoteLoadProgressLabel(remoteLoadUiState),
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 20)) togetherWith
+                                fadeOut(animationSpec = tween(durationMillis = 110))
+                        },
+                        label = "playerLoadingStatusSwap"
+                    ) { loadingLabel ->
+                        Text(
+                            text = loadingLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
 
         }

@@ -80,6 +80,12 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
+private data class AlbumArtCrossfadeState(
+    val trackKey: String?,
+    val artwork: ImageBitmap?,
+    val placeholderIcon: ImageVector
+)
+
 private class VisualizationDebugAccumulator {
     var frameCount: Int = 0
     var windowStartNs: Long = 0L
@@ -1587,7 +1593,15 @@ internal fun AlbumArtPlaceholder(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (useScopeArtworkBackground) {
-                Crossfade(targetState = artwork, label = "albumArtCrossfade") { art ->
+                val albumArtCrossfadeState = remember(file?.absolutePath, artwork, placeholderIcon) {
+                    AlbumArtCrossfadeState(
+                        trackKey = file?.absolutePath,
+                        artwork = artwork,
+                        placeholderIcon = placeholderIcon
+                    )
+                }
+                Crossfade(targetState = albumArtCrossfadeState, label = "albumArtCrossfade") { state ->
+                    val art = state.artwork
                     if (art != null) {
                         Box(
                             modifier = Modifier
@@ -1624,7 +1638,7 @@ internal fun AlbumArtPlaceholder(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = placeholderIcon,
+                                    imageVector = state.placeholderIcon,
                                     contentDescription = "No album artwork",
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(72.dp)

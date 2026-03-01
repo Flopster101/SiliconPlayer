@@ -817,8 +817,9 @@ internal fun PlayerScreen(
                                 if (isTimelineTouchActive) return@detectVerticalDragGestures
                                 val shouldCollapse = downwardDragPx >= collapseThresholdPx
                                 if (shouldCollapse) {
-                                    isDraggingDown = false
-                                    downwardDragPx = 0f
+                                    // Preserve the dragged-down offset until the parent
+                                    // actually collapses the expanded player, so the panel
+                                    // does not snap back upward for a frame first.
                                     onCollapseBySwipe()
                                 } else {
                                     isDraggingDown = false

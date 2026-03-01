@@ -26,6 +26,10 @@ internal fun ensureRecentArtworkThumbnailCached(
     if (cacheFile.exists() && cacheFile.isFile && cacheFile.length() > 0L) {
         return cacheKey
     }
+    val tempCacheFile = File(cacheRoot, "$cacheKey.tmp")
+    if (tempCacheFile.exists()) {
+        tempCacheFile.delete()
+    }
 
     val sourceFile = resolveRecentArtworkSourceFile(context, normalizedSource)
     val bitmap = when {
@@ -37,18 +41,23 @@ internal fun ensureRecentArtworkThumbnailCached(
     } ?: return null
     val scaled = scaleBitmapForRecentThumb(bitmap, RECENT_ARTWORK_THUMB_MAX_SIZE_PX)
     return try {
-        FileOutputStream(cacheFile).use { output ->
+        FileOutputStream(tempCacheFile).use { output ->
             if (!scaled.compress(Bitmap.CompressFormat.JPEG, 82, output)) {
                 return null
             }
+            output.fd.sync()
         }
-        if (cacheFile.length() <= 0L) {
-            cacheFile.delete()
+        if (tempCacheFile.length() <= 0L) {
+            tempCacheFile.delete()
+            null
+        } else if (!tempCacheFile.renameTo(cacheFile)) {
+            tempCacheFile.delete()
             null
         } else {
             cacheKey
         }
     } catch (_: Throwable) {
+        tempCacheFile.delete()
         cacheFile.delete()
         null
     } finally {

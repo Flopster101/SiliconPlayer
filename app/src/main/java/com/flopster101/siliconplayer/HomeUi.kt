@@ -1330,19 +1330,18 @@ private fun RecentTrackArtworkChip(
             .background(MaterialTheme.colorScheme.secondaryContainer),
         contentAlignment = Alignment.Center
     ) {
+        Icon(
+            imageVector = fallbackIcon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.size(HomeRecentIconGlyphSize)
+        )
         if (artwork != null) {
             Image(
                 bitmap = artwork,
                 contentDescription = "Album artwork",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Icon(
-                imageVector = fallbackIcon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(HomeRecentIconGlyphSize)
             )
         }
     }

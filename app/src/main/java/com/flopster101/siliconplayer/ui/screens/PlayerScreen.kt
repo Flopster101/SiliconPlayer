@@ -59,6 +59,7 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -696,6 +697,7 @@ internal fun PlayerScreen(
     val panelAlpha = 1f - (0.22f * dragFadeProgress)
     val topArrowFocusRequester = remember { FocusRequester() }
     val primaryContentFocusRequester = remember { FocusRequester() }
+    var showRemainingTime by rememberSaveable { mutableStateOf(false) }
 
     val hasTrack = file != null
     val remoteLoadUiState = RemoteLoadUiStateHolder.current
@@ -1075,12 +1077,16 @@ internal fun PlayerScreen(
                                         sliderPosition = if (isSeeking) sliderPosition else positionSeconds,
                                         elapsedPositionSeconds = if (isSeeking) sliderPosition else positionSeconds,
                                         durationSeconds = durationSeconds,
+                                        showRemainingTime = showRemainingTime,
                                         canSeek = canSeek,
                                         hasReliableDuration = hasReliableDuration,
                                         seekInProgress = seekInProgress,
                                         focusRequester = primaryContentFocusRequester,
                                         upFocusRequester = topArrowFocusRequester,
                                         layoutScale = landscapeLayoutScale,
+                                        onToggleDurationDisplayMode = {
+                                            showRemainingTime = !showRemainingTime
+                                        },
                                         onSeekInteractionChanged = { isTimelineTouchActive = it },
                                         onSliderValueChange = { value ->
                                             isSeeking = true
@@ -1429,12 +1435,16 @@ internal fun PlayerScreen(
                                             sliderPosition = if (isSeeking) sliderPosition else positionSeconds,
                                             elapsedPositionSeconds = if (isSeeking) sliderPosition else positionSeconds,
                                             durationSeconds = durationSeconds,
+                                            showRemainingTime = showRemainingTime,
                                             canSeek = canSeek,
                                             hasReliableDuration = hasReliableDuration,
                                             seekInProgress = seekInProgress,
                                             focusRequester = primaryContentFocusRequester,
                                             upFocusRequester = topArrowFocusRequester,
                                             layoutScale = portraitTimelineScale,
+                                            onToggleDurationDisplayMode = {
+                                                showRemainingTime = !showRemainingTime
+                                            },
                                             onSeekInteractionChanged = { isTimelineTouchActive = it },
                                             onSliderValueChange = { value ->
                                                 isSeeking = true
@@ -3941,12 +3951,14 @@ private fun TimelineSection(
     sliderPosition: Double,
     elapsedPositionSeconds: Double,
     durationSeconds: Double,
+    showRemainingTime: Boolean,
     canSeek: Boolean,
     hasReliableDuration: Boolean,
     seekInProgress: Boolean,
     focusRequester: FocusRequester? = null,
     upFocusRequester: FocusRequester? = null,
     layoutScale: Float = 1f,
+    onToggleDurationDisplayMode: () -> Unit,
     onSeekInteractionChanged: (Boolean) -> Unit,
     onSliderValueChange: (Float) -> Unit,
     onSliderValueChangeFinished: () -> Unit
@@ -3954,10 +3966,21 @@ private fun TimelineSection(
     val sliderMax = durationSeconds.coerceAtLeast(0.0).toFloat()
     val normalizedValue = sliderPosition.toFloat().coerceIn(0f, sliderMax)
     val seekEnabled = canSeek && durationSeconds > 0.0
-    val durationText = if (durationSeconds > 0.0) {
-        if (hasReliableDuration) formatTime(durationSeconds) else "${formatTime(durationSeconds)}?"
+    val durationText = if (showRemainingTime) {
+        when {
+            durationSeconds <= 0.0 -> "-:--"
+            elapsedPositionSeconds > durationSeconds -> "-:--"
+            else -> {
+                val remainingTimeText = formatTime(durationSeconds - elapsedPositionSeconds)
+                if (hasReliableDuration) "-$remainingTimeText" else "-$remainingTimeText?"
+            }
+        }
     } else {
-        "-:--"
+        if (durationSeconds > 0.0) {
+            if (hasReliableDuration) formatTime(durationSeconds) else "${formatTime(durationSeconds)}?"
+        } else {
+            "-:--"
+        }
     }
     val sliderHeight = lerpDp(30.dp, 44.dp, layoutScale)
     val timeTextStyle = if (layoutScale < 0.35f) {
@@ -4009,7 +4032,8 @@ private fun TimelineSection(
             }
             Text(
                 text = durationText,
-                style = timeTextStyle
+                style = timeTextStyle,
+                modifier = Modifier.clickable(onClick = onToggleDurationDisplayMode)
             )
         }
     }

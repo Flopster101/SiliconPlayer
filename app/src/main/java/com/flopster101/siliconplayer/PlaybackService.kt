@@ -138,6 +138,7 @@ class PlaybackService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isServiceAlive = true
         createChannelIfNeeded()
         setupMediaSession()
         registerReceiver(
@@ -148,6 +149,7 @@ class PlaybackService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isServiceAlive = false
         handler.removeCallbacks(ticker)
         unregisterReceiver(noisyReceiver)
         mediaSession?.release()
@@ -786,6 +788,19 @@ class PlaybackService : Service() {
         const val ACTION_BROADCAST_PREVIOUS_TRACK_REQUEST = "com.flopster101.siliconplayer.action.BROADCAST_PREVIOUS_TRACK_REQUEST"
         const val ACTION_BROADCAST_NEXT_TRACK_REQUEST = "com.flopster101.siliconplayer.action.BROADCAST_NEXT_TRACK_REQUEST"
         const val EXTRA_OPEN_PLAYER_FROM_NOTIFICATION = "extra_open_player_from_notification"
+        @Volatile
+        private var isServiceAlive = false
+
+        private fun startServiceSafely(context: Context, intent: Intent) {
+            try {
+                context.startService(intent)
+            } catch (error: RuntimeException) {
+                val blockedBackgroundStart =
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                        error is IllegalStateException
+                if (!blockedBackgroundStart) throw error
+            }
+        }
 
         fun syncFromUi(
             context: Context,
@@ -804,10 +819,22 @@ class PlaybackService : Service() {
                 .putExtra(EXTRA_DURATION, durationSeconds)
                 .putExtra(EXTRA_POSITION, positionSeconds)
                 .putExtra(EXTRA_IS_PLAYING, isPlaying)
-            if (path != null && isPlaying) {
+            val shouldStartAsForeground = path != null && isPlaying && !isServiceAlive
+            if (!shouldStartAsForeground) {
+                startServiceSafely(context, intent)
+                return
+            }
+            try {
                 ContextCompat.startForegroundService(context, intent)
-            } else {
-                context.startService(intent)
+            } catch (error: RuntimeException) {
+                val blockedForegroundStart =
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                        error is ForegroundServiceStartNotAllowedException
+                if (blockedForegroundStart) {
+                    startServiceSafely(context, intent)
+                    return
+                }
+                throw error
             }
         }
 

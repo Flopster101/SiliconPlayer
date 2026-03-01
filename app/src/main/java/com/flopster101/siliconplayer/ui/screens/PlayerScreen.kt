@@ -884,6 +884,8 @@ internal fun PlayerScreen(
                     val metadataSpacer = lerpDp(6.dp, 12.dp, landscapeLayoutScale)
                     val timelineSpacer = lerpDp(4.dp, 10.dp, landscapeLayoutScale)
                     val actionStripSpacer = lerpDp(6.dp, 12.dp, landscapeLayoutScale)
+                    val landscapeTitleScaleBoost = lerpFloat(2.0f, 4f, landscapeLayoutScale)
+                    val landscapeSupportingScaleBoost = lerpFloat(1f, 2.2f, landscapeLayoutScale)
                     val landscapePaneHeight = (maxHeight - verticalPadding * 2f).coerceAtLeast(120.dp)
                     val landscapeContentWidth = (maxWidth - horizontalPadding * 2f - paneGap).coerceAtLeast(120.dp)
                     val landscapeArtPaneWidth = (landscapeContentWidth * artPaneWeight).coerceAtLeast(120.dp)
@@ -1025,6 +1027,8 @@ internal fun PlayerScreen(
                                         subtuneCount = subtuneCount,
                                         onOpenSubtuneSelector = onOpenSubtuneSelector,
                                         layoutScale = landscapeLayoutScale,
+                                        titleScaleBoost = landscapeTitleScaleBoost,
+                                        supportingScaleBoost = landscapeSupportingScaleBoost,
                                         technicalSummary = trackTechnicalSummary,
                                         modifier = Modifier.fillMaxWidth()
                                     )
@@ -2078,25 +2082,33 @@ private fun PortraitTrackMetadataBlock(
     subtuneCount: Int = 0,
     onOpenSubtuneSelector: () -> Unit = {},
     layoutScale: Float = 1f,
+    titleScaleBoost: Float = 0f,
+    supportingScaleBoost: Float = 0f,
     technicalSummary: String? = null,
     modifier: Modifier = Modifier
 ) {
+    val effectiveTitleScale = layoutScale.coerceIn(0f, 1f)
+    val effectiveSupportingScale = layoutScale.coerceIn(0f, 1f)
+    val titleFontBoost = titleScaleBoost.coerceAtLeast(0f).sp
+    val titleLineBoost = (titleScaleBoost.coerceAtLeast(0f) * 1.25f).sp
+    val supportingFontBoost = supportingScaleBoost.coerceAtLeast(0f).sp
+    val supportingLineBoost = (supportingScaleBoost.coerceAtLeast(0f) * 1.33f).sp
     val titleTextStyle = MaterialTheme.typography.headlineSmall.copy(
-        fontSize = lerpSp(18.sp, 28.sp, layoutScale),
-        lineHeight = lerpSp(22.sp, 34.sp, layoutScale)
+        fontSize = (lerpSp(18.sp, 28.sp, effectiveTitleScale).value + titleFontBoost.value).sp,
+        lineHeight = (lerpSp(22.sp, 34.sp, effectiveTitleScale).value + titleLineBoost.value).sp
     )
     val artistTextStyle = titleTextStyle.copy(
-        fontSize = lerpSp(11.5.sp, 15.5.sp, layoutScale),
-        lineHeight = lerpSp(13.sp, 17.sp, layoutScale),
+        fontSize = (lerpSp(11.5.sp, 15.5.sp, effectiveSupportingScale).value + supportingFontBoost.value).sp,
+        lineHeight = (lerpSp(13.sp, 17.sp, effectiveSupportingScale).value + supportingLineBoost.value).sp,
         fontWeight = FontWeight.Medium
     )
     val filenameTextStyle = MaterialTheme.typography.bodySmall.copy(
-        fontSize = lerpSp(11.sp, 14.sp, layoutScale),
-        lineHeight = lerpSp(14.sp, 18.sp, layoutScale)
+        fontSize = (lerpSp(11.sp, 14.sp, effectiveSupportingScale).value + supportingFontBoost.value).sp,
+        lineHeight = (lerpSp(14.sp, 18.sp, effectiveSupportingScale).value + supportingLineBoost.value).sp
     )
     val technicalSummaryTextStyle = MaterialTheme.typography.bodySmall.copy(
-        fontSize = lerpSp(10.5.sp, 13.sp, layoutScale),
-        lineHeight = lerpSp(13.sp, 17.sp, layoutScale)
+        fontSize = (lerpSp(10.5.sp, 13.sp, effectiveSupportingScale).value + supportingFontBoost.value).sp,
+        lineHeight = (lerpSp(13.sp, 17.sp, effectiveSupportingScale).value + supportingLineBoost.value).sp
     )
     val albumTextStyle = artistTextStyle
     val shouldShowFilename = remember(filename, filenameDisplayMode, decoderName, title, filenameOnlyWhenTitleMissing) {

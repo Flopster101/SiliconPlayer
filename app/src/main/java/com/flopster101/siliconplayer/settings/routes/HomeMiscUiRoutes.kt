@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
@@ -204,6 +205,14 @@ internal fun FileBrowserRouteContent(
             )
         )
     }
+    var showLocalThumbnailPreviews by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                AppPreferenceKeys.BROWSER_SHOW_LOCAL_THUMBNAIL_PREVIEWS,
+                AppDefaults.Browser.showLocalThumbnailPreviews
+            )
+        )
+    }
 
     SettingsSectionLabel("Browser behavior")
     PlayerSettingToggleCard(
@@ -225,6 +234,30 @@ internal fun FileBrowserRouteContent(
         description = "Draw the same rounded chip background behind file icons as folders.",
         checked = state.showFileIconChipBackground,
         onCheckedChange = actions.onShowFileIconChipBackgroundChanged
+    )
+    SettingsRowSpacer()
+    PlayerSettingToggleCard(
+        title = "Show local music thumbnails",
+        description = "Slowly load cached artwork previews for local playable files in folder lists.",
+        checked = showLocalThumbnailPreviews,
+        onCheckedChange = {
+            showLocalThumbnailPreviews = it
+            prefs.edit().putBoolean(AppPreferenceKeys.BROWSER_SHOW_LOCAL_THUMBNAIL_PREVIEWS, it).apply()
+        }
+    )
+    SettingsRowSpacer()
+    SettingsItemCard(
+        title = "Clear thumbnail preview cache",
+        description = "Delete cached local file browser artwork thumbnails.",
+        icon = Icons.Default.DeleteForever,
+        onClick = {
+            val deleted = clearLocalBrowserThumbnailCache(context)
+            Toast.makeText(
+                context,
+                if (deleted > 0) "Cleared $deleted thumbnail previews" else "Thumbnail preview cache is already empty",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     )
     SettingsRowSpacer()
     PlayerSettingToggleCard(

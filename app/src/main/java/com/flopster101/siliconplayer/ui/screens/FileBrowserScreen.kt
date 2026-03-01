@@ -18,6 +18,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -64,6 +65,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -74,6 +77,8 @@ import com.flopster101.siliconplayer.extensionCandidatesForName
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.FilePreviewKind
 import com.flopster101.siliconplayer.DecoderArtworkHint
+import com.flopster101.siliconplayer.AppDefaults
+import com.flopster101.siliconplayer.AppPreferenceKeys
 import com.flopster101.siliconplayer.BrowserLaunchState
 import com.flopster101.siliconplayer.BrowserLocationModel
 import com.flopster101.siliconplayer.R
@@ -82,6 +87,7 @@ import com.flopster101.siliconplayer.resolveDecoderArtworkHintForFileName
 import com.flopster101.siliconplayer.resolveBrowserLocationModel
 import com.flopster101.siliconplayer.buildHttpDisplayUri
 import com.flopster101.siliconplayer.buildSmbDisplayUri
+import com.flopster101.siliconplayer.resolveLocalBrowserThumbnailPreview
 import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.HomePinnedEntry
 import com.flopster101.siliconplayer.RecentPathEntry
@@ -110,6 +116,7 @@ import java.util.Locale
 import java.util.zip.ZipFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -124,8 +131,12 @@ private const val BROWSER_PAGE_DURATION_MS = 280
 private const val MIN_LOADING_SPINNER_MS = 220L
 private const val FILE_ENTRY_ANIM_DURATION_MS = 280
 private const val DIRECTORY_DIRECT_PUBLISH_MAX_ITEMS = 3000
+private const val LOCAL_BROWSER_THUMBNAIL_STAGGER_BASE_MS = 36L
+private const val LOCAL_BROWSER_THUMBNAIL_STAGGER_RANGE_MS = 120L
 private val FILE_ICON_BOX_SIZE = 38.dp
 private val FILE_ICON_GLYPH_SIZE = 26.dp
+@OptIn(ExperimentalCoroutinesApi::class)
+private val LOCAL_BROWSER_THUMBNAIL_LOADER_DISPATCHER = Dispatchers.IO.limitedParallelism(1)
 private val FALLBACK_VIDEO_EXTENSIONS = setOf(
     "3g2", "3gp", "asf", "avi", "divx", "f4v", "flv", "m2ts", "m2v", "m4v",
     "mkv", "mov", "mp4", "mpeg", "mpg", "mts", "ogm", "ogv", "rm", "rmvb",
@@ -194,6 +205,31 @@ internal fun FileBrowserScreen(
     onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
+    val prefs = remember(context) {
+        context.getSharedPreferences(AppPreferenceKeys.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    var showLocalThumbnailPreviews by remember {
+        mutableStateOf(
+            prefs.getBoolean(
+                AppPreferenceKeys.BROWSER_SHOW_LOCAL_THUMBNAIL_PREVIEWS,
+                AppDefaults.Browser.showLocalThumbnailPreviews
+            )
+        )
+    }
+    DisposableEffect(prefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sharedPrefs, key ->
+            if (key == AppPreferenceKeys.BROWSER_SHOW_LOCAL_THUMBNAIL_PREVIEWS) {
+                showLocalThumbnailPreviews = sharedPrefs.getBoolean(
+                    AppPreferenceKeys.BROWSER_SHOW_LOCAL_THUMBNAIL_PREVIEWS,
+                    AppDefaults.Browser.showLocalThumbnailPreviews
+                )
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
     val localListingAdapter = remember(repository) { LocalBrowserListingAdapter(repository) }
     var storageLocationsRefreshToken by remember { mutableIntStateOf(0) }
     val storageLocations = remember(context, storageLocationsRefreshToken) { detectStorageLocations(context) }
@@ -1558,6 +1594,7 @@ internal fun FileBrowserScreen(
                                         hasSelectedAbove = hasSelectedAbove,
                                         hasSelectedBelow = hasSelectedBelow,
                                         showFileIconChipBackground = showFileIconChipBackground,
+                                        showLocalThumbnailPreviews = showLocalThumbnailPreviews,
                                         decoderExtensionArtworkHints = decoderExtensionArtworkHints,
                                         rightFocusRequester = selectorButtonFocusRequester,
                                         rowFocusRequester = rowFocusRequester,
@@ -2180,6 +2217,7 @@ fun FileItemRow(
     hasSelectedAbove: Boolean = false,
     hasSelectedBelow: Boolean = false,
     showFileIconChipBackground: Boolean,
+    showLocalThumbnailPreviews: Boolean,
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint> = emptyMap(),
     rightFocusRequester: FocusRequester? = null,
     rowFocusRequester: FocusRequester? = null,
@@ -2187,6 +2225,7 @@ fun FileItemRow(
     onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val selectionShape = RoundedCornerShape(
         topStart = if (hasSelectedAbove) 0.dp else 18.dp,
         topEnd = if (hasSelectedAbove) 0.dp else 18.dp,
@@ -2194,10 +2233,36 @@ fun FileItemRow(
         bottomEnd = if (hasSelectedBelow) 0.dp else 18.dp
     )
     val isVideoFile = !item.isDirectory && isLikelyVideoFile(item.file)
+    val previewKind = if (item.isDirectory) null else browserPreviewKindForName(item.name)
     val decoderArtworkHint = if (item.isDirectory || isVideoFile) {
         null
     } else {
         resolveDecoderArtworkHintForFileName(item.file.name, decoderExtensionArtworkHints)
+    }
+    val shouldShowThumbnailPreview = showLocalThumbnailPreviews &&
+        item.kind == FileItem.Kind.AudioFile &&
+        !item.isDirectory &&
+        !isVideoFile &&
+        previewKind == null
+    val thumbnailPreview by produceState<ImageBitmap?>(
+        initialValue = null,
+        shouldShowThumbnailPreview,
+        item.file.absolutePath,
+        item.file.lastModified(),
+        item.size
+    ) {
+        if (!shouldShowThumbnailPreview) {
+            value = null
+            return@produceState
+        }
+        delay(
+            LOCAL_BROWSER_THUMBNAIL_STAGGER_BASE_MS +
+                ((item.file.absolutePath.hashCode().toLong() and Long.MAX_VALUE) %
+                    LOCAL_BROWSER_THUMBNAIL_STAGGER_RANGE_MS)
+        )
+        value = withContext(LOCAL_BROWSER_THUMBNAIL_LOADER_DISPATCHER) {
+            resolveLocalBrowserThumbnailPreview(context, item.file)
+        }
     }
     val subtitle by produceState(
         initialValue = if (item.isDirectory && !item.isArchive) "Loading..." else {
@@ -2267,104 +2332,121 @@ fun FileItemRow(
             modifier = Modifier.size(FILE_ICON_BOX_SIZE),
             contentAlignment = Alignment.Center
         ) {
-            val iconContent: @Composable () -> Unit = {
-                if (item.isDirectory) {
-                    if (item.isArchive) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_folder_zip),
-                            contentDescription = "ZIP archive",
-                            tint = iconTint,
-                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Folder,
-                            contentDescription = "Directory",
-                            tint = iconTint,
-                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                        )
-                    }
-                } else {
-                    val previewKind = browserPreviewKindForName(item.name)
-                    val contentDescription = when {
-                        isVideoFile -> "Video file"
-                        decoderArtworkHint == DecoderArtworkHint.TrackedFile -> "Tracked file"
-                        decoderArtworkHint == DecoderArtworkHint.GameFile -> "Game file"
-                        previewKind == FilePreviewKind.Text -> "Text file"
-                        previewKind == FilePreviewKind.Image -> "Image file"
-                        item.kind == FileItem.Kind.UnsupportedFile -> "File"
-                        else -> "Audio file"
-                    }
-                    if (isVideoFile) {
-                        Icon(
-                            imageVector = Icons.Default.VideoFile,
-                            contentDescription = contentDescription,
-                            tint = iconTint,
-                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                        )
-                    } else if (decoderArtworkHint == DecoderArtworkHint.TrackedFile) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_file_tracked),
-                            contentDescription = contentDescription,
-                            tint = iconTint,
-                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                        )
-                    } else if (decoderArtworkHint == DecoderArtworkHint.GameFile) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_file_game),
-                            contentDescription = contentDescription,
-                            tint = iconTint,
-                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                        )
-                    } else if (previewKind == FilePreviewKind.Text) {
-                        Icon(
-                            imageVector = Icons.Default.Description,
-                            contentDescription = contentDescription,
-                            tint = iconTint,
-                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                        )
-                    } else if (previewKind == FilePreviewKind.Image) {
-                        Icon(
-                            imageVector = Icons.Default.Photo,
-                            contentDescription = contentDescription,
-                            tint = iconTint,
-                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                        )
-                    } else if (item.kind == FileItem.Kind.UnsupportedFile) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_file_unsupported),
-                            contentDescription = contentDescription,
-                            tint = iconTint,
-                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.AudioFile,
-                            contentDescription = contentDescription,
-                            tint = iconTint,
-                            modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
-                        )
-                    }
-                }
-            }
-            if (showIconChipBackground) {
-                Box(
+            val previewBitmap = thumbnailPreview
+            val previewAlpha by animateFloatAsState(
+                targetValue = if (previewBitmap != null) 1f else 0f,
+                animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing),
+                label = "browserThumbnailPreviewAlpha"
+            )
+            if (previewBitmap != null) {
+                Image(
+                    bitmap = previewBitmap,
+                    contentDescription = "Track thumbnail",
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(
-                            color = chipContainerColor,
-                            shape = chipShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    iconContent()
-                }
+                        .clip(chipShape)
+                        .graphicsLayer(alpha = previewAlpha)
+                )
             } else {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    iconContent()
+                val iconContent: @Composable () -> Unit = {
+                    if (item.isDirectory) {
+                        if (item.isArchive) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_folder_zip),
+                                contentDescription = "ZIP archive",
+                                tint = iconTint,
+                                modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Folder,
+                                contentDescription = "Directory",
+                                tint = iconTint,
+                                modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                            )
+                        }
+                    } else {
+                        val contentDescription = when {
+                            isVideoFile -> "Video file"
+                            decoderArtworkHint == DecoderArtworkHint.TrackedFile -> "Tracked file"
+                            decoderArtworkHint == DecoderArtworkHint.GameFile -> "Game file"
+                            previewKind == FilePreviewKind.Text -> "Text file"
+                            previewKind == FilePreviewKind.Image -> "Image file"
+                            item.kind == FileItem.Kind.UnsupportedFile -> "File"
+                            else -> "Audio file"
+                        }
+                        if (isVideoFile) {
+                            Icon(
+                                imageVector = Icons.Default.VideoFile,
+                                contentDescription = contentDescription,
+                                tint = iconTint,
+                                modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                            )
+                        } else if (decoderArtworkHint == DecoderArtworkHint.TrackedFile) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_file_tracked),
+                                contentDescription = contentDescription,
+                                tint = iconTint,
+                                modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                            )
+                        } else if (decoderArtworkHint == DecoderArtworkHint.GameFile) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_file_game),
+                                contentDescription = contentDescription,
+                                tint = iconTint,
+                                modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                            )
+                        } else if (previewKind == FilePreviewKind.Text) {
+                            Icon(
+                                imageVector = Icons.Default.Description,
+                                contentDescription = contentDescription,
+                                tint = iconTint,
+                                modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                            )
+                        } else if (previewKind == FilePreviewKind.Image) {
+                            Icon(
+                                imageVector = Icons.Default.Photo,
+                                contentDescription = contentDescription,
+                                tint = iconTint,
+                                modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                            )
+                        } else if (item.kind == FileItem.Kind.UnsupportedFile) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_file_unsupported),
+                                contentDescription = contentDescription,
+                                tint = iconTint,
+                                modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.AudioFile,
+                                contentDescription = contentDescription,
+                                tint = iconTint,
+                                modifier = Modifier.size(FILE_ICON_GLYPH_SIZE)
+                            )
+                        }
+                    }
+                }
+                if (showIconChipBackground) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                color = chipContainerColor,
+                                shape = chipShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        iconContent()
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        iconContent()
+                    }
                 }
             }
         }

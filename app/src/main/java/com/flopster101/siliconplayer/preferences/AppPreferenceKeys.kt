@@ -11,6 +11,7 @@ internal object AppPreferenceKeys {
     const val REMEMBER_BROWSER_LOCATION = "remember_browser_location"
     const val BROWSER_SHOW_PARENT_DIRECTORY_ENTRY = "browser_show_parent_directory_entry"
     const val BROWSER_SHOW_FILE_ICON_CHIP_BACKGROUND = "browser_show_file_icon_chip_background"
+    const val BROWSER_SHOW_LOCAL_THUMBNAIL_PREVIEWS = "browser_show_local_thumbnail_previews"
     const val BROWSER_SHOW_UNSUPPORTED_FILES = "browser_show_unsupported_files"
     const val BROWSER_SHOW_PREVIEW_FILES = "browser_show_preview_files"
     const val BROWSER_SHOW_HIDDEN_FILES_AND_FOLDERS = "browser_show_hidden_files_and_folders"

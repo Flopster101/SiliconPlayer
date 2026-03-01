@@ -5,6 +5,7 @@ object AppDefaults {
         val nameSortMode = BrowserNameSortMode.Natural
         const val showParentDirectoryEntry = true
         const val showFileIconChipBackground = true
+        const val showLocalThumbnailPreviews = true
         const val showUnsupportedFiles = false
         const val showPreviewFiles = true
         const val showHiddenFilesAndFolders = false

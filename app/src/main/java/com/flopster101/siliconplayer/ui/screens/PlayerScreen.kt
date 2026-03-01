@@ -698,25 +698,27 @@ internal fun PlayerScreen(
     val remoteLoadUiState = RemoteLoadUiStateHolder.current
     val sanitizedTitle = sanitizeRemoteCachedMetadataTitle(title, file)
     val displayTitle = sanitizedTitle.ifBlank {
-        if (file != null) inferredDisplayTitleForName(file.name) else "No track selected"
+        if (file != null) inferredDisplayTitleForName(file.name) else "No track loaded"
     }
-    val displayArtist = artist.ifBlank { if (hasTrack) "Unknown Artist" else "Tap a file to play" }
+    val displayArtist = artist.ifBlank { if (hasTrack) "Unknown Artist" else "Unknown" }
     val displayAlbum = if (hasTrack) {
         NativeBridge.getTrackAlbum().trim()
     } else {
         ""
     }
-    val displayFilename = file?.let { toDisplayFilename(it) } ?: "No file loaded"
+    val displayFilename = file?.let { toDisplayFilename(it) }.orEmpty()
     val fileSizeBytes = file?.length() ?: 0L
     val formatLabel = file?.name?.let(::inferredPrimaryExtensionForName)?.uppercase() ?: "EMPTY"
     val trackBitrateOrSize by produceState<String?>(
         initialValue = null,
+        hasTrack,
         file?.absolutePath,
         decoderName,
         fileSizeBytes,
         sampleRateHz
     ) {
         value = when {
+            !hasTrack -> null
             decoderName.equals(DecoderNames.FFMPEG, ignoreCase = true) -> {
                 var resolved: String? = null
                 repeat(8) { attempt ->
@@ -2097,16 +2099,20 @@ private fun PortraitTrackMetadataBlock(
         lineHeight = lerpSp(13.sp, 17.sp, layoutScale)
     )
     val albumTextStyle = artistTextStyle
-    val shouldShowFilename = remember(filenameDisplayMode, decoderName, title, filenameOnlyWhenTitleMissing) {
-        when (filenameDisplayMode) {
-            com.flopster101.siliconplayer.FilenameDisplayMode.Always -> {
-                if (filenameOnlyWhenTitleMissing) title.isBlank() else true
-            }
-            com.flopster101.siliconplayer.FilenameDisplayMode.Never -> false
-            com.flopster101.siliconplayer.FilenameDisplayMode.TrackerOnly -> {
-                val decoder = decoderName?.lowercase() ?: ""
-                val isTracker = decoder.contains("openmpt") || decoder.contains("libopenmpt")
-                if (isTracker && filenameOnlyWhenTitleMissing) title.isBlank() else isTracker
+    val shouldShowFilename = remember(filename, filenameDisplayMode, decoderName, title, filenameOnlyWhenTitleMissing) {
+        if (filename.isBlank()) {
+            false
+        } else {
+            when (filenameDisplayMode) {
+                com.flopster101.siliconplayer.FilenameDisplayMode.Always -> {
+                    if (filenameOnlyWhenTitleMissing) title.isBlank() else true
+                }
+                com.flopster101.siliconplayer.FilenameDisplayMode.Never -> false
+                com.flopster101.siliconplayer.FilenameDisplayMode.TrackerOnly -> {
+                    val decoder = decoderName?.lowercase() ?: ""
+                    val isTracker = decoder.contains("openmpt") || decoder.contains("libopenmpt")
+                    if (isTracker && filenameOnlyWhenTitleMissing) title.isBlank() else isTracker
+                }
             }
         }
     }
@@ -2308,25 +2314,29 @@ private fun TrackMetadataBlock(
     )
     val titleArtistSpacer = lerpDp(3.dp, 8.dp, layoutScale)
     val artistFilenameSpacer = lerpDp(1.dp, 6.dp, layoutScale)
-    val shouldShowFilename = remember(filenameDisplayMode, decoderName, title, filenameOnlyWhenTitleMissing) {
-        when (filenameDisplayMode) {
-            com.flopster101.siliconplayer.FilenameDisplayMode.Always -> {
-                // If "only when title missing" is enabled, check if title is blank
-                if (filenameOnlyWhenTitleMissing) {
-                    title.isBlank()
-                } else {
-                    true
+    val shouldShowFilename = remember(filename, filenameDisplayMode, decoderName, title, filenameOnlyWhenTitleMissing) {
+        if (filename.isBlank()) {
+            false
+        } else {
+            when (filenameDisplayMode) {
+                com.flopster101.siliconplayer.FilenameDisplayMode.Always -> {
+                    // If "only when title missing" is enabled, check if title is blank
+                    if (filenameOnlyWhenTitleMissing) {
+                        title.isBlank()
+                    } else {
+                        true
+                    }
                 }
-            }
-            com.flopster101.siliconplayer.FilenameDisplayMode.Never -> false
-            com.flopster101.siliconplayer.FilenameDisplayMode.TrackerOnly -> {
-                val decoder = decoderName?.lowercase() ?: ""
-                val isTracker = decoder.contains("openmpt") || decoder.contains("libopenmpt")
-                // If tracker format, apply the "only when title missing" logic
-                if (isTracker && filenameOnlyWhenTitleMissing) {
-                    title.isBlank()
-                } else {
-                    isTracker
+                com.flopster101.siliconplayer.FilenameDisplayMode.Never -> false
+                com.flopster101.siliconplayer.FilenameDisplayMode.TrackerOnly -> {
+                    val decoder = decoderName?.lowercase() ?: ""
+                    val isTracker = decoder.contains("openmpt") || decoder.contains("libopenmpt")
+                    // If tracker format, apply the "only when title missing" logic
+                    if (isTracker && filenameOnlyWhenTitleMissing) {
+                        title.isBlank()
+                    } else {
+                        isTracker
+                    }
                 }
             }
         }
@@ -4043,6 +4053,7 @@ private fun buildTrackTechnicalSummary(
     bitDepthLabel: String,
     decoderName: String?
 ): String {
+    val bitrateLabel = bitrateOrSize?.ifBlank { "--" } ?: "--"
     val sampleRateLabel = if (sampleRateHz > 0) {
         formatSampleRateForDetails(sampleRateHz)
     } else {
@@ -4058,7 +4069,7 @@ private fun buildTrackTechnicalSummary(
     }
     return listOfNotNull(
         formatLabel,
-        bitrateOrSize,
+        bitrateLabel,
         sampleRateLabel,
         channelsAndDepth
     ).joinToString(" • ")

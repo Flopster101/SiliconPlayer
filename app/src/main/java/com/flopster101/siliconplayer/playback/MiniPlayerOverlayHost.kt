@@ -289,10 +289,10 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 file = selectedFile,
                 title = sanitizedTitle.ifBlank {
                     selectedFile?.name?.let(::inferredDisplayTitleForName)
-                        ?: "No track selected"
+                        ?: "No track loaded"
                 },
                 artist = metadataArtist.ifBlank {
-                    if (selectedFile != null) "Unknown Artist" else "Tap a file to play"
+                    if (selectedFile != null) "Unknown Artist" else "Unknown"
                 },
                 artwork = artworkBitmap,
                 noArtworkIcon = placeholderArtworkIconForFile(selectedFile, decoderName),

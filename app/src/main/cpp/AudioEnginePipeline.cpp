@@ -10,9 +10,11 @@ namespace {
         return preference == 2 ? "SoX" : "Built-in";
     }
 
+    constexpr int kRenderChunkFramesVerySmall = 256;
     constexpr int kRenderChunkFramesSmall = 512;
     constexpr int kRenderChunkFramesMedium = 1024;
     constexpr int kRenderChunkFramesLarge = 2048;
+    constexpr int kRenderTargetFramesVerySmall = 2048;
     constexpr int kRenderTargetFramesSmall = 4096;
     constexpr int kRenderTargetFramesMedium = 8192;
     constexpr int kRenderTargetFramesLarge = 16384;
@@ -26,7 +28,7 @@ void AudioEngine::setAudioPipelineConfig(
         bool allowFallback) {
     const int normalizedBackend = (backendPreference >= 0 && backendPreference <= 3) ? backendPreference : 0;
     const int normalizedPerformance = (performanceMode >= 0 && performanceMode <= 3) ? performanceMode : 1;
-    const int normalizedBufferPreset = (bufferPreset >= 0 && bufferPreset <= 3) ? bufferPreset : 0;
+    const int normalizedBufferPreset = (bufferPreset >= 0 && bufferPreset <= 3) ? bufferPreset : 1;
     const int normalizedResampler = (resamplerPreference >= 1 && resamplerPreference <= 2) ? resamplerPreference : 1;
 
     const bool changed =
@@ -59,9 +61,13 @@ void AudioEngine::setAudioPipelineConfig(
 }
 
 void AudioEngine::updateRenderQueueTuning() {
-    int chunkFrames = kRenderChunkFramesMedium;
-    int targetFrames = kRenderTargetFramesMedium;
+    int chunkFrames = kRenderChunkFramesSmall;
+    int targetFrames = kRenderTargetFramesSmall;
     switch (outputBufferPreset) {
+        case 0:
+            chunkFrames = kRenderChunkFramesVerySmall;
+            targetFrames = kRenderTargetFramesVerySmall;
+            break;
         case 1:
             chunkFrames = kRenderChunkFramesSmall;
             targetFrames = kRenderTargetFramesSmall;
@@ -70,7 +76,6 @@ void AudioEngine::updateRenderQueueTuning() {
             chunkFrames = kRenderChunkFramesLarge;
             targetFrames = kRenderTargetFramesLarge;
             break;
-        case 0:
         case 2:
         default:
             chunkFrames = kRenderChunkFramesMedium;

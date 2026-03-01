@@ -205,6 +205,7 @@ internal fun AudioBufferPresetSelectorCard(
         description = description,
         selectedValue = selectedPreset,
         options = listOf(
+            EnumChoice(AudioBufferPreset.VerySmall, AudioBufferPreset.VerySmall.label),
             EnumChoice(AudioBufferPreset.Small, AudioBufferPreset.Small.label),
             EnumChoice(AudioBufferPreset.Medium, AudioBufferPreset.Medium.label),
             EnumChoice(AudioBufferPreset.Large, AudioBufferPreset.Large.label)

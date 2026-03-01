@@ -617,9 +617,13 @@ std::vector<float> LibOpenMPTDecoder::getCurrentChannelScopeSamples(int samplesP
     ).count();
     const int64_t lastReadNs = channelScopeLastReadNs;
     const double intervalNs = static_cast<double>(lastFrames) * (1'000'000'000.0 / static_cast<double>(effectiveRate));
-    double alpha = 1.0;
+    double alpha = 0.0;
     if (lastReadNs > 0 && intervalNs > 0.0) {
-        const int64_t elapsedNs = std::max<int64_t>(0, nowNs - lastReadNs);
+        // Keep the scope one callback behind the most recently rendered decoder block,
+        // then interpolate through that delayed block as wall time advances. Without
+        // this extra callback of latency, channel scope can lead the audible output.
+        const int64_t delayedAnchorNs = lastReadNs + static_cast<int64_t>(intervalNs);
+        const int64_t elapsedNs = std::max<int64_t>(0, nowNs - delayedAnchorNs);
         alpha = std::clamp(static_cast<double>(elapsedNs) / intervalNs, 0.0, 1.0);
     }
     // Preserve wave shape by phase-interpolating through history progression instead of

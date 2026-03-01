@@ -25,12 +25,14 @@ namespace {
 
     int openSlBufferFramesForPreset(int bufferPreset) {
         switch (bufferPreset) {
+            case 0:
+                return 512;
             case 1:
                 return 1024;
+            case 2:
+                return 2048;
             case 3:
                 return 4096;
-            case 0:
-            case 2:
             default:
                 return 2048;
         }
@@ -38,12 +40,14 @@ namespace {
 
     int audioTrackBufferFramesForPreset(int bufferPreset) {
         switch (bufferPreset) {
+            case 0:
+                return 512;
             case 1:
                 return 1024;
+            case 2:
+                return 2048;
             case 3:
                 return 4096;
-            case 0:
-            case 2:
             default:
                 return 2048;
         }
@@ -446,7 +450,6 @@ void AudioEngine::applyStreamBufferPreset() {
     }
 
     if (stream == nullptr) return;
-    if (outputBufferPreset == 0) return;
 
     if (!AAudioDyn::ensureLoaded()) return;
     auto& aaudio = AAudioDyn::api();
@@ -454,8 +457,10 @@ void AudioEngine::applyStreamBufferPreset() {
     const int32_t bufferCapacity = aaudio.streamGetBufferCapacityInFrames(stream);
     if (burstFrames <= 0 || bufferCapacity <= 0) return;
 
-    int multiplier = 2;
-    if (outputBufferPreset == 2) {
+    int multiplier = 1;
+    if (outputBufferPreset == 1) {
+        multiplier = 2;
+    } else if (outputBufferPreset == 2) {
         multiplier = 4;
     } else if (outputBufferPreset == 3) {
         multiplier = 8;

@@ -294,7 +294,7 @@ private:
     std::atomic<int> activeOutputBackend { 0 }; // 0 inactive, 1 AAudio, 2 OpenSL ES, 3 AudioTrack
     int outputBackendPreference = 0; // 0 auto, 1 aaudio, 2 opensl, 3 audiotrack
     int outputPerformanceMode = 2; // 0 auto, 1 low-latency, 2 none, 3 power-saving
-    int outputBufferPreset = 0; // 0 auto, 1 small, 2 medium, 3 large
+    int outputBufferPreset = 1; // 0 very small, 1 small, 2 medium, 3 large
     int outputResamplerPreference = 1; // 1 built-in, 2 sox
     bool outputAllowFallback = true;
     std::atomic<bool> isPlaying { false };

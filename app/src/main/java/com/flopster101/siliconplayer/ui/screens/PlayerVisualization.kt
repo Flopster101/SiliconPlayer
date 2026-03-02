@@ -81,6 +81,7 @@ import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private data class AlbumArtCrossfadeState(
@@ -1529,7 +1530,7 @@ internal fun AlbumArtPlaceholder(
                     mode = visualizationMode,
                     snapshot = snapshot
                 )
-                withContext(Dispatchers.Main.immediate) {
+                launch(Dispatchers.Main.immediate) {
                     snapshot.waveLeft?.let { visWaveLeft = it }
                     snapshot.waveRight?.let { visWaveRight = it }
                     snapshot.bars?.let { visBars = it }
@@ -1621,12 +1622,13 @@ internal fun AlbumArtPlaceholder(
                 if (pollIntervalNs != lastPollIntervalNs || nextFrameTickNs == 0L) {
                     nextFrameTickNs = nowNs + pollIntervalNs
                     lastPollIntervalNs = pollIntervalNs
-                } else {
-                    while (nextFrameTickNs <= nowNs) {
-                        nextFrameTickNs += pollIntervalNs
-                    }
                 }
-                sleepUntilTickNs(nextFrameTickNs)
+                if (nextFrameTickNs <= nowNs) {
+                    nextFrameTickNs = nowNs + pollIntervalNs
+                } else {
+                    sleepUntilTickNs(nextFrameTickNs)
+                    nextFrameTickNs += pollIntervalNs
+                }
             }
         }
     }

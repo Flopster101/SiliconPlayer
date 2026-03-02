@@ -11,9 +11,9 @@ namespace {
     }
 
     constexpr int kRenderChunkFramesVerySmall = 256;
-    constexpr int kRenderChunkFramesSmall = 512;
-    constexpr int kRenderChunkFramesMedium = 1024;
-    constexpr int kRenderChunkFramesLarge = 2048;
+    constexpr int kRenderChunkFramesSmall = 256;
+    constexpr int kRenderChunkFramesMedium = 256;
+    constexpr int kRenderChunkFramesLarge = 256;
     constexpr int kRenderTargetFramesVerySmall = 2048;
     constexpr int kRenderTargetFramesSmall = 4096;
     constexpr int kRenderTargetFramesMedium = 8192;

@@ -265,10 +265,16 @@ std::vector<float> AudioEngine::getOpenMptChannelVuLevels() {
 }
 
 std::vector<float> AudioEngine::getChannelScopeSamples(int samplesPerChannel) {
-    std::lock_guard<std::mutex> lock(decoderMutex);
-    if (!decoder) return {};
-    auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
-    return openMptDecoder ? openMptDecoder->getCurrentChannelScopeSamples(samplesPerChannel) : std::vector<float>{};
+    std::shared_ptr<ChannelScopeSharedState> state;
+    {
+        std::lock_guard<std::mutex> lock(decoderMutex);
+        if (!decoder) return {};
+        auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
+        if (!openMptDecoder) return {};
+        state = openMptDecoder->getChannelScopeSharedState();
+    }
+    if (!state) return {};
+    return state->getProcessedSamples(samplesPerChannel);
 }
 
 std::vector<int32_t> AudioEngine::getChannelScopeTextState(int maxChannels) {

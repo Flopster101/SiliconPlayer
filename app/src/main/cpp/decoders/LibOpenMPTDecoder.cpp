@@ -124,7 +124,8 @@ std::string joinNamedEntries(const std::vector<std::string>& names) {
 }
 }
 
-LibOpenMPTDecoder::LibOpenMPTDecoder() {
+LibOpenMPTDecoder::LibOpenMPTDecoder()
+    : channelScopeState(std::make_shared<ChannelScopeSharedState>()) {
 }
 
 LibOpenMPTDecoder::~LibOpenMPTDecoder() {
@@ -243,28 +244,69 @@ void LibOpenMPTDecoder::close() {
     currentSubtuneIndex = 0;
     subtuneNames.clear();
     subtuneDurationsSeconds.clear();
-    lastChannelScopeSnapshot.clear();
-    channelScopeInterpolatedPrev.clear();
-    channelScopeInterpolatedCurr.clear();
-    channelScopeFrozenFrameCount.clear();
-    lastChannelScopeChannels = 0;
-    lastChannelScopeSamplesPerChannel = 0;
     channelScopeSourceSerial = 0;
-    channelScopeConsumedSerial = 0;
     channelScopeLastReadFrames = 0;
     channelScopeLastReadNs = 0;
-    channelScopeInterpolationInitialized = false;
-    channelScopeCachedOutput.clear();
-    channelScopeOutputSerial = 0;
     toggleChannelNames.clear();
     toggleChannelMuted.clear();
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
+}
+
+void LibOpenMPTDecoder::captureChannelScopeSnapshotLocked() {
+    if constexpr (!HasChannelScopeApi<openmpt::module>) {
+        return;
+    }
+    if (!channelScopeState) return;
+
+    const int totalChannels = std::clamp(
+            moduleChannels > 0 ? moduleChannels : static_cast<int>(module->get_num_channels()),
+            0, 64);
+    if (totalChannels <= 0) return;
+
+    const int maxSamples = ChannelScopeSharedState::kMaxSamples;
+    const size_t flatSize = static_cast<size_t>(totalChannels) * maxSamples;
+
+    thread_local std::vector<float> scratchRaw;
+    thread_local std::vector<float> scratchVu;
+    scratchRaw.resize(flatSize);
+    scratchVu.resize(static_cast<size_t>(totalChannels));
+
+    for (int ch = 0; ch < totalChannels; ++ch) {
+        float* dest = scratchRaw.data() + static_cast<size_t>(ch) * maxSamples;
+        const int written = static_cast<int>(
+                module->get_current_channel_scope(ch, dest, maxSamples));
+        if (written < maxSamples && written > 0) {
+            std::fill(dest + written, dest + maxSamples, 0.0f);
+        } else if (written <= 0) {
+            std::fill(dest, dest + maxSamples, 0.0f);
+        }
+        scratchVu[static_cast<size_t>(ch)] =
+                std::clamp(module->get_current_channel_vu_mono(ch), 0.0f, 1.0f);
+    }
+
+    {
+        std::lock_guard<std::mutex> scopeLock(channelScopeState->mutex);
+        if (channelScopeState->snapshotRaw.size() != flatSize) {
+            channelScopeState->snapshotRaw.resize(flatSize);
+        }
+        std::copy(scratchRaw.begin(), scratchRaw.begin() + static_cast<ptrdiff_t>(flatSize),
+                  channelScopeState->snapshotRaw.begin());
+        if (channelScopeState->snapshotVu.size() != static_cast<size_t>(totalChannels)) {
+            channelScopeState->snapshotVu.resize(static_cast<size_t>(totalChannels));
+        }
+        std::copy(scratchVu.begin(), scratchVu.begin() + totalChannels,
+                  channelScopeState->snapshotVu.begin());
+        channelScopeState->snapshotChannels = totalChannels;
+        channelScopeState->snapshotSerial = channelScopeSourceSerial;
+    }
 }
 
 int LibOpenMPTDecoder::read(float* buffer, int numFrames) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (!module) return 0;
 
-    // render audio
     size_t count = module->read_interleaved_stereo(renderSampleRate, numFrames, buffer);
     if (count > 0) {
         channelScopeSourceSerial++;
@@ -272,9 +314,10 @@ int LibOpenMPTDecoder::read(float* buffer, int numFrames) {
         channelScopeLastReadNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()
         ).count();
+        captureChannelScopeSnapshotLocked();
     }
 
-    return (int)count;
+    return static_cast<int>(count);
 }
 
 void LibOpenMPTDecoder::seek(double seconds) {
@@ -494,52 +537,82 @@ std::vector<float> LibOpenMPTDecoder::getCurrentChannelVuLevels() {
 }
 
 std::vector<float> LibOpenMPTDecoder::getCurrentChannelScopeSamples(int samplesPerChannel) {
-    std::lock_guard<std::mutex> lock(decodeMutex);
-    if (!module) {
-        return {};
+    if (!channelScopeState) return {};
+    return channelScopeState->getProcessedSamples(samplesPerChannel);
+}
+
+void ChannelScopeSharedState::clear() {
+    std::lock_guard<std::mutex> lock(mutex);
+    snapshotRaw.clear();
+    snapshotVu.clear();
+    snapshotChannels = 0;
+    snapshotSerial = 0;
+    prevSnapshot.clear();
+    interpolatedPrev.clear();
+    interpolatedCurr.clear();
+    frozenFrameCount.clear();
+    lastChannels = 0;
+    lastSamplesPerChannel = 0;
+    consumedSerial = 0;
+    interpolationInitialized = false;
+    cachedOutput.clear();
+    outputSerial = 0;
+}
+
+std::vector<float> ChannelScopeSharedState::getProcessedSamples(int samplesPerChannel) {
+    std::vector<float> localRaw;
+    std::vector<float> localVu;
+    int localChannels = 0;
+    uint64_t localSerial = 0;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (snapshotChannels <= 0 || snapshotRaw.empty()) {
+            return {};
+        }
+        localChannels = snapshotChannels;
+        localSerial = snapshotSerial;
+        localRaw = snapshotRaw;
+        localVu = snapshotVu;
     }
-    if constexpr (!HasChannelScopeApi<openmpt::module>) {
-        return {};
-    }
-    const int clampedSamples = std::clamp(samplesPerChannel, 16, 8192);
-    const int totalChannels = std::clamp(
-            moduleChannels > 0 ? moduleChannels : static_cast<int>(module->get_num_channels()),
-            0,
-            64
-    );
-    if (totalChannels <= 0) {
-        return {};
-    }
+
+    const int clampedSamples = std::clamp(samplesPerChannel, 16, kMaxSamples);
+    const int totalChannels = localChannels;
     const size_t flattenedSize = static_cast<size_t>(totalChannels * clampedSamples);
     std::vector<float> flattened(flattenedSize, 0.0f);
+
     const bool scopeShapeChanged =
-            lastChannelScopeChannels != totalChannels ||
-            lastChannelScopeSamplesPerChannel != clampedSamples ||
-            lastChannelScopeSnapshot.size() != flattenedSize ||
-            channelScopeInterpolatedPrev.size() != flattenedSize ||
-            channelScopeInterpolatedCurr.size() != flattenedSize ||
-            channelScopeFrozenFrameCount.size() != static_cast<size_t>(totalChannels);
+            lastChannels != totalChannels ||
+            lastSamplesPerChannel != clampedSamples ||
+            prevSnapshot.size() != flattenedSize ||
+            interpolatedPrev.size() != flattenedSize ||
+            interpolatedCurr.size() != flattenedSize ||
+            frozenFrameCount.size() != static_cast<size_t>(totalChannels);
     if (scopeShapeChanged) {
-        lastChannelScopeSnapshot.assign(flattenedSize, 0.0f);
-        channelScopeInterpolatedPrev.assign(flattenedSize, 0.0f);
-        channelScopeInterpolatedCurr.assign(flattenedSize, 0.0f);
-        channelScopeFrozenFrameCount.assign(static_cast<size_t>(totalChannels), 0);
-        lastChannelScopeChannels = totalChannels;
-        lastChannelScopeSamplesPerChannel = clampedSamples;
-        channelScopeInterpolationInitialized = false;
-        channelScopeConsumedSerial = channelScopeSourceSerial;
+        prevSnapshot.assign(flattenedSize, 0.0f);
+        interpolatedPrev.assign(flattenedSize, 0.0f);
+        interpolatedCurr.assign(flattenedSize, 0.0f);
+        frozenFrameCount.assign(static_cast<size_t>(totalChannels), 0);
+        lastChannels = totalChannels;
+        lastSamplesPerChannel = clampedSamples;
+        interpolationInitialized = false;
+        consumedSerial = localSerial;
     }
-    if (channelScopeSourceSerial != channelScopeConsumedSerial || !channelScopeInterpolationInitialized) {
+    if (localSerial != consumedSerial || !interpolationInitialized) {
         std::vector<float> raw(flattenedSize, 0.0f);
         std::vector<float> processed(flattenedSize, 0.0f);
         for (int channel = 0; channel < totalChannels; ++channel) {
             const size_t channelOffset = static_cast<size_t>(channel) * clampedSamples;
             float* rawDestination = raw.data() + channelOffset;
-            const int written = static_cast<int>(module->get_current_channel_scope(channel, rawDestination, clampedSamples));
-            if (written < clampedSamples && written > 0) {
-                std::fill(rawDestination + written, rawDestination + clampedSamples, 0.0f);
+            const size_t snapshotOffset = static_cast<size_t>(channel) * kMaxSamples;
+            const int copyLen = std::min(clampedSamples, kMaxSamples);
+            std::copy(localRaw.data() + snapshotOffset,
+                      localRaw.data() + snapshotOffset + copyLen,
+                      rawDestination);
+            if (copyLen < clampedSamples) {
+                std::fill(rawDestination + copyLen, rawDestination + clampedSamples, 0.0f);
             }
-            const float* previous = lastChannelScopeSnapshot.data() + channelOffset;
+
+            const float* previous = prevSnapshot.data() + channelOffset;
             bool sameAsPrevious = true;
             float peak = 0.0f;
             float prevPeak = 0.0f;
@@ -555,13 +628,14 @@ std::vector<float> LibOpenMPTDecoder::getCurrentChannelScopeSamples(int samplesP
                 prevPeak = std::max(prevPeak, std::abs(prevValue));
             }
 
-            auto& frozenFrames = channelScopeFrozenFrameCount[static_cast<size_t>(channel)];
-            const float channelVu = std::clamp(module->get_current_channel_vu_mono(channel), 0.0f, 1.0f);
+            auto& frozen = frozenFrameCount[static_cast<size_t>(channel)];
+            const float channelVu = (static_cast<size_t>(channel) < localVu.size())
+                    ? localVu[static_cast<size_t>(channel)]
+                    : 0.0f;
             const float meanDelta = deltaSum / static_cast<float>(clampedSamples);
             const float rms = std::sqrt(rmsAcc / static_cast<float>(clampedSamples));
             const bool frameNearlyFrozen = meanDelta < 0.0005f;
             const bool looksSilentNow = (channelVu < 0.00035f) && (rms < 0.0045f);
-            // Stale tail-hold: non-zero frozen shape while channel output is effectively silent.
             const bool abruptTailFreeze =
                     looksSilentNow &&
                     (peak > 0.018f || prevPeak > 0.018f) &&
@@ -571,24 +645,22 @@ std::vector<float> LibOpenMPTDecoder::getCurrentChannelScopeSamples(int samplesP
                     (!frameNearlyFrozen || channelVu > 0.03f);
             bool suppressStaleScope = false;
             if (abruptTailFreeze) {
-                frozenFrames = 3;
+                frozen = 3;
                 suppressStaleScope = true;
             } else if (likelyFreshSignal) {
-                frozenFrames = 0;
+                frozen = 0;
             } else {
-                if (frozenFrames < 255) {
-                    frozenFrames++;
+                if (frozen < 255) {
+                    frozen++;
                 }
-                // Secondary guard for slow VU decay: collapse frozen low-energy shapes earlier.
                 if (!suppressStaleScope &&
                     frameNearlyFrozen &&
-                    frozenFrames >= 6 &&
+                    frozen >= 6 &&
                     channelVu < 0.03f &&
                     (peak > 0.012f || prevPeak > 0.012f)) {
                     suppressStaleScope = true;
                 }
-                // Keep 3-frame debounce to avoid single-frame flatline flicker.
-                if (frozenFrames >= 3) {
+                if (frozen >= 3) {
                     suppressStaleScope = true;
                 }
             }
@@ -600,30 +672,29 @@ std::vector<float> LibOpenMPTDecoder::getCurrentChannelScopeSamples(int samplesP
                 std::copy(rawDestination, rawDestination + clampedSamples, processedDestination);
             }
         }
-        lastChannelScopeSnapshot = std::move(raw);
-        if (!channelScopeInterpolationInitialized) {
-            channelScopeInterpolatedPrev = processed;
-            channelScopeInterpolatedCurr = processed;
-            channelScopeInterpolationInitialized = true;
+        prevSnapshot = std::move(raw);
+        if (!interpolationInitialized) {
+            interpolatedPrev = processed;
+            interpolatedCurr = processed;
+            interpolationInitialized = true;
         } else {
-            channelScopeInterpolatedPrev = channelScopeInterpolatedCurr;
-            channelScopeInterpolatedCurr = processed;
+            interpolatedPrev = interpolatedCurr;
+            interpolatedCurr = processed;
         }
-        channelScopeConsumedSerial = channelScopeSourceSerial;
-        // Copy latest processed frame directly into output and cache it.
+        consumedSerial = localSerial;
         for (int channel = 0; channel < totalChannels; ++channel) {
             const size_t channelOffset = static_cast<size_t>(channel) * static_cast<size_t>(clampedSamples);
-            const float* curr = channelScopeInterpolatedCurr.data() + channelOffset;
+            const float* curr = interpolatedCurr.data() + channelOffset;
             float* out = flattened.data() + channelOffset;
             std::copy(curr, curr + clampedSamples, out);
         }
-        channelScopeCachedOutput = flattened;
-        channelScopeOutputSerial = channelScopeConsumedSerial;
+        cachedOutput = flattened;
+        outputSerial = consumedSerial;
         return flattened;
     }
     // No new audio data — return cached output.
-    if (!channelScopeCachedOutput.empty() && channelScopeCachedOutput.size() == flattenedSize) {
-        return channelScopeCachedOutput;
+    if (!cachedOutput.empty() && cachedOutput.size() == flattenedSize) {
+        return cachedOutput;
     }
     return flattened;
 }

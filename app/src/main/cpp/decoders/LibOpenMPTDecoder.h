@@ -12,6 +12,30 @@
 #include <string>
 #include <cstdint>
 
+struct ChannelScopeSharedState {
+    mutable std::mutex mutex;
+    static constexpr int kMaxSamples = 8192;
+
+    std::vector<float> snapshotRaw;
+    std::vector<float> snapshotVu;
+    int snapshotChannels = 0;
+    uint64_t snapshotSerial = 0;
+
+    std::vector<float> prevSnapshot;
+    std::vector<float> interpolatedPrev;
+    std::vector<float> interpolatedCurr;
+    std::vector<std::uint8_t> frozenFrameCount;
+    int lastChannels = 0;
+    int lastSamplesPerChannel = 0;
+    uint64_t consumedSerial = 0;
+    bool interpolationInitialized = false;
+    std::vector<float> cachedOutput;
+    uint64_t outputSerial = 0;
+
+    std::vector<float> getProcessedSamples(int samplesPerChannel);
+    void clear();
+};
+
 class LibOpenMPTDecoder : public AudioDecoder {
 public:
     LibOpenMPTDecoder();
@@ -47,6 +71,7 @@ public:
     int getModuleChannelCount();
     std::vector<float> getCurrentChannelVuLevels();
     std::vector<float> getCurrentChannelScopeSamples(int samplesPerChannel);
+    std::shared_ptr<ChannelScopeSharedState> getChannelScopeSharedState() const { return channelScopeState; }
     std::vector<int32_t> getChannelScopeTextState(int maxChannels) override;
     std::vector<std::string> getToggleChannelNames() override;
     void setToggleChannelMuted(int channelIndex, bool enabled) override;
@@ -108,21 +133,16 @@ private:
     int currentSubtuneIndex = 0;
     std::vector<std::string> subtuneNames;
     std::vector<double> subtuneDurationsSeconds;
-    std::vector<float> lastChannelScopeSnapshot;
-    std::vector<float> channelScopeInterpolatedPrev;
-    std::vector<float> channelScopeInterpolatedCurr;
-    std::vector<std::uint8_t> channelScopeFrozenFrameCount;
-    int lastChannelScopeChannels = 0;
-    int lastChannelScopeSamplesPerChannel = 0;
+
+    std::shared_ptr<ChannelScopeSharedState> channelScopeState;
     uint64_t channelScopeSourceSerial = 0;
-    uint64_t channelScopeConsumedSerial = 0;
     int channelScopeLastReadFrames = 0;
     int64_t channelScopeLastReadNs = 0;
-    bool channelScopeInterpolationInitialized = false;
-    std::vector<float> channelScopeCachedOutput;
-    uint64_t channelScopeOutputSerial = 0;
+
     std::vector<std::string> toggleChannelNames;
     std::vector<bool> toggleChannelMuted;
+
+    void captureChannelScopeSnapshotLocked();
 
     void applyRenderSettingsLocked();
     void rebuildToggleChannelsLocked();

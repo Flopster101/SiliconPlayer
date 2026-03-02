@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <sys/resource.h>
 #include <sys/syscall.h>
+#include <thread>
 #include <unistd.h>
 
 extern "C" {
@@ -622,7 +623,7 @@ void AudioEngine::renderWorkerLoop() {
         bool needsFill = false;
         {
             std::unique_lock<std::mutex> lock(renderQueueMutex);
-            renderWorkerCv.wait(lock, [this, targetFrames]() {
+            renderWorkerCv.wait_for(lock, std::chrono::milliseconds(7), [this, targetFrames]() {
                 if (renderWorkerStop) return true;
                 if (!isPlaying.load() || seekInProgress.load()) return false;
                 const size_t availableSamples = renderQueueSamples.size() > renderQueueOffset
@@ -642,6 +643,12 @@ void AudioEngine::renderWorkerLoop() {
                     : 0u;
             const int bufferedFrames = static_cast<int>(availableSamples / 2u);
             needsFill = bufferedFrames < targetFrames;
+
+            // Allow a small overshoot above target to keep scope snapshots
+            // flowing during idle gaps between AAudio callbacks.
+            if (!needsFill && bufferedFrames < targetFrames + 512) {
+                needsFill = true;
+            }
         }
 
         if (!needsFill) {
@@ -763,6 +770,17 @@ void AudioEngine::renderWorkerLoop() {
         }
 
         appendRenderQueue(localBuffer.data(), chunkFrames, channels);
+
+        // Pace chunk renders so scope captures are spread evenly across
+        // time rather than clustering in a burst after each AAudio callback.
+        // Skip pacing when buffer is critically low to avoid underruns.
+        {
+            const int currentLevel = renderQueueFrames();
+            const int safetyThreshold = std::max(targetFrames / 4, 1024);
+            if (currentLevel > safetyThreshold && currentLevel < targetFrames) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(6));
+            }
+        }
 
         if (!isPlaying.load() && renderTerminalStopPending.load()) {
             renderWorkerCv.notify_all();

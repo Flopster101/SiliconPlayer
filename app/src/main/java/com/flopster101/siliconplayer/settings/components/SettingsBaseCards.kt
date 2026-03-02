@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -109,6 +110,7 @@ internal fun SettingsRowContainer(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(shape)
             .clickable(enabled = enabled, onClick = onClick),
         shape = shape,
         color = MaterialTheme.colorScheme.surfaceContainerLow,

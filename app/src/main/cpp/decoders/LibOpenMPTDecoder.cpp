@@ -254,6 +254,8 @@ void LibOpenMPTDecoder::close() {
     channelScopeLastReadFrames = 0;
     channelScopeLastReadNs = 0;
     channelScopeInterpolationInitialized = false;
+    channelScopeCachedOutput.clear();
+    channelScopeOutputSerial = 0;
     toggleChannelNames.clear();
     toggleChannelMuted.clear();
 }
@@ -608,54 +610,20 @@ std::vector<float> LibOpenMPTDecoder::getCurrentChannelScopeSamples(int samplesP
             channelScopeInterpolatedCurr = processed;
         }
         channelScopeConsumedSerial = channelScopeSourceSerial;
-    }
-
-    const int effectiveRate = std::max(renderSampleRate, 1);
-    const int lastFrames = std::max(channelScopeLastReadFrames, 1);
-    const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch()
-    ).count();
-    const int64_t lastReadNs = channelScopeLastReadNs;
-    const double intervalNs = static_cast<double>(lastFrames) * (1'000'000'000.0 / static_cast<double>(effectiveRate));
-    double alpha = 0.0;
-    if (lastReadNs > 0 && intervalNs > 0.0) {
-        // Keep the scope one callback behind the most recently rendered decoder block,
-        // then interpolate through that delayed block as wall time advances. Without
-        // this extra callback of latency, channel scope can lead the audible output.
-        const int64_t delayedAnchorNs = lastReadNs + static_cast<int64_t>(intervalNs);
-        const int64_t elapsedNs = std::max<int64_t>(0, nowNs - delayedAnchorNs);
-        alpha = std::clamp(static_cast<double>(elapsedNs) / intervalNs, 0.0, 1.0);
-    }
-    // Preserve wave shape by phase-interpolating through history progression instead of
-    // value-crossfading two independently triggered scope frames.
-    const float deltaSamples = std::clamp(
-            static_cast<float>(alpha * static_cast<double>(lastFrames)),
-            0.0f,
-            static_cast<float>(clampedSamples - 1)
-    );
-    const float stableRegionLength = static_cast<float>(clampedSamples) - deltaSamples;
-    auto sampleLinear = [](const float* source, int size, float pos) -> float {
-        const float clamped = std::clamp(pos, 0.0f, static_cast<float>(size - 1));
-        const int idx0 = static_cast<int>(clamped);
-        const int idx1 = std::min(idx0 + 1, size - 1);
-        const float frac = clamped - static_cast<float>(idx0);
-        const float a = source[idx0];
-        const float b = source[idx1];
-        return a + ((b - a) * frac);
-    };
-    for (int channel = 0; channel < totalChannels; ++channel) {
-        const size_t channelOffset = static_cast<size_t>(channel) * static_cast<size_t>(clampedSamples);
-        const float* prev = channelScopeInterpolatedPrev.data() + channelOffset;
-        const float* curr = channelScopeInterpolatedCurr.data() + channelOffset;
-        float* out = flattened.data() + channelOffset;
-        for (int i = 0; i < clampedSamples; ++i) {
-            const float indexF = static_cast<float>(i);
-            if (indexF < stableRegionLength) {
-                out[i] = sampleLinear(prev, clampedSamples, indexF + deltaSamples);
-            } else {
-                out[i] = sampleLinear(curr, clampedSamples, indexF);
-            }
+        // Copy latest processed frame directly into output and cache it.
+        for (int channel = 0; channel < totalChannels; ++channel) {
+            const size_t channelOffset = static_cast<size_t>(channel) * static_cast<size_t>(clampedSamples);
+            const float* curr = channelScopeInterpolatedCurr.data() + channelOffset;
+            float* out = flattened.data() + channelOffset;
+            std::copy(curr, curr + clampedSamples, out);
         }
+        channelScopeCachedOutput = flattened;
+        channelScopeOutputSerial = channelScopeConsumedSerial;
+        return flattened;
+    }
+    // No new audio data — return cached output.
+    if (!channelScopeCachedOutput.empty() && channelScopeCachedOutput.size() == flattenedSize) {
+        return channelScopeCachedOutput;
     }
     return flattened;
 }

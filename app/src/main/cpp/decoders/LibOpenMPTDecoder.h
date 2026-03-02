@@ -119,6 +119,8 @@ private:
     int channelScopeLastReadFrames = 0;
     int64_t channelScopeLastReadNs = 0;
     bool channelScopeInterpolationInitialized = false;
+    std::vector<float> channelScopeCachedOutput;
+    uint64_t channelScopeOutputSerial = 0;
     std::vector<std::string> toggleChannelNames;
     std::vector<bool> toggleChannelMuted;
 

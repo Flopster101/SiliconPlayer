@@ -22,7 +22,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -65,8 +64,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
@@ -94,6 +97,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
@@ -143,6 +147,7 @@ import kotlin.coroutines.coroutineContext
 import androidx.compose.foundation.text.selection.SelectionContainer
 
 internal val LocalPlayerFocusIndicatorsEnabled = compositionLocalOf { true }
+private val LocalPlayerMarqueeClockState = compositionLocalOf<State<Long>> { mutableLongStateOf(0L) }
 
 private const val PREF_KEY_VIS_OSC_WINDOW_MS = "visualization_osc_window_ms"
 private const val PREF_KEY_VIS_OSC_TRIGGER_MODE = "visualization_osc_trigger_mode"
@@ -563,6 +568,33 @@ private fun rememberPlayerVisualizationPreferenceState(
     return state
 }
 
+@Composable
+private fun rememberPlayerMarqueeClockState(resetKey: Any?): State<Long> {
+    val clockState = remember { mutableLongStateOf(0L) }
+    LaunchedEffect(resetKey) {
+        val startTimeMs = withFrameMillis { it }
+        clockState.longValue = 0L
+        while (true) {
+            clockState.longValue = withFrameMillis { it - startTimeMs }
+        }
+    }
+    return clockState
+}
+
+private fun playerMarqueeMotionFadeAlpha(
+    elapsedMs: Int,
+    segmentDurationMs: Int,
+    fadeInMs: Int,
+    fadeOutMs: Int
+): Float {
+    if (segmentDurationMs <= 0) return 0f
+    val fadeInProgress = (elapsedMs.toFloat() / fadeInMs.coerceAtLeast(1)).coerceIn(0f, 1f)
+    val fadeOutProgress = (
+        (segmentDurationMs - elapsedMs).toFloat() / fadeOutMs.coerceAtLeast(1)
+        ).coerceIn(0f, 1f)
+    return minOf(fadeInProgress, fadeOutProgress)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun PlayerScreen(
@@ -698,6 +730,7 @@ internal fun PlayerScreen(
     val topArrowFocusRequester = remember { FocusRequester() }
     val primaryContentFocusRequester = remember { FocusRequester() }
     var showRemainingTime by rememberSaveable { mutableStateOf(false) }
+    val playerMarqueeClockState = rememberPlayerMarqueeClockState(file?.absolutePath)
 
     val hasTrack = file != null
     val remoteLoadUiState = RemoteLoadUiStateHolder.current
@@ -870,36 +903,37 @@ internal fun PlayerScreen(
                 }
             )
     ) {
-        Scaffold(
-            topBar = {
-                PlayerTopBar(
-                    isLandscape = isLandscape,
-                    isTabletLike = isTabletLike,
-                    compactPortraitHeader = shortPortraitDevice,
-                    onBack = onBack,
-                    enableCollapseGesture = enableCollapseGesture,
-                    focusRequester = topArrowFocusRequester,
-                    downFocusRequester = if (canSeek && durationSeconds > 0.0) {
-                        primaryContentFocusRequester
-                    } else {
-                        transportAnchorFocusRequester
-                    }
-                )
-            }
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .background(
-                        brush = Brush.verticalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.background,
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+        CompositionLocalProvider(LocalPlayerMarqueeClockState provides playerMarqueeClockState) {
+            Scaffold(
+                topBar = {
+                    PlayerTopBar(
+                        isLandscape = isLandscape,
+                        isTabletLike = isTabletLike,
+                        compactPortraitHeader = shortPortraitDevice,
+                        onBack = onBack,
+                        enableCollapseGesture = enableCollapseGesture,
+                        focusRequester = topArrowFocusRequester,
+                        downFocusRequester = if (canSeek && durationSeconds > 0.0) {
+                            primaryContentFocusRequester
+                        } else {
+                            transportAnchorFocusRequester
+                        }
+                    )
+                }
+            ) { innerPadding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.background,
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                                )
                             )
                         )
-                    )
-            ) {
+                ) {
             if (isLandscape) {
                 BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                     val landscapeWidthScale = normalizedScale(maxWidth, compactDp = 640.dp, roomyDp = 1280.dp)
@@ -1547,6 +1581,8 @@ internal fun PlayerScreen(
             }
         }
     }
+    }
+    }
     if (showTrackInfoDialog) {
         TrackInfoDetailsDialog(
             file = file,
@@ -1579,7 +1615,6 @@ internal fun PlayerScreen(
             onDismiss = { showChannelControlDialog = false }
         )
     }
-}
 }
 
 private fun handlePlayerGlobalKeyDown(
@@ -2110,6 +2145,171 @@ private fun TrackInfoChip(
 }
 
 @Composable
+private fun PlayerMarqueeText(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    textAlign: TextAlign = TextAlign.Start,
+    color: Color = Color.Unspecified
+) {
+    BoxWithConstraints(
+        modifier = modifier.fillMaxWidth()
+    ) {
+        val textMeasurer = rememberTextMeasurer()
+        val density = LocalDensity.current
+        val maxWidthPx = with(density) { maxWidth.roundToPx().coerceAtLeast(1) }
+        val measuredText = remember(text, style) {
+            textMeasurer.measure(
+                text = AnnotatedString(text),
+                style = style,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip
+            )
+        }
+        val marqueeTrailingGap = 18.dp
+        val marqueeEdgeFade = 14.dp
+        val marqueeTrailingGapPx = with(density) { marqueeTrailingGap.roundToPx() }
+        val marqueeEdgeFadePx = with(density) { marqueeEdgeFade.toPx() }
+        val overflowPx = (measuredText.size.width - maxWidthPx).coerceAtLeast(0)
+        val sharedTimeMs = LocalPlayerMarqueeClockState.current.value
+        val startPauseMs = 900
+        val forwardDurationMs = 2200
+        val turnaroundPauseMs = 1050
+        val returnDurationMs = 1720
+        val resetPauseMs = 1500
+        val fadeInMs = 180
+        val fadeOutMs = 260
+        val targetOffset = if (overflowPx > 0) -(overflowPx + marqueeTrailingGapPx).toFloat() else 0f
+        val cycleDurationMs = startPauseMs + forwardDurationMs + turnaroundPauseMs + returnDurationMs + resetPauseMs
+        val cyclePositionMs = if (overflowPx > 0 && cycleDurationMs > 0) {
+            (sharedTimeMs % cycleDurationMs.toLong()).toInt()
+        } else {
+            0
+        }
+        val marqueeOffsetPx = when {
+            overflowPx <= 0 -> 0f
+            cyclePositionMs < startPauseMs -> 0f
+            cyclePositionMs < startPauseMs + forwardDurationMs -> {
+                val forwardElapsedMs = cyclePositionMs - startPauseMs
+                val forwardProgress = (forwardElapsedMs.toFloat() / forwardDurationMs).coerceIn(0f, 1f)
+                targetOffset * forwardProgress
+            }
+            cyclePositionMs < startPauseMs + forwardDurationMs + turnaroundPauseMs -> targetOffset
+            cyclePositionMs < startPauseMs + forwardDurationMs + turnaroundPauseMs + returnDurationMs -> {
+                val returnElapsedMs = cyclePositionMs - startPauseMs - forwardDurationMs - turnaroundPauseMs
+                val returnProgress = (returnElapsedMs.toFloat() / returnDurationMs).coerceIn(0f, 1f)
+                targetOffset * (1f - returnProgress)
+            }
+            else -> 0f
+        }
+        val marqueeFadeAlpha = when {
+            overflowPx <= 0 -> 0f
+            cyclePositionMs < startPauseMs -> 0f
+            cyclePositionMs < startPauseMs + forwardDurationMs -> {
+                val forwardElapsedMs = cyclePositionMs - startPauseMs
+                playerMarqueeMotionFadeAlpha(
+                    elapsedMs = forwardElapsedMs,
+                    segmentDurationMs = forwardDurationMs,
+                    fadeInMs = fadeInMs,
+                    fadeOutMs = fadeOutMs
+                )
+            }
+            cyclePositionMs < startPauseMs + forwardDurationMs + turnaroundPauseMs -> 0f
+            cyclePositionMs < startPauseMs + forwardDurationMs + turnaroundPauseMs + returnDurationMs -> {
+                val returnElapsedMs = cyclePositionMs - startPauseMs - forwardDurationMs - turnaroundPauseMs
+                playerMarqueeMotionFadeAlpha(
+                    elapsedMs = returnElapsedMs,
+                    segmentDurationMs = returnDurationMs,
+                    fadeInMs = fadeInMs,
+                    fadeOutMs = fadeOutMs
+                )
+            }
+            else -> 0f
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clipToBounds()
+                .then(
+                    if (overflowPx > 0 && marqueeFadeAlpha > 0f) {
+                        Modifier
+                            .graphicsLayer {
+                                compositingStrategy = CompositingStrategy.Offscreen
+                            }
+                            .drawWithContent {
+                                drawContent()
+                                val fadeWidthPx = marqueeEdgeFadePx.coerceAtMost(size.width / 2f)
+                                if (fadeWidthPx > 0f) {
+                                    val opaqueMaskAlpha = 1f - marqueeFadeAlpha
+                                    drawRect(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color.Black.copy(alpha = opaqueMaskAlpha),
+                                                Color.Black
+                                            ),
+                                            startX = 0f,
+                                            endX = fadeWidthPx
+                                        ),
+                                        topLeft = Offset.Zero,
+                                        size = Size(fadeWidthPx, size.height),
+                                        blendMode = BlendMode.DstIn
+                                    )
+                                    drawRect(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color.Black,
+                                                Color.Black.copy(alpha = opaqueMaskAlpha)
+                                            ),
+                                            startX = size.width - fadeWidthPx,
+                                            endX = size.width
+                                        ),
+                                        topLeft = Offset(size.width - fadeWidthPx, 0f),
+                                        size = Size(fadeWidthPx, size.height),
+                                        blendMode = BlendMode.DstIn
+                                    )
+                                }
+                            }
+                    } else {
+                        Modifier
+                    }
+                )
+        ) {
+            if (overflowPx > 0) {
+                Row(
+                    modifier = Modifier
+                        .wrapContentWidth(align = Alignment.Start, unbounded = true)
+                        .graphicsLayer { translationX = marqueeOffsetPx }
+                ) {
+                    Text(
+                        text = text,
+                        style = style,
+                        color = color,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip,
+                        textAlign = TextAlign.Start
+                    )
+                    Spacer(Modifier.width(marqueeTrailingGap))
+                }
+            } else {
+                Text(
+                    text = text,
+                    style = style,
+                    color = color,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = textAlign,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
 @OptIn(ExperimentalFoundationApi::class)
 private fun PortraitTrackMetadataBlock(
     title: String,
@@ -2232,11 +2432,9 @@ private fun PortraitTrackMetadataBlock(
                         },
                         label = "portraitSubtuneTrackTitleSwap"
                     ) { animatedTitle ->
-                        Text(
+                        PlayerMarqueeText(
                             text = animatedTitle,
                             style = titleTextStyle,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                             textAlign = TextAlign.Start
                         )
                     }
@@ -2262,13 +2460,10 @@ private fun PortraitTrackMetadataBlock(
                     },
                     label = "portraitTrackTitleSwap"
                 ) { animatedTitle ->
-                    Text(
+                    PlayerMarqueeText(
                         text = animatedTitle,
                         style = titleTextStyle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Start,
-                        modifier = Modifier.fillMaxWidth()
+                        textAlign = TextAlign.Start
                     )
                 }
             }
@@ -2346,54 +2541,24 @@ private fun PortraitTrackMetadataBlock(
                         }
                     )
                 )
-                BoxWithConstraints(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clipToBounds()
-                ) {
-                    val textMeasurer = rememberTextMeasurer()
-                    val density = LocalDensity.current
-                    val maxWidthPx = with(density) { maxWidth.roundToPx().coerceAtLeast(1) }
-                    val shouldMarqueeFilename = remember(filename, filenameTextStyle, maxWidthPx) {
-                        textMeasurer.measure(
-                            text = AnnotatedString(filename),
-                            style = filenameTextStyle,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Clip,
-                            constraints = Constraints(maxWidth = maxWidthPx)
-                        ).hasVisualOverflow
-                    }
-                    AnimatedContent(
-                        targetState = filename,
-                        transitionSpec = {
-                            fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 20)) togetherWith
-                                fadeOut(animationSpec = tween(durationMillis = 110))
-                        },
-                        label = "portraitTrackFilenameSwap"
-                    ) { animatedFilename ->
-                        Text(
-                            text = animatedFilename,
-                            style = filenameTextStyle,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = if (shouldMarqueeFilename) TextOverflow.Clip else TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Start,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(
-                                    if (shouldMarqueeFilename) {
-                                        Modifier.basicMarquee(
-                                            iterations = 3,
-                                            initialDelayMillis = 550
-                                        )
-                                    } else {
-                                        Modifier
-                                    }
-                                )
-                        )
-                    }
+                AnimatedContent(
+                    targetState = filename,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 20)) togetherWith
+                            fadeOut(animationSpec = tween(durationMillis = 110))
+                    },
+                    label = "portraitTrackFilenameSwap"
+                ) { animatedFilename ->
+                    Text(
+                        text = animatedFilename,
+                        style = filenameTextStyle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
@@ -2539,28 +2704,12 @@ private fun TrackMetadataBlock(
             },
             label = "trackTitleSwap"
         ) { (animatedTitle, animatedSubtuneBadge) ->
-            val shouldMarquee = animatedTitle.length > 30
-            if (shouldMarquee && animatedSubtuneBadge == null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clipToBounds()
-                ) {
-                    Text(
-                        text = animatedTitle,
-                        style = titleTextStyle,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Clip,
-                        textAlign = TextAlign.Start,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .basicMarquee(
-                                iterations = 3,
-                                initialDelayMillis = 450
-                            )
-                    )
-                }
+            if (animatedSubtuneBadge == null) {
+                PlayerMarqueeText(
+                    text = animatedTitle,
+                    style = titleTextStyle,
+                    textAlign = TextAlign.Start
+                )
             } else {
                 Row(
                     modifier = Modifier
@@ -2591,15 +2740,13 @@ private fun TrackMetadataBlock(
                             overflow = TextOverflow.Ellipsis,
                             textAlign = TextAlign.Center
                         )
-                        if (animatedSubtuneBadge != null) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = animatedSubtuneBadge,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                                maxLines = 1
-                            )
-                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = animatedSubtuneBadge,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+                            maxLines = 1
+                        )
                     }
                 }
             }
@@ -2632,46 +2779,16 @@ private fun TrackMetadataBlock(
                 Spacer(modifier = Modifier.height(artistFilenameSpacer))
                 val filenameTextStyle = MaterialTheme.typography.bodySmall
                 val filenameColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f)
-                val textMeasurer = rememberTextMeasurer()
-                val density = LocalDensity.current
-                BoxWithConstraints(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clipToBounds()
-                ) {
-                    val maxWidthPx = with(density) { maxWidth.roundToPx().coerceAtLeast(1) }
-                    val shouldMarqueeFilename = remember(filename, filenameTextStyle, maxWidthPx) {
-                        textMeasurer.measure(
-                            text = AnnotatedString(filename),
-                            style = filenameTextStyle,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Clip,
-                            constraints = Constraints(maxWidth = maxWidthPx)
-                        ).hasVisualOverflow
-                    }
-                    Text(
-                        text = filename,
-                        style = filenameTextStyle,
-                        color = filenameColor,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = if (shouldMarqueeFilename) TextOverflow.Clip else TextOverflow.Ellipsis,
-                        textAlign = if (shouldMarqueeFilename) TextAlign.Start else TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(
-                                if (shouldMarqueeFilename) {
-                                    Modifier.basicMarquee(
-                                        iterations = 3,
-                                        initialDelayMillis = 550
-                                    )
-                                } else {
-                                    Modifier
-                                }
-                            )
-                    )
-                }
+                Text(
+                    text = filename,
+                    style = filenameTextStyle,
+                    color = filenameColor,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }

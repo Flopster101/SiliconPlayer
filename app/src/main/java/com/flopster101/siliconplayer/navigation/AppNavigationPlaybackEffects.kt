@@ -172,11 +172,4 @@ internal fun AppNavigationPlaybackEffects(
         restorePlayerStateFromSessionAndNative(shouldOpenExpandedFromSignal)
     }
 
-    LaunchedEffect(notificationOpenSignal, openPlayerFromNotification, selectedFile) {
-        if (notificationOpenSignal <= 0) return@LaunchedEffect
-        if (selectedFile == null) return@LaunchedEffect
-        if (openPlayerFromNotification) {
-            restorePlayerStateFromSessionAndNative(true)
-        }
-    }
 }

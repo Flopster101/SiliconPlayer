@@ -502,12 +502,15 @@ private class ChannelScopeGlCoreRenderer {
             if (history.size < 2) continue
             val triggerIndex = frame.triggerIndices.getOrNull(channel)?.coerceIn(0, history.size - 1)
                 ?: (history.size / 2)
-            val phaseOffset = if (frame.triggerModeNative == 0) 0 else history.size / 2
-            val startIndexRaw = ((triggerIndex - phaseOffset) % history.size + history.size) % history.size
             val edgeTrim = ((history.size * 0.04f).toInt()).coerceIn(0, ((history.size - 2) / 2).coerceAtLeast(0))
             val visibleSamples = history.size - (edgeTrim * 2)
             if (visibleSamples < 2) continue
-            val startIndex = (startIndexRaw + edgeTrim) % history.size
+            val halfVisible = visibleSamples / 2
+            val startIndex = if (frame.triggerModeNative == 0) {
+                edgeTrim
+            } else {
+                (triggerIndex - halfVisible).coerceIn(0, history.size - visibleSamples)
+            }
             val maxRenderSamples = cellWidth.toInt().coerceIn(96, 1024)
             val renderSamples = visibleSamples.coerceIn(2, maxRenderSamples)
             val sampleStep = if (renderSamples <= 1) {
@@ -567,8 +570,8 @@ private class ChannelScopeGlCoreRenderer {
         val clampedOffset = sampleOffset.coerceIn(0f, (size - 1).toFloat())
         val base = clampedOffset.toInt().coerceIn(0, size - 1)
         val frac = (clampedOffset - base.toFloat()).coerceIn(0f, 1f)
-        val idx0 = (startIndex + base) % size
-        val idx1 = (idx0 + 1) % size
+        val idx0 = (startIndex + base).coerceIn(0, size - 1)
+        val idx1 = (idx0 + 1).coerceIn(0, size - 1)
         val s0 = history[idx0].coerceIn(-1f, 1f)
         val s1 = history[idx1].coerceIn(-1f, 1f)
         return s0 + ((s1 - s0) * frac)

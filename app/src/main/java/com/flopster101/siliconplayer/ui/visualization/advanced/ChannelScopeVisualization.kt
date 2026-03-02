@@ -71,14 +71,17 @@ fun ChannelScopeVisualization(
                 .getOrNull(channel)
                 ?.coerceIn(0, history.size - 1)
                 ?: findTriggerIndex(history, triggerModeNative)
-            val phaseOffset = if (triggerModeNative == 0) 0 else history.size / 2
-            val startIndexRaw = ((triggerIndex - phaseOffset) % history.size + history.size) % history.size
             val edgeTrim = ((history.size * 0.04f).toInt()).coerceIn(0, ((history.size - 2) / 2).coerceAtLeast(0))
             val visibleSamples = history.size - (edgeTrim * 2)
             if (visibleSamples < 2) {
                 continue
             }
-            val startIndex = (startIndexRaw + edgeTrim) % history.size
+            val halfVisible = visibleSamples / 2
+            val startIndex = if (triggerModeNative == 0) {
+                edgeTrim
+            } else {
+                (triggerIndex - halfVisible).coerceIn(0, history.size - visibleSamples)
+            }
             val stepX = cellWidth / (visibleSamples - 1).coerceAtLeast(1).toFloat()
 
             clipRect(left = left, top = top, right = left + cellWidth, bottom = top + cellHeight) {
@@ -104,8 +107,8 @@ fun ChannelScopeVisualization(
                 }
 
                 for (i in 1 until visibleSamples) {
-                    val samplePrev = history[(startIndex + i - 1) % history.size].coerceIn(-1f, 1f)
-                    val sampleNext = history[(startIndex + i) % history.size].coerceIn(-1f, 1f)
+                    val samplePrev = history[(startIndex + i - 1).coerceIn(0, history.lastIndex)].coerceIn(-1f, 1f)
+                    val sampleNext = history[(startIndex + i).coerceIn(0, history.lastIndex)].coerceIn(-1f, 1f)
                     val x0 = left + (i - 1) * stepX
                     val x1 = left + i * stepX
                     val y0 = centerY - (samplePrev * ampScale)

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include "AudioEngine.h"
 #include "AudioTrackJniBridge.h"
+#include "ChannelScopeTrigger.h"
 #include "decoders/DecoderRegistry.h"
 #include "decoders/UadeDecoder.h"
 #include <vector>
@@ -12,6 +13,7 @@
 #include <mutex>
 static AudioEngine *audioEngine = nullptr;
 static std::mutex engineMutex;
+static ChannelScopeTrigger channelScopeTrigger;
 static jstring toJString(JNIEnv* env, std::string_view value);
 static JavaVM* gJavaVm = nullptr;
 static jclass gNativeBridgeClass = nullptr;
@@ -824,6 +826,33 @@ Java_com_flopster101_siliconplayer_NativeBridge_getChannelScopeTextState(JNIEnv*
         return env->NewIntArray(0);
     }
     return toJIntArray(env, audioEngine->getChannelScopeTextState(static_cast<int>(maxChannels)));
+}
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_computeChannelScopeTriggers(
+    JNIEnv* env, jobject,
+    jfloatArray flatScopeData, jint samplesPerChannel, jint numChannels,
+    jint triggerModeNative, jint algorithmMode
+) {
+    if (flatScopeData == nullptr) return env->NewIntArray(0);
+    jint dataLen = env->GetArrayLength(flatScopeData);
+    if (dataLen <= 0 || samplesPerChannel < 8 || numChannels <= 0) return env->NewIntArray(0);
+
+    jfloat* dataPtr = env->GetFloatArrayElements(flatScopeData, nullptr);
+    if (dataPtr == nullptr) return env->NewIntArray(0);
+
+    auto indices = channelScopeTrigger.computeTriggerIndices(
+        dataPtr, static_cast<int>(samplesPerChannel), static_cast<int>(numChannels),
+        static_cast<int>(triggerModeNative), static_cast<int>(algorithmMode)
+    );
+
+    env->ReleaseFloatArrayElements(flatScopeData, dataPtr, JNI_ABORT);
+    return toJIntArray(env, indices);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_resetChannelScopeTriggers(JNIEnv*, jobject) {
+    channelScopeTrigger.reset();
 }
 
 extern "C" JNIEXPORT jstring JNICALL

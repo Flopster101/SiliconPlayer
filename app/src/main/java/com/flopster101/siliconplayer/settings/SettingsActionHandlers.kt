@@ -548,6 +548,10 @@ internal fun resetVisualizationChannelScopeSettingsAction(
             AppDefaults.Visualization.ChannelScope.triggerMode.storageValue
         )
         .putString(
+            AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TRIGGER_ALGORITHM,
+            AppDefaults.Visualization.ChannelScope.triggerAlgorithm.storageValue
+        )
+        .putString(
             AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_FPS_MODE,
             AppDefaults.Visualization.ChannelScope.fpsMode.storageValue
         )

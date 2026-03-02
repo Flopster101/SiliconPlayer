@@ -30,6 +30,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                         val scopeContrastBackdropEnabledKey =
                             AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_CONTRAST_BACKDROP_ENABLED
                         val scopeTriggerKey = "visualization_channel_scope_trigger_mode"
+                        val scopeTriggerAlgorithmKey = "visualization_channel_scope_trigger_algorithm"
                         val scopeFpsModeKey = "visualization_channel_scope_fps_mode"
                         val scopeLineWidthKey = "visualization_channel_scope_line_width_dp"
                         val scopeGridWidthKey = "visualization_channel_scope_grid_width_dp"
@@ -85,6 +86,16 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     prefs.getString(
                                         scopeTriggerKey,
                                         AppDefaults.Visualization.ChannelScope.triggerMode.storageValue
+                                    )
+                                )
+                            )
+                        }
+                        var scopeTriggerAlgorithm by remember {
+                            mutableStateOf(
+                                VisualizationChannelScopeTriggerAlgorithm.fromStorage(
+                                    prefs.getString(
+                                        scopeTriggerAlgorithmKey,
+                                        AppDefaults.Visualization.ChannelScope.triggerAlgorithm.storageValue
                                     )
                                 )
                             )
@@ -446,6 +457,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                         var showRendererBackendDialog by remember { mutableStateOf(false) }
                         var showGainDialog by remember { mutableStateOf(false) }
                         var showTriggerDialog by remember { mutableStateOf(false) }
+                        var showTriggerAlgorithmDialog by remember { mutableStateOf(false) }
                         var showFpsModeDialog by remember { mutableStateOf(false) }
                         var showLineWidthDialog by remember { mutableStateOf(false) }
                         var showGridWidthDialog by remember { mutableStateOf(false) }
@@ -483,6 +495,15 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                             value = scopeTriggerMode.label,
                             onClick = { showTriggerDialog = true }
                         )
+                        if (scopeTriggerMode != VisualizationOscTriggerMode.Off) {
+                            SettingsRowSpacer()
+                            SettingsValuePickerCard(
+                                title = "Trigger algorithm",
+                                description = "Fast uses zero-crossing detection. Accurate uses correlation-based matching (slower, higher quality).",
+                                value = scopeTriggerAlgorithm.label,
+                                onClick = { showTriggerAlgorithmDialog = true }
+                            )
+                        }
                         SettingsRowSpacer()
                         SettingsValuePickerCard(
                             title = "Renderer backend",
@@ -866,6 +887,20 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     prefs.edit().putString(scopeTriggerKey, mode.storageValue).apply()
                                 },
                                 onDismiss = { showTriggerDialog = false }
+                            )
+                        }
+                        if (showTriggerAlgorithmDialog) {
+                            SettingsSingleChoiceDialog(
+                                title = "Trigger algorithm",
+                                selectedValue = scopeTriggerAlgorithm,
+                                options = VisualizationChannelScopeTriggerAlgorithm.entries.map { alg ->
+                                    ChoiceDialogOption(value = alg, label = alg.label)
+                                },
+                                onSelected = { alg ->
+                                    scopeTriggerAlgorithm = alg
+                                    prefs.edit().putString(scopeTriggerAlgorithmKey, alg.storageValue).apply()
+                                },
+                                onDismiss = { showTriggerAlgorithmDialog = false }
                             )
                         }
                         if (showBackgroundModeDialog) {

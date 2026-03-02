@@ -118,6 +118,14 @@ object NativeBridge {
     external fun getOpenMptChannelVuLevels(): FloatArray
     external fun getChannelScopeSamples(samplesPerChannel: Int): FloatArray
     external fun getChannelScopeTextState(maxChannels: Int): IntArray
+    external fun computeChannelScopeTriggers(
+        flatScopeData: FloatArray,
+        samplesPerChannel: Int,
+        numChannels: Int,
+        triggerModeNative: Int,
+        algorithmMode: Int
+    ): IntArray
+    external fun resetChannelScopeTriggers()
     external fun getVgmGameName(): String
     external fun getVgmSystemName(): String
     external fun getVgmReleaseDate(): String

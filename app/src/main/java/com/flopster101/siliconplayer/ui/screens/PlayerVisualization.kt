@@ -60,6 +60,7 @@ import com.flopster101.siliconplayer.VisualizationChannelScopeTextAnchor
 import com.flopster101.siliconplayer.VisualizationChannelScopeBackgroundMode
 import com.flopster101.siliconplayer.VisualizationChannelScopeTextColorMode
 import com.flopster101.siliconplayer.VisualizationChannelScopeTextFont
+import com.flopster101.siliconplayer.VisualizationChannelScopeTriggerAlgorithm
 import com.flopster101.siliconplayer.VisualizationMode
 import com.flopster101.siliconplayer.VisualizationNoteNameFormat
 import com.flopster101.siliconplayer.VisualizationOscColorMode
@@ -330,7 +331,8 @@ private fun readVisualizationSnapshot(
     channelScopeDcRemovalEnabled: Boolean,
     channelScopeGainPercent: Int,
     channelScopeTriggerModeNative: Int,
-    previousChannelScopeTriggerIndices: IntArray,
+    channelScopeTriggerAlgorithmNative: Int,
+    channelScopeTriggerStates: MutableList<ChannelScopeTriggerState>,
     sampleRateHz: Int,
     shouldPollChannelScopeText: Boolean
 ): VisualizationSnapshot? {
@@ -373,25 +375,63 @@ private fun readVisualizationSnapshot(
                     windowMs = channelScopeWindowMs,
                     sampleRateHz = sampleRateHz
                 )
-                val channelScopesFlat = NativeBridge.getChannelScopeSamples(scopeSamples)
-                val histories = if (scopeSamples > 0 && channelScopesFlat.size >= scopeSamples) {
+                // Accurate mode needs a wider buffer for the correlation kernel.
+                val bufferMultiplier = if (channelScopeTriggerAlgorithmNative == 1) 2.25f else 1.5f
+                val nativeSamples = ((scopeSamples * bufferMultiplier).toInt()).coerceIn(scopeSamples, 8192)
+                val channelScopesFlat = NativeBridge.getChannelScopeSamples(nativeSamples)
+                val fullHistories = if (nativeSamples > 0 && channelScopesFlat.size >= nativeSamples) {
                     buildChannelScopeHistories(
                         flatScopes = channelScopesFlat,
-                        points = scopeSamples,
+                        points = nativeSamples,
                         dcRemovalEnabled = channelScopeDcRemovalEnabled,
                         gainPercent = channelScopeGainPercent
                     )
                 } else {
                     emptyList()
                 }
-                val triggerIndices = computeChannelScopeTriggerIndices(
-                    histories = histories,
-                    triggerModeNative = channelScopeTriggerModeNative,
-                    previousIndices = previousChannelScopeTriggerIndices
-                )
+                val rawTriggerIndices = if (fullHistories.isNotEmpty() && channelScopeTriggerModeNative != 0) {
+                    // Re-flatten processed histories for native trigger.
+                    val flatProcessed = FloatArray(fullHistories.size * nativeSamples)
+                    for (ch in fullHistories.indices) {
+                        val h = fullHistories[ch]
+                        System.arraycopy(h, 0, flatProcessed, ch * nativeSamples, h.size.coerceAtMost(nativeSamples))
+                    }
+                    val result = NativeBridge.computeChannelScopeTriggers(
+                        flatScopeData = flatProcessed,
+                        samplesPerChannel = nativeSamples,
+                        numChannels = fullHistories.size,
+                        triggerModeNative = channelScopeTriggerModeNative,
+                        algorithmMode = channelScopeTriggerAlgorithmNative
+                    )
+                    result
+                } else {
+                    IntArray(fullHistories.size) { fullHistories[it].size / 2 }
+                }
+                // Extract display-sized windows centered on each channel's trigger.
+                val displayHalf = scopeSamples / 2
+                val histories = fullHistories.mapIndexed { ch, full ->
+                    if (full.size <= scopeSamples) {
+                        full
+                    } else {
+                        val t = rawTriggerIndices.getOrElse(ch) { full.size / 2 }
+                        val start = (t - displayHalf).coerceIn(0, full.size - scopeSamples)
+                        full.copyOfRange(start, start + scopeSamples)
+                    }
+                }
+                // Remap trigger indices into the extracted windows (always near center).
+                val triggerIndices = IntArray(histories.size) { ch ->
+                    val full = fullHistories.getOrNull(ch)
+                    if (full == null || full.size <= scopeSamples) {
+                        histories.getOrNull(ch)?.let { it.size / 2 } ?: 0
+                    } else {
+                        val t = rawTriggerIndices.getOrElse(ch) { full.size / 2 }
+                        val start = (t - displayHalf).coerceIn(0, full.size - scopeSamples)
+                        t - start
+                    }
+                }
                 val lastChannelCount = histories.size.coerceIn(1, 64)
-                val scopeChannels = if (scopeSamples > 0) {
-                    (channelScopesFlat.size / scopeSamples).coerceIn(1, 64)
+                val scopeChannels = if (nativeSamples > 0) {
+                    (channelScopesFlat.size / nativeSamples).coerceIn(1, 64)
                 } else {
                     NativeBridge.getVisualizationChannelCount().coerceAtLeast(1).coerceIn(1, 64)
                 }
@@ -544,98 +584,324 @@ private fun parseOpenMptIndexedNames(raw: String): Map<Int, String> {
     return out
 }
 
+// Per-channel persistent state for the correlation trigger.
+private class ChannelScopeTriggerState {
+    // Correlation buffer — blended waveform shape used as the match kernel.
+    var corrBuffer: FloatArray? = null
+    // Gaussian window applied when updating the buffer (cached per period).
+    var prevWindow: FloatArray? = null
+    // Cached slope-finder kernel (recomputed when period changes significantly).
+    var prevSlopeFinder: FloatArray? = null
+    var prevPeriod: Int = 0
+    // Smoothed data mean for DC removal across frames.
+    var prevMean: Float = 0f
+}
+
 private fun computeChannelScopeTriggerIndices(
     histories: List<FloatArray>,
     triggerModeNative: Int,
-    previousIndices: IntArray
+    states: MutableList<ChannelScopeTriggerState>
 ): IntArray {
     if (histories.isEmpty()) return IntArray(0)
+    while (states.size < histories.size) states.add(ChannelScopeTriggerState())
+    if (states.size > histories.size) states.subList(histories.size, states.size).clear()
     return IntArray(histories.size) { channel ->
-        val history = histories[channel]
-        val anchorIndex = (history.size / 2).coerceAtLeast(0)
-        val previous = previousIndices.getOrElse(channel) { -1 }
-        findScopedTriggerIndex(
-            history = history,
+        findCorrelationTriggerIndex(
+            history = histories[channel],
             triggerModeNative = triggerModeNative,
-            anchorIndex = anchorIndex,
-            previousIndex = previous
+            state = states[channel]
         )
     }
 }
 
-private fun findScopedTriggerIndex(
+/**
+ * Estimate dominant period via downsampled autocorrelation.
+ * Returns 0 when no clear periodicity is detected.
+ */
+private fun estimateSignalPeriod(data: FloatArray, subsmpPerS: Float, maxFreq: Float): Int {
+    val n = data.size
+    if (n < 16) return 0
+    val stride = (n / 256).coerceAtLeast(1)
+    val downN = n / stride
+    if (downN < 8) return 0
+    var meanAcc = 0.0
+    for (i in 0 until downN) meanAcc += data[i * stride]
+    val mean = (meanAcc / downN).toFloat()
+    // Minimum period from max_freq.
+    val minPeriod = if (maxFreq > 0f) (subsmpPerS / maxFreq).toInt().coerceAtLeast(2) else 2
+    val minLag = (minPeriod / stride).coerceAtLeast(2)
+    val maxLag = downN / 2
+    if (minLag >= maxLag) return 0
+    // Find the first zero crossing of autocorrelation to skip the central peak.
+    var zeroCrossLag = minLag
+    for (lag in minLag..maxLag) {
+        var sum = 0.0
+        val count = downN - lag
+        for (j in 0 until count) {
+            sum += (data[j * stride] - mean).toDouble() * (data[(j + lag) * stride] - mean).toDouble()
+        }
+        if (sum < 0.0) { zeroCrossLag = lag; break }
+    }
+    var bestCorr = 0.0
+    var bestLag = 0
+    for (lag in zeroCrossLag..maxLag) {
+        var sum = 0.0
+        val count = downN - lag
+        for (j in 0 until count) {
+            sum += (data[j * stride] - mean).toDouble() * (data[(j + lag) * stride] - mean).toDouble()
+        }
+        val corr = sum / count
+        if (corr > bestCorr) {
+            bestCorr = corr
+            bestLag = lag
+        }
+    }
+    val rawPeriod = if (bestCorr > 0.0) bestLag * stride else 0
+    // For long periods, apply edge-compensation to avoid underestimating.
+    if (rawPeriod > 0 && rawPeriod > n * 0.1) {
+        val compensated = FloatArray(downN)
+        for (i in 0 until downN) compensated[i] = data[i * stride] - mean
+        val edgeComp = 0.9f
+        for (i in 0 until downN) {
+            val div = (1f - edgeComp * i.toFloat() / downN).coerceAtLeast(0.5f)
+            compensated[i] /= div
+        }
+        var bestCorrComp = 0.0
+        var bestLagComp = 0
+        for (lag in zeroCrossLag..maxLag) {
+            var sum = 0.0
+            val count = downN - lag
+            for (j in 0 until count) {
+                sum += compensated[j].toDouble() * compensated[j + lag].toDouble()
+            }
+            val corr = sum / count
+            if (corr > bestCorrComp) { bestCorrComp = corr; bestLagComp = lag }
+        }
+        return if (bestCorrComp > 0.0) bestLagComp * stride else rawPeriod
+    }
+    return rawPeriod
+}
+
+/** Un-normalized "valid" cross-correlation: slide kernel across data, return scores. */
+private fun correlateValid(data: FloatArray, kernel: FloatArray): FloatArray {
+    val dataLen = data.size
+    val kernelLen = kernel.size
+    val outLen = dataLen - kernelLen + 1
+    if (outLen <= 0) return floatArrayOf()
+    val out = FloatArray(outLen)
+    for (i in 0 until outLen) {
+        var sum = 0f
+        for (j in 0 until kernelLen) {
+            sum += data[i + j] * kernel[j]
+        }
+        out[i] = sum
+    }
+    return out
+}
+
+/** Normalize a buffer in place (divide by abs-max, avoiding division by zero). */
+private fun normalizeBufferInPlace(buf: FloatArray) {
+    var mx = 0f
+    for (v in buf) { val a = kotlin.math.abs(v); if (a > mx) mx = a }
+    if (mx < 0.01f) return
+    val inv = 1f / mx
+    for (i in buf.indices) buf[i] *= inv
+}
+
+/** Build Gaussian window of given size and standard deviation. */
+private fun gaussianWindow(size: Int, std: Float): FloatArray {
+    if (size <= 0 || std <= 0f) return FloatArray(size)
+    val mid = (size - 1) / 2f
+    return FloatArray(size) { i ->
+        val d = (i - mid) / std
+        kotlin.math.exp(-0.5f * d * d)
+    }
+}
+
+/**
+ * Correlation-based trigger (accurate mode, unused in hot path — native C++ version is used).
+ */
+private fun findCorrelationTriggerIndex(
     history: FloatArray,
     triggerModeNative: Int,
-    anchorIndex: Int,
-    previousIndex: Int
+    state: ChannelScopeTriggerState
 ): Int {
-    if (history.size < 2 || triggerModeNative == 0) {
-        return anchorIndex.coerceIn(0, history.size - 1)
-    }
     val n = history.size
-    val anchor = anchorIndex.coerceIn(0, n - 1)
-    val previous = if (previousIndex in 0 until n) previousIndex else -1
-    fun circularDistance(a: Int, b: Int): Int {
-        val d = kotlin.math.abs(a - b)
-        return kotlin.math.min(d, n - d)
+    val center = n / 2
+    if (n < 8 || triggerModeNative == 0) return center
+
+    // Normalize edge direction (internally always work as rising-edge).
+    val data = if (triggerModeNative == 2) FloatArray(n) { -history[it] } else history
+
+    // Skip near-silence.
+    var absMax = 0f
+    for (s in data) { val a = kotlin.math.abs(s); if (a > absMax) absMax = a }
+    if (absMax < 0.01f) return center
+
+    // --- Sizing ---
+    // The caller provides n = kernelSize + triggerDiameter samples.
+    // We derive A, B, triggerDiameter from n.
+    val kernelSize = (n * 2) / 3  // n ≈ kernel + 0.5*kernel = 1.5*kernel → kernel ≈ 2n/3
+    val triggerDiameter = n - kernelSize
+    val halfKernel = kernelSize / 2
+    val corrNsamp = triggerDiameter + 1  // number of correlation offsets
+    if (kernelSize < 8 || corrNsamp < 2) return center
+
+    // --- Mean removal ---
+    val meanResp = 1.0f
+    var dataMean = 0f
+    for (s in data) dataMean += s
+    dataMean /= n
+    state.prevMean += meanResp * (dataMean - state.prevMean)
+    val meanRemoved = FloatArray(n) { data[it] - state.prevMean }
+
+    // --- Period estimation ---
+    val subsmpPerS = 44100f
+    val maxFreq = 4000f
+    val period = estimateSignalPeriod(meanRemoved, subsmpPerS, maxFreq)
+
+    // --- Slope finder (recomputed when period changes significantly) ---
+    val recalcSemitones = 1.0f
+    val needRecalc = state.prevSlopeFinder == null ||
+        state.prevSlopeFinder!!.size != kernelSize ||
+        (state.prevPeriod > 0 && period > 0 &&
+            kotlin.math.abs(kotlin.math.ln(period.toFloat() / state.prevPeriod) / kotlin.math.ln(2f) * 12f) > recalcSemitones) ||
+        (state.prevPeriod == 0 && period > 0) ||
+        (period == 0 && state.prevPeriod == 0 && state.prevSlopeFinder == null)
+
+    val edgeStrength = 2.0f
+    val bufferStrength = 1.0f
+    val slopeWidthFraction = 0.25f
+
+    if (needRecalc || state.prevSlopeFinder == null) {
+        val slopeWidth = if (period > 0) {
+            (slopeWidthFraction * period).coerceIn(1f, halfKernel / 3f)
+        } else {
+            (kernelSize / 12f).coerceIn(1f, halfKernel / 3f)
+        }
+        val slopeStrength = edgeStrength * 2f
+        val sf = FloatArray(kernelSize)
+        for (j in 0 until kernelSize) {
+            sf[j] = if (j < halfKernel) -slopeStrength / 2f else slopeStrength / 2f
+        }
+        // Apply Gaussian window.
+        val gw = gaussianWindow(kernelSize, slopeWidth)
+        for (j in 0 until kernelSize) sf[j] *= gw[j]
+        state.prevSlopeFinder = sf
+        state.prevPeriod = period
+    }
+    val slopeFinder = state.prevSlopeFinder!!
+
+    // --- Correlation buffer ---
+    val corrBuffer = state.corrBuffer
+    val corrEnabled = corrBuffer != null && corrBuffer.size == kernelSize
+    val responsiveness = 0.2f
+
+    // --- Build combined kernel ---
+    val combinedKernel = if (corrEnabled) {
+        FloatArray(kernelSize) { j ->
+            slopeFinder[j] + corrBuffer!![j] * bufferStrength
+        }
+    } else {
+        slopeFinder.copyOf()
     }
 
-    var bestIndex = -1
-    var bestScore = Float.NEGATIVE_INFINITY
-    for (i in 1 until n) {
-        val prev = history[i - 1]
-        val curr = history[i]
-        val crossed = if (triggerModeNative == 1) {
-            prev < 0f && curr >= 0f
-        } else {
-            prev > 0f && curr <= 0f
-        }
-        if (!crossed) continue
+    // --- Un-normalized cross-correlation of data with combined kernel ---
+    val corr = correlateValid(meanRemoved, combinedKernel)
+    if (corr.size != corrNsamp) return center
 
-        val left = history[(i - 2 + n) % n]
-        val right = history[(i + 1) % n]
-        val slope = kotlin.math.abs(curr - prev)
-        val edgeEnergy = 0.5f * (kotlin.math.abs(curr) + kotlin.math.abs(prev))
-        val curvature = kotlin.math.abs((right - curr) - (curr - left))
-        val anchorPenalty = circularDistance(i, anchor).toFloat() / n.toFloat()
-        val continuityPenalty = if (previous >= 0) {
-            circularDistance(i, previous).toFloat() / n.toFloat()
-        } else {
-            0f
-        }
+    // --- Buffer quality (correlation of data with buffer alone, for local-max filter) ---
+    val peaks = if (corrEnabled) {
+        val bq = correlateValid(meanRemoved, corrBuffer!!)
+        FloatArray(corrNsamp) { i -> bq.getOrElse(i) { 0f } * bufferStrength }
+    } else {
+        FloatArray(corrNsamp)
+    }
 
-        val score =
-            (slope * 2.8f) +
-                (edgeEnergy * 0.9f) +
-                (curvature * 0.35f) -
-                (anchorPenalty * 1.6f) -
-                (continuityPenalty * 1.1f)
-        if (score > bestScore) {
-            bestScore = score
-            bestIndex = i
+    // --- Cumulative-sum edge score ---
+    if (edgeStrength != 0f) {
+        val cumsumStart = halfKernel - 1
+        val cumsumLen = corrNsamp
+        if (cumsumStart >= 0 && cumsumStart + cumsumLen <= n) {
+            val edgeScore = FloatArray(cumsumLen)
+            var cumSum = 0f
+            for (i in 0 until cumsumLen) {
+                cumSum += meanRemoved[cumsumStart + i]
+                edgeScore[i] = -cumSum * edgeStrength
+            }
+            for (i in 0 until corrNsamp) peaks[i] += edgeScore.getOrElse(i) { 0f }
         }
     }
 
-    if (bestIndex >= 0) return bestIndex
-
-    // Fallback near-zero center lock for stable idle/noise behavior.
-    var fallbackIndex = anchor
-    var fallbackRank = Float.POSITIVE_INFINITY
-    for (i in history.indices) {
-        val sample = kotlin.math.abs(history[i])
-        val anchorPenalty = circularDistance(i, anchor).toFloat() / n.toFloat()
-        val continuityPenalty = if (previous >= 0) {
-            circularDistance(i, previous).toFloat() / n.toFloat()
-        } else {
-            0f
-        }
-        val rank = sample + (anchorPenalty * 0.10f) + (continuityPenalty * 0.08f)
-        if (rank < fallbackRank) {
-            fallbackRank = rank
-            fallbackIndex = i
-        }
+    // --- Restrict search radius by period ---
+    val triggerRadiusPeriods = 1.5f
+    val triggerRadius = if (period > 0) {
+        (period * triggerRadiusPeriods).toInt().coerceAtMost(corrNsamp / 2)
+    } else {
+        corrNsamp / 2
     }
-    return fallbackIndex
+
+    // --- find_peak with local-maxima filtering ---
+    val mid = corrNsamp / 2
+    val left = (mid - triggerRadius).coerceAtLeast(0)
+    val right = (mid + triggerRadius + 1).coerceAtMost(corrNsamp)
+    val windowLen = right - left
+    if (windowLen < 2) return center
+
+    // Work on windowed copies.
+    val wCorr = FloatArray(windowLen) { corr[left + it] }
+    val wPeaks = FloatArray(windowLen) { peaks[left + it] }
+
+    // Find minimum correlation to use as suppression value.
+    var minCorr = Float.MAX_VALUE
+    for (v in wCorr) if (v < minCorr) minCorr = v
+
+    // Suppress non-local-maxima of peak score.
+    for (i in 0 until windowLen - 1) {
+        if (wPeaks[i] < wPeaks[i + 1]) wCorr[i] = minCorr
+    }
+    for (i in 1 until windowLen) {
+        if (wPeaks[i] < wPeaks[i - 1]) wCorr[i] = minCorr
+    }
+    // Suppress boundary positions.
+    wCorr[0] = minCorr
+    wCorr[windowLen - 1] = minCorr
+
+    // Pick the best local maximum.
+    var bestIdx = windowLen / 2
+    var bestVal = minCorr
+    for (i in 0 until windowLen) {
+        if (wCorr[i] > bestVal) { bestVal = wCorr[i]; bestIdx = i }
+    }
+    // If nothing survived, fall back to center.
+    val peakOffset = if (bestVal <= minCorr) mid else left + bestIdx
+
+    // The trigger point in the data buffer.
+    val triggerIdx = (peakOffset + halfKernel).coerceIn(0, n - 1)
+
+    // --- Update correlation buffer: align to trigger, Gaussian-window, blend ---
+    val alignStart = (triggerIdx - halfKernel).coerceIn(0, n - kernelSize)
+    val aligned = FloatArray(kernelSize) { j -> meanRemoved[alignStart + j] }
+    val resultMean = run { var s = 0f; for (v in aligned) s += v; s / kernelSize }
+    for (j in 0 until kernelSize) aligned[j] -= resultMean
+    normalizeBufferInPlace(aligned)
+    val bufStd = if (period > 0) (period * 0.5f) else (kernelSize / 4f)
+    val window = gaussianWindow(kernelSize, bufStd)
+    for (j in 0 until kernelSize) aligned[j] *= window[j]
+
+    if (state.corrBuffer == null || state.corrBuffer!!.size != kernelSize) {
+        state.corrBuffer = aligned
+        state.prevWindow = window
+    } else {
+        val buf = state.corrBuffer!!
+        normalizeBufferInPlace(buf)
+        for (j in 0 until kernelSize) {
+            buf[j] = buf[j] * (1f - responsiveness) + aligned[j] * responsiveness
+        }
+        state.prevWindow = window
+    }
+
+    return triggerIdx
 }
 
 internal data class ChannelScopePrefs(
@@ -645,6 +911,7 @@ internal data class ChannelScopePrefs(
     val gainPercent: Int,
     val contrastBackdropEnabled: Boolean,
     val triggerModeNative: Int,
+    val triggerAlgorithmNative: Int,
     val fpsMode: VisualizationOscFpsMode,
     val lineWidthDp: Int,
     val gridWidthDp: Int,
@@ -687,6 +954,7 @@ internal data class ChannelScopePrefs(
         private const val KEY_GAIN_PERCENT = "visualization_channel_scope_gain_percent"
         private const val KEY_CONTRAST_BACKDROP_ENABLED = "visualization_channel_scope_contrast_backdrop_enabled"
         private const val KEY_TRIGGER_MODE = "visualization_channel_scope_trigger_mode"
+        private const val KEY_TRIGGER_ALGORITHM = "visualization_channel_scope_trigger_algorithm"
         private const val KEY_FPS_MODE = "visualization_channel_scope_fps_mode"
         private const val KEY_LINE_WIDTH_DP = "visualization_channel_scope_line_width_dp"
         private const val KEY_GRID_WIDTH_DP = "visualization_channel_scope_grid_width_dp"
@@ -729,6 +997,12 @@ internal data class ChannelScopePrefs(
                 "falling" -> 2
                 else -> 0
             }
+            val triggerAlgorithmNative = VisualizationChannelScopeTriggerAlgorithm.fromStorage(
+                sharedPrefs.getString(
+                    KEY_TRIGGER_ALGORITHM,
+                    AppDefaults.Visualization.ChannelScope.triggerAlgorithm.storageValue
+                )
+            ).nativeValue
             return ChannelScopePrefs(
                 windowMs = sharedPrefs.getInt(
                     KEY_WINDOW_MS,
@@ -760,6 +1034,7 @@ internal data class ChannelScopePrefs(
                     AppDefaults.Visualization.ChannelScope.contrastBackdropEnabled
                 ),
                 triggerModeNative = triggerModeNative,
+                triggerAlgorithmNative = triggerAlgorithmNative,
                 fpsMode = VisualizationOscFpsMode.fromStorage(
                     sharedPrefs.getString(
                         KEY_FPS_MODE,
@@ -1217,7 +1492,7 @@ internal fun AlbumArtPlaceholder(
             var nextFrameTickNs = 0L
             var lastPollIntervalNs = 0L
             var localChannelScopeLastTextPollNs = 0L
-            var localChannelScopeTriggerIndices = visChannelScopeTriggerIndices
+            val localChannelScopeTriggerStates = mutableListOf<ChannelScopeTriggerState>()
             while (true) {
                 coroutineContext.ensureActive()
                 val frameStartNs = System.nanoTime()
@@ -1234,7 +1509,8 @@ internal fun AlbumArtPlaceholder(
                     channelScopeDcRemovalEnabled = channelScopePrefs.dcRemovalEnabled,
                     channelScopeGainPercent = channelScopePrefs.gainPercent,
                     channelScopeTriggerModeNative = channelScopePrefs.triggerModeNative,
-                    previousChannelScopeTriggerIndices = localChannelScopeTriggerIndices,
+                    channelScopeTriggerAlgorithmNative = channelScopePrefs.triggerAlgorithmNative,
+                    channelScopeTriggerStates = localChannelScopeTriggerStates,
                     sampleRateHz = sampleRateHz,
                     shouldPollChannelScopeText = shouldPollText
                 )
@@ -1261,7 +1537,6 @@ internal fun AlbumArtPlaceholder(
                     snapshot.channelCount?.let { visChannelCount = it }
                     snapshot.channelScopeHistories?.let { visChannelScopeHistories = it }
                     snapshot.channelScopeTriggerIndices?.let {
-                        localChannelScopeTriggerIndices = it
                         visChannelScopeTriggerIndices = it
                     }
                     snapshot.channelScopeLastChannelCount?.let { visChannelScopeLastChannelCount = it }

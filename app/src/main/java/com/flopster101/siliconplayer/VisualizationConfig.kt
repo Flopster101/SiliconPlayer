@@ -93,6 +93,21 @@ enum class VisualizationOscTriggerMode(
     }
 }
 
+enum class VisualizationChannelScopeTriggerAlgorithm(
+    val storageValue: String,
+    val label: String,
+    val nativeValue: Int
+) {
+    Fast("fast", "Fast (zero-crossing)", 0),
+    Accurate("accurate", "Accurate (correlation)", 1);
+
+    companion object {
+        fun fromStorage(value: String?): VisualizationChannelScopeTriggerAlgorithm {
+            return entries.firstOrNull { it.storageValue == value } ?: Fast
+        }
+    }
+}
+
 enum class VisualizationOscColorMode(
     val storageValue: String,
     val label: String

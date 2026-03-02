@@ -127,6 +127,7 @@ internal object AppPreferenceKeys {
     const val VISUALIZATION_CHANNEL_SCOPE_GAIN_PERCENT = "visualization_channel_scope_gain_percent"
     const val VISUALIZATION_CHANNEL_SCOPE_CONTRAST_BACKDROP_ENABLED = "visualization_channel_scope_contrast_backdrop_enabled"
     const val VISUALIZATION_CHANNEL_SCOPE_TRIGGER_MODE = "visualization_channel_scope_trigger_mode"
+    const val VISUALIZATION_CHANNEL_SCOPE_TRIGGER_ALGORITHM = "visualization_channel_scope_trigger_algorithm"
     const val VISUALIZATION_CHANNEL_SCOPE_FPS_MODE = "visualization_channel_scope_fps_mode"
     const val VISUALIZATION_CHANNEL_SCOPE_LINE_WIDTH_DP = "visualization_channel_scope_line_width_dp"
     const val VISUALIZATION_CHANNEL_SCOPE_GRID_WIDTH_DP = "visualization_channel_scope_grid_width_dp"

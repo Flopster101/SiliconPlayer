@@ -5,6 +5,7 @@ import android.os.Process
 import android.hardware.display.DisplayManager
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -39,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -1517,6 +1519,15 @@ internal fun AlbumArtPlaceholder(
     }
     val oscStereoActive = oscStereo && visChannelCount > 1
     val vuTopAnchor = vuAnchor == VisualizationVuAnchor.Top
+    val basicVisualizationMode =
+        visualizationMode == VisualizationMode.Bars ||
+            visualizationMode == VisualizationMode.Oscilloscope ||
+            visualizationMode == VisualizationMode.VuMeters
+    val basicVisualizationAlpha by animateFloatAsState(
+        targetValue = if (!basicVisualizationMode || isPlaying) 1f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "basicVisualizationVisibility"
+    )
     val visualizationContrastBrush = remember(visualizationMode, oscStereoActive) {
         when (visualizationMode) {
             VisualizationMode.Bars -> if (barContrastBackdropEnabled) {
@@ -1654,94 +1665,111 @@ internal fun AlbumArtPlaceholder(
                         .background(scopeBackgroundColor)
                 )
             }
-            if (visualizationContrastBrush != null) {
+            if (visualizationContrastBrush != null && (!basicVisualizationMode || basicVisualizationAlpha > 0f)) {
                 Box(
                     modifier = Modifier
                         .matchParentSize()
+                        .graphicsLayer {
+                            alpha = if (basicVisualizationMode) {
+                                basicVisualizationAlpha
+                            } else {
+                                1f
+                            }
+                        }
                         .background(brush = visualizationContrastBrush)
                 )
             }
-            BasicVisualizationOverlay(
-                mode = visualizationMode,
-                bars = visBarsSmoothed,
-                waveformLeft = visWaveLeft,
-                waveformRight = visWaveRight,
-                vuLevels = visVuSmoothed,
-                channelCount = visChannelCount,
-                barCount = barCount,
-                barRoundnessDp = barRoundnessDp,
-                barOverlayArtwork = barOverlayArtwork,
-                barUseThemeColor = barUseThemeColor,
-                barFrequencyGridEnabled = barFrequencyGridEnabled,
-                barSampleRateHz = sampleRateHz,
-                barRenderBackend = barRenderBackend,
-                barColorModeNoArtwork = barColorModeNoArtwork,
-                barColorModeWithArtwork = barColorModeWithArtwork,
-                barCustomColorArgb = barCustomColorArgb,
-                oscStereo = oscStereo,
-                oscRenderBackend = visualizationOscRenderBackend,
-                artwork = artwork,
-                oscLineWidthDp = oscLineWidthDp,
-                oscGridWidthDp = oscGridWidthDp,
-                oscVerticalGridEnabled = oscVerticalGridEnabled,
-                oscCenterLineEnabled = oscCenterLineEnabled,
-                oscLineColorModeNoArtwork = oscLineColorModeNoArtwork,
-                oscGridColorModeNoArtwork = oscGridColorModeNoArtwork,
-                oscLineColorModeWithArtwork = oscLineColorModeWithArtwork,
-                oscGridColorModeWithArtwork = oscGridColorModeWithArtwork,
-                oscCustomLineColorArgb = oscCustomLineColorArgb,
-                oscCustomGridColorArgb = oscCustomGridColorArgb,
-                vuAnchor = vuAnchor,
-                vuUseThemeColor = vuUseThemeColor,
-                vuRenderBackend = vuRenderBackend,
-                vuColorModeNoArtwork = vuColorModeNoArtwork,
-                vuColorModeWithArtwork = vuColorModeWithArtwork,
-                vuCustomColorArgb = vuCustomColorArgb,
-                channelScopeHistories = channelScopeState.channelHistories,
-                channelScopeTextStates = channelScopeState.channelTextStates,
-                channelScopeInstrumentNamesByIndex = channelScopeState.instrumentNamesByIndex,
-                channelScopeSampleNamesByIndex = channelScopeState.sampleNamesByIndex,
-                channelScopeTriggerModeNative = channelScopeState.triggerModeNative,
-                channelScopeTriggerIndices = channelScopeState.triggerIndices,
-                channelScopeRenderBackend = channelScopeState.renderBackend,
-                channelScopeLineWidthDp = channelScopeState.lineWidthDp,
-                channelScopeGridWidthDp = channelScopeState.gridWidthDp,
-                channelScopeVerticalGridEnabled = channelScopeState.verticalGridEnabled,
-                channelScopeCenterLineEnabled = channelScopeState.centerLineEnabled,
-                channelScopeLayout = channelScopeState.layout,
-                channelScopeLineColorModeNoArtwork = channelScopeState.lineColorModeNoArtwork,
-                channelScopeGridColorModeNoArtwork = channelScopeState.gridColorModeNoArtwork,
-                channelScopeLineColorModeWithArtwork = channelScopeState.lineColorModeWithArtwork,
-                channelScopeGridColorModeWithArtwork = channelScopeState.gridColorModeWithArtwork,
-                channelScopeCustomLineColorArgb = channelScopeState.customLineColorArgb,
-                channelScopeCustomGridColorArgb = channelScopeState.customGridColorArgb,
-                channelScopeBackgroundColorArgb = scopeBackgroundColor.toArgb(),
-                channelScopeTextEnabled = channelScopeState.textEnabled,
-                channelScopeTextAnchor = channelScopeState.textAnchor,
-                channelScopeTextPaddingDp = channelScopeState.textPaddingDp,
-                channelScopeTextSizeSp = channelScopeState.textSizeSp,
-                channelScopeTextHideWhenOverflow = channelScopeState.textHideWhenOverflow,
-                channelScopeTextShadowEnabled = channelScopeState.textShadowEnabled,
-                channelScopeTextFont = channelScopeState.textFont,
-                channelScopeTextColorMode = channelScopeState.textColorMode,
-                channelScopeCustomTextColorArgb = channelScopeState.customTextColorArgb,
-                channelScopeTextNoteFormat = channelScopeState.textNoteFormat,
-                channelScopeTextShowChannel = channelScopeState.textShowChannel,
-                channelScopeTextShowNote = channelScopeState.textShowNote,
-                channelScopeTextShowVolume = channelScopeState.textShowVolume,
-                channelScopeTextShowEffect = channelScopeState.textShowEffect,
-                channelScopeTextShowInstrumentSample = channelScopeState.textShowInstrumentSample,
-                channelScopeTextVuEnabled = channelScopeState.textVuEnabled,
-                channelScopeTextVuAnchor = channelScopeState.textVuAnchor,
-                channelScopeTextVuColorMode = channelScopeState.textVuColorMode,
-                channelScopeTextVuCustomColorArgb = channelScopeState.textVuCustomColorArgb,
-                channelScopeCornerRadiusDp = artworkCornerRadiusDp.coerceIn(0, 48),
-                channelScopeOnFrameStats = { fps, frameMs ->
-                    visDebugDrawFps = fps.coerceAtLeast(0)
-                    visDebugDrawFrameMs = frameMs.coerceAtLeast(0)
-                },
-                modifier = Modifier.matchParentSize()
-            )
+            if (!basicVisualizationMode || basicVisualizationAlpha > 0f) {
+                BasicVisualizationOverlay(
+                    mode = visualizationMode,
+                    bars = visBarsSmoothed,
+                    waveformLeft = visWaveLeft,
+                    waveformRight = visWaveRight,
+                    vuLevels = visVuSmoothed,
+                    channelCount = visChannelCount,
+                    barCount = barCount,
+                    barRoundnessDp = barRoundnessDp,
+                    barOverlayArtwork = barOverlayArtwork,
+                    barUseThemeColor = barUseThemeColor,
+                    barFrequencyGridEnabled = barFrequencyGridEnabled,
+                    barSampleRateHz = sampleRateHz,
+                    barRenderBackend = barRenderBackend,
+                    barColorModeNoArtwork = barColorModeNoArtwork,
+                    barColorModeWithArtwork = barColorModeWithArtwork,
+                    barCustomColorArgb = barCustomColorArgb,
+                    oscStereo = oscStereo,
+                    oscRenderBackend = visualizationOscRenderBackend,
+                    artwork = artwork,
+                    oscLineWidthDp = oscLineWidthDp,
+                    oscGridWidthDp = oscGridWidthDp,
+                    oscVerticalGridEnabled = oscVerticalGridEnabled,
+                    oscCenterLineEnabled = oscCenterLineEnabled,
+                    oscLineColorModeNoArtwork = oscLineColorModeNoArtwork,
+                    oscGridColorModeNoArtwork = oscGridColorModeNoArtwork,
+                    oscLineColorModeWithArtwork = oscLineColorModeWithArtwork,
+                    oscGridColorModeWithArtwork = oscGridColorModeWithArtwork,
+                    oscCustomLineColorArgb = oscCustomLineColorArgb,
+                    oscCustomGridColorArgb = oscCustomGridColorArgb,
+                    vuAnchor = vuAnchor,
+                    vuUseThemeColor = vuUseThemeColor,
+                    vuRenderBackend = vuRenderBackend,
+                    vuColorModeNoArtwork = vuColorModeNoArtwork,
+                    vuColorModeWithArtwork = vuColorModeWithArtwork,
+                    vuCustomColorArgb = vuCustomColorArgb,
+                    channelScopeHistories = channelScopeState.channelHistories,
+                    channelScopeTextStates = channelScopeState.channelTextStates,
+                    channelScopeInstrumentNamesByIndex = channelScopeState.instrumentNamesByIndex,
+                    channelScopeSampleNamesByIndex = channelScopeState.sampleNamesByIndex,
+                    channelScopeTriggerModeNative = channelScopeState.triggerModeNative,
+                    channelScopeTriggerIndices = channelScopeState.triggerIndices,
+                    channelScopeRenderBackend = channelScopeState.renderBackend,
+                    channelScopeLineWidthDp = channelScopeState.lineWidthDp,
+                    channelScopeGridWidthDp = channelScopeState.gridWidthDp,
+                    channelScopeVerticalGridEnabled = channelScopeState.verticalGridEnabled,
+                    channelScopeCenterLineEnabled = channelScopeState.centerLineEnabled,
+                    channelScopeLayout = channelScopeState.layout,
+                    channelScopeLineColorModeNoArtwork = channelScopeState.lineColorModeNoArtwork,
+                    channelScopeGridColorModeNoArtwork = channelScopeState.gridColorModeNoArtwork,
+                    channelScopeLineColorModeWithArtwork = channelScopeState.lineColorModeWithArtwork,
+                    channelScopeGridColorModeWithArtwork = channelScopeState.gridColorModeWithArtwork,
+                    channelScopeCustomLineColorArgb = channelScopeState.customLineColorArgb,
+                    channelScopeCustomGridColorArgb = channelScopeState.customGridColorArgb,
+                    channelScopeBackgroundColorArgb = scopeBackgroundColor.toArgb(),
+                    channelScopeTextEnabled = channelScopeState.textEnabled,
+                    channelScopeTextAnchor = channelScopeState.textAnchor,
+                    channelScopeTextPaddingDp = channelScopeState.textPaddingDp,
+                    channelScopeTextSizeSp = channelScopeState.textSizeSp,
+                    channelScopeTextHideWhenOverflow = channelScopeState.textHideWhenOverflow,
+                    channelScopeTextShadowEnabled = channelScopeState.textShadowEnabled,
+                    channelScopeTextFont = channelScopeState.textFont,
+                    channelScopeTextColorMode = channelScopeState.textColorMode,
+                    channelScopeCustomTextColorArgb = channelScopeState.customTextColorArgb,
+                    channelScopeTextNoteFormat = channelScopeState.textNoteFormat,
+                    channelScopeTextShowChannel = channelScopeState.textShowChannel,
+                    channelScopeTextShowNote = channelScopeState.textShowNote,
+                    channelScopeTextShowVolume = channelScopeState.textShowVolume,
+                    channelScopeTextShowEffect = channelScopeState.textShowEffect,
+                    channelScopeTextShowInstrumentSample = channelScopeState.textShowInstrumentSample,
+                    channelScopeTextVuEnabled = channelScopeState.textVuEnabled,
+                    channelScopeTextVuAnchor = channelScopeState.textVuAnchor,
+                    channelScopeTextVuColorMode = channelScopeState.textVuColorMode,
+                    channelScopeTextVuCustomColorArgb = channelScopeState.textVuCustomColorArgb,
+                    channelScopeCornerRadiusDp = artworkCornerRadiusDp.coerceIn(0, 48),
+                    channelScopeOnFrameStats = { fps, frameMs ->
+                        visDebugDrawFps = fps.coerceAtLeast(0)
+                        visDebugDrawFrameMs = frameMs.coerceAtLeast(0)
+                    },
+                    modifier = Modifier
+                        .matchParentSize()
+                        .graphicsLayer {
+                            alpha = if (basicVisualizationMode) {
+                                basicVisualizationAlpha
+                            } else {
+                                1f
+                            }
+                        }
+                )
+            }
             if (backendTransitionBlackAlpha.value > 0f) {
                 Box(
                     modifier = Modifier

@@ -481,6 +481,273 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                         var showTextVuCustomColorDialog by remember { mutableStateOf(false) }
                         var showTextNoteFormatDialog by remember { mutableStateOf(false) }
 
+                        PreferenceChangeSyncEffect(
+                            prefs = prefs,
+                            watchedKeys = setOf(
+                                scopeWindowKey,
+                                scopeRenderBackendKey,
+                                scopeDcRemovalEnabledKey,
+                                scopeGainPercentKey,
+                                scopeContrastBackdropEnabledKey,
+                                scopeTriggerKey,
+                                scopeTriggerAlgorithmKey,
+                                scopeFpsModeKey,
+                                scopeLineWidthKey,
+                                scopeGridWidthKey,
+                                scopeVerticalGridEnabledKey,
+                                scopeCenterLineEnabledKey,
+                                scopeShowArtworkBackgroundKey,
+                                scopeBackgroundModeKey,
+                                scopeCustomBackgroundColorKey,
+                                scopeLayoutKey,
+                                scopeLineNoArtworkColorModeKey,
+                                scopeGridNoArtworkColorModeKey,
+                                scopeLineArtworkColorModeKey,
+                                scopeGridArtworkColorModeKey,
+                                scopeCustomLineColorKey,
+                                scopeCustomGridColorKey,
+                                scopeTextEnabledKey,
+                                scopeTextAnchorKey,
+                                scopeTextPaddingKey,
+                                scopeTextSizeKey,
+                                scopeTextHideWhenOverflowKey,
+                                scopeTextShadowEnabledKey,
+                                scopeTextFontKey,
+                                scopeTextColorModeKey,
+                                scopeCustomTextColorKey,
+                                scopeTextNoteFormatKey,
+                                scopeTextShowChannelKey,
+                                scopeTextShowNoteKey,
+                                scopeTextShowVolumeKey,
+                                scopeTextShowEffectKey,
+                                scopeTextShowInstrumentSampleKey,
+                                scopeTextVuEnabledKey,
+                                scopeTextVuAnchorKey,
+                                scopeTextVuColorModeKey,
+                                scopeTextVuCustomColorKey
+                            )
+                        ) {
+                            scopeWindowMs = prefs.getInt(
+                                scopeWindowKey,
+                                AppDefaults.Visualization.ChannelScope.windowMs
+                            ).coerceIn(
+                                AppDefaults.Visualization.ChannelScope.windowRangeMs.first,
+                                AppDefaults.Visualization.ChannelScope.windowRangeMs.last
+                            )
+                            scopeTriggerMode = VisualizationOscTriggerMode.fromStorage(
+                                prefs.getString(
+                                    scopeTriggerKey,
+                                    AppDefaults.Visualization.ChannelScope.triggerMode.storageValue
+                                )
+                            )
+                            scopeTriggerAlgorithm = VisualizationChannelScopeTriggerAlgorithm.fromStorage(
+                                prefs.getString(
+                                    scopeTriggerAlgorithmKey,
+                                    AppDefaults.Visualization.ChannelScope.triggerAlgorithm.storageValue
+                                )
+                            )
+                            scopeRenderBackend = VisualizationRenderBackend.fromStorage(
+                                prefs.getString(
+                                    scopeRenderBackendKey,
+                                    AppDefaults.Visualization.ChannelScope.renderBackend.storageValue
+                                ),
+                                AppDefaults.Visualization.ChannelScope.renderBackend
+                            )
+                            scopeDcRemovalEnabled = prefs.getBoolean(
+                                scopeDcRemovalEnabledKey,
+                                AppDefaults.Visualization.ChannelScope.dcRemovalEnabled
+                            )
+                            scopeGainPercent = prefs.getInt(
+                                scopeGainPercentKey,
+                                AppDefaults.Visualization.ChannelScope.gainPercent
+                            ).coerceIn(
+                                AppDefaults.Visualization.ChannelScope.gainRangePercent.first,
+                                AppDefaults.Visualization.ChannelScope.gainRangePercent.last
+                            )
+                            scopeContrastBackdropEnabled = prefs.getBoolean(
+                                scopeContrastBackdropEnabledKey,
+                                AppDefaults.Visualization.ChannelScope.contrastBackdropEnabled
+                            )
+                            scopeFpsMode = VisualizationOscFpsMode.fromStorage(
+                                prefs.getString(
+                                    scopeFpsModeKey,
+                                    AppDefaults.Visualization.ChannelScope.fpsMode.storageValue
+                                )
+                            )
+                            scopeLineWidthDp = prefs.getInt(
+                                scopeLineWidthKey,
+                                AppDefaults.Visualization.ChannelScope.lineWidthDp
+                            ).coerceIn(
+                                AppDefaults.Visualization.ChannelScope.lineWidthRangeDp.first,
+                                AppDefaults.Visualization.ChannelScope.lineWidthRangeDp.last
+                            )
+                            scopeGridWidthDp = prefs.getInt(
+                                scopeGridWidthKey,
+                                AppDefaults.Visualization.ChannelScope.gridWidthDp
+                            ).coerceIn(
+                                AppDefaults.Visualization.ChannelScope.gridWidthRangeDp.first,
+                                AppDefaults.Visualization.ChannelScope.gridWidthRangeDp.last
+                            )
+                            scopeVerticalGridEnabled = prefs.getBoolean(
+                                scopeVerticalGridEnabledKey,
+                                AppDefaults.Visualization.ChannelScope.verticalGridEnabled
+                            )
+                            scopeCenterLineEnabled = prefs.getBoolean(
+                                scopeCenterLineEnabledKey,
+                                AppDefaults.Visualization.ChannelScope.centerLineEnabled
+                            )
+                            scopeShowArtworkBackground = prefs.getBoolean(
+                                scopeShowArtworkBackgroundKey,
+                                AppDefaults.Visualization.ChannelScope.showArtworkBackground
+                            )
+                            scopeBackgroundMode = VisualizationChannelScopeBackgroundMode.fromStorage(
+                                prefs.getString(
+                                    scopeBackgroundModeKey,
+                                    AppDefaults.Visualization.ChannelScope.backgroundMode.storageValue
+                                )
+                            )
+                            scopeCustomBackgroundColorArgb = prefs.getInt(
+                                scopeCustomBackgroundColorKey,
+                                AppDefaults.Visualization.ChannelScope.customBackgroundColorArgb
+                            )
+                            scopeLayout = VisualizationChannelScopeLayout.fromStorage(
+                                prefs.getString(
+                                    scopeLayoutKey,
+                                    AppDefaults.Visualization.ChannelScope.layout.storageValue
+                                )
+                            )
+                            scopeLineColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                                prefs.getString(
+                                    scopeLineNoArtworkColorModeKey,
+                                    AppDefaults.Visualization.ChannelScope.lineColorModeNoArtwork.storageValue
+                                ),
+                                AppDefaults.Visualization.ChannelScope.lineColorModeNoArtwork
+                            )
+                            scopeGridColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+                                prefs.getString(
+                                    scopeGridNoArtworkColorModeKey,
+                                    AppDefaults.Visualization.ChannelScope.gridColorModeNoArtwork.storageValue
+                                ),
+                                AppDefaults.Visualization.ChannelScope.gridColorModeNoArtwork
+                            )
+                            scopeLineColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                                prefs.getString(
+                                    scopeLineArtworkColorModeKey,
+                                    AppDefaults.Visualization.ChannelScope.lineColorModeWithArtwork.storageValue
+                                ),
+                                AppDefaults.Visualization.ChannelScope.lineColorModeWithArtwork
+                            )
+                            scopeGridColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+                                prefs.getString(
+                                    scopeGridArtworkColorModeKey,
+                                    AppDefaults.Visualization.ChannelScope.gridColorModeWithArtwork.storageValue
+                                ),
+                                AppDefaults.Visualization.ChannelScope.gridColorModeWithArtwork
+                            )
+                            scopeCustomLineColorArgb = prefs.getInt(
+                                scopeCustomLineColorKey,
+                                AppDefaults.Visualization.ChannelScope.customLineColorArgb
+                            )
+                            scopeCustomGridColorArgb = prefs.getInt(
+                                scopeCustomGridColorKey,
+                                AppDefaults.Visualization.ChannelScope.customGridColorArgb
+                            )
+                            scopeTextEnabled = prefs.getBoolean(
+                                scopeTextEnabledKey,
+                                AppDefaults.Visualization.ChannelScope.textEnabled
+                            )
+                            scopeTextAnchor = VisualizationChannelScopeTextAnchor.fromStorage(
+                                prefs.getString(
+                                    scopeTextAnchorKey,
+                                    AppDefaults.Visualization.ChannelScope.textAnchor.storageValue
+                                )
+                            )
+                            scopeTextPaddingDp = prefs.getInt(
+                                scopeTextPaddingKey,
+                                AppDefaults.Visualization.ChannelScope.textPaddingDp
+                            ).coerceIn(
+                                AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.first,
+                                AppDefaults.Visualization.ChannelScope.textPaddingRangeDp.last
+                            )
+                            scopeTextSizeSp = prefs.getInt(
+                                scopeTextSizeKey,
+                                AppDefaults.Visualization.ChannelScope.textSizeSp
+                            ).coerceIn(
+                                AppDefaults.Visualization.ChannelScope.textSizeRangeSp.first,
+                                AppDefaults.Visualization.ChannelScope.textSizeRangeSp.last
+                            )
+                            scopeTextHideWhenOverflow = prefs.getBoolean(
+                                scopeTextHideWhenOverflowKey,
+                                AppDefaults.Visualization.ChannelScope.textHideWhenOverflow
+                            )
+                            scopeTextShadowEnabled = prefs.getBoolean(
+                                scopeTextShadowEnabledKey,
+                                AppDefaults.Visualization.ChannelScope.textShadowEnabled
+                            )
+                            scopeTextFont = VisualizationChannelScopeTextFont.fromStorage(
+                                prefs.getString(
+                                    scopeTextFontKey,
+                                    AppDefaults.Visualization.ChannelScope.textFont.storageValue
+                                )
+                            )
+                            scopeTextColorMode = VisualizationChannelScopeTextColorMode.fromStorage(
+                                prefs.getString(
+                                    scopeTextColorModeKey,
+                                    AppDefaults.Visualization.ChannelScope.textColorMode.storageValue
+                                )
+                            )
+                            scopeCustomTextColorArgb = prefs.getInt(
+                                scopeCustomTextColorKey,
+                                AppDefaults.Visualization.ChannelScope.customTextColorArgb
+                            )
+                            scopeTextNoteFormat = VisualizationNoteNameFormat.fromStorage(
+                                prefs.getString(
+                                    scopeTextNoteFormatKey,
+                                    AppDefaults.Visualization.ChannelScope.textNoteFormat.storageValue
+                                )
+                            )
+                            scopeTextShowChannel = prefs.getBoolean(
+                                scopeTextShowChannelKey,
+                                AppDefaults.Visualization.ChannelScope.textShowChannel
+                            )
+                            scopeTextShowNote = prefs.getBoolean(
+                                scopeTextShowNoteKey,
+                                AppDefaults.Visualization.ChannelScope.textShowNote
+                            )
+                            scopeTextShowVolume = prefs.getBoolean(
+                                scopeTextShowVolumeKey,
+                                AppDefaults.Visualization.ChannelScope.textShowVolume
+                            )
+                            scopeTextShowEffect = prefs.getBoolean(
+                                scopeTextShowEffectKey,
+                                AppDefaults.Visualization.ChannelScope.textShowEffect
+                            )
+                            scopeTextShowInstrumentSample = prefs.getBoolean(
+                                scopeTextShowInstrumentSampleKey,
+                                AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
+                            )
+                            scopeTextVuEnabled = prefs.getBoolean(
+                                scopeTextVuEnabledKey,
+                                AppDefaults.Visualization.ChannelScope.textVuEnabled
+                            )
+                            scopeTextVuAnchor = VisualizationVuAnchor.fromStorage(
+                                prefs.getString(
+                                    scopeTextVuAnchorKey,
+                                    AppDefaults.Visualization.ChannelScope.textVuAnchor.storageValue
+                                )
+                            )
+                            scopeTextVuColorMode = VisualizationChannelScopeTextColorMode.fromStorage(
+                                prefs.getString(
+                                    scopeTextVuColorModeKey,
+                                    AppDefaults.Visualization.ChannelScope.textVuColorMode.storageValue
+                                )
+                            )
+                            scopeTextVuCustomColorArgb = prefs.getInt(
+                                scopeTextVuCustomColorKey,
+                                AppDefaults.Visualization.ChannelScope.textVuCustomColorArgb
+                            )
+                        }
+
                         SettingsSectionLabel("Channel scope")
                         SettingsValuePickerCard(
                             title = "Visible window",

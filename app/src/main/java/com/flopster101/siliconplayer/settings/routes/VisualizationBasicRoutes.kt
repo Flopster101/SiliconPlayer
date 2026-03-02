@@ -138,6 +138,51 @@ internal fun VisualizationBasicBarsRouteContent(
     var showBarColorModeWithArtworkDialog by remember { mutableStateOf(false) }
     var showBarCustomColorDialog by remember { mutableStateOf(false) }
 
+    PreferenceChangeSyncEffect(
+        prefs = prefs,
+        watchedKeys = setOf(
+            barColorModeNoArtworkKey,
+            barColorModeWithArtworkKey,
+            barCustomColorKey,
+            barFpsModeKey,
+            barFrequencyGridEnabledKey,
+            barContrastBackdropEnabledKey
+        )
+    ) {
+        barColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+            prefs.getString(
+                barColorModeNoArtworkKey,
+                AppDefaults.Visualization.Bars.colorModeNoArtwork.storageValue
+            ),
+            AppDefaults.Visualization.Bars.colorModeNoArtwork
+        )
+        barColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+            prefs.getString(
+                barColorModeWithArtworkKey,
+                AppDefaults.Visualization.Bars.colorModeWithArtwork.storageValue
+            ),
+            AppDefaults.Visualization.Bars.colorModeWithArtwork
+        )
+        barCustomColorArgb = prefs.getInt(
+            barCustomColorKey,
+            AppDefaults.Visualization.Bars.customColorArgb
+        )
+        barFpsMode = VisualizationOscFpsMode.fromStorage(
+            prefs.getString(
+                barFpsModeKey,
+                AppDefaults.Visualization.Bars.fpsMode.storageValue
+            )
+        )
+        barFrequencyGridEnabled = prefs.getBoolean(
+            barFrequencyGridEnabledKey,
+            AppDefaults.Visualization.Bars.frequencyGridEnabled
+        )
+        barContrastBackdropEnabled = prefs.getBoolean(
+            barContrastBackdropEnabledKey,
+            AppDefaults.Visualization.Bars.contrastBackdropEnabled
+        )
+    }
+
     SettingsSectionLabel("Bars")
     SettingsValuePickerCard(
         title = "Renderer backend",
@@ -436,6 +481,46 @@ internal fun VisualizationBasicVuMetersRouteContent(
     var showVuColorModeNoArtworkDialog by remember { mutableStateOf(false) }
     var showVuColorModeWithArtworkDialog by remember { mutableStateOf(false) }
     var showVuCustomColorDialog by remember { mutableStateOf(false) }
+
+    PreferenceChangeSyncEffect(
+        prefs = prefs,
+        watchedKeys = setOf(
+            vuColorModeNoArtworkKey,
+            vuColorModeWithArtworkKey,
+            vuCustomColorKey,
+            vuFpsModeKey,
+            vuContrastBackdropEnabledKey
+        )
+    ) {
+        vuColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+            prefs.getString(
+                vuColorModeNoArtworkKey,
+                AppDefaults.Visualization.Vu.colorModeNoArtwork.storageValue
+            ),
+            AppDefaults.Visualization.Vu.colorModeNoArtwork
+        )
+        vuColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+            prefs.getString(
+                vuColorModeWithArtworkKey,
+                AppDefaults.Visualization.Vu.colorModeWithArtwork.storageValue
+            ),
+            AppDefaults.Visualization.Vu.colorModeWithArtwork
+        )
+        vuCustomColorArgb = prefs.getInt(
+            vuCustomColorKey,
+            AppDefaults.Visualization.Vu.customColorArgb
+        )
+        vuFpsMode = VisualizationOscFpsMode.fromStorage(
+            prefs.getString(
+                vuFpsModeKey,
+                AppDefaults.Visualization.Vu.fpsMode.storageValue
+            )
+        )
+        vuContrastBackdropEnabled = prefs.getBoolean(
+            vuContrastBackdropEnabledKey,
+            AppDefaults.Visualization.Vu.contrastBackdropEnabled
+        )
+    }
 
     SettingsSectionLabel("VU meters")
     SettingsValuePickerCard(

@@ -197,6 +197,116 @@ internal fun VisualizationBasicOscilloscopeRouteContent(
     var showCustomLineColorDialog by remember { mutableStateOf(false) }
     var showCustomGridColorDialog by remember { mutableStateOf(false) }
 
+    PreferenceChangeSyncEffect(
+        prefs = prefs,
+        watchedKeys = setOf(
+            oscWindowKey,
+            oscTriggerKey,
+            oscFpsModeKey,
+            oscRenderBackendKey,
+            oscLineWidthKey,
+            oscGridWidthKey,
+            oscVerticalGridEnabledKey,
+            oscCenterLineEnabledKey,
+            oscLineNoArtworkColorModeKey,
+            oscGridNoArtworkColorModeKey,
+            oscLineArtworkColorModeKey,
+            oscGridArtworkColorModeKey,
+            oscCustomLineColorKey,
+            oscCustomGridColorKey,
+            oscContrastBackdropEnabledKey
+        )
+    ) {
+        visualizationOscWindowMs = prefs.getInt(
+            oscWindowKey,
+            AppDefaults.Visualization.Oscilloscope.windowMs
+        ).coerceIn(
+            AppDefaults.Visualization.Oscilloscope.windowRangeMs.first,
+            AppDefaults.Visualization.Oscilloscope.windowRangeMs.last
+        )
+        visualizationOscTriggerMode = VisualizationOscTriggerMode.fromStorage(
+            prefs.getString(
+                oscTriggerKey,
+                AppDefaults.Visualization.Oscilloscope.triggerMode.storageValue
+            )
+        )
+        visualizationOscFpsMode = VisualizationOscFpsMode.fromStorage(
+            prefs.getString(
+                oscFpsModeKey,
+                AppDefaults.Visualization.Oscilloscope.fpsMode.storageValue
+            )
+        )
+        visualizationOscRenderBackend = VisualizationRenderBackend.fromStorage(
+            prefs.getString(
+                oscRenderBackendKey,
+                AppDefaults.Visualization.Oscilloscope.renderBackend.storageValue
+            ),
+            AppDefaults.Visualization.Oscilloscope.renderBackend
+        )
+        visualizationOscLineWidthDp = prefs.getInt(
+            oscLineWidthKey,
+            AppDefaults.Visualization.Oscilloscope.lineWidthDp
+        ).coerceIn(
+            AppDefaults.Visualization.Oscilloscope.lineWidthRangeDp.first,
+            AppDefaults.Visualization.Oscilloscope.lineWidthRangeDp.last
+        )
+        visualizationOscGridWidthDp = prefs.getInt(
+            oscGridWidthKey,
+            AppDefaults.Visualization.Oscilloscope.gridWidthDp
+        ).coerceIn(
+            AppDefaults.Visualization.Oscilloscope.gridWidthRangeDp.first,
+            AppDefaults.Visualization.Oscilloscope.gridWidthRangeDp.last
+        )
+        visualizationOscVerticalGridEnabled = prefs.getBoolean(
+            oscVerticalGridEnabledKey,
+            AppDefaults.Visualization.Oscilloscope.verticalGridEnabled
+        )
+        visualizationOscCenterLineEnabled = prefs.getBoolean(
+            oscCenterLineEnabledKey,
+            AppDefaults.Visualization.Oscilloscope.centerLineEnabled
+        )
+        oscLineColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+            prefs.getString(
+                oscLineNoArtworkColorModeKey,
+                AppDefaults.Visualization.Oscilloscope.lineColorModeNoArtwork.storageValue
+            ),
+            AppDefaults.Visualization.Oscilloscope.lineColorModeNoArtwork
+        )
+        oscGridColorModeNoArtwork = VisualizationOscColorMode.fromStorage(
+            prefs.getString(
+                oscGridNoArtworkColorModeKey,
+                AppDefaults.Visualization.Oscilloscope.gridColorModeNoArtwork.storageValue
+            ),
+            AppDefaults.Visualization.Oscilloscope.gridColorModeNoArtwork
+        )
+        oscLineColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+            prefs.getString(
+                oscLineArtworkColorModeKey,
+                AppDefaults.Visualization.Oscilloscope.lineColorModeWithArtwork.storageValue
+            ),
+            AppDefaults.Visualization.Oscilloscope.lineColorModeWithArtwork
+        )
+        oscGridColorModeWithArtwork = VisualizationOscColorMode.fromStorage(
+            prefs.getString(
+                oscGridArtworkColorModeKey,
+                AppDefaults.Visualization.Oscilloscope.gridColorModeWithArtwork.storageValue
+            ),
+            AppDefaults.Visualization.Oscilloscope.gridColorModeWithArtwork
+        )
+        oscCustomLineColorArgb = prefs.getInt(
+            oscCustomLineColorKey,
+            AppDefaults.Visualization.Oscilloscope.customLineColorArgb
+        )
+        oscCustomGridColorArgb = prefs.getInt(
+            oscCustomGridColorKey,
+            AppDefaults.Visualization.Oscilloscope.customGridColorArgb
+        )
+        oscContrastBackdropEnabled = prefs.getBoolean(
+            oscContrastBackdropEnabledKey,
+            AppDefaults.Visualization.Oscilloscope.contrastBackdropEnabled
+        )
+    }
+
     SettingsSectionLabel("Oscilloscope")
     PlayerSettingToggleCard(
         title = "Stereo mode",

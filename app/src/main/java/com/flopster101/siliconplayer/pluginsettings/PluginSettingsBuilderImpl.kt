@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.SettingsRowSpacer
 
 /**
  * Implementation of PluginSettingsBuilder.
@@ -60,7 +61,11 @@ class PluginSettingsSectionBuilderImpl : PluginSettingsSectionBuilder {
 
     override fun spacer(height: Int) {
         content.add {
-            Spacer(modifier = Modifier.height(height.dp))
+            if (height == 10) {
+                SettingsRowSpacer()
+            } else {
+                Spacer(modifier = Modifier.height(height.dp))
+            }
         }
     }
 

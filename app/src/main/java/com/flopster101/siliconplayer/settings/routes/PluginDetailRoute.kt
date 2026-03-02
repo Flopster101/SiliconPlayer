@@ -500,7 +500,7 @@ internal fun PluginDetailRouteContent(
                 onClick = { showCoreCapabilitiesDialog = true }
             )
             if (coreAboutEntry != null) {
-                Spacer(modifier = Modifier.height(8.dp))
+                SettingsRowSpacer()
             }
         }
 

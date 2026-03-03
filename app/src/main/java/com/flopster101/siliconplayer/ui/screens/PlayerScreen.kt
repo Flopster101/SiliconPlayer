@@ -2156,10 +2156,16 @@ private fun PlayerMarqueeText(
     style: TextStyle,
     modifier: Modifier = Modifier,
     textAlign: TextAlign = TextAlign.Start,
-    color: Color = Color.Unspecified
+    color: Color = Color.Unspecified,
+    expandToAvailableWidth: Boolean = true
 ) {
+    val containerModifier = if (expandToAvailableWidth) {
+        modifier.fillMaxWidth()
+    } else {
+        modifier
+    }
     BoxWithConstraints(
-        modifier = modifier.fillMaxWidth()
+        modifier = containerModifier
     ) {
         val textMeasurer = rememberTextMeasurer()
         val density = LocalDensity.current
@@ -2236,7 +2242,13 @@ private fun PlayerMarqueeText(
 
         Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .then(
+                    if (expandToAvailableWidth) {
+                        Modifier.fillMaxWidth()
+                    } else {
+                        Modifier
+                    }
+                )
                 .clipToBounds()
                 .then(
                     if (overflowPx > 0 && marqueeFadeAlpha > 0f) {
@@ -2308,7 +2320,11 @@ private fun PlayerMarqueeText(
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = textAlign,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = if (expandToAvailableWidth) {
+                        Modifier.fillMaxWidth()
+                    } else {
+                        Modifier
+                    }
                 )
             }
         }
@@ -2427,7 +2443,7 @@ private fun PortraitTrackMetadataBlock(
                             MaterialTheme.colorScheme.primary.copy(alpha = subtuneTitleFlashAlpha.value)
                         )
                         .clickable(onClick = onOpenSubtuneSelector)
-                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                        .padding(start = 0.dp, end = 6.dp, top = 3.dp, bottom = 3.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     AnimatedContent(
@@ -2441,7 +2457,8 @@ private fun PortraitTrackMetadataBlock(
                         PlayerMarqueeText(
                             text = animatedTitle,
                             style = titleTextStyle,
-                            textAlign = TextAlign.Start
+                            textAlign = TextAlign.Start,
+                            expandToAvailableWidth = false
                         )
                     }
                     Spacer(modifier = Modifier.width(4.dp))
@@ -2736,7 +2753,7 @@ private fun TrackMetadataBlock(
                                     Modifier
                                 }
                             )
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                            .padding(start = 0.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(

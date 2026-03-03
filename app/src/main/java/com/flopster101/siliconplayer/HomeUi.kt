@@ -33,7 +33,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
@@ -186,7 +185,6 @@ internal fun HomeScreen(
     bottomContentPadding: Dp = 0.dp,
     onOpenLibrary: () -> Unit,
     onOpenNetwork: () -> Unit,
-    onOpenUrlOrPath: () -> Unit,
     onOpenPinnedFolder: (HomePinnedEntry) -> Unit,
     onPlayPinnedFile: (HomePinnedEntry) -> Unit,
     onOpenRecentFolder: (RecentPathEntry) -> Unit,
@@ -229,7 +227,7 @@ internal fun HomeScreen(
     val recentFolderAnimationState = rememberRecentAnimationState(recentFolderKeys)
     var runHomeIntroAnimation by rememberSaveable { mutableStateOf(true) }
     val introAnimatedItemCount = remember(recentFolders.size, recentPlayedFiles.size) {
-        3 + recentFolders.size + recentPlayedFiles.size
+        2 + recentFolders.size + recentPlayedFiles.size
     }
 
     LaunchedEffect(runHomeIntroAnimation, introAnimatedItemCount) {
@@ -351,17 +349,8 @@ internal fun HomeScreen(
                 onClick = onOpenLibrary
             ),
             HomeQuickActionSpec(
-                itemKey = "home_intro_url_button",
-                order = 1,
-                title = "URL or path",
-                subtitle = "Open links or direct paths",
-                icon = Icons.Default.Link,
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                onClick = onOpenUrlOrPath
-            ),
-            HomeQuickActionSpec(
                 itemKey = "home_intro_network_button",
-                order = 2,
+                order = 1,
                 title = "Network sources",
                 subtitle = "Open network shares and remote sources",
                 icon = Icons.Default.Public,

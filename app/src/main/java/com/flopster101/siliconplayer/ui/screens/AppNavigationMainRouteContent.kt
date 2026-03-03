@@ -38,8 +38,7 @@ internal fun AppNavigationHomeContentSection(
     onRecentFoldersChanged: (List<RecentPathEntry>) -> Unit,
     onRecentPlayedFilesChanged: (List<RecentPathEntry>) -> Unit,
     onOpenBrowser: (BrowserOpenRequest) -> Unit,
-    onCurrentViewChanged: (MainView) -> Unit,
-    onOpenUrlOrPathDialog: () -> Unit
+    onCurrentViewChanged: (MainView) -> Unit
 ) {
     AppNavigationHomeRouteSection(
         mainPadding = mainPadding,
@@ -63,7 +62,6 @@ internal fun AppNavigationHomeContentSection(
         onOpenNetwork = {
             onCurrentViewChanged(MainView.Network)
         },
-        onOpenUrlOrPath = onOpenUrlOrPathDialog,
         onOpenPinnedFolder = { entry ->
             onOpenRecentFolderFromEntry(
                 entry = entry.asRecentPathEntry(),
@@ -604,6 +602,7 @@ internal fun AppNavigationMainContentHost(
         onTouchInteraction = onTouchInteraction,
         onOpenPlayerSurface = onOpenPlayerSurface,
         onHomeRequested = onHomeRequested,
+        onOpenUrlOrPathRequested = onOpenUrlOrPathDialog,
         onSettingsRequested = onSettingsRequested,
         homeContent = { mainPadding ->
             AppNavigationHomeContentSection(
@@ -630,8 +629,7 @@ internal fun AppNavigationMainContentHost(
                 onRecentFoldersChanged = onRecentFoldersChanged,
                 onRecentPlayedFilesChanged = onRecentPlayedFilesChanged,
                 onOpenBrowser = onOpenBrowser,
-                onCurrentViewChanged = onCurrentViewChanged,
-                onOpenUrlOrPathDialog = onOpenUrlOrPathDialog
+                onCurrentViewChanged = onCurrentViewChanged
             )
         },
         networkContent = { mainPadding ->

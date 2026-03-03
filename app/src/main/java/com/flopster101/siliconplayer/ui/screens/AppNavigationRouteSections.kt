@@ -37,7 +37,6 @@ internal fun AppNavigationHomeRouteSection(
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     onOpenLibrary: () -> Unit,
     onOpenNetwork: () -> Unit,
-    onOpenUrlOrPath: () -> Unit,
     onOpenPinnedFolder: (HomePinnedEntry) -> Unit,
     onPlayPinnedFile: (HomePinnedEntry) -> Unit,
     onOpenRecentFolder: (RecentPathEntry) -> Unit,
@@ -68,7 +67,6 @@ internal fun AppNavigationHomeRouteSection(
         bottomContentPadding = bottomContentPadding,
         onOpenLibrary = onOpenLibrary,
         onOpenNetwork = onOpenNetwork,
-        onOpenUrlOrPath = onOpenUrlOrPath,
         onOpenPinnedFolder = onOpenPinnedFolder,
         onPlayPinnedFile = onPlayPinnedFile,
         onOpenRecentFolder = onOpenRecentFolder,
@@ -203,6 +201,7 @@ internal fun AppNavigationMainScaffoldSection(
     onTouchInteraction: () -> Unit,
     onOpenPlayerSurface: () -> Unit,
     onHomeRequested: () -> Unit,
+    onOpenUrlOrPathRequested: () -> Unit,
     onSettingsRequested: () -> Unit,
     homeContent: @Composable (PaddingValues) -> Unit,
     networkContent: @Composable (PaddingValues) -> Unit,
@@ -264,6 +263,7 @@ internal fun AppNavigationMainScaffoldSection(
             currentView = currentView,
             onOpenPlayerSurface = onOpenPlayerSurface,
             onHomeRequested = onHomeRequested,
+            onOpenUrlOrPathRequested = onOpenUrlOrPathRequested,
             onSettingsRequested = onSettingsRequested,
             mainContentModifier = Modifier
                 .focusRequester(mainContentFocusRequester)

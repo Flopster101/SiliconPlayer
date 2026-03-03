@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,6 +51,7 @@ internal fun MainNavigationScaffold(
     currentView: MainView,
     onOpenPlayerSurface: () -> Unit,
     onHomeRequested: () -> Unit,
+    onOpenUrlOrPathRequested: () -> Unit,
     onSettingsRequested: () -> Unit,
     mainContentModifier: Modifier = Modifier,
     content: @Composable (mainPadding: PaddingValues, targetView: MainView) -> Unit
@@ -137,6 +139,18 @@ internal fun MainNavigationScaffold(
                             },
                             actions = {
                                 AnimatedVisibility(
+                                    visible = true,
+                                    enter = fadeIn(animationSpec = tween(150)),
+                                    exit = fadeOut(animationSpec = tween(120))
+                                ) {
+                                    IconButton(onClick = onOpenUrlOrPathRequested) {
+                                        Icon(
+                                            imageVector = Icons.Default.Link,
+                                            contentDescription = "Open URL or path"
+                                        )
+                                    }
+                                }
+                                AnimatedVisibility(
                                     visible = shouldShowSettingsAction,
                                     enter = fadeIn(animationSpec = tween(150)),
                                     exit = fadeOut(animationSpec = tween(120))
@@ -174,6 +188,18 @@ internal fun MainNavigationScaffold(
                                         Icon(
                                             imageVector = Icons.Default.Home,
                                             contentDescription = "Go to app home"
+                                        )
+                                    }
+                                }
+                                AnimatedVisibility(
+                                    visible = true,
+                                    enter = fadeIn(animationSpec = tween(150)),
+                                    exit = fadeOut(animationSpec = tween(120))
+                                ) {
+                                    IconButton(onClick = onOpenUrlOrPathRequested) {
+                                        Icon(
+                                            imageVector = Icons.Default.Link,
+                                            contentDescription = "Open URL or path"
                                         )
                                     }
                                 }

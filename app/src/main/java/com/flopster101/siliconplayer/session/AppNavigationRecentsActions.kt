@@ -55,6 +55,8 @@ internal fun addRecentPlayedTrackEntry(
     title: String?,
     artist: String?,
     decoderName: String?,
+    isPlaylist: Boolean = false,
+    playlistSourceHint: String? = null,
     limit: Int,
     update: (List<RecentPathEntry>) -> Unit,
     write: (List<RecentPathEntry>, Int) -> Unit
@@ -68,6 +70,8 @@ internal fun addRecentPlayedTrackEntry(
         title = title,
         artist = artist,
         decoderName = decoderName,
+        isPlaylist = isPlaylist,
+        playlistSourceHint = playlistSourceHint,
         limit = limit
     )
     update(next)

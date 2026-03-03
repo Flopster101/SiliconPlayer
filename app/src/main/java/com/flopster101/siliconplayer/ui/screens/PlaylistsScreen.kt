@@ -1,5 +1,16 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,12 +24,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,10 +42,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +61,13 @@ import com.flopster101.siliconplayer.StoredPlaylist
 import com.flopster101.siliconplayer.playlistEntryMatchesPlayback
 import com.flopster101.siliconplayer.playlistTrackSubtitle
 import com.flopster101.siliconplayer.samePath
+
+private enum class PlaylistsSurfaceDestination {
+    Library,
+    Favorites
+}
+
+private const val PLAYLISTS_PAGE_NAV_DURATION_MS = 280
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,45 +89,42 @@ internal fun PlaylistsScreen(
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val activePlaylistId = activePlaylist?.id
-    val favoriteCountLabel = remember(libraryState.favorites.size) {
-        when (libraryState.favorites.size) {
-            0 -> "No favorites yet"
-            1 -> "1 favorite"
-            else -> "${libraryState.favorites.size} favorites"
-        }
+    var destination by rememberSaveable { mutableStateOf(PlaylistsSurfaceDestination.Library) }
+    val showingFavoritesDetail = destination == PlaylistsSurfaceDestination.Favorites
+    BackHandler(enabled = showingFavoritesDetail) {
+        destination = PlaylistsSurfaceDestination.Library
     }
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
-                title = { Text("Playlists") },
+                title = {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(text = "Playlists")
+                        if (showingFavoritesDetail) {
+                            Text(
+                                text = "Favorites",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(
+                        onClick = {
+                            if (showingFavoritesDetail) {
+                                destination = PlaylistsSurfaceDestination.Library
+                            } else {
+                                onBack()
+                            }
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Go back"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = onAddCurrentTrackToFavorites,
-                        enabled = canAddCurrentTrackToFavorites
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = "Add current track to favorites"
-                        )
-                    }
-                    IconButton(
-                        onClick = onSaveActivePlaylist,
-                        enabled = canSaveActivePlaylist
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Save,
-                            contentDescription = "Save current playlist as internal copy"
                         )
                     }
                 },
@@ -113,138 +132,280 @@ internal fun PlaylistsScreen(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(
-                start = 16.dp,
-                top = 8.dp,
-                end = 16.dp,
-                bottom = bottomContentPadding + 16.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                SectionHeader(
-                    icon = Icons.Default.Star,
-                    title = "Favorites",
-                    subtitle = favoriteCountLabel
-                )
-            }
-            if (libraryState.favorites.isEmpty()) {
-                item {
-                    EmptySectionCard(
-                        title = "Nothing pinned here yet",
-                        body = "Use the star action in this page after opening a track to keep it ready at the top."
+        AnimatedContent(
+            targetState = destination,
+            transitionSpec = {
+                val forward = playlistsSurfaceDestinationOrder(targetState) >=
+                    playlistsSurfaceDestinationOrder(initialState)
+                val enter = slideInHorizontally(
+                    initialOffsetX = { fullWidth -> if (forward) fullWidth else -fullWidth / 4 },
+                    animationSpec = tween(
+                        durationMillis = PLAYLISTS_PAGE_NAV_DURATION_MS,
+                        easing = FastOutSlowInEasing
                     )
-                }
-            } else {
-                items(
-                    items = libraryState.favorites,
-                    key = { it.id }
-                ) { entry ->
-                    val isActive = playlistEntryMatchesPlayback(
-                        entry = entry,
+                ) + fadeIn(
+                    animationSpec = tween(
+                        durationMillis = 210,
+                        delayMillis = 40,
+                        easing = LinearOutSlowInEasing
+                    )
+                )
+                val exit = slideOutHorizontally(
+                    targetOffsetX = { fullWidth -> if (forward) -fullWidth / 4 else fullWidth / 4 },
+                    animationSpec = tween(
+                        durationMillis = PLAYLISTS_PAGE_NAV_DURATION_MS,
+                        easing = FastOutSlowInEasing
+                    )
+                ) + fadeOut(
+                    animationSpec = tween(
+                        durationMillis = 110,
+                        easing = FastOutLinearInEasing
+                    )
+                )
+                enter togetherWith exit
+            },
+            label = "playlistsSurfaceTransition",
+            modifier = Modifier.fillMaxSize()
+        ) { currentDestination ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    top = 8.dp,
+                    end = 16.dp,
+                    bottom = bottomContentPadding + 16.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (currentDestination == PlaylistsSurfaceDestination.Favorites) {
+                    playlistDetailContent(
+                        title = "Favorites",
+                        entries = libraryState.favorites,
+                        heroIcon = Icons.Default.Star,
+                        emptyBody = "Your favorites will show up here.",
                         activeSourceId = currentPlaybackSourceId,
-                        currentSubtuneIndex = currentSubtuneIndex
+                        currentSubtuneIndex = currentSubtuneIndex,
+                        onEntryClick = onOpenFavorite,
+                        onEntryDelete = onRemoveFavorite
                     )
-                    PlaylistTrackRow(
-                        entry = entry,
-                        isActive = isActive,
-                        onClick = { onOpenFavorite(entry) },
-                        onDelete = { onRemoveFavorite(entry) }
-                    )
-                }
-            }
-
-            item {
-                Spacer(modifier = Modifier.size(4.dp))
-            }
-            item {
-                SectionHeader(
-                    icon = Icons.Default.LibraryMusic,
-                    title = "Saved playlists",
-                    subtitle = when (libraryState.playlists.size) {
-                        0 -> "Nothing imported yet"
-                        1 -> "1 playlist"
-                        else -> "${libraryState.playlists.size} playlists"
+                } else {
+                    item {
+                        FavoritesCollectionRow(
+                            favoriteCount = libraryState.favorites.size,
+                            hasActiveFavorite = libraryState.favorites.any { entry ->
+                                playlistEntryMatchesPlayback(
+                                    entry = entry,
+                                    activeSourceId = currentPlaybackSourceId,
+                                    currentSubtuneIndex = currentSubtuneIndex
+                                )
+                            },
+                            onClick = { destination = PlaylistsSurfaceDestination.Favorites }
+                        )
                     }
-                )
-            }
-            activePlaylist?.takeIf { playlist ->
-                libraryState.playlists.none { it.id == playlist.id }
-            }?.let { sessionPlaylist ->
-                item(key = "active_session_playlist") {
-                    SessionPlaylistCard(
-                        playlist = sessionPlaylist,
-                        onOpen = { onOpenPlaylist(sessionPlaylist) }
-                    )
-                }
-            }
-            if (libraryState.playlists.isEmpty()) {
-                item {
-                    EmptySectionCard(
-                        title = "Open an M3U or M3U8 to import it",
-                        body = "Imported playlists land here automatically, and the save action can clone the active list into an internal playlist."
-                    )
-                }
-            } else {
-                items(
-                    items = libraryState.playlists,
-                    key = { it.id }
-                ) { playlist ->
-                    PlaylistCollectionRow(
-                        playlist = playlist,
-                        isActive = playlist.id == activePlaylistId || (
-                            playlist.sourceIdHint != null &&
-                                activePlaylist?.sourceIdHint != null &&
-                                samePath(playlist.sourceIdHint, activePlaylist.sourceIdHint)
-                            ),
-                        onClick = { onOpenPlaylist(playlist) },
-                        onDelete = { onRemovePlaylist(playlist) }
-                    )
+
+                    activePlaylist?.takeIf { playlist ->
+                        libraryState.playlists.none { it.id == playlist.id }
+                    }?.let { sessionPlaylist ->
+                        item(key = "active_session_playlist") {
+                            SessionPlaylistCard(
+                                playlist = sessionPlaylist,
+                                onOpen = { onOpenPlaylist(sessionPlaylist) }
+                            )
+                        }
+                    }
+                    if (libraryState.playlists.isEmpty()) {
+                        if (activePlaylist == null || libraryState.playlists.any { it.id == activePlaylist.id }) {
+                            item {
+                                EmptySectionCard(
+                                    title = "No playlists yet",
+                                    body = "More playlist options will show up here later."
+                                )
+                            }
+                        }
+                    } else {
+                        items(
+                            items = libraryState.playlists,
+                            key = { it.id }
+                        ) { playlist ->
+                            PlaylistCollectionRow(
+                                playlist = playlist,
+                                isActive = playlist.id == activePlaylistId || (
+                                    playlist.sourceIdHint != null &&
+                                        activePlaylist?.sourceIdHint != null &&
+                                        samePath(playlist.sourceIdHint, activePlaylist.sourceIdHint)
+                                    ),
+                                onClick = { onOpenPlaylist(playlist) },
+                                onDelete = { onRemovePlaylist(playlist) }
+                            )
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-@Composable
-private fun SectionHeader(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+private fun LazyListScope.playlistDetailContent(
     title: String,
-    subtitle: String
+    entries: List<PlaylistTrackEntry>,
+    heroIcon: ImageVector,
+    emptyBody: String,
+    activeSourceId: String?,
+    currentSubtuneIndex: Int,
+    onEntryClick: (PlaylistTrackEntry) -> Unit,
+    onEntryDelete: (PlaylistTrackEntry) -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .clip(MaterialTheme.shapes.large)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
+    item {
+        PlaylistHeroCard(
+            title = title,
+            trackCountLabel = playlistTrackCountLabel(entries.size),
+            heroIcon = heroIcon
+        )
+    }
+    if (entries.isEmpty()) {
+        item {
+            EmptySectionCard(
+                title = "Nothing here yet",
+                body = emptyBody
             )
         }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+    } else {
+        items(
+            items = entries,
+            key = { it.id }
+        ) { entry ->
+            val isActive = playlistEntryMatchesPlayback(
+                entry = entry,
+                activeSourceId = activeSourceId,
+                currentSubtuneIndex = currentSubtuneIndex
             )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+            PlaylistTrackRow(
+                entry = entry,
+                isActive = isActive,
+                onClick = { onEntryClick(entry) },
+                onDelete = { onEntryDelete(entry) }
             )
+        }
+    }
+}
+
+@Composable
+private fun PlaylistHeroCard(
+    title: String,
+    trackCountLabel: String,
+    heroIcon: ImageVector
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(MaterialTheme.shapes.extraLarge)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = heroIcon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(30.dp)
+                )
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Text(
+                    text = trackCountLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FavoritesCollectionRow(
+    favoriteCount: Int,
+    hasActiveFavorite: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.large,
+        color = if (hasActiveFavorite) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(MaterialTheme.shapes.large)
+                    .background(
+                        if (hasActiveFavorite) {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = if (hasActiveFavorite) {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    }
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Favorites",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = when (favoriteCount) {
+                        0 -> "No tracks yet"
+                        1 -> "1 track"
+                        else -> "$favoriteCount tracks"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -278,6 +439,19 @@ private fun EmptySectionCard(
         }
     }
 }
+
+private fun playlistsSurfaceDestinationOrder(destination: PlaylistsSurfaceDestination): Int =
+    when (destination) {
+        PlaylistsSurfaceDestination.Library -> 0
+        PlaylistsSurfaceDestination.Favorites -> 1
+    }
+
+private fun playlistTrackCountLabel(trackCount: Int): String =
+    when (trackCount) {
+        0 -> "No tracks yet"
+        1 -> "1 track"
+        else -> "$trackCount tracks"
+    }
 
 @Composable
 private fun PlaylistTrackRow(
@@ -353,7 +527,7 @@ private fun SessionPlaylistCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
@@ -396,7 +570,7 @@ private fun PlaylistCollectionRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 14.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
+                .padding(start = 16.dp, top = 14.dp, end = 10.dp, bottom = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

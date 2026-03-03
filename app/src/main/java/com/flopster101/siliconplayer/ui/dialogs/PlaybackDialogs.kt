@@ -1,20 +1,22 @@
 package com.flopster101.siliconplayer.ui.dialogs
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -31,16 +33,21 @@ import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.rememberDialogLazyListScrollbarAlpha
 import com.flopster101.siliconplayer.HttpSourceSpec
 import com.flopster101.siliconplayer.PlaylistTrackEntry
 import com.flopster101.siliconplayer.RemoteLoadPhase
 import com.flopster101.siliconplayer.RemoteLoadUiState
 import com.flopster101.siliconplayer.SubtuneEntry
+import com.flopster101.siliconplayer.ui.screens.BrowserLazyListScrollbar
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
 import com.flopster101.siliconplayer.formatByteCount
@@ -432,55 +439,79 @@ internal fun SubtuneSelectorDialog(
             if (subtuneEntries.isEmpty()) {
                 Text("No subtunes available.")
             } else {
-                Column(
+                val listState = rememberLazyListState()
+                val scrollbarAlpha = rememberDialogLazyListScrollbarAlpha(
+                    enabled = subtuneEntries.size > 1,
+                    listState = listState,
+                    flashKey = subtuneEntries.size to currentSubtuneIndex,
+                    label = "subtuneSelectorScrollbarAlpha"
+                )
+                val scrollbarHeld = remember { mutableStateOf(false) }
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 360.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    subtuneEntries.forEach { entry ->
-                        val isCurrent = entry.index == currentSubtuneIndex
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelectSubtune(entry.index) },
-                            shape = MaterialTheme.shapes.medium,
-                            color = if (isCurrent) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerHigh
-                            }
-                        ) {
-                            Column(
+                    LazyColumn(
+                        state = listState,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(
+                            count = subtuneEntries.size,
+                            key = { index -> subtuneEntries[index].index }
+                        ) { index ->
+                            val entry = subtuneEntries[index]
+                            val isCurrent = entry.index == currentSubtuneIndex
+                            Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 10.dp)
-                            ) {
-                                Text(
-                                    text = "${entry.index + 1}. ${entry.title}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                val details = buildString {
-                                    append(formatShortDuration(entry.durationSeconds))
-                                    if (entry.artist.isNotBlank()) {
-                                        append(" • ")
-                                        append(entry.artist)
-                                    }
+                                    .clickable { onSelectSubtune(entry.index) },
+                                shape = MaterialTheme.shapes.medium,
+                                color = if (isCurrent) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainerHigh
                                 }
-                                Text(
-                                    text = details,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                                ) {
+                                    Text(
+                                        text = "${entry.index + 1}. ${entry.title}",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    val details = buildString {
+                                        append(formatShortDuration(entry.durationSeconds))
+                                        if (entry.artist.isNotBlank()) {
+                                            append(" • ")
+                                            append(entry.artist)
+                                        }
+                                    }
+                                    Text(
+                                        text = details,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
                     }
+                    BrowserLazyListScrollbar(
+                        listState = listState,
+                        onDragActiveChanged = { isActive -> scrollbarHeld.value = isActive },
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxSize()
+                            .graphicsLayer(alpha = if (scrollbarHeld.value) 1f else scrollbarAlpha)
+                    )
                 }
             }
         },
@@ -509,48 +540,72 @@ internal fun PlaylistSelectorDialog(
             if (entries.isEmpty()) {
                 Text("No playlist entries available.")
             } else {
-                Column(
+                val listState = rememberLazyListState()
+                val scrollbarAlpha = rememberDialogLazyListScrollbarAlpha(
+                    enabled = entries.size > 1,
+                    listState = listState,
+                    flashKey = entries.size to currentEntryId,
+                    label = "playlistSelectorScrollbarAlpha"
+                )
+                val scrollbarHeld = remember { mutableStateOf(false) }
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 360.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    entries.forEachIndexed { index, entry ->
-                        val isCurrent = entry.id == currentEntryId
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelectEntry(entry) },
-                            shape = MaterialTheme.shapes.medium,
-                            color = if (isCurrent) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerHigh
-                            }
-                        ) {
-                            Column(
+                    LazyColumn(
+                        state = listState,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(
+                            count = entries.size,
+                            key = { index -> entries[index].id }
+                        ) { index ->
+                            val entry = entries[index]
+                            val isCurrent = entry.id == currentEntryId
+                            Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                                    .clickable { onSelectEntry(entry) },
+                                shape = MaterialTheme.shapes.medium,
+                                color = if (isCurrent) {
+                                    MaterialTheme.colorScheme.primaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceContainerHigh
+                                }
                             ) {
-                                Text(
-                                    text = "${index + 1}. ${entry.title}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = playlistTrackSubtitle(entry),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                                ) {
+                                    Text(
+                                        text = "${index + 1}. ${entry.title}",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = playlistTrackSubtitle(entry),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
                     }
+                    BrowserLazyListScrollbar(
+                        listState = listState,
+                        onDragActiveChanged = { isActive -> scrollbarHeld.value = isActive },
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxSize()
+                            .graphicsLayer(alpha = if (scrollbarHeld.value) 1f else scrollbarAlpha)
+                    )
                 }
             }
         },

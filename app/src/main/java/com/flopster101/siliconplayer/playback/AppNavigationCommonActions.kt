@@ -97,6 +97,8 @@ internal fun addRecentPlayedTrackAction(
     title: String?,
     artist: String?,
     decoderName: String?,
+    isPlaylist: Boolean = false,
+    playlistSourceHint: String? = null,
     limitProvider: () -> Int,
     onRecentPlayedChanged: (List<RecentPathEntry>) -> Unit,
     prefs: SharedPreferences
@@ -111,24 +113,28 @@ internal fun addRecentPlayedTrackAction(
         title = title,
         artist = artist,
         decoderName = decoderName,
+        isPlaylist = isPlaylist,
+        playlistSourceHint = playlistSourceHint,
         limit = limit,
         update = onRecentPlayedChanged,
         write = { entries, max ->
             writeRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, entries, max)
         }
     )
-    scheduleRecentPlayedArtworkCacheBackfillInSession(
-        context = context,
-        scope = appScope,
-        sourceId = path,
-        requestUrlHint = requestUrl,
-        currentProvider = currentProvider,
-        limitProvider = limitProvider,
-        onRecentPlayedChanged = onRecentPlayedChanged,
-        writeRecentPlayed = { entries, max ->
-            writeRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, entries, max)
-        }
-    )
+    if (!isPlaylist) {
+        scheduleRecentPlayedArtworkCacheBackfillInSession(
+            context = context,
+            scope = appScope,
+            sourceId = path,
+            requestUrlHint = requestUrl,
+            currentProvider = currentProvider,
+            limitProvider = limitProvider,
+            onRecentPlayedChanged = onRecentPlayedChanged,
+            writeRecentPlayed = { entries, max ->
+                writeRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, entries, max)
+            }
+        )
+    }
 }
 
 internal fun scheduleRecentTrackMetadataRefreshAction(

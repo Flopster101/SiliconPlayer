@@ -902,9 +902,43 @@ internal fun HomeScreen(
                                         }
                                     }
                                     val storagePresentation = storagePresentationForEntry(entry)
+                                    val playlistSourceFile = entry.playlistSourceHint?.let { sourceHint ->
+                                        val normalizedSourcePath =
+                                            normalizeSourceIdentity(sourceHint) ?: sourceHint
+                                        val parsedSource = Uri.parse(normalizedSourcePath)
+                                        if (parsedSource.scheme.equals("file", ignoreCase = true)) {
+                                            File(parsedSource.path ?: normalizedSourcePath)
+                                        } else if (!parsedSource.scheme.isNullOrBlank()) {
+                                            val decodedLeaf = sourceLeafNameForDisplay(normalizedSourcePath)
+                                                ?.trim()
+                                                ?.takeIf { it.isNotBlank() }
+                                            File(decodedLeaf ?: normalizedSourcePath)
+                                        } else {
+                                            File(normalizedSourcePath)
+                                        }
+                                    }
+                                    val iconSourceFile = if (entry.isPlaylist) {
+                                        playlistSourceFile ?: trackFile
+                                    } else {
+                                        trackFile
+                                    }
                                     val extensionLabel =
-                                        inferredPrimaryExtensionForName(trackFile.name)?.uppercase() ?: "UNKNOWN"
-                                    val useLiveMetadata = index == 0 && samePath(currentTrackPath, entry.path)
+                                        if (entry.isPlaylist) {
+                                            val sourceExtension = inferredPrimaryExtensionForName(playlistSourceFile?.name.orEmpty())
+                                                ?.uppercase()
+                                            val playlistExtension = inferredPrimaryExtensionForName(trackFile.name)
+                                                ?.uppercase()
+                                                ?: "PLAYLIST"
+                                            if (!sourceExtension.isNullOrBlank() && sourceExtension != playlistExtension) {
+                                                "$sourceExtension on $playlistExtension"
+                                            } else {
+                                                playlistExtension
+                                            }
+                                        } else {
+                                            inferredPrimaryExtensionForName(trackFile.name)?.uppercase() ?: "UNKNOWN"
+                                        }
+                                    val isCurrentlyPlayingEntry = index == 0 && samePath(currentTrackPath, entry.path)
+                                    val useLiveMetadata = isCurrentlyPlayingEntry && !entry.isPlaylist
                                     val liveTitle = currentTrackTitle.trim()
                                     val liveArtist = currentTrackArtist.trim()
                                     val liveMetadataReady = liveTitle.isNotBlank() || liveArtist.isNotBlank()
@@ -961,7 +995,7 @@ internal fun HomeScreen(
                                             ?: (entry.title.orEmpty() to entry.artist.orEmpty())
                                     }
                                     val fallbackIcon = placeholderArtworkIconForFile(
-                                        file = trackFile,
+                                        file = iconSourceFile,
                                         decoderName = entry.decoderName,
                                         allowCurrentDecoderFallback = false
                                     )
@@ -997,10 +1031,11 @@ internal fun HomeScreen(
                                                         cachedArtist = targetDisplayMetadata.second,
                                                         storagePresentation = storagePresentation,
                                                         extensionLabel = extensionLabel,
-                                                        isArchiveSource = archiveSource != null
+                                                        isArchiveSource = archiveSource != null,
+                                                        usePlaylistSubtitleIcon = entry.isPlaylist
                                                     )
                                                 }
-                                                if (useLiveMetadata) {
+                                                if (isCurrentlyPlayingEntry) {
                                                     Spacer(modifier = Modifier.width(12.dp))
                                                     Icon(
                                                         imageVector = Icons.Default.PlayArrow,
@@ -1523,7 +1558,8 @@ internal fun RecentTrackSummaryText(
     cachedArtist: String?,
     storagePresentation: StoragePresentation,
     extensionLabel: String,
-    isArchiveSource: Boolean
+    isArchiveSource: Boolean,
+    usePlaylistSubtitleIcon: Boolean = false
 ) {
     val fallback = inferredDisplayTitleForName(file.name)
     val display = remember(file.absolutePath, cachedTitle, cachedArtist) {
@@ -1577,7 +1613,14 @@ internal fun RecentTrackSummaryText(
         }
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        if (isArchiveSource) {
+        if (usePlaylistSubtitleIcon) {
+            Icon(
+                imageVector = Icons.Default.LibraryMusic,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp)
+            )
+        } else if (isArchiveSource) {
             Icon(
                 painter = painterResource(id = R.drawable.ic_folder_zip),
                 contentDescription = null,

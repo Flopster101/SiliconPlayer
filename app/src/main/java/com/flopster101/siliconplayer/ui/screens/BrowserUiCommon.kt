@@ -1558,7 +1558,8 @@ internal fun BrowserLazyListScrollbar(
             offsetFraction = offsetFraction,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .fillMaxSize(),
+                .width(20.dp)
+                .fillMaxHeight(),
             onDragFractionChanged = dragToFraction,
             onDragActiveChanged = onDragActiveChanged
         )

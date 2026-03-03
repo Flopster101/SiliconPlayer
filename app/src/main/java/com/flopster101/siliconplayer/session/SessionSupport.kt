@@ -260,7 +260,9 @@ internal data class RecentPathEntry(
     val artist: String? = null,
     val decoderName: String? = null,
     val sourceNodeId: Long? = null,
-    val artworkThumbnailCacheKey: String? = null
+    val artworkThumbnailCacheKey: String? = null,
+    val isPlaylist: Boolean = false,
+    val playlistSourceHint: String? = null
 )
 
 internal data class HomePinnedEntry(
@@ -521,6 +523,10 @@ internal fun readRecentEntries(
             val artworkThumbnailCacheKey = objectValue
                 .optString("artworkThumbnailCacheKey", "")
                 .ifBlank { null }
+            val isPlaylist = objectValue.optBoolean("isPlaylist", false)
+            val playlistSourceHint = objectValue
+                .optString("playlistSourceHint", "")
+                .ifBlank { null }
             val sourceNodeId = if (
                 objectValue.has("sourceNodeId") &&
                 !objectValue.isNull("sourceNodeId")
@@ -538,7 +544,9 @@ internal fun readRecentEntries(
                     artist = existing.artist ?: artist,
                     decoderName = existing.decoderName ?: decoderName,
                     sourceNodeId = existing.sourceNodeId ?: sourceNodeId,
-                    artworkThumbnailCacheKey = existing.artworkThumbnailCacheKey ?: artworkThumbnailCacheKey
+                    artworkThumbnailCacheKey = existing.artworkThumbnailCacheKey ?: artworkThumbnailCacheKey,
+                    isPlaylist = existing.isPlaylist || isPlaylist,
+                    playlistSourceHint = existing.playlistSourceHint ?: playlistSourceHint
                 )
                 continue
             }
@@ -549,7 +557,9 @@ internal fun readRecentEntries(
                 artist = artist,
                 decoderName = decoderName,
                 sourceNodeId = sourceNodeId,
-                artworkThumbnailCacheKey = artworkThumbnailCacheKey
+                artworkThumbnailCacheKey = artworkThumbnailCacheKey,
+                isPlaylist = isPlaylist,
+                playlistSourceHint = playlistSourceHint
             )
             if (deduped.size >= maxItems) break
         }
@@ -762,7 +772,9 @@ internal fun writeRecentEntries(
                 artist = existing.artist ?: entry.artist,
                 decoderName = existing.decoderName ?: entry.decoderName,
                 sourceNodeId = existing.sourceNodeId ?: entry.sourceNodeId,
-                artworkThumbnailCacheKey = existing.artworkThumbnailCacheKey ?: entry.artworkThumbnailCacheKey
+                artworkThumbnailCacheKey = existing.artworkThumbnailCacheKey ?: entry.artworkThumbnailCacheKey,
+                isPlaylist = existing.isPlaylist || entry.isPlaylist,
+                playlistSourceHint = existing.playlistSourceHint ?: entry.playlistSourceHint
             )
         } else {
             deduped += entry
@@ -780,6 +792,8 @@ internal fun writeRecentEntries(
                 .put("decoderName", entry.decoderName ?: "")
                 .put("sourceNodeId", entry.sourceNodeId)
                 .put("artworkThumbnailCacheKey", entry.artworkThumbnailCacheKey ?: "")
+                .put("isPlaylist", entry.isPlaylist)
+                .put("playlistSourceHint", entry.playlistSourceHint ?: "")
         )
     }
     prefs.edit().putString(key, array.toString()).apply()
@@ -816,18 +830,27 @@ internal fun buildUpdatedRecentPlayedTracks(
     artist: String? = null,
     decoderName: String? = null,
     artworkThumbnailCacheKey: String? = null,
+    isPlaylist: Boolean = false,
+    playlistSourceHint: String? = null,
     clearBlankMetadataOnUpdate: Boolean = false,
     limit: Int
 ): List<RecentPathEntry> {
     val normalized = normalizeSourceIdentity(newPath) ?: newPath
     val existing = current.firstOrNull { samePath(it.path, normalized) }
+    val resolvedIsPlaylist = isPlaylist || existing?.isPlaylist == true
+    val resolvedPlaylistSourceHint = playlistSourceHint
+        ?.trim()
+        .takeUnless { it.isNullOrBlank() }
+        ?: existing?.playlistSourceHint
     val trimmedTitle = title?.trim()
     val trimmedArtist = artist?.trim()
     val resolvedTitle = when {
+        resolvedIsPlaylist -> null
         clearBlankMetadataOnUpdate && trimmedTitle != null -> trimmedTitle.ifBlank { null }
         else -> trimmedTitle.takeUnless { it.isNullOrBlank() } ?: existing?.title
     }
     val resolvedArtist = when {
+        resolvedIsPlaylist -> null
         clearBlankMetadataOnUpdate && trimmedArtist != null -> trimmedArtist.ifBlank { null }
         else -> trimmedArtist.takeUnless { it.isNullOrBlank() } ?: existing?.artist
     }
@@ -844,7 +867,9 @@ internal fun buildUpdatedRecentPlayedTracks(
             artist = resolvedArtist,
             decoderName = resolvedDecoderName,
             sourceNodeId = sourceNodeId ?: existing?.sourceNodeId,
-            artworkThumbnailCacheKey = resolvedArtworkThumbnailCacheKey
+            artworkThumbnailCacheKey = resolvedArtworkThumbnailCacheKey,
+            isPlaylist = resolvedIsPlaylist,
+            playlistSourceHint = resolvedPlaylistSourceHint
         )
     ) + current.filterNot { samePath(it.path, normalized) }
     return updated.take(limit)
@@ -916,6 +941,7 @@ internal fun mergeRecentPlayedTrackMetadata(
     var changed = false
     val updated = current.map { entry ->
         if (!samePath(entry.path, normalized)) return@map entry
+        if (entry.isPlaylist) return@map entry
         val resolvedTitle = normalizedTitle ?: entry.title
         val resolvedArtist = normalizedArtist ?: entry.artist
         if (resolvedTitle == entry.title && resolvedArtist == entry.artist) {

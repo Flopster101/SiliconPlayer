@@ -262,6 +262,18 @@ private data class PendingPlaylistSubtuneSelection(
     val subtuneIndex: Int
 )
 
+private data class LastStoppedPlaylistResume(
+    val playlist: StoredPlaylist,
+    val entryId: String
+)
+
+private data class ExternalPlaylistRecentOverride(
+    val playlistPath: String,
+    val locationId: String?,
+    val sourceHint: String?,
+    val referencedSources: Set<String>
+)
+
 private fun parsePlaylistFileDocument(
     file: File,
     sourceIdHint: String?
@@ -376,14 +388,12 @@ private fun playAdjacentPlaylistEntry(
 private fun openPlaylistDocument(
     context: Context,
     document: ParsedPlaylistDocument,
-    playlistLibraryState: PlaylistLibraryState,
     trackLoadDelegates: AppNavigationTrackLoadDelegates,
     manualOpenDelegates: AppNavigationManualOpenDelegates,
     autoPlayOnTrackSelect: Boolean,
     openPlayerOnTrackSelect: Boolean,
     autoStart: Boolean = autoPlayOnTrackSelect,
     expandOverride: Boolean? = openPlayerOnTrackSelect,
-    onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit,
     onActivePlaylistChanged: (StoredPlaylist?) -> Unit,
     onActivePlaylistEntryIdChanged: (String?) -> Unit,
     onShowPlaylistSelectorDialogChanged: (Boolean) -> Unit,
@@ -394,22 +404,15 @@ private fun openPlaylistDocument(
         Toast.makeText(context, "Unable to open playlist", Toast.LENGTH_SHORT).show()
         return
     }
-    val importedPlaylist = buildImportedPlaylist(document)
-    val updatedState = upsertStoredPlaylist(
-        state = playlistLibraryState,
-        playlist = importedPlaylist
-    )
-    onPlaylistLibraryStateChanged(updatedState)
-    val storedPlaylist = updatedState.playlists.firstOrNull { it.id == importedPlaylist.id }
-        ?: importedPlaylist
+    val transientPlaylist = buildImportedPlaylist(document)
     onShowPlaylistSelectorDialogChanged(false)
-    val entryToOpen = storedPlaylist.entries.firstOrNull { it.id == selectedEntryId }
-        ?: storedPlaylist.entries.firstOrNull()
+    val entryToOpen = transientPlaylist.entries.firstOrNull { it.id == selectedEntryId }
+        ?: transientPlaylist.entries.firstOrNull()
         ?: return
     openPlaylistEntry(
         context = context,
         entry = entryToOpen,
-        playlist = storedPlaylist,
+        playlist = transientPlaylist,
         trackLoadDelegates = trackLoadDelegates,
         manualOpenDelegates = manualOpenDelegates,
         autoPlayOnTrackSelect = autoStart,
@@ -447,26 +450,20 @@ private fun playAdjacentBrowserFileFromAnchor(
         ?.entries
         ?.mapNotNull { entry -> resolvePlaylistEntryLocalFile(entry.source)?.absolutePath }
         .orEmpty()
-    val browserContinuationFiles = buildList {
-        addAll(visiblePlayableFiles)
-        if (none { file -> samePath(file.absolutePath, normalizedAnchorPath) }) {
-            val anchorFile = File(normalizedAnchorPath)
-            val parentDirectory = anchorFile.parentFile
-            if (parentDirectory != null && parentDirectory.exists() && parentDirectory.isDirectory) {
-                addAll(
-                    repository.getFiles(parentDirectory)
-                        .asSequence()
-                        .filter { item ->
-                            !item.isDirectory &&
-                                (repository.isPlayableFile(item.file) || isSupportedPlaylistFile(item.file))
-                        }
-                        .map { item -> item.file }
-                        .toList()
-                )
+    val anchorFile = File(normalizedAnchorPath)
+    val parentDirectory = anchorFile.parentFile
+    val browserContinuationFiles = if (parentDirectory != null && parentDirectory.exists() && parentDirectory.isDirectory) {
+        repository.getFiles(parentDirectory)
+            .asSequence()
+            .filter { item ->
+                !item.isDirectory &&
+                    (repository.isPlayableFile(item.file) || isSupportedPlaylistFile(item.file))
             }
-        }
+            .map { item -> item.file }
+            .toList()
+    } else {
+        visiblePlayableFiles
     }
-        .distinctBy { file -> file.absolutePath.lowercase() }
         .filter { file ->
             samePath(file.absolutePath, normalizedAnchorPath) ||
                 referencedLocalSources.none { sourcePath ->
@@ -502,14 +499,12 @@ private fun playAdjacentBrowserFileFromAnchor(
         openPlaylistDocument(
             context = context,
             document = parsed,
-            playlistLibraryState = playlistLibraryState,
             trackLoadDelegates = trackLoadDelegates,
             manualOpenDelegates = manualOpenDelegates,
             autoPlayOnTrackSelect = true,
             openPlayerOnTrackSelect = openPlayerOnTrackSelect,
             autoStart = true,
             expandOverride = expandOverride,
-            onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
             onActivePlaylistChanged = onActivePlaylistChanged,
             onActivePlaylistEntryIdChanged = onActivePlaylistEntryIdChanged,
             onShowPlaylistSelectorDialogChanged = onShowPlaylistSelectorDialogChanged,
@@ -1092,6 +1087,7 @@ private fun AppNavigation(
     }
     var activePlaylist by remember { mutableStateOf<StoredPlaylist?>(null) }
     var activePlaylistEntryId by remember { mutableStateOf<String?>(null) }
+    var lastStoppedPlaylistResume by remember { mutableStateOf<LastStoppedPlaylistResume?>(null) }
     var pendingPlaylistSubtuneSelection by remember { mutableStateOf<PendingPlaylistSubtuneSelection?>(null) }
     var pendingBrowserPlaylistDocument by remember { mutableStateOf<ParsedPlaylistDocument?>(null) }
     var networkNodes by remember {
@@ -1545,6 +1541,32 @@ private fun AppNavigation(
         ?.durationSecondsOverride
         ?.takeIf { it.isFinite() && it > 0.0 }
     val effectiveDuration = playlistDurationOverride ?: duration
+    val pinnedPlaylistSubtune = activePlaylistMetadataEntry?.subtuneIndex != null
+    val transportSubtuneCount = if (pinnedPlaylistSubtune) 0 else subtuneCount
+    val transportCurrentSubtuneIndex = if (pinnedPlaylistSubtune) 0 else currentSubtuneIndex
+    val activePlaylistBrowserFile = activePlaylist
+        ?.takeIf { activePlaylistMetadataEntry != null }
+        ?.sourceIdHint
+        ?.takeIf { it.isNotBlank() }
+        ?.let(::resolvePlaylistEntryLocalFile)
+        ?.takeIf { it.exists() && it.isFile && isSupportedPlaylistFile(it) }
+    val activePlaylistInfo = activePlaylist.takeIf { activePlaylistMetadataEntry != null }
+    val trackInfoPlaylistTitle = activePlaylistInfo
+        ?.title
+        ?.trim()
+        ?.ifBlank { "Playlist" }
+    val trackInfoPlaylistFormatLabel = activePlaylistInfo?.format?.label
+    val trackInfoPlaylistTrackCount = activePlaylistInfo?.entries?.size ?: 0
+    val trackInfoPlaylistPathOrUrl = activePlaylistInfo
+        ?.takeIf { it.format != PlaylistStoredFormat.Internal }
+        ?.sourceIdHint
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+    val usesSelfContainedPlaylistQueue = activePlaylistMetadataEntry != null && (
+        activePlaylist?.format == PlaylistStoredFormat.Internal ||
+            (activePlaylist?.entries?.size ?: 0) > 1 ||
+            activePlaylistBrowserFile == null
+    )
     val effectivePlaybackCapabilitiesFlags =
         if (playlistDurationOverride != null) {
             playbackCapabilitiesFlags or PLAYBACK_CAP_RELIABLE_DURATION
@@ -1686,6 +1708,66 @@ private fun AppNavigation(
         onActiveRepeatModeChanged = { activeRepeatMode = it },
         applyRepeatModeToNative = { mode -> applyRepeatModeToNative(mode) }
     )
+    fun currentExternalPlaylistRecentOverride(): ExternalPlaylistRecentOverride? {
+        val playlist = activePlaylist ?: return null
+        if (playlist.format == PlaylistStoredFormat.Internal) return null
+        val playlistPath = playlist.sourceIdHint?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        val playlistEntry = playlist.entries.firstOrNull { it.id == activePlaylistEntryId } ?: return null
+        val locationId = playlist.sourceIdHint
+            ?.let(::resolvePlaylistEntryLocalFile)
+            ?.takeIf { it.exists() && it.isFile && isSupportedPlaylistFile(it) }
+            ?.let { lastBrowserLocationId }
+        return ExternalPlaylistRecentOverride(
+            playlistPath = playlistPath,
+            locationId = locationId,
+            sourceHint = playlistEntry.source.trim().takeIf { it.isNotBlank() },
+            referencedSources = playlist.entries.map { it.source }.toSet()
+        )
+    }
+
+    val addRecentPlayedTrackFromPlaybackContext: (String, String?, String?, String?) -> Unit =
+        { path, locationId, title, artist ->
+            val playlistOverride = currentExternalPlaylistRecentOverride()
+            if (playlistOverride != null) {
+                val updatedRecentPlayed = buildUpdatedRecentPlayedTracks(
+                    current = recentPlayedFiles,
+                    newPath = playlistOverride.playlistPath,
+                    locationId = playlistOverride.locationId ?: locationId,
+                    title = null,
+                    artist = null,
+                    decoderName = NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() },
+                    isPlaylist = true,
+                    playlistSourceHint = playlistOverride.sourceHint,
+                    limit = recentFilesLimit
+                )
+                    .filterNot { entry ->
+                        !entry.isPlaylist &&
+                            playlistOverride.referencedSources.any { referenced -> samePath(entry.path, referenced) }
+                    }
+                recentPlayedFiles = updatedRecentPlayed
+                writeRecentEntries(
+                    prefs,
+                    AppPreferenceKeys.RECENT_PLAYED_FILES,
+                    updatedRecentPlayed,
+                    recentFilesLimit
+                )
+            } else {
+                runtimeDelegates.addRecentPlayedTrack(
+                    path,
+                    locationId,
+                    title,
+                    artist,
+                    false,
+                    null
+                )
+            }
+        }
+    val scheduleRecentTrackMetadataRefreshFromPlaybackContext: (String, String?) -> Unit =
+        { sourceId, locationId ->
+            if (currentExternalPlaylistRecentOverride() == null) {
+                runtimeDelegates.scheduleRecentTrackMetadataRefresh(sourceId, locationId)
+            }
+        }
 
     LaunchedEffect(visualizationMode) {
         prefs.edit()
@@ -1719,16 +1801,33 @@ private fun AppNavigation(
         val normalizedTitle = metadataTitle.trim()
         val normalizedArtist = metadataArtist.trim()
         val decoderName = NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() }
-        val updatedRecentPlayed = buildUpdatedRecentPlayedTracks(
+        val playlistOverride = currentExternalPlaylistRecentOverride()
+        val recentEntryPath = playlistOverride?.playlistPath ?: sourceId
+        val recentEntryLocationId = if (playlistOverride != null) {
+            playlistOverride.locationId
+        } else if (isLocalPlayableFile(selectedFile)) {
+            lastBrowserLocationId
+        } else {
+            null
+        }
+        var updatedRecentPlayed = buildUpdatedRecentPlayedTracks(
             current = recentPlayedFiles,
-            newPath = sourceId,
-            locationId = if (isLocalPlayableFile(selectedFile)) lastBrowserLocationId else null,
-            title = normalizedTitle,
-            artist = normalizedArtist,
+            newPath = recentEntryPath,
+            locationId = recentEntryLocationId,
+            title = if (playlistOverride != null) null else normalizedTitle,
+            artist = if (playlistOverride != null) null else normalizedArtist,
             decoderName = decoderName,
+            isPlaylist = playlistOverride != null,
+            playlistSourceHint = playlistOverride?.sourceHint,
             clearBlankMetadataOnUpdate = true,
             limit = recentFilesLimit
         )
+        if (playlistOverride != null && playlistOverride.referencedSources.isNotEmpty()) {
+                updatedRecentPlayed = updatedRecentPlayed.filterNot { entry ->
+                    !entry.isPlaylist &&
+                        playlistOverride.referencedSources.any { referenced -> samePath(entry.path, referenced) }
+                }
+        }
         recentPlayedFiles = updatedRecentPlayed
         writeRecentEntries(
             prefs,
@@ -1756,7 +1855,7 @@ private fun AppNavigation(
         refreshRepeatModeForTrack = { runtimeDelegates.refreshRepeatModeForTrack() },
         refreshSubtuneState = { runtimeDelegates.refreshSubtuneState() },
         addRecentPlayedTrack = { path, locationId, title, artist ->
-            runtimeDelegates.addRecentPlayedTrack(path, locationId, title, artist)
+            addRecentPlayedTrackFromPlaybackContext(path, locationId, title, artist)
         },
         syncPlaybackService = { runtimeDelegates.syncPlaybackService() },
         readNativeTrackSnapshot = { readNativeTrackSnapshot() },
@@ -1826,13 +1925,13 @@ private fun AppNavigation(
         onIsPlayingChanged = { isPlaying = it },
         refreshRepeatModeForTrack = { runtimeDelegates.refreshRepeatModeForTrack() },
         onAddRecentPlayedTrack = { path, locationId, title, artist ->
-            runtimeDelegates.addRecentPlayedTrack(path, locationId, title, artist)
+            addRecentPlayedTrackFromPlaybackContext(path, locationId, title, artist)
         },
         metadataTitleProvider = { effectiveMetadataTitle },
         metadataArtistProvider = { effectiveMetadataArtist },
         onStartEngine = { NativeBridge.startEngine() },
         scheduleRecentTrackMetadataRefresh = { sourceId, locationId ->
-            runtimeDelegates.scheduleRecentTrackMetadataRefresh(sourceId, locationId)
+            scheduleRecentTrackMetadataRefreshFromPlaybackContext(sourceId, locationId)
         },
         onPlayerExpandedChanged = { isPlayerExpanded = it },
         onPlaybackStartInProgressChanged = { playbackStartInProgress = it },
@@ -1892,7 +1991,7 @@ private fun AppNavigation(
         onArtworkBitmapCleared = { artworkBitmap = null },
         refreshRepeatModeForTrack = { runtimeDelegates.refreshRepeatModeForTrack() },
         onAddRecentPlayedTrack = { path, locationId, title, artist ->
-            runtimeDelegates.addRecentPlayedTrack(path, locationId, title, artist)
+            addRecentPlayedTrackFromPlaybackContext(path, locationId, title, artist)
         },
         metadataTitleProvider = { effectiveMetadataTitle },
         metadataArtistProvider = { effectiveMetadataArtist },
@@ -1900,7 +1999,7 @@ private fun AppNavigation(
         onStartEngine = { NativeBridge.startEngine() },
         onIsPlayingChanged = { isPlaying = it },
         scheduleRecentTrackMetadataRefresh = { sourceId, locationId ->
-            runtimeDelegates.scheduleRecentTrackMetadataRefresh(sourceId, locationId)
+            scheduleRecentTrackMetadataRefreshFromPlaybackContext(sourceId, locationId)
         },
         onPlayerExpandedChanged = { isPlayerExpanded = it },
         syncPlaybackService = playbackSessionCoordinator.syncPlaybackService,
@@ -1941,12 +2040,10 @@ private fun AppNavigation(
         openPlaylistDocument(
             context = context,
             document = document,
-            playlistLibraryState = playlistLibraryState,
             trackLoadDelegates = trackLoadDelegates,
             manualOpenDelegates = manualOpenDelegates,
             autoPlayOnTrackSelect = autoPlayOnTrackSelect,
             openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-            onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
             onActivePlaylistChanged = { activePlaylist = it },
             onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
             onShowPlaylistSelectorDialogChanged = { showPlaylistSelectorDialog = it },
@@ -2098,25 +2195,24 @@ private fun AppNavigation(
                 activePlaylist?.entries?.isNotEmpty() == true &&
                     !currentPlaylistEntryId.isNullOrBlank()
             ) {
-                val movedWithinPlaylist = playAdjacentPlaylistEntry(
-                    context = context,
-                    activePlaylist = activePlaylist,
-                    currentEntryId = currentPlaylistEntryId,
-                    offset = offset,
-                    wrapOverride = wrapOverride,
-                    playlistWrapNavigation = playlistWrapNavigation,
-                    notifyWrap = notifyWrap,
-                    expandOverride = isPlayerExpanded,
-                    trackLoadDelegates = trackLoadDelegates,
-                    manualOpenDelegates = manualOpenDelegates,
-                    autoPlayOnTrackSelect = autoPlayOnTrackSelect,
-                    openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                    onActivePlaylistChanged = { activePlaylist = it },
-                    onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
-                    onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
-                )
-                if (movedWithinPlaylist) {
-                    true
+                if (usesSelfContainedPlaylistQueue) {
+                    playAdjacentPlaylistEntry(
+                        context = context,
+                        activePlaylist = activePlaylist,
+                        currentEntryId = currentPlaylistEntryId,
+                        offset = offset,
+                        wrapOverride = wrapOverride,
+                        playlistWrapNavigation = playlistWrapNavigation,
+                        notifyWrap = notifyWrap,
+                        expandOverride = isPlayerExpanded,
+                        trackLoadDelegates = trackLoadDelegates,
+                        manualOpenDelegates = manualOpenDelegates,
+                        autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+                        openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                        onActivePlaylistChanged = { activePlaylist = it },
+                        onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                        onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+                    )
                 } else {
                     playAdjacentBrowserFileFromAnchor(
                         context = context,
@@ -2152,6 +2248,88 @@ private fun AppNavigation(
                 )
             }
         }
+    val playAdjacentTrackFromUiAction: (Int, Boolean) -> Boolean = { offset, stopAtBoundary ->
+        val wrapAtBoundary = activeRepeatMode != RepeatMode.None
+        val moved = if (
+            activePlaylist?.entries?.isNotEmpty() == true &&
+                !currentPlaylistNavigationEntryId.isNullOrBlank()
+        ) {
+            playAdjacentPlaylistEntry(
+                context = context,
+                activePlaylist = activePlaylist,
+                currentEntryId = currentPlaylistNavigationEntryId,
+                offset = offset,
+                wrapOverride = false,
+                playlistWrapNavigation = playlistWrapNavigation,
+                notifyWrap = false,
+                expandOverride = isPlayerExpanded,
+                trackLoadDelegates = trackLoadDelegates,
+                manualOpenDelegates = manualOpenDelegates,
+                autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+                openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                onActivePlaylistChanged = { activePlaylist = it },
+                onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+            ) || playAdjacentBrowserFileFromAnchor(
+                context = context,
+                anchorPath = activePlaylist?.sourceIdHint,
+                offset = offset,
+                wrapOverride = wrapAtBoundary,
+                playlistWrapNavigation = playlistWrapNavigation,
+                notifyWrap = true,
+                activePlaylist = activePlaylist,
+                repository = repository,
+                visiblePlayableFiles = visiblePlayableFiles,
+                playlistLibraryState = playlistLibraryState,
+                trackLoadDelegates = trackLoadDelegates,
+                manualOpenDelegates = manualOpenDelegates,
+                openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                expandOverride = isPlayerExpanded,
+                onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
+                onActivePlaylistChanged = { activePlaylist = it },
+                onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                onShowPlaylistSelectorDialogChanged = { showPlaylistSelectorDialog = it },
+                onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+            )
+        } else {
+            val localAnchorPath = selectedFile?.absolutePath
+            if (localAnchorPath != null) {
+                playAdjacentBrowserFileFromAnchor(
+                    context = context,
+                    anchorPath = localAnchorPath,
+                    offset = offset,
+                    wrapOverride = wrapAtBoundary,
+                    playlistWrapNavigation = playlistWrapNavigation,
+                    notifyWrap = true,
+                    activePlaylist = null,
+                    repository = repository,
+                    visiblePlayableFiles = visiblePlayableFiles,
+                    playlistLibraryState = playlistLibraryState,
+                    trackLoadDelegates = trackLoadDelegates,
+                    manualOpenDelegates = manualOpenDelegates,
+                    openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                    expandOverride = isPlayerExpanded,
+                    onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
+                    onActivePlaylistChanged = { activePlaylist = it },
+                    onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                    onShowPlaylistSelectorDialogChanged = { showPlaylistSelectorDialog = it },
+                    onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+                )
+            } else {
+                false
+            }
+        } || trackNavDelegates.playAdjacentTrack(
+            offset = offset,
+            notifyWrap = true,
+            wrapOverride = wrapAtBoundary
+        )
+        if (!moved && stopAtBoundary && offset > 0 && !wrapAtBoundary) {
+            stopAndEmptyTrackAction(context, playbackStateDelegates)
+            true
+        } else {
+            moved
+        }
+    }
 
     AppNavigationPlaybackPollEffects(
         selectedFile = selectedFile,
@@ -2188,12 +2366,7 @@ private fun AppNavigation(
             runtimeDelegates.refreshRepeatModeForTrack()
         },
         onAddRecentPlayedTrack = { path, locationId, title, artist ->
-            runtimeDelegates.addRecentPlayedTrack(
-                path,
-                locationId,
-                title,
-                artist
-            )
+            addRecentPlayedTrackFromPlaybackContext(path, locationId, title, artist)
         },
         onPlayAdjacentTrack = { offset, wrapOverride, notifyWrap ->
             playAdjacentActivePlaylistEntryAction(offset, wrapOverride, notifyWrap)
@@ -2336,6 +2509,15 @@ private fun AppNavigation(
         playbackStateDelegates = playbackStateDelegates
     )
     val stopAndEmptyTrack: () -> Unit = {
+        lastStoppedPlaylistResume = activePlaylistMetadataEntry
+            ?.let { entry ->
+                activePlaylist?.let { playlist ->
+                    LastStoppedPlaylistResume(
+                        playlist = playlist,
+                        entryId = entry.id
+                    )
+                }
+            }
         trackLoadDelegates.cancelPendingTrackSelection()
         manualOpenDelegates.cancelPendingManualInputSelection()
         deferredPlaybackSeek = null
@@ -2407,7 +2589,7 @@ private fun AppNavigation(
             playbackStateDelegates.resetAndOptionallyKeepLastTrack(keepLastTrack = true)
         },
         onPreviousTrackRequested = { trackNavDelegates.handlePreviousTrackAction() },
-        onNextTrackRequested = { trackNavDelegates.playAdjacentTrack(1) }
+        onNextTrackRequested = { playAdjacentTrackFromUiAction(1, true) }
     )
 
     AppNavigationBackHandlers(
@@ -2429,7 +2611,51 @@ private fun AppNavigation(
 
     @Composable
     fun BoxScope.PlayerOverlayAndDialogsSection() {
-        val canResumeStoppedTrack = lastStoppedFile?.exists() == true || !lastStoppedSourceId.isNullOrBlank()
+        val resumeLastStoppedPlayback: (Boolean) -> Boolean = { autoStart ->
+            val playlistResume = lastStoppedPlaylistResume
+            val resumedFromPlaylist = if (playlistResume != null) {
+                val playlistEntry = playlistResume.playlist.entries.firstOrNull { it.id == playlistResume.entryId }
+                val localFile = playlistEntry?.let { resolvePlaylistEntryLocalFile(it.source) }
+                when {
+                    playlistEntry == null -> {
+                        lastStoppedPlaylistResume = null
+                        false
+                    }
+
+                    localFile != null && (!localFile.exists() || !localFile.isFile) -> {
+                        lastStoppedPlaylistResume = null
+                        false
+                    }
+
+                    else -> {
+                        openPlaylistEntry(
+                            context = context,
+                            entry = playlistEntry,
+                            playlist = playlistResume.playlist,
+                            trackLoadDelegates = trackLoadDelegates,
+                            manualOpenDelegates = manualOpenDelegates,
+                            autoPlayOnTrackSelect = autoStart,
+                            openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                            expandOverride = isPlayerExpanded,
+                            onActivePlaylistChanged = { activePlaylist = it },
+                            onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                            onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+                        )
+                        true
+                    }
+                }
+            } else {
+                false
+            }
+            if (resumedFromPlaylist) {
+                true
+            } else {
+                trackNavDelegates.resumeLastStoppedTrack(autoStart = autoStart)
+            }
+        }
+        val canResumeStoppedTrack = lastStoppedPlaylistResume != null ||
+            lastStoppedFile?.exists() == true ||
+            !lastStoppedSourceId.isNullOrBlank()
         val startPlaybackFromSurface = buildStartPlaybackFromSurfaceAction(
             selectedFileProvider = { selectedFile },
             currentPlaybackSourceIdProvider = { currentPlaybackSourceId },
@@ -2439,17 +2665,17 @@ private fun AppNavigation(
             activeRepeatModeProvider = { activeRepeatMode },
             isLocalPlayableFile = isLocalPlayableFile,
             addRecentPlayedTrack = { path, locationId, title, artist ->
-                runtimeDelegates.addRecentPlayedTrack(path, locationId, title, artist)
+                addRecentPlayedTrackFromPlaybackContext(path, locationId, title, artist)
             },
             applyRepeatModeToNative = { mode -> applyRepeatModeToNative(mode) },
             startEngine = { startEngineWithPauseResumeFade() },
             onPlayingStateChanged = { isPlaying = it },
             scheduleRecentTrackMetadataRefresh = { sourceId, locationId ->
-                runtimeDelegates.scheduleRecentTrackMetadataRefresh(sourceId, locationId)
+                scheduleRecentTrackMetadataRefreshFromPlaybackContext(sourceId, locationId)
             },
             syncPlaybackService = playbackSessionCoordinator.syncPlaybackService,
             resumeLastStoppedTrack = { autoStart ->
-                trackNavDelegates.resumeLastStoppedTrack(autoStart = autoStart)
+                resumeLastStoppedPlayback(autoStart)
             }
         )
         val startPlaybackFromSurfaceWithDeferredSeek: () -> Unit = {
@@ -2542,6 +2768,10 @@ private fun AppNavigation(
             decoderName = activeCoreNameForUi,
             playbackSourceLabel = playbackSourceLabel,
             pathOrUrl = currentTrackPathOrUrl,
+            playlistTitle = trackInfoPlaylistTitle,
+            playlistFormatLabel = trackInfoPlaylistFormatLabel,
+            playlistTrackCount = trackInfoPlaylistTrackCount,
+            playlistPathOrUrl = trackInfoPlaylistPathOrUrl,
             artworkBitmap = artworkBitmap,
             activeRepeatMode = activeRepeatMode,
             playbackCapabilitiesFlags = effectivePlaybackCapabilitiesFlags,
@@ -2593,11 +2823,11 @@ private fun AppNavigation(
             canResumeStoppedTrack = canResumeStoppedTrack,
             onHidePlayerSurface = { hidePlayerSurface() },
             onPreviousTrack = { trackNavDelegates.handlePreviousTrackAction() },
-            onForcePreviousTrack = { trackNavDelegates.playAdjacentTrack(-1) },
-            onNextTrack = { trackNavDelegates.playAdjacentTrack(1) },
+            onForcePreviousTrack = { playAdjacentTrackFromUiAction(-1, false) },
+            onNextTrack = { playAdjacentTrackFromUiAction(1, true) },
             onPlayPause = {
                 if (selectedFile == null) {
-                    trackNavDelegates.resumeLastStoppedTrack(autoStart = true)
+                    resumeLastStoppedPlayback(true)
                 } else if (isPlaying) {
                     pauseEngineWithPauseResumeFade {
                         isPlaying = false
@@ -2675,13 +2905,13 @@ private fun AppNavigation(
                     Toast.makeText(context, "No subtunes available", Toast.LENGTH_SHORT).show()
                 }
             },
-            canPreviousSubtune = subtuneCount > 1 && currentSubtuneIndex > 0,
-            canNextSubtune = subtuneCount > 1 && currentSubtuneIndex < (subtuneCount - 1),
-            canOpenSubtuneSelector = subtuneCount > 1,
+            canPreviousSubtune = transportSubtuneCount > 1 && transportCurrentSubtuneIndex > 0,
+            canNextSubtune = transportSubtuneCount > 1 && transportCurrentSubtuneIndex < (transportSubtuneCount - 1),
+            canOpenSubtuneSelector = transportSubtuneCount > 1,
             canOpenPlaylistSelector = activePlaylist?.entries?.isNotEmpty() == true,
             onOpenPlaylistSelector = { showPlaylistSelectorDialog = true },
-            currentSubtuneIndex = currentSubtuneIndex,
-            subtuneCount = subtuneCount,
+            currentSubtuneIndex = transportCurrentSubtuneIndex,
+            subtuneCount = transportSubtuneCount,
             onCycleRepeatMode = { runtimeDelegates.cycleRepeatMode() }
         )
         AppNavigationPlaybackDialogsSection(
@@ -3311,6 +3541,7 @@ private fun AppNavigation(
                 currentPlaybackSourceId = currentPlaybackSourceId,
                 currentPlaybackRequestUrl = currentPlaybackRequestUrl,
                 selectedFile = selectedFile,
+                playingPlaylistFile = activePlaylistBrowserFile,
                 metadataTitle = effectiveMetadataTitle,
                 metadataArtist = effectiveMetadataArtist,
                 isPlaying = isPlaying,
@@ -3417,6 +3648,13 @@ private fun AppNavigation(
                             )
                         )
                     }
+                },
+                onClearActivePlaylistContext = {
+                    activePlaylist = null
+                    activePlaylistEntryId = null
+                    lastStoppedPlaylistResume = null
+                    pendingPlaylistSubtuneSelection = null
+                    showPlaylistSelectorDialog = false
                 },
                 onPlaylistFileSelected = handlePlaylistFileSelectionAction,
                 onRememberSmbCredentials = { sourceNodeId, sourceId, username, password ->

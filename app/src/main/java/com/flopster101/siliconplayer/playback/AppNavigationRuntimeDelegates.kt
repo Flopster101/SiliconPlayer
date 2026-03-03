@@ -12,7 +12,7 @@ internal data class AppNavigationRuntimeDelegates(
     val resolveShareableFileForRecent: (RecentPathEntry) -> File?,
     val addRecentFolder: (String, String?, Long?) -> Unit,
     val addRecentFolderWithTitle: (String, String?, Long?, String?) -> Unit,
-    val addRecentPlayedTrack: (String, String?, String?, String?) -> Unit,
+    val addRecentPlayedTrack: (String, String?, String?, String?, Boolean, String?) -> Unit,
     val scheduleRecentTrackMetadataRefresh: (String, String?) -> Unit,
     val scheduleRecentPlayedMetadataBackfill: () -> Unit,
     val refreshRepeatModeForTrack: () -> Unit,
@@ -51,7 +51,8 @@ internal fun buildAppNavigationRuntimeDelegates(
     onActiveRepeatModeChanged: (RepeatMode) -> Unit,
     applyRepeatModeToNative: (RepeatMode) -> Unit
 ): AppNavigationRuntimeDelegates {
-    val addRecentPlayedTrack: (String, String?, String?, String?) -> Unit = { path, locationId, title, artist ->
+    val addRecentPlayedTrack: (String, String?, String?, String?, Boolean, String?) -> Unit =
+        { path, locationId, title, artist, isPlaylist, playlistSourceHint ->
         val currentDecoderName = NativeBridge.getCurrentDecoderName().trim().takeIf { it.isNotEmpty() }
         addRecentPlayedTrackAction(
             context = context,
@@ -63,6 +64,8 @@ internal fun buildAppNavigationRuntimeDelegates(
             title = title,
             artist = artist,
             decoderName = currentDecoderName,
+            isPlaylist = isPlaylist,
+            playlistSourceHint = playlistSourceHint,
             limitProvider = recentFilesLimitProvider,
             onRecentPlayedChanged = onRecentPlayedChanged,
             prefs = prefs
@@ -132,7 +135,9 @@ internal fun buildAppNavigationRuntimeDelegates(
                 locationId = locationId,
                 selectedFileProvider = selectedFileProvider,
                 currentPlaybackSourceIdProvider = currentPlaybackSourceIdProvider,
-                onAddRecentPlayedTrack = addRecentPlayedTrack
+                onAddRecentPlayedTrack = { path, resolvedLocationId, title, artist ->
+                    addRecentPlayedTrack(path, resolvedLocationId, title, artist, false, null)
+                }
             )
         },
         scheduleRecentPlayedMetadataBackfill = {

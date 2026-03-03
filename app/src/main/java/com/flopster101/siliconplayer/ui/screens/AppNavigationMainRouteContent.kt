@@ -38,6 +38,7 @@ internal fun AppNavigationHomeContentSection(
     onRecentFoldersChanged: (List<RecentPathEntry>) -> Unit,
     onRecentPlayedFilesChanged: (List<RecentPathEntry>) -> Unit,
     onOpenBrowser: (BrowserOpenRequest) -> Unit,
+    onPlaylistFileSelected: (File, String?) -> Unit,
     onOpenPlaylists: () -> Unit,
     onCurrentViewChanged: (MainView) -> Unit
 ) {
@@ -90,7 +91,8 @@ internal fun AppNavigationHomeContentSection(
                 },
                 onApplyManualInputSelection = { rawInput ->
                     manualOpenDelegates.applyManualInputSelection(rawInput)
-                }
+                },
+                onOpenPlaylistFile = onPlaylistFileSelected
             )
         },
         onOpenRecentFolder = { entry ->
@@ -119,7 +121,8 @@ internal fun AppNavigationHomeContentSection(
                 },
                 onApplyManualInputSelection = { rawInput ->
                     manualOpenDelegates.applyManualInputSelection(rawInput)
-                }
+                },
+                onOpenPlaylistFile = onPlaylistFileSelected
             )
         },
         onPinRecentFolder = { entry ->
@@ -209,6 +212,7 @@ internal fun AppNavigationHomeContentSection(
                 title = title,
                 artist = artist,
                 decoderName = decoderName,
+                isPlaylist = entry.isPlaylist,
                 clearBlankMetadataOnUpdate = true,
                 limit = recentFilesLimit
             )
@@ -425,6 +429,7 @@ internal fun AppNavigationBrowserContentSection(
     showFileIconChipBackground: Boolean,
     isPlayerExpanded: Boolean,
     selectedFile: File?,
+    playingPlaylistFile: File?,
     networkNodes: List<NetworkNode>,
     autoPlayOnTrackSelect: Boolean,
     openPlayerOnTrackSelect: Boolean,
@@ -441,6 +446,7 @@ internal fun AppNavigationBrowserContentSection(
     onLastBrowserLocationIdChanged: (String?) -> Unit,
     onLastBrowserDirectoryPathChanged: (String?) -> Unit,
     onBrowserLocationChanged: (BrowserLaunchState) -> Unit,
+    onClearActivePlaylistContext: () -> Unit,
     onPlaylistFileSelected: (File, String?) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
     onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit
@@ -470,6 +476,7 @@ internal fun AppNavigationBrowserContentSection(
         showFileIconChipBackground = showFileIconChipBackground,
         backHandlingEnabled = !isPlayerExpanded,
         playingFile = selectedFile,
+        playingPlaylistFile = playingPlaylistFile,
         onVisiblePlayableFilesChanged = onVisiblePlayableFilesChanged,
         onExitBrowser = {
             onCurrentViewChanged(if (returnToNetworkOnBrowserExit) MainView.Network else MainView.Home)
@@ -478,6 +485,7 @@ internal fun AppNavigationBrowserContentSection(
         },
         onBrowserLocationChanged = onBrowserLocationChanged,
         onFileSelected = { file, sourceIdOverride ->
+            onClearActivePlaylistContext()
             trackLoadDelegates.applyTrackSelection(
                 file = file,
                 autoStart = autoPlayOnTrackSelect,
@@ -487,9 +495,11 @@ internal fun AppNavigationBrowserContentSection(
         },
         onPlaylistFileSelected = onPlaylistFileSelected,
         onOpenRemoteSource = { rawInput ->
+            onClearActivePlaylistContext()
             manualOpenDelegates.applyManualInputSelection(rawInput)
         },
         onOpenRemoteSourceAsCached = { rawInput ->
+            onClearActivePlaylistContext()
             manualOpenDelegates.applyManualInputSelection(
                 rawInput,
                 options = ManualSourceOpenOptions(forceCaching = true)
@@ -534,6 +544,7 @@ internal fun AppNavigationMainContentHost(
     currentPlaybackSourceId: String?,
     currentPlaybackRequestUrl: String?,
     selectedFile: File?,
+    playingPlaylistFile: File?,
     metadataTitle: String,
     metadataArtist: String,
     isPlaying: Boolean,
@@ -586,6 +597,7 @@ internal fun AppNavigationMainContentHost(
     onLastBrowserLocationIdChanged: (String?) -> Unit,
     onLastBrowserDirectoryPathChanged: (String?) -> Unit,
     onBrowserLocationChanged: (BrowserLaunchState) -> Unit,
+    onClearActivePlaylistContext: () -> Unit,
     onPlaylistFileSelected: (File, String?) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
     onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit,
@@ -661,7 +673,7 @@ internal fun AppNavigationMainContentHost(
                 mainPadding = mainPadding,
                 context = context,
                 prefs = prefs,
-                currentTrackPath = currentPlaybackSourceId ?: selectedFile?.absolutePath,
+                currentTrackPath = playingPlaylistFile?.absolutePath ?: currentPlaybackSourceId ?: selectedFile?.absolutePath,
                 metadataTitle = metadataTitle,
                 metadataArtist = metadataArtist,
                 isPlaying = isPlaying,
@@ -681,6 +693,7 @@ internal fun AppNavigationMainContentHost(
                 onRecentFoldersChanged = onRecentFoldersChanged,
                 onRecentPlayedFilesChanged = onRecentPlayedFilesChanged,
                 onOpenBrowser = onOpenBrowser,
+                onPlaylistFileSelected = onPlaylistFileSelected,
                 onOpenPlaylists = { onCurrentViewChanged(MainView.Playlists) },
                 onCurrentViewChanged = onCurrentViewChanged
             )
@@ -742,6 +755,7 @@ internal fun AppNavigationMainContentHost(
                 showFileIconChipBackground = showFileIconChipBackground,
                 isPlayerExpanded = isPlayerExpanded,
                 selectedFile = selectedFile,
+                playingPlaylistFile = playingPlaylistFile,
                 networkNodes = networkNodes,
                 autoPlayOnTrackSelect = autoPlayOnTrackSelect,
                 openPlayerOnTrackSelect = openPlayerOnTrackSelect,
@@ -758,6 +772,7 @@ internal fun AppNavigationMainContentHost(
                 onLastBrowserLocationIdChanged = onLastBrowserLocationIdChanged,
                 onLastBrowserDirectoryPathChanged = onLastBrowserDirectoryPathChanged,
                 onBrowserLocationChanged = onBrowserLocationChanged,
+                onClearActivePlaylistContext = onClearActivePlaylistContext,
                 onPlaylistFileSelected = onPlaylistFileSelected,
                 onRememberSmbCredentials = onRememberSmbCredentials,
                 onRememberHttpCredentials = onRememberHttpCredentials

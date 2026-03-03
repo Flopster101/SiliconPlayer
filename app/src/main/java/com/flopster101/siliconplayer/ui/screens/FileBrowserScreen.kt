@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.SdCard
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
@@ -203,6 +204,7 @@ internal fun FileBrowserScreen(
     onOpenSettings: (() -> Unit)? = null,
     showPrimaryTopBar: Boolean = true,
     playingFile: File? = null,
+    playingPlaylistFile: File? = null,
     pinnedHomeEntries: List<HomePinnedEntry> = emptyList(),
     onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit = { _, _ -> }
 ) {
@@ -950,8 +952,9 @@ internal fun FileBrowserScreen(
             )
         )
 
-        val playingPath = playingFile?.absolutePath
-        val playingParentPath = playingFile?.parentFile?.absolutePath
+        val browserPlayingFile = playingPlaylistFile ?: playingFile
+        val playingPath = browserPlayingFile?.absolutePath
+        val playingParentPath = browserPlayingFile?.parentFile?.absolutePath
         launchAutoScrollTargetKey = if (
             playingPath != null &&
             playingParentPath == restoredDirectory.absolutePath
@@ -1597,6 +1600,7 @@ internal fun FileBrowserScreen(
                                     FileItemRow(
                                         item = item,
                                         isPlaying = item.file == playingFile,
+                                        isPlayingPlaylist = item.file == playingPlaylistFile,
                                         isSelected = isSelected,
                                         hasSelectedAbove = hasSelectedAbove,
                                         hasSelectedBelow = hasSelectedBelow,
@@ -2221,6 +2225,7 @@ private fun isWithinRoot(file: File, root: File): Boolean {
 fun FileItemRow(
     item: FileItem,
     isPlaying: Boolean,
+    isPlayingPlaylist: Boolean,
     isSelected: Boolean = false,
     hasSelectedAbove: Boolean = false,
     hasSelectedBelow: Boolean = false,
@@ -2474,11 +2479,11 @@ fun FileItemRow(
                 maxLines = 1
             )
         }
-        if (isPlaying) {
+        if (isPlayingPlaylist || isPlaying) {
             Spacer(modifier = Modifier.width(12.dp))
             Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = "Playing",
+                imageVector = if (isPlayingPlaylist) Icons.Default.LibraryMusic else Icons.Default.PlayArrow,
+                contentDescription = if (isPlayingPlaylist) "Playing playlist" else "Playing",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(16.dp)
             )

@@ -21,12 +21,23 @@ internal fun playRecentFileEntryAction(
     networkNodes: List<NetworkNode>,
     openPlayerOnTrackSelect: Boolean,
     onApplyTrackSelection: (File, Boolean, Boolean?, String?, String?, Boolean) -> Unit,
-    onApplyManualInputSelection: (String) -> Unit
+    onApplyManualInputSelection: (String) -> Unit,
+    onOpenPlaylistFile: (File, String?) -> Unit
 ) {
     val playbackInput = resolveRecentPlaybackInput(entry, networkNodes)
     val normalized = normalizeSourceIdentity(playbackInput)
     val uri = normalized?.let { Uri.parse(it) }
     val scheme = uri?.scheme?.lowercase(Locale.ROOT)
+    if (entry.isPlaylist && !normalized.isNullOrBlank() && (scheme == null || scheme == "file")) {
+        val localPlaylist = when (scheme) {
+            "file" -> uri?.path?.let(::File)
+            else -> File(normalized)
+        }?.takeIf { it.exists() && it.isFile && isSupportedPlaylistFile(it) }
+        if (localPlaylist != null) {
+            onOpenPlaylistFile(localPlaylist, normalized)
+            return
+        }
+    }
     val isRemote = scheme == "http" || scheme == "https" || scheme == "smb"
     if (isRemote && !normalized.isNullOrBlank()) {
         val cached = findExistingCachedFileForSource(cacheRoot, normalized)

@@ -621,6 +621,10 @@ internal fun PlayerScreen(
     decoderName: String?,
     playbackSourceLabel: String? = null,
     pathOrUrl: String? = null,
+    playlistTitle: String? = null,
+    playlistFormatLabel: String? = null,
+    playlistTrackCount: Int = 0,
+    playlistPathOrUrl: String? = null,
     artwork: ImageBitmap?,
     noArtworkIcon: ImageVector = Icons.Default.MusicNote,
     repeatMode: RepeatMode,
@@ -1600,6 +1604,10 @@ internal fun PlayerScreen(
             isDialogVisible = showTrackInfoDialog,
             playbackSourceLabel = playbackSourceLabel,
             pathOrUrl = pathOrUrl,
+            playlistTitle = playlistTitle,
+            playlistFormatLabel = playlistFormatLabel,
+            playlistTrackCount = playlistTrackCount,
+            playlistPathOrUrl = playlistPathOrUrl,
             sampleRateHz = sampleRateHz,
             channelCount = channelCount,
             bitDepthLabel = bitDepthLabel,
@@ -1878,6 +1886,10 @@ private fun TrackInfoDetailsDialog(
     isDialogVisible: Boolean,
     playbackSourceLabel: String?,
     pathOrUrl: String?,
+    playlistTitle: String?,
+    playlistFormatLabel: String?,
+    playlistTrackCount: Int,
+    playlistPathOrUrl: String?,
     sampleRateHz: Int,
     channelCount: Int,
     bitDepthLabel: String,
@@ -1916,6 +1928,11 @@ private fun TrackInfoDetailsDialog(
     }
     val channelsLabel = if (channelCount > 0) "$channelCount channels" else "Unknown"
     val depthLabel = bitDepthLabel.ifBlank { "Unknown" }
+    val playlistCountLabel = when {
+        playlistTrackCount <= 0 -> null
+        playlistTrackCount == 1 -> "1 track"
+        else -> "$playlistTrackCount tracks"
+    }
     val sampleRateChain =
         "${formatSampleRateForDetails(sampleRateHz)} -> " +
             "${formatSampleRateForDetails(liveMetadata.renderRateHz)} -> " +
@@ -1947,6 +1964,10 @@ private fun TrackInfoDetailsDialog(
         row("Bit depth", depthLabel)
         row("Audio backend", audioBackendLabel)
         row("Path / URL", pathOrUrlLabel)
+        playlistTitle?.takeIf { it.isNotBlank() }?.let { row("Playlist", it) }
+        playlistFormatLabel?.takeIf { it.isNotBlank() }?.let { row("Playlist format", it) }
+        playlistCountLabel?.let { row("Playlist tracks", it) }
+        playlistPathOrUrl?.takeIf { it.isNotBlank() }?.let { row("Playlist path / URL", it) }
         appendCoreTrackInfoCopyRows(
             builder = this,
             decoderName = decoderName,
@@ -2016,6 +2037,18 @@ private fun TrackInfoDetailsDialog(
                             TrackInfoDetailsRow("Bit depth", depthLabel)
                             TrackInfoDetailsRow("Audio backend", audioBackendLabel)
                             TrackInfoDetailsRow("Path / URL", pathOrUrlLabel)
+                            playlistTitle?.takeIf { it.isNotBlank() }?.let {
+                                TrackInfoDetailsRow("Playlist", it)
+                            }
+                            playlistFormatLabel?.takeIf { it.isNotBlank() }?.let {
+                                TrackInfoDetailsRow("Playlist format", it)
+                            }
+                            playlistCountLabel?.let {
+                                TrackInfoDetailsRow("Playlist tracks", it)
+                            }
+                            playlistPathOrUrl?.takeIf { it.isNotBlank() }?.let {
+                                TrackInfoDetailsRow("Playlist path / URL", it)
+                            }
                             TrackInfoCoreSections(
                                 decoderName = decoderName,
                                 sampleRateHz = sampleRateHz,

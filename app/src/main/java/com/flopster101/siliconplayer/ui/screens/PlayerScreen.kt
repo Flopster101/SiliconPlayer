@@ -2185,17 +2185,38 @@ private fun PlayerMarqueeText(
         val marqueeEdgeFadePx = with(density) { marqueeEdgeFade.toPx() }
         val overflowPx = (measuredText.size.width - maxWidthPx).coerceAtLeast(0)
         val sharedTimeMs = LocalPlayerMarqueeClockState.current.value
-        val startPauseMs = 900
-        val forwardDurationMs = 2200
+        val marqueeInstanceStartMs = remember(text, style, expandToAvailableWidth) {
+            mutableLongStateOf(Long.MIN_VALUE)
+        }
+        SideEffect {
+            if (marqueeInstanceStartMs.longValue == Long.MIN_VALUE) {
+                marqueeInstanceStartMs.longValue = sharedTimeMs
+            }
+        }
+        val instanceElapsedMs = if (marqueeInstanceStartMs.longValue == Long.MIN_VALUE) {
+            0L
+        } else {
+            (sharedTimeMs - marqueeInstanceStartMs.longValue).coerceAtLeast(0L)
+        }
+        val startPauseMs = 1450
         val turnaroundPauseMs = 1050
-        val returnDurationMs = 1720
-        val resetPauseMs = 1500
+        val resetPauseMs = 1850
         val fadeInMs = 180
         val fadeOutMs = 260
-        val targetOffset = if (overflowPx > 0) -(overflowPx + marqueeTrailingGapPx).toFloat() else 0f
+        val travelDistancePx = (overflowPx + marqueeTrailingGapPx).coerceAtLeast(0)
+        val marqueeSpeedDpPerSecond = 56.dp
+        val marqueeSpeedPxPerSecond = with(density) { marqueeSpeedDpPerSecond.toPx() }.coerceAtLeast(1f)
+        val travelDurationMs = if (travelDistancePx > 0) {
+            ((travelDistancePx / marqueeSpeedPxPerSecond) * 1000f).toInt().coerceAtLeast(1)
+        } else {
+            0
+        }
+        val forwardDurationMs = travelDurationMs
+        val returnDurationMs = travelDurationMs
+        val targetOffset = if (overflowPx > 0) -travelDistancePx.toFloat() else 0f
         val cycleDurationMs = startPauseMs + forwardDurationMs + turnaroundPauseMs + returnDurationMs + resetPauseMs
         val cyclePositionMs = if (overflowPx > 0 && cycleDurationMs > 0) {
-            (sharedTimeMs % cycleDurationMs.toLong()).toInt()
+            (instanceElapsedMs % cycleDurationMs.toLong()).toInt()
         } else {
             0
         }

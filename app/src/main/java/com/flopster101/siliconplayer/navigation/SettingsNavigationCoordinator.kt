@@ -23,6 +23,11 @@ internal fun buildSettingsNavigationCoordinator(
     setSelectedPluginName: (String) -> Unit,
     setPlayerExpanded: (Boolean) -> Unit
 ): SettingsNavigationCoordinator {
+    val resolvedSettingsReturnView =
+        (if (currentView == MainView.Settings) settingsReturnView else currentView)
+            .takeUnless { it == MainView.Settings }
+            ?: MainView.Home
+
     val openSettingsRoute: (SettingsRoute, Boolean) -> Unit = { targetRoute, resetHistory ->
         if (resetHistory) {
             setSettingsRouteHistory(emptyList())
@@ -57,7 +62,7 @@ internal fun buildSettingsNavigationCoordinator(
 
     val openCurrentCoreSettings: () -> Unit = {
         pluginNameForCoreName(lastUsedCoreName)?.let { pluginName ->
-            setSettingsReturnView(if (currentView == MainView.Settings) MainView.Home else currentView)
+            setSettingsReturnView(resolvedSettingsReturnView)
             setSettingsLaunchedFromPlayer(true)
             setSelectedPluginName(pluginName)
             openSettingsRoute(SettingsRoute.PluginDetail, true)
@@ -67,7 +72,7 @@ internal fun buildSettingsNavigationCoordinator(
     }
 
     val openVisualizationSettings: () -> Unit = {
-        setSettingsReturnView(if (currentView == MainView.Settings) MainView.Home else currentView)
+        setSettingsReturnView(resolvedSettingsReturnView)
         setSettingsLaunchedFromPlayer(true)
         openSettingsRoute(SettingsRoute.Visualization, true)
         setCurrentView(MainView.Settings)
@@ -75,7 +80,7 @@ internal fun buildSettingsNavigationCoordinator(
     }
 
     val openVisualizationBarsSettings: () -> Unit = {
-        setSettingsReturnView(if (currentView == MainView.Settings) MainView.Home else currentView)
+        setSettingsReturnView(resolvedSettingsReturnView)
         setSettingsLaunchedFromPlayer(true)
         openSettingsRoute(SettingsRoute.VisualizationBasicBars, true)
         setCurrentView(MainView.Settings)
@@ -83,7 +88,7 @@ internal fun buildSettingsNavigationCoordinator(
     }
 
     val openVisualizationOscilloscopeSettings: () -> Unit = {
-        setSettingsReturnView(if (currentView == MainView.Settings) MainView.Home else currentView)
+        setSettingsReturnView(resolvedSettingsReturnView)
         setSettingsLaunchedFromPlayer(true)
         openSettingsRoute(SettingsRoute.VisualizationBasicOscilloscope, true)
         setCurrentView(MainView.Settings)
@@ -91,7 +96,7 @@ internal fun buildSettingsNavigationCoordinator(
     }
 
     val openVisualizationVuMetersSettings: () -> Unit = {
-        setSettingsReturnView(if (currentView == MainView.Settings) MainView.Home else currentView)
+        setSettingsReturnView(resolvedSettingsReturnView)
         setSettingsLaunchedFromPlayer(true)
         openSettingsRoute(SettingsRoute.VisualizationBasicVuMeters, true)
         setCurrentView(MainView.Settings)
@@ -99,7 +104,7 @@ internal fun buildSettingsNavigationCoordinator(
     }
 
     val openVisualizationChannelScopeSettings: () -> Unit = {
-        setSettingsReturnView(if (currentView == MainView.Settings) MainView.Home else currentView)
+        setSettingsReturnView(resolvedSettingsReturnView)
         setSettingsLaunchedFromPlayer(true)
         openSettingsRoute(SettingsRoute.VisualizationAdvancedChannelScope, true)
         setCurrentView(MainView.Settings)

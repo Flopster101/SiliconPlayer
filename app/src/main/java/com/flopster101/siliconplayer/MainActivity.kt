@@ -2623,7 +2623,10 @@ private fun AppNavigation(
                 onHomeRequested = { currentView = MainView.Home },
                 onSettingsRequested = {
                     settingsLaunchedFromPlayer = false
-                    settingsReturnView = if (currentView == MainView.Settings) MainView.Home else currentView
+                    settingsReturnView =
+                        (if (currentView == MainView.Settings) settingsReturnView else currentView)
+                            .takeUnless { it == MainView.Settings }
+                            ?: MainView.Home
                     openSettingsRoute(SettingsRoute.Root, true)
                     currentView = MainView.Settings
                 },

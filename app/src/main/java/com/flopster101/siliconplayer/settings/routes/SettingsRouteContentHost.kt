@@ -82,6 +82,8 @@ internal fun SettingsRouteContentHost(
                     .fillMaxSize()
                     .verticalScroll(state = rememberScrollState())
             ) {
+                Spacer(modifier = Modifier.height(8.dp))
+
                 SettingsRowsHost {
                     when (currentRoute) {
                     SettingsRoute.Root -> {

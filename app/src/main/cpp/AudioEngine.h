@@ -442,6 +442,7 @@ private:
     float phase = 0.0f;
     std::atomic<bool> streamNeedsRebuild { false };
     std::atomic<bool> resumeAfterRebuild { false };
+    std::atomic<bool> refreshPausedStreamOnNextStart { false };
     std::atomic<uint64_t> decoderSerial { 0 };
     std::thread seekWorkerThread;
     std::mutex seekWorkerMutex;

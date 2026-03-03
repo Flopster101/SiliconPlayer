@@ -65,6 +65,15 @@ namespace {
 bool AudioEngine::start() {
     recoverStreamIfNeeded();
 
+    if (refreshPausedStreamOnNextStart.exchange(false, std::memory_order_relaxed) &&
+        outputStreamReady.load(std::memory_order_relaxed) &&
+        !streamNeedsRebuild.load(std::memory_order_relaxed)) {
+        // Reopen the paused output stream so route/sample-rate changes that
+        // happened while idle are applied before the first resumed callback.
+        closeStream();
+        createStream();
+    }
+
     if (!outputStreamReady.load(std::memory_order_relaxed) || streamNeedsRebuild.load()) {
         closeStream();
         createStream();
@@ -198,6 +207,7 @@ void AudioEngine::setFastTrackSwitchStartupHint(bool enabled) {
 void AudioEngine::stop() {
     pendingPauseFadeRequest.store(false, std::memory_order_relaxed);
     pendingResumeFadeOnStart.store(false, std::memory_order_relaxed);
+    refreshPausedStreamOnNextStart.store(true, std::memory_order_relaxed);
     const bool wasSeeking = seekInProgress.load();
     if (wasSeeking) {
         decoderSerial.fetch_add(1);
@@ -240,6 +250,7 @@ void AudioEngine::stopWithPauseResumeFade(int durationMs, float attenuationDb) {
         stop();
         return;
     }
+    refreshPausedStreamOnNextStart.store(true, std::memory_order_relaxed);
     pendingPauseFadeDurationMs.store(durationMs, std::memory_order_relaxed);
     pendingPauseFadeAttenuationDb.store(attenuationDb, std::memory_order_relaxed);
     pendingPauseFadeRequest.store(true, std::memory_order_relaxed);

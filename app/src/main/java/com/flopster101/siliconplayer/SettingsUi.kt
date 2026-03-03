@@ -6,6 +6,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -19,6 +22,12 @@ internal fun SettingsScreen(
     var pendingResetAction by remember { mutableStateOf<SettingsResetAction?>(null) }
     var pendingPluginResetName by remember { mutableStateOf<String?>(null) }
     var pluginPriorityEditMode by remember { mutableStateOf(false) }
+    val navigationBarBottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val effectiveBottomContentPadding = if (bottomContentPadding > 0.dp) {
+        bottomContentPadding
+    } else {
+        navigationBarBottomInset + 12.dp
+    }
 
     LaunchedEffect(route) {
         if (route != SettingsRoute.AudioPlugins) {
@@ -40,7 +49,7 @@ internal fun SettingsScreen(
     ) { paddingValues ->
         SettingsRouteContentHost(
             route = route,
-            bottomContentPadding = bottomContentPadding,
+            bottomContentPadding = effectiveBottomContentPadding,
             scaffoldPaddingValues = paddingValues,
             state = state,
             actions = actions,

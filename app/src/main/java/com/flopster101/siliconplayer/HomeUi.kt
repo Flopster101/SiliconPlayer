@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -108,7 +107,6 @@ private data class HomeQuickActionSpec(
     val itemKey: String,
     val order: Int,
     val title: String,
-    val subtitle: String,
     val icon: ImageVector,
     val containerColor: androidx.compose.ui.graphics.Color,
     val onClick: () -> Unit
@@ -343,7 +341,6 @@ internal fun HomeScreen(
                 itemKey = "home_intro_files_button",
                 order = 0,
                 title = "Files",
-                subtitle = "Browse local storage",
                 icon = Icons.Default.Folder,
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 onClick = onOpenLibrary
@@ -352,7 +349,6 @@ internal fun HomeScreen(
                 itemKey = "home_intro_network_button",
                 order = 1,
                 title = "Network sources",
-                subtitle = "Open network shares and remote sources",
                 icon = Icons.Default.Public,
                 containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                 onClick = onOpenNetwork
@@ -378,7 +374,6 @@ internal fun HomeScreen(
                         ) {
                             HomeQuickActionCard(
                                 title = action.title,
-                                subtitle = action.subtitle,
                                 icon = action.icon,
                                 containerColor = action.containerColor,
                                 onClick = action.onClick
@@ -398,7 +393,6 @@ internal fun HomeScreen(
                                     ) {
                                         HomeQuickActionCard(
                                             title = action.title,
-                                            subtitle = action.subtitle,
                                             icon = action.icon,
                                             containerColor = action.containerColor,
                                             onClick = action.onClick
@@ -1188,7 +1182,6 @@ private fun resolvedRecentFolderTitle(entry: RecentPathEntry): String {
 @Composable
 private fun HomeQuickActionCard(
     title: String,
-    subtitle: String,
     icon: ImageVector,
     containerColor: androidx.compose.ui.graphics.Color,
     onClick: () -> Unit
@@ -1196,7 +1189,7 @@ private fun HomeQuickActionCard(
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 108.dp),
+            .height(108.dp),
         onClick = onClick
     ) {
         Box(
@@ -1208,33 +1201,27 @@ private fun HomeQuickActionCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset(y = 5.dp),
+                    .offset(y = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
                 Surface(
-                    modifier = Modifier.size(34.dp),
+                    modifier = Modifier.size(46.dp),
                     shape = MaterialTheme.shapes.medium,
                     color = containerColor
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = icon,
-                            contentDescription = null
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp)
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    textAlign = TextAlign.Center
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center

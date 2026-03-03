@@ -50,6 +50,11 @@ internal data class SubtuneSelectionResult(
     val sourceId: String? = null
 )
 
+internal data class LoadedTrackSelectionState(
+    val snapshot: NativeTrackSnapshot,
+    val initialSubtuneApplied: Boolean
+)
+
 internal fun readSubtuneState(selectedFile: File?): SubtuneState {
     if (selectedFile == null) {
         return SubtuneState(count = 0, currentIndex = 0)
@@ -293,6 +298,22 @@ internal fun buildSnapshotApplicationResult(
         repeatModeCapabilitiesFlags = snapshot.repeatModeCapabilitiesFlags,
         playbackCapabilitiesFlags = snapshot.playbackCapabilitiesFlags,
         durationSeconds = snapshot.durationSeconds
+    )
+}
+
+internal fun loadTrackSnapshotForSelection(
+    path: String,
+    initialSubtuneIndex: Int?
+): LoadedTrackSelectionState {
+    NativeBridge.loadAudio(path)
+    val subtuneCount = NativeBridge.getSubtuneCount().coerceAtLeast(0)
+    val initialSubtuneApplied = initialSubtuneIndex
+        ?.takeIf { subtuneCount > 0 && it in 0 until subtuneCount }
+        ?.let { targetIndex -> NativeBridge.selectSubtune(targetIndex) }
+        ?: false
+    return LoadedTrackSelectionState(
+        snapshot = readNativeTrackSnapshot(),
+        initialSubtuneApplied = initialSubtuneApplied
     )
 }
 

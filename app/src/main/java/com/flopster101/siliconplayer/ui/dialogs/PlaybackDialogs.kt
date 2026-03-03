@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.HttpSourceSpec
+import com.flopster101.siliconplayer.PlaylistTrackEntry
 import com.flopster101.siliconplayer.RemoteLoadPhase
 import com.flopster101.siliconplayer.RemoteLoadUiState
 import com.flopster101.siliconplayer.SubtuneEntry
@@ -44,6 +45,7 @@ import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
 import com.flopster101.siliconplayer.formatByteCount
 import com.flopster101.siliconplayer.formatShortDuration
+import com.flopster101.siliconplayer.playlistTrackSubtitle
 
 @Composable
 internal fun ManualSmbAuthenticationDialog(
@@ -485,6 +487,116 @@ internal fun SubtuneSelectorDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+internal fun PlaylistSelectorDialog(
+    title: String,
+    entries: List<PlaylistTrackEntry>,
+    currentEntryId: String?,
+    onSelectEntry: (PlaylistTrackEntry) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            if (entries.isEmpty()) {
+                Text("No playlist entries available.")
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    entries.forEachIndexed { index, entry ->
+                        val isCurrent = entry.id == currentEntryId
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onSelectEntry(entry) },
+                            shape = MaterialTheme.shapes.medium,
+                            color = if (isCurrent) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                            }
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                            ) {
+                                Text(
+                                    text = "${index + 1}. ${entry.title}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = playlistTrackSubtitle(entry),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+internal fun PlaylistOpenActionDialog(
+    title: String,
+    entryCount: Int,
+    onPlayNow: () -> Unit,
+    onBrowseEntries: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Text(
+                text = if (entryCount == 1) {
+                    "This playlist contains 1 entry. You can play it immediately or inspect its tracks first."
+                } else {
+                    "This playlist contains $entryCount entries. You can play from the top or inspect its tracks first."
+                }
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onPlayNow) {
+                Text("Play")
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onBrowseEntries) {
+                    Text("List tracks")
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
             }
         }
     )

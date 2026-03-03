@@ -36,6 +36,7 @@ internal fun AppNavigationHomeRouteSection(
     storagePresentationForPinnedEntry: (HomePinnedEntry) -> StoragePresentation,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     onOpenLibrary: () -> Unit,
+    onOpenPlaylists: () -> Unit,
     onOpenNetwork: () -> Unit,
     onOpenPinnedFolder: (HomePinnedEntry) -> Unit,
     onPlayPinnedFile: (HomePinnedEntry) -> Unit,
@@ -66,6 +67,7 @@ internal fun AppNavigationHomeRouteSection(
         storagePresentationForPinnedEntry = storagePresentationForPinnedEntry,
         bottomContentPadding = bottomContentPadding,
         onOpenLibrary = onOpenLibrary,
+        onOpenPlaylists = onOpenPlaylists,
         onOpenNetwork = onOpenNetwork,
         onOpenPinnedFolder = onOpenPinnedFolder,
         onPlayPinnedFile = onPlayPinnedFile,
@@ -83,6 +85,43 @@ internal fun AppNavigationHomeRouteSection(
         onClearRecentPlayed = onClearRecentPlayed,
         canShareRecentFile = canShareRecentFile,
         canSharePinnedFile = canSharePinnedFile
+    )
+}
+
+@Composable
+internal fun AppNavigationPlaylistsRouteSection(
+    mainPadding: PaddingValues,
+    bottomContentPadding: androidx.compose.ui.unit.Dp,
+    libraryState: PlaylistLibraryState,
+    activePlaylist: StoredPlaylist?,
+    currentPlaybackSourceId: String?,
+    currentSubtuneIndex: Int,
+    canAddCurrentTrackToFavorites: Boolean,
+    canSaveActivePlaylist: Boolean,
+    onExitPlaylists: () -> Unit,
+    onAddCurrentTrackToFavorites: () -> Unit,
+    onSaveActivePlaylist: () -> Unit,
+    onOpenFavorite: (PlaylistTrackEntry) -> Unit,
+    onRemoveFavorite: (PlaylistTrackEntry) -> Unit,
+    onOpenPlaylist: (StoredPlaylist) -> Unit,
+    onRemovePlaylist: (StoredPlaylist) -> Unit
+) {
+    MainPlaylistsRouteHost(
+        mainPadding = mainPadding,
+        bottomContentPadding = bottomContentPadding,
+        libraryState = libraryState,
+        activePlaylist = activePlaylist,
+        currentPlaybackSourceId = currentPlaybackSourceId,
+        currentSubtuneIndex = currentSubtuneIndex,
+        canAddCurrentTrackToFavorites = canAddCurrentTrackToFavorites,
+        canSaveActivePlaylist = canSaveActivePlaylist,
+        onExitPlaylists = onExitPlaylists,
+        onAddCurrentTrackToFavorites = onAddCurrentTrackToFavorites,
+        onSaveActivePlaylist = onSaveActivePlaylist,
+        onOpenFavorite = onOpenFavorite,
+        onRemoveFavorite = onRemoveFavorite,
+        onOpenPlaylist = onOpenPlaylist,
+        onRemovePlaylist = onRemovePlaylist
     )
 }
 
@@ -144,6 +183,7 @@ internal fun AppNavigationBrowserRouteSection(
     onExitBrowser: () -> Unit,
     onBrowserLocationChanged: (BrowserLaunchState) -> Unit,
     onFileSelected: (File, String?) -> Unit,
+    onPlaylistFileSelected: (File, String?) -> Unit,
     onOpenRemoteSource: (String) -> Unit,
     onOpenRemoteSourceAsCached: (String) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
@@ -171,6 +211,7 @@ internal fun AppNavigationBrowserRouteSection(
         onExitBrowser = onExitBrowser,
         onBrowserLocationChanged = onBrowserLocationChanged,
         onFileSelected = onFileSelected,
+        onPlaylistFileSelected = onPlaylistFileSelected,
         onOpenRemoteSource = onOpenRemoteSource,
         onOpenRemoteSourceAsCached = onOpenRemoteSourceAsCached,
         onRememberSmbCredentials = onRememberSmbCredentials,
@@ -204,6 +245,7 @@ internal fun AppNavigationMainScaffoldSection(
     onOpenUrlOrPathRequested: () -> Unit,
     onSettingsRequested: () -> Unit,
     homeContent: @Composable (PaddingValues) -> Unit,
+    playlistsContent: @Composable (PaddingValues) -> Unit,
     networkContent: @Composable (PaddingValues) -> Unit,
     browserContent: @Composable (PaddingValues) -> Unit,
     settingsContent: @Composable (PaddingValues) -> Unit
@@ -268,9 +310,10 @@ internal fun AppNavigationMainScaffoldSection(
             mainContentModifier = Modifier
                 .focusRequester(mainContentFocusRequester)
                 .focusRestorer()
-        ) { mainPadding, targetView ->
+            ) { mainPadding, targetView ->
             when (targetView) {
                 MainView.Home -> homeContent(mainPadding)
+                MainView.Playlists -> playlistsContent(mainPadding)
                 MainView.Network -> networkContent(mainPadding)
                 MainView.Browser -> browserContent(mainPadding)
                 MainView.Settings -> settingsContent(mainPadding)

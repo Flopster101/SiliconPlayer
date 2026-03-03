@@ -96,6 +96,7 @@ import com.flopster101.siliconplayer.PINNED_HOME_ENTRIES_LIMIT
 import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
 import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
 import com.flopster101.siliconplayer.folderTitleForDisplay
+import com.flopster101.siliconplayer.isSupportedPlaylistFile
 import com.flopster101.siliconplayer.data.buildArchiveSourceId
 import com.flopster101.siliconplayer.data.buildArchiveDirectoryPath
 import com.flopster101.siliconplayer.data.parseArchiveSourceId
@@ -191,6 +192,7 @@ internal fun FileBrowserScreen(
     initialHttpRootPath: String? = null,
     restoreFocusedItemRequestToken: Int = 0,
     onFileSelected: (File, String?) -> Unit,
+    onPlaylistFileSelected: (File, String?) -> Unit = { _, _ -> },
     onVisiblePlayableFilesChanged: (List<File>) -> Unit = {},
     onBrowserLocationChanged: (BrowserLaunchState) -> Unit = {},
     bottomContentPadding: Dp = 0.dp,
@@ -747,6 +749,23 @@ internal fun FileBrowserScreen(
             navigateTo(item.file)
             return
         }
+        val mounted = findArchiveMount(item.file.absolutePath)
+        val sourceIdOverride = if (mounted != null) {
+            val mountRoot = mounted.first
+            val archivePath = mounted.second.logicalArchivePath ?: mounted.second.archivePath
+            val relativePath = resolveArchiveRelativePath(item.file.absolutePath, mountRoot)
+            if (relativePath.isNullOrBlank()) {
+                null
+            } else {
+                buildArchiveSourceId(archivePath, relativePath)
+            }
+        } else {
+            null
+        }
+        if (isSupportedPlaylistFile(item.file)) {
+            onPlaylistFileSelected(item.file, sourceIdOverride)
+            return
+        }
         when (browserPreviewKindForName(item.name)) {
             FilePreviewKind.Text -> {
                 val textPreviewContent = readTextPreviewContent(item.file)
@@ -762,19 +781,6 @@ internal fun FileBrowserScreen(
                 return
             }
             null -> Unit
-        }
-        val mounted = findArchiveMount(item.file.absolutePath)
-        val sourceIdOverride = if (mounted != null) {
-            val mountRoot = mounted.first
-            val archivePath = mounted.second.logicalArchivePath ?: mounted.second.archivePath
-            val relativePath = resolveArchiveRelativePath(item.file.absolutePath, mountRoot)
-            if (relativePath.isNullOrBlank()) {
-                null
-            } else {
-                buildArchiveSourceId(archivePath, relativePath)
-            }
-        } else {
-            null
         }
         onFileSelected(item.file, sourceIdOverride)
     }

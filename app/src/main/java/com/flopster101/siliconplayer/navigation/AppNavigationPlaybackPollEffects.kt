@@ -3,6 +3,7 @@ package com.flopster101.siliconplayer
 import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
 import java.io.File
 import kotlin.math.abs
 import kotlinx.coroutines.delay
@@ -18,6 +19,7 @@ internal fun AppNavigationPlaybackPollEffects(
     seekRequestedAtMs: Long,
     seekUiBusyThresholdMs: Long,
     duration: Double,
+    durationOverrideSeconds: Double?,
     subtuneCountProvider: () -> Int,
     currentSubtuneIndexProvider: () -> Int,
     activeRepeatModeProvider: () -> RepeatMode,
@@ -39,9 +41,12 @@ internal fun AppNavigationPlaybackPollEffects(
     onSubtuneCursorChanged: (File?) -> Unit,
     onAddRecentPlayedTrack: (path: String, locationId: String?, title: String?, artist: String?) -> Unit,
     onPlayAdjacentTrack: (offset: Int, wrapOverride: Boolean?, notifyWrap: Boolean) -> Boolean,
+    onRestartCurrentTrack: () -> Unit,
     onStopPlaybackAndUnload: () -> Unit,
     isLocalPlayableFile: (File?) -> Boolean
 ) {
+    val latestDurationOverrideSeconds = rememberUpdatedState(durationOverrideSeconds)
+
     LaunchedEffect(selectedFile) {
         var metadataPollElapsedMs = 0L
         var subtunePollElapsedMs = 0L
@@ -55,6 +60,7 @@ internal fun AppNavigationPlaybackPollEffects(
         var localPlaybackWatchPath = playbackWatchPath
         var durationRefreshCountdown = 0
         var lastPersistedRecentMetadata: Triple<String, String, String>? = null
+        var suppressedSyntheticEndSourceId: String? = null
 
         while (selectedFileProvider() != null) {
             val currentFile = selectedFileProvider()
@@ -133,6 +139,20 @@ internal fun AppNavigationPlaybackPollEffects(
             }
 
             if (!nextSeekInProgress) {
+                val durationOverrideThreshold = latestDurationOverrideSeconds.value
+                    ?.takeIf { it.isFinite() && it > 0.0 }
+                val syntheticEndPositionResetThreshold = durationOverrideThreshold
+                    ?.let { (it - 0.25).coerceAtLeast(0.0) }
+
+                if (
+                    durationOverrideThreshold != null &&
+                    suppressedSyntheticEndSourceId != null &&
+                    activeSourceId == suppressedSyntheticEndSourceId &&
+                    nextPosition <= (syntheticEndPositionResetThreshold ?: 0.0)
+                ) {
+                    suppressedSyntheticEndSourceId = null
+                }
+
                 subtunePollElapsedMs += pollDelayMs
                 val subtunePollIntervalMs = if (nextIsPlaying) 360L else 900L
                 if (subtunePollElapsedMs >= subtunePollIntervalMs) {
@@ -159,15 +179,43 @@ internal fun AppNavigationPlaybackPollEffects(
 
                 val currentPath = currentPlaybackSourceIdProvider() ?: currentFile?.absolutePath
                 if (currentPath != localPlaybackWatchPath) {
+                    suppressedSyntheticEndSourceId = null
                     localPlaybackWatchPath = currentPath
                     onPlaybackWatchPathChanged(currentPath)
                 } else {
+                    val endedAtPlaylistDuration = durationOverrideThreshold != null &&
+                        currentPath != null &&
+                        nextIsPlaying &&
+                        suppressedSyntheticEndSourceId == null &&
+                        nextPosition + 0.02 >= durationOverrideThreshold
+                    if (endedAtPlaylistDuration) {
+                        suppressedSyntheticEndSourceId = currentPath
+                        val repeatMode = activeRepeatModeProvider()
+                        when (repeatMode) {
+                            RepeatMode.None -> {
+                                val moved = onPlayAdjacentTrack(1, false, false)
+                                if (!moved) {
+                                    onStopPlaybackAndUnload()
+                                }
+                            }
+                            RepeatMode.Playlist -> {
+                                val moved = onPlayAdjacentTrack(1, true, false)
+                                if (!moved) {
+                                    onStopPlaybackAndUnload()
+                                }
+                            }
+                            else -> {
+                                onRestartCurrentTrack()
+                            }
+                        }
+                        continue
+                    }
                     val endedNaturally = NativeBridge.consumeNaturalEndEvent()
                     if (endedNaturally) {
                         val repeatMode = activeRepeatModeProvider()
                         val moved = when (repeatMode) {
                             RepeatMode.None -> onPlayAdjacentTrack(1, false, false)
-                            RepeatMode.Playlist -> onPlayAdjacentTrack(1, true, true)
+                            RepeatMode.Playlist -> onPlayAdjacentTrack(1, true, false)
                             else -> false
                         }
                         if (moved) {

@@ -196,6 +196,25 @@ internal fun AppNavigationPlaybackDialogsSection(
     subtuneEntries: List<SubtuneEntry>,
     currentSubtuneIndex: Int,
     onShowSubtuneSelectorDialogChanged: (Boolean) -> Unit,
+    showPlaylistSelectorDialog: Boolean,
+    playlistDialogTitle: String,
+    playlistEntries: List<PlaylistTrackEntry>,
+    currentPlaylistEntryId: String?,
+    onShowPlaylistSelectorDialogChanged: (Boolean) -> Unit,
+    onSelectPlaylistEntry: (PlaylistTrackEntry) -> Unit,
+    showPlaylistOpenActionDialog: Boolean,
+    playlistOpenActionTitle: String,
+    playlistOpenActionEntryCount: Int,
+    onShowPlaylistOpenActionDialogChanged: (Boolean) -> Unit,
+    onDismissPlaylistOpenActionDialog: () -> Unit,
+    onPlayPlaylistFromFile: () -> Unit,
+    onBrowsePlaylistFromFile: () -> Unit,
+    showPlaylistPreviewDialog: Boolean,
+    playlistPreviewTitle: String,
+    playlistPreviewEntries: List<PlaylistTrackEntry>,
+    onShowPlaylistPreviewDialogChanged: (Boolean) -> Unit,
+    onDismissPlaylistPreviewDialog: () -> Unit,
+    onSelectPlaylistPreviewEntry: (PlaylistTrackEntry) -> Unit,
     showAudioEffectsDialog: Boolean,
     tempMasterVolumeDb: Float,
     tempPluginVolumeDb: Float,
@@ -338,6 +357,36 @@ internal fun AppNavigationPlaybackDialogsSection(
             onShowSubtuneSelectorDialogChanged(false)
         },
         onDismissSubtuneSelector = { onShowSubtuneSelectorDialogChanged(false) },
+        showPlaylistSelectorDialog = showPlaylistSelectorDialog,
+        playlistDialogTitle = playlistDialogTitle,
+        playlistEntries = playlistEntries,
+        currentPlaylistEntryId = currentPlaylistEntryId,
+        onSelectPlaylistEntry = {
+            onSelectPlaylistEntry(it)
+            onShowPlaylistSelectorDialogChanged(false)
+        },
+        onDismissPlaylistSelector = { onShowPlaylistSelectorDialogChanged(false) },
+        showPlaylistOpenActionDialog = showPlaylistOpenActionDialog,
+        playlistOpenActionTitle = playlistOpenActionTitle,
+        playlistOpenActionEntryCount = playlistOpenActionEntryCount,
+        onPlayPlaylistFromFile = {
+            onPlayPlaylistFromFile()
+            onShowPlaylistOpenActionDialogChanged(false)
+        },
+        onBrowsePlaylistFromFile = {
+            onShowPlaylistOpenActionDialogChanged(false)
+            onShowPlaylistPreviewDialogChanged(true)
+            onBrowsePlaylistFromFile()
+        },
+        onDismissPlaylistOpenAction = onDismissPlaylistOpenActionDialog,
+        showPlaylistPreviewDialog = showPlaylistPreviewDialog,
+        playlistPreviewTitle = playlistPreviewTitle,
+        playlistPreviewEntries = playlistPreviewEntries,
+        onSelectPlaylistPreviewEntry = {
+            onSelectPlaylistPreviewEntry(it)
+            onShowPlaylistPreviewDialogChanged(false)
+        },
+        onDismissPlaylistPreview = onDismissPlaylistPreviewDialog,
         showAudioEffectsDialog = showAudioEffectsDialog,
         tempMasterVolumeDb = tempMasterVolumeDb,
         tempPluginVolumeDb = tempPluginVolumeDb,

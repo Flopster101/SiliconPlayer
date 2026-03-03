@@ -130,7 +130,8 @@ internal data class ManualSourceResolution(
 )
 
 internal data class ManualSourceOpenOptions(
-    val forceCaching: Boolean = false
+    val forceCaching: Boolean = false,
+    val initialSubtuneIndex: Int? = null
 )
 
 internal fun resolvePlaybackSourceLabel(

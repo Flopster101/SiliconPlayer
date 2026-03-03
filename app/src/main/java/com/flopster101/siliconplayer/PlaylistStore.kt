@@ -1,0 +1,182 @@
+package com.flopster101.siliconplayer
+
+import android.content.SharedPreferences
+import org.json.JSONArray
+import org.json.JSONObject
+
+private const val PLAYLIST_LIBRARY_FAVORITES_KEY = "favorites"
+private const val PLAYLIST_LIBRARY_PLAYLISTS_KEY = "playlists"
+private const val PLAYLIST_ENTRY_ID_KEY = "id"
+private const val PLAYLIST_ENTRY_SOURCE_KEY = "source"
+private const val PLAYLIST_ENTRY_TITLE_KEY = "title"
+private const val PLAYLIST_ENTRY_ARTIST_KEY = "artist"
+private const val PLAYLIST_ENTRY_SUBTUNE_KEY = "subtune_index"
+private const val STORED_PLAYLIST_ID_KEY = "id"
+private const val STORED_PLAYLIST_TITLE_KEY = "title"
+private const val STORED_PLAYLIST_FORMAT_KEY = "format"
+private const val STORED_PLAYLIST_SOURCE_HINT_KEY = "source_id_hint"
+private const val STORED_PLAYLIST_UPDATED_AT_KEY = "updated_at_ms"
+private const val STORED_PLAYLIST_ENTRIES_KEY = "entries"
+
+internal fun readPlaylistLibraryState(prefs: SharedPreferences): PlaylistLibraryState {
+    val raw = prefs.getString(AppPreferenceKeys.PLAYLIST_LIBRARY_JSON, null)
+        ?.trim()
+        .takeUnless { it.isNullOrBlank() }
+        ?: return emptyPlaylistLibraryState()
+    return runCatching {
+        val root = JSONObject(raw)
+        val favorites = root.optJSONArray(PLAYLIST_LIBRARY_FAVORITES_KEY)
+            ?.let(::readPlaylistTrackEntries)
+            .orEmpty()
+        val playlists = root.optJSONArray(PLAYLIST_LIBRARY_PLAYLISTS_KEY)
+            ?.let(::readStoredPlaylists)
+            .orEmpty()
+        PlaylistLibraryState(
+            favorites = favorites,
+            playlists = playlists
+        )
+    }.getOrElse {
+        emptyPlaylistLibraryState()
+    }
+}
+
+internal fun writePlaylistLibraryState(
+    prefs: SharedPreferences,
+    state: PlaylistLibraryState
+) {
+    val root = JSONObject()
+        .put(
+            PLAYLIST_LIBRARY_FAVORITES_KEY,
+            JSONArray().apply {
+                state.favorites.forEach { put(writePlaylistTrackEntry(it)) }
+            }
+        )
+        .put(
+            PLAYLIST_LIBRARY_PLAYLISTS_KEY,
+            JSONArray().apply {
+                state.playlists.forEach { put(writeStoredPlaylist(it)) }
+            }
+        )
+    prefs.edit()
+        .putString(AppPreferenceKeys.PLAYLIST_LIBRARY_JSON, root.toString())
+        .apply()
+}
+
+internal fun upsertStoredPlaylist(
+    state: PlaylistLibraryState,
+    playlist: StoredPlaylist
+): PlaylistLibraryState {
+    val existingIndex = state.playlists.indexOfFirst { existing ->
+        existing.sourceIdHint != null &&
+            playlist.sourceIdHint != null &&
+            samePath(existing.sourceIdHint, playlist.sourceIdHint)
+    }
+    val updatedPlaylist = if (existingIndex >= 0) {
+        playlist.copy(
+            id = state.playlists[existingIndex].id,
+            updatedAtMs = System.currentTimeMillis()
+        )
+    } else {
+        playlist.copy(updatedAtMs = System.currentTimeMillis())
+    }
+    val withoutExisting = if (existingIndex >= 0) {
+        state.playlists.toMutableList().apply { removeAt(existingIndex) }
+    } else {
+        state.playlists.toMutableList()
+    }
+    withoutExisting.add(0, updatedPlaylist)
+    return state.copy(playlists = withoutExisting)
+}
+
+internal fun removeStoredPlaylist(
+    state: PlaylistLibraryState,
+    playlistId: String
+): PlaylistLibraryState {
+    return state.copy(
+        playlists = state.playlists.filterNot { it.id == playlistId }
+    )
+}
+
+internal fun upsertFavoriteTrack(
+    state: PlaylistLibraryState,
+    track: PlaylistTrackEntry
+): PlaylistLibraryState {
+    val withoutExisting = state.favorites.filterNot { existing ->
+        samePath(existing.source, track.source) &&
+            (existing.subtuneIndex ?: -1) == (track.subtuneIndex ?: -1)
+    }
+    return state.copy(favorites = listOf(track) + withoutExisting)
+}
+
+internal fun removeFavoriteTrack(
+    state: PlaylistLibraryState,
+    favoriteId: String
+): PlaylistLibraryState {
+    return state.copy(
+        favorites = state.favorites.filterNot { it.id == favoriteId }
+    )
+}
+
+private fun readStoredPlaylists(array: JSONArray): List<StoredPlaylist> {
+    val playlists = mutableListOf<StoredPlaylist>()
+    for (index in 0 until array.length()) {
+        val item = array.optJSONObject(index) ?: continue
+        val title = item.optString(STORED_PLAYLIST_TITLE_KEY).trim()
+        val entriesArray = item.optJSONArray(STORED_PLAYLIST_ENTRIES_KEY) ?: continue
+        val entries = readPlaylistTrackEntries(entriesArray)
+        if (title.isBlank() || entries.isEmpty()) continue
+        playlists += StoredPlaylist(
+            id = item.optString(STORED_PLAYLIST_ID_KEY).trim().ifBlank { java.util.UUID.randomUUID().toString() },
+            title = title,
+            format = PlaylistStoredFormat.fromStorage(item.optString(STORED_PLAYLIST_FORMAT_KEY)),
+            sourceIdHint = item.optString(STORED_PLAYLIST_SOURCE_HINT_KEY).trim().ifBlank { null },
+            entries = entries,
+            updatedAtMs = item.optLong(STORED_PLAYLIST_UPDATED_AT_KEY).takeIf { it > 0L }
+                ?: System.currentTimeMillis()
+        )
+    }
+    return playlists
+}
+
+private fun readPlaylistTrackEntries(array: JSONArray): List<PlaylistTrackEntry> {
+    val entries = mutableListOf<PlaylistTrackEntry>()
+    for (index in 0 until array.length()) {
+        val item = array.optJSONObject(index) ?: continue
+        val source = item.optString(PLAYLIST_ENTRY_SOURCE_KEY).trim()
+        val title = item.optString(PLAYLIST_ENTRY_TITLE_KEY).trim()
+        if (source.isBlank() || title.isBlank()) continue
+        entries += PlaylistTrackEntry(
+            id = item.optString(PLAYLIST_ENTRY_ID_KEY).trim().ifBlank { java.util.UUID.randomUUID().toString() },
+            source = source,
+            title = title,
+            artist = item.optString(PLAYLIST_ENTRY_ARTIST_KEY).trim().ifBlank { null },
+            subtuneIndex = item.optInt(PLAYLIST_ENTRY_SUBTUNE_KEY, Int.MIN_VALUE)
+                .takeUnless { it == Int.MIN_VALUE || it < 0 }
+        )
+    }
+    return entries
+}
+
+private fun writeStoredPlaylist(playlist: StoredPlaylist): JSONObject {
+    return JSONObject()
+        .put(STORED_PLAYLIST_ID_KEY, playlist.id)
+        .put(STORED_PLAYLIST_TITLE_KEY, playlist.title)
+        .put(STORED_PLAYLIST_FORMAT_KEY, playlist.format.storageValue)
+        .put(STORED_PLAYLIST_SOURCE_HINT_KEY, playlist.sourceIdHint ?: "")
+        .put(STORED_PLAYLIST_UPDATED_AT_KEY, playlist.updatedAtMs)
+        .put(
+            STORED_PLAYLIST_ENTRIES_KEY,
+            JSONArray().apply {
+                playlist.entries.forEach { put(writePlaylistTrackEntry(it)) }
+            }
+        )
+}
+
+private fun writePlaylistTrackEntry(entry: PlaylistTrackEntry): JSONObject {
+    return JSONObject()
+        .put(PLAYLIST_ENTRY_ID_KEY, entry.id)
+        .put(PLAYLIST_ENTRY_SOURCE_KEY, entry.source)
+        .put(PLAYLIST_ENTRY_TITLE_KEY, entry.title)
+        .put(PLAYLIST_ENTRY_ARTIST_KEY, entry.artist ?: "")
+        .put(PLAYLIST_ENTRY_SUBTUNE_KEY, entry.subtuneIndex ?: -1)
+}

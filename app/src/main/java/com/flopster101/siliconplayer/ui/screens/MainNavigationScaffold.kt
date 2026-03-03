@@ -58,11 +58,15 @@ internal fun MainNavigationScaffold(
 ) {
     val isMainTopBarVisible =
         currentView != MainView.Settings &&
-            currentView != MainView.Network
+            currentView != MainView.Network &&
+            currentView != MainView.Playlists
     var lastVisibleTopBarView by remember { mutableStateOf(currentView) }
     val viewTransition = updateTransition(targetState = currentView, label = "mainViewTopBarTransition")
     val displayedTopBarView = if (isMainTopBarVisible) currentView else lastVisibleTopBarView
-    val shouldShowBrowserHomeAction = displayedTopBarView == MainView.Browser || displayedTopBarView == MainView.Network
+    val shouldShowBrowserHomeAction =
+        displayedTopBarView == MainView.Browser ||
+            displayedTopBarView == MainView.Network ||
+            displayedTopBarView == MainView.Playlists
     val shouldShowSettingsAction = displayedTopBarView != MainView.Settings
     val homeScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
@@ -258,7 +262,8 @@ internal fun MainNavigationScaffold(
             ) { targetView ->
                 val routePadding = if (
                     targetView == MainView.Settings ||
-                    targetView == MainView.Network
+                    targetView == MainView.Network ||
+                    targetView == MainView.Playlists
                 ) {
                     PaddingValues(0.dp)
                 } else {

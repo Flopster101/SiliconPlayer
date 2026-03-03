@@ -7,8 +7,7 @@ import com.flopster101.siliconplayer.PreviousTrackAction
 import com.flopster101.siliconplayer.ResumeTarget
 import com.flopster101.siliconplayer.NativeTrackSnapshot
 import com.flopster101.siliconplayer.currentTrackIndexForList
-import com.flopster101.siliconplayer.readCurrentDecoderName
-import com.flopster101.siliconplayer.readNativeTrackSnapshot
+import com.flopster101.siliconplayer.loadTrackSnapshotForSelection
 import com.flopster101.siliconplayer.runWithNativeAudioSession
 import com.flopster101.siliconplayer.resolvePreviousTrackAction
 import com.flopster101.siliconplayer.resolveResumeTarget
@@ -27,6 +26,7 @@ internal suspend fun applyTrackSelectionAction(
     sourceIdOverride: String?,
     locationIdOverride: String?,
     initialSeekSeconds: Double?,
+    initialSubtuneIndex: Int?,
     useSongVolumeLookup: Boolean,
     onResetPlayback: () -> Unit,
     onSelectedFileChanged: (File) -> Unit,
@@ -63,19 +63,18 @@ internal suspend fun applyTrackSelectionAction(
         onSongVolumeDbChanged(0f)
         onSongGainChanged(0f)
     }
-    val resolvedDecoderName = runWithNativeAudioSession {
-        NativeBridge.loadAudio(loadFile.absolutePath)
-        readCurrentDecoderName()
+    val loadedTrackState = runWithNativeAudioSession {
+        loadTrackSnapshotForSelection(
+            path = loadFile.absolutePath,
+            initialSubtuneIndex = initialSubtuneIndex
+        )
     }
     coroutineContext.ensureActive()
-    onResolvedDecoderState(resolvedDecoderName)
-    val nativeSnapshot = runWithNativeAudioSession {
-        readNativeTrackSnapshot()
-    }
-    coroutineContext.ensureActive()
+    val nativeSnapshot = loadedTrackState.snapshot
+    onResolvedDecoderState(nativeSnapshot.decoderName)
     applyNativeTrackSnapshot(nativeSnapshot)
     refreshSubtuneState()
-    val loadedDurationSeconds = NativeBridge.getDuration().coerceAtLeast(0.0)
+    val loadedDurationSeconds = nativeSnapshot.durationSeconds.coerceAtLeast(0.0)
     val shouldApplyInitialSeek = initialSeekSeconds != null &&
         loadedDurationSeconds > 0.0
     val resolvedPositionSeconds = if (shouldApplyInitialSeek) {

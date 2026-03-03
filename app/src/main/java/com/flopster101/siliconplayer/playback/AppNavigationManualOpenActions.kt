@@ -152,6 +152,7 @@ internal fun launchManualRemoteSelectionAction(
                     val remoteAttempt = executeManualRemoteOpen(
                         resolved = effectiveResolved,
                         forceCaching = options.forceCaching,
+                        initialSubtuneIndex = options.initialSubtuneIndex,
                         cacheRoot = cacheRoot,
                         selectedFileAbsolutePath = selectedFileAbsolutePathProvider(),
                         urlCacheMaxTracks = urlCacheMaxTracks,
@@ -223,6 +224,7 @@ internal fun launchManualRemoteSelectionAction(
                         var remoteAttempt = executeManualRemoteOpen(
                             resolved = resolvedSource,
                             forceCaching = true,
+                            initialSubtuneIndex = options.initialSubtuneIndex,
                             cacheRoot = cacheRoot,
                             selectedFileAbsolutePath = selectedFileAbsolutePathProvider(),
                             urlCacheMaxTracks = urlCacheMaxTracks,
@@ -422,7 +424,7 @@ internal suspend fun applyManualInputSelectionAction(
     onCurrentViewChanged: (MainView) -> Unit,
     onAddRecentFolder: (String, String?, Long?) -> Unit,
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
-    onApplyTrackSelection: (File, Boolean, Boolean?, String?) -> Unit,
+    onApplyTrackSelection: (File, Boolean, Boolean?, String?, Int?) -> Unit,
     onLaunchManualRemoteSelection: (ManualSourceResolution, ManualSourceOpenOptions, Boolean?) -> Unit
 ) {
     val archiveFile = resolveArchiveSourceToMountedFile(context, rawInput)
@@ -433,7 +435,7 @@ internal suspend fun applyManualInputSelectionAction(
         )
         currentCoroutineContext().ensureActive()
         onVisiblePlayableFilesChanged(contextualPlayableFiles)
-        onApplyTrackSelection(archiveFile, true, openPlayerOnTrackSelect, rawInput.trim())
+        onApplyTrackSelection(archiveFile, true, openPlayerOnTrackSelect, rawInput.trim(), options.initialSubtuneIndex)
         return
     }
 
@@ -464,7 +466,7 @@ internal suspend fun applyManualInputSelectionAction(
             )
             currentCoroutineContext().ensureActive()
             onVisiblePlayableFilesChanged(contextualPlayableFiles)
-            onApplyTrackSelection(localFile, true, openPlayerOnTrackSelect, action.sourceId)
+            onApplyTrackSelection(localFile, true, openPlayerOnTrackSelect, action.sourceId, options.initialSubtuneIndex)
             return
         }
 

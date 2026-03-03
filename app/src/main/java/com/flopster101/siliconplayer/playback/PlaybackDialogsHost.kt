@@ -2,6 +2,8 @@ package com.flopster101.siliconplayer
 
 import androidx.compose.runtime.Composable
 import com.flopster101.siliconplayer.ui.dialogs.AudioEffectsDialog
+import com.flopster101.siliconplayer.ui.dialogs.PlaylistOpenActionDialog
+import com.flopster101.siliconplayer.ui.dialogs.PlaylistSelectorDialog
 import com.flopster101.siliconplayer.ui.dialogs.SoxExperimentalDialog
 import com.flopster101.siliconplayer.ui.dialogs.SubtuneSelectorDialog
 import com.flopster101.siliconplayer.ui.dialogs.UrlOrPathDialog
@@ -23,6 +25,23 @@ internal fun PlaybackDialogsHost(
     currentSubtuneIndex: Int,
     onSelectSubtune: (Int) -> Unit,
     onDismissSubtuneSelector: () -> Unit,
+    showPlaylistSelectorDialog: Boolean,
+    playlistDialogTitle: String,
+    playlistEntries: List<PlaylistTrackEntry>,
+    currentPlaylistEntryId: String?,
+    onSelectPlaylistEntry: (PlaylistTrackEntry) -> Unit,
+    onDismissPlaylistSelector: () -> Unit,
+    showPlaylistOpenActionDialog: Boolean,
+    playlistOpenActionTitle: String,
+    playlistOpenActionEntryCount: Int,
+    onPlayPlaylistFromFile: () -> Unit,
+    onBrowsePlaylistFromFile: () -> Unit,
+    onDismissPlaylistOpenAction: () -> Unit,
+    showPlaylistPreviewDialog: Boolean,
+    playlistPreviewTitle: String,
+    playlistPreviewEntries: List<PlaylistTrackEntry>,
+    onSelectPlaylistPreviewEntry: (PlaylistTrackEntry) -> Unit,
+    onDismissPlaylistPreview: () -> Unit,
     showAudioEffectsDialog: Boolean,
     tempMasterVolumeDb: Float,
     tempPluginVolumeDb: Float,
@@ -90,6 +109,36 @@ internal fun PlaybackDialogsHost(
             currentSubtuneIndex = currentSubtuneIndex,
             onSelectSubtune = onSelectSubtune,
             onDismiss = onDismissSubtuneSelector
+        )
+    }
+
+    if (showPlaylistSelectorDialog) {
+        PlaylistSelectorDialog(
+            title = playlistDialogTitle,
+            entries = playlistEntries,
+            currentEntryId = currentPlaylistEntryId,
+            onSelectEntry = onSelectPlaylistEntry,
+            onDismiss = onDismissPlaylistSelector
+        )
+    }
+
+    if (showPlaylistOpenActionDialog) {
+        PlaylistOpenActionDialog(
+            title = playlistOpenActionTitle,
+            entryCount = playlistOpenActionEntryCount,
+            onPlayNow = onPlayPlaylistFromFile,
+            onBrowseEntries = onBrowsePlaylistFromFile,
+            onDismiss = onDismissPlaylistOpenAction
+        )
+    }
+
+    if (showPlaylistPreviewDialog) {
+        PlaylistSelectorDialog(
+            title = playlistPreviewTitle,
+            entries = playlistPreviewEntries,
+            currentEntryId = null,
+            onSelectEntry = onSelectPlaylistPreviewEntry,
+            onDismiss = onDismissPlaylistPreview
         )
     }
 

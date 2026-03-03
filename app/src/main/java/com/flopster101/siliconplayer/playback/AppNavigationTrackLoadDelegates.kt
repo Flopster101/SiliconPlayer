@@ -54,6 +54,7 @@ internal class AppNavigationTrackLoadDelegates(
         sourceIdOverride: String? = null,
         locationIdOverride: String? = lastBrowserLocationIdProvider(),
         initialSeekSeconds: Double? = null,
+        initialSubtuneIndex: Int? = null,
         useSongVolumeLookup: Boolean = true
     ) {
         ManualRemoteOpenCoordinator.cancelPendingOpenWork()
@@ -73,6 +74,7 @@ internal class AppNavigationTrackLoadDelegates(
                     sourceIdOverride = sourceIdOverride,
                     locationIdOverride = locationIdOverride,
                     initialSeekSeconds = initialSeekSeconds,
+                    initialSubtuneIndex = initialSubtuneIndex,
                     useSongVolumeLookup = useSongVolumeLookup,
                     onResetPlayback = onResetPlayback,
                     onSelectedFileChanged = onSelectedFileChanged,

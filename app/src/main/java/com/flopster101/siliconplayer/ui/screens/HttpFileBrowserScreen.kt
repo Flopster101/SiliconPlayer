@@ -100,6 +100,7 @@ import com.flopster101.siliconplayer.httpAuthenticationFailureMessage
 import com.flopster101.siliconplayer.HttpBrowserListLocation
 import com.flopster101.siliconplayer.HttpBrowserListingAdapter
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.isSupportedPlaylistFileName
 import com.flopster101.siliconplayer.FilePreviewKind
 import com.flopster101.siliconplayer.DecoderArtworkHint
 import com.flopster101.siliconplayer.BrowserLaunchState
@@ -167,6 +168,7 @@ internal fun HttpFileBrowserScreen(
     onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit,
     sourceNodeId: Long?,
     onBrowserLocationChanged: (BrowserLaunchState) -> Unit,
+    onPlaylistFileSelected: (File, String?) -> Unit = { _, _ -> },
     pinnedHomeEntries: List<HomePinnedEntry> = emptyList(),
     onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit = { _, _ -> }
 ) {
@@ -791,7 +793,53 @@ internal fun HttpFileBrowserScreen(
         }
     }
 
+    fun openPlaylistEntry(entry: HttpBrowserEntry) {
+        val parsedSpec = parseHttpSourceSpecFromInput(entry.requestUrl) ?: return
+        val authSpec = parsedSpec.copy(
+            username = sessionUsername,
+            password = sessionPassword
+        )
+        val sourceId = buildHttpSourceId(authSpec)
+        val requestUrl = stripUrlFragment(buildHttpRequestUri(authSpec))
+        previewLoadJob?.cancel()
+        previewLoadJob = coroutineScope.launch {
+            previewDownloadProgressState = BrowserRemoteExportProgressState(
+                currentIndex = 1,
+                totalCount = 1,
+                currentFileName = entry.name,
+                loadState = null
+            )
+            val prepared = prepareRemoteExportFile(
+                context = context,
+                request = HttpRemoteExportRequest(
+                    sourceId = sourceId,
+                    requestUrl = requestUrl,
+                    preferredFileName = entry.name
+                ),
+                onStatus = { loadState ->
+                    previewDownloadProgressState = BrowserRemoteExportProgressState(
+                        currentIndex = 1,
+                        totalCount = 1,
+                        currentFileName = entry.name,
+                        loadState = loadState
+                    )
+                }
+            )
+            previewDownloadProgressState = null
+            val cachedItem = prepared.getOrNull()
+            if (cachedItem == null) {
+                val error = prepared.exceptionOrNull()
+                if (error !is RemoteExportCancelledException && error !is CancellationException) {
+                    Toast.makeText(context, "Failed to open playlist", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+            onPlaylistFileSelected(cachedItem.sourceFile, sourceId)
+        }
+    }
+
     fun openPreviewEntry(entry: HttpBrowserEntry): Boolean {
+        if (isSupportedPlaylistFileName(entry.name)) return false
         val previewKind = browserPreviewKindForName(entry.name) ?: return false
         val parsedSpec = parseHttpSourceSpecFromInput(entry.requestUrl) ?: return false
         val authSpec = parsedSpec.copy(
@@ -1394,6 +1442,10 @@ internal fun HttpFileBrowserScreen(
                                                 navigationDirection = BrowserPageNavDirection.Forward
                                             )
                                         } else {
+                                            if (isSupportedPlaylistFileName(entry.name)) {
+                                                openPlaylistEntry(entry)
+                                                return@HttpEntryRow
+                                            }
                                             if (openPreviewEntry(entry)) {
                                                 return@HttpEntryRow
                                             }

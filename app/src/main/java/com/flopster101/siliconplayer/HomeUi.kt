@@ -32,6 +32,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
@@ -182,6 +183,7 @@ internal fun HomeScreen(
     storagePresentationForPinnedEntry: (HomePinnedEntry) -> StoragePresentation,
     bottomContentPadding: Dp = 0.dp,
     onOpenLibrary: () -> Unit,
+    onOpenPlaylists: () -> Unit,
     onOpenNetwork: () -> Unit,
     onOpenPinnedFolder: (HomePinnedEntry) -> Unit,
     onPlayPinnedFile: (HomePinnedEntry) -> Unit,
@@ -225,7 +227,7 @@ internal fun HomeScreen(
     val recentFolderAnimationState = rememberRecentAnimationState(recentFolderKeys)
     var runHomeIntroAnimation by rememberSaveable { mutableStateOf(true) }
     val introAnimatedItemCount = remember(recentFolders.size, recentPlayedFiles.size) {
-        2 + recentFolders.size + recentPlayedFiles.size
+        3 + recentFolders.size + recentPlayedFiles.size
     }
 
     LaunchedEffect(runHomeIntroAnimation, introAnimatedItemCount) {
@@ -346,8 +348,16 @@ internal fun HomeScreen(
                 onClick = onOpenLibrary
             ),
             HomeQuickActionSpec(
-                itemKey = "home_intro_network_button",
+                itemKey = "home_intro_playlists_button",
                 order = 1,
+                title = "Playlists",
+                icon = Icons.Default.LibraryMusic,
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                onClick = onOpenPlaylists
+            ),
+            HomeQuickActionSpec(
+                itemKey = "home_intro_network_button",
+                order = 2,
                 title = "Network sources",
                 icon = Icons.Default.Public,
                 containerColor = MaterialTheme.colorScheme.tertiaryContainer,

@@ -47,7 +47,7 @@ internal class AppNavigationManualOpenDelegates(
     private val onBrowserLaunchTargetChanged: (BrowserLaunchState) -> Unit,
     private val onCurrentViewChanged: (MainView) -> Unit,
     private val onAddRecentFolder: (String, String?, Long?) -> Unit,
-    private val onApplyTrackSelection: (file: File, autoStart: Boolean, expandOverride: Boolean?, sourceIdOverride: String?) -> Unit
+    private val onApplyTrackSelection: (file: File, autoStart: Boolean, expandOverride: Boolean?, sourceIdOverride: String?, initialSubtuneIndex: Int?) -> Unit
 ) {
     private var manualInputSelectionJob: Job? = null
 

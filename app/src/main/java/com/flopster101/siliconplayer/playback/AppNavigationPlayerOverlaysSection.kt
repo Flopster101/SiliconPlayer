@@ -87,6 +87,8 @@ internal fun BoxScope.AppNavigationPlayerOverlaysSection(
     canPreviousSubtune: Boolean,
     canNextSubtune: Boolean,
     canOpenSubtuneSelector: Boolean,
+    canOpenPlaylistSelector: Boolean,
+    onOpenPlaylistSelector: () -> Unit,
     currentSubtuneIndex: Int,
     subtuneCount: Int,
     onCycleRepeatMode: () -> Unit
@@ -208,6 +210,8 @@ internal fun BoxScope.AppNavigationPlayerOverlaysSection(
         canPreviousSubtune = canPreviousSubtune,
         canNextSubtune = canNextSubtune,
         canOpenSubtuneSelector = canOpenSubtuneSelector,
+        canOpenPlaylistSelector = canOpenPlaylistSelector,
+        onOpenPlaylistSelector = onOpenPlaylistSelector,
         currentSubtuneIndex = currentSubtuneIndex,
         subtuneCount = subtuneCount,
         onCycleRepeatMode = onCycleRepeatMode,

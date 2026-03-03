@@ -257,6 +257,684 @@ private fun resolveAutoDarkThemePreference(context: Context, systemDarkTheme: Bo
 
 private const val HOME_BACK_EXIT_TIMEOUT_MS = 2_000L
 
+private data class PendingPlaylistSubtuneSelection(
+    val sourceId: String,
+    val subtuneIndex: Int
+)
+
+private fun parsePlaylistFileDocument(
+    file: File,
+    sourceIdHint: String?
+): ParsedPlaylistDocument? {
+    return runCatching {
+        parsePlaylistDocument(
+            file = file,
+            sourceIdHint = sourceIdHint ?: file.absolutePath
+        )
+    }.getOrNull()
+}
+
+private fun openPlaylistEntry(
+    context: Context,
+    entry: PlaylistTrackEntry,
+    playlist: StoredPlaylist?,
+    trackLoadDelegates: AppNavigationTrackLoadDelegates,
+    manualOpenDelegates: AppNavigationManualOpenDelegates,
+    autoPlayOnTrackSelect: Boolean,
+    openPlayerOnTrackSelect: Boolean,
+    expandOverride: Boolean? = openPlayerOnTrackSelect,
+    onActivePlaylistChanged: (StoredPlaylist?) -> Unit,
+    onActivePlaylistEntryIdChanged: (String?) -> Unit,
+    onPendingPlaylistSubtuneSelectionChanged: (PendingPlaylistSubtuneSelection?) -> Unit
+) {
+    onActivePlaylistChanged(playlist)
+    onActivePlaylistEntryIdChanged(entry.id)
+    onPendingPlaylistSubtuneSelectionChanged(
+        entry.subtuneIndex?.let { PendingPlaylistSubtuneSelection(entry.source, it) }
+    )
+    val localFile = resolvePlaylistEntryLocalFile(entry.source)
+    if (localFile != null) {
+        if (!localFile.exists() || !localFile.isFile) {
+            onPendingPlaylistSubtuneSelectionChanged(null)
+            Toast.makeText(context, "Playlist entry is not available", Toast.LENGTH_SHORT).show()
+            return
+        }
+        trackLoadDelegates.applyTrackSelection(
+            file = localFile,
+            autoStart = autoPlayOnTrackSelect,
+            expandOverride = expandOverride,
+            sourceIdOverride = localFile.absolutePath,
+            initialSubtuneIndex = entry.subtuneIndex
+        )
+    } else {
+        manualOpenDelegates.applyManualInputSelection(
+            rawInput = entry.source,
+            options = ManualSourceOpenOptions(initialSubtuneIndex = entry.subtuneIndex),
+            expandOverride = expandOverride
+        )
+    }
+}
+
+private fun playAdjacentPlaylistEntry(
+    context: Context,
+    activePlaylist: StoredPlaylist?,
+    currentEntryId: String?,
+    offset: Int,
+    wrapOverride: Boolean?,
+    playlistWrapNavigation: Boolean,
+    notifyWrap: Boolean,
+    expandOverride: Boolean?,
+    trackLoadDelegates: AppNavigationTrackLoadDelegates,
+    manualOpenDelegates: AppNavigationManualOpenDelegates,
+    autoPlayOnTrackSelect: Boolean,
+    openPlayerOnTrackSelect: Boolean,
+    onActivePlaylistChanged: (StoredPlaylist?) -> Unit,
+    onActivePlaylistEntryIdChanged: (String?) -> Unit,
+    onPendingPlaylistSubtuneSelectionChanged: (PendingPlaylistSubtuneSelection?) -> Unit
+): Boolean {
+    val playlist = activePlaylist ?: return false
+    val entries = playlist.entries
+    if (entries.isEmpty()) return false
+    val currentIndex = currentEntryId
+        ?.let { entryId -> entries.indexOfFirst { it.id == entryId } }
+        ?: -1
+    if (currentIndex !in entries.indices) return false
+    val shouldWrap = wrapOverride ?: playlistWrapNavigation
+    val rawTargetIndex = currentIndex + offset
+    val targetIndex = if (shouldWrap) {
+        val wrappedIndex = ((rawTargetIndex % entries.size) + entries.size) % entries.size
+        if (wrappedIndex != rawTargetIndex && notifyWrap) {
+            val message = if (offset < 0) {
+                "Wrapped to last track"
+            } else {
+                "Wrapped to first track"
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+        wrappedIndex
+    } else {
+        if (rawTargetIndex !in entries.indices) return false
+        rawTargetIndex
+    }
+    val targetEntry = entries.getOrNull(targetIndex) ?: return false
+    openPlaylistEntry(
+        context = context,
+        entry = targetEntry,
+        playlist = playlist,
+        trackLoadDelegates = trackLoadDelegates,
+        manualOpenDelegates = manualOpenDelegates,
+        autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+        openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+        expandOverride = expandOverride,
+        onActivePlaylistChanged = onActivePlaylistChanged,
+        onActivePlaylistEntryIdChanged = onActivePlaylistEntryIdChanged,
+        onPendingPlaylistSubtuneSelectionChanged = onPendingPlaylistSubtuneSelectionChanged
+    )
+    return true
+}
+
+private fun openPlaylistDocument(
+    context: Context,
+    document: ParsedPlaylistDocument,
+    playlistLibraryState: PlaylistLibraryState,
+    trackLoadDelegates: AppNavigationTrackLoadDelegates,
+    manualOpenDelegates: AppNavigationManualOpenDelegates,
+    autoPlayOnTrackSelect: Boolean,
+    openPlayerOnTrackSelect: Boolean,
+    autoStart: Boolean = autoPlayOnTrackSelect,
+    expandOverride: Boolean? = openPlayerOnTrackSelect,
+    onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit,
+    onActivePlaylistChanged: (StoredPlaylist?) -> Unit,
+    onActivePlaylistEntryIdChanged: (String?) -> Unit,
+    onShowPlaylistSelectorDialogChanged: (Boolean) -> Unit,
+    onPendingPlaylistSubtuneSelectionChanged: (PendingPlaylistSubtuneSelection?) -> Unit,
+    selectedEntryId: String? = null
+) {
+    if (document.entries.isEmpty()) {
+        Toast.makeText(context, "Unable to open playlist", Toast.LENGTH_SHORT).show()
+        return
+    }
+    val importedPlaylist = buildImportedPlaylist(document)
+    val updatedState = upsertStoredPlaylist(
+        state = playlistLibraryState,
+        playlist = importedPlaylist
+    )
+    onPlaylistLibraryStateChanged(updatedState)
+    val storedPlaylist = updatedState.playlists.firstOrNull { it.id == importedPlaylist.id }
+        ?: importedPlaylist
+    onShowPlaylistSelectorDialogChanged(false)
+    val entryToOpen = storedPlaylist.entries.firstOrNull { it.id == selectedEntryId }
+        ?: storedPlaylist.entries.firstOrNull()
+        ?: return
+    openPlaylistEntry(
+        context = context,
+        entry = entryToOpen,
+        playlist = storedPlaylist,
+        trackLoadDelegates = trackLoadDelegates,
+        manualOpenDelegates = manualOpenDelegates,
+        autoPlayOnTrackSelect = autoStart,
+        openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+        expandOverride = expandOverride,
+        onActivePlaylistChanged = onActivePlaylistChanged,
+        onActivePlaylistEntryIdChanged = onActivePlaylistEntryIdChanged,
+        onPendingPlaylistSubtuneSelectionChanged = onPendingPlaylistSubtuneSelectionChanged
+    )
+}
+
+private fun playAdjacentBrowserFileFromAnchor(
+    context: Context,
+    anchorPath: String?,
+    offset: Int,
+    wrapOverride: Boolean?,
+    playlistWrapNavigation: Boolean,
+    notifyWrap: Boolean,
+    activePlaylist: StoredPlaylist?,
+    repository: com.flopster101.siliconplayer.data.FileRepository,
+    visiblePlayableFiles: List<File>,
+    playlistLibraryState: PlaylistLibraryState,
+    trackLoadDelegates: AppNavigationTrackLoadDelegates,
+    manualOpenDelegates: AppNavigationManualOpenDelegates,
+    openPlayerOnTrackSelect: Boolean,
+    expandOverride: Boolean?,
+    onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit,
+    onActivePlaylistChanged: (StoredPlaylist?) -> Unit,
+    onActivePlaylistEntryIdChanged: (String?) -> Unit,
+    onShowPlaylistSelectorDialogChanged: (Boolean) -> Unit,
+    onPendingPlaylistSubtuneSelectionChanged: (PendingPlaylistSubtuneSelection?) -> Unit
+): Boolean {
+    val normalizedAnchorPath = anchorPath?.takeIf { it.isNotBlank() } ?: return false
+    val referencedLocalSources = activePlaylist
+        ?.entries
+        ?.mapNotNull { entry -> resolvePlaylistEntryLocalFile(entry.source)?.absolutePath }
+        .orEmpty()
+    val browserContinuationFiles = buildList {
+        addAll(visiblePlayableFiles)
+        if (none { file -> samePath(file.absolutePath, normalizedAnchorPath) }) {
+            val anchorFile = File(normalizedAnchorPath)
+            val parentDirectory = anchorFile.parentFile
+            if (parentDirectory != null && parentDirectory.exists() && parentDirectory.isDirectory) {
+                addAll(
+                    repository.getFiles(parentDirectory)
+                        .asSequence()
+                        .filter { item ->
+                            !item.isDirectory &&
+                                (repository.isPlayableFile(item.file) || isSupportedPlaylistFile(item.file))
+                        }
+                        .map { item -> item.file }
+                        .toList()
+                )
+            }
+        }
+    }
+        .distinctBy { file -> file.absolutePath.lowercase() }
+        .filter { file ->
+            samePath(file.absolutePath, normalizedAnchorPath) ||
+                referencedLocalSources.none { sourcePath ->
+                    samePath(file.absolutePath, sourcePath)
+                }
+        }
+    if (browserContinuationFiles.isEmpty()) return false
+    val currentIndex = browserContinuationFiles.indexOfFirst { file ->
+        samePath(file.absolutePath, normalizedAnchorPath)
+    }
+    if (currentIndex !in browserContinuationFiles.indices) return false
+    val rawTargetIndex = currentIndex + offset
+    val shouldWrap = wrapOverride ?: playlistWrapNavigation
+    val targetIndex = if (shouldWrap) {
+        val wrappedIndex =
+            ((rawTargetIndex % browserContinuationFiles.size) + browserContinuationFiles.size) % browserContinuationFiles.size
+        if (wrappedIndex != rawTargetIndex && notifyWrap) {
+            val message = if (offset < 0) {
+                "Wrapped to last track"
+            } else {
+                "Wrapped to first track"
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+        wrappedIndex
+    } else {
+        if (rawTargetIndex !in browserContinuationFiles.indices) return false
+        rawTargetIndex
+    }
+    val targetFile = browserContinuationFiles.getOrNull(targetIndex) ?: return false
+    if (isSupportedPlaylistFile(targetFile)) {
+        val parsed = parsePlaylistFileDocument(targetFile, targetFile.absolutePath) ?: return false
+        openPlaylistDocument(
+            context = context,
+            document = parsed,
+            playlistLibraryState = playlistLibraryState,
+            trackLoadDelegates = trackLoadDelegates,
+            manualOpenDelegates = manualOpenDelegates,
+            autoPlayOnTrackSelect = true,
+            openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+            autoStart = true,
+            expandOverride = expandOverride,
+            onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
+            onActivePlaylistChanged = onActivePlaylistChanged,
+            onActivePlaylistEntryIdChanged = onActivePlaylistEntryIdChanged,
+            onShowPlaylistSelectorDialogChanged = onShowPlaylistSelectorDialogChanged,
+            onPendingPlaylistSubtuneSelectionChanged = onPendingPlaylistSubtuneSelectionChanged
+        )
+    } else {
+        trackLoadDelegates.applyTrackSelection(
+            file = targetFile,
+            autoStart = true,
+            expandOverride = expandOverride
+        )
+    }
+    return true
+}
+
+private fun resolveActivePlaylistMetadataEntry(
+    activePlaylist: StoredPlaylist?,
+    activePlaylistEntryId: String?,
+    activeSourceId: String?,
+    currentSubtuneIndex: Int
+): PlaylistTrackEntry? {
+    val entry = activePlaylist
+        ?.entries
+        ?.firstOrNull { it.id == activePlaylistEntryId }
+        ?: return null
+    return entry.takeIf {
+        playlistEntryMatchesPlayback(
+            entry = it,
+            activeSourceId = activeSourceId,
+            currentSubtuneIndex = currentSubtuneIndex
+        )
+    }
+}
+
+private fun addCurrentTrackToFavorites(
+    context: Context,
+    playlistLibraryState: PlaylistLibraryState,
+    currentPlaybackSourceId: String?,
+    selectedFile: File?,
+    metadataTitle: String,
+    metadataArtist: String,
+    subtuneCount: Int,
+    currentSubtuneIndex: Int,
+    onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit
+) {
+    val sourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
+    if (sourceId.isNullOrBlank()) return
+    val derivedTitle = metadataTitle.trim().ifBlank {
+        selectedFile?.nameWithoutExtension
+            ?.takeIf { it.isNotBlank() }
+            ?: sourceId.substringAfterLast('/').ifBlank { "Track" }
+    }
+    val favoriteEntry = PlaylistTrackEntry(
+        source = sourceId,
+        title = derivedTitle,
+        artist = metadataArtist.trim().takeIf { it.isNotBlank() },
+        subtuneIndex = if (subtuneCount > 1) currentSubtuneIndex else null
+    )
+    onPlaylistLibraryStateChanged(
+        upsertFavoriteTrack(
+            state = playlistLibraryState,
+            track = favoriteEntry
+        )
+    )
+    Toast.makeText(context, "Added to favorites", Toast.LENGTH_SHORT).show()
+}
+
+private fun saveActivePlaylistAsInternal(
+    context: Context,
+    playlistLibraryState: PlaylistLibraryState,
+    activePlaylist: StoredPlaylist?,
+    onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit,
+    onActivePlaylistChanged: (StoredPlaylist?) -> Unit
+) {
+    val currentPlaylist = activePlaylist ?: return
+    if (
+        currentPlaylist.format == PlaylistStoredFormat.Internal &&
+            playlistLibraryState.playlists.any { it.id == currentPlaylist.id }
+    ) {
+        Toast.makeText(context, "This playlist is already saved", Toast.LENGTH_SHORT).show()
+        return
+    }
+    val baseTitle = currentPlaylist.title.trim().ifBlank { "Playlist" }
+    val targetTitle = if (currentPlaylist.format == PlaylistStoredFormat.Internal) {
+        "$baseTitle copy"
+    } else {
+        "$baseTitle (saved)"
+    }
+    val savedPlaylist = buildInternalPlaylistCopy(targetTitle, currentPlaylist.entries)
+    val updatedState = upsertStoredPlaylist(playlistLibraryState, savedPlaylist)
+    onPlaylistLibraryStateChanged(updatedState)
+    onActivePlaylistChanged(updatedState.playlists.firstOrNull { it.id == savedPlaylist.id } ?: savedPlaylist)
+    Toast.makeText(context, "Playlist saved", Toast.LENGTH_SHORT).show()
+}
+
+@Composable
+private fun AppNavigationPlaylistEffects(
+    pendingFileToOpen: File?,
+    pendingFileFromExternalIntent: Boolean,
+    currentPlaybackSourceId: String?,
+    selectedFile: File?,
+    currentSubtuneIndex: Int,
+    activePlaylist: StoredPlaylist?,
+    activePlaylistEntryId: String?,
+    pendingPlaylistSubtuneSelection: PendingPlaylistSubtuneSelection?,
+    subtuneCount: Int,
+    onPendingFileToOpenChanged: (File?) -> Unit,
+    onPendingFileFromExternalIntentChanged: (Boolean) -> Unit,
+    onActivePlaylistEntryIdChanged: (String?) -> Unit,
+    onPendingPlaylistSubtuneSelectionChanged: (PendingPlaylistSubtuneSelection?) -> Unit,
+    onHandlePlaylistFileSelection: (File, String?) -> Unit,
+    onSelectSubtune: (Int) -> Unit
+) {
+    LaunchedEffect(pendingFileToOpen?.absolutePath, pendingFileFromExternalIntent) {
+        val pendingFile = pendingFileToOpen ?: return@LaunchedEffect
+        if (!isSupportedPlaylistFile(pendingFile)) return@LaunchedEffect
+        onHandlePlaylistFileSelection(
+            pendingFile,
+            pendingFile.absolutePath
+        )
+        onPendingFileToOpenChanged(null)
+        onPendingFileFromExternalIntentChanged(false)
+    }
+
+    LaunchedEffect(
+        currentPlaybackSourceId,
+        selectedFile?.absolutePath,
+        currentSubtuneIndex,
+        activePlaylist?.id,
+        activePlaylist?.sourceIdHint
+    ) {
+        val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath ?: return@LaunchedEffect
+        val matchedEntry = activePlaylist
+            ?.entries
+            ?.firstOrNull { entry ->
+                playlistEntryMatchesPlayback(
+                    entry = entry,
+                    activeSourceId = activeSourceId,
+                    currentSubtuneIndex = currentSubtuneIndex
+                )
+            }
+        if (matchedEntry != null && matchedEntry.id != activePlaylistEntryId) {
+            onActivePlaylistEntryIdChanged(matchedEntry.id)
+        }
+    }
+
+    LaunchedEffect(
+        pendingPlaylistSubtuneSelection?.sourceId,
+        pendingPlaylistSubtuneSelection?.subtuneIndex,
+        currentPlaybackSourceId,
+        selectedFile?.absolutePath,
+        subtuneCount
+    ) {
+        val pendingSelection = pendingPlaylistSubtuneSelection ?: return@LaunchedEffect
+        val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath ?: return@LaunchedEffect
+        if (!samePath(pendingSelection.sourceId, activeSourceId)) return@LaunchedEffect
+        if (subtuneCount <= 0) return@LaunchedEffect
+        if (pendingSelection.subtuneIndex !in 0 until subtuneCount) {
+            onPendingPlaylistSubtuneSelectionChanged(null)
+            return@LaunchedEffect
+        }
+        if (currentSubtuneIndex != pendingSelection.subtuneIndex) {
+            onSelectSubtune(pendingSelection.subtuneIndex)
+        }
+        onPendingPlaylistSubtuneSelectionChanged(null)
+    }
+}
+
+@Composable
+private fun AppNavigationBackHandlers(
+    context: Context,
+    currentView: MainView,
+    isPlayerExpanded: Boolean,
+    isPlayerSurfaceVisible: Boolean,
+    settingsLaunchedFromPlayer: Boolean,
+    showUrlOrPathDialog: Boolean,
+    showMiniPlayerFocusHighlight: Boolean,
+    onRestoreMiniPlayerFocusOnCollapseChanged: (Boolean) -> Unit,
+    onPlayerExpandedChanged: (Boolean) -> Unit,
+    onCollapseDragInProgressChanged: (Boolean) -> Unit,
+    onExpandedOverlaySettledVisibleChanged: (Boolean) -> Unit,
+    popSettingsRoute: () -> Boolean,
+    exitSettingsToReturnView: () -> Unit,
+    onCurrentViewChanged: (MainView) -> Unit
+) {
+    BackHandler(enabled = isPlayerExpanded || currentView == MainView.Settings) {
+        handleAppNavigationBackAction(
+            isPlayerExpanded = isPlayerExpanded,
+            currentView = currentView,
+            settingsLaunchedFromPlayer = settingsLaunchedFromPlayer,
+            onPlayerExpandedChanged = { expanded ->
+                if (
+                    isPlayerExpanded &&
+                    !expanded &&
+                    isPlayerSurfaceVisible &&
+                    showMiniPlayerFocusHighlight
+                ) {
+                    onRestoreMiniPlayerFocusOnCollapseChanged(true)
+                }
+                onPlayerExpandedChanged(expanded)
+                if (!expanded) {
+                    onCollapseDragInProgressChanged(false)
+                    onExpandedOverlaySettledVisibleChanged(false)
+                }
+            },
+            popSettingsRoute = popSettingsRoute,
+            exitSettingsToReturnView = exitSettingsToReturnView
+        )
+    }
+    BackHandler(enabled = !isPlayerExpanded && currentView == MainView.Playlists) {
+        onCurrentViewChanged(MainView.Home)
+    }
+    HomeExitBackHandler(
+        context = context,
+        currentView = currentView,
+        isPlayerExpanded = isPlayerExpanded,
+        showUrlOrPathDialog = showUrlOrPathDialog
+    )
+}
+
+private fun openAudioEffectsDialogFromSettings(
+    masterVolumeDb: Float,
+    pluginVolumeDb: Float,
+    songVolumeDb: Float,
+    ignoreCoreVolumeForSong: Boolean,
+    forceMono: Boolean,
+    onTempMasterVolumeDbChanged: (Float) -> Unit,
+    onTempPluginVolumeDbChanged: (Float) -> Unit,
+    onTempSongVolumeDbChanged: (Float) -> Unit,
+    onTempIgnoreCoreVolumeForSongChanged: (Boolean) -> Unit,
+    onTempForceMonoChanged: (Boolean) -> Unit,
+    onShowAudioEffectsDialogChanged: (Boolean) -> Unit
+) {
+    onTempMasterVolumeDbChanged(masterVolumeDb)
+    onTempPluginVolumeDbChanged(pluginVolumeDb)
+    onTempSongVolumeDbChanged(songVolumeDb)
+    onTempIgnoreCoreVolumeForSongChanged(ignoreCoreVolumeForSong)
+    onTempForceMonoChanged(forceMono)
+    onShowAudioEffectsDialogChanged(true)
+}
+
+private fun updateAudioBackendPreferenceSelection(
+    prefs: android.content.SharedPreferences,
+    selectedBackend: AudioBackendPreference,
+    currentBackend: AudioBackendPreference,
+    currentPerformanceMode: AudioPerformanceMode,
+    currentBufferPreset: AudioBufferPreset,
+    onAudioBackendPreferenceChanged: (AudioBackendPreference) -> Unit,
+    onAudioPerformanceModeChanged: (AudioPerformanceMode) -> Unit,
+    onAudioBufferPresetChanged: (AudioBufferPreset) -> Unit
+) {
+    if (selectedBackend == currentBackend) return
+
+    prefs.edit()
+        .putString(
+            AppPreferenceKeys.audioPerformanceModeForBackend(currentBackend),
+            currentPerformanceMode.storageValue
+        )
+        .putString(
+            AppPreferenceKeys.audioBufferPresetForBackend(currentBackend),
+            currentBufferPreset.storageValue
+        )
+        .apply()
+
+    val performanceModeKey = AppPreferenceKeys.audioPerformanceModeForBackend(selectedBackend)
+    val restoredPerformanceValue = when {
+        prefs.contains(performanceModeKey) -> {
+            prefs.getString(
+                performanceModeKey,
+                selectedBackend.defaultPerformanceMode().storageValue
+            )
+        }
+        selectedBackend == AudioBackendPreference.AAudio -> {
+            prefs.getString(
+                AppPreferenceKeys.AUDIO_PERFORMANCE_MODE,
+                selectedBackend.defaultPerformanceMode().storageValue
+            )
+        }
+        else -> selectedBackend.defaultPerformanceMode().storageValue
+    }
+    val restoredPerformanceMode = AudioPerformanceMode.fromStorage(restoredPerformanceValue)
+
+    val bufferPresetKey = AppPreferenceKeys.audioBufferPresetForBackend(selectedBackend)
+    val restoredBufferValue = when {
+        prefs.contains(bufferPresetKey) -> {
+            prefs.getString(
+                bufferPresetKey,
+                selectedBackend.defaultBufferPreset().storageValue
+            )
+        }
+        selectedBackend == AudioBackendPreference.AAudio -> {
+            prefs.getString(
+                AppPreferenceKeys.AUDIO_BUFFER_PRESET,
+                selectedBackend.defaultBufferPreset().storageValue
+            )
+        }
+        else -> selectedBackend.defaultBufferPreset().storageValue
+    }
+    val restoredBufferPreset = AudioBufferPreset.fromStorage(restoredBufferValue)
+
+    onAudioBackendPreferenceChanged(selectedBackend)
+    onAudioPerformanceModeChanged(restoredPerformanceMode)
+    onAudioBufferPresetChanged(restoredBufferPreset)
+}
+
+private fun clearSavedNetworkSourcesFromSettings(
+    context: Context,
+    prefs: android.content.SharedPreferences,
+    onNetworkNodesChanged: (List<NetworkNode>) -> Unit
+) {
+    onNetworkNodesChanged(emptyList())
+    writeNetworkNodes(prefs, emptyList())
+    Toast.makeText(context, "Saved network sources cleared", Toast.LENGTH_SHORT).show()
+}
+
+private fun clearAllSettingsAndUiState(
+    context: Context,
+    prefs: android.content.SharedPreferences,
+    defaultScopeTextSizeSp: Int,
+    onThemeModeChanged: (ThemeMode) -> Unit,
+    settingsStates: AppNavigationSettingsStates,
+    onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
+    onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
+    onAutoPlayNextTrackOnEndChanged: (Boolean) -> Unit,
+    onPreloadNextCachedRemoteTrackChanged: (Boolean) -> Unit,
+    onPlaylistWrapNavigationChanged: (Boolean) -> Unit,
+    onPreviousRestartsAfterThresholdChanged: (Boolean) -> Unit,
+    onFadePauseResumeChanged: (Boolean) -> Unit,
+    onPersistRepeatModeChanged: (Boolean) -> Unit,
+    onPreferredRepeatModeChanged: (RepeatMode) -> Unit,
+    onRememberBrowserLocationChanged: (Boolean) -> Unit,
+    onShowParentDirectoryEntryChanged: (Boolean) -> Unit,
+    onShowFileIconChipBackgroundChanged: (Boolean) -> Unit,
+    onBrowserNameSortModeChanged: (BrowserNameSortMode) -> Unit,
+    onLastBrowserLocationIdChanged: (String?) -> Unit,
+    onLastBrowserDirectoryPathChanged: (String?) -> Unit,
+    onRecentFoldersLimitChanged: (Int) -> Unit,
+    onRecentFilesLimitChanged: (Int) -> Unit,
+    onRecentFoldersChanged: (List<RecentPathEntry>) -> Unit,
+    onRecentPlayedFilesChanged: (List<RecentPathEntry>) -> Unit,
+    onKeepScreenOnChanged: (Boolean) -> Unit,
+    onPlayerArtworkCornerRadiusDpChanged: (Int) -> Unit,
+    onFilenameDisplayModeChanged: (FilenameDisplayMode) -> Unit,
+    onFilenameOnlyWhenTitleMissingChanged: (Boolean) -> Unit,
+    onUnknownTrackDurationSecondsChanged: (Int) -> Unit,
+    onEndFadeApplyToAllTracksChanged: (Boolean) -> Unit,
+    onEndFadeDurationMsChanged: (Int) -> Unit,
+    onEndFadeCurveChanged: (EndFadeCurve) -> Unit,
+    onVisualizationModeChanged: (VisualizationMode) -> Unit,
+    onEnabledVisualizationModesChanged: (Set<VisualizationMode>) -> Unit,
+    onVisualizationShowDebugInfoChanged: (Boolean) -> Unit,
+    onVisualizationBarCountChanged: (Int) -> Unit,
+    onVisualizationBarSmoothingPercentChanged: (Int) -> Unit,
+    onVisualizationBarRoundnessDpChanged: (Int) -> Unit,
+    onVisualizationBarOverlayArtworkChanged: (Boolean) -> Unit,
+    onVisualizationBarUseThemeColorChanged: (Boolean) -> Unit,
+    onVisualizationBarRenderBackendChanged: (VisualizationRenderBackend) -> Unit,
+    onVisualizationOscStereoChanged: (Boolean) -> Unit,
+    onVisualizationVuAnchorChanged: (VisualizationVuAnchor) -> Unit,
+    onVisualizationVuUseThemeColorChanged: (Boolean) -> Unit,
+    onVisualizationVuSmoothingPercentChanged: (Int) -> Unit,
+    onVisualizationVuRenderBackendChanged: (VisualizationRenderBackend) -> Unit,
+    onNetworkNodesChanged: (List<NetworkNode>) -> Unit,
+    onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit,
+    onActivePlaylistChanged: (StoredPlaylist?) -> Unit,
+    onActivePlaylistEntryIdChanged: (String?) -> Unit,
+    onShowPlaylistSelectorDialogChanged: (Boolean) -> Unit
+) {
+    clearAllSettingsUsingStateHolders(
+        context = context,
+        prefs = prefs,
+        defaultScopeTextSizeSp = defaultScopeTextSizeSp,
+        selectableVisualizationModes = selectableVisualizationModes,
+        onThemeModeChanged = onThemeModeChanged,
+        settingsStates = settingsStates,
+        onAutoPlayOnTrackSelectChanged = onAutoPlayOnTrackSelectChanged,
+        onOpenPlayerOnTrackSelectChanged = onOpenPlayerOnTrackSelectChanged,
+        onAutoPlayNextTrackOnEndChanged = onAutoPlayNextTrackOnEndChanged,
+        onPreloadNextCachedRemoteTrackChanged = onPreloadNextCachedRemoteTrackChanged,
+        onPlaylistWrapNavigationChanged = onPlaylistWrapNavigationChanged,
+        onPreviousRestartsAfterThresholdChanged = onPreviousRestartsAfterThresholdChanged,
+        onFadePauseResumeChanged = onFadePauseResumeChanged,
+        onPersistRepeatModeChanged = onPersistRepeatModeChanged,
+        onPreferredRepeatModeChanged = onPreferredRepeatModeChanged,
+        onRememberBrowserLocationChanged = onRememberBrowserLocationChanged,
+        onShowParentDirectoryEntryChanged = onShowParentDirectoryEntryChanged,
+        onShowFileIconChipBackgroundChanged = onShowFileIconChipBackgroundChanged,
+        onBrowserNameSortModeChanged = onBrowserNameSortModeChanged,
+        onLastBrowserLocationIdChanged = onLastBrowserLocationIdChanged,
+        onLastBrowserDirectoryPathChanged = onLastBrowserDirectoryPathChanged,
+        onRecentFoldersLimitChanged = onRecentFoldersLimitChanged,
+        onRecentFilesLimitChanged = onRecentFilesLimitChanged,
+        onRecentFoldersChanged = onRecentFoldersChanged,
+        onRecentPlayedFilesChanged = onRecentPlayedFilesChanged,
+        onKeepScreenOnChanged = onKeepScreenOnChanged,
+        onPlayerArtworkCornerRadiusDpChanged = onPlayerArtworkCornerRadiusDpChanged,
+        onFilenameDisplayModeChanged = onFilenameDisplayModeChanged,
+        onFilenameOnlyWhenTitleMissingChanged = onFilenameOnlyWhenTitleMissingChanged,
+        onUnknownTrackDurationSecondsChanged = onUnknownTrackDurationSecondsChanged,
+        onEndFadeApplyToAllTracksChanged = onEndFadeApplyToAllTracksChanged,
+        onEndFadeDurationMsChanged = onEndFadeDurationMsChanged,
+        onEndFadeCurveChanged = onEndFadeCurveChanged,
+        onVisualizationModeChanged = onVisualizationModeChanged,
+        onEnabledVisualizationModesChanged = onEnabledVisualizationModesChanged,
+        onVisualizationShowDebugInfoChanged = onVisualizationShowDebugInfoChanged,
+        onVisualizationBarCountChanged = onVisualizationBarCountChanged,
+        onVisualizationBarSmoothingPercentChanged = onVisualizationBarSmoothingPercentChanged,
+        onVisualizationBarRoundnessDpChanged = onVisualizationBarRoundnessDpChanged,
+        onVisualizationBarOverlayArtworkChanged = onVisualizationBarOverlayArtworkChanged,
+        onVisualizationBarUseThemeColorChanged = onVisualizationBarUseThemeColorChanged,
+        onVisualizationBarRenderBackendChanged = onVisualizationBarRenderBackendChanged,
+        onVisualizationOscStereoChanged = onVisualizationOscStereoChanged,
+        onVisualizationVuAnchorChanged = onVisualizationVuAnchorChanged,
+        onVisualizationVuUseThemeColorChanged = onVisualizationVuUseThemeColorChanged,
+        onVisualizationVuSmoothingPercentChanged = onVisualizationVuSmoothingPercentChanged,
+        onVisualizationVuRenderBackendChanged = onVisualizationVuRenderBackendChanged
+    )
+    onNetworkNodesChanged(emptyList())
+    writeNetworkNodes(prefs, emptyList())
+    onPlaylistLibraryStateChanged(emptyPlaylistLibraryState())
+    onActivePlaylistChanged(null)
+    onActivePlaylistEntryIdChanged(null)
+    onShowPlaylistSelectorDialogChanged(false)
+}
+
 @Composable
 private fun HomeExitBackHandler(
     context: Context,
@@ -368,6 +1046,9 @@ private fun AppNavigation(
     var currentSubtuneIndex by remember { mutableIntStateOf(0) }
     var subtuneEntries by remember { mutableStateOf<List<SubtuneEntry>>(emptyList()) }
     var showSubtuneSelectorDialog by remember { mutableStateOf(false) }
+    var showPlaylistSelectorDialog by remember { mutableStateOf(false) }
+    var showPlaylistOpenActionDialog by remember { mutableStateOf(false) }
+    var showPlaylistPreviewDialog by remember { mutableStateOf(false) }
     var repeatModeCapabilitiesFlags by remember { mutableIntStateOf(REPEAT_CAP_ALL) }
     var playbackCapabilitiesFlags by remember {
         mutableIntStateOf(
@@ -406,8 +1087,19 @@ private fun AppNavigation(
     var recentPlayedFiles by remember {
         mutableStateOf(readRecentEntries(prefs, AppPreferenceKeys.RECENT_PLAYED_FILES, recentFilesLimit))
     }
+    var playlistLibraryState by remember {
+        mutableStateOf(readPlaylistLibraryState(prefs))
+    }
+    var activePlaylist by remember { mutableStateOf<StoredPlaylist?>(null) }
+    var activePlaylistEntryId by remember { mutableStateOf<String?>(null) }
+    var pendingPlaylistSubtuneSelection by remember { mutableStateOf<PendingPlaylistSubtuneSelection?>(null) }
+    var pendingBrowserPlaylistDocument by remember { mutableStateOf<ParsedPlaylistDocument?>(null) }
     var networkNodes by remember {
         mutableStateOf(readNetworkNodes(prefs))
+    }
+    val onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit = { updated ->
+        playlistLibraryState = updated
+        writePlaylistLibraryState(prefs, updated)
     }
     val applyNetworkSourceMetadata: (String, String?, String?) -> Unit = { sourceId, title, artist ->
         val updated = mergeNetworkSourceMetadata(
@@ -793,78 +1485,6 @@ private fun AppNavigation(
     }
 
     val settingsStates = rememberAppNavigationSettingsStates(prefs)
-    var ffmpegCoreSampleRateHz by settingsStates.ffmpegCoreSampleRateHz
-    var ffmpegGaplessRepeatTrack by settingsStates.ffmpegGaplessRepeatTrack
-    var openMptCoreSampleRateHz by settingsStates.openMptCoreSampleRateHz
-    var vgmPlayCoreSampleRateHz by settingsStates.vgmPlayCoreSampleRateHz
-    var gmeCoreSampleRateHz by settingsStates.gmeCoreSampleRateHz
-    var sidPlayFpCoreSampleRateHz by settingsStates.sidPlayFpCoreSampleRateHz
-    var lazyUsf2CoreSampleRateHz by settingsStates.lazyUsf2CoreSampleRateHz
-    var adPlugCoreSampleRateHz by settingsStates.adPlugCoreSampleRateHz
-    var hivelyTrackerCoreSampleRateHz by settingsStates.hivelyTrackerCoreSampleRateHz
-    var klystrackCoreSampleRateHz by settingsStates.klystrackCoreSampleRateHz
-    var furnaceCoreSampleRateHz by settingsStates.furnaceCoreSampleRateHz
-    var uadeCoreSampleRateHz by settingsStates.uadeCoreSampleRateHz
-    var adPlugOplEngine by settingsStates.adPlugOplEngine
-    var lazyUsf2UseHleAudio by settingsStates.lazyUsf2UseHleAudio
-    var vio2sfInterpolationQuality by settingsStates.vio2sfInterpolationQuality
-    var sc68SamplingRateHz by settingsStates.sc68SamplingRateHz
-    var sc68Asid by settingsStates.sc68Asid
-    var sc68DefaultTimeSeconds by settingsStates.sc68DefaultTimeSeconds
-    var sc68YmEngine by settingsStates.sc68YmEngine
-    var sc68YmVolModel by settingsStates.sc68YmVolModel
-    var sc68AmigaFilter by settingsStates.sc68AmigaFilter
-    var sc68AmigaBlend by settingsStates.sc68AmigaBlend
-    var sc68AmigaClock by settingsStates.sc68AmigaClock
-    var uadeFilterEnabled by settingsStates.uadeFilterEnabled
-    var uadeNtscMode by settingsStates.uadeNtscMode
-    var uadePanningMode by settingsStates.uadePanningMode
-    var hivelyTrackerPanningMode by settingsStates.hivelyTrackerPanningMode
-    var hivelyTrackerMixGainPercent by settingsStates.hivelyTrackerMixGainPercent
-    var klystrackPlayerQuality by settingsStates.klystrackPlayerQuality
-    var furnaceYm2612Core by settingsStates.furnaceYm2612Core
-    var furnaceSnCore by settingsStates.furnaceSnCore
-    var furnaceNesCore by settingsStates.furnaceNesCore
-    var furnaceC64Core by settingsStates.furnaceC64Core
-    var furnaceGbQuality by settingsStates.furnaceGbQuality
-    var furnaceDsidQuality by settingsStates.furnaceDsidQuality
-    var furnaceAyCore by settingsStates.furnaceAyCore
-    var sidPlayFpBackend by settingsStates.sidPlayFpBackend
-    var sidPlayFpClockMode by settingsStates.sidPlayFpClockMode
-    var sidPlayFpSidModelMode by settingsStates.sidPlayFpSidModelMode
-    var sidPlayFpFilter6581Enabled by settingsStates.sidPlayFpFilter6581Enabled
-    var sidPlayFpFilter8580Enabled by settingsStates.sidPlayFpFilter8580Enabled
-    var sidPlayFpDigiBoost8580 by settingsStates.sidPlayFpDigiBoost8580
-    var sidPlayFpFilterCurve6581Percent by settingsStates.sidPlayFpFilterCurve6581Percent
-    var sidPlayFpFilterRange6581Percent by settingsStates.sidPlayFpFilterRange6581Percent
-    var sidPlayFpFilterCurve8580Percent by settingsStates.sidPlayFpFilterCurve8580Percent
-    var sidPlayFpReSidFpFastSampling by settingsStates.sidPlayFpReSidFpFastSampling
-    var sidPlayFpReSidFpCombinedWaveformsStrength by settingsStates.sidPlayFpReSidFpCombinedWaveformsStrength
-    var gmeTempoPercent by settingsStates.gmeTempoPercent
-    var gmeStereoSeparationPercent by settingsStates.gmeStereoSeparationPercent
-    var gmeEchoEnabled by settingsStates.gmeEchoEnabled
-    var gmeAccuracyEnabled by settingsStates.gmeAccuracyEnabled
-    var gmeEqTrebleDecibel by settingsStates.gmeEqTrebleDecibel
-    var gmeEqBassHz by settingsStates.gmeEqBassHz
-    var gmeSpcUseBuiltInFade by settingsStates.gmeSpcUseBuiltInFade
-    var gmeSpcInterpolation by settingsStates.gmeSpcInterpolation
-    var gmeSpcUseNativeSampleRate by settingsStates.gmeSpcUseNativeSampleRate
-    var vgmPlayLoopCount by settingsStates.vgmPlayLoopCount
-    var vgmPlayAllowNonLoopingLoop by settingsStates.vgmPlayAllowNonLoopingLoop
-    var vgmPlayVsyncRate by settingsStates.vgmPlayVsyncRate
-    var vgmPlayResampleMode by settingsStates.vgmPlayResampleMode
-    var vgmPlayChipSampleMode by settingsStates.vgmPlayChipSampleMode
-    var vgmPlayChipSampleRate by settingsStates.vgmPlayChipSampleRate
-    var vgmPlayChipCoreSelections by settingsStates.vgmPlayChipCoreSelections
-    var openMptStereoSeparationPercent by settingsStates.openMptStereoSeparationPercent
-    var openMptStereoSeparationAmigaPercent by settingsStates.openMptStereoSeparationAmigaPercent
-    var openMptInterpolationFilterLength by settingsStates.openMptInterpolationFilterLength
-    var openMptAmigaResamplerMode by settingsStates.openMptAmigaResamplerMode
-    var openMptAmigaResamplerApplyAllModules by settingsStates.openMptAmigaResamplerApplyAllModules
-    var openMptVolumeRampingStrength by settingsStates.openMptVolumeRampingStrength
-    var openMptFt2XmVolumeRamping by settingsStates.openMptFt2XmVolumeRamping
-    var openMptMasterGainMilliBel by settingsStates.openMptMasterGainMilliBel
-    var openMptSurroundEnabled by settingsStates.openMptSurroundEnabled
     var respondHeadphoneMediaButtons by settingsStates.respondHeadphoneMediaButtons
     var pauseOnHeadphoneDisconnect by settingsStates.pauseOnHeadphoneDisconnect
     var audioBackendPreference by settingsStates.audioBackendPreference
@@ -894,6 +1514,43 @@ private fun AppNavigation(
     var currentPlaybackSourceId by settingsStates.currentPlaybackSourceId
     var currentPlaybackRequestUrl by remember { mutableStateOf<String?>(null) }
     val currentTrackPathOrUrl = currentPlaybackSourceId ?: selectedFile?.absolutePath
+    val activePlaylistMetadataEntry = resolveActivePlaylistMetadataEntry(
+        activePlaylist = activePlaylist,
+        activePlaylistEntryId = activePlaylistEntryId,
+        activeSourceId = currentTrackPathOrUrl,
+        currentSubtuneIndex = currentSubtuneIndex
+    )
+    val currentPlaylistNavigationEntryId = activePlaylist
+        ?.entries
+        ?.firstOrNull { entry ->
+            playlistEntryMatchesPlayback(
+                entry = entry,
+                activeSourceId = currentTrackPathOrUrl,
+                currentSubtuneIndex = currentSubtuneIndex
+            )
+        }
+        ?.id
+        ?: activePlaylistEntryId
+    val effectiveMetadataTitle = activePlaylistMetadataEntry
+        ?.title
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+        ?: metadataTitle
+    val effectiveMetadataArtist = activePlaylistMetadataEntry
+        ?.artist
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+        ?: metadataArtist
+    val playlistDurationOverride = activePlaylistMetadataEntry
+        ?.durationSecondsOverride
+        ?.takeIf { it.isFinite() && it > 0.0 }
+    val effectiveDuration = playlistDurationOverride ?: duration
+    val effectivePlaybackCapabilitiesFlags =
+        if (playlistDurationOverride != null) {
+            playbackCapabilitiesFlags or PLAYBACK_CAP_RELIABLE_DURATION
+        } else {
+            playbackCapabilitiesFlags
+        }
     val playbackSourceLabel = remember(selectedFile, currentPlaybackSourceId) {
         resolvePlaybackSourceLabel(selectedFile, currentPlaybackSourceId)
     }
@@ -1010,9 +1667,9 @@ private fun AppNavigation(
         selectedFileProvider = { selectedFile },
         currentPlaybackSourceIdProvider = { currentPlaybackSourceId },
         currentPlaybackRequestUrlProvider = { currentPlaybackRequestUrl },
-        metadataTitleProvider = { metadataTitle },
-        metadataArtistProvider = { metadataArtist },
-        durationProvider = { duration },
+        metadataTitleProvider = { effectiveMetadataTitle },
+        metadataArtistProvider = { effectiveMetadataArtist },
+        durationProvider = { effectiveDuration },
         positionProvider = { position },
         isPlayingProvider = { isPlaying },
         subtuneCountProvider = { subtuneCount },
@@ -1094,8 +1751,8 @@ private fun AppNavigation(
         isPlayingProvider = { isPlaying },
         lastBrowserLocationIdProvider = { lastBrowserLocationId },
         isLocalPlayableFile = isLocalPlayableFile,
-        metadataTitleProvider = { metadataTitle },
-        metadataArtistProvider = { metadataArtist },
+        metadataTitleProvider = { effectiveMetadataTitle },
+        metadataArtistProvider = { effectiveMetadataArtist },
         refreshRepeatModeForTrack = { runtimeDelegates.refreshRepeatModeForTrack() },
         refreshSubtuneState = { runtimeDelegates.refreshSubtuneState() },
         addRecentPlayedTrack = { path, locationId, title, artist ->
@@ -1171,8 +1828,8 @@ private fun AppNavigation(
         onAddRecentPlayedTrack = { path, locationId, title, artist ->
             runtimeDelegates.addRecentPlayedTrack(path, locationId, title, artist)
         },
-        metadataTitleProvider = { metadataTitle },
-        metadataArtistProvider = { metadataArtist },
+        metadataTitleProvider = { effectiveMetadataTitle },
+        metadataArtistProvider = { effectiveMetadataArtist },
         onStartEngine = { NativeBridge.startEngine() },
         scheduleRecentTrackMetadataRefresh = { sourceId, locationId ->
             runtimeDelegates.scheduleRecentTrackMetadataRefresh(sourceId, locationId)
@@ -1237,8 +1894,8 @@ private fun AppNavigation(
         onAddRecentPlayedTrack = { path, locationId, title, artist ->
             runtimeDelegates.addRecentPlayedTrack(path, locationId, title, artist)
         },
-        metadataTitleProvider = { metadataTitle },
-        metadataArtistProvider = { metadataArtist },
+        metadataTitleProvider = { effectiveMetadataTitle },
+        metadataArtistProvider = { effectiveMetadataArtist },
         applyRepeatModeToNative = { mode -> applyRepeatModeToNative(mode) },
         onStartEngine = { NativeBridge.startEngine() },
         onIsPlayingChanged = { isPlaying = it },
@@ -1269,14 +1926,136 @@ private fun AppNavigation(
         onAddRecentFolder = { path, locationId, sourceNodeId ->
             runtimeDelegates.addRecentFolder(path, locationId, sourceNodeId)
         },
-        onApplyTrackSelection = { file, autoStart, expandOverride, sourceIdOverride ->
+        onApplyTrackSelection = { file, autoStart, expandOverride, sourceIdOverride, initialSubtuneIndex ->
             trackLoadDelegates.applyTrackSelection(
                 file = file,
                 autoStart = autoStart,
                 expandOverride = expandOverride,
-                sourceIdOverride = sourceIdOverride
+                sourceIdOverride = sourceIdOverride,
+                initialSubtuneIndex = initialSubtuneIndex
             )
         }
+    )
+
+    val openParsedPlaylistDocumentAction: (ParsedPlaylistDocument, String?) -> Unit = { document, entryId ->
+        openPlaylistDocument(
+            context = context,
+            document = document,
+            playlistLibraryState = playlistLibraryState,
+            trackLoadDelegates = trackLoadDelegates,
+            manualOpenDelegates = manualOpenDelegates,
+            autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+            openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+            onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
+            onActivePlaylistChanged = { activePlaylist = it },
+            onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+            onShowPlaylistSelectorDialogChanged = { showPlaylistSelectorDialog = it },
+            onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it },
+            selectedEntryId = entryId
+        )
+    }
+    val handlePlaylistFileSelectionAction: (File, String?) -> Unit = { file, sourceIdHint ->
+        val parsed = parsePlaylistFileDocument(file, sourceIdHint)
+        if (parsed == null || parsed.entries.isEmpty()) {
+            Toast.makeText(context, "Unable to open playlist", Toast.LENGTH_SHORT).show()
+        } else {
+            pendingBrowserPlaylistDocument = parsed
+            showPlaylistPreviewDialog = false
+            showPlaylistOpenActionDialog = true
+        }
+    }
+    val openPlaylistFileImmediatelyAction: (File, String?) -> Unit = { file, sourceIdHint ->
+        val parsed = parsePlaylistFileDocument(file, sourceIdHint)
+        if (parsed == null || parsed.entries.isEmpty()) {
+            Toast.makeText(context, "Unable to open playlist", Toast.LENGTH_SHORT).show()
+        } else {
+            openParsedPlaylistDocumentAction(parsed, null)
+            pendingBrowserPlaylistDocument = null
+            showPlaylistOpenActionDialog = false
+            showPlaylistPreviewDialog = false
+        }
+    }
+    val playPendingBrowserPlaylistAction: () -> Unit = {
+        pendingBrowserPlaylistDocument?.let { document ->
+            openParsedPlaylistDocumentAction(document, null)
+            pendingBrowserPlaylistDocument = null
+            showPlaylistOpenActionDialog = false
+            showPlaylistPreviewDialog = false
+        }
+    }
+    val openPendingBrowserPlaylistEntryAction: (PlaylistTrackEntry) -> Unit = { entry ->
+        pendingBrowserPlaylistDocument?.let { document ->
+            openParsedPlaylistDocumentAction(document, entry.id)
+            pendingBrowserPlaylistDocument = null
+            showPlaylistOpenActionDialog = false
+            showPlaylistPreviewDialog = false
+        }
+    }
+    val dismissPendingBrowserPlaylistAction: () -> Unit = {
+        pendingBrowserPlaylistDocument = null
+        showPlaylistOpenActionDialog = false
+        showPlaylistPreviewDialog = false
+    }
+    val browsePendingBrowserPlaylistAction: () -> Unit = {
+        if (pendingBrowserPlaylistDocument == null) {
+            showPlaylistPreviewDialog = false
+        } else {
+            showPlaylistPreviewDialog = true
+        }
+    }
+    val playPlaylistEntryAction: (PlaylistTrackEntry, StoredPlaylist?) -> Unit = { entry, playlist ->
+        openPlaylistEntry(
+            context = context,
+            entry = entry,
+            playlist = playlist,
+            trackLoadDelegates = trackLoadDelegates,
+            manualOpenDelegates = manualOpenDelegates,
+            autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+            openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+            onActivePlaylistChanged = { activePlaylist = it },
+            onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+            onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+        )
+    }
+    val addCurrentTrackToFavoritesAction: () -> Unit = {
+        addCurrentTrackToFavorites(
+            context = context,
+            playlistLibraryState = playlistLibraryState,
+            currentPlaybackSourceId = currentPlaybackSourceId,
+            selectedFile = selectedFile,
+            metadataTitle = effectiveMetadataTitle,
+            metadataArtist = effectiveMetadataArtist,
+            subtuneCount = subtuneCount,
+            currentSubtuneIndex = currentSubtuneIndex,
+            onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged
+        )
+    }
+    val saveActivePlaylistAsInternalAction: () -> Unit = {
+        saveActivePlaylistAsInternal(
+            context = context,
+            playlistLibraryState = playlistLibraryState,
+            activePlaylist = activePlaylist,
+            onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
+            onActivePlaylistChanged = { activePlaylist = it }
+        )
+    }
+
+    AppNavigationPlaylistEffects(
+        pendingFileToOpen = pendingFileToOpen,
+        pendingFileFromExternalIntent = pendingFileFromExternalIntent,
+        currentPlaybackSourceId = currentPlaybackSourceId,
+        selectedFile = selectedFile,
+        currentSubtuneIndex = currentSubtuneIndex,
+        activePlaylist = activePlaylist,
+        activePlaylistEntryId = activePlaylistEntryId,
+        pendingPlaylistSubtuneSelection = pendingPlaylistSubtuneSelection,
+        subtuneCount = subtuneCount,
+        onPendingFileToOpenChanged = { pendingFileToOpen = it },
+        onPendingFileFromExternalIntentChanged = { pendingFileFromExternalIntent = it },
+        onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+        onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it },
+        onHandlePlaylistFileSelection = openPlaylistFileImmediatelyAction,
+        onSelectSubtune = { playbackStateDelegates.selectSubtune(it) }
     )
 
     val trackNavDelegates = com.flopster101.siliconplayer.playback.AppNavigationTrackNavDelegates(
@@ -1312,6 +2091,67 @@ private fun AppNavigation(
             manualOpenDelegates.applyManualInputSelection(rawInput, options, expandOverride)
         }
     )
+    val playAdjacentActivePlaylistEntryAction: (Int, Boolean?, Boolean) -> Boolean =
+        { offset, wrapOverride, notifyWrap ->
+            val currentPlaylistEntryId = currentPlaylistNavigationEntryId
+            if (
+                activePlaylist?.entries?.isNotEmpty() == true &&
+                    !currentPlaylistEntryId.isNullOrBlank()
+            ) {
+                val movedWithinPlaylist = playAdjacentPlaylistEntry(
+                    context = context,
+                    activePlaylist = activePlaylist,
+                    currentEntryId = currentPlaylistEntryId,
+                    offset = offset,
+                    wrapOverride = wrapOverride,
+                    playlistWrapNavigation = playlistWrapNavigation,
+                    notifyWrap = notifyWrap,
+                    expandOverride = isPlayerExpanded,
+                    trackLoadDelegates = trackLoadDelegates,
+                    manualOpenDelegates = manualOpenDelegates,
+                    autoPlayOnTrackSelect = autoPlayOnTrackSelect,
+                    openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                    onActivePlaylistChanged = { activePlaylist = it },
+                    onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                    onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+                )
+                if (movedWithinPlaylist) {
+                    true
+                } else {
+                    playAdjacentBrowserFileFromAnchor(
+                        context = context,
+                        anchorPath = activePlaylist?.sourceIdHint,
+                        offset = offset,
+                        wrapOverride = wrapOverride,
+                        playlistWrapNavigation = playlistWrapNavigation,
+                        notifyWrap = notifyWrap,
+                        activePlaylist = activePlaylist,
+                        repository = repository,
+                        visiblePlayableFiles = visiblePlayableFiles,
+                        playlistLibraryState = playlistLibraryState,
+                        trackLoadDelegates = trackLoadDelegates,
+                        manualOpenDelegates = manualOpenDelegates,
+                        openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                        expandOverride = isPlayerExpanded,
+                        onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
+                        onActivePlaylistChanged = { activePlaylist = it },
+                        onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                        onShowPlaylistSelectorDialogChanged = { showPlaylistSelectorDialog = it },
+                        onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+                    ) || trackNavDelegates.playAdjacentTrack(
+                        offset = offset,
+                        notifyWrap = notifyWrap,
+                        wrapOverride = wrapOverride
+                    )
+                }
+            } else {
+                trackNavDelegates.playAdjacentTrack(
+                    offset = offset,
+                    notifyWrap = notifyWrap,
+                    wrapOverride = wrapOverride
+                )
+            }
+        }
 
     AppNavigationPlaybackPollEffects(
         selectedFile = selectedFile,
@@ -1322,7 +2162,8 @@ private fun AppNavigation(
         seekStartedAtMs = seekStartedAtMs,
         seekRequestedAtMs = seekRequestedAtMs,
         seekUiBusyThresholdMs = seekUiBusyThresholdMs,
-        duration = duration,
+        duration = effectiveDuration,
+        durationOverrideSeconds = playlistDurationOverride,
         subtuneCountProvider = { subtuneCount },
         currentSubtuneIndexProvider = { currentSubtuneIndex },
         activeRepeatModeProvider = { activeRepeatMode },
@@ -1355,11 +2196,12 @@ private fun AppNavigation(
             )
         },
         onPlayAdjacentTrack = { offset, wrapOverride, notifyWrap ->
-            trackNavDelegates.playAdjacentTrack(
-                offset = offset,
-                notifyWrap = notifyWrap,
-                wrapOverride = wrapOverride
-            )
+            playAdjacentActivePlaylistEntryAction(offset, wrapOverride, notifyWrap)
+        },
+        onRestartCurrentTrack = {
+            NativeBridge.seekTo(0.0)
+            position = 0.0
+            runtimeDelegates.syncPlaybackService()
         },
         onStopPlaybackAndUnload = {
             stopAndEmptyTrackAction(context, playbackStateDelegates)
@@ -1395,6 +2237,11 @@ private fun AppNavigation(
             currentSubtuneIndex = 0
             subtuneEntries = emptyList()
             showSubtuneSelectorDialog = false
+            showPlaylistSelectorDialog = false
+            showPlaylistOpenActionDialog = false
+            showPlaylistPreviewDialog = false
+            pendingPlaylistSubtuneSelection = null
+            pendingBrowserPlaylistDocument = null
         },
         onRememberBrowserLocationCleared = {
             lastBrowserLocationId = null
@@ -1415,81 +2262,10 @@ private fun AppNavigation(
         visiblePlayableSourceIds = RemotePlayableSourceIdsHolder.current
     )
 
-    AppNavigationCoreEffects(
+    AppNavigationCoreEffectsFromSettingsStates(
         prefs = prefs,
-        ffmpegCoreSampleRateHz = ffmpegCoreSampleRateHz,
-        ffmpegGaplessRepeatTrack = ffmpegGaplessRepeatTrack,
-        openMptCoreSampleRateHz = openMptCoreSampleRateHz,
-        vgmPlayCoreSampleRateHz = vgmPlayCoreSampleRateHz,
-        gmeCoreSampleRateHz = gmeCoreSampleRateHz,
-        sidPlayFpCoreSampleRateHz = sidPlayFpCoreSampleRateHz,
-        lazyUsf2CoreSampleRateHz = lazyUsf2CoreSampleRateHz,
-        adPlugCoreSampleRateHz = adPlugCoreSampleRateHz,
-        hivelyTrackerCoreSampleRateHz = hivelyTrackerCoreSampleRateHz,
-        klystrackCoreSampleRateHz = klystrackCoreSampleRateHz,
-        furnaceCoreSampleRateHz = furnaceCoreSampleRateHz,
-        uadeCoreSampleRateHz = uadeCoreSampleRateHz,
-        adPlugOplEngine = adPlugOplEngine,
-        lazyUsf2UseHleAudio = lazyUsf2UseHleAudio,
-        vio2sfInterpolationQuality = vio2sfInterpolationQuality,
-        sc68SamplingRateHz = sc68SamplingRateHz,
-        sc68Asid = sc68Asid,
-        sc68DefaultTimeSeconds = sc68DefaultTimeSeconds,
-        sc68YmEngine = sc68YmEngine,
-        sc68YmVolModel = sc68YmVolModel,
-        sc68AmigaFilter = sc68AmigaFilter,
-        sc68AmigaBlend = sc68AmigaBlend,
-        sc68AmigaClock = sc68AmigaClock,
-        uadeFilterEnabled = uadeFilterEnabled,
-        uadeNtscMode = uadeNtscMode,
-        uadePanningMode = uadePanningMode,
-        hivelyTrackerPanningMode = hivelyTrackerPanningMode,
-        hivelyTrackerMixGainPercent = hivelyTrackerMixGainPercent,
-        klystrackPlayerQuality = klystrackPlayerQuality,
-        furnaceYm2612Core = furnaceYm2612Core,
-        furnaceSnCore = furnaceSnCore,
-        furnaceNesCore = furnaceNesCore,
-        furnaceC64Core = furnaceC64Core,
-        furnaceGbQuality = furnaceGbQuality,
-        furnaceDsidQuality = furnaceDsidQuality,
-        furnaceAyCore = furnaceAyCore,
-        sidPlayFpBackend = sidPlayFpBackend,
-        sidPlayFpClockMode = sidPlayFpClockMode,
-        sidPlayFpSidModelMode = sidPlayFpSidModelMode,
-        sidPlayFpFilter6581Enabled = sidPlayFpFilter6581Enabled,
-        sidPlayFpFilter8580Enabled = sidPlayFpFilter8580Enabled,
-        sidPlayFpDigiBoost8580 = sidPlayFpDigiBoost8580,
-        sidPlayFpFilterCurve6581Percent = sidPlayFpFilterCurve6581Percent,
-        sidPlayFpFilterRange6581Percent = sidPlayFpFilterRange6581Percent,
-        sidPlayFpFilterCurve8580Percent = sidPlayFpFilterCurve8580Percent,
-        sidPlayFpReSidFpFastSampling = sidPlayFpReSidFpFastSampling,
-        sidPlayFpReSidFpCombinedWaveformsStrength = sidPlayFpReSidFpCombinedWaveformsStrength,
-        gmeTempoPercent = gmeTempoPercent,
-        gmeStereoSeparationPercent = gmeStereoSeparationPercent,
-        gmeEchoEnabled = gmeEchoEnabled,
-        gmeAccuracyEnabled = gmeAccuracyEnabled,
-        gmeEqTrebleDecibel = gmeEqTrebleDecibel,
-        gmeEqBassHz = gmeEqBassHz,
-        gmeSpcUseBuiltInFade = gmeSpcUseBuiltInFade,
-        gmeSpcInterpolation = gmeSpcInterpolation,
-        gmeSpcUseNativeSampleRate = gmeSpcUseNativeSampleRate,
+        settingsStates = settingsStates,
         unknownTrackDurationSeconds = unknownTrackDurationSeconds,
-        vgmPlayLoopCount = vgmPlayLoopCount,
-        vgmPlayAllowNonLoopingLoop = vgmPlayAllowNonLoopingLoop,
-        vgmPlayVsyncRate = vgmPlayVsyncRate,
-        vgmPlayResampleMode = vgmPlayResampleMode,
-        vgmPlayChipSampleMode = vgmPlayChipSampleMode,
-        vgmPlayChipSampleRate = vgmPlayChipSampleRate,
-        vgmPlayChipCoreSelections = vgmPlayChipCoreSelections,
-        openMptStereoSeparationPercent = openMptStereoSeparationPercent,
-        openMptStereoSeparationAmigaPercent = openMptStereoSeparationAmigaPercent,
-        openMptInterpolationFilterLength = openMptInterpolationFilterLength,
-        openMptAmigaResamplerMode = openMptAmigaResamplerMode,
-        openMptAmigaResamplerApplyAllModules = openMptAmigaResamplerApplyAllModules,
-        openMptVolumeRampingStrength = openMptVolumeRampingStrength,
-        openMptFt2XmVolumeRamping = openMptFt2XmVolumeRamping,
-        openMptMasterGainMilliBel = openMptMasterGainMilliBel,
-        openMptSurroundEnabled = openMptSurroundEnabled,
         applyCoreOptionWithPolicyFn = { coreName, optionName, optionValue, policy, optionLabel ->
             playbackStateDelegates.applyCoreOptionWithPolicy(
                 coreName = coreName,
@@ -1523,9 +2299,9 @@ private fun AppNavigation(
         selectedFile = selectedFile,
         currentPlaybackSourceId = currentPlaybackSourceId,
         isPlaying = isPlaying,
-        metadataTitle = metadataTitle,
-        metadataArtist = metadataArtist,
-        duration = duration,
+        metadataTitle = effectiveMetadataTitle,
+        metadataArtist = effectiveMetadataArtist,
+        duration = effectiveDuration,
         notificationOpenSignal = notificationOpenSignal,
         syncPlaybackService = playbackSessionCoordinator.syncPlaybackService,
         restorePlayerStateFromSessionAndNative = playbackSessionCoordinator.restorePlayerStateFromSessionAndNative
@@ -1634,35 +2410,21 @@ private fun AppNavigation(
         onNextTrackRequested = { trackNavDelegates.playAdjacentTrack(1) }
     )
 
-    BackHandler(enabled = isPlayerExpanded || currentView == MainView.Settings) {
-        handleAppNavigationBackAction(
-            isPlayerExpanded = isPlayerExpanded,
-            currentView = currentView,
-            settingsLaunchedFromPlayer = settingsLaunchedFromPlayer,
-            onPlayerExpandedChanged = { expanded ->
-                if (
-                    isPlayerExpanded &&
-                    !expanded &&
-                    isPlayerSurfaceVisible &&
-                    showMiniPlayerFocusHighlight
-                ) {
-                    restoreMiniPlayerFocusOnCollapse = true
-                }
-                isPlayerExpanded = expanded
-                if (!expanded) {
-                    collapseDragInProgress = false
-                    expandedOverlaySettledVisible = false
-                }
-            },
-            popSettingsRoute = popSettingsRoute,
-            exitSettingsToReturnView = exitSettingsToReturnView
-        )
-    }
-    HomeExitBackHandler(
+    AppNavigationBackHandlers(
         context = context,
         currentView = currentView,
         isPlayerExpanded = isPlayerExpanded,
-        showUrlOrPathDialog = showUrlOrPathDialog
+        isPlayerSurfaceVisible = isPlayerSurfaceVisible,
+        settingsLaunchedFromPlayer = settingsLaunchedFromPlayer,
+        showUrlOrPathDialog = showUrlOrPathDialog,
+        showMiniPlayerFocusHighlight = showMiniPlayerFocusHighlight,
+        onRestoreMiniPlayerFocusOnCollapseChanged = { restoreMiniPlayerFocusOnCollapse = it },
+        onPlayerExpandedChanged = { isPlayerExpanded = it },
+        onCollapseDragInProgressChanged = { collapseDragInProgress = it },
+        onExpandedOverlaySettledVisibleChanged = { expandedOverlaySettledVisible = it },
+        popSettingsRoute = popSettingsRoute,
+        exitSettingsToReturnView = exitSettingsToReturnView,
+        onCurrentViewChanged = { currentView = it }
     )
 
     @Composable
@@ -1672,8 +2434,8 @@ private fun AppNavigation(
             selectedFileProvider = { selectedFile },
             currentPlaybackSourceIdProvider = { currentPlaybackSourceId },
             lastBrowserLocationIdProvider = { lastBrowserLocationId },
-            metadataTitleProvider = { metadataTitle },
-            metadataArtistProvider = { metadataArtist },
+            metadataTitleProvider = { effectiveMetadataTitle },
+            metadataArtistProvider = { effectiveMetadataArtist },
             activeRepeatModeProvider = { activeRepeatMode },
             isLocalPlayableFile = isLocalPlayableFile,
             addRecentPlayedTrack = { path, locationId, title, artist ->
@@ -1770,10 +2532,10 @@ private fun AppNavigation(
             isPlaying = isPlaying,
             playbackStartInProgress = playbackStartInProgress,
             seekUiBusy = seekUiBusy,
-            durationSeconds = duration,
+            durationSeconds = effectiveDuration,
             positionSeconds = position,
-            metadataTitle = metadataTitle,
-            metadataArtist = metadataArtist,
+            metadataTitle = effectiveMetadataTitle,
+            metadataArtist = effectiveMetadataArtist,
             metadataSampleRate = metadataSampleRate,
             metadataChannelCount = metadataChannelCount,
             metadataBitDepthLabel = metadataBitDepthLabel,
@@ -1782,7 +2544,7 @@ private fun AppNavigation(
             pathOrUrl = currentTrackPathOrUrl,
             artworkBitmap = artworkBitmap,
             activeRepeatMode = activeRepeatMode,
-            playbackCapabilitiesFlags = playbackCapabilitiesFlags,
+            playbackCapabilitiesFlags = effectivePlaybackCapabilitiesFlags,
             canOpenCurrentCoreSettings = canOpenCurrentCoreSettings,
             openCurrentCoreSettings = openCurrentCoreSettings,
             visualizationMode = visualizationMode,
@@ -1916,6 +2678,8 @@ private fun AppNavigation(
             canPreviousSubtune = subtuneCount > 1 && currentSubtuneIndex > 0,
             canNextSubtune = subtuneCount > 1 && currentSubtuneIndex < (subtuneCount - 1),
             canOpenSubtuneSelector = subtuneCount > 1,
+            canOpenPlaylistSelector = activePlaylist?.entries?.isNotEmpty() == true,
+            onOpenPlaylistSelector = { showPlaylistSelectorDialog = true },
             currentSubtuneIndex = currentSubtuneIndex,
             subtuneCount = subtuneCount,
             onCycleRepeatMode = { runtimeDelegates.cycleRepeatMode() }
@@ -1945,6 +2709,25 @@ private fun AppNavigation(
             subtuneEntries = subtuneEntries,
             currentSubtuneIndex = currentSubtuneIndex,
             onShowSubtuneSelectorDialogChanged = { showSubtuneSelectorDialog = it },
+            showPlaylistSelectorDialog = showPlaylistSelectorDialog,
+            playlistDialogTitle = activePlaylist?.title ?: "Playlist",
+            playlistEntries = activePlaylist?.entries.orEmpty(),
+            currentPlaylistEntryId = activePlaylistEntryId,
+            onShowPlaylistSelectorDialogChanged = { showPlaylistSelectorDialog = it },
+            onSelectPlaylistEntry = { playPlaylistEntryAction(it, activePlaylist) },
+            showPlaylistOpenActionDialog = showPlaylistOpenActionDialog,
+            playlistOpenActionTitle = pendingBrowserPlaylistDocument?.title ?: "Playlist",
+            playlistOpenActionEntryCount = pendingBrowserPlaylistDocument?.entries?.size ?: 0,
+            onShowPlaylistOpenActionDialogChanged = { showPlaylistOpenActionDialog = it },
+            onDismissPlaylistOpenActionDialog = dismissPendingBrowserPlaylistAction,
+            onPlayPlaylistFromFile = playPendingBrowserPlaylistAction,
+            onBrowsePlaylistFromFile = browsePendingBrowserPlaylistAction,
+            showPlaylistPreviewDialog = showPlaylistPreviewDialog,
+            playlistPreviewTitle = pendingBrowserPlaylistDocument?.title ?: "Playlist",
+            playlistPreviewEntries = pendingBrowserPlaylistDocument?.entries.orEmpty(),
+            onShowPlaylistPreviewDialogChanged = { showPlaylistPreviewDialog = it },
+            onDismissPlaylistPreviewDialog = dismissPendingBrowserPlaylistAction,
+            onSelectPlaylistPreviewEntry = openPendingBrowserPlaylistEntryAction,
             showAudioEffectsDialog = showAudioEffectsDialog,
             tempMasterVolumeDb = tempMasterVolumeDb,
             tempPluginVolumeDb = tempPluginVolumeDb,
@@ -1971,7 +2754,8 @@ private fun AppNavigation(
 
     val settingsRouteContent: @Composable (androidx.compose.foundation.layout.PaddingValues) -> Unit = { mainPadding ->
         AppNavigationSettingsRouteSection(mainPadding = mainPadding) {
-            val settingsPluginCoreActions = SettingsPluginCoreActions(
+            val settingsPluginCoreActions = buildSettingsPluginCoreActionsFromStateHolders(
+                settingsStates = settingsStates,
                 onOpenVgmPlayChipSettings = {
                     openSettingsRoute(SettingsRoute.PluginVgmPlayChipSettings, false)
                 },
@@ -1998,83 +2782,7 @@ private fun AppNavigation(
                     NativeBridge.setDecoderEnabledExtensions(pluginName, extensions)
                     savePluginConfiguration(prefs, pluginName)
                     decoderIconHintsVersion++
-                },
-                onFfmpegSampleRateChanged = { ffmpegCoreSampleRateHz = it },
-                onFfmpegGaplessRepeatTrackChanged = { ffmpegGaplessRepeatTrack = it },
-                onOpenMptSampleRateChanged = { openMptCoreSampleRateHz = it },
-                onVgmPlaySampleRateChanged = { vgmPlayCoreSampleRateHz = it },
-                onGmeSampleRateChanged = { gmeCoreSampleRateHz = it },
-                onSidPlayFpSampleRateChanged = { sidPlayFpCoreSampleRateHz = it },
-                onLazyUsf2SampleRateChanged = { lazyUsf2CoreSampleRateHz = it },
-                onAdPlugSampleRateChanged = { adPlugCoreSampleRateHz = it },
-                onHivelyTrackerSampleRateChanged = { hivelyTrackerCoreSampleRateHz = it },
-                onKlystrackSampleRateChanged = { klystrackCoreSampleRateHz = it },
-                onFurnaceSampleRateChanged = { furnaceCoreSampleRateHz = it },
-                onUadeSampleRateChanged = { uadeCoreSampleRateHz = it },
-                onAdPlugOplEngineChanged = { adPlugOplEngine = it },
-                onLazyUsf2UseHleAudioChanged = { lazyUsf2UseHleAudio = it },
-                onVio2sfInterpolationQualityChanged = { vio2sfInterpolationQuality = it },
-                onSc68SamplingRateHzChanged = { sc68SamplingRateHz = it },
-                onSc68AsidChanged = { sc68Asid = it },
-                onSc68DefaultTimeSecondsChanged = { sc68DefaultTimeSeconds = it },
-                onSc68YmEngineChanged = { sc68YmEngine = it },
-                onSc68YmVolModelChanged = { sc68YmVolModel = it },
-                onSc68AmigaFilterChanged = { sc68AmigaFilter = it },
-                onSc68AmigaBlendChanged = { sc68AmigaBlend = it },
-                onSc68AmigaClockChanged = { sc68AmigaClock = it },
-                onUadeFilterEnabledChanged = { uadeFilterEnabled = it },
-                onUadeNtscModeChanged = { uadeNtscMode = it },
-                onUadePanningModeChanged = { uadePanningMode = it },
-                onHivelyTrackerPanningModeChanged = { hivelyTrackerPanningMode = it },
-                onHivelyTrackerMixGainPercentChanged = { hivelyTrackerMixGainPercent = it },
-                onKlystrackPlayerQualityChanged = { klystrackPlayerQuality = it },
-                onFurnaceYm2612CoreChanged = { furnaceYm2612Core = it },
-                onFurnaceSnCoreChanged = { furnaceSnCore = it },
-                onFurnaceNesCoreChanged = { furnaceNesCore = it },
-                onFurnaceC64CoreChanged = { furnaceC64Core = it },
-                onFurnaceGbQualityChanged = { furnaceGbQuality = it },
-                onFurnaceDsidQualityChanged = { furnaceDsidQuality = it },
-                onFurnaceAyCoreChanged = { furnaceAyCore = it },
-                onSidPlayFpBackendChanged = { sidPlayFpBackend = it },
-                onSidPlayFpClockModeChanged = { sidPlayFpClockMode = it },
-                onSidPlayFpSidModelModeChanged = { sidPlayFpSidModelMode = it },
-                onSidPlayFpFilter6581EnabledChanged = { sidPlayFpFilter6581Enabled = it },
-                onSidPlayFpFilter8580EnabledChanged = { sidPlayFpFilter8580Enabled = it },
-                onSidPlayFpDigiBoost8580Changed = { sidPlayFpDigiBoost8580 = it },
-                onSidPlayFpFilterCurve6581PercentChanged = { sidPlayFpFilterCurve6581Percent = it },
-                onSidPlayFpFilterRange6581PercentChanged = { sidPlayFpFilterRange6581Percent = it },
-                onSidPlayFpFilterCurve8580PercentChanged = { sidPlayFpFilterCurve8580Percent = it },
-                onSidPlayFpReSidFpFastSamplingChanged = { sidPlayFpReSidFpFastSampling = it },
-                onSidPlayFpReSidFpCombinedWaveformsStrengthChanged = {
-                    sidPlayFpReSidFpCombinedWaveformsStrength = it
-                },
-                onGmeTempoPercentChanged = { gmeTempoPercent = it },
-                onGmeStereoSeparationPercentChanged = { gmeStereoSeparationPercent = it },
-                onGmeEchoEnabledChanged = { gmeEchoEnabled = it },
-                onGmeAccuracyEnabledChanged = { gmeAccuracyEnabled = it },
-                onGmeEqTrebleDecibelChanged = { gmeEqTrebleDecibel = it },
-                onGmeEqBassHzChanged = { gmeEqBassHz = it },
-                onGmeSpcUseBuiltInFadeChanged = { gmeSpcUseBuiltInFade = it },
-                onGmeSpcInterpolationChanged = { gmeSpcInterpolation = it },
-                onGmeSpcUseNativeSampleRateChanged = { gmeSpcUseNativeSampleRate = it },
-                onVgmPlayLoopCountChanged = { vgmPlayLoopCount = it },
-                onVgmPlayAllowNonLoopingLoopChanged = { vgmPlayAllowNonLoopingLoop = it },
-                onVgmPlayVsyncRateChanged = { vgmPlayVsyncRate = it },
-                onVgmPlayResampleModeChanged = { vgmPlayResampleMode = it },
-                onVgmPlayChipSampleModeChanged = { vgmPlayChipSampleMode = it },
-                onVgmPlayChipSampleRateChanged = { vgmPlayChipSampleRate = it },
-                onVgmPlayChipCoreChanged = { chipKey, selectedValue ->
-                    vgmPlayChipCoreSelections = vgmPlayChipCoreSelections + (chipKey to selectedValue)
-                },
-                onOpenMptStereoSeparationPercentChanged = { openMptStereoSeparationPercent = it },
-                onOpenMptStereoSeparationAmigaPercentChanged = { openMptStereoSeparationAmigaPercent = it },
-                onOpenMptInterpolationFilterLengthChanged = { openMptInterpolationFilterLength = it },
-                onOpenMptAmigaResamplerModeChanged = { openMptAmigaResamplerMode = it },
-                onOpenMptAmigaResamplerApplyAllModulesChanged = { openMptAmigaResamplerApplyAllModules = it },
-                onOpenMptVolumeRampingStrengthChanged = { openMptVolumeRampingStrength = it },
-                onOpenMptFt2XmVolumeRampingChanged = { openMptFt2XmVolumeRamping = it },
-                onOpenMptMasterGainMilliBelChanged = { openMptMasterGainMilliBel = it },
-                onOpenMptSurroundEnabledChanged = { openMptSurroundEnabled = it }
+                }
             )
             SettingsScreen(
                                 route = settingsRoute,
@@ -2142,12 +2850,19 @@ private fun AppNavigation(
                                     onOpenFileBrowser = { openSettingsRoute(SettingsRoute.FileBrowser, false) },
                                     onOpenNetwork = { openSettingsRoute(SettingsRoute.Network, false) },
                                     onOpenAudioEffects = {
-                            tempMasterVolumeDb = masterVolumeDb
-                            tempPluginVolumeDb = pluginVolumeDb
-                            tempSongVolumeDb = songVolumeDb
-                            tempIgnoreCoreVolumeForSong = ignoreCoreVolumeForSong
-                            tempForceMono = forceMono
-                            showAudioEffectsDialog = true
+                            openAudioEffectsDialogFromSettings(
+                                masterVolumeDb = masterVolumeDb,
+                                pluginVolumeDb = pluginVolumeDb,
+                                songVolumeDb = songVolumeDb,
+                                ignoreCoreVolumeForSong = ignoreCoreVolumeForSong,
+                                forceMono = forceMono,
+                                onTempMasterVolumeDbChanged = { tempMasterVolumeDb = it },
+                                onTempPluginVolumeDbChanged = { tempPluginVolumeDb = it },
+                                onTempSongVolumeDbChanged = { tempSongVolumeDb = it },
+                                onTempIgnoreCoreVolumeForSongChanged = { tempIgnoreCoreVolumeForSong = it },
+                                onTempForceMonoChanged = { tempForceMono = it },
+                                onShowAudioEffectsDialogChanged = { showAudioEffectsDialog = it }
+                            )
                         },
                                     onClearAllAudioParameters = {
                             clearAllAudioParametersAction(
@@ -2222,59 +2937,16 @@ private fun AppNavigation(
                             )
                         },
                                     onAudioBackendPreferenceChanged = { selectedBackend ->
-                            if (selectedBackend != audioBackendPreference) {
-                                val previousBackend = audioBackendPreference
-                                prefs.edit()
-                                    .putString(
-                                        AppPreferenceKeys.audioPerformanceModeForBackend(previousBackend),
-                                        audioPerformanceMode.storageValue
-                                    )
-                                    .putString(
-                                        AppPreferenceKeys.audioBufferPresetForBackend(previousBackend),
-                                        audioBufferPreset.storageValue
-                                    )
-                                    .apply()
-
-                                val performanceModeKey = AppPreferenceKeys.audioPerformanceModeForBackend(selectedBackend)
-                                val restoredPerformanceValue = when {
-                                    prefs.contains(performanceModeKey) -> {
-                                        prefs.getString(
-                                            performanceModeKey,
-                                            selectedBackend.defaultPerformanceMode().storageValue
-                                        )
-                                    }
-                                    selectedBackend == AudioBackendPreference.AAudio -> {
-                                        prefs.getString(
-                                            AppPreferenceKeys.AUDIO_PERFORMANCE_MODE,
-                                            selectedBackend.defaultPerformanceMode().storageValue
-                                        )
-                                    }
-                                    else -> selectedBackend.defaultPerformanceMode().storageValue
-                                }
-                                val restoredPerformanceMode = AudioPerformanceMode.fromStorage(restoredPerformanceValue)
-
-                                val bufferPresetKey = AppPreferenceKeys.audioBufferPresetForBackend(selectedBackend)
-                                val restoredBufferValue = when {
-                                    prefs.contains(bufferPresetKey) -> {
-                                        prefs.getString(
-                                            bufferPresetKey,
-                                            selectedBackend.defaultBufferPreset().storageValue
-                                        )
-                                    }
-                                    selectedBackend == AudioBackendPreference.AAudio -> {
-                                        prefs.getString(
-                                            AppPreferenceKeys.AUDIO_BUFFER_PRESET,
-                                            selectedBackend.defaultBufferPreset().storageValue
-                                        )
-                                    }
-                                    else -> selectedBackend.defaultBufferPreset().storageValue
-                                }
-                                val restoredBufferPreset = AudioBufferPreset.fromStorage(restoredBufferValue)
-
-                                audioBackendPreference = selectedBackend
-                                audioPerformanceMode = restoredPerformanceMode
-                                audioBufferPreset = restoredBufferPreset
-                            }
+                            updateAudioBackendPreferenceSelection(
+                                prefs = prefs,
+                                selectedBackend = selectedBackend,
+                                currentBackend = audioBackendPreference,
+                                currentPerformanceMode = audioPerformanceMode,
+                                currentBufferPreset = audioBufferPreset,
+                                onAudioBackendPreferenceChanged = { audioBackendPreference = it },
+                                onAudioPerformanceModeChanged = { audioPerformanceMode = it },
+                                onAudioBufferPresetChanged = { audioBufferPreset = it }
+                            )
                         },
                                     onAudioPerformanceModeChanged = { audioPerformanceMode = it },
                                     onAudioBufferPresetChanged = { audioBufferPreset = it },
@@ -2509,16 +3181,17 @@ private fun AppNavigation(
                             )
                         },
                                     onClearSavedNetworkSources = {
-                            networkNodes = emptyList()
-                            writeNetworkNodes(prefs, networkNodes)
-                            Toast.makeText(context, "Saved network sources cleared", Toast.LENGTH_SHORT).show()
+                            clearSavedNetworkSourcesFromSettings(
+                                context = context,
+                                prefs = prefs,
+                                onNetworkNodesChanged = { networkNodes = it }
+                            )
                         },
                                     onClearAllSettings = {
-                            clearAllSettingsUsingStateHolders(
+                            clearAllSettingsAndUiState(
                                 context = context,
                                 prefs = prefs,
                                 defaultScopeTextSizeSp = defaultScopeTextSizeSp,
-                                selectableVisualizationModes = selectableVisualizationModes,
                                 onThemeModeChanged = onThemeModeChanged,
                                 settingsStates = settingsStates,
                                 onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
@@ -2561,10 +3234,13 @@ private fun AppNavigation(
                                 onVisualizationVuAnchorChanged = { visualizationVuAnchor = it },
                                 onVisualizationVuUseThemeColorChanged = { visualizationVuUseThemeColor = it },
                                 onVisualizationVuSmoothingPercentChanged = { visualizationVuSmoothingPercent = it },
-                                onVisualizationVuRenderBackendChanged = { visualizationVuRenderBackend = it }
+                                onVisualizationVuRenderBackendChanged = { visualizationVuRenderBackend = it },
+                                onNetworkNodesChanged = { networkNodes = it },
+                                onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
+                                onActivePlaylistChanged = { activePlaylist = it },
+                                onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                                onShowPlaylistSelectorDialogChanged = { showPlaylistSelectorDialog = it }
                             )
-                            networkNodes = emptyList()
-                            writeNetworkNodes(prefs, networkNodes)
                         },
                                     onClearAllPluginSettings = {
                             clearAllPluginSettingsUsingStateHolders(
@@ -2635,13 +3311,18 @@ private fun AppNavigation(
                 currentPlaybackSourceId = currentPlaybackSourceId,
                 currentPlaybackRequestUrl = currentPlaybackRequestUrl,
                 selectedFile = selectedFile,
-                metadataTitle = metadataTitle,
-                metadataArtist = metadataArtist,
+                metadataTitle = effectiveMetadataTitle,
+                metadataArtist = effectiveMetadataArtist,
                 isPlaying = isPlaying,
+                currentSubtuneIndex = currentSubtuneIndex,
                 recentFolders = recentFolders,
                 recentPlayedFiles = recentPlayedFiles,
                 recentFoldersLimit = recentFoldersLimit,
                 recentFilesLimit = recentFilesLimit,
+                playlistLibraryState = playlistLibraryState,
+                activePlaylist = activePlaylist,
+                canAddCurrentTrackToFavorites = (currentPlaybackSourceId ?: selectedFile?.absolutePath) != null,
+                canSaveActivePlaylist = activePlaylist?.entries?.isNotEmpty() == true,
                 networkNodes = networkNodes,
                 storageDescriptors = storageDescriptors,
                 miniPlayerListInset = miniPlayerListInset,
@@ -2652,6 +3333,17 @@ private fun AppNavigation(
                 runtimeDelegates = runtimeDelegates,
                 onRecentFoldersChanged = { recentFolders = it },
                 onRecentPlayedFilesChanged = { recentPlayedFiles = it },
+                onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
+                onAddCurrentTrackToFavorites = addCurrentTrackToFavoritesAction,
+                onSaveActivePlaylist = saveActivePlaylistAsInternalAction,
+                onOpenFavorite = { playPlaylistEntryAction(it, activePlaylist) },
+                onOpenPlaylist = { playlist ->
+                    activePlaylist = playlist
+                    activePlaylistEntryId = playlist.entries.firstOrNull()?.id
+                    playlist.entries.firstOrNull()?.let { entry ->
+                        playPlaylistEntryAction(entry, playlist)
+                    }
+                },
                 onOpenBrowser = openBrowser,
                 onCurrentViewChanged = { currentView = it },
                 onOpenUrlOrPathDialog = {
@@ -2726,6 +3418,7 @@ private fun AppNavigation(
                         )
                     }
                 },
+                onPlaylistFileSelected = handlePlaylistFileSelectionAction,
                 onRememberSmbCredentials = { sourceNodeId, sourceId, username, password ->
                     rememberNetworkSmbCredentials(sourceNodeId, sourceId, username, password)
                 },

@@ -203,16 +203,22 @@ private fun buildSettingsPluginCoreStateFromStateHolders(
     )
 }
 
-private fun buildSettingsPluginCoreActionsFromStateHolders(
-    settingsStates: AppNavigationSettingsStates
+internal fun buildSettingsPluginCoreActionsFromStateHolders(
+    settingsStates: AppNavigationSettingsStates,
+    onOpenVgmPlayChipSettings: () -> Unit = {},
+    onPluginSelected: (String) -> Unit = {},
+    onPluginEnabledChanged: (String, Boolean) -> Unit = { _, _ -> },
+    onPluginPriorityChanged: (String, Int) -> Unit = { _, _ -> },
+    onPluginPriorityOrderChanged: (List<String>) -> Unit = {},
+    onPluginExtensionsChanged: (String, Array<String>) -> Unit = { _, _ -> }
 ): SettingsPluginCoreActions {
     return SettingsPluginCoreActions(
-        onOpenVgmPlayChipSettings = {},
-        onPluginSelected = {},
-        onPluginEnabledChanged = { _, _ -> },
-        onPluginPriorityChanged = { _, _ -> },
-        onPluginPriorityOrderChanged = {},
-        onPluginExtensionsChanged = { _, _ -> },
+        onOpenVgmPlayChipSettings = onOpenVgmPlayChipSettings,
+        onPluginSelected = onPluginSelected,
+        onPluginEnabledChanged = onPluginEnabledChanged,
+        onPluginPriorityChanged = onPluginPriorityChanged,
+        onPluginPriorityOrderChanged = onPluginPriorityOrderChanged,
+        onPluginExtensionsChanged = onPluginExtensionsChanged,
         onFfmpegSampleRateChanged = { settingsStates.ffmpegCoreSampleRateHz.intValue = it },
         onFfmpegGaplessRepeatTrackChanged = { settingsStates.ffmpegGaplessRepeatTrack.value = it },
         onOpenMptSampleRateChanged = { settingsStates.openMptCoreSampleRateHz.intValue = it },

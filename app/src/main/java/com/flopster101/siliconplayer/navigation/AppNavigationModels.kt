@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 internal enum class MainView {
     Home,
+    Playlists,
     Network,
     Browser,
     Settings
@@ -36,9 +37,10 @@ enum class SettingsRoute {
 
 internal fun mainViewOrder(view: MainView): Int = when (view) {
     MainView.Home -> 0
-    MainView.Network -> 1
-    MainView.Browser -> 2
-    MainView.Settings -> 3
+    MainView.Playlists -> 1
+    MainView.Network -> 2
+    MainView.Browser -> 3
+    MainView.Settings -> 4
 }
 
 internal fun settingsRouteOrder(route: SettingsRoute): Int = when (route) {

@@ -640,6 +640,8 @@ internal fun PlayerScreen(
     canPreviousSubtune: Boolean,
     canNextSubtune: Boolean,
     canOpenSubtuneSelector: Boolean,
+    canOpenPlaylistSelector: Boolean = false,
+    onOpenPlaylistSelector: () -> Unit = {},
     currentSubtuneIndex: Int = 0,
     subtuneCount: Int = 0,
     onCycleRepeatMode: () -> Unit,
@@ -1190,6 +1192,8 @@ internal fun PlayerScreen(
                                 onCycleVisualizationMode = onCycleVisualizationMode,
                                 onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
                                 onOpenTrackInfo = { showTrackInfoDialog = true },
+                                canOpenPlaylistSelector = canOpenPlaylistSelector,
+                                onOpenPlaylistSelector = onOpenPlaylistSelector,
                                 onOpenAudioEffects = onOpenAudioEffects,
                                 onOpenChannelControls = { showChannelControlDialog = true },
                                 compactLayout = true,
@@ -1565,6 +1569,8 @@ internal fun PlayerScreen(
                             onCycleVisualizationMode = onCycleVisualizationMode,
                             onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
                             onOpenTrackInfo = { showTrackInfoDialog = true },
+                            canOpenPlaylistSelector = canOpenPlaylistSelector,
+                            onOpenPlaylistSelector = onOpenPlaylistSelector,
                             onOpenAudioEffects = onOpenAudioEffects,
                             onOpenChannelControls = { showChannelControlDialog = true },
                             compactLayout = true,
@@ -3398,6 +3404,8 @@ private fun FutureActionStrip(
     onCycleVisualizationMode: () -> Unit,
     onOpenVisualizationPicker: () -> Unit,
     onOpenTrackInfo: () -> Unit,
+    canOpenPlaylistSelector: Boolean,
+    onOpenPlaylistSelector: () -> Unit,
     onOpenAudioEffects: () -> Unit,
     onOpenChannelControls: () -> Unit,
     compactLayout: Boolean = false,
@@ -3413,6 +3421,7 @@ private fun FutureActionStrip(
     val canFocusVisualizationMode = true
     val canFocusCoreSettings = canOpenCoreSettings
     val canFocusTrackInfo = true
+    val canFocusPlaylistSelector = canOpenPlaylistSelector
     val canFocusAudioEffects = true
     val canFocusChannelControls = true
     fun firstAvailableActionRequester(vararg options: Pair<Boolean, FocusRequester>): FocusRequester? {
@@ -3563,15 +3572,44 @@ private fun FutureActionStrip(
                         modifier = Modifier.size(coreSettingsIconSize)
                     )
                 }
-                Box(
-                    modifier = Modifier.size(iconButtonSize),
-                    contentAlignment = Alignment.Center
+                IconButton(
+                    onClick = onOpenPlaylistSelector,
+                    enabled = canOpenPlaylistSelector,
+                    modifier = Modifier
+                        .size(iconButtonSize)
+                        .focusProperties {
+                            left = firstAvailableActionRequester(
+                                canFocusCoreSettings to coreSettingsFocusRequester,
+                                canFocusVisualizationMode to visualizationModeFocusRequester,
+                                canFocusChannelControls to channelControlsFocusRequester,
+                                canFocusAudioEffects to audioEffectsFocusRequester,
+                                canFocusTrackInfo to trackInfoFocusRequester,
+                                canFocusPlaylistSelector to trackInfoFocusRequester
+                            ) ?: trackInfoFocusRequester
+                            right = firstAvailableActionRequester(
+                                canFocusTrackInfo to trackInfoFocusRequester,
+                                canFocusAudioEffects to audioEffectsFocusRequester,
+                                canFocusChannelControls to channelControlsFocusRequester,
+                                canFocusVisualizationMode to visualizationModeFocusRequester,
+                                canFocusCoreSettings to coreSettingsFocusRequester,
+                                canFocusPlaylistSelector to trackInfoFocusRequester
+                            ) ?: trackInfoFocusRequester
+                            if (transportAnchorFocusRequester != null) {
+                                up = transportAnchorFocusRequester
+                            }
+                        }
+                        .playerFocusHalo(enabled = canOpenPlaylistSelector, shape = CircleShape)
+                        .focusable(enabled = canOpenPlaylistSelector)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.List,
-                        contentDescription = "Subtune list placeholder",
+                        contentDescription = "Open current playlist",
                         modifier = Modifier.size(genericIconSize),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                        tint = if (canOpenPlaylistSelector) {
+                            LocalContentColor.current
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                        }
                     )
                 }
                 IconButton(

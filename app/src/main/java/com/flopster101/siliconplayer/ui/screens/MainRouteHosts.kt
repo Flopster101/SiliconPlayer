@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import com.flopster101.siliconplayer.ui.screens.FileBrowserScreen
 import com.flopster101.siliconplayer.ui.screens.HttpFileBrowserScreen
 import com.flopster101.siliconplayer.ui.screens.NetworkBrowserScreen
+import com.flopster101.siliconplayer.ui.screens.PlaylistsScreen
 import com.flopster101.siliconplayer.ui.screens.SmbFileBrowserScreen
 import com.flopster101.siliconplayer.RemotePlayableSourceIdsHolder
 import java.io.File
@@ -28,6 +29,7 @@ internal fun MainHomeRouteHost(
     storagePresentationForPinnedEntry: (HomePinnedEntry) -> StoragePresentation,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
     onOpenLibrary: () -> Unit,
+    onOpenPlaylists: () -> Unit,
     onOpenNetwork: () -> Unit,
     onOpenPinnedFolder: (HomePinnedEntry) -> Unit,
     onPlayPinnedFile: (HomePinnedEntry) -> Unit,
@@ -58,6 +60,7 @@ internal fun MainHomeRouteHost(
             storagePresentationForPinnedEntry = storagePresentationForPinnedEntry,
             bottomContentPadding = bottomContentPadding,
             onOpenLibrary = onOpenLibrary,
+            onOpenPlaylists = onOpenPlaylists,
             onOpenNetwork = onOpenNetwork,
             onOpenPinnedFolder = onOpenPinnedFolder,
             onPlayPinnedFile = onPlayPinnedFile,
@@ -118,6 +121,44 @@ internal fun MainNetworkRouteHost(
 }
 
 @Composable
+internal fun MainPlaylistsRouteHost(
+    mainPadding: PaddingValues,
+    bottomContentPadding: androidx.compose.ui.unit.Dp,
+    libraryState: PlaylistLibraryState,
+    activePlaylist: StoredPlaylist?,
+    currentPlaybackSourceId: String?,
+    currentSubtuneIndex: Int,
+    canAddCurrentTrackToFavorites: Boolean,
+    canSaveActivePlaylist: Boolean,
+    onExitPlaylists: () -> Unit,
+    onAddCurrentTrackToFavorites: () -> Unit,
+    onSaveActivePlaylist: () -> Unit,
+    onOpenFavorite: (PlaylistTrackEntry) -> Unit,
+    onRemoveFavorite: (PlaylistTrackEntry) -> Unit,
+    onOpenPlaylist: (StoredPlaylist) -> Unit,
+    onRemovePlaylist: (StoredPlaylist) -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize().padding(mainPadding)) {
+        PlaylistsScreen(
+            libraryState = libraryState,
+            activePlaylist = activePlaylist,
+            currentPlaybackSourceId = currentPlaybackSourceId,
+            currentSubtuneIndex = currentSubtuneIndex,
+            bottomContentPadding = bottomContentPadding,
+            canAddCurrentTrackToFavorites = canAddCurrentTrackToFavorites,
+            canSaveActivePlaylist = canSaveActivePlaylist,
+            onBack = onExitPlaylists,
+            onAddCurrentTrackToFavorites = onAddCurrentTrackToFavorites,
+            onSaveActivePlaylist = onSaveActivePlaylist,
+            onOpenFavorite = onOpenFavorite,
+            onRemoveFavorite = onRemoveFavorite,
+            onOpenPlaylist = onOpenPlaylist,
+            onRemovePlaylist = onRemovePlaylist
+        )
+    }
+}
+
+@Composable
 internal fun MainBrowserRouteHost(
     mainPadding: PaddingValues,
     repository: com.flopster101.siliconplayer.data.FileRepository,
@@ -138,6 +179,7 @@ internal fun MainBrowserRouteHost(
     onExitBrowser: () -> Unit,
     onBrowserLocationChanged: (BrowserLaunchState) -> Unit,
     onFileSelected: (File, String?) -> Unit,
+    onPlaylistFileSelected: (File, String?) -> Unit,
     onOpenRemoteSource: (String) -> Unit,
     onOpenRemoteSourceAsCached: (String) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
@@ -179,6 +221,7 @@ internal fun MainBrowserRouteHost(
                 onRememberSmbCredentials = onRememberSmbCredentials,
                 sourceNodeId = routeResolution.requestedSmbSourceNodeId,
                 onBrowserLocationChanged = onBrowserLocationChanged,
+                onPlaylistFileSelected = onPlaylistFileSelected,
                 pinnedHomeEntries = pinnedHomeEntries,
                 onPinHomeEntry = onPinHomeEntry
             )
@@ -198,6 +241,7 @@ internal fun MainBrowserRouteHost(
                 onRememberHttpCredentials = onRememberHttpCredentials,
                 sourceNodeId = routeResolution.requestedHttpSourceNodeId,
                 onBrowserLocationChanged = onBrowserLocationChanged,
+                onPlaylistFileSelected = onPlaylistFileSelected,
                 pinnedHomeEntries = pinnedHomeEntries,
                 onPinHomeEntry = onPinHomeEntry
             )
@@ -225,6 +269,7 @@ internal fun MainBrowserRouteHost(
                 playingFile = playingFile,
                 onBrowserLocationChanged = onBrowserLocationChanged,
                 onFileSelected = onFileSelected,
+                onPlaylistFileSelected = onPlaylistFileSelected,
                 pinnedHomeEntries = pinnedHomeEntries,
                 onPinHomeEntry = onPinHomeEntry
             )

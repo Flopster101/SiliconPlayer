@@ -90,6 +90,7 @@ import com.flopster101.siliconplayer.buildSmbSourceId
 import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
+import com.flopster101.siliconplayer.isSupportedPlaylistFileName
 import com.flopster101.siliconplayer.FilePreviewKind
 import com.flopster101.siliconplayer.DecoderArtworkHint
 import com.flopster101.siliconplayer.BrowserLaunchState
@@ -154,6 +155,7 @@ internal fun SmbFileBrowserScreen(
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
     sourceNodeId: Long?,
     onBrowserLocationChanged: (BrowserLaunchState) -> Unit,
+    onPlaylistFileSelected: (File, String?) -> Unit = { _, _ -> },
     pinnedHomeEntries: List<HomePinnedEntry> = emptyList(),
     onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit = { _, _ -> }
 ) {
@@ -786,7 +788,52 @@ internal fun SmbFileBrowserScreen(
         }
     }
 
+    fun openPlaylistEntry(entry: SmbBrowserEntry) {
+        val targetPath = joinSmbRelativePath(effectivePath().orEmpty(), entry.name)
+        val targetSpec = buildSmbEntrySourceSpec(
+            credentialsSpec.copy(share = currentShare),
+            targetPath
+        )
+        val sourceId = buildSmbSourceId(targetSpec)
+        previewLoadJob?.cancel()
+        previewLoadJob = coroutineScope.launch {
+            previewDownloadProgressState = BrowserRemoteExportProgressState(
+                currentIndex = 1,
+                totalCount = 1,
+                currentFileName = entry.name,
+                loadState = null
+            )
+            val prepared = prepareRemoteExportFile(
+                context = context,
+                request = SmbRemoteExportRequest(
+                    sourceId = sourceId,
+                    smbSpec = targetSpec,
+                    preferredFileName = entry.name
+                ),
+                onStatus = { loadState ->
+                    previewDownloadProgressState = BrowserRemoteExportProgressState(
+                        currentIndex = 1,
+                        totalCount = 1,
+                        currentFileName = entry.name,
+                        loadState = loadState
+                    )
+                }
+            )
+            previewDownloadProgressState = null
+            val cachedItem = prepared.getOrNull()
+            if (cachedItem == null) {
+                val error = prepared.exceptionOrNull()
+                if (error !is RemoteExportCancelledException && error !is CancellationException) {
+                    Toast.makeText(context, "Failed to open playlist", Toast.LENGTH_SHORT).show()
+                }
+                return@launch
+            }
+            onPlaylistFileSelected(cachedItem.sourceFile, sourceId)
+        }
+    }
+
     fun openPreviewEntry(entry: SmbBrowserEntry): Boolean {
+        if (isSupportedPlaylistFileName(entry.name)) return false
         val previewKind = browserPreviewKindForName(entry.name) ?: return false
         val targetPath = joinSmbRelativePath(effectivePath().orEmpty(), entry.name)
         val targetSpec = buildSmbEntrySourceSpec(
@@ -1385,6 +1432,10 @@ internal fun SmbFileBrowserScreen(
                                             navigationDirection = BrowserPageNavDirection.Forward
                                         )
                                     } else {
+                                        if (isSupportedPlaylistFileName(entry.name)) {
+                                            openPlaylistEntry(entry)
+                                            return@SmbEntryRow
+                                        }
                                         if (openPreviewEntry(entry)) {
                                             return@SmbEntryRow
                                         }

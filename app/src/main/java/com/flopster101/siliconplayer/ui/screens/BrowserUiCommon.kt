@@ -1,5 +1,8 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import com.flopster101.siliconplayer.VerticalScrollbarTrack
+import com.flopster101.siliconplayer.rememberLazyListScrollbarDragHandler
+import com.flopster101.siliconplayer.rememberScrollStateScrollbarDragHandler
 import android.graphics.BitmapFactory
 import android.webkit.MimeTypeMap
 import androidx.compose.animation.AnimatedVisibility
@@ -744,31 +747,21 @@ private fun BrowserScrollStateScrollbar(
     val maxScrollPx = scrollState.maxValue.toFloat()
     if (maxScrollPx <= 0f) return
 
-    val density = LocalDensity.current
+    val dragToFraction = rememberScrollStateScrollbarDragHandler(scrollState)
     BoxWithConstraints(
-        modifier = modifier.background(
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-            shape = RoundedCornerShape(999.dp)
-        )
+        modifier = modifier
     ) {
-        val viewportPx = with(density) { maxHeight.toPx() }.coerceAtLeast(1f)
+        val viewportPx = with(LocalDensity.current) { maxHeight.toPx() }.coerceAtLeast(1f)
         val contentPx = (viewportPx + maxScrollPx).coerceAtLeast(viewportPx)
         val thumbHeightFraction = (viewportPx / contentPx).coerceIn(0.08f, 1f)
         val offsetFraction = (scrollState.value.toFloat() / maxScrollPx).coerceIn(0f, 1f)
-
-        val thumbHeight = (maxHeight * thumbHeightFraction).coerceAtLeast(18.dp)
-        val thumbMaxOffset = (maxHeight - thumbHeight).coerceAtLeast(0.dp)
-        val thumbOffset = thumbMaxOffset * offsetFraction
-
-        Box(
+        VerticalScrollbarTrack(
+            thumbFraction = thumbHeightFraction,
+            offsetFraction = offsetFraction,
             modifier = Modifier
-                .fillMaxWidth()
-                .height(thumbHeight)
-                .offset(y = thumbOffset)
-                .background(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                    shape = RoundedCornerShape(999.dp)
-                )
+                .align(Alignment.CenterEnd)
+                .fillMaxSize(),
+            onDragFractionChanged = dragToFraction
         )
     }
 }
@@ -1522,7 +1515,8 @@ internal fun BrowserSearchNoResultsCard(
 @Composable
 internal fun BrowserLazyListScrollbar(
     listState: LazyListState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDragActiveChanged: ((Boolean) -> Unit)? = null
 ) {
     val layoutInfo = listState.layoutInfo
     val visibleItems = layoutInfo.visibleItemsInfo
@@ -1534,32 +1528,39 @@ internal fun BrowserLazyListScrollbar(
         return
     }
 
-    val averageItemSizePx = (visibleItems.sumOf { it.size }.toFloat() / visibleCount.toFloat())
-        .coerceAtLeast(1f)
-    val fractionalFirstIndex = listState.firstVisibleItemIndex.toFloat() +
-        (listState.firstVisibleItemScrollOffset.toFloat() / averageItemSizePx)
-    val maxFirstIndex = (totalItems - visibleCount).coerceAtLeast(1).toFloat()
-    val offsetFraction = (fractionalFirstIndex / maxFirstIndex).coerceIn(0f, 1f)
-    val thumbHeightFraction = (visibleCount.toFloat() / totalItems.toFloat()).coerceIn(0.08f, 1f)
+    val averageItemSizePx = visibleItems
+        .firstOrNull { it.size > 0 }
+        ?.size
+        ?.toFloat()
+        ?.coerceAtLeast(1f)
+        ?: 1f
+    val dragToFraction = rememberLazyListScrollbarDragHandler(
+        listState = listState,
+        totalItems = totalItems,
+        visibleCount = visibleCount,
+        averageItemSizePx = averageItemSizePx
+    )
 
     BoxWithConstraints(
-        modifier = modifier.background(
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-            shape = RoundedCornerShape(999.dp)
-        )
+        modifier = modifier
     ) {
-        val thumbHeight = (maxHeight * thumbHeightFraction).coerceAtLeast(18.dp)
-        val thumbMaxOffset = (maxHeight - thumbHeight).coerceAtLeast(0.dp)
-        val thumbOffset = thumbMaxOffset * offsetFraction
-        Box(
+        val viewportPx = with(LocalDensity.current) { maxHeight.toPx() }.coerceAtLeast(1f)
+        val estimatedContentPx = (averageItemSizePx * totalItems.toFloat()).coerceAtLeast(viewportPx)
+        val thumbHeightFraction = (viewportPx / estimatedContentPx).coerceIn(0.08f, 1f)
+        val absoluteScrollPx = (
+            (listState.firstVisibleItemIndex.toFloat() * averageItemSizePx) +
+                listState.firstVisibleItemScrollOffset.toFloat()
+            ).coerceAtLeast(0f)
+        val maxScrollPx = (estimatedContentPx - viewportPx).coerceAtLeast(1f)
+        val offsetFraction = (absoluteScrollPx / maxScrollPx).coerceIn(0f, 1f)
+        VerticalScrollbarTrack(
+            thumbFraction = thumbHeightFraction,
+            offsetFraction = offsetFraction,
             modifier = Modifier
-                .fillMaxWidth()
-                .height(thumbHeight)
-                .offset(y = thumbOffset)
-                .background(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                    shape = RoundedCornerShape(999.dp)
-                )
+                .align(Alignment.CenterEnd)
+                .fillMaxSize(),
+            onDragFractionChanged = dragToFraction,
+            onDragActiveChanged = onDragActiveChanged
         )
     }
 }

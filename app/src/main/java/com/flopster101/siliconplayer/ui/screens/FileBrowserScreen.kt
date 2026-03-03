@@ -1447,6 +1447,7 @@ internal fun FileBrowserScreen(
             flashKey = "${browserContentState.currentDirectoryPath}|${filteredFileList.size}|${browserSearchController.debouncedQuery}",
             label = "fileBrowserDirectoryScrollbarAlpha"
         )
+        var directoryScrollbarHeld by remember { mutableStateOf(false) }
 
         Box(
             modifier = Modifier
@@ -1638,6 +1639,7 @@ internal fun FileBrowserScreen(
             if (browserContentState.pane == BrowserPane.DirectoryEntries) {
                 BrowserLazyListScrollbar(
                     listState = directoryListState,
+                    onDragActiveChanged = { isActive -> directoryScrollbarHeld = isActive },
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(
@@ -1646,8 +1648,8 @@ internal fun FileBrowserScreen(
                             bottom = bottomContentPadding + 8.dp
                     )
                         .fillMaxHeight()
-                        .width(4.dp)
-                        .graphicsLayer(alpha = directoryScrollbarAlpha)
+                        .width(24.dp)
+                        .graphicsLayer(alpha = if (directoryScrollbarHeld) 1f else directoryScrollbarAlpha)
                 )
             }
         }

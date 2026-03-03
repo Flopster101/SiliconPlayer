@@ -193,36 +193,17 @@ private fun AboutEntityScrollbar(
     viewportHeightPx: Int,
     modifier: Modifier = Modifier
 ) {
-    val density = LocalDensity.current
+    val dragToFraction = rememberScrollStateScrollbarDragHandler(scrollState)
     val totalContentPx = viewportHeightPx + scrollState.maxValue
     if (totalContentPx <= 0) return
-    val thumbHeightPx = (viewportHeightPx.toFloat() * (viewportHeightPx.toFloat() / totalContentPx.toFloat()))
-        .coerceAtLeast(18f)
-        .coerceAtMost(viewportHeightPx.toFloat())
-    val maxOffsetPx = (viewportHeightPx - thumbHeightPx).coerceAtLeast(0f)
+    val thumbFraction = (viewportHeightPx.toFloat() / totalContentPx.toFloat()).coerceIn(0f, 1f)
     val offsetFraction = if (scrollState.maxValue == 0) 0f else {
         scrollState.value.toFloat() / scrollState.maxValue.toFloat()
     }
-    val thumbOffsetPx = maxOffsetPx * offsetFraction
-    val thumbHeightDp = with(density) { thumbHeightPx.toDp() }
-    val thumbOffsetDp = with(density) { thumbOffsetPx.roundToInt().toDp() }
-
-    Box(
-        modifier = modifier
-            .background(
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(999.dp)
-            )
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset(y = thumbOffsetDp)
-                .height(thumbHeightDp)
-                .background(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                    shape = RoundedCornerShape(999.dp)
-                )
-        )
-    }
+    VerticalScrollbarTrack(
+        thumbFraction = thumbFraction,
+        offsetFraction = offsetFraction,
+        modifier = modifier,
+        onDragFractionChanged = dragToFraction
+    )
 }

@@ -654,6 +654,7 @@ internal fun HttpFileBrowserScreen(
         flashKey = "${browserContentState.path}|${filteredEntries.size}|${browserSearchController.debouncedQuery}",
         label = "httpBrowserDirectoryScrollbarAlpha"
     )
+    var directoryScrollbarHeld by remember { mutableStateOf(false) }
 
     fun selectedDownloadFileTargets(): List<HttpSelectionFileTarget> {
         val selectedEntries = browsableEntries.filter { entry ->
@@ -1432,6 +1433,7 @@ internal fun HttpFileBrowserScreen(
             if (browserContentState.pane == HttpBrowserPane.Entries) {
                 BrowserLazyListScrollbar(
                     listState = entriesListState,
+                    onDragActiveChanged = { isActive -> directoryScrollbarHeld = isActive },
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(
@@ -1440,8 +1442,8 @@ internal fun HttpFileBrowserScreen(
                             bottom = bottomContentPadding + 8.dp
                         )
                         .fillMaxHeight()
-                        .width(4.dp)
-                        .graphicsLayer(alpha = directoryScrollbarAlpha)
+                        .width(24.dp)
+                        .graphicsLayer(alpha = if (directoryScrollbarHeld) 1f else directoryScrollbarAlpha)
                 )
             }
         }

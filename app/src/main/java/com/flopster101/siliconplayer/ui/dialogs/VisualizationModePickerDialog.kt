@@ -1,5 +1,7 @@
 package com.flopster101.siliconplayer.ui.dialogs
 
+import com.flopster101.siliconplayer.VerticalScrollbarTrack
+import com.flopster101.siliconplayer.rememberScrollStateScrollbarDragHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -79,6 +81,7 @@ internal fun VisualizationModePickerDialog(
         scrollState = optionScrollState,
         label = "visualizationModeScrollbarAlpha"
     )
+    val dragToFraction = rememberScrollStateScrollbarDragHandler(optionScrollState)
 
     AlertDialog(
         modifier = adaptiveDialogModifier(),
@@ -183,26 +186,17 @@ internal fun VisualizationModePickerDialog(
                         }
                     }
                     if (optionScrollState.maxValue > 0 && optionViewportHeightPx > 0f) {
-                        val thumbHeightPx = optionViewportHeightPx * scrollbarThumbFraction
-                        val maxOffsetPx = (optionViewportHeightPx - thumbHeightPx).coerceAtLeast(0f)
-                        val thumbOffsetPx = maxOffsetPx * scrollbarOffsetFraction
-                        val dialogDensity = LocalDensity.current
-                        Box(
+                        VerticalScrollbarTrack(
+                            thumbFraction = scrollbarThumbFraction,
+                            offsetFraction = scrollbarOffsetFraction,
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
                                 .width(4.dp)
                                 .fillMaxHeight()
-                                .graphicsLayer(alpha = scrollbarAlpha)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f), RoundedCornerShape(999.dp))
-                        )
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .offset(y = with(dialogDensity) { thumbOffsetPx.toDp() })
-                                .width(4.dp)
-                                .height(with(dialogDensity) { thumbHeightPx.toDp() })
-                                .graphicsLayer(alpha = scrollbarAlpha)
-                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f), RoundedCornerShape(999.dp))
+                                .graphicsLayer(alpha = scrollbarAlpha),
+                            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                            thumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f),
+                            onDragFractionChanged = dragToFraction
                         )
                     }
                 }

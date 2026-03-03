@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import com.flopster101.siliconplayer.VerticalScrollbarTrack
 import android.content.Context
 import android.content.SharedPreferences
 import android.widget.Toast
@@ -131,6 +132,7 @@ import com.flopster101.siliconplayer.RemoteLoadUiState
 import com.flopster101.siliconplayer.RemoteLoadUiStateHolder
 import com.flopster101.siliconplayer.RemotePreloadUiStateHolder
 import com.flopster101.siliconplayer.rememberDialogScrollbarAlpha
+import com.flopster101.siliconplayer.rememberScrollStateScrollbarDragHandler
 import com.flopster101.siliconplayer.sanitizeRemoteCachedMetadataTitle
 import com.flopster101.siliconplayer.shouldRestartCurrentTrackOnPrevious
 import com.flopster101.siliconplayer.stripRemoteCacheHashPrefix
@@ -2058,25 +2060,23 @@ private fun TrackInfoDetailsScrollbar(
 
     val viewport = viewportHeightPx.toFloat()
     val content = viewport + maxScroll.toFloat()
-    val thumbHeightPx = (viewport * (viewport / content)).coerceAtLeast(24f)
-    val travelRangePx = (viewport - thumbHeightPx).coerceAtLeast(0f)
-    val thumbOffsetPx =
-        if (maxScroll > 0) (scrollState.value.toFloat() / maxScroll.toFloat()) * travelRangePx else 0f
-
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(99.dp))
-            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f))
-    ) {
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(0, thumbOffsetPx.roundToInt()) }
-                .fillMaxWidth()
-                .height(with(LocalDensity.current) { thumbHeightPx.toDp() })
-                .clip(RoundedCornerShape(99.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.68f))
-        )
+    val thumbFraction = (viewport / content).coerceIn(0f, 1f)
+    val offsetFraction = if (maxScroll > 0) {
+        scrollState.value.toFloat() / maxScroll.toFloat()
+    } else {
+        0f
     }
+    val dragToFraction = rememberScrollStateScrollbarDragHandler(scrollState)
+
+    VerticalScrollbarTrack(
+        thumbFraction = thumbFraction,
+        offsetFraction = offsetFraction,
+        modifier = modifier,
+        minThumbHeight = 24.dp,
+        trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f),
+        thumbColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.68f),
+        onDragFractionChanged = dragToFraction
+    )
 }
 
 @Composable

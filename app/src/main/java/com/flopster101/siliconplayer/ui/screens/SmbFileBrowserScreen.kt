@@ -608,6 +608,7 @@ internal fun SmbFileBrowserScreen(
         flashKey = "${browserContentState.pathKey}|${filteredEntries.size}|${browserSearchController.debouncedQuery}",
         label = "smbBrowserDirectoryScrollbarAlpha"
     )
+    var directoryScrollbarHeld by remember { mutableStateOf(false) }
     val subtitle = buildString {
         append("smb://")
         append(credentialsSpec.host)
@@ -1416,6 +1417,7 @@ internal fun SmbFileBrowserScreen(
             if (browserContentState.pane == SmbBrowserPane.Entries) {
                 BrowserLazyListScrollbar(
                     listState = entriesListState,
+                    onDragActiveChanged = { isActive -> directoryScrollbarHeld = isActive },
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(
@@ -1424,8 +1426,8 @@ internal fun SmbFileBrowserScreen(
                             bottom = bottomContentPadding + 8.dp
                         )
                         .fillMaxHeight()
-                        .width(4.dp)
-                        .graphicsLayer(alpha = directoryScrollbarAlpha)
+                        .width(24.dp)
+                        .graphicsLayer(alpha = if (directoryScrollbarHeld) 1f else directoryScrollbarAlpha)
                 )
             }
         }

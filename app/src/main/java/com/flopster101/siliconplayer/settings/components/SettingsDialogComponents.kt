@@ -7,14 +7,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -34,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import java.util.Locale
@@ -169,12 +175,33 @@ internal fun SettingsSearchableMultiSelectDialog(
 ) {
     var pendingSelected by remember(title, selectedValues) { mutableStateOf(selectedValues) }
     var searchQuery by remember(title) { mutableStateOf("") }
+    val listState = rememberLazyListState()
+    var listViewportHeightPx by remember { mutableFloatStateOf(0f) }
     val filtered = remember(options, searchQuery) {
         if (searchQuery.isBlank()) {
             options
         } else {
             options.filter { it.label.contains(searchQuery, ignoreCase = true) || it.value.contains(searchQuery, ignoreCase = true) }
         }
+    }
+    val visibleItems = listState.layoutInfo.visibleItemsInfo
+    val visibleCount = visibleItems.size
+    val hasScrollableResults = visibleItems.isNotEmpty() &&
+        (listState.canScrollBackward || listState.canScrollForward || filtered.size > visibleCount)
+    val averageItemSizePx = if (visibleItems.isEmpty()) {
+        0f
+    } else {
+        (visibleItems.sumOf { it.size }.toFloat() / visibleCount.toFloat()).coerceAtLeast(1f)
+    }
+    val listDragToFraction = if (filtered.isNotEmpty() && visibleCount > 0 && averageItemSizePx > 0f) {
+        rememberLazyListScrollbarDragHandler(
+            listState = listState,
+            totalItems = filtered.size,
+            visibleCount = visibleCount,
+            averageItemSizePx = averageItemSizePx
+        )
+    } else {
+        null
     }
 
     AlertDialog(
@@ -219,31 +246,60 @@ internal fun SettingsSearchableMultiSelectDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
-                LazyColumn(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = 300.dp)
+                        .onSizeChanged { listViewportHeightPx = it.height.toFloat() }
                 ) {
-                    items(items = filtered, key = { it.value }) { option ->
-                        val checked = pendingSelected.contains(option.value)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    pendingSelected = if (checked) pendingSelected - option.value else pendingSelected + option.value
-                                }
-                                .padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = checked,
-                                onCheckedChange = { enabled ->
-                                    pendingSelected = if (enabled) pendingSelected + option.value else pendingSelected - option.value
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(option.label)
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(end = 10.dp)
+                            .heightIn(max = 300.dp)
+                    ) {
+                        items(items = filtered, key = { it.value }) { option ->
+                            val checked = pendingSelected.contains(option.value)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        pendingSelected = if (checked) pendingSelected - option.value else pendingSelected + option.value
+                                    }
+                                    .padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = checked,
+                                    onCheckedChange = { enabled ->
+                                        pendingSelected = if (enabled) pendingSelected + option.value else pendingSelected - option.value
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(option.label)
+                            }
                         }
+                    }
+                    if (hasScrollableResults && listViewportHeightPx > 0f) {
+                        val estimatedContentPx = (averageItemSizePx * filtered.size.toFloat())
+                            .coerceAtLeast(listViewportHeightPx)
+                        val thumbFraction = (listViewportHeightPx / estimatedContentPx).coerceIn(0.08f, 1f)
+                        val absoluteScrollPx = (
+                            (listState.firstVisibleItemIndex.toFloat() * averageItemSizePx) +
+                                listState.firstVisibleItemScrollOffset.toFloat()
+                            ).coerceAtLeast(0f)
+                        val maxScrollPx = (estimatedContentPx - listViewportHeightPx).coerceAtLeast(1f)
+                        val offsetFraction = (absoluteScrollPx / maxScrollPx).coerceIn(0f, 1f)
+                        VerticalScrollbarTrack(
+                            thumbFraction = thumbFraction,
+                            offsetFraction = offsetFraction,
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .width(10.dp)
+                                .fillMaxHeight(),
+                            onDragFractionChanged = listDragToFraction
+                        )
                     }
                 }
             }
@@ -273,6 +329,9 @@ internal fun <T> SettingsGroupedToggleDialog(
 ) {
     var pendingSelected by remember(title, selectedValues) { mutableStateOf(selectedValues) }
     val groupedOptions = options.groupBy { it.groupLabel }
+    val scrollState = rememberScrollState()
+    val dragToFraction = rememberScrollStateScrollbarDragHandler(scrollState)
+    var scrollViewportHeightPx by remember { mutableFloatStateOf(0f) }
 
     AlertDialog(
         modifier = adaptiveDialogModifier(),
@@ -280,77 +339,104 @@ internal fun <T> SettingsGroupedToggleDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (selectAllValues != null) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedButton(onClick = { pendingSelected = selectAllValues }) {
-                            Text("All")
-                        }
-                        OutlinedButton(onClick = { pendingSelected = emptySet() }) {
-                            Text("None")
-                        }
-                    }
-                }
-                if (!topDescription.isNullOrBlank()) {
-                    Text(
-                        text = topDescription,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                val orderedGroupLabels = buildList {
-                    addAll(groupedOptions.keys)
-                    emptyGroupLabels.forEach { group ->
-                        if (!contains(group)) add(group)
-                    }
-                }
-
-                orderedGroupLabels.forEach { groupLabel ->
-                    Text(
-                        text = groupLabel,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    val groupItems = groupedOptions[groupLabel].orEmpty()
-                    if (groupItems.isEmpty()) {
-                        Text(
-                            text = "No options yet.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        groupItems.forEach { option ->
-                            val optionValue = option.value
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        pendingSelected = if (pendingSelected.contains(optionValue)) {
-                                            pendingSelected - optionValue
-                                        } else {
-                                            pendingSelected + optionValue
-                                        }
-                                    }
-                                    .padding(vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = pendingSelected.contains(optionValue),
-                                    onCheckedChange = { checked ->
-                                        pendingSelected = if (checked) {
-                                            pendingSelected + optionValue
-                                        } else {
-                                            pendingSelected - optionValue
-                                        }
-                                    }
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(option.label)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .onSizeChanged { scrollViewportHeightPx = it.height.toFloat() }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 10.dp)
+                        .verticalScroll(scrollState),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (selectAllValues != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(onClick = { pendingSelected = selectAllValues }) {
+                                Text("All")
+                            }
+                            OutlinedButton(onClick = { pendingSelected = emptySet() }) {
+                                Text("None")
                             }
                         }
                     }
+                    if (!topDescription.isNullOrBlank()) {
+                        Text(
+                            text = topDescription,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    val orderedGroupLabels = buildList {
+                        addAll(groupedOptions.keys)
+                        emptyGroupLabels.forEach { group ->
+                            if (!contains(group)) add(group)
+                        }
+                    }
+
+                    orderedGroupLabels.forEach { groupLabel ->
+                        Text(
+                            text = groupLabel,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        val groupItems = groupedOptions[groupLabel].orEmpty()
+                        if (groupItems.isEmpty()) {
+                            Text(
+                                text = "No options yet.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            groupItems.forEach { option ->
+                                val optionValue = option.value
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            pendingSelected = if (pendingSelected.contains(optionValue)) {
+                                                pendingSelected - optionValue
+                                            } else {
+                                                pendingSelected + optionValue
+                                            }
+                                        }
+                                        .padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = pendingSelected.contains(optionValue),
+                                        onCheckedChange = { checked ->
+                                            pendingSelected = if (checked) {
+                                                pendingSelected + optionValue
+                                            } else {
+                                                pendingSelected - optionValue
+                                            }
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(option.label)
+                                }
+                            }
+                        }
+                    }
+                }
+                if (scrollState.maxValue > 0 && scrollViewportHeightPx > 0f) {
+                    val contentHeightPx = scrollViewportHeightPx + scrollState.maxValue.toFloat()
+                    val thumbFraction = (scrollViewportHeightPx / contentHeightPx).coerceIn(0.08f, 1f)
+                    val offsetFraction = (scrollState.value.toFloat() / scrollState.maxValue.toFloat()).coerceIn(0f, 1f)
+                    VerticalScrollbarTrack(
+                        thumbFraction = thumbFraction,
+                        offsetFraction = offsetFraction,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .width(10.dp)
+                            .fillMaxHeight(),
+                        onDragFractionChanged = dragToFraction
+                    )
                 }
             }
         },

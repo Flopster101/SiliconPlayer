@@ -1,5 +1,7 @@
 package com.flopster101.siliconplayer.ui.dialogs
 
+import com.flopster101.siliconplayer.VerticalScrollbarTrack
+import com.flopster101.siliconplayer.rememberScrollStateScrollbarDragHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -400,6 +402,7 @@ private fun DspTabContent(
         scrollState = scrollState,
         label = "audioEffectsDspScrollbarAlpha"
     )
+    val dragToFraction = rememberScrollStateScrollbarDragHandler(scrollState)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -609,26 +612,17 @@ private fun DspTabContent(
             }
 
             if (scrollState.maxValue > 0 && viewportHeightPx > 0f) {
-                val thumbHeightPx = viewportHeightPx * thumbFraction
-                val maxOffsetPx = (viewportHeightPx - thumbHeightPx).coerceAtLeast(0f)
-                val thumbOffsetPx = maxOffsetPx * offsetFraction
-                val density = LocalDensity.current
-                Box(
+                VerticalScrollbarTrack(
+                    thumbFraction = thumbFraction,
+                    offsetFraction = offsetFraction,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .width(4.dp)
                         .fillMaxHeight()
-                        .graphicsLayer(alpha = scrollbarAlpha)
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f), RoundedCornerShape(999.dp))
-                )
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .offset(y = with(density) { thumbOffsetPx.toDp() })
-                        .width(4.dp)
-                        .height(with(density) { thumbHeightPx.toDp() })
-                        .graphicsLayer(alpha = scrollbarAlpha)
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f), RoundedCornerShape(999.dp))
+                        .graphicsLayer(alpha = scrollbarAlpha),
+                    trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                    thumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.42f),
+                    onDragFractionChanged = dragToFraction
                 )
             }
         }

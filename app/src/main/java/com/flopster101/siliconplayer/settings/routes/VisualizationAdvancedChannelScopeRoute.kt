@@ -1,6 +1,7 @@
 package com.flopster101.siliconplayer
 
 import android.content.Context
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -747,7 +749,22 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                 AppDefaults.Visualization.ChannelScope.textVuCustomColorArgb
                             )
                         }
+                        val settingsRefreshKey = listOf(
+                            scopeTriggerMode,
+                            scopeShowArtworkBackground,
+                            scopeBackgroundMode,
+                            scopeTextEnabled,
+                            scopeTextColorMode,
+                            scopeTextVuEnabled,
+                            scopeTextVuColorMode
+                        )
 
+                        Crossfade(
+                            targetState = settingsRefreshKey,
+                            animationSpec = tween(durationMillis = 140),
+                            label = "channelScopeSettingsRefresh"
+                        ) {
+                        Column {
                         SettingsSectionLabel("Channel scope")
                         SettingsValuePickerCard(
                             title = "Visible window",
@@ -1094,6 +1111,9 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     )
                                 }
                             }
+                        }
+
+                        }
                         }
 
                         if (showWindowDialog) {

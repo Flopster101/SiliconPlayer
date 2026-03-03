@@ -10,6 +10,8 @@ private const val PLAYLIST_ENTRY_ID_KEY = "id"
 private const val PLAYLIST_ENTRY_SOURCE_KEY = "source"
 private const val PLAYLIST_ENTRY_TITLE_KEY = "title"
 private const val PLAYLIST_ENTRY_ARTIST_KEY = "artist"
+private const val PLAYLIST_ENTRY_ALBUM_KEY = "album"
+private const val PLAYLIST_ENTRY_ARTWORK_CACHE_KEY = "artworkThumbnailCacheKey"
 private const val PLAYLIST_ENTRY_SUBTUNE_KEY = "subtune_index"
 private const val STORED_PLAYLIST_ID_KEY = "id"
 private const val STORED_PLAYLIST_TITLE_KEY = "title"
@@ -150,6 +152,8 @@ private fun readPlaylistTrackEntries(array: JSONArray): List<PlaylistTrackEntry>
             source = source,
             title = title,
             artist = item.optString(PLAYLIST_ENTRY_ARTIST_KEY).trim().ifBlank { null },
+            album = item.optString(PLAYLIST_ENTRY_ALBUM_KEY).trim().ifBlank { null },
+            artworkThumbnailCacheKey = item.optString(PLAYLIST_ENTRY_ARTWORK_CACHE_KEY).trim().ifBlank { null },
             subtuneIndex = item.optInt(PLAYLIST_ENTRY_SUBTUNE_KEY, Int.MIN_VALUE)
                 .takeUnless { it == Int.MIN_VALUE || it < 0 }
         )
@@ -178,5 +182,7 @@ private fun writePlaylistTrackEntry(entry: PlaylistTrackEntry): JSONObject {
         .put(PLAYLIST_ENTRY_SOURCE_KEY, entry.source)
         .put(PLAYLIST_ENTRY_TITLE_KEY, entry.title)
         .put(PLAYLIST_ENTRY_ARTIST_KEY, entry.artist ?: "")
+        .put(PLAYLIST_ENTRY_ALBUM_KEY, entry.album ?: "")
+        .put(PLAYLIST_ENTRY_ARTWORK_CACHE_KEY, entry.artworkThumbnailCacheKey ?: "")
         .put(PLAYLIST_ENTRY_SUBTUNE_KEY, entry.subtuneIndex ?: -1)
 }

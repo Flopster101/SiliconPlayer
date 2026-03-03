@@ -94,6 +94,7 @@ import com.flopster101.siliconplayer.HomePinnedEntry
 import com.flopster101.siliconplayer.RecentPathEntry
 import com.flopster101.siliconplayer.previewPinnedHomeEntryInsertion
 import com.flopster101.siliconplayer.PINNED_HOME_ENTRIES_LIMIT
+import com.flopster101.siliconplayer.samePath
 import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
 import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
 import com.flopster101.siliconplayer.folderTitleForDisplay
@@ -205,6 +206,8 @@ internal fun FileBrowserScreen(
     showPrimaryTopBar: Boolean = true,
     playingFile: File? = null,
     playingPlaylistFile: File? = null,
+    favoriteSourcePaths: List<String> = emptyList(),
+    onToggleFavoriteFile: (File) -> Unit = {},
     pinnedHomeEntries: List<HomePinnedEntry> = emptyList(),
     onPinHomeEntry: (RecentPathEntry, Boolean) -> Unit = { _, _ -> }
 ) {
@@ -1601,9 +1604,13 @@ internal fun FileBrowserScreen(
                                         item = item,
                                         isPlaying = item.file == playingFile,
                                         isPlayingPlaylist = item.file == playingPlaylistFile,
+                                        isFavorited = favoriteSourcePaths.any { favoritePath ->
+                                            samePath(favoritePath, entryKey)
+                                        },
                                         isSelected = isSelected,
                                         hasSelectedAbove = hasSelectedAbove,
                                         hasSelectedBelow = hasSelectedBelow,
+                                        showFavoriteToggle = browserSelectionController.isSelectionMode,
                                         showFileIconChipBackground = showFileIconChipBackground,
                                         showLocalThumbnailPreviews = showLocalThumbnailPreviews,
                                         decoderExtensionArtworkHints = decoderExtensionArtworkHints,
@@ -1631,7 +1638,8 @@ internal fun FileBrowserScreen(
                                                 return@FileItemRow
                                             }
                                             openFileItem(item)
-                                        }
+                                        },
+                                        onToggleFavorite = { onToggleFavoriteFile(item.file) }
                                     )
                                 }
                             }
@@ -2226,9 +2234,11 @@ fun FileItemRow(
     item: FileItem,
     isPlaying: Boolean,
     isPlayingPlaylist: Boolean,
+    isFavorited: Boolean = false,
     isSelected: Boolean = false,
     hasSelectedAbove: Boolean = false,
     hasSelectedBelow: Boolean = false,
+    showFavoriteToggle: Boolean = false,
     showFileIconChipBackground: Boolean,
     showLocalThumbnailPreviews: Boolean,
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint> = emptyMap(),
@@ -2236,7 +2246,8 @@ fun FileItemRow(
     rowFocusRequester: FocusRequester? = null,
     onFocused: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val selectionShape = RoundedCornerShape(
@@ -2478,6 +2489,35 @@ fun FileItemRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1
             )
+        }
+        val canShowFavoriteToggle = showFavoriteToggle &&
+            !item.isDirectory &&
+            item.kind == FileItem.Kind.AudioFile
+        if (canShowFavoriteToggle) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clickable(onClick = onToggleFavorite),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(
+                        id = if (isFavorited) {
+                            R.drawable.ic_star_filled
+                        } else {
+                            R.drawable.ic_star_outline
+                        }
+                    ),
+                    contentDescription = if (isFavorited) {
+                        "Remove from favorites"
+                    } else {
+                        "Add to favorites"
+                    },
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
         if (isPlayingPlaylist || isPlaying) {
             Spacer(modifier = Modifier.width(12.dp))

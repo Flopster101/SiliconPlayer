@@ -33,6 +33,8 @@ internal data class PlaylistTrackEntry(
     val source: String,
     val title: String,
     val artist: String? = null,
+    val album: String? = null,
+    val artworkThumbnailCacheKey: String? = null,
     val subtuneIndex: Int? = null,
     val durationSecondsOverride: Double? = null
 )

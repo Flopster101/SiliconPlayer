@@ -307,36 +307,26 @@ internal fun AppNavigationHomeContentSection(
 internal fun AppNavigationPlaylistsContentSection(
     mainPadding: PaddingValues,
     bottomContentPadding: Dp,
+    isPlayerExpanded: Boolean,
     playlistLibraryState: PlaylistLibraryState,
     activePlaylist: StoredPlaylist?,
     currentPlaybackSourceId: String?,
     currentSubtuneIndex: Int,
-    canAddCurrentTrackToFavorites: Boolean,
-    canSaveActivePlaylist: Boolean,
     onCurrentViewChanged: (MainView) -> Unit,
-    onAddCurrentTrackToFavorites: () -> Unit,
-    onSaveActivePlaylist: () -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
-    onRemoveFavorite: (PlaylistTrackEntry) -> Unit,
-    onOpenPlaylist: (StoredPlaylist) -> Unit,
-    onRemovePlaylist: (StoredPlaylist) -> Unit
+    onOpenPlaylist: (StoredPlaylist) -> Unit
 ) {
     AppNavigationPlaylistsRouteSection(
         mainPadding = mainPadding,
         bottomContentPadding = bottomContentPadding,
+        backHandlingEnabled = !isPlayerExpanded,
         libraryState = playlistLibraryState,
         activePlaylist = activePlaylist,
         currentPlaybackSourceId = currentPlaybackSourceId,
         currentSubtuneIndex = currentSubtuneIndex,
-        canAddCurrentTrackToFavorites = canAddCurrentTrackToFavorites,
-        canSaveActivePlaylist = canSaveActivePlaylist,
         onExitPlaylists = { onCurrentViewChanged(MainView.Home) },
-        onAddCurrentTrackToFavorites = onAddCurrentTrackToFavorites,
-        onSaveActivePlaylist = onSaveActivePlaylist,
         onOpenFavorite = onOpenFavorite,
-        onRemoveFavorite = onRemoveFavorite,
-        onOpenPlaylist = onOpenPlaylist,
-        onRemovePlaylist = onRemovePlaylist
+        onOpenPlaylist = onOpenPlaylist
     )
 }
 
@@ -430,6 +420,7 @@ internal fun AppNavigationBrowserContentSection(
     isPlayerExpanded: Boolean,
     selectedFile: File?,
     playingPlaylistFile: File?,
+    favoriteSourcePaths: List<String>,
     networkNodes: List<NetworkNode>,
     autoPlayOnTrackSelect: Boolean,
     openPlayerOnTrackSelect: Boolean,
@@ -448,6 +439,7 @@ internal fun AppNavigationBrowserContentSection(
     onBrowserLocationChanged: (BrowserLaunchState) -> Unit,
     onClearActivePlaylistContext: () -> Unit,
     onPlaylistFileSelected: (File, String?) -> Unit,
+    onToggleFavoriteFile: (File) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
     onRememberHttpCredentials: (Long?, String, String?, String?) -> Unit
 ) {
@@ -477,6 +469,7 @@ internal fun AppNavigationBrowserContentSection(
         backHandlingEnabled = !isPlayerExpanded,
         playingFile = selectedFile,
         playingPlaylistFile = playingPlaylistFile,
+        favoriteSourcePaths = favoriteSourcePaths,
         onVisiblePlayableFilesChanged = onVisiblePlayableFilesChanged,
         onExitBrowser = {
             onCurrentViewChanged(if (returnToNetworkOnBrowserExit) MainView.Network else MainView.Home)
@@ -494,6 +487,7 @@ internal fun AppNavigationBrowserContentSection(
             )
         },
         onPlaylistFileSelected = onPlaylistFileSelected,
+        onToggleFavoriteFile = onToggleFavoriteFile,
         onOpenRemoteSource = { rawInput ->
             onClearActivePlaylistContext()
             manualOpenDelegates.applyManualInputSelection(rawInput)
@@ -555,8 +549,6 @@ internal fun AppNavigationMainContentHost(
     recentFilesLimit: Int,
     playlistLibraryState: PlaylistLibraryState,
     activePlaylist: StoredPlaylist?,
-    canAddCurrentTrackToFavorites: Boolean,
-    canSaveActivePlaylist: Boolean,
     networkNodes: List<NetworkNode>,
     storageDescriptors: List<StorageDescriptor>,
     miniPlayerListInset: Dp,
@@ -568,8 +560,6 @@ internal fun AppNavigationMainContentHost(
     onRecentFoldersChanged: (List<RecentPathEntry>) -> Unit,
     onRecentPlayedFilesChanged: (List<RecentPathEntry>) -> Unit,
     onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit,
-    onAddCurrentTrackToFavorites: () -> Unit,
-    onSaveActivePlaylist: () -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
     onOpenPlaylist: (StoredPlaylist) -> Unit,
     onOpenBrowser: (BrowserOpenRequest) -> Unit,
@@ -702,23 +692,14 @@ internal fun AppNavigationMainContentHost(
             AppNavigationPlaylistsContentSection(
                 mainPadding = mainPadding,
                 bottomContentPadding = miniPlayerListInset,
+                isPlayerExpanded = isPlayerExpanded,
                 playlistLibraryState = playlistLibraryState,
                 activePlaylist = activePlaylist,
                 currentPlaybackSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath,
                 currentSubtuneIndex = currentSubtuneIndex,
-                canAddCurrentTrackToFavorites = canAddCurrentTrackToFavorites,
-                canSaveActivePlaylist = canSaveActivePlaylist,
                 onCurrentViewChanged = onCurrentViewChanged,
-                onAddCurrentTrackToFavorites = onAddCurrentTrackToFavorites,
-                onSaveActivePlaylist = onSaveActivePlaylist,
                 onOpenFavorite = onOpenFavorite,
-                onRemoveFavorite = { favorite ->
-                    onPlaylistLibraryStateChanged(removeFavoriteTrack(playlistLibraryState, favorite.id))
-                },
-                onOpenPlaylist = onOpenPlaylist,
-                onRemovePlaylist = { playlist ->
-                    onPlaylistLibraryStateChanged(removeStoredPlaylist(playlistLibraryState, playlist.id))
-                }
+                onOpenPlaylist = onOpenPlaylist
             )
         },
         networkContent = { mainPadding ->
@@ -756,6 +737,7 @@ internal fun AppNavigationMainContentHost(
                 isPlayerExpanded = isPlayerExpanded,
                 selectedFile = selectedFile,
                 playingPlaylistFile = playingPlaylistFile,
+                favoriteSourcePaths = playlistLibraryState.favorites.map { it.source },
                 networkNodes = networkNodes,
                 autoPlayOnTrackSelect = autoPlayOnTrackSelect,
                 openPlayerOnTrackSelect = openPlayerOnTrackSelect,
@@ -774,6 +756,14 @@ internal fun AppNavigationMainContentHost(
                 onBrowserLocationChanged = onBrowserLocationChanged,
                 onClearActivePlaylistContext = onClearActivePlaylistContext,
                 onPlaylistFileSelected = onPlaylistFileSelected,
+                onToggleFavoriteFile = { file ->
+                    toggleFavoriteForFile(
+                        context = context,
+                        playlistLibraryState = playlistLibraryState,
+                        file = file,
+                        onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged
+                    )
+                },
                 onRememberSmbCredentials = onRememberSmbCredentials,
                 onRememberHttpCredentials = onRememberHttpCredentials
             )

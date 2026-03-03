@@ -274,6 +274,16 @@ private data class ExternalPlaylistRecentOverride(
     val referencedSources: Set<String>
 )
 
+private fun buildFavoritesPlaybackPlaylist(entries: List<PlaylistTrackEntry>): StoredPlaylist {
+    return StoredPlaylist(
+        id = "__favorites__",
+        title = "Favorites",
+        format = PlaylistStoredFormat.Internal,
+        entries = entries,
+        updatedAtMs = 0L
+    )
+}
+
 private fun parsePlaylistFileDocument(
     file: File,
     sourceIdHint: String?
@@ -539,65 +549,160 @@ private fun resolveActivePlaylistMetadataEntry(
     }
 }
 
-private fun addCurrentTrackToFavorites(
+private fun resolveFavoriteEntryForPlayback(
+    playlistLibraryState: PlaylistLibraryState,
+    activeSourceId: String?,
+    currentSubtuneIndex: Int
+): PlaylistTrackEntry? {
+    if (activeSourceId.isNullOrBlank()) return null
+    return playlistLibraryState.favorites.firstOrNull { entry ->
+        samePath(entry.source, activeSourceId) && entry.subtuneIndex == currentSubtuneIndex
+    } ?: playlistLibraryState.favorites.firstOrNull { entry ->
+        samePath(entry.source, activeSourceId) && entry.subtuneIndex == null
+    }
+}
+
+private fun buildFavoriteEntryForSource(
+    context: Context,
+    sourceId: String,
+    fallbackFile: File?,
+    metadataTitle: String,
+    metadataArtist: String,
+    metadataAlbum: String,
+    subtuneCount: Int,
+    currentSubtuneIndex: Int
+): PlaylistTrackEntry {
+    val derivedTitle = metadataTitle.trim().ifBlank {
+        fallbackFile
+            ?.nameWithoutExtension
+            ?.takeIf { it.isNotBlank() }
+            ?: sourceId.substringAfterLast('/').ifBlank { "Track" }
+    }
+    return PlaylistTrackEntry(
+        source = sourceId,
+        title = derivedTitle,
+        artist = metadataArtist.trim().takeIf { it.isNotBlank() },
+        album = metadataAlbum.trim().takeIf { it.isNotBlank() },
+        artworkThumbnailCacheKey = ensureRecentArtworkThumbnailCached(
+            context = context,
+            sourceId = sourceId
+        ),
+        subtuneIndex = if (subtuneCount > 1) currentSubtuneIndex else null
+    )
+}
+
+private fun toggleCurrentTrackFavorite(
     context: Context,
     playlistLibraryState: PlaylistLibraryState,
     currentPlaybackSourceId: String?,
     selectedFile: File?,
     metadataTitle: String,
     metadataArtist: String,
+    metadataAlbum: String,
     subtuneCount: Int,
     currentSubtuneIndex: Int,
     onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit
 ) {
     val sourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
     if (sourceId.isNullOrBlank()) return
-    val derivedTitle = metadataTitle.trim().ifBlank {
-        selectedFile?.nameWithoutExtension
-            ?.takeIf { it.isNotBlank() }
-            ?: sourceId.substringAfterLast('/').ifBlank { "Track" }
-    }
-    val favoriteEntry = PlaylistTrackEntry(
-        source = sourceId,
-        title = derivedTitle,
-        artist = metadataArtist.trim().takeIf { it.isNotBlank() },
-        subtuneIndex = if (subtuneCount > 1) currentSubtuneIndex else null
+    val existingFavorite = resolveFavoriteEntryForPlayback(
+        playlistLibraryState = playlistLibraryState,
+        activeSourceId = sourceId,
+        currentSubtuneIndex = currentSubtuneIndex
     )
+    if (existingFavorite != null) {
+        onPlaylistLibraryStateChanged(removeFavoriteTrack(playlistLibraryState, existingFavorite.id))
+        Toast.makeText(context, "Removed from favorites", Toast.LENGTH_SHORT).show()
+        return
+    }
     onPlaylistLibraryStateChanged(
         upsertFavoriteTrack(
             state = playlistLibraryState,
-            track = favoriteEntry
+            track = buildFavoriteEntryForSource(
+                context = context,
+                sourceId = sourceId,
+                fallbackFile = selectedFile,
+                metadataTitle = metadataTitle,
+                metadataArtist = metadataArtist,
+                metadataAlbum = metadataAlbum,
+                subtuneCount = subtuneCount,
+                currentSubtuneIndex = currentSubtuneIndex
+            )
         )
     )
     Toast.makeText(context, "Added to favorites", Toast.LENGTH_SHORT).show()
 }
 
-private fun saveActivePlaylistAsInternal(
+internal fun toggleFavoriteForFile(
     context: Context,
     playlistLibraryState: PlaylistLibraryState,
-    activePlaylist: StoredPlaylist?,
-    onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit,
-    onActivePlaylistChanged: (StoredPlaylist?) -> Unit
+    file: File,
+    onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit
 ) {
-    val currentPlaylist = activePlaylist ?: return
-    if (
-        currentPlaylist.format == PlaylistStoredFormat.Internal &&
-            playlistLibraryState.playlists.any { it.id == currentPlaylist.id }
-    ) {
-        Toast.makeText(context, "This playlist is already saved", Toast.LENGTH_SHORT).show()
+    val matchingFavorites = playlistLibraryState.favorites.filter { entry ->
+        samePath(entry.source, file.absolutePath)
+    }
+    if (matchingFavorites.isNotEmpty()) {
+        onPlaylistLibraryStateChanged(
+            playlistLibraryState.copy(
+                favorites = playlistLibraryState.favorites.filterNot { entry ->
+                    matchingFavorites.any { existing -> existing.id == entry.id }
+                }
+            )
+        )
+        Toast.makeText(context, "Removed from favorites", Toast.LENGTH_SHORT).show()
         return
     }
-    val baseTitle = currentPlaylist.title.trim().ifBlank { "Playlist" }
-    val targetTitle = if (currentPlaylist.format == PlaylistStoredFormat.Internal) {
-        "$baseTitle copy"
-    } else {
-        "$baseTitle (saved)"
+    onPlaylistLibraryStateChanged(
+        upsertFavoriteTrack(
+            state = playlistLibraryState,
+            track = PlaylistTrackEntry(
+                source = file.absolutePath,
+                title = inferredDisplayTitleForName(file.name),
+                artist = null,
+                album = null,
+                artworkThumbnailCacheKey = ensureRecentArtworkThumbnailCached(
+                    context = context,
+                    sourceId = file.absolutePath
+                ),
+                subtuneIndex = null
+            )
+        )
+    )
+    Toast.makeText(context, "Added to favorites", Toast.LENGTH_SHORT).show()
+}
+
+private fun mergeFavoritePlaybackMetadata(
+    playlistLibraryState: PlaylistLibraryState,
+    favoriteId: String,
+    title: String,
+    artist: String?,
+    album: String?,
+    artworkThumbnailCacheKey: String?
+): PlaylistLibraryState {
+    val normalizedTitle = title.trim()
+    val normalizedArtist = artist?.trim().takeUnless { it.isNullOrBlank() }
+    val normalizedAlbum = album?.trim().takeUnless { it.isNullOrBlank() }
+    val normalizedArtworkKey = artworkThumbnailCacheKey?.trim().takeUnless { it.isNullOrBlank() }
+    var changed = false
+    val updatedFavorites = playlistLibraryState.favorites.map { entry ->
+        if (entry.id != favoriteId) return@map entry
+        val updatedEntry = entry.copy(
+            title = normalizedTitle.ifBlank { entry.title },
+            artist = normalizedArtist ?: entry.artist,
+            album = normalizedAlbum ?: entry.album,
+            artworkThumbnailCacheKey = normalizedArtworkKey ?: entry.artworkThumbnailCacheKey
+        )
+        if (updatedEntry != entry) {
+            changed = true
+        }
+        updatedEntry
     }
-    val savedPlaylist = buildInternalPlaylistCopy(targetTitle, currentPlaylist.entries)
-    val updatedState = upsertStoredPlaylist(playlistLibraryState, savedPlaylist)
-    onPlaylistLibraryStateChanged(updatedState)
-    onActivePlaylistChanged(updatedState.playlists.firstOrNull { it.id == savedPlaylist.id } ?: savedPlaylist)
-    Toast.makeText(context, "Playlist saved", Toast.LENGTH_SHORT).show()
+    return if (changed) {
+        playlistLibraryState.copy(favorites = updatedFavorites)
+    } else {
+        playlistLibraryState
+    }
 }
 
 @Composable
@@ -1516,6 +1621,12 @@ private fun AppNavigation(
         activeSourceId = currentTrackPathOrUrl,
         currentSubtuneIndex = currentSubtuneIndex
     )
+    val currentFavoriteEntry = resolveFavoriteEntryForPlayback(
+        playlistLibraryState = playlistLibraryState,
+        activeSourceId = currentTrackPathOrUrl,
+        currentSubtuneIndex = currentSubtuneIndex
+    )
+    val isCurrentTrackFavorited = currentFavoriteEntry != null
     val currentPlaylistNavigationEntryId = activePlaylist
         ?.entries
         ?.firstOrNull { entry ->
@@ -1537,6 +1648,11 @@ private fun AppNavigation(
         ?.trim()
         ?.takeIf { it.isNotBlank() }
         ?: metadataArtist
+    val effectiveMetadataAlbum = activePlaylistMetadataEntry
+        ?.album
+        ?.trim()
+        ?.takeIf { it.isNotBlank() }
+        ?: NativeBridge.getTrackAlbum()
     val playlistDurationOverride = activePlaylistMetadataEntry
         ?.durationSecondsOverride
         ?.takeIf { it.isFinite() && it > 0.0 }
@@ -1575,6 +1691,44 @@ private fun AppNavigation(
         }
     val playbackSourceLabel = remember(selectedFile, currentPlaybackSourceId) {
         resolvePlaybackSourceLabel(selectedFile, currentPlaybackSourceId)
+    }
+
+    LaunchedEffect(
+        isPlaying,
+        currentFavoriteEntry?.id,
+        currentTrackPathOrUrl,
+        effectiveMetadataTitle,
+        effectiveMetadataArtist,
+        effectiveMetadataAlbum
+    ) {
+        if (!isPlaying) return@LaunchedEffect
+        val favoriteEntry = currentFavoriteEntry ?: return@LaunchedEffect
+        val sourceId = currentTrackPathOrUrl ?: return@LaunchedEffect
+        val resolvedArtist = effectiveMetadataArtist.trim().ifBlank {
+            favoriteEntry.artist?.trim().takeUnless { it.isNullOrBlank() } ?: "Unknown artist"
+        }
+        val artworkCacheKey = if (favoriteEntry.artworkThumbnailCacheKey.isNullOrBlank()) {
+            withContext(Dispatchers.IO) {
+                ensureRecentArtworkThumbnailCached(
+                    context = context,
+                    sourceId = sourceId,
+                    requestUrlHint = currentPlaybackRequestUrl
+                )
+            }
+        } else {
+            favoriteEntry.artworkThumbnailCacheKey
+        }
+        val updatedState = mergeFavoritePlaybackMetadata(
+            playlistLibraryState = playlistLibraryState,
+            favoriteId = favoriteEntry.id,
+            title = effectiveMetadataTitle,
+            artist = resolvedArtist,
+            album = effectiveMetadataAlbum,
+            artworkThumbnailCacheKey = artworkCacheKey
+        )
+        if (updatedState != playlistLibraryState) {
+            onPlaylistLibraryStateChanged(updatedState)
+        }
     }
 
     // Get supported extensions from JNI
@@ -2114,29 +2268,20 @@ private fun AppNavigation(
             onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
         )
     }
-    val addCurrentTrackToFavoritesAction: () -> Unit = {
-        addCurrentTrackToFavorites(
+    val toggleCurrentTrackFavoriteAction: () -> Unit = {
+        toggleCurrentTrackFavorite(
             context = context,
             playlistLibraryState = playlistLibraryState,
             currentPlaybackSourceId = currentPlaybackSourceId,
             selectedFile = selectedFile,
             metadataTitle = effectiveMetadataTitle,
             metadataArtist = effectiveMetadataArtist,
+            metadataAlbum = effectiveMetadataAlbum,
             subtuneCount = subtuneCount,
             currentSubtuneIndex = currentSubtuneIndex,
             onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged
         )
     }
-    val saveActivePlaylistAsInternalAction: () -> Unit = {
-        saveActivePlaylistAsInternal(
-            context = context,
-            playlistLibraryState = playlistLibraryState,
-            activePlaylist = activePlaylist,
-            onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
-            onActivePlaylistChanged = { activePlaylist = it }
-        )
-    }
-
     AppNavigationPlaylistEffects(
         pendingFileToOpen = pendingFileToOpen,
         pendingFileFromExternalIntent = pendingFileFromExternalIntent,
@@ -2773,6 +2918,7 @@ private fun AppNavigation(
             playlistTrackCount = trackInfoPlaylistTrackCount,
             playlistPathOrUrl = trackInfoPlaylistPathOrUrl,
             artworkBitmap = artworkBitmap,
+            isCurrentTrackFavorited = isCurrentTrackFavorited,
             activeRepeatMode = activeRepeatMode,
             playbackCapabilitiesFlags = effectivePlaybackCapabilitiesFlags,
             canOpenCurrentCoreSettings = canOpenCurrentCoreSettings,
@@ -2839,6 +2985,7 @@ private fun AppNavigation(
             },
             onPlay = startPlaybackFromSurfaceWithDeferredSeek,
             onStopAndClear = stopAndEmptyTrack,
+            onToggleFavoriteTrack = toggleCurrentTrackFavoriteAction,
             onOpenAudioEffects = openAudioEffectsDialog,
             onPause = {
                 pauseEngineWithPauseResumeFade {
@@ -3552,8 +3699,6 @@ private fun AppNavigation(
                 recentFilesLimit = recentFilesLimit,
                 playlistLibraryState = playlistLibraryState,
                 activePlaylist = activePlaylist,
-                canAddCurrentTrackToFavorites = (currentPlaybackSourceId ?: selectedFile?.absolutePath) != null,
-                canSaveActivePlaylist = activePlaylist?.entries?.isNotEmpty() == true,
                 networkNodes = networkNodes,
                 storageDescriptors = storageDescriptors,
                 miniPlayerListInset = miniPlayerListInset,
@@ -3565,9 +3710,10 @@ private fun AppNavigation(
                 onRecentFoldersChanged = { recentFolders = it },
                 onRecentPlayedFilesChanged = { recentPlayedFiles = it },
                 onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
-                onAddCurrentTrackToFavorites = addCurrentTrackToFavoritesAction,
-                onSaveActivePlaylist = saveActivePlaylistAsInternalAction,
-                onOpenFavorite = { playPlaylistEntryAction(it, activePlaylist) },
+                onOpenFavorite = { entry ->
+                    val favoritesPlaylist = buildFavoritesPlaybackPlaylist(playlistLibraryState.favorites)
+                    playPlaylistEntryAction(entry, favoritesPlaylist)
+                },
                 onOpenPlaylist = { playlist ->
                     activePlaylist = playlist
                     activePlaylistEntryId = playlist.entries.firstOrNull()?.id

@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutLinearInEasing
@@ -13,26 +14,39 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
@@ -49,8 +63,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -58,9 +76,16 @@ import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.PlaylistLibraryState
 import com.flopster101.siliconplayer.PlaylistTrackEntry
 import com.flopster101.siliconplayer.StoredPlaylist
+import com.flopster101.siliconplayer.ensureRecentArtworkThumbnailCached
 import com.flopster101.siliconplayer.playlistEntryMatchesPlayback
-import com.flopster101.siliconplayer.playlistTrackSubtitle
+import com.flopster101.siliconplayer.placeholderArtworkIconForFile
+import com.flopster101.siliconplayer.recentArtworkThumbnailFile
+import com.flopster101.siliconplayer.resolvePlaylistEntryLocalFile
 import com.flopster101.siliconplayer.samePath
+import java.io.File
+import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private enum class PlaylistsSurfaceDestination {
     Library,
@@ -68,6 +93,7 @@ private enum class PlaylistsSurfaceDestination {
 }
 
 private const val PLAYLISTS_PAGE_NAV_DURATION_MS = 280
+private val PLAYLISTS_DETAIL_CONTENT_GUTTER = 8.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,21 +103,18 @@ internal fun PlaylistsScreen(
     currentPlaybackSourceId: String?,
     currentSubtuneIndex: Int,
     bottomContentPadding: Dp,
-    canAddCurrentTrackToFavorites: Boolean,
-    canSaveActivePlaylist: Boolean,
+    backHandlingEnabled: Boolean = true,
     onBack: () -> Unit,
-    onAddCurrentTrackToFavorites: () -> Unit,
-    onSaveActivePlaylist: () -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
-    onRemoveFavorite: (PlaylistTrackEntry) -> Unit,
-    onOpenPlaylist: (StoredPlaylist) -> Unit,
-    onRemovePlaylist: (StoredPlaylist) -> Unit
+    onOpenPlaylist: (StoredPlaylist) -> Unit
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val activePlaylistId = activePlaylist?.id
     var destination by rememberSaveable { mutableStateOf(PlaylistsSurfaceDestination.Library) }
     val showingFavoritesDetail = destination == PlaylistsSurfaceDestination.Favorites
-    BackHandler(enabled = showingFavoritesDetail) {
+    val showCollapsedDetailSubtitle = showingFavoritesDetail &&
+        scrollBehavior.state.collapsedFraction >= 0.999f
+    BackHandler(enabled = backHandlingEnabled && showingFavoritesDetail) {
         destination = PlaylistsSurfaceDestination.Library
     }
     Scaffold(
@@ -104,11 +127,32 @@ internal fun PlaylistsScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(text = "Playlists")
                         if (showingFavoritesDetail) {
-                            Text(
-                                text = "Favorites",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Box(
+                                modifier = Modifier.height(18.dp),
+                                contentAlignment = Alignment.TopStart
+                            ) {
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = showCollapsedDetailSubtitle,
+                                    enter = fadeIn(
+                                        animationSpec = tween(
+                                            durationMillis = 160,
+                                            easing = LinearOutSlowInEasing
+                                        )
+                                    ),
+                                    exit = fadeOut(
+                                        animationSpec = tween(
+                                            durationMillis = 90,
+                                            easing = FastOutLinearInEasing
+                                        )
+                                    )
+                                ) {
+                                    Text(
+                                        text = "Favorites",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 },
@@ -177,7 +221,9 @@ internal fun PlaylistsScreen(
                     end = 16.dp,
                     bottom = bottomContentPadding + 16.dp
                 ),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(
+                    if (currentDestination == PlaylistsSurfaceDestination.Favorites) 0.dp else 12.dp
+                )
             ) {
                 if (currentDestination == PlaylistsSurfaceDestination.Favorites) {
                     playlistDetailContent(
@@ -187,8 +233,7 @@ internal fun PlaylistsScreen(
                         emptyBody = "Your favorites will show up here.",
                         activeSourceId = currentPlaybackSourceId,
                         currentSubtuneIndex = currentSubtuneIndex,
-                        onEntryClick = onOpenFavorite,
-                        onEntryDelete = onRemoveFavorite
+                        onEntryClick = onOpenFavorite
                     )
                 } else {
                     item {
@@ -236,8 +281,7 @@ internal fun PlaylistsScreen(
                                         activePlaylist?.sourceIdHint != null &&
                                         samePath(playlist.sourceIdHint, activePlaylist.sourceIdHint)
                                     ),
-                                onClick = { onOpenPlaylist(playlist) },
-                                onDelete = { onRemovePlaylist(playlist) }
+                                onClick = { onOpenPlaylist(playlist) }
                             )
                         }
                     }
@@ -254,22 +298,39 @@ private fun LazyListScope.playlistDetailContent(
     emptyBody: String,
     activeSourceId: String?,
     currentSubtuneIndex: Int,
-    onEntryClick: (PlaylistTrackEntry) -> Unit,
-    onEntryDelete: (PlaylistTrackEntry) -> Unit
+    onEntryClick: (PlaylistTrackEntry) -> Unit
 ) {
     item {
         PlaylistHeroCard(
             title = title,
             trackCountLabel = playlistTrackCountLabel(entries.size),
-            heroIcon = heroIcon
+            heroIcon = heroIcon,
+            entries = entries
         )
     }
     if (entries.isEmpty()) {
         item {
-            EmptySectionCard(
-                title = "Nothing here yet",
-                body = emptyBody
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = PLAYLISTS_DETAIL_CONTENT_GUTTER + 6.dp,
+                        top = 8.dp,
+                        end = PLAYLISTS_DETAIL_CONTENT_GUTTER + 6.dp
+                    ),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Nothing here yet",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = emptyBody,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     } else {
         items(
@@ -284,8 +345,7 @@ private fun LazyListScope.playlistDetailContent(
             PlaylistTrackRow(
                 entry = entry,
                 isActive = isActive,
-                onClick = { onEntryClick(entry) },
-                onDelete = { onEntryDelete(entry) }
+                onClick = { onEntryClick(entry) }
             )
         }
     }
@@ -295,51 +355,238 @@ private fun LazyListScope.playlistDetailContent(
 private fun PlaylistHeroCard(
     title: String,
     trackCountLabel: String,
-    heroIcon: ImageVector
+    heroIcon: ImageVector?,
+    entries: List<PlaylistTrackEntry>
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        shape = MaterialTheme.shapes.extraLarge
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                start = PLAYLISTS_DETAIL_CONTENT_GUTTER,
+                top = 8.dp,
+                end = PLAYLISTS_DETAIL_CONTENT_GUTTER,
+                bottom = 8.dp
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
+        PlaylistCoverArt(
+            entries = entries,
+            heroIcon = heroIcon,
+            modifier = Modifier.size(220.dp),
+            iconSize = 68.dp
+        )
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = trackCountLabel,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(MaterialTheme.shapes.extraLarge)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
+            IconButton(onClick = {}) {
                 Icon(
-                    imageVector = heroIcon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(30.dp)
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More actions"
                 )
             }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
+            Spacer(modifier = Modifier.weight(1f))
+            IconButton(onClick = {}) {
+                Icon(
+                    imageVector = Icons.Default.Shuffle,
+                    contentDescription = "Shuffle"
                 )
-                Text(
-                    text = trackCountLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
+            }
+            FilledIconButton(
+                onClick = {},
+                modifier = Modifier.size(64.dp),
+                shape = CircleShape
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Play playlist",
+                    modifier = Modifier.size(34.dp)
                 )
             }
         }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 6.dp)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            PlaylistActionPill(
+                label = "Add",
+                icon = Icons.Default.Add
+            )
+            PlaylistActionPill(
+                label = "Edit",
+                icon = Icons.Default.Edit
+            )
+            PlaylistActionPill(
+                label = "Sort",
+                icon = Icons.Default.SwapVert
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaylistActionPill(
+    label: String,
+    icon: ImageVector
+) {
+    val pillShape = RoundedCornerShape(18.dp)
+    Surface(
+        modifier = Modifier.clip(pillShape).clickable(onClick = {}),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = pillShape
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(15.dp)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaylistCoverArt(
+    entries: List<PlaylistTrackEntry>,
+    heroIcon: ImageVector?,
+    modifier: Modifier = Modifier,
+    iconSize: Dp = 36.dp
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.secondaryContainer
+    ) {
+        if (heroIcon != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                                MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(iconSize * 1.65f)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = heroIcon,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
+            }
+        } else {
+            PlaylistIconGrid(entries = entries)
+        }
+    }
+}
+
+@Composable
+private fun PlaylistIconGrid(
+    entries: List<PlaylistTrackEntry>
+) {
+    val coverSources = playlistCoverSources(entries)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            PlaylistCoverCell(
+                source = coverSources[0],
+                modifier = Modifier.weight(1f)
+            )
+            PlaylistCoverCell(
+                source = coverSources[1],
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            PlaylistCoverCell(
+                source = coverSources[2],
+                modifier = Modifier.weight(1f)
+            )
+            PlaylistCoverCell(
+                source = coverSources[3],
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaylistCoverCell(
+    source: String?,
+    modifier: Modifier = Modifier
+) {
+    val icon = placeholderArtworkIconForFile(
+        file = source?.let(::File),
+        decoderName = null,
+        allowCurrentDecoderFallback = false
+    )
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .clip(MaterialTheme.shapes.large)
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(28.dp)
+        )
     }
 }
 
@@ -453,59 +700,161 @@ private fun playlistTrackCountLabel(trackCount: Int): String =
         else -> "$trackCount tracks"
     }
 
+private fun playlistCoverSources(entries: List<PlaylistTrackEntry>): List<String?> {
+    val distinctSources = entries
+        .asSequence()
+        .mapNotNull { entry -> entry.source.takeIf { it.isNotBlank() } }
+        .distinctBy { source -> playlistCoverSourceKey(source) }
+        .take(4)
+        .toMutableList()
+    if (distinctSources.isEmpty()) {
+        distinctSources += ""
+    }
+    while (distinctSources.size < 4) {
+        distinctSources += distinctSources.last()
+    }
+    return distinctSources
+}
+
+private fun playlistCoverSourceKey(source: String): String {
+    val fileName = source.substringAfterLast('/').substringAfterLast('\\')
+    val extension = fileName.substringAfterLast('.', missingDelimiterValue = "").lowercase(Locale.ROOT)
+    return extension.ifBlank {
+        fileName.lowercase(Locale.ROOT)
+    }
+}
+
 @Composable
 private fun PlaylistTrackRow(
     entry: PlaylistTrackEntry,
     isActive: Boolean,
-    onClick: () -> Unit,
-    onDelete: () -> Unit
+    onClick: () -> Unit
 ) {
-    Surface(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.large,
-        color = if (isActive) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        }
+            .padding(horizontal = PLAYLISTS_DETAIL_CONTENT_GUTTER)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 14.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
+                .clickable(onClick = onClick)
+                .padding(start = 6.dp, top = 10.dp, end = 2.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.Star,
-                contentDescription = null,
-                tint = if (isActive) {
-                    MaterialTheme.colorScheme.onPrimaryContainer
-                } else {
-                    MaterialTheme.colorScheme.primary
-                }
+            PlaylistTrackArtworkChip(
+                entry = entry,
+                isActive = isActive
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = entry.title,
                     style = MaterialTheme.typography.titleSmall,
+                    color = if (isActive) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = playlistTrackSubtitle(entry),
+                    text = playlistPageTrackSubtitle(entry),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            IconButton(onClick = onDelete) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clickable(onClick = {}),
+                contentAlignment = Alignment.Center
+            ) {
                 Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Remove favorite"
+                    imageVector = Icons.Default.MoreHoriz,
+                    contentDescription = "Track options",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+        androidx.compose.material3.HorizontalDivider(
+            modifier = Modifier.padding(start = 64.dp),
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+        )
+    }
+}
+
+@Composable
+private fun PlaylistTrackArtworkChip(
+    entry: PlaylistTrackEntry,
+    isActive: Boolean
+) {
+    val context = LocalContext.current
+    val fallbackIcon = placeholderArtworkIconForFile(
+        file = resolvePlaylistEntryLocalFile(entry.source),
+        decoderName = null,
+        allowCurrentDecoderFallback = false
+    )
+    val artworkThumbnailCacheKey = androidx.compose.runtime.produceState<String?>(
+        initialValue = entry.artworkThumbnailCacheKey,
+        key1 = entry.id,
+        key2 = entry.source,
+        key3 = entry.artworkThumbnailCacheKey
+    ) {
+        if (!entry.artworkThumbnailCacheKey.isNullOrBlank()) {
+            value = entry.artworkThumbnailCacheKey
+            return@produceState
+        }
+        value = withContext(Dispatchers.IO) {
+            ensureRecentArtworkThumbnailCached(
+                context = context,
+                sourceId = entry.source
+            )
+        }
+    }.value
+    val artwork = androidx.compose.runtime.produceState<androidx.compose.ui.graphics.ImageBitmap?>(
+        initialValue = null,
+        key1 = artworkThumbnailCacheKey
+    ) {
+        value = withContext(Dispatchers.IO) {
+            val artworkFile = recentArtworkThumbnailFile(context, artworkThumbnailCacheKey)
+                ?: return@withContext null
+            BitmapFactory.decodeFile(artworkFile.absolutePath)?.asImageBitmap()
+        }
+    }.value
+    Surface(
+        modifier = Modifier.size(46.dp),
+        shape = MaterialTheme.shapes.large,
+        color = if (isActive) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        }
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = fallbackIcon,
+                contentDescription = null,
+                tint = if (isActive) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(28.dp)
+            )
+            if (artwork != null) {
+                Image(
+                    bitmap = artwork,
+                    contentDescription = "Album artwork",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }
@@ -553,8 +902,7 @@ private fun SessionPlaylistCard(
 private fun PlaylistCollectionRow(
     playlist: StoredPlaylist,
     isActive: Boolean,
-    onClick: () -> Unit,
-    onDelete: () -> Unit
+    onClick: () -> Unit
 ) {
     Surface(
         modifier = Modifier
@@ -584,36 +932,23 @@ private fun PlaylistCollectionRow(
                 }
             )
             Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = playlist.title,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    AssistChip(
-                        onClick = onClick,
-                        label = { Text(playlist.format.label) }
-                    )
-                }
                 Text(
-                    text = "${playlist.entries.size} entries",
+                    text = playlist.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${playlist.entries.size} entries • ${playlist.format.label}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete playlist"
-                )
-            }
         }
     }
+}
+
+private fun playlistPageTrackSubtitle(entry: PlaylistTrackEntry): String {
+    return entry.artist?.trim()?.takeIf { it.isNotBlank() } ?: "No metadata yet"
 }

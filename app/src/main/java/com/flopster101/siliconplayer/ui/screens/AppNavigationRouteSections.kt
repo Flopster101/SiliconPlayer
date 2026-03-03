@@ -92,36 +92,26 @@ internal fun AppNavigationHomeRouteSection(
 internal fun AppNavigationPlaylistsRouteSection(
     mainPadding: PaddingValues,
     bottomContentPadding: androidx.compose.ui.unit.Dp,
+    backHandlingEnabled: Boolean,
     libraryState: PlaylistLibraryState,
     activePlaylist: StoredPlaylist?,
     currentPlaybackSourceId: String?,
     currentSubtuneIndex: Int,
-    canAddCurrentTrackToFavorites: Boolean,
-    canSaveActivePlaylist: Boolean,
     onExitPlaylists: () -> Unit,
-    onAddCurrentTrackToFavorites: () -> Unit,
-    onSaveActivePlaylist: () -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
-    onRemoveFavorite: (PlaylistTrackEntry) -> Unit,
-    onOpenPlaylist: (StoredPlaylist) -> Unit,
-    onRemovePlaylist: (StoredPlaylist) -> Unit
+    onOpenPlaylist: (StoredPlaylist) -> Unit
 ) {
     MainPlaylistsRouteHost(
         mainPadding = mainPadding,
         bottomContentPadding = bottomContentPadding,
+        backHandlingEnabled = backHandlingEnabled,
         libraryState = libraryState,
         activePlaylist = activePlaylist,
         currentPlaybackSourceId = currentPlaybackSourceId,
         currentSubtuneIndex = currentSubtuneIndex,
-        canAddCurrentTrackToFavorites = canAddCurrentTrackToFavorites,
-        canSaveActivePlaylist = canSaveActivePlaylist,
         onExitPlaylists = onExitPlaylists,
-        onAddCurrentTrackToFavorites = onAddCurrentTrackToFavorites,
-        onSaveActivePlaylist = onSaveActivePlaylist,
         onOpenFavorite = onOpenFavorite,
-        onRemoveFavorite = onRemoveFavorite,
-        onOpenPlaylist = onOpenPlaylist,
-        onRemovePlaylist = onRemovePlaylist
+        onOpenPlaylist = onOpenPlaylist
     )
 }
 
@@ -180,11 +170,13 @@ internal fun AppNavigationBrowserRouteSection(
     backHandlingEnabled: Boolean,
     playingFile: File?,
     playingPlaylistFile: File?,
+    favoriteSourcePaths: List<String>,
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
     onExitBrowser: () -> Unit,
     onBrowserLocationChanged: (BrowserLaunchState) -> Unit,
     onFileSelected: (File, String?) -> Unit,
     onPlaylistFileSelected: (File, String?) -> Unit,
+    onToggleFavoriteFile: (File) -> Unit,
     onOpenRemoteSource: (String) -> Unit,
     onOpenRemoteSourceAsCached: (String) -> Unit,
     onRememberSmbCredentials: (Long?, String, String?, String?) -> Unit,
@@ -209,11 +201,13 @@ internal fun AppNavigationBrowserRouteSection(
         backHandlingEnabled = backHandlingEnabled,
         playingFile = playingFile,
         playingPlaylistFile = playingPlaylistFile,
+        favoriteSourcePaths = favoriteSourcePaths,
         onVisiblePlayableFilesChanged = onVisiblePlayableFilesChanged,
         onExitBrowser = onExitBrowser,
         onBrowserLocationChanged = onBrowserLocationChanged,
         onFileSelected = onFileSelected,
         onPlaylistFileSelected = onPlaylistFileSelected,
+        onToggleFavoriteFile = onToggleFavoriteFile,
         onOpenRemoteSource = onOpenRemoteSource,
         onOpenRemoteSourceAsCached = onOpenRemoteSourceAsCached,
         onRememberSmbCredentials = onRememberSmbCredentials,

@@ -670,6 +670,8 @@ internal fun PlayerScreen(
     visualizationVuRenderBackend: VisualizationRenderBackend,
     visualizationShowDebugInfo: Boolean = false,
     artworkCornerRadiusDp: Int = 3,
+    isTrackFavorited: Boolean = false,
+    onToggleFavoriteTrack: () -> Unit = {},
     onOpenAudioEffects: () -> Unit,
     filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode = com.flopster101.siliconplayer.FilenameDisplayMode.Always,
     filenameOnlyWhenTitleMissing: Boolean = false,
@@ -954,7 +956,9 @@ internal fun PlayerScreen(
                     val artPaneWeight = lerpFloat(0.36f, 0.48f, landscapeLayoutScale)
                     val rightPaneWeight = 1f - artPaneWeight
                     val transportRowWidth = playerTransportRowWidth(maxWidth, landscapeLayoutScale)
-                    val actionStripWidthFraction = lerpFloat(0.62f, 0.76f, landscapeLayoutScale)
+                    val actionStripWidthFraction = (
+                        lerpFloat(0.62f, 0.76f, landscapeLayoutScale) * (7f / 6f)
+                    ).coerceAtMost(0.9f)
                     val actionStripScale = (landscapeLayoutScale * 0.78f).coerceIn(0.44f, 0.76f)
                     val metadataSpacer = lerpDp(6.dp, 12.dp, landscapeLayoutScale)
                     val timelineSpacer = lerpDp(4.dp, 10.dp, landscapeLayoutScale)
@@ -1196,6 +1200,9 @@ internal fun PlayerScreen(
                                 onCycleVisualizationMode = onCycleVisualizationMode,
                                 onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
                                 onOpenTrackInfo = { showTrackInfoDialog = true },
+                                isTrackFavorited = isTrackFavorited,
+                                onToggleFavoriteTrack = onToggleFavoriteTrack,
+                                canToggleFavoriteTrack = pathOrUrl != null,
                                 canOpenPlaylistSelector = canOpenPlaylistSelector,
                                 onOpenPlaylistSelector = onOpenPlaylistSelector,
                                 onOpenAudioEffects = onOpenAudioEffects,
@@ -1267,9 +1274,9 @@ internal fun PlayerScreen(
                         lerpDp(4.dp, 10.dp, shortPortraitHeightScale)
                     }
                     val actionStripWidth = if (shortPortraitLayout) {
-                        lerpFloat(0.86f, 0.92f, shortPortraitHeightScale)
+                        (lerpFloat(0.86f, 0.92f, shortPortraitHeightScale) * (7f / 6f)).coerceAtMost(0.98f)
                     } else {
-                        lerpFloat(0.76f, 0.86f, portraitLayoutScale)
+                        (lerpFloat(0.76f, 0.86f, portraitLayoutScale) * (7f / 6f)).coerceAtMost(0.96f)
                     }
                     val actionStripBottomPadding = if (shortPortraitLayout) {
                         lerpDp(2.dp, 6.dp, shortPortraitHeightScale)
@@ -1573,6 +1580,9 @@ internal fun PlayerScreen(
                             onCycleVisualizationMode = onCycleVisualizationMode,
                             onOpenVisualizationPicker = { showVisualizationPickerDialog = true },
                             onOpenTrackInfo = { showTrackInfoDialog = true },
+                            isTrackFavorited = isTrackFavorited,
+                            onToggleFavoriteTrack = onToggleFavoriteTrack,
+                            canToggleFavoriteTrack = pathOrUrl != null,
                             canOpenPlaylistSelector = canOpenPlaylistSelector,
                             onOpenPlaylistSelector = onOpenPlaylistSelector,
                             onOpenAudioEffects = onOpenAudioEffects,
@@ -3475,6 +3485,9 @@ private fun FutureActionStrip(
     onCycleVisualizationMode: () -> Unit,
     onOpenVisualizationPicker: () -> Unit,
     onOpenTrackInfo: () -> Unit,
+    isTrackFavorited: Boolean,
+    onToggleFavoriteTrack: () -> Unit,
+    canToggleFavoriteTrack: Boolean,
     canOpenPlaylistSelector: Boolean,
     onOpenPlaylistSelector: () -> Unit,
     onOpenAudioEffects: () -> Unit,
@@ -3486,11 +3499,13 @@ private fun FutureActionStrip(
 ) {
     val visualizationModeFocusRequester = actionStripFirstFocusRequester ?: remember { FocusRequester() }
     val coreSettingsFocusRequester = remember { FocusRequester() }
+    val favoriteTrackFocusRequester = remember { FocusRequester() }
     val trackInfoFocusRequester = remember { FocusRequester() }
     val audioEffectsFocusRequester = remember { FocusRequester() }
     val channelControlsFocusRequester = remember { FocusRequester() }
     val canFocusVisualizationMode = true
     val canFocusCoreSettings = canOpenCoreSettings
+    val canFocusFavoriteTrack = canToggleFavoriteTrack
     val canFocusTrackInfo = true
     val canFocusPlaylistSelector = canOpenPlaylistSelector
     val canFocusAudioEffects = true
@@ -3500,14 +3515,18 @@ private fun FutureActionStrip(
     }
     BoxWithConstraints(modifier = modifier) {
         val stripMaxWidth = maxWidth
-        val tabletWidthScale = normalizedScale(stripMaxWidth, compactDp = 560.dp, roomyDp = 980.dp)
-        val compactVisibleActionCount = 6
+        val compactSizingWidth = if (compactLayout) {
+            stripMaxWidth * (6f / 7f)
+        } else {
+            stripMaxWidth
+        }
+        val tabletWidthScale = normalizedScale(compactSizingWidth, compactDp = 560.dp, roomyDp = 980.dp)
         val compactShortLayout = compactLayout && layoutScale < 0.7f
         val widthBias = lerpFloat(0.92f, 1.04f, layoutScale)
         val iconButtonMax = lerpDp(52.dp, 70.dp, tabletWidthScale)
         val iconButtonMin = if (compactShortLayout) 30.dp else 34.dp
         val iconButtonSize =
-            scaledDp(stripMaxWidth, lerpFloat(0.096f, 0.118f, layoutScale) * widthBias).coerceIn(iconButtonMin, iconButtonMax)
+            scaledDp(compactSizingWidth, lerpFloat(0.096f, 0.118f, layoutScale) * widthBias).coerceIn(iconButtonMin, iconButtonMax)
         val stripHorizontalPadding = if (compactLayout) {
             val minPadding = if (compactShortLayout) 6.dp else 7.dp
             val maxPadding = if (compactShortLayout) lerpDp(9.dp, 13.dp, tabletWidthScale) else lerpDp(10.dp, 14.dp, tabletWidthScale)
@@ -3531,21 +3550,16 @@ private fun FutureActionStrip(
         val genericIconSize = scaledDp(iconButtonSize, 0.68f).coerceIn(22.dp, lerpDp(27.dp, 33.dp, tabletWidthScale))
         val compactItemSpacing = scaledDp(iconButtonSize, lerpFloat(0.14f, 0.20f, layoutScale))
             .coerceIn(
-                if (compactShortLayout) 10.dp else 11.dp,
-                if (compactShortLayout) lerpDp(13.dp, 19.dp, tabletWidthScale) else lerpDp(15.dp, 21.dp, tabletWidthScale)
+                if (compactShortLayout) 7.dp else 8.dp,
+                if (compactShortLayout) lerpDp(10.dp, 15.dp, tabletWidthScale) else lerpDp(11.dp, 17.dp, tabletWidthScale)
             )
-        val compactStripTargetWidth = (
-            iconButtonSize.value * compactVisibleActionCount +
-                compactItemSpacing.value * (compactVisibleActionCount - 1) +
-                stripHorizontalPadding.value * 2f
-            ).dp
         Box(
             modifier = Modifier.fillMaxWidth(),
             contentAlignment = Alignment.Center
         ) {
             Surface(
                 modifier = if (compactLayout) {
-                    Modifier.width(minOf(stripMaxWidth, compactStripTargetWidth))
+                    Modifier.widthIn(max = stripMaxWidth)
                 } else {
                     Modifier.fillMaxWidth()
                 },
@@ -3553,9 +3567,15 @@ private fun FutureActionStrip(
                 shape = MaterialTheme.shapes.extraLarge
             ) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = stripHorizontalPadding, vertical = stripVerticalPadding),
+                    modifier = if (compactLayout) {
+                        Modifier
+                            .wrapContentWidth()
+                            .padding(horizontal = stripHorizontalPadding, vertical = stripVerticalPadding)
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = stripHorizontalPadding, vertical = stripVerticalPadding)
+                    },
                     contentAlignment = Alignment.Center
                 ) {
                     Row(
@@ -3654,10 +3674,12 @@ private fun FutureActionStrip(
                                 canFocusVisualizationMode to visualizationModeFocusRequester,
                                 canFocusChannelControls to channelControlsFocusRequester,
                                 canFocusAudioEffects to audioEffectsFocusRequester,
+                                canFocusFavoriteTrack to favoriteTrackFocusRequester,
                                 canFocusTrackInfo to trackInfoFocusRequester,
                                 canFocusPlaylistSelector to trackInfoFocusRequester
                             ) ?: trackInfoFocusRequester
                             right = firstAvailableActionRequester(
+                                canFocusFavoriteTrack to favoriteTrackFocusRequester,
                                 canFocusTrackInfo to trackInfoFocusRequester,
                                 canFocusAudioEffects to audioEffectsFocusRequester,
                                 canFocusChannelControls to channelControlsFocusRequester,
@@ -3684,6 +3706,53 @@ private fun FutureActionStrip(
                     )
                 }
                 IconButton(
+                    onClick = onToggleFavoriteTrack,
+                    enabled = canToggleFavoriteTrack,
+                    modifier = Modifier
+                        .size(iconButtonSize)
+                        .focusRequester(favoriteTrackFocusRequester)
+                        .focusProperties {
+                            left = firstAvailableActionRequester(
+                                canFocusPlaylistSelector to trackInfoFocusRequester,
+                                canFocusCoreSettings to coreSettingsFocusRequester,
+                                canFocusVisualizationMode to visualizationModeFocusRequester,
+                                canFocusChannelControls to channelControlsFocusRequester,
+                                canFocusAudioEffects to audioEffectsFocusRequester,
+                                canFocusFavoriteTrack to favoriteTrackFocusRequester
+                            ) ?: favoriteTrackFocusRequester
+                            right = firstAvailableActionRequester(
+                                canFocusTrackInfo to trackInfoFocusRequester,
+                                canFocusAudioEffects to audioEffectsFocusRequester,
+                                canFocusChannelControls to channelControlsFocusRequester,
+                                canFocusVisualizationMode to visualizationModeFocusRequester,
+                                canFocusCoreSettings to coreSettingsFocusRequester,
+                                canFocusFavoriteTrack to favoriteTrackFocusRequester
+                            ) ?: favoriteTrackFocusRequester
+                            if (transportAnchorFocusRequester != null) {
+                                up = transportAnchorFocusRequester
+                            }
+                        }
+                        .playerFocusHalo(enabled = canToggleFavoriteTrack, shape = CircleShape)
+                        .focusable(enabled = canToggleFavoriteTrack)
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            id = if (isTrackFavorited) {
+                                R.drawable.ic_star_filled
+                            } else {
+                                R.drawable.ic_star_outline
+                            }
+                        ),
+                        contentDescription = if (isTrackFavorited) {
+                            "Remove from favorites"
+                        } else {
+                            "Add to favorites"
+                        },
+                        tint = LocalContentColor.current,
+                        modifier = Modifier.size(genericIconSize)
+                    )
+                }
+                IconButton(
                     onClick = onOpenTrackInfo,
                     enabled = true,
                     modifier = Modifier
@@ -3691,6 +3760,7 @@ private fun FutureActionStrip(
                         .focusRequester(trackInfoFocusRequester)
                         .focusProperties {
                             left = firstAvailableActionRequester(
+                                canFocusFavoriteTrack to favoriteTrackFocusRequester,
                                 canFocusCoreSettings to coreSettingsFocusRequester,
                                 canFocusVisualizationMode to visualizationModeFocusRequester,
                                 canFocusChannelControls to channelControlsFocusRequester,

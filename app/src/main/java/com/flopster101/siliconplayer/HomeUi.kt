@@ -350,7 +350,7 @@ internal fun HomeScreen(
             HomeQuickActionSpec(
                 itemKey = "home_intro_playlists_button",
                 order = 1,
-                title = "Playlists",
+                title = "Library",
                 icon = Icons.Default.LibraryMusic,
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 onClick = onOpenPlaylists

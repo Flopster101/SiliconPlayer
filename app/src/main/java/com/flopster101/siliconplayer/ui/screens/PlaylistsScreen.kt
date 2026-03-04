@@ -53,6 +53,8 @@ import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -92,6 +94,12 @@ private enum class PlaylistsSurfaceDestination {
     Favorites
 }
 
+private enum class LibrarySurfaceTab {
+    Playlists,
+    Albums,
+    Artists
+}
+
 private const val PLAYLISTS_PAGE_NAV_DURATION_MS = 280
 private val PLAYLISTS_DETAIL_CONTENT_GUTTER = 8.dp
 
@@ -111,6 +119,7 @@ internal fun PlaylistsScreen(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val activePlaylistId = activePlaylist?.id
     var destination by rememberSaveable { mutableStateOf(PlaylistsSurfaceDestination.Library) }
+    var selectedTab by rememberSaveable { mutableStateOf(LibrarySurfaceTab.Playlists) }
     val showingFavoritesDetail = destination == PlaylistsSurfaceDestination.Favorites
     val showCollapsedDetailSubtitle = showingFavoritesDetail &&
         scrollBehavior.state.collapsedFraction >= 0.999f
@@ -125,7 +134,7 @@ internal fun PlaylistsScreen(
             LargeTopAppBar(
                 title = {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(text = "Playlists")
+                        Text(text = "Library")
                         if (showingFavoritesDetail) {
                             Box(
                                 modifier = Modifier.height(18.dp),
@@ -237,56 +246,123 @@ internal fun PlaylistsScreen(
                     )
                 } else {
                     item {
-                        FavoritesCollectionRow(
-                            favoriteCount = libraryState.favorites.size,
-                            hasActiveFavorite = libraryState.favorites.any { entry ->
-                                playlistEntryMatchesPlayback(
-                                    entry = entry,
-                                    activeSourceId = currentPlaybackSourceId,
-                                    currentSubtuneIndex = currentSubtuneIndex
-                                )
-                            },
-                            onClick = { destination = PlaylistsSurfaceDestination.Favorites }
+                        LibraryTabRow(
+                            selectedTab = selectedTab,
+                            onTabSelected = { selectedTab = it }
                         )
                     }
-
-                    activePlaylist?.takeIf { playlist ->
-                        libraryState.playlists.none { it.id == playlist.id }
-                    }?.let { sessionPlaylist ->
-                        item(key = "active_session_playlist") {
-                            SessionPlaylistCard(
-                                playlist = sessionPlaylist,
-                                onOpen = { onOpenPlaylist(sessionPlaylist) }
-                            )
-                        }
-                    }
-                    if (libraryState.playlists.isEmpty()) {
-                        if (activePlaylist == null || libraryState.playlists.any { it.id == activePlaylist.id }) {
+                    when (selectedTab) {
+                        LibrarySurfaceTab.Playlists -> {
                             item {
-                                EmptySectionCard(
-                                    title = "No playlists yet",
-                                    body = "More playlist options will show up here later."
+                                FavoritesCollectionRow(
+                                    favoriteCount = libraryState.favorites.size,
+                                    hasActiveFavorite = libraryState.favorites.any { entry ->
+                                        playlistEntryMatchesPlayback(
+                                            entry = entry,
+                                            activeSourceId = currentPlaybackSourceId,
+                                            currentSubtuneIndex = currentSubtuneIndex
+                                        )
+                                    },
+                                    onClick = { destination = PlaylistsSurfaceDestination.Favorites }
                                 )
                             }
+                            activePlaylist?.takeIf { playlist ->
+                                libraryState.playlists.none { it.id == playlist.id }
+                            }?.let { sessionPlaylist ->
+                                item(key = "active_session_playlist") {
+                                    SessionPlaylistCard(
+                                        playlist = sessionPlaylist,
+                                        onOpen = { onOpenPlaylist(sessionPlaylist) }
+                                    )
+                                }
+                            }
+                            if (libraryState.playlists.isEmpty()) {
+                                if (activePlaylist == null || libraryState.playlists.any { it.id == activePlaylist.id }) {
+                                    item {
+                                        EmptySectionCard(
+                                            title = "No playlists yet",
+                                            body = "More playlist options will show up here later."
+                                        )
+                                    }
+                                }
+                            } else {
+                                items(
+                                    items = libraryState.playlists,
+                                    key = { it.id }
+                                ) { playlist ->
+                                    PlaylistCollectionRow(
+                                        playlist = playlist,
+                                        isActive = playlist.id == activePlaylistId || (
+                                            playlist.sourceIdHint != null &&
+                                                activePlaylist?.sourceIdHint != null &&
+                                                samePath(playlist.sourceIdHint, activePlaylist.sourceIdHint)
+                                            ),
+                                        onClick = { onOpenPlaylist(playlist) }
+                                    )
+                                }
+                            }
                         }
-                    } else {
-                        items(
-                            items = libraryState.playlists,
-                            key = { it.id }
-                        ) { playlist ->
-                            PlaylistCollectionRow(
-                                playlist = playlist,
-                                isActive = playlist.id == activePlaylistId || (
-                                    playlist.sourceIdHint != null &&
-                                        activePlaylist?.sourceIdHint != null &&
-                                        samePath(playlist.sourceIdHint, activePlaylist.sourceIdHint)
-                                    ),
-                                onClick = { onOpenPlaylist(playlist) }
+                        LibrarySurfaceTab.Albums -> {
+                            libraryPlaceholderTabContent(
+                                title = "Albums",
+                                body = "Album library will show up here later."
+                            )
+                        }
+                        LibrarySurfaceTab.Artists -> {
+                            libraryPlaceholderTabContent(
+                                title = "Artists",
+                                body = "Artist library will show up here later."
                             )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+private fun LazyListScope.libraryPlaceholderTabContent(
+    title: String,
+    body: String
+) {
+    item {
+        EmptySectionCard(
+            title = title,
+            body = body
+        )
+    }
+}
+
+@Composable
+private fun LibraryTabRow(
+    selectedTab: LibrarySurfaceTab,
+    onTabSelected: (LibrarySurfaceTab) -> Unit
+) {
+    val tabs = listOf(
+        LibrarySurfaceTab.Playlists,
+        LibrarySurfaceTab.Albums,
+        LibrarySurfaceTab.Artists
+    )
+    TabRow(
+        selectedTabIndex = tabs.indexOf(selectedTab),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp)
+    ) {
+        tabs.forEach { tab ->
+            Tab(
+                selected = tab == selectedTab,
+                onClick = { onTabSelected(tab) },
+                text = {
+                    Text(
+                        text = when (tab) {
+                            LibrarySurfaceTab.Playlists -> "Playlists"
+                            LibrarySurfaceTab.Albums -> "Albums"
+                            LibrarySurfaceTab.Artists -> "Artists"
+                        }
+                    )
+                }
+            )
         }
     }
 }
@@ -880,7 +956,7 @@ private fun SessionPlaylistCard(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
-                text = "Current playlist session",
+                text = "Current playlist",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )
@@ -890,7 +966,7 @@ private fun SessionPlaylistCard(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = "${playlist.entries.size} entries • ${playlist.format.label}",
+                text = "${playlist.entries.size} tracks • ${playlist.format.label}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer
             )
@@ -940,7 +1016,7 @@ private fun PlaylistCollectionRow(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${playlist.entries.size} entries • ${playlist.format.label}",
+                    text = "${playlist.entries.size} tracks • ${playlist.format.label}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

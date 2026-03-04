@@ -97,7 +97,6 @@ import com.flopster101.siliconplayer.playlistEntryMatchesPlayback
 import com.flopster101.siliconplayer.placeholderArtworkIconForFile
 import com.flopster101.siliconplayer.recentArtworkThumbnailFile
 import com.flopster101.siliconplayer.resolvePlaylistEntryLocalFile
-import com.flopster101.siliconplayer.samePath
 import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
@@ -137,7 +136,6 @@ internal fun PlaylistsScreen(
     onOpenPlaylist: (StoredPlaylist) -> Unit
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val activePlaylistId = activePlaylist?.id
     var destination by rememberSaveable { mutableStateOf(PlaylistsSurfaceDestination.Library) }
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     var albumCollectionLayout by rememberSaveable { mutableStateOf(AlbumCollectionLayout.Grid) }
@@ -166,7 +164,7 @@ internal fun PlaylistsScreen(
             LargeTopAppBar(
                 title = {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(text = "Library")
+                        Text(text = if (showingFavoritesDetail) "Playlists" else "Library")
                         if (showingFavoritesDetail) {
                             Box(
                                 modifier = Modifier.height(18.dp),
@@ -299,14 +297,8 @@ internal fun PlaylistsScreen(
                             LibrarySurfaceTab.Playlists -> {
                                 PlaylistsLibraryTabPage(
                                     libraryState = libraryState,
-                                    activePlaylist = activePlaylist,
-                                    activePlaylistId = activePlaylistId,
-                                    currentPlaybackSourceId = currentPlaybackSourceId,
-                                    currentSubtuneIndex = currentSubtuneIndex,
                                     bottomContentPadding = bottomContentPadding,
-                                    onOpenFavorites = {
-                                        destination = PlaylistsSurfaceDestination.Favorites
-                                    },
+                                    onOpenFavorites = { destination = PlaylistsSurfaceDestination.Favorites },
                                     onOpenPlaylist = onOpenPlaylist
                                 )
                             }
@@ -333,10 +325,6 @@ internal fun PlaylistsScreen(
 @Composable
 private fun PlaylistsLibraryTabPage(
     libraryState: PlaylistLibraryState,
-    activePlaylist: StoredPlaylist?,
-    activePlaylistId: String?,
-    currentPlaybackSourceId: String?,
-    currentSubtuneIndex: Int,
     bottomContentPadding: Dp,
     onOpenFavorites: () -> Unit,
     onOpenPlaylist: (StoredPlaylist) -> Unit
@@ -348,40 +336,27 @@ private fun PlaylistsLibraryTabPage(
             top = 8.dp,
             end = 16.dp,
             bottom = bottomContentPadding + 16.dp
-        ),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        )
     ) {
         item {
             FavoritesCollectionRow(
                 favoriteCount = libraryState.favorites.size,
-                hasActiveFavorite = libraryState.favorites.any { entry ->
-                    playlistEntryMatchesPlayback(
-                        entry = entry,
-                        activeSourceId = currentPlaybackSourceId,
-                        currentSubtuneIndex = currentSubtuneIndex
-                    )
-                },
                 onClick = onOpenFavorites
             )
         }
-        activePlaylist?.takeIf { playlist ->
-            libraryState.playlists.none { it.id == playlist.id }
-        }?.let { sessionPlaylist ->
-            item(key = "active_session_playlist") {
-                SessionPlaylistCard(
-                    playlist = sessionPlaylist,
-                    onOpen = { onOpenPlaylist(sessionPlaylist) }
-                )
-            }
+        item {
+            androidx.compose.material3.HorizontalDivider(
+                modifier = Modifier.padding(start = 74.dp),
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+            )
         }
         if (libraryState.playlists.isEmpty()) {
-            if (activePlaylist == null || libraryState.playlists.any { it.id == activePlaylist.id }) {
-                item {
-                    EmptySectionCard(
-                        title = "No playlists yet",
-                        body = "More playlist options will show up here later."
-                    )
-                }
+            item {
+                Spacer(modifier = Modifier.height(10.dp))
+                EmptySectionCard(
+                    title = "No playlists yet",
+                    body = "More playlist options will show up here later."
+                )
             }
         } else {
             items(
@@ -390,12 +365,11 @@ private fun PlaylistsLibraryTabPage(
             ) { playlist ->
                 PlaylistCollectionRow(
                     playlist = playlist,
-                    isActive = playlist.id == activePlaylistId || (
-                        playlist.sourceIdHint != null &&
-                            activePlaylist?.sourceIdHint != null &&
-                            samePath(playlist.sourceIdHint, activePlaylist.sourceIdHint)
-                        ),
                     onClick = { onOpenPlaylist(playlist) }
+                )
+                androidx.compose.material3.HorizontalDivider(
+                    modifier = Modifier.padding(start = 74.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
                 )
             }
         }
@@ -1067,68 +1041,22 @@ private fun PlaylistCoverCell(
 @Composable
 private fun FavoritesCollectionRow(
     favoriteCount: Int,
-    hasActiveFavorite: Boolean,
     onClick: () -> Unit
 ) {
-    Surface(
+    PlaylistLibraryFlatRow(
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.large,
-        color = if (hasActiveFavorite) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        }
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, top = 14.dp, end = 16.dp, bottom = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(MaterialTheme.shapes.large)
-                    .background(
-                        if (hasActiveFavorite) {
-                            MaterialTheme.colorScheme.secondaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.primaryContainer
-                        }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = null,
-                    tint = if (hasActiveFavorite) {
-                        MaterialTheme.colorScheme.onSecondaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    }
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Favorites",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = when (favoriteCount) {
-                        0 -> "No tracks yet"
-                        1 -> "1 track"
-                        else -> "$favoriteCount tracks"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
+            .fillMaxWidth(),
+        title = "Favorites",
+        subtitle = when (favoriteCount) {
+            0 -> "No tracks yet"
+            1 -> "1 track"
+            else -> "$favoriteCount tracks"
+        },
+        icon = Icons.Default.Star,
+        iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
+        iconTint = MaterialTheme.colorScheme.onPrimaryContainer,
+        onClick = onClick
+    )
 }
 
 @Composable
@@ -1336,89 +1264,71 @@ private fun PlaylistTrackArtworkChip(
 }
 
 @Composable
-private fun SessionPlaylistCard(
+private fun PlaylistCollectionRow(
     playlist: StoredPlaylist,
-    onOpen: () -> Unit
+    onClick: () -> Unit
 ) {
-    Surface(
+    PlaylistLibraryFlatRow(
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpen),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.secondaryContainer
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = "Current playlist",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-            Text(
-                text = playlist.title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = "${playlist.entries.size} tracks • ${playlist.format.label}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-        }
-    }
+            .fillMaxWidth(),
+        title = playlist.title,
+        subtitle = "${playlist.entries.size} tracks • ${playlist.format.label}",
+        icon = Icons.Default.LibraryMusic,
+        iconContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+        iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+        onClick = onClick
+    )
 }
 
 @Composable
-private fun PlaylistCollectionRow(
-    playlist: StoredPlaylist,
-    isActive: Boolean,
+private fun PlaylistLibraryFlatRow(
+    modifier: Modifier = Modifier,
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconContainerColor: Color,
+    iconTint: Color,
     onClick: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.large,
-        color = if (isActive) {
-            MaterialTheme.colorScheme.tertiaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        }
+    Row(
+        modifier = modifier
+            .clickable(onClick = onClick)
+            .padding(start = 6.dp, top = 10.dp, end = 2.dp, bottom = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, top = 14.dp, end = 10.dp, bottom = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Surface(
+            modifier = Modifier.size(56.dp),
+            shape = MaterialTheme.shapes.large,
+            color = iconContainerColor
         ) {
-            Icon(
-                imageVector = Icons.Default.LibraryMusic,
-                contentDescription = null,
-                tint = if (isActive) {
-                    MaterialTheme.colorScheme.onTertiaryContainer
-                } else {
-                    MaterialTheme.colorScheme.primary
-                }
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = playlist.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "${playlist.entries.size} tracks • ${playlist.format.label}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(30.dp)
                 )
             }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

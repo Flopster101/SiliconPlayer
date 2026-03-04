@@ -12,16 +12,20 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -31,11 +35,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LibraryMusic
@@ -45,6 +54,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -58,14 +68,18 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -87,6 +101,7 @@ import com.flopster101.siliconplayer.samePath
 import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private enum class PlaylistsSurfaceDestination {
@@ -100,10 +115,15 @@ private enum class LibrarySurfaceTab {
     Artists
 }
 
+private enum class AlbumCollectionLayout {
+    Grid,
+    List
+}
+
 private const val PLAYLISTS_PAGE_NAV_DURATION_MS = 280
 private val PLAYLISTS_DETAIL_CONTENT_GUTTER = 8.dp
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 internal fun PlaylistsScreen(
     libraryState: PlaylistLibraryState,
@@ -119,10 +139,22 @@ internal fun PlaylistsScreen(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val activePlaylistId = activePlaylist?.id
     var destination by rememberSaveable { mutableStateOf(PlaylistsSurfaceDestination.Library) }
-    var selectedTab by rememberSaveable { mutableStateOf(LibrarySurfaceTab.Playlists) }
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    var albumCollectionLayout by rememberSaveable { mutableStateOf(AlbumCollectionLayout.Grid) }
+    val libraryTabs = rememberLibraryTabs()
+    val pagerState = rememberPagerState(
+        initialPage = selectedTabIndex,
+        pageCount = { libraryTabs.size }
+    )
+    val coroutineScope = rememberCoroutineScope()
     val showingFavoritesDetail = destination == PlaylistsSurfaceDestination.Favorites
     val showCollapsedDetailSubtitle = showingFavoritesDetail &&
         scrollBehavior.state.collapsedFraction >= 0.999f
+    LaunchedEffect(pagerState.currentPage) {
+        if (selectedTabIndex != pagerState.currentPage) {
+            selectedTabIndex = pagerState.currentPage
+        }
+    }
     BackHandler(enabled = backHandlingEnabled && showingFavoritesDetail) {
         destination = PlaylistsSurfaceDestination.Library
     }
@@ -220,21 +252,18 @@ internal fun PlaylistsScreen(
             label = "playlistsSurfaceTransition",
             modifier = Modifier.fillMaxSize()
         ) { currentDestination ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    top = 8.dp,
-                    end = 16.dp,
-                    bottom = bottomContentPadding + 16.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(
-                    if (currentDestination == PlaylistsSurfaceDestination.Favorites) 0.dp else 12.dp
-                )
-            ) {
-                if (currentDestination == PlaylistsSurfaceDestination.Favorites) {
+            if (currentDestination == PlaylistsSurfaceDestination.Favorites) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        top = 8.dp,
+                        end = 16.dp,
+                        bottom = bottomContentPadding + 16.dp
+                    )
+                ) {
                     playlistDetailContent(
                         title = "Favorites",
                         entries = libraryState.favorites,
@@ -244,75 +273,55 @@ internal fun PlaylistsScreen(
                         currentSubtuneIndex = currentSubtuneIndex,
                         onEntryClick = onOpenFavorite
                     )
-                } else {
-                    item {
-                        LibraryTabRow(
-                            selectedTab = selectedTab,
-                            onTabSelected = { selectedTab = it }
-                        )
-                    }
-                    when (selectedTab) {
-                        LibrarySurfaceTab.Playlists -> {
-                            item {
-                                FavoritesCollectionRow(
-                                    favoriteCount = libraryState.favorites.size,
-                                    hasActiveFavorite = libraryState.favorites.any { entry ->
-                                        playlistEntryMatchesPlayback(
-                                            entry = entry,
-                                            activeSourceId = currentPlaybackSourceId,
-                                            currentSubtuneIndex = currentSubtuneIndex
-                                        )
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    LibraryTabRow(
+                        selectedTabIndex = selectedTabIndex,
+                        tabs = libraryTabs,
+                        onTabSelected = { tabIndex ->
+                            if (selectedTabIndex == tabIndex) return@LibraryTabRow
+                            selectedTabIndex = tabIndex
+                            coroutineScope.launch {
+                                pagerState.animateScrollToPage(tabIndex)
+                            }
+                        }
+                    )
+                    HorizontalPager(
+                        state = pagerState,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        when (libraryTabs[page]) {
+                            LibrarySurfaceTab.Playlists -> {
+                                PlaylistsLibraryTabPage(
+                                    libraryState = libraryState,
+                                    activePlaylist = activePlaylist,
+                                    activePlaylistId = activePlaylistId,
+                                    currentPlaybackSourceId = currentPlaybackSourceId,
+                                    currentSubtuneIndex = currentSubtuneIndex,
+                                    bottomContentPadding = bottomContentPadding,
+                                    onOpenFavorites = {
+                                        destination = PlaylistsSurfaceDestination.Favorites
                                     },
-                                    onClick = { destination = PlaylistsSurfaceDestination.Favorites }
+                                    onOpenPlaylist = onOpenPlaylist
                                 )
                             }
-                            activePlaylist?.takeIf { playlist ->
-                                libraryState.playlists.none { it.id == playlist.id }
-                            }?.let { sessionPlaylist ->
-                                item(key = "active_session_playlist") {
-                                    SessionPlaylistCard(
-                                        playlist = sessionPlaylist,
-                                        onOpen = { onOpenPlaylist(sessionPlaylist) }
-                                    )
-                                }
+                            LibrarySurfaceTab.Albums -> {
+                                AlbumsLibraryPlaceholderPage(
+                                    bottomContentPadding = bottomContentPadding,
+                                    layout = albumCollectionLayout,
+                                    onLayoutChanged = { albumCollectionLayout = it }
+                                )
                             }
-                            if (libraryState.playlists.isEmpty()) {
-                                if (activePlaylist == null || libraryState.playlists.any { it.id == activePlaylist.id }) {
-                                    item {
-                                        EmptySectionCard(
-                                            title = "No playlists yet",
-                                            body = "More playlist options will show up here later."
-                                        )
-                                    }
-                                }
-                            } else {
-                                items(
-                                    items = libraryState.playlists,
-                                    key = { it.id }
-                                ) { playlist ->
-                                    PlaylistCollectionRow(
-                                        playlist = playlist,
-                                        isActive = playlist.id == activePlaylistId || (
-                                            playlist.sourceIdHint != null &&
-                                                activePlaylist?.sourceIdHint != null &&
-                                                samePath(playlist.sourceIdHint, activePlaylist.sourceIdHint)
-                                            ),
-                                        onClick = { onOpenPlaylist(playlist) }
-                                    )
-                                }
+                            LibrarySurfaceTab.Artists -> {
+                                ArtistsLibraryPlaceholderPage(
+                                    bottomContentPadding = bottomContentPadding
+                                )
                             }
-                        }
-                        LibrarySurfaceTab.Albums -> {
-                            libraryPlaceholderTabContent(
-                                title = "Albums",
-                                body = "Album library will show up here later."
-                            )
-                        }
-                        LibrarySurfaceTab.Artists -> {
-                            libraryPlaceholderTabContent(
-                                title = "Artists",
-                                body = "Artist library will show up here later."
-                            )
                         }
                     }
                 }
@@ -321,38 +330,418 @@ internal fun PlaylistsScreen(
     }
 }
 
-private fun LazyListScope.libraryPlaceholderTabContent(
-    title: String,
-    body: String
+@Composable
+private fun PlaylistsLibraryTabPage(
+    libraryState: PlaylistLibraryState,
+    activePlaylist: StoredPlaylist?,
+    activePlaylistId: String?,
+    currentPlaybackSourceId: String?,
+    currentSubtuneIndex: Int,
+    bottomContentPadding: Dp,
+    onOpenFavorites: () -> Unit,
+    onOpenPlaylist: (StoredPlaylist) -> Unit
 ) {
-    item {
-        EmptySectionCard(
-            title = title,
-            body = body
-        )
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            top = 8.dp,
+            end = 16.dp,
+            bottom = bottomContentPadding + 16.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            FavoritesCollectionRow(
+                favoriteCount = libraryState.favorites.size,
+                hasActiveFavorite = libraryState.favorites.any { entry ->
+                    playlistEntryMatchesPlayback(
+                        entry = entry,
+                        activeSourceId = currentPlaybackSourceId,
+                        currentSubtuneIndex = currentSubtuneIndex
+                    )
+                },
+                onClick = onOpenFavorites
+            )
+        }
+        activePlaylist?.takeIf { playlist ->
+            libraryState.playlists.none { it.id == playlist.id }
+        }?.let { sessionPlaylist ->
+            item(key = "active_session_playlist") {
+                SessionPlaylistCard(
+                    playlist = sessionPlaylist,
+                    onOpen = { onOpenPlaylist(sessionPlaylist) }
+                )
+            }
+        }
+        if (libraryState.playlists.isEmpty()) {
+            if (activePlaylist == null || libraryState.playlists.any { it.id == activePlaylist.id }) {
+                item {
+                    EmptySectionCard(
+                        title = "No playlists yet",
+                        body = "More playlist options will show up here later."
+                    )
+                }
+            }
+        } else {
+            items(
+                items = libraryState.playlists,
+                key = { it.id }
+            ) { playlist ->
+                PlaylistCollectionRow(
+                    playlist = playlist,
+                    isActive = playlist.id == activePlaylistId || (
+                        playlist.sourceIdHint != null &&
+                            activePlaylist?.sourceIdHint != null &&
+                            samePath(playlist.sourceIdHint, activePlaylist.sourceIdHint)
+                        ),
+                    onClick = { onOpenPlaylist(playlist) }
+                )
+            }
+        }
     }
 }
 
 @Composable
-private fun LibraryTabRow(
-    selectedTab: LibrarySurfaceTab,
-    onTabSelected: (LibrarySurfaceTab) -> Unit
+private fun LibraryCollectionPlaceholderPage(
+    title: String,
+    body: String,
+    bottomContentPadding: Dp
 ) {
-    val tabs = listOf(
-        LibrarySurfaceTab.Playlists,
-        LibrarySurfaceTab.Albums,
-        LibrarySurfaceTab.Artists
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            top = 12.dp,
+            end = 16.dp,
+            bottom = bottomContentPadding + 16.dp
+        ),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        item {
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+            )
+        }
+        items(
+            items = listOf(0, 1, 2, 3)
+        ) {
+            LibraryPlaceholderRow(
+                title = "$title will appear here",
+                body = "Add library folders later."
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlbumsLibraryPlaceholderPage(
+    bottomContentPadding: Dp,
+    layout: AlbumCollectionLayout,
+    onLayoutChanged: (AlbumCollectionLayout) -> Unit
+) {
+    val placeholderAlbums = listOf(
+        "Album One",
+        "Album Two",
+        "Album Three",
+        "Album Four",
+        "Album Five",
+        "Album Six"
     )
+    AnimatedContent(
+        targetState = layout,
+        transitionSpec = {
+            val enter = fadeIn(
+                animationSpec = tween(
+                    durationMillis = 160,
+                    easing = LinearOutSlowInEasing
+                )
+            )
+            val exit = fadeOut(
+                animationSpec = tween(
+                    durationMillis = 120,
+                    easing = FastOutLinearInEasing
+                )
+            )
+            enter togetherWith exit
+        },
+        label = "albumLayoutModeTransition",
+        modifier = Modifier.fillMaxSize()
+    ) { currentLayout ->
+        if (currentLayout == AlbumCollectionLayout.List) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    top = 10.dp,
+                    end = 16.dp,
+                    bottom = bottomContentPadding + 16.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    item {
+                        AlbumLayoutToggleRow(
+                            layout = currentLayout,
+                            onLayoutChanged = onLayoutChanged
+                        )
+                    }
+                    items(placeholderAlbums) { albumTitle ->
+                        AlbumPlaceholderListRow(
+                            title = albumTitle
+                    )
+                }
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 156.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    top = 10.dp,
+                    end = 16.dp,
+                    bottom = bottomContentPadding + 16.dp
+                ),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        AlbumLayoutToggleRow(
+                            layout = currentLayout,
+                            onLayoutChanged = onLayoutChanged
+                        )
+                    }
+                    gridItems(placeholderAlbums) { albumTitle ->
+                        AlbumPlaceholderGridCard(
+                            title = albumTitle
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtistsLibraryPlaceholderPage(
+    bottomContentPadding: Dp
+) {
+    LibraryCollectionPlaceholderPage(
+        title = "Artists",
+        body = "Choose library folders later.",
+        bottomContentPadding = bottomContentPadding
+    )
+}
+
+@Composable
+private fun AlbumLayoutToggleRow(
+    layout: AlbumCollectionLayout,
+    onLayoutChanged: (AlbumCollectionLayout) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 2.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerLow),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            LibraryLayoutToggleButton(
+                selected = layout == AlbumCollectionLayout.Grid,
+                icon = Icons.Default.GridView,
+                contentDescription = "Grid albums",
+                onClick = { onLayoutChanged(AlbumCollectionLayout.Grid) }
+            )
+            LibraryLayoutToggleButton(
+                selected = layout == AlbumCollectionLayout.List,
+                icon = Icons.AutoMirrored.Filled.ViewList,
+                contentDescription = "List albums",
+                onClick = { onLayoutChanged(AlbumCollectionLayout.List) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun LibraryLayoutToggleButton(
+    selected: Boolean,
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .clip(CircleShape)
+            .clickable(onClick = onClick),
+        shape = CircleShape,
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            Color.Transparent
+        }
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(19.dp),
+                tint = if (selected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlbumPlaceholderGridCard(
+    title: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surfaceContainerHighest
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                    MaterialTheme.colorScheme.surfaceContainerHighest
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LibraryMusic,
+                        contentDescription = null,
+                        modifier = Modifier.size(34.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Album placeholder",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumPlaceholderListRow(
+    title: String
+) {
+    LibraryPlaceholderRow(
+        title = title,
+        body = "Album placeholder"
+    )
+}
+
+@Composable
+private fun LibraryPlaceholderRow(
+    title: String,
+    body: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            modifier = Modifier.size(54.dp),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerHighest
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LibraryMusic,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall
+            )
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+    androidx.compose.material3.HorizontalDivider(
+        modifier = Modifier.padding(start = 72.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+    )
+}
+
+@Composable
+private fun LibraryTabRow(
+    selectedTabIndex: Int,
+    tabs: List<LibrarySurfaceTab>,
+    onTabSelected: (Int) -> Unit
+) {
     TabRow(
-        selectedTabIndex = tabs.indexOf(selectedTab),
+        selectedTabIndex = selectedTabIndex,
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 6.dp)
     ) {
-        tabs.forEach { tab ->
+        tabs.forEachIndexed { index, tab ->
             Tab(
-                selected = tab == selectedTab,
-                onClick = { onTabSelected(tab) },
+                selected = index == selectedTabIndex,
+                onClick = { onTabSelected(index) },
                 text = {
                     Text(
                         text = when (tab) {
@@ -365,6 +754,15 @@ private fun LibraryTabRow(
             )
         }
     }
+}
+
+@Composable
+private fun rememberLibraryTabs(): List<LibrarySurfaceTab> {
+    return listOf(
+        LibrarySurfaceTab.Playlists,
+        LibrarySurfaceTab.Albums,
+        LibrarySurfaceTab.Artists
+    )
 }
 
 private fun LazyListScope.playlistDetailContent(

@@ -128,12 +128,16 @@ import java.io.FileOutputStream
 import android.content.Intent
 import android.content.Context
 import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.IntentFilter
 import android.provider.Settings
 import android.os.Environment
 import android.webkit.MimeTypeMap
 import android.widget.Toast
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -1190,6 +1194,7 @@ private fun AppNavigation(
     var playlistLibraryState by remember {
         mutableStateOf(readPlaylistLibraryState(prefs))
     }
+    var externalTrackInfoDialogRequestToken by remember { mutableIntStateOf(0) }
     var activePlaylist by remember { mutableStateOf<StoredPlaylist?>(null) }
     var activePlaylistEntryId by remember { mutableStateOf<String?>(null) }
     var lastStoppedPlaylistResume by remember { mutableStateOf<LastStoppedPlaylistResume?>(null) }
@@ -2944,6 +2949,7 @@ private fun AppNavigation(
             playerArtworkCornerRadiusDp = playerArtworkCornerRadiusDp,
             filenameDisplayMode = filenameDisplayMode,
             filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
+            externalTrackInfoDialogRequestToken = externalTrackInfoDialogRequestToken,
             showMiniPlayerFocusHighlight = showMiniPlayerFocusHighlight,
             onHardwareNavigationInput = { showMiniPlayerFocusHighlight = true },
             onTouchInteraction = {
@@ -3648,6 +3654,38 @@ private fun AppNavigation(
                 keepHistory = currentView == MainView.Browser
             )
         }
+        val openPlayerSurfaceAction: () -> Unit = {
+            isPlayerSurfaceVisible = true
+            isPlayerExpanded = true
+            collapseFromSwipe = false
+            collapseDragInProgress = false
+            expandedOverlaySettledVisible = false
+            expandFromMiniDrag = false
+            miniExpandPreviewProgress = 0f
+        }
+        val favoritesPlaybackPlaylist = buildFavoritesPlaybackPlaylist(playlistLibraryState.favorites)
+        val syncActiveFavoritesContextAfterMutation: (List<PlaylistTrackEntry>) -> Unit = { favorites ->
+            if (activePlaylist?.id == "__favorites__") {
+                if (favorites.isEmpty()) {
+                    activePlaylist = null
+                    activePlaylistEntryId = null
+                    pendingPlaylistSubtuneSelection = null
+                } else {
+                    activePlaylist = buildFavoritesPlaybackPlaylist(favorites)
+                    val playbackMatchedEntryId = favorites.firstOrNull { entry ->
+                        playlistEntryMatchesPlayback(
+                            entry = entry,
+                            activeSourceId = currentTrackPathOrUrl,
+                            currentSubtuneIndex = currentSubtuneIndex
+                        )
+                    }?.id
+                    val retainedEntryId = activePlaylistEntryId?.takeIf { currentId ->
+                        favorites.any { it.id == currentId }
+                    }
+                    activePlaylistEntryId = playbackMatchedEntryId ?: retainedEntryId ?: favorites.first().id
+                }
+            }
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -3664,15 +3702,7 @@ private fun AppNavigation(
                 requestMiniPlayerFocus = { miniPlayerFocusRequester.requestFocus() },
                 onHardwareNavigationInput = { showMiniPlayerFocusHighlight = true },
                 onTouchInteraction = { showMiniPlayerFocusHighlight = false },
-                onOpenPlayerSurface = {
-                    isPlayerSurfaceVisible = true
-                    isPlayerExpanded = true
-                    collapseFromSwipe = false
-                    collapseDragInProgress = false
-                    expandedOverlaySettledVisible = false
-                    expandFromMiniDrag = false
-                    miniExpandPreviewProgress = 0f
-                },
+                onOpenPlayerSurface = openPlayerSurfaceAction,
                 onHomeRequested = { currentView = MainView.Home },
                 onSettingsRequested = {
                     settingsLaunchedFromPlayer = false
@@ -3711,14 +3741,166 @@ private fun AppNavigation(
                 onRecentPlayedFilesChanged = { recentPlayedFiles = it },
                 onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
                 onOpenFavorite = { entry ->
-                    val favoritesPlaylist = buildFavoritesPlaybackPlaylist(playlistLibraryState.favorites)
-                    playPlaylistEntryAction(entry, favoritesPlaylist)
+                    openPlaylistEntry(
+                        context = context,
+                        entry = entry,
+                        playlist = favoritesPlaybackPlaylist,
+                        trackLoadDelegates = trackLoadDelegates,
+                        manualOpenDelegates = manualOpenDelegates,
+                        autoPlayOnTrackSelect = true,
+                        openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                        onActivePlaylistChanged = { activePlaylist = it },
+                        onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                        onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+                    )
                 },
                 onOpenPlaylist = { playlist ->
                     activePlaylist = playlist
                     activePlaylistEntryId = playlist.entries.firstOrNull()?.id
                     playlist.entries.firstOrNull()?.let { entry ->
                         playPlaylistEntryAction(entry, playlist)
+                    }
+                },
+                onPlayFavoritePlaylist = {
+                    val firstEntry = playlistLibraryState.favorites.firstOrNull()
+                    if (firstEntry == null) {
+                        Toast.makeText(context, "Favorites is empty", Toast.LENGTH_SHORT).show()
+                    } else {
+                        openPlaylistEntry(
+                            context = context,
+                            entry = firstEntry,
+                            playlist = favoritesPlaybackPlaylist,
+                            trackLoadDelegates = trackLoadDelegates,
+                            manualOpenDelegates = manualOpenDelegates,
+                            autoPlayOnTrackSelect = true,
+                            openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                            onActivePlaylistChanged = { activePlaylist = it },
+                            onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                            onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+                        )
+                    }
+                },
+                onDeleteAllFavorites = {
+                    if (playlistLibraryState.favorites.isNotEmpty()) {
+                        val updatedState = playlistLibraryState.copy(favorites = emptyList())
+                        onPlaylistLibraryStateChanged(updatedState)
+                        syncActiveFavoritesContextAfterMutation(updatedState.favorites)
+                        Toast.makeText(context, "Favorites cleared", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onDeleteFavoriteTrack = { entry ->
+                    val updatedState = removeFavoriteTrack(playlistLibraryState, entry.id)
+                    if (updatedState != playlistLibraryState) {
+                        onPlaylistLibraryStateChanged(updatedState)
+                        syncActiveFavoritesContextAfterMutation(updatedState.favorites)
+                        Toast.makeText(context, "Removed from favorites", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onPlayFavoriteTrackAsCached = { entry ->
+                    val normalizedSource = normalizeSourceIdentity(entry.source) ?: entry.source
+                    val cachedFile = findExistingCachedFileForSource(
+                        cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR),
+                        url = normalizedSource
+                    )?.takeIf { it.exists() && it.isFile }
+                    if (cachedFile == null) {
+                        Toast.makeText(context, "No cached file available", Toast.LENGTH_SHORT).show()
+                    } else {
+                        activePlaylist = favoritesPlaybackPlaylist
+                        activePlaylistEntryId = entry.id
+                        pendingPlaylistSubtuneSelection =
+                            entry.subtuneIndex?.let { PendingPlaylistSubtuneSelection(entry.source, it) }
+                        trackLoadDelegates.applyTrackSelection(
+                            file = cachedFile,
+                            autoStart = true,
+                            expandOverride = openPlayerOnTrackSelect,
+                            sourceIdOverride = entry.source,
+                            initialSubtuneIndex = entry.subtuneIndex
+                        )
+                    }
+                },
+                onOpenFavoriteTrackLocation = { entry ->
+                    val localFile = resolvePlaylistEntryLocalFile(entry.source)
+                        ?.takeIf { it.exists() && it.isFile }
+                    if (localFile == null) {
+                        Toast.makeText(context, "Location is only available for local files", Toast.LENGTH_SHORT).show()
+                    } else {
+                        val parentDirectory = localFile.parentFile
+                        if (parentDirectory == null || !parentDirectory.exists()) {
+                            Toast.makeText(context, "Unable to resolve file location", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val locationId = resolveStorageLocationForPath(
+                                path = parentDirectory.absolutePath,
+                                descriptors = storageDescriptors
+                            )
+                            openBrowser(
+                                browserOpenRequest(
+                                    locationId = locationId,
+                                    directoryPath = parentDirectory.absolutePath
+                                )
+                            )
+                            currentView = MainView.Browser
+                        }
+                    }
+                },
+                onShareFavoriteTrack = { entry ->
+                    val localFile = resolvePlaylistEntryLocalFile(entry.source)
+                        ?.takeIf { it.exists() && it.isFile }
+                    if (localFile == null) {
+                        Toast.makeText(context, "Share is only available for local files", Toast.LENGTH_SHORT).show()
+                    } else {
+                        try {
+                            val uri = FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                localFile
+                            )
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = guessMimeTypeFromFilename(localFile.name)
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                clipData = ClipData.newRawUri(localFile.name, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            val chooser = Intent.createChooser(intent, "Share file").apply {
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(chooser)
+                        } catch (_: Throwable) {
+                            Toast.makeText(context, "Unable to share file", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                onCopyFavoriteTrackSource = { entry ->
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("URL or path", entry.source))
+                    Toast.makeText(context, "Copied URL/path", Toast.LENGTH_SHORT).show()
+                },
+                onOpenFavoriteTrackInfo = { entry ->
+                    openPlayerSurfaceAction()
+                    val playingSameEntry = playlistEntryMatchesPlayback(
+                        entry = entry,
+                        activeSourceId = currentTrackPathOrUrl,
+                        currentSubtuneIndex = currentSubtuneIndex
+                    )
+                    if (playingSameEntry) {
+                        externalTrackInfoDialogRequestToken += 1
+                    } else {
+                        openPlaylistEntry(
+                            context = context,
+                            entry = entry,
+                            playlist = favoritesPlaybackPlaylist,
+                            trackLoadDelegates = trackLoadDelegates,
+                            manualOpenDelegates = manualOpenDelegates,
+                            autoPlayOnTrackSelect = false,
+                            openPlayerOnTrackSelect = true,
+                            expandOverride = true,
+                            onActivePlaylistChanged = { activePlaylist = it },
+                            onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                            onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+                        )
+                        appScope.launch {
+                            delay(140)
+                            externalTrackInfoDialogRequestToken += 1
+                        }
                     }
                 },
                 onOpenBrowser = openBrowser,

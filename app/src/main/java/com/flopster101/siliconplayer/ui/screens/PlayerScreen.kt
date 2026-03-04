@@ -675,6 +675,7 @@ internal fun PlayerScreen(
     onOpenAudioEffects: () -> Unit,
     filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode = com.flopster101.siliconplayer.FilenameDisplayMode.Always,
     filenameOnlyWhenTitleMissing: Boolean = false,
+    externalTrackInfoDialogRequestToken: Int = 0,
     onCollapseDragProgressChanged: (Boolean) -> Unit = {}
 ) {
     var sliderPosition by remember(file?.absolutePath, durationSeconds) {
@@ -721,6 +722,11 @@ internal fun PlayerScreen(
     DisposableEffect(Unit) {
         onDispose {
             onCollapseDragProgressChanged(false)
+        }
+    }
+    LaunchedEffect(externalTrackInfoDialogRequestToken) {
+        if (externalTrackInfoDialogRequestToken > 0) {
+            showTrackInfoDialog = true
         }
     }
 

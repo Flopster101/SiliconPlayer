@@ -314,7 +314,15 @@ internal fun AppNavigationPlaylistsContentSection(
     currentSubtuneIndex: Int,
     onCurrentViewChanged: (MainView) -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
-    onOpenPlaylist: (StoredPlaylist) -> Unit
+    onOpenPlaylist: (StoredPlaylist) -> Unit,
+    onPlayFavoritePlaylist: () -> Unit,
+    onDeleteAllFavorites: () -> Unit,
+    onDeleteFavoriteTrack: (PlaylistTrackEntry) -> Unit,
+    onPlayFavoriteTrackAsCached: (PlaylistTrackEntry) -> Unit,
+    onOpenFavoriteTrackLocation: (PlaylistTrackEntry) -> Unit,
+    onShareFavoriteTrack: (PlaylistTrackEntry) -> Unit,
+    onCopyFavoriteTrackSource: (PlaylistTrackEntry) -> Unit,
+    onOpenFavoriteTrackInfo: (PlaylistTrackEntry) -> Unit
 ) {
     AppNavigationPlaylistsRouteSection(
         mainPadding = mainPadding,
@@ -326,7 +334,15 @@ internal fun AppNavigationPlaylistsContentSection(
         currentSubtuneIndex = currentSubtuneIndex,
         onExitPlaylists = { onCurrentViewChanged(MainView.Home) },
         onOpenFavorite = onOpenFavorite,
-        onOpenPlaylist = onOpenPlaylist
+        onOpenPlaylist = onOpenPlaylist,
+        onPlayFavoritePlaylist = onPlayFavoritePlaylist,
+        onDeleteAllFavorites = onDeleteAllFavorites,
+        onDeleteFavoriteTrack = onDeleteFavoriteTrack,
+        onPlayFavoriteTrackAsCached = onPlayFavoriteTrackAsCached,
+        onOpenFavoriteTrackLocation = onOpenFavoriteTrackLocation,
+        onShareFavoriteTrack = onShareFavoriteTrack,
+        onCopyFavoriteTrackSource = onCopyFavoriteTrackSource,
+        onOpenFavoriteTrackInfo = onOpenFavoriteTrackInfo
     )
 }
 
@@ -562,6 +578,14 @@ internal fun AppNavigationMainContentHost(
     onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
     onOpenPlaylist: (StoredPlaylist) -> Unit,
+    onPlayFavoritePlaylist: () -> Unit,
+    onDeleteAllFavorites: () -> Unit,
+    onDeleteFavoriteTrack: (PlaylistTrackEntry) -> Unit,
+    onPlayFavoriteTrackAsCached: (PlaylistTrackEntry) -> Unit,
+    onOpenFavoriteTrackLocation: (PlaylistTrackEntry) -> Unit,
+    onShareFavoriteTrack: (PlaylistTrackEntry) -> Unit,
+    onCopyFavoriteTrackSource: (PlaylistTrackEntry) -> Unit,
+    onOpenFavoriteTrackInfo: (PlaylistTrackEntry) -> Unit,
     onOpenBrowser: (BrowserOpenRequest) -> Unit,
     onCurrentViewChanged: (MainView) -> Unit,
     onOpenUrlOrPathDialog: () -> Unit,
@@ -699,7 +723,15 @@ internal fun AppNavigationMainContentHost(
                 currentSubtuneIndex = currentSubtuneIndex,
                 onCurrentViewChanged = onCurrentViewChanged,
                 onOpenFavorite = onOpenFavorite,
-                onOpenPlaylist = onOpenPlaylist
+                onOpenPlaylist = onOpenPlaylist,
+                onPlayFavoritePlaylist = onPlayFavoritePlaylist,
+                onDeleteAllFavorites = onDeleteAllFavorites,
+                onDeleteFavoriteTrack = onDeleteFavoriteTrack,
+                onPlayFavoriteTrackAsCached = onPlayFavoriteTrackAsCached,
+                onOpenFavoriteTrackLocation = onOpenFavoriteTrackLocation,
+                onShareFavoriteTrack = onShareFavoriteTrack,
+                onCopyFavoriteTrackSource = onCopyFavoriteTrackSource,
+                onOpenFavoriteTrackInfo = onOpenFavoriteTrackInfo
             )
         },
         networkContent = { mainPadding ->

@@ -111,6 +111,7 @@ internal fun ExpandedPlayerOverlayHost(
     onOpenAudioEffects: () -> Unit,
     filenameDisplayMode: FilenameDisplayMode,
     filenameOnlyWhenTitleMissing: Boolean,
+    externalTrackInfoDialogRequestToken: Int,
     showFocusIndicators: Boolean,
     onHardwareNavigationInput: () -> Unit,
     onTouchInteraction: () -> Unit
@@ -267,6 +268,7 @@ internal fun ExpandedPlayerOverlayHost(
                     onOpenAudioEffects = onOpenAudioEffects,
                     filenameDisplayMode = filenameDisplayMode,
                     filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
+                    externalTrackInfoDialogRequestToken = externalTrackInfoDialogRequestToken,
                     onCollapseDragProgressChanged = onCollapseDragProgressChanged
                 )
             }

@@ -1,7 +1,9 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import android.net.Uri
 import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -12,7 +14,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -63,15 +64,20 @@ import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -92,11 +98,16 @@ import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.PlaylistLibraryState
 import com.flopster101.siliconplayer.PlaylistTrackEntry
 import com.flopster101.siliconplayer.StoredPlaylist
+import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.ensureRecentArtworkThumbnailCached
+import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
+import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
 import com.flopster101.siliconplayer.playlistEntryMatchesPlayback
 import com.flopster101.siliconplayer.placeholderArtworkIconForFile
 import com.flopster101.siliconplayer.recentArtworkThumbnailFile
 import com.flopster101.siliconplayer.resolvePlaylistEntryLocalFile
+import com.flopster101.siliconplayer.sourceLeafNameForDisplay
+import com.flopster101.siliconplayer.data.parseArchiveSourceId
 import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
@@ -133,7 +144,15 @@ internal fun PlaylistsScreen(
     backHandlingEnabled: Boolean = true,
     onBack: () -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
-    onOpenPlaylist: (StoredPlaylist) -> Unit
+    onOpenPlaylist: (StoredPlaylist) -> Unit,
+    onPlayFavoritePlaylist: () -> Unit,
+    onDeleteAllFavorites: () -> Unit,
+    onDeleteFavoriteTrack: (PlaylistTrackEntry) -> Unit,
+    onPlayFavoriteTrackAsCached: (PlaylistTrackEntry) -> Unit,
+    onOpenFavoriteTrackLocation: (PlaylistTrackEntry) -> Unit,
+    onShareFavoriteTrack: (PlaylistTrackEntry) -> Unit,
+    onCopyFavoriteTrackSource: (PlaylistTrackEntry) -> Unit,
+    onOpenFavoriteTrackInfo: (PlaylistTrackEntry) -> Unit
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var destination by rememberSaveable { mutableStateOf(PlaylistsSurfaceDestination.Library) }
@@ -146,6 +165,11 @@ internal fun PlaylistsScreen(
     )
     val coroutineScope = rememberCoroutineScope()
     val showingFavoritesDetail = destination == PlaylistsSurfaceDestination.Favorites
+    var showDeleteAllFavoritesConfirm by rememberSaveable { mutableStateOf(false) }
+    var showDeleteFavoritesPlaylistConfirm by rememberSaveable { mutableStateOf(false) }
+    var trackInfoDialogState by remember {
+        mutableStateOf<PlaylistTrackInfoDialogState?>(null)
+    }
     val showCollapsedDetailSubtitle = showingFavoritesDetail &&
         scrollBehavior.state.collapsedFraction >= 0.999f
     LaunchedEffect(pagerState.currentPage) {
@@ -269,7 +293,23 @@ internal fun PlaylistsScreen(
                         emptyBody = "Your favorites will show up here.",
                         activeSourceId = currentPlaybackSourceId,
                         currentSubtuneIndex = currentSubtuneIndex,
-                        onEntryClick = onOpenFavorite
+                        onEntryClick = onOpenFavorite,
+                        onPlayPlaylist = onPlayFavoritePlaylist,
+                        onDeletePlaylist = { showDeleteFavoritesPlaylistConfirm = true },
+                        canDeletePlaylist = false,
+                        onDeleteAllEntries = { showDeleteAllFavoritesConfirm = true },
+                        onPlayEntry = onOpenFavorite,
+                        onPlayEntryAsCached = onPlayFavoriteTrackAsCached,
+                        onDeleteEntry = onDeleteFavoriteTrack,
+                        onOpenEntryLocation = onOpenFavoriteTrackLocation,
+                        onShareEntry = onShareFavoriteTrack,
+                        onCopyEntrySource = onCopyFavoriteTrackSource,
+                        onOpenEntryInfo = { entry ->
+                            trackInfoDialogState = buildPlaylistTrackInfoDialogState(
+                                playlistTitle = "Favorites",
+                                entry = entry
+                            )
+                        }
                     )
                 }
             } else {
@@ -319,6 +359,47 @@ internal fun PlaylistsScreen(
                 }
             }
         }
+    }
+    if (showDeleteAllFavoritesConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllFavoritesConfirm = false },
+            title = { Text("Delete all favorites?") },
+            text = { Text("This will remove every track from Favorites.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteAllFavoritesConfirm = false
+                        onDeleteAllFavorites()
+                    }
+                ) {
+                    Text("Delete all")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteAllFavoritesConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+    if (showDeleteFavoritesPlaylistConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteFavoritesPlaylistConfirm = false },
+            title = { Text("Delete playlist?") },
+            text = { Text("Favorites cannot be deleted.") },
+            confirmButton = {
+                TextButton(onClick = { showDeleteFavoritesPlaylistConfirm = false }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+    trackInfoDialogState?.let { dialogState ->
+        BrowserInfoDialog(
+            title = "Track and decoder info",
+            fields = dialogState.fields,
+            onDismiss = { trackInfoDialogState = null }
+        )
     }
 }
 
@@ -746,14 +827,29 @@ private fun LazyListScope.playlistDetailContent(
     emptyBody: String,
     activeSourceId: String?,
     currentSubtuneIndex: Int,
-    onEntryClick: (PlaylistTrackEntry) -> Unit
+    onEntryClick: (PlaylistTrackEntry) -> Unit,
+    onPlayPlaylist: () -> Unit,
+    onDeletePlaylist: () -> Unit,
+    canDeletePlaylist: Boolean,
+    onDeleteAllEntries: () -> Unit,
+    onPlayEntry: (PlaylistTrackEntry) -> Unit,
+    onPlayEntryAsCached: (PlaylistTrackEntry) -> Unit,
+    onDeleteEntry: (PlaylistTrackEntry) -> Unit,
+    onOpenEntryLocation: (PlaylistTrackEntry) -> Unit,
+    onShareEntry: (PlaylistTrackEntry) -> Unit,
+    onCopyEntrySource: (PlaylistTrackEntry) -> Unit,
+    onOpenEntryInfo: (PlaylistTrackEntry) -> Unit
 ) {
     item {
         PlaylistHeroCard(
             title = title,
             trackCountLabel = playlistTrackCountLabel(entries.size),
             heroIcon = heroIcon,
-            entries = entries
+            entries = entries,
+            onPlayPlaylist = onPlayPlaylist,
+            onDeletePlaylist = onDeletePlaylist,
+            canDeletePlaylist = canDeletePlaylist,
+            onDeleteAllEntries = onDeleteAllEntries
         )
     }
     if (entries.isEmpty()) {
@@ -793,7 +889,14 @@ private fun LazyListScope.playlistDetailContent(
             PlaylistTrackRow(
                 entry = entry,
                 isActive = isActive,
-                onClick = { onEntryClick(entry) }
+                onClick = { onEntryClick(entry) },
+                onPlay = { onPlayEntry(entry) },
+                onPlayAsCached = { onPlayEntryAsCached(entry) },
+                onDelete = { onDeleteEntry(entry) },
+                onOpenLocation = { onOpenEntryLocation(entry) },
+                onShare = { onShareEntry(entry) },
+                onCopySource = { onCopyEntrySource(entry) },
+                onOpenInfo = { onOpenEntryInfo(entry) }
             )
         }
     }
@@ -804,8 +907,13 @@ private fun PlaylistHeroCard(
     title: String,
     trackCountLabel: String,
     heroIcon: ImageVector?,
-    entries: List<PlaylistTrackEntry>
+    entries: List<PlaylistTrackEntry>,
+    onPlayPlaylist: () -> Unit,
+    onDeletePlaylist: () -> Unit,
+    canDeletePlaylist: Boolean,
+    onDeleteAllEntries: () -> Unit
 ) {
+    var menuExpanded by rememberSaveable { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -844,11 +952,33 @@ private fun PlaylistHeroCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = {}) {
-                Icon(
-                    imageVector = Icons.Default.MoreVert,
-                    contentDescription = "More actions"
-                )
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "More actions"
+                    )
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Delete playlist") },
+                        enabled = canDeletePlaylist,
+                        onClick = {
+                            menuExpanded = false
+                            onDeletePlaylist()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete all entries") },
+                        onClick = {
+                            menuExpanded = false
+                            onDeleteAllEntries()
+                        }
+                    )
+                }
             }
             Spacer(modifier = Modifier.weight(1f))
             IconButton(onClick = {}) {
@@ -858,7 +988,7 @@ private fun PlaylistHeroCard(
                 )
             }
             FilledIconButton(
-                onClick = {},
+                onClick = onPlayPlaylist,
                 modifier = Modifier.size(64.dp),
                 shape = CircleShape
             ) {
@@ -1130,8 +1260,19 @@ private fun playlistCoverSourceKey(source: String): String {
 private fun PlaylistTrackRow(
     entry: PlaylistTrackEntry,
     isActive: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onPlay: () -> Unit,
+    onPlayAsCached: () -> Unit,
+    onDelete: () -> Unit,
+    onOpenLocation: () -> Unit,
+    onShare: () -> Unit,
+    onCopySource: () -> Unit,
+    onOpenInfo: () -> Unit
 ) {
+    var menuExpanded by rememberSaveable(entry.id) { mutableStateOf(false) }
+    val isRemoteSource = remember(entry.source) { isRemotePlaylistSource(entry.source) }
+    val localEntryFile = remember(entry.source) { resolvePlaylistEntryLocalFile(entry.source) }
+    val canOpenLocalLocation = localEntryFile?.exists() == true
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1172,7 +1313,7 @@ private fun PlaylistTrackRow(
             Box(
                 modifier = Modifier
                     .size(28.dp)
-                    .clickable(onClick = {}),
+                    .clickable(onClick = { menuExpanded = true }),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -1181,6 +1322,75 @@ private fun PlaylistTrackRow(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(18.dp)
                 )
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Play") },
+                        onClick = {
+                            menuExpanded = false
+                            onPlay()
+                        }
+                    )
+                    if (isRemoteSource) {
+                        DropdownMenuItem(
+                            text = { Text("Play as cached") },
+                            onClick = {
+                                menuExpanded = false
+                                onPlayAsCached()
+                            }
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("Delete") },
+                        onClick = {
+                            menuExpanded = false
+                            onDelete()
+                        }
+                    )
+                    if (canOpenLocalLocation) {
+                        DropdownMenuItem(
+                            text = { Text("Open location") },
+                            onClick = {
+                                menuExpanded = false
+                                onOpenLocation()
+                            }
+                        )
+                    }
+                    if (isRemoteSource) {
+                        DropdownMenuItem(
+                            text = { Text("Copy URL") },
+                            onClick = {
+                                menuExpanded = false
+                                onCopySource()
+                            }
+                        )
+                    } else if (canOpenLocalLocation) {
+                        DropdownMenuItem(
+                            text = { Text("Share") },
+                            onClick = {
+                                menuExpanded = false
+                                onShare()
+                            }
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text("Info") },
+                        onClick = {
+                            menuExpanded = false
+                            onOpenInfo()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Move up") },
+                        onClick = { menuExpanded = false }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Move down") },
+                        onClick = { menuExpanded = false }
+                    )
+                }
             }
         }
         androidx.compose.material3.HorizontalDivider(
@@ -1188,6 +1398,20 @@ private fun PlaylistTrackRow(
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
         )
     }
+}
+
+private fun isRemotePlaylistSource(sourceId: String): Boolean {
+    val normalized = sourceId.trim()
+    if (normalized.isEmpty()) return false
+    val scheme = Uri.parse(normalized).scheme?.lowercase(Locale.ROOT)
+    if (scheme == "http" || scheme == "https" || scheme == "smb") return true
+    if (scheme == "archive") {
+        val parsed = parseArchiveSourceId(normalized) ?: return false
+        return parseHttpSourceSpecFromInput(parsed.archivePath) != null ||
+            parseSmbSourceSpecFromInput(parsed.archivePath) != null
+    }
+    return parseHttpSourceSpecFromInput(normalized) != null ||
+        parseSmbSourceSpecFromInput(normalized) != null
 }
 
 @Composable
@@ -1335,4 +1559,78 @@ private fun PlaylistLibraryFlatRow(
 
 private fun playlistPageTrackSubtitle(entry: PlaylistTrackEntry): String {
     return entry.artist?.trim()?.takeIf { it.isNotBlank() } ?: "No metadata yet"
+}
+
+private data class PlaylistTrackInfoDialogState(
+    val fields: List<BrowserInfoField>
+)
+
+private fun buildPlaylistTrackInfoDialogState(
+    playlistTitle: String,
+    entry: PlaylistTrackEntry
+): PlaylistTrackInfoDialogState {
+    val sourceId = entry.source.trim()
+    val localFile = resolvePlaylistEntryLocalFile(sourceId)?.takeIf { it.exists() && it.isFile }
+    val archiveSource = parseArchiveSourceId(sourceId)
+    val httpSource = parseHttpSourceSpecFromInput(sourceId)
+    val smbSource = parseSmbSourceSpecFromInput(sourceId)
+    val sourceFileName = localFile?.name
+        ?: sourceLeafNameForDisplay(sourceId)
+        ?: entry.title
+    val sourceSizeBytes = localFile?.length()
+    val storageOrHostLabel = when {
+        httpSource != null || smbSource != null -> "Host"
+        archiveSource != null -> "Archive"
+        else -> "Storage"
+    }
+    val storageOrHostValue = when {
+        httpSource != null -> httpSource.host
+        smbSource != null -> smbSource.host
+        archiveSource != null -> decodePercentEncodedForDisplay(archiveSource.archivePath) ?: archiveSource.archivePath
+        localFile?.parentFile != null -> localFile.parentFile?.absolutePath.orEmpty()
+        else -> sourceId
+    }
+    val fields = buildBrowserInfoFields(
+        entries = listOf(
+            BrowserInfoEntry(
+                name = sourceFileName,
+                isDirectory = false,
+                sizeBytes = sourceSizeBytes
+            )
+        ),
+        path = sourceId,
+        storageOrHostLabel = storageOrHostLabel,
+        storageOrHost = storageOrHostValue
+    ).toMutableList()
+    fields += BrowserInfoField("Playlist", playlistTitle)
+    if (entry.title.isNotBlank()) {
+        fields += BrowserInfoField("Track title", entry.title)
+    }
+    entry.artist?.trim()?.takeIf { it.isNotBlank() }?.let { artist ->
+        fields += BrowserInfoField("Artist", artist)
+    }
+    entry.album?.trim()?.takeIf { it.isNotBlank() }?.let { album ->
+        fields += BrowserInfoField("Album", album)
+    }
+    entry.subtuneIndex?.let { subtuneIndex ->
+        fields += BrowserInfoField("Subtune", "${subtuneIndex + 1}")
+    }
+    entry.durationSecondsOverride
+        ?.takeIf { it.isFinite() && it > 0.0 }
+        ?.let { seconds ->
+            fields += BrowserInfoField("Duration", formatPlaylistInfoDuration(seconds))
+        }
+    return PlaylistTrackInfoDialogState(fields = fields)
+}
+
+private fun formatPlaylistInfoDuration(seconds: Double): String {
+    val totalSeconds = seconds.toInt().coerceAtLeast(0)
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val secs = totalSeconds % 60
+    return if (hours > 0) {
+        String.format(Locale.ROOT, "%d:%02d:%02d", hours, minutes, secs)
+    } else {
+        String.format(Locale.ROOT, "%d:%02d", minutes, secs)
+    }
 }

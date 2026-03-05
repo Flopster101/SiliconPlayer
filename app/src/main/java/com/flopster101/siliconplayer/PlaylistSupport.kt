@@ -36,7 +36,8 @@ internal data class PlaylistTrackEntry(
     val album: String? = null,
     val artworkThumbnailCacheKey: String? = null,
     val subtuneIndex: Int? = null,
-    val durationSecondsOverride: Double? = null
+    val durationSecondsOverride: Double? = null,
+    val addedAtMs: Long = System.currentTimeMillis()
 )
 
 internal data class StoredPlaylist(

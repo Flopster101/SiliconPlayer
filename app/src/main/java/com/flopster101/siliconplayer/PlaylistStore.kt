@@ -13,6 +13,7 @@ private const val PLAYLIST_ENTRY_ARTIST_KEY = "artist"
 private const val PLAYLIST_ENTRY_ALBUM_KEY = "album"
 private const val PLAYLIST_ENTRY_ARTWORK_CACHE_KEY = "artworkThumbnailCacheKey"
 private const val PLAYLIST_ENTRY_SUBTUNE_KEY = "subtune_index"
+private const val PLAYLIST_ENTRY_ADDED_AT_KEY = "added_at_ms"
 private const val STORED_PLAYLIST_ID_KEY = "id"
 private const val STORED_PLAYLIST_TITLE_KEY = "title"
 private const val STORED_PLAYLIST_FORMAT_KEY = "format"
@@ -147,6 +148,7 @@ private fun readPlaylistTrackEntries(array: JSONArray): List<PlaylistTrackEntry>
         val source = item.optString(PLAYLIST_ENTRY_SOURCE_KEY).trim()
         val title = item.optString(PLAYLIST_ENTRY_TITLE_KEY).trim()
         if (source.isBlank() || title.isBlank()) continue
+        val fallbackAddedAt = (array.length() - index).toLong()
         entries += PlaylistTrackEntry(
             id = item.optString(PLAYLIST_ENTRY_ID_KEY).trim().ifBlank { java.util.UUID.randomUUID().toString() },
             source = source,
@@ -155,7 +157,10 @@ private fun readPlaylistTrackEntries(array: JSONArray): List<PlaylistTrackEntry>
             album = item.optString(PLAYLIST_ENTRY_ALBUM_KEY).trim().ifBlank { null },
             artworkThumbnailCacheKey = item.optString(PLAYLIST_ENTRY_ARTWORK_CACHE_KEY).trim().ifBlank { null },
             subtuneIndex = item.optInt(PLAYLIST_ENTRY_SUBTUNE_KEY, Int.MIN_VALUE)
-                .takeUnless { it == Int.MIN_VALUE || it < 0 }
+                .takeUnless { it == Int.MIN_VALUE || it < 0 },
+            addedAtMs = item.optLong(PLAYLIST_ENTRY_ADDED_AT_KEY)
+                .takeIf { it > 0L }
+                ?: fallbackAddedAt
         )
     }
     return entries
@@ -185,4 +190,5 @@ private fun writePlaylistTrackEntry(entry: PlaylistTrackEntry): JSONObject {
         .put(PLAYLIST_ENTRY_ALBUM_KEY, entry.album ?: "")
         .put(PLAYLIST_ENTRY_ARTWORK_CACHE_KEY, entry.artworkThumbnailCacheKey ?: "")
         .put(PLAYLIST_ENTRY_SUBTUNE_KEY, entry.subtuneIndex ?: -1)
+        .put(PLAYLIST_ENTRY_ADDED_AT_KEY, entry.addedAtMs)
 }

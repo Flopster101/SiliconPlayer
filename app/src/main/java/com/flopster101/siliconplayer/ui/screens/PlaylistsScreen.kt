@@ -47,6 +47,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -130,6 +131,16 @@ private enum class AlbumCollectionLayout {
     List
 }
 
+private enum class PlaylistEntrySortMode(
+    val label: String
+) {
+    Custom("Custom"),
+    Title("Title"),
+    Artist("Artist"),
+    Album("Album"),
+    RecentlyAdded("Recently added")
+}
+
 private const val PLAYLISTS_PAGE_NAV_DURATION_MS = 280
 private val PLAYLISTS_DETAIL_CONTENT_GUTTER = 8.dp
 
@@ -165,6 +176,7 @@ internal fun PlaylistsScreen(
     )
     val coroutineScope = rememberCoroutineScope()
     val showingFavoritesDetail = destination == PlaylistsSurfaceDestination.Favorites
+    var favoritesSortMode by rememberSaveable { mutableStateOf(PlaylistEntrySortMode.Custom) }
     var showDeleteAllFavoritesConfirm by rememberSaveable { mutableStateOf(false) }
     var showDeleteFavoritesPlaylistConfirm by rememberSaveable { mutableStateOf(false) }
     var trackInfoDialogState by remember {
@@ -179,6 +191,12 @@ internal fun PlaylistsScreen(
     }
     BackHandler(enabled = backHandlingEnabled && showingFavoritesDetail) {
         destination = PlaylistsSurfaceDestination.Library
+    }
+    val sortedFavoriteEntries = remember(libraryState.favorites, favoritesSortMode) {
+        sortPlaylistEntries(
+            entries = libraryState.favorites,
+            sortMode = favoritesSortMode
+        )
     }
     Scaffold(
         modifier = Modifier
@@ -288,9 +306,11 @@ internal fun PlaylistsScreen(
                 ) {
                     playlistDetailContent(
                         title = "Favorites",
-                        entries = libraryState.favorites,
+                        entries = sortedFavoriteEntries,
                         heroIcon = Icons.Default.Star,
                         emptyBody = "Your favorites will show up here.",
+                        selectedSortMode = favoritesSortMode,
+                        onSortModeSelected = { favoritesSortMode = it },
                         activeSourceId = currentPlaybackSourceId,
                         currentSubtuneIndex = currentSubtuneIndex,
                         onEntryClick = onOpenFavorite,
@@ -825,6 +845,8 @@ private fun LazyListScope.playlistDetailContent(
     entries: List<PlaylistTrackEntry>,
     heroIcon: ImageVector,
     emptyBody: String,
+    selectedSortMode: PlaylistEntrySortMode,
+    onSortModeSelected: (PlaylistEntrySortMode) -> Unit,
     activeSourceId: String?,
     currentSubtuneIndex: Int,
     onEntryClick: (PlaylistTrackEntry) -> Unit,
@@ -846,6 +868,8 @@ private fun LazyListScope.playlistDetailContent(
             trackCountLabel = playlistTrackCountLabel(entries.size),
             heroIcon = heroIcon,
             entries = entries,
+            selectedSortMode = selectedSortMode,
+            onSortModeSelected = onSortModeSelected,
             onPlayPlaylist = onPlayPlaylist,
             onDeletePlaylist = onDeletePlaylist,
             canDeletePlaylist = canDeletePlaylist,
@@ -908,12 +932,15 @@ private fun PlaylistHeroCard(
     trackCountLabel: String,
     heroIcon: ImageVector?,
     entries: List<PlaylistTrackEntry>,
+    selectedSortMode: PlaylistEntrySortMode,
+    onSortModeSelected: (PlaylistEntrySortMode) -> Unit,
     onPlayPlaylist: () -> Unit,
     onDeletePlaylist: () -> Unit,
     canDeletePlaylist: Boolean,
     onDeleteAllEntries: () -> Unit
 ) {
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
+    var sortMenuExpanded by rememberSaveable { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1008,16 +1035,43 @@ private fun PlaylistHeroCard(
         ) {
             PlaylistActionPill(
                 label = "Add",
-                icon = Icons.Default.Add
+                icon = Icons.Default.Add,
+                onClick = {}
             )
             PlaylistActionPill(
                 label = "Edit",
-                icon = Icons.Default.Edit
+                icon = Icons.Default.Edit,
+                onClick = {}
             )
-            PlaylistActionPill(
-                label = "Sort",
-                icon = Icons.Default.SwapVert
-            )
+            Box {
+                PlaylistActionPill(
+                    label = "Sort",
+                    icon = Icons.Default.SwapVert,
+                    onClick = { sortMenuExpanded = true }
+                )
+                DropdownMenu(
+                    expanded = sortMenuExpanded,
+                    onDismissRequest = { sortMenuExpanded = false }
+                ) {
+                    PlaylistEntrySortMode.entries.forEach { mode ->
+                        DropdownMenuItem(
+                            text = { Text(mode.label) },
+                            leadingIcon = {
+                                if (mode == selectedSortMode) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null
+                                    )
+                                }
+                            },
+                            onClick = {
+                                sortMenuExpanded = false
+                                onSortModeSelected(mode)
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -1025,11 +1079,12 @@ private fun PlaylistHeroCard(
 @Composable
 private fun PlaylistActionPill(
     label: String,
-    icon: ImageVector
+    icon: ImageVector,
+    onClick: () -> Unit
 ) {
     val pillShape = RoundedCornerShape(18.dp)
     Surface(
-        modifier = Modifier.clip(pillShape).clickable(onClick = {}),
+        modifier = Modifier.clip(pillShape).clickable(onClick = onClick),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = pillShape
     ) {
@@ -1049,6 +1104,63 @@ private fun PlaylistActionPill(
             )
         }
     }
+}
+
+private fun sortPlaylistEntries(
+    entries: List<PlaylistTrackEntry>,
+    sortMode: PlaylistEntrySortMode
+): List<PlaylistTrackEntry> {
+    if (entries.size <= 1 || sortMode == PlaylistEntrySortMode.Custom) return entries
+    val indexedEntries = entries.withIndex()
+    return when (sortMode) {
+        PlaylistEntrySortMode.Custom -> entries
+        PlaylistEntrySortMode.Title -> {
+            indexedEntries
+                .sortedWith(
+                    compareBy<IndexedValue<PlaylistTrackEntry>> { it.value.title.lowercase(Locale.ROOT) }
+                        .thenBy { sortablePlaylistText(it.value.artist) }
+                        .thenBy { sortablePlaylistText(it.value.album) }
+                        .thenBy { it.index }
+                )
+                .map { it.value }
+        }
+
+        PlaylistEntrySortMode.Artist -> {
+            indexedEntries
+                .sortedWith(
+                    compareBy<IndexedValue<PlaylistTrackEntry>> { sortablePlaylistText(it.value.artist) }
+                        .thenBy { it.value.title.lowercase(Locale.ROOT) }
+                        .thenBy { sortablePlaylistText(it.value.album) }
+                        .thenBy { it.index }
+                )
+                .map { it.value }
+        }
+
+        PlaylistEntrySortMode.Album -> {
+            indexedEntries
+                .sortedWith(
+                    compareBy<IndexedValue<PlaylistTrackEntry>> { sortablePlaylistText(it.value.album) }
+                        .thenBy { sortablePlaylistText(it.value.artist) }
+                        .thenBy { it.value.title.lowercase(Locale.ROOT) }
+                        .thenBy { it.index }
+                )
+                .map { it.value }
+        }
+
+        PlaylistEntrySortMode.RecentlyAdded -> {
+            indexedEntries
+                .sortedWith(
+                    compareByDescending<IndexedValue<PlaylistTrackEntry>> { it.value.addedAtMs }
+                        .thenBy { it.index }
+                )
+                .map { it.value }
+        }
+    }
+}
+
+private fun sortablePlaylistText(value: String?): String {
+    val normalized = value?.trim()?.lowercase(Locale.ROOT).orEmpty()
+    return if (normalized.isBlank()) "\uFFFF" else normalized
 }
 
 @Composable

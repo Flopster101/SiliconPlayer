@@ -3796,6 +3796,13 @@ private fun AppNavigation(
                         Toast.makeText(context, "Removed from favorites", Toast.LENGTH_SHORT).show()
                     }
                 },
+                onMoveFavoriteTrack = { entry, offset ->
+                    val updatedState = moveFavoriteTrack(playlistLibraryState, entry.id, offset)
+                    if (updatedState != playlistLibraryState) {
+                        onPlaylistLibraryStateChanged(updatedState)
+                        syncActiveFavoritesContextAfterMutation(updatedState.favorites)
+                    }
+                },
                 onPlayFavoriteTrackAsCached = { entry ->
                     val normalizedSource = normalizeSourceIdentity(entry.source) ?: entry.source
                     val cachedFile = findExistingCachedFileForSource(

@@ -120,6 +120,23 @@ internal fun removeFavoriteTrack(
     )
 }
 
+internal fun moveFavoriteTrack(
+    state: PlaylistLibraryState,
+    favoriteId: String,
+    offset: Int
+): PlaylistLibraryState {
+    if (offset == 0 || state.favorites.size < 2) return state
+    val currentIndex = state.favorites.indexOfFirst { it.id == favoriteId }
+    if (currentIndex < 0) return state
+    val targetIndex = (currentIndex + offset).coerceIn(0, state.favorites.lastIndex)
+    if (targetIndex == currentIndex) return state
+    val reorderedFavorites = state.favorites.toMutableList().apply {
+        val entry = removeAt(currentIndex)
+        add(targetIndex, entry)
+    }
+    return state.copy(favorites = reorderedFavorites)
+}
+
 private fun readStoredPlaylists(array: JSONArray): List<StoredPlaylist> {
     val playlists = mutableListOf<StoredPlaylist>()
     for (index in 0 until array.length()) {

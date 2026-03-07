@@ -5,9 +5,11 @@ import android.graphics.BitmapFactory
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -16,6 +18,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.pager.HorizontalPager
@@ -36,6 +39,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -49,6 +53,7 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.MoreVert
@@ -76,6 +81,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,13 +91,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -159,6 +168,7 @@ internal fun PlaylistsScreen(
     onPlayFavoritePlaylist: () -> Unit,
     onDeleteAllFavorites: () -> Unit,
     onDeleteFavoriteTrack: (PlaylistTrackEntry) -> Unit,
+    onMoveFavoriteTrack: (PlaylistTrackEntry, Int) -> Unit,
     onPlayFavoriteTrackAsCached: (PlaylistTrackEntry) -> Unit,
     onOpenFavoriteTrackLocation: (PlaylistTrackEntry) -> Unit,
     onShareFavoriteTrack: (PlaylistTrackEntry) -> Unit,
@@ -177,6 +187,8 @@ internal fun PlaylistsScreen(
     val coroutineScope = rememberCoroutineScope()
     val showingFavoritesDetail = destination == PlaylistsSurfaceDestination.Favorites
     var favoritesSortMode by rememberSaveable { mutableStateOf(PlaylistEntrySortMode.Custom) }
+    var favoritesEditModeEnabled by rememberSaveable { mutableStateOf(false) }
+    var favoritesDraggingEntryId by remember { mutableStateOf<String?>(null) }
     var showDeleteAllFavoritesConfirm by rememberSaveable { mutableStateOf(false) }
     var showDeleteFavoritesPlaylistConfirm by rememberSaveable { mutableStateOf(false) }
     var trackInfoDialogState by remember {
@@ -190,7 +202,17 @@ internal fun PlaylistsScreen(
         }
     }
     BackHandler(enabled = backHandlingEnabled && showingFavoritesDetail) {
+        favoritesEditModeEnabled = false
+        favoritesDraggingEntryId = null
         destination = PlaylistsSurfaceDestination.Library
+    }
+    LaunchedEffect(favoritesEditModeEnabled, favoritesSortMode, libraryState.favorites) {
+        val isCustomSort = favoritesSortMode == PlaylistEntrySortMode.Custom
+        val missingDraggedEntry = favoritesDraggingEntryId != null &&
+            libraryState.favorites.none { it.id == favoritesDraggingEntryId }
+        if (!favoritesEditModeEnabled || !isCustomSort || missingDraggedEntry) {
+            favoritesDraggingEntryId = null
+        }
     }
     val sortedFavoriteEntries = remember(libraryState.favorites, favoritesSortMode) {
         sortPlaylistEntries(
@@ -241,6 +263,8 @@ internal fun PlaylistsScreen(
                     IconButton(
                         onClick = {
                             if (showingFavoritesDetail) {
+                                favoritesEditModeEnabled = false
+                                favoritesDraggingEntryId = null
                                 destination = PlaylistsSurfaceDestination.Library
                             } else {
                                 onBack()
@@ -311,6 +335,16 @@ internal fun PlaylistsScreen(
                         emptyBody = "Your favorites will show up here.",
                         selectedSortMode = favoritesSortMode,
                         onSortModeSelected = { favoritesSortMode = it },
+                        isEditMode = favoritesEditModeEnabled,
+                        onEditModeChanged = { enabled ->
+                            favoritesEditModeEnabled = enabled
+                            if (!enabled) {
+                                favoritesDraggingEntryId = null
+                            }
+                        },
+                        canReorderEntries = favoritesSortMode == PlaylistEntrySortMode.Custom,
+                        draggingEntryId = favoritesDraggingEntryId,
+                        onDraggingEntryIdChange = { favoritesDraggingEntryId = it },
                         activeSourceId = currentPlaybackSourceId,
                         currentSubtuneIndex = currentSubtuneIndex,
                         onEntryClick = onOpenFavorite,
@@ -321,6 +355,7 @@ internal fun PlaylistsScreen(
                         onPlayEntry = onOpenFavorite,
                         onPlayEntryAsCached = onPlayFavoriteTrackAsCached,
                         onDeleteEntry = onDeleteFavoriteTrack,
+                        onMoveEntry = onMoveFavoriteTrack,
                         onOpenEntryLocation = onOpenFavoriteTrackLocation,
                         onShareEntry = onShareFavoriteTrack,
                         onCopyEntrySource = onCopyFavoriteTrackSource,
@@ -847,6 +882,11 @@ private fun LazyListScope.playlistDetailContent(
     emptyBody: String,
     selectedSortMode: PlaylistEntrySortMode,
     onSortModeSelected: (PlaylistEntrySortMode) -> Unit,
+    isEditMode: Boolean,
+    onEditModeChanged: (Boolean) -> Unit,
+    canReorderEntries: Boolean,
+    draggingEntryId: String?,
+    onDraggingEntryIdChange: (String?) -> Unit,
     activeSourceId: String?,
     currentSubtuneIndex: Int,
     onEntryClick: (PlaylistTrackEntry) -> Unit,
@@ -857,6 +897,7 @@ private fun LazyListScope.playlistDetailContent(
     onPlayEntry: (PlaylistTrackEntry) -> Unit,
     onPlayEntryAsCached: (PlaylistTrackEntry) -> Unit,
     onDeleteEntry: (PlaylistTrackEntry) -> Unit,
+    onMoveEntry: (PlaylistTrackEntry, Int) -> Unit,
     onOpenEntryLocation: (PlaylistTrackEntry) -> Unit,
     onShareEntry: (PlaylistTrackEntry) -> Unit,
     onCopyEntrySource: (PlaylistTrackEntry) -> Unit,
@@ -870,6 +911,8 @@ private fun LazyListScope.playlistDetailContent(
             entries = entries,
             selectedSortMode = selectedSortMode,
             onSortModeSelected = onSortModeSelected,
+            isEditMode = isEditMode,
+            onEditModeChanged = onEditModeChanged,
             onPlayPlaylist = onPlayPlaylist,
             onDeletePlaylist = onDeletePlaylist,
             canDeletePlaylist = canDeletePlaylist,
@@ -901,22 +944,48 @@ private fun LazyListScope.playlistDetailContent(
             }
         }
     } else {
-        items(
+        itemsIndexed(
             items = entries,
-            key = { it.id }
-        ) { entry ->
+            key = { _, entry -> entry.id }
+        ) { index, entry ->
             val isActive = playlistEntryMatchesPlayback(
                 entry = entry,
                 activeSourceId = activeSourceId,
                 currentSubtuneIndex = currentSubtuneIndex
             )
+            val canMoveUp = index > 0
+            val canMoveDown = index < entries.lastIndex
             PlaylistTrackRow(
                 entry = entry,
                 isActive = isActive,
+                isDragged = draggingEntryId == entry.id,
+                editModeEnabled = isEditMode,
+                canReorder = canReorderEntries,
+                canMoveUp = canMoveUp,
+                canMoveDown = canMoveDown,
                 onClick = { onEntryClick(entry) },
                 onPlay = { onPlayEntry(entry) },
                 onPlayAsCached = { onPlayEntryAsCached(entry) },
                 onDelete = { onDeleteEntry(entry) },
+                onMoveUp = { onMoveEntry(entry, -1) },
+                onMoveDown = { onMoveEntry(entry, 1) },
+                onDragStart = {
+                    if (canReorderEntries) {
+                        onDraggingEntryIdChange(entry.id)
+                    }
+                },
+                onDragStep = { direction ->
+                    if (canReorderEntries) {
+                        if (direction > 0) {
+                            onMoveEntry(entry, 1)
+                        } else if (direction < 0) {
+                            onMoveEntry(entry, -1)
+                        }
+                    }
+                },
+                onDragEnd = {
+                    onDraggingEntryIdChange(null)
+                },
                 onOpenLocation = { onOpenEntryLocation(entry) },
                 onShare = { onShareEntry(entry) },
                 onCopySource = { onCopyEntrySource(entry) },
@@ -934,6 +1003,8 @@ private fun PlaylistHeroCard(
     entries: List<PlaylistTrackEntry>,
     selectedSortMode: PlaylistEntrySortMode,
     onSortModeSelected: (PlaylistEntrySortMode) -> Unit,
+    isEditMode: Boolean,
+    onEditModeChanged: (Boolean) -> Unit,
     onPlayPlaylist: () -> Unit,
     onDeletePlaylist: () -> Unit,
     canDeletePlaylist: Boolean,
@@ -1039,9 +1110,9 @@ private fun PlaylistHeroCard(
                 onClick = {}
             )
             PlaylistActionPill(
-                label = "Edit",
-                icon = Icons.Default.Edit,
-                onClick = {}
+                label = if (isEditMode) "Done" else "Edit",
+                icon = if (isEditMode) Icons.Default.Check else Icons.Default.Edit,
+                onClick = { onEditModeChanged(!isEditMode) }
             )
             Box {
                 PlaylistActionPill(
@@ -1372,10 +1443,20 @@ private fun playlistCoverSourceKey(source: String): String {
 private fun PlaylistTrackRow(
     entry: PlaylistTrackEntry,
     isActive: Boolean,
+    isDragged: Boolean,
+    editModeEnabled: Boolean,
+    canReorder: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
     onClick: () -> Unit,
     onPlay: () -> Unit,
     onPlayAsCached: () -> Unit,
     onDelete: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onDragStart: () -> Unit,
+    onDragStep: (Int) -> Unit,
+    onDragEnd: () -> Unit,
     onOpenLocation: () -> Unit,
     onShare: () -> Unit,
     onCopySource: () -> Unit,
@@ -1385,6 +1466,20 @@ private fun PlaylistTrackRow(
     val isRemoteSource = remember(entry.source) { isRemotePlaylistSource(entry.source) }
     val localEntryFile = remember(entry.source) { resolvePlaylistEntryLocalFile(entry.source) }
     val canOpenLocalLocation = localEntryFile?.exists() == true
+    val draggedHighlightColor by animateColorAsState(
+        targetValue = if (isDragged) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.56f)
+        } else {
+            Color.Transparent
+        },
+        animationSpec = tween(durationMillis = 140, easing = LinearOutSlowInEasing),
+        label = "playlistRowDraggedHighlight"
+    )
+    val draggedScale by animateFloatAsState(
+        targetValue = if (isDragged) 1.014f else 1f,
+        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+        label = "playlistRowDraggedScale"
+    )
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1393,7 +1488,19 @@ private fun PlaylistTrackRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .graphicsLayer {
+                    scaleX = draggedScale
+                    scaleY = draggedScale
+                }
+                .clip(RoundedCornerShape(14.dp))
+                .background(draggedHighlightColor)
+                .let { base ->
+                    if (editModeEnabled) {
+                        base
+                    } else {
+                        base.clickable(onClick = onClick)
+                    }
+                }
                 .padding(start = 6.dp, top = 10.dp, end = 2.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1420,6 +1527,15 @@ private fun PlaylistTrackRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (editModeEnabled) {
+                PlaylistTrackReorderHandle(
+                    reorderEnabled = canReorder,
+                    isDragged = isDragged,
+                    onDragStart = onDragStart,
+                    onDragStep = onDragStep,
+                    onDragEnd = onDragEnd
                 )
             }
             Box(
@@ -1496,11 +1612,19 @@ private fun PlaylistTrackRow(
                     )
                     DropdownMenuItem(
                         text = { Text("Move up") },
-                        onClick = { menuExpanded = false }
+                        enabled = canReorder && canMoveUp,
+                        onClick = {
+                            menuExpanded = false
+                            onMoveUp()
+                        }
                     )
                     DropdownMenuItem(
                         text = { Text("Move down") },
-                        onClick = { menuExpanded = false }
+                        enabled = canReorder && canMoveDown,
+                        onClick = {
+                            menuExpanded = false
+                            onMoveDown()
+                        }
                     )
                 }
             }
@@ -1508,6 +1632,73 @@ private fun PlaylistTrackRow(
         androidx.compose.material3.HorizontalDivider(
             modifier = Modifier.padding(start = 64.dp),
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+        )
+    }
+}
+
+@Composable
+private fun PlaylistTrackReorderHandle(
+    reorderEnabled: Boolean,
+    isDragged: Boolean,
+    onDragStart: () -> Unit,
+    onDragStep: (Int) -> Unit,
+    onDragEnd: () -> Unit
+) {
+    var dragSwapRemainderPx by remember { mutableFloatStateOf(0f) }
+    val dragSwapThresholdPx = with(LocalDensity.current) { 44.dp.toPx() }
+    val handleTint by animateColorAsState(
+        targetValue = when {
+            !reorderEnabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.36f)
+            isDragged -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)
+        },
+        animationSpec = tween(durationMillis = 120, easing = FastOutSlowInEasing),
+        label = "playlistDragHandleTint"
+    )
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .let { base ->
+                if (reorderEnabled) {
+                    base.pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = {
+                                dragSwapRemainderPx = 0f
+                                onDragStart()
+                            },
+                            onDragEnd = {
+                                dragSwapRemainderPx = 0f
+                                onDragEnd()
+                            },
+                            onDragCancel = {
+                                dragSwapRemainderPx = 0f
+                                onDragEnd()
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                dragSwapRemainderPx += dragAmount.y
+                                while (dragSwapRemainderPx >= dragSwapThresholdPx) {
+                                    onDragStep(1)
+                                    dragSwapRemainderPx -= dragSwapThresholdPx
+                                }
+                                while (dragSwapRemainderPx <= -dragSwapThresholdPx) {
+                                    onDragStep(-1)
+                                    dragSwapRemainderPx += dragSwapThresholdPx
+                                }
+                            }
+                        )
+                    }
+                } else {
+                    base
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.DragIndicator,
+            contentDescription = "Drag to reorder",
+            tint = handleTint,
+            modifier = Modifier.size(28.dp)
         )
     }
 }

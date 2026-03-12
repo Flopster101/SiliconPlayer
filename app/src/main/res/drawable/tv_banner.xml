@@ -33,7 +33,7 @@
             <bitmap
                 android:antialias="true"
                 android:gravity="center"
-                android:src="@drawable/ic_launcher" />
+                android:src="@mipmap/ic_launcher" />
         </inset>
     </item>
 </layer-list>

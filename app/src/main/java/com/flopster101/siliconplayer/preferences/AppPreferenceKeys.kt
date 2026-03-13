@@ -41,6 +41,7 @@ internal object AppPreferenceKeys {
     const val SESSION_RESUME_PLAYBACK_CAPABILITIES = "session_resume_playback_capabilities"
     const val SESSION_RESUME_REPEAT_CAPABILITIES = "session_resume_repeat_capabilities"
     const val THEME_MODE = "theme_mode"
+    const val THEME_USE_MONET = "theme_use_monet"
     const val RECENT_FOLDERS = "recent_folders"
     const val RECENT_PLAYED_FILES = "recent_played_files"
     const val PINNED_HOME_ENTRIES = "pinned_home_entries"

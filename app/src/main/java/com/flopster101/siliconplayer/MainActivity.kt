@@ -172,20 +172,41 @@ class MainActivity : ComponentActivity() {
                     )
                 )
             }
+            val monetAvailable = remember { supportsMonetTheming() }
+            var useMonet by remember {
+                mutableStateOf(
+                    monetAvailable && prefs.getBoolean(
+                        AppPreferenceKeys.THEME_USE_MONET,
+                        defaultUseMonetForCurrentApi()
+                    )
+                )
+            }
             val systemDarkTheme = isSystemInDarkTheme()
             val darkTheme = when (themeMode) {
                 ThemeMode.Auto -> resolveAutoDarkThemePreference(this@MainActivity, systemDarkTheme)
                 ThemeMode.Light -> false
                 ThemeMode.Dark -> true
             }
-            SiliconPlayerTheme(darkTheme = darkTheme) {
+            SiliconPlayerTheme(
+                darkTheme = darkTheme,
+                dynamicColor = monetAvailable && useMonet
+            ) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     AppNavigation(
                         themeMode = themeMode,
+                        useMonet = useMonet,
+                        monetAvailable = monetAvailable,
                         onThemeModeChanged = { mode ->
                             themeMode = mode
                             prefs.edit()
                                 .putString(AppPreferenceKeys.THEME_MODE, mode.storageValue)
+                                .apply()
+                        },
+                        onUseMonetChanged = { enabled ->
+                            val effectiveEnabled = monetAvailable && enabled
+                            useMonet = effectiveEnabled
+                            prefs.edit()
+                                .putBoolean(AppPreferenceKeys.THEME_USE_MONET, effectiveEnabled)
                                 .apply()
                         },
                         initialFileToOpen = initialFileToOpen,
@@ -934,6 +955,7 @@ private fun clearAllSettingsAndUiState(
     prefs: android.content.SharedPreferences,
     defaultScopeTextSizeSp: Int,
     onThemeModeChanged: (ThemeMode) -> Unit,
+    onUseMonetChanged: (Boolean) -> Unit,
     settingsStates: AppNavigationSettingsStates,
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
@@ -988,6 +1010,7 @@ private fun clearAllSettingsAndUiState(
         defaultScopeTextSizeSp = defaultScopeTextSizeSp,
         selectableVisualizationModes = selectableVisualizationModes,
         onThemeModeChanged = onThemeModeChanged,
+        onUseMonetChanged = onUseMonetChanged,
         settingsStates = settingsStates,
         onAutoPlayOnTrackSelectChanged = onAutoPlayOnTrackSelectChanged,
         onOpenPlayerOnTrackSelectChanged = onOpenPlayerOnTrackSelectChanged,
@@ -1073,7 +1096,10 @@ private fun HomeExitBackHandler(
 @Composable
 private fun AppNavigation(
     themeMode: ThemeMode,
+    useMonet: Boolean,
+    monetAvailable: Boolean,
     onThemeModeChanged: (ThemeMode) -> Unit,
+    onUseMonetChanged: (Boolean) -> Unit,
     initialFileToOpen: File?,
     initialFileFromExternalIntent: Boolean
 ) {
@@ -3183,6 +3209,8 @@ private fun AppNavigation(
                                     audioDucking = audioDucking,
                                     persistRepeatMode = persistRepeatMode,
                                     themeMode = themeMode,
+                                    useMonet = useMonet,
+                                    monetAvailable = monetAvailable,
                                     rememberBrowserLocation = rememberBrowserLocation,
                                     showParentDirectoryEntry = showParentDirectoryEntry,
                                     showFileIconChipBackground = showFileIconChipBackground,
@@ -3344,6 +3372,7 @@ private fun AppNavigation(
                                     onOpenPlayerFromNotificationChanged = { openPlayerFromNotification = it },
                                     onPersistRepeatModeChanged = { persistRepeatMode = it },
                                     onThemeModeChanged = onThemeModeChanged,
+                                    onUseMonetChanged = onUseMonetChanged,
                                     onRememberBrowserLocationChanged = { rememberBrowserLocation = it },
                                     onShowParentDirectoryEntryChanged = { showParentDirectoryEntry = it },
                                     onShowFileIconChipBackgroundChanged = { showFileIconChipBackground = it },
@@ -3576,6 +3605,7 @@ private fun AppNavigation(
                                 prefs = prefs,
                                 defaultScopeTextSizeSp = defaultScopeTextSizeSp,
                                 onThemeModeChanged = onThemeModeChanged,
+                                onUseMonetChanged = onUseMonetChanged,
                                 settingsStates = settingsStates,
                                 onAutoPlayOnTrackSelectChanged = { autoPlayOnTrackSelect = it },
                                 onOpenPlayerOnTrackSelectChanged = { openPlayerOnTrackSelect = it },

@@ -696,6 +696,7 @@ internal fun clearAllSettingsAction(
     defaultScopeTextSizeSp: Int,
     selectableVisualizationModes: List<VisualizationMode>,
     onThemeModeChanged: (ThemeMode) -> Unit,
+    onUseMonetChanged: (Boolean) -> Unit,
     ffmpegCoreSampleRateHz: Int,
     openMptCoreSampleRateHz: Int,
     vgmPlayCoreSampleRateHz: Int,
@@ -1038,6 +1039,7 @@ internal fun clearAllSettingsAction(
     )
 
     onThemeModeChanged(ThemeMode.Auto)
+    onUseMonetChanged(defaultUseMonetForCurrentApi())
     Toast.makeText(context, "All app settings cleared", Toast.LENGTH_SHORT).show()
 }
 

@@ -54,11 +54,14 @@ internal data class NetworkRouteActions(
 )
 
 internal data class UiRouteState(
-    val themeMode: ThemeMode
+    val themeMode: ThemeMode,
+    val useMonet: Boolean,
+    val monetAvailable: Boolean
 )
 
 internal data class UiRouteActions(
-    val onThemeModeChanged: (ThemeMode) -> Unit
+    val onThemeModeChanged: (ThemeMode) -> Unit,
+    val onUseMonetChanged: (Boolean) -> Unit
 )
 
 @Composable
@@ -311,5 +314,17 @@ internal fun UiRouteContent(
     ThemeModeSelectorCard(
         selectedMode = state.themeMode,
         onSelectedModeChanged = actions.onThemeModeChanged
+    )
+    SettingsRowSpacer()
+    PlayerSettingToggleCard(
+        title = "Use Monet colors",
+        description = if (state.monetAvailable) {
+            "Use Android wallpaper-based dynamic colors instead of SiliconPlayer's custom palette."
+        } else {
+            "Requires Android 12 or newer. Older versions use SiliconPlayer's custom palette."
+        },
+        checked = state.monetAvailable && state.useMonet,
+        onCheckedChange = actions.onUseMonetChanged,
+        enabled = state.monetAvailable
     )
 }

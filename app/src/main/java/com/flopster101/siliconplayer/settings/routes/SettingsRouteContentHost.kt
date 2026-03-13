@@ -445,8 +445,15 @@ internal fun SettingsRouteContentHost(
 
                     SettingsRoute.Ui -> {
                         UiRouteContent(
-                            state = UiRouteState(themeMode = state.themeMode),
-                            actions = UiRouteActions(onThemeModeChanged = actions.onThemeModeChanged)
+                            state = UiRouteState(
+                                themeMode = state.themeMode,
+                                useMonet = state.useMonet,
+                                monetAvailable = state.monetAvailable
+                            ),
+                            actions = UiRouteActions(
+                                onThemeModeChanged = actions.onThemeModeChanged,
+                                onUseMonetChanged = actions.onUseMonetChanged
+                            )
                         )
                     }
 

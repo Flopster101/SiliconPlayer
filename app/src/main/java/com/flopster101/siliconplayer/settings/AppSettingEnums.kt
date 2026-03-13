@@ -40,6 +40,10 @@ fun defaultAudioBackendForCurrentApi(): AudioBackendPreference {
     return if (isAaudioAvailableOnDevice()) AudioBackendPreference.AAudio else AudioBackendPreference.OpenSLES
 }
 
+fun supportsMonetTheming(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+fun defaultUseMonetForCurrentApi(): Boolean = supportsMonetTheming()
+
 fun AudioBackendPreference.defaultPerformanceMode(): AudioPerformanceMode {
     return when (this) {
         AudioBackendPreference.AAudio -> AudioPerformanceMode.LowLatency

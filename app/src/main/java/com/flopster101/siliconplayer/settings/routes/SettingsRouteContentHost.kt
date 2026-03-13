@@ -457,7 +457,7 @@ internal fun SettingsRouteContentHost(
                         )
                     }
 
-                        SettingsRoute.About -> AboutSettingsBody()
+                    SettingsRoute.About -> AboutSettingsBody(useMonet = state.useMonet)
                     }
                 }
 

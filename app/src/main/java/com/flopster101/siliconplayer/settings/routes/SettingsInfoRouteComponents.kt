@@ -2,7 +2,7 @@ package com.flopster101.siliconplayer
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,11 +16,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,12 +26,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
-internal fun AboutSettingsBody() {
+internal fun AboutSettingsBody(
+    useMonet: Boolean
+) {
     val context = LocalContext.current
     val versionLabel = "v${BuildConfig.VERSION_NAME}-${BuildConfig.GIT_SHA}"
     val coreEntries = remember { AboutCatalog.cores }
@@ -52,24 +55,13 @@ internal fun AboutSettingsBody() {
                     .padding(horizontal = 18.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    modifier = Modifier.size(48.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
+                AboutAppIcon(useMonet = useMonet)
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Silicon Player",
-                        style = MaterialTheme.typography.headlineSmall
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = versionLabel,
@@ -167,6 +159,29 @@ internal fun AboutSettingsBody() {
             onDismiss = { selectedAboutEntry = null }
         )
     }
+}
+
+@Composable
+private fun AboutAppIcon(
+    useMonet: Boolean
+) {
+    val painter = painterResource(
+        id = if (useMonet) {
+            R.drawable.about_app_icon_monochrome
+        } else {
+            R.drawable.about_app_icon_color
+        }
+    )
+    Image(
+        painter = painter,
+        contentDescription = null,
+        modifier = Modifier.size(48.dp),
+        colorFilter = if (useMonet) {
+            ColorFilter.tint(MaterialTheme.colorScheme.primary)
+        } else {
+            null
+        }
+    )
 }
 
 @Composable

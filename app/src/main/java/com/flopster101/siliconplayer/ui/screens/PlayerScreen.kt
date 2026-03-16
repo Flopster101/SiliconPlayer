@@ -2407,6 +2407,117 @@ private fun PlayerMarqueeText(
 }
 
 @Composable
+private fun PlayerTitleWithOptionalSubtuneBadge(
+    title: String,
+    titleTextStyle: TextStyle,
+    subtuneBadge: String?,
+    subtuneTitleClickable: Boolean,
+    subtuneTitleFlashAlpha: Float,
+    onOpenSubtuneSelector: () -> Unit,
+    textAlign: TextAlign,
+    centered: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val badgeTextStyle = MaterialTheme.typography.bodySmall
+    val badgeTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+    val badgeSpacing = 4.dp
+    val badgeStartPadding = if (centered) 4.dp else 0.dp
+    val badgeEndPadding = if (centered) 10.dp else 6.dp
+    val badgeVerticalPadding = if (centered) 4.dp else 3.dp
+    val density = LocalDensity.current
+    val titleRowMinHeight = with(density) {
+        (titleTextStyle.lineHeight.toDp() + (badgeVerticalPadding * 2)).coerceAtLeast(1.dp)
+    }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = titleRowMinHeight),
+        contentAlignment = if (centered) Alignment.Center else Alignment.CenterStart
+    ) {
+        if (subtuneBadge == null) {
+            AnimatedContent(
+                targetState = title,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 35)) togetherWith
+                        fadeOut(animationSpec = tween(durationMillis = 120))
+                },
+                label = if (centered) "centeredTrackTitleSwap" else "portraitTrackTitleSwap"
+            ) { animatedTitle ->
+                PlayerMarqueeText(
+                    text = animatedTitle,
+                    style = titleTextStyle,
+                    textAlign = textAlign
+                )
+            }
+        } else {
+            val textMeasurer = rememberTextMeasurer()
+            val badgeWidth = remember(subtuneBadge, badgeTextStyle, badgeStartPadding, badgeEndPadding) {
+                with(density) {
+                    textMeasurer.measure(
+                        text = AnnotatedString(subtuneBadge),
+                        style = badgeTextStyle,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    ).size.width.toDp() + badgeStartPadding + badgeSpacing + badgeEndPadding
+                }
+            }
+            val titleMaxWidth = (maxWidth - badgeWidth).coerceAtLeast(48.dp)
+            Row(
+                modifier = Modifier
+                    .wrapContentWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        MaterialTheme.colorScheme.primary.copy(alpha = subtuneTitleFlashAlpha)
+                    )
+                    .then(
+                        if (subtuneTitleClickable) {
+                            Modifier.clickable(onClick = onOpenSubtuneSelector)
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .padding(
+                        start = badgeStartPadding,
+                        end = badgeEndPadding,
+                        top = badgeVerticalPadding,
+                        bottom = badgeVerticalPadding
+                    )
+                    .animateContentSize(
+                        animationSpec = tween(durationMillis = 220, easing = LinearOutSlowInEasing)
+                    ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AnimatedContent(
+                    targetState = title,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 35)) togetherWith
+                            fadeOut(animationSpec = tween(durationMillis = 120))
+                    },
+                    label = if (centered) "centeredSubtuneTrackTitleSwap" else "portraitSubtuneTrackTitleSwap"
+                ) { animatedTitle ->
+                    PlayerMarqueeText(
+                        text = animatedTitle,
+                        style = titleTextStyle,
+                        textAlign = textAlign,
+                        modifier = Modifier.width(titleMaxWidth),
+                        expandToAvailableWidth = false
+                    )
+                }
+                Spacer(modifier = Modifier.width(badgeSpacing))
+                Text(
+                    text = subtuneBadge,
+                    style = badgeTextStyle,
+                    color = badgeTextColor,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@Composable
 @OptIn(ExperimentalFoundationApi::class)
 private fun PortraitTrackMetadataBlock(
     title: String,
@@ -2505,73 +2616,16 @@ private fun PortraitTrackMetadataBlock(
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.Top
     ) {
-        if (subtuneBadge != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            MaterialTheme.colorScheme.primary.copy(alpha = subtuneTitleFlashAlpha.value)
-                        )
-                        .then(
-                            if (subtuneTitleClickable) {
-                                Modifier.clickable(onClick = onOpenSubtuneSelector)
-                            } else {
-                                Modifier
-                            }
-                        )
-                        .padding(start = 0.dp, end = 6.dp, top = 3.dp, bottom = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AnimatedContent(
-                        targetState = title,
-                        transitionSpec = {
-                            fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 35)) togetherWith
-                                fadeOut(animationSpec = tween(durationMillis = 120))
-                        },
-                        label = "portraitSubtuneTrackTitleSwap"
-                    ) { animatedTitle ->
-                        PlayerMarqueeText(
-                            text = animatedTitle,
-                            style = titleTextStyle,
-                            textAlign = TextAlign.Start,
-                            expandToAvailableWidth = false
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = subtuneBadge,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                        maxLines = 1
-                    )
-                }
-            }
-        } else {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                AnimatedContent(
-                    targetState = title,
-                    transitionSpec = {
-                        fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 35)) togetherWith
-                            fadeOut(animationSpec = tween(durationMillis = 120))
-                    },
-                    label = "portraitTrackTitleSwap"
-                ) { animatedTitle ->
-                    PlayerMarqueeText(
-                        text = animatedTitle,
-                        style = titleTextStyle,
-                        textAlign = TextAlign.Start
-                    )
-                }
-            }
-        }
+        PlayerTitleWithOptionalSubtuneBadge(
+            title = title,
+            titleTextStyle = titleTextStyle,
+            subtuneBadge = subtuneBadge,
+            subtuneTitleClickable = subtuneTitleClickable,
+            subtuneTitleFlashAlpha = subtuneTitleFlashAlpha.value,
+            onOpenSubtuneSelector = onOpenSubtuneSelector,
+            textAlign = TextAlign.Start,
+            centered = false
+        )
         Spacer(modifier = Modifier.height(lerpDp(2.dp, 5.dp, layoutScale)))
         AnimatedContent(
             targetState = artist,
@@ -2800,61 +2854,16 @@ private fun TrackMetadataBlock(
         horizontalAlignment = if (centerSupportingMetadata) Alignment.CenterHorizontally else Alignment.Start,
         verticalArrangement = Arrangement.Top
     ) {
-        AnimatedContent(
-            targetState = title to subtuneBadge,
-            transitionSpec = {
-                fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 40)) togetherWith
-                    fadeOut(animationSpec = tween(durationMillis = 120))
-            },
-            label = "trackTitleSwap"
-        ) { (animatedTitle, animatedSubtuneBadge) ->
-            if (animatedSubtuneBadge == null) {
-                PlayerMarqueeText(
-                    text = animatedTitle,
-                    style = titleTextStyle,
-                    textAlign = TextAlign.Start
-                )
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = subtuneTitleFlashAlpha.value)
-                            )
-                            .then(
-                                if (subtuneTitleClickable) {
-                                    Modifier.clickable(onClick = onOpenSubtuneSelector)
-                                } else {
-                                    Modifier
-                                }
-                            )
-                            .padding(start = 0.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = animatedTitle,
-                            style = titleTextStyle,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = animatedSubtuneBadge,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                            maxLines = 1
-                        )
-                    }
-                }
-            }
-        }
+        PlayerTitleWithOptionalSubtuneBadge(
+            title = title,
+            titleTextStyle = titleTextStyle,
+            subtuneBadge = subtuneBadge,
+            subtuneTitleClickable = subtuneTitleClickable,
+            subtuneTitleFlashAlpha = subtuneTitleFlashAlpha.value,
+            onOpenSubtuneSelector = onOpenSubtuneSelector,
+            textAlign = if (centerSupportingMetadata) TextAlign.Center else TextAlign.Start,
+            centered = centerSupportingMetadata
+        )
         Spacer(modifier = Modifier.height(titleArtistSpacer))
         AnimatedContent(
             targetState = artist,

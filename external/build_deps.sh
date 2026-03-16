@@ -138,6 +138,39 @@ ensure_system_dependencies() {
     install_dependency_if_missing "XA assembler" "xa|xa65" "xa65" "xa" "$linux_family"
 }
 
+extract_patch_subject() {
+    local patch_file="$1"
+
+    awk '
+        BEGIN {
+            in_subject = 0
+            subject = ""
+        }
+        /^Subject: / {
+            in_subject = 1
+            line = $0
+            sub(/^Subject: \[PATCH[^]]*\] /, "", line)
+            subject = line
+            next
+        }
+        in_subject && /^[ \t]/ {
+            line = $0
+            sub(/^[ \t]+/, "", line)
+            subject = subject " " line
+            next
+        }
+        in_subject {
+            print subject
+            exit
+        }
+        END {
+            if(in_subject) {
+                print subject
+            }
+        }
+    ' "$patch_file"
+}
+
 # -----------------------------------------------------------------------------
 # Function: Apply libopenmpt patches (idempotent)
 # -----------------------------------------------------------------------------
@@ -152,7 +185,7 @@ apply_libopenmpt_patches() {
         local patch_name
         patch_name="$(basename "$patch_file")"
         local patch_subject
-        patch_subject="$(sed -n 's/^Subject: \[PATCH[^]]*\] //p' "$patch_file" | head -n 1)"
+        patch_subject="$(extract_patch_subject "$patch_file")"
 
         # Secondary idempotency check:
         # If the patch subject already exists in git history, treat it as applied.
@@ -254,7 +287,7 @@ apply_lazyusf2_patches() {
         local patch_name
         patch_name="$(basename "$patch_file")"
         local patch_subject
-        patch_subject="$(sed -n 's/^Subject: \[PATCH[^]]*\] //p' "$patch_file" | head -n 1)"
+        patch_subject="$(extract_patch_subject "$patch_file")"
 
         # If the patch subject already exists in git history, treat it as applied.
         # This avoids false negatives from reverse-apply checks when later patches
@@ -357,7 +390,7 @@ apply_klystrack_patches() {
         local patch_name
         patch_name="$(basename "$patch_file")"
         local patch_subject
-        patch_subject="$(sed -n 's/^Subject: \[PATCH[^]]*\] //p' "$patch_file" | head -n 1)"
+        patch_subject="$(extract_patch_subject "$patch_file")"
 
         # Secondary idempotency check:
         # If the patch subject already exists in git history, treat it as applied.
@@ -399,7 +432,7 @@ apply_uade_patches() {
         local patch_name
         patch_name="$(basename "$patch_file")"
         local patch_subject
-        patch_subject="$(sed -n 's/^Subject: \[PATCH[^]]*\] //p' "$patch_file" | head -n 1)"
+        patch_subject="$(extract_patch_subject "$patch_file")"
 
         if [ -n "$patch_subject" ] && git -C "$PROJECT_PATH" log --format=%s | grep -Fqx "$patch_subject"; then
             echo "uade patch already applied (subject): $patch_name"

@@ -1,0 +1,42 @@
+From 2e7399353e23c6c8c4750cecadfd23048010e3a7 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Mon, 16 Mar 2026 11:55:30 -0300
+Subject: [PATCH] soundlib: fix OPL channel scope waveform capture
+
+---
+ soundlib/Fastmix.cpp | 3 ++-
+ soundlib/OPL.cpp     | 4 ----
+ 2 files changed, 2 insertions(+), 5 deletions(-)
+
+diff --git a/soundlib/Fastmix.cpp b/soundlib/Fastmix.cpp
+index 47c5d04268..35c72607f3 100644
+--- a/soundlib/Fastmix.cpp
++++ b/soundlib/Fastmix.cpp
+@@ -328,7 +328,8 @@ void CSoundFile::CreateStereoMix(int count)
+ 	const CHANNELINDEX scopeChannels = std::min(GetNumChannels(), static_cast<CHANNELINDEX>(MAX_CHANNELS));
+ 	for(CHANNELINDEX channel = 0; channel < scopeChannels; channel++)
+ 	{
+-		if(!scopeUpdated[channel])
++		const bool renderedByOpl = (m_opl != nullptr) && m_opl->IsActive(channel);
++		if(!scopeUpdated[channel] && !renderedByOpl)
+ 		{
+ 			PushChannelScopeSilence(channel, count);
+ 		}
+diff --git a/soundlib/OPL.cpp b/soundlib/OPL.cpp
+index 973c8a85ef..a1c7b1430f 100644
+--- a/soundlib/OPL.cpp
++++ b/soundlib/OPL.cpp
+@@ -81,10 +81,6 @@ void OPL::Mix(int32 *target, size_t count, uint32 volumeFactorQ16, ScopeTapCallb
+ 				}
+ 				const int32 channelMixLeft = static_cast<int32>(channelLeft[oplCh]) * factor;
+ 				const int32 channelMixRight = static_cast<int32>(channelRight[oplCh]) * factor;
+-				if(channelMixLeft == 0 && channelMixRight == 0)
+-				{
+-					continue;
+-				}
+ 				scopeTap(scopeTapUser, trackerChannel, channelMixLeft, channelMixRight);
+ 			}
+ 		}
+-- 
+2.53.0
+

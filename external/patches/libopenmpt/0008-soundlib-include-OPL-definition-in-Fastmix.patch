@@ -1,0 +1,24 @@
+From 389addd5b37ca4fdf064a8e4e442e660c7e5bf63 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Mon, 16 Mar 2026 12:04:39 -0300
+Subject: [PATCH] soundlib: include OPL definition in Fastmix
+
+---
+ soundlib/Fastmix.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/soundlib/Fastmix.cpp b/soundlib/Fastmix.cpp
+index 35c72607f3..f1848e9d48 100644
+--- a/soundlib/Fastmix.cpp
++++ b/soundlib/Fastmix.cpp
+@@ -17,6 +17,7 @@
+ // - The loop lookahead stuff might still fail for samples with backward loops.
+ 
+ #include "stdafx.h"
++#include "OPL.h"
+ #include "Sndfile.h"
+ #include "MixerLoops.h"
+ #include "MixFuncTable.h"
+-- 
+2.53.0
+

@@ -17,7 +17,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
@@ -26,6 +25,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -37,6 +37,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -80,30 +82,46 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.PlaylistLibraryState
@@ -154,6 +172,210 @@ internal enum class PlaylistEntrySortMode(
 
 private const val PLAYLISTS_PAGE_NAV_DURATION_MS = 280
 private val PLAYLISTS_DETAIL_CONTENT_GUTTER = 8.dp
+private val LocalPlaylistsTitleMarqueeClockState = compositionLocalOf<State<Long>> { mutableLongStateOf(0L) }
+
+@Composable
+private fun rememberPlaylistsTitleMarqueeClockState(resetKey: Any?): State<Long> {
+    val clockState = remember { mutableLongStateOf(0L) }
+    LaunchedEffect(resetKey) {
+        val startTimeMs = withFrameMillis { it }
+        clockState.longValue = 0L
+        while (true) {
+            clockState.longValue = withFrameMillis { it - startTimeMs }
+        }
+    }
+    return clockState
+}
+
+private fun playlistsTitleMarqueeMotionFadeAlpha(
+    elapsedMs: Int,
+    segmentDurationMs: Int,
+    fadeInMs: Int,
+    fadeOutMs: Int
+): Float {
+    if (segmentDurationMs <= 0) return 0f
+    val fadeInProgress = (elapsedMs.toFloat() / fadeInMs.coerceAtLeast(1)).coerceIn(0f, 1f)
+    val fadeOutProgress = (
+        (segmentDurationMs - elapsedMs).toFloat() / fadeOutMs.coerceAtLeast(1)
+        ).coerceIn(0f, 1f)
+    return minOf(fadeInProgress, fadeOutProgress)
+}
+
+@Composable
+private fun PlaylistsTopBarMarqueeText(
+    text: String,
+    style: TextStyle,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified
+) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val textMeasurer = rememberTextMeasurer()
+        val density = LocalDensity.current
+        val maxWidthPx = with(density) { maxWidth.roundToPx().coerceAtLeast(1) }
+        val measuredText = remember(text, style) {
+            textMeasurer.measure(
+                text = AnnotatedString(text),
+                style = style,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip
+            )
+        }
+        val marqueeTrailingGap = 18.dp
+        val marqueeEdgeFade = 14.dp
+        val marqueeTrailingGapPx = with(density) { marqueeTrailingGap.roundToPx() }
+        val marqueeEdgeFadePx = with(density) { marqueeEdgeFade.toPx() }
+        val overflowPx = (measuredText.size.width - maxWidthPx).coerceAtLeast(0)
+        val sharedTimeMs = LocalPlaylistsTitleMarqueeClockState.current.value
+        val marqueeInstanceStartMs = remember(text, style) {
+            mutableLongStateOf(Long.MIN_VALUE)
+        }
+        SideEffect {
+            if (marqueeInstanceStartMs.longValue == Long.MIN_VALUE) {
+                marqueeInstanceStartMs.longValue = sharedTimeMs
+            }
+        }
+        val instanceElapsedMs = if (marqueeInstanceStartMs.longValue == Long.MIN_VALUE) {
+            0L
+        } else {
+            (sharedTimeMs - marqueeInstanceStartMs.longValue).coerceAtLeast(0L)
+        }
+        val startPauseMs = 1450
+        val turnaroundPauseMs = 1050
+        val resetPauseMs = 1850
+        val fadeInMs = 180
+        val fadeOutMs = 260
+        val travelDistancePx = (overflowPx + marqueeTrailingGapPx).coerceAtLeast(0)
+        val marqueeSpeedPxPerSecond = with(density) { 56.dp.toPx() }.coerceAtLeast(1f)
+        val travelDurationMs = if (travelDistancePx > 0) {
+            ((travelDistancePx / marqueeSpeedPxPerSecond) * 1000f).toInt().coerceAtLeast(1)
+        } else {
+            0
+        }
+        val targetOffset = if (overflowPx > 0) -travelDistancePx.toFloat() else 0f
+        val cycleDurationMs = startPauseMs + travelDurationMs + turnaroundPauseMs + travelDurationMs + resetPauseMs
+        val cyclePositionMs = if (overflowPx > 0 && cycleDurationMs > 0) {
+            (instanceElapsedMs % cycleDurationMs.toLong()).toInt()
+        } else {
+            0
+        }
+        val marqueeOffsetPx = when {
+            overflowPx <= 0 -> 0f
+            cyclePositionMs < startPauseMs -> 0f
+            cyclePositionMs < startPauseMs + travelDurationMs -> {
+                val progress = ((cyclePositionMs - startPauseMs).toFloat() / travelDurationMs).coerceIn(0f, 1f)
+                targetOffset * progress
+            }
+            cyclePositionMs < startPauseMs + travelDurationMs + turnaroundPauseMs -> targetOffset
+            cyclePositionMs < startPauseMs + travelDurationMs + turnaroundPauseMs + travelDurationMs -> {
+                val elapsed = cyclePositionMs - startPauseMs - travelDurationMs - turnaroundPauseMs
+                val progress = (elapsed.toFloat() / travelDurationMs).coerceIn(0f, 1f)
+                targetOffset * (1f - progress)
+            }
+            else -> 0f
+        }
+        val marqueeFadeAlpha = when {
+            overflowPx <= 0 -> 0f
+            cyclePositionMs < startPauseMs -> 0f
+            cyclePositionMs < startPauseMs + travelDurationMs -> {
+                playlistsTitleMarqueeMotionFadeAlpha(
+                    elapsedMs = cyclePositionMs - startPauseMs,
+                    segmentDurationMs = travelDurationMs,
+                    fadeInMs = fadeInMs,
+                    fadeOutMs = fadeOutMs
+                )
+            }
+            cyclePositionMs < startPauseMs + travelDurationMs + turnaroundPauseMs -> 0f
+            cyclePositionMs < startPauseMs + travelDurationMs + turnaroundPauseMs + travelDurationMs -> {
+                playlistsTitleMarqueeMotionFadeAlpha(
+                    elapsedMs = cyclePositionMs - startPauseMs - travelDurationMs - turnaroundPauseMs,
+                    segmentDurationMs = travelDurationMs,
+                    fadeInMs = fadeInMs,
+                    fadeOutMs = fadeOutMs
+                )
+            }
+            else -> 0f
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clipToBounds()
+                .then(
+                    if (overflowPx > 0 && marqueeFadeAlpha > 0f) {
+                        Modifier
+                            .graphicsLayer {
+                                compositingStrategy = CompositingStrategy.Offscreen
+                            }
+                            .drawWithContent {
+                                drawContent()
+                                val fadeWidthPx = marqueeEdgeFadePx.coerceAtMost(size.width / 2f)
+                                if (fadeWidthPx > 0f) {
+                                    val opaqueMaskAlpha = 1f - marqueeFadeAlpha
+                                    drawRect(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color.Black.copy(alpha = opaqueMaskAlpha),
+                                                Color.Black
+                                            ),
+                                            startX = 0f,
+                                            endX = fadeWidthPx
+                                        ),
+                                        topLeft = Offset.Zero,
+                                        size = Size(fadeWidthPx, size.height),
+                                        blendMode = BlendMode.DstIn
+                                    )
+                                    drawRect(
+                                        brush = Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color.Black,
+                                                Color.Black.copy(alpha = opaqueMaskAlpha)
+                                            ),
+                                            startX = size.width - fadeWidthPx,
+                                            endX = size.width
+                                        ),
+                                        topLeft = Offset(size.width - fadeWidthPx, 0f),
+                                        size = Size(fadeWidthPx, size.height),
+                                        blendMode = BlendMode.DstIn
+                                    )
+                                }
+                            }
+                    } else {
+                        Modifier
+                    }
+                )
+        ) {
+            if (overflowPx > 0) {
+                Row(
+                    modifier = Modifier
+                        .wrapContentWidth(align = Alignment.Start, unbounded = true)
+                        .graphicsLayer { translationX = marqueeOffsetPx }
+                ) {
+                    Text(
+                        text = text,
+                        style = style,
+                        color = color,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip,
+                        textAlign = TextAlign.Start
+                    )
+                    Spacer(Modifier.width(marqueeTrailingGap))
+                }
+            } else {
+                Text(
+                    text = text,
+                    style = style,
+                    color = color,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -251,94 +473,92 @@ internal fun PlaylistsScreen(
             sortMode = favoritesSortMode
         )
     }
-    Scaffold(
-        modifier = Modifier
-            .fillMaxSize()
-                .nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            LargeTopAppBar(
-                title = {
-                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                        if (showingPlaylistDetail && detailSubtitle != null) {
-                            val detailTitleAlpha = ((detailCollapseFraction - 0.58f) / 0.42f)
-                                .coerceIn(0f, 1f)
-                            val playlistsTitleAlpha = 1f - detailTitleAlpha
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(36.dp),
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                Text(
-                                    text = "Playlists",
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Clip,
-                                    modifier = Modifier.graphicsLayer(alpha = playlistsTitleAlpha)
-                                )
-                                Text(
-                                    text = detailSubtitle,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Clip,
+    val playlistsTitleMarqueeClockState = rememberPlaylistsTitleMarqueeClockState(detailSubtitle)
+    CompositionLocalProvider(LocalPlaylistsTitleMarqueeClockState provides playlistsTitleMarqueeClockState) {
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
+            topBar = {
+                LargeTopAppBar(
+                    title = {
+                        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                            if (showingPlaylistDetail && detailSubtitle != null) {
+                                val detailTitleAlpha = ((detailCollapseFraction - 0.58f) / 0.42f)
+                                    .coerceIn(0f, 1f)
+                                val playlistsTitleAlpha = 1f - detailTitleAlpha
+                                Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .graphicsLayer(alpha = detailTitleAlpha)
-                                        .basicMarquee()
-                                )
-                            }
-                            Box(
-                                modifier = Modifier.height(18.dp),
-                                contentAlignment = Alignment.TopStart
-                            ) {
-                                androidx.compose.animation.AnimatedVisibility(
-                                    visible = showCollapsedDetailSubtitle,
-                                    enter = fadeIn(
-                                        animationSpec = tween(
-                                            durationMillis = 160,
-                                            easing = LinearOutSlowInEasing
-                                        )
-                                    ),
-                                    exit = fadeOut(
-                                        animationSpec = tween(
-                                            durationMillis = 90,
-                                            easing = FastOutLinearInEasing
-                                        )
-                                    )
+                                        .height(40.dp),
+                                    contentAlignment = Alignment.CenterStart
                                 ) {
                                     Text(
-                                        text = "Playlist",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        text = "Playlists",
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Clip,
+                                        modifier = Modifier.graphicsLayer(alpha = playlistsTitleAlpha)
+                                    )
+                                    PlaylistsTopBarMarqueeText(
+                                        text = detailSubtitle,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        modifier = Modifier.graphicsLayer(alpha = detailTitleAlpha)
                                     )
                                 }
-                            }
-                        } else {
-                            Text(text = if (showingPlaylistDetail) "Playlists" else "Library")
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = {
-                            if (showingPlaylistDetail) {
-                                favoritesEditModeEnabled = false
-                                favoritesDraggingEntryId = null
-                                selectedStoredPlaylistId = null
-                                destination = PlaylistsSurfaceDestination.Library
+                                Box(
+                                    modifier = Modifier.height(18.dp),
+                                    contentAlignment = Alignment.TopStart
+                                ) {
+                                    androidx.compose.animation.AnimatedVisibility(
+                                        visible = showCollapsedDetailSubtitle,
+                                        enter = fadeIn(
+                                            animationSpec = tween(
+                                                durationMillis = 160,
+                                                easing = LinearOutSlowInEasing
+                                            )
+                                        ),
+                                        exit = fadeOut(
+                                            animationSpec = tween(
+                                                durationMillis = 90,
+                                                easing = FastOutLinearInEasing
+                                            )
+                                        )
+                                    ) {
+                                        Text(
+                                            text = "Playlist",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             } else {
-                                onBack()
+                                Text(text = if (showingPlaylistDetail) "Playlists" else "Library")
                             }
                         }
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Go back"
-                        )
-                    }
-                },
-                scrollBehavior = scrollBehavior
-            )
-        }
-    ) { innerPadding ->
+                    },
+                    navigationIcon = {
+                        IconButton(
+                            onClick = {
+                                if (showingPlaylistDetail) {
+                                    favoritesEditModeEnabled = false
+                                    favoritesDraggingEntryId = null
+                                    selectedStoredPlaylistId = null
+                                    destination = PlaylistsSurfaceDestination.Library
+                                } else {
+                                    onBack()
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Go back"
+                            )
+                        }
+                    },
+                    scrollBehavior = scrollBehavior
+                )
+            }
+        ) { innerPadding ->
         AnimatedContent(
             targetState = destination,
             transitionSpec = {
@@ -540,6 +760,7 @@ internal fun PlaylistsScreen(
                 }
             }
         }
+    }
     }
     if (showDeleteAllFavoritesConfirm) {
         AlertDialog(

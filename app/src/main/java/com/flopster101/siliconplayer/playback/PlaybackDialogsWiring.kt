@@ -198,6 +198,8 @@ internal fun AppNavigationPlaybackDialogsSection(
     onShowSubtuneSelectorDialogChanged: (Boolean) -> Unit,
     showPlaylistSelectorDialog: Boolean,
     playlistDialogTitle: String,
+    playlistDialogSubtitle: String?,
+    playlistDialogShuffleActive: Boolean,
     playlistEntries: List<PlaylistTrackEntry>,
     currentPlaylistEntryId: String?,
     onShowPlaylistSelectorDialogChanged: (Boolean) -> Unit,
@@ -211,6 +213,7 @@ internal fun AppNavigationPlaybackDialogsSection(
     onBrowsePlaylistFromFile: () -> Unit,
     showPlaylistPreviewDialog: Boolean,
     playlistPreviewTitle: String,
+    playlistPreviewSubtitle: String?,
     playlistPreviewEntries: List<PlaylistTrackEntry>,
     onShowPlaylistPreviewDialogChanged: (Boolean) -> Unit,
     onDismissPlaylistPreviewDialog: () -> Unit,
@@ -359,6 +362,8 @@ internal fun AppNavigationPlaybackDialogsSection(
         onDismissSubtuneSelector = { onShowSubtuneSelectorDialogChanged(false) },
         showPlaylistSelectorDialog = showPlaylistSelectorDialog,
         playlistDialogTitle = playlistDialogTitle,
+        playlistDialogSubtitle = playlistDialogSubtitle,
+        playlistDialogShuffleActive = playlistDialogShuffleActive,
         playlistEntries = playlistEntries,
         currentPlaylistEntryId = currentPlaylistEntryId,
         onSelectPlaylistEntry = {
@@ -381,6 +386,7 @@ internal fun AppNavigationPlaybackDialogsSection(
         onDismissPlaylistOpenAction = onDismissPlaylistOpenActionDialog,
         showPlaylistPreviewDialog = showPlaylistPreviewDialog,
         playlistPreviewTitle = playlistPreviewTitle,
+        playlistPreviewSubtitle = playlistPreviewSubtitle,
         playlistPreviewEntries = playlistPreviewEntries,
         onSelectPlaylistPreviewEntry = {
             onSelectPlaylistPreviewEntry(it)

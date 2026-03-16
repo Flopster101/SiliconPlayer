@@ -27,6 +27,8 @@ internal fun PlaybackDialogsHost(
     onDismissSubtuneSelector: () -> Unit,
     showPlaylistSelectorDialog: Boolean,
     playlistDialogTitle: String,
+    playlistDialogSubtitle: String?,
+    playlistDialogShuffleActive: Boolean,
     playlistEntries: List<PlaylistTrackEntry>,
     currentPlaylistEntryId: String?,
     onSelectPlaylistEntry: (PlaylistTrackEntry) -> Unit,
@@ -39,6 +41,7 @@ internal fun PlaybackDialogsHost(
     onDismissPlaylistOpenAction: () -> Unit,
     showPlaylistPreviewDialog: Boolean,
     playlistPreviewTitle: String,
+    playlistPreviewSubtitle: String?,
     playlistPreviewEntries: List<PlaylistTrackEntry>,
     onSelectPlaylistPreviewEntry: (PlaylistTrackEntry) -> Unit,
     onDismissPlaylistPreview: () -> Unit,
@@ -115,6 +118,8 @@ internal fun PlaybackDialogsHost(
     if (showPlaylistSelectorDialog) {
         PlaylistSelectorDialog(
             title = playlistDialogTitle,
+            subtitle = playlistDialogSubtitle,
+            shuffleActive = playlistDialogShuffleActive,
             entries = playlistEntries,
             currentEntryId = currentPlaylistEntryId,
             onSelectEntry = onSelectPlaylistEntry,
@@ -135,6 +140,8 @@ internal fun PlaybackDialogsHost(
     if (showPlaylistPreviewDialog) {
         PlaylistSelectorDialog(
             title = playlistPreviewTitle,
+            subtitle = playlistPreviewSubtitle,
+            shuffleActive = false,
             entries = playlistPreviewEntries,
             currentEntryId = null,
             onSelectEntry = onSelectPlaylistPreviewEntry,

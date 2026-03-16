@@ -1,6 +1,10 @@
 package com.flopster101.siliconplayer.ui.dialogs
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +23,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -29,30 +34,42 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.flopster101.siliconplayer.rememberDialogLazyListScrollbarAlpha
 import com.flopster101.siliconplayer.HttpSourceSpec
 import com.flopster101.siliconplayer.PlaylistTrackEntry
 import com.flopster101.siliconplayer.RemoteLoadPhase
 import com.flopster101.siliconplayer.RemoteLoadUiState
 import com.flopster101.siliconplayer.SubtuneEntry
-import com.flopster101.siliconplayer.ui.screens.BrowserLazyListScrollbar
 import com.flopster101.siliconplayer.adaptiveDialogModifier
 import com.flopster101.siliconplayer.adaptiveDialogProperties
+import com.flopster101.siliconplayer.ensureRecentArtworkThumbnailCached
 import com.flopster101.siliconplayer.formatByteCount
 import com.flopster101.siliconplayer.formatShortDuration
-import com.flopster101.siliconplayer.playlistTrackSubtitle
+import com.flopster101.siliconplayer.placeholderArtworkIconForFile
+import com.flopster101.siliconplayer.recentArtworkThumbnailFile
+import com.flopster101.siliconplayer.rememberDialogLazyListScrollbarAlpha
+import com.flopster101.siliconplayer.resolvePlaylistEntryLocalFile
+import com.flopster101.siliconplayer.ui.screens.BrowserLazyListScrollbar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun ManualSmbAuthenticationDialog(
@@ -523,88 +540,169 @@ internal fun SubtuneSelectorDialog(
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun PlaylistSelectorDialog(
     title: String,
+    subtitle: String?,
+    shuffleActive: Boolean,
     entries: List<PlaylistTrackEntry>,
     currentEntryId: String?,
     onSelectEntry: (PlaylistTrackEntry) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val resolvedPrimaryTitle = subtitle
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: title
+    val resolvedSecondaryTitle = title.takeIf { resolvedPrimaryTitle != title }
     AlertDialog(
         modifier = adaptiveDialogModifier(),
         properties = adaptiveDialogProperties(),
         onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            if (entries.isEmpty()) {
-                Text("No playlist entries available.")
-            } else {
-                val listState = rememberLazyListState()
-                val scrollbarAlpha = rememberDialogLazyListScrollbarAlpha(
-                    enabled = entries.size > 1,
-                    listState = listState,
-                    flashKey = entries.size to currentEntryId,
-                    label = "playlistSelectorScrollbarAlpha"
-                )
-                val scrollbarHeld = remember { mutableStateOf(false) }
-                Box(
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = resolvedPrimaryTitle,
+                    style = MaterialTheme.typography.headlineSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Clip,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 360.dp)
-                ) {
-                    LazyColumn(
-                        state = listState,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        .basicMarquee()
+                )
+                resolvedSecondaryTitle?.let { secondaryTitle ->
+                    Text(
+                        text = secondaryTitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (entries.isEmpty()) {
+                    Text("No playlist entries available.")
+                } else {
+                    val listState = rememberLazyListState()
+                    val scrollbarAlpha = rememberDialogLazyListScrollbarAlpha(
+                        enabled = entries.size > 1,
+                        listState = listState,
+                        flashKey = entries.size to currentEntryId,
+                        label = "playlistSelectorScrollbarAlpha"
+                    )
+                    val scrollbarHeld = remember { mutableStateOf(false) }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 360.dp)
                     ) {
-                        items(
-                            count = entries.size,
-                            key = { index -> entries[index].id }
-                        ) { index ->
-                            val entry = entries[index]
-                            val isCurrent = entry.id == currentEntryId
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onSelectEntry(entry) },
-                                shape = MaterialTheme.shapes.medium,
-                                color = if (isCurrent) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceContainerHigh
-                                }
-                            ) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(
+                                count = entries.size,
+                                key = { index -> entries[index].id }
+                            ) { index ->
+                                val entry = entries[index]
+                                val isCurrent = entry.id == currentEntryId
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 10.dp)
                                 ) {
-                                    Text(
-                                        text = "${index + 1}. ${entry.title}",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = playlistTrackSubtitle(entry),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(MaterialTheme.shapes.large)
+                                            .background(
+                                                if (isCurrent) {
+                                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+                                                } else {
+                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0f)
+                                                }
+                                            )
+                                            .clickable { onSelectEntry(entry) }
+                                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        PlaylistSelectorArtworkChip(
+                                            entry = entry,
+                                            isCurrent = isCurrent
+                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = entry.title,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = if (isCurrent) {
+                                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurface
+                                                },
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = playlistSelectorSubtitle(entry),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = if (isCurrent) {
+                                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                                },
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        Text(
+                                            text = "${index + 1}",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = if (isCurrent) {
+                                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
+                                        )
+                                    }
+                                    if (index < entries.lastIndex) {
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(start = 58.dp),
+                                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                                        )
+                                    }
                                 }
                             }
                         }
+                        BrowserLazyListScrollbar(
+                            listState = listState,
+                            onDragActiveChanged = { isActive -> scrollbarHeld.value = isActive },
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxSize()
+                                .graphicsLayer(alpha = if (scrollbarHeld.value) 1f else scrollbarAlpha)
+                        )
                     }
-                    BrowserLazyListScrollbar(
-                        listState = listState,
-                        onDragActiveChanged = { isActive -> scrollbarHeld.value = isActive },
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .fillMaxSize()
-                            .graphicsLayer(alpha = if (scrollbarHeld.value) 1f else scrollbarAlpha)
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shuffle,
+                        contentDescription = if (shuffleActive) "Shuffle active" else "Shuffle inactive",
+                        tint = if (shuffleActive) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                        },
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
@@ -615,6 +713,98 @@ internal fun PlaylistSelectorDialog(
             }
         }
     )
+}
+
+private fun playlistSelectorSubtitle(entry: PlaylistTrackEntry): String {
+    val details = buildList {
+        entry.artist
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let(::add)
+        entry.subtuneIndex?.let { add("Subtune ${it + 1}") }
+        entry.album
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() && !contains(it) }
+            ?.let(::add)
+    }
+    if (details.isNotEmpty()) {
+        return details.joinToString(" • ")
+    }
+    return resolvePlaylistEntryLocalFile(entry.source)?.name ?: entry.source
+}
+
+@Composable
+private fun PlaylistSelectorArtworkChip(
+    entry: PlaylistTrackEntry,
+    isCurrent: Boolean
+) {
+    val context = LocalContext.current
+    val localFile = remember(entry.source) { resolvePlaylistEntryLocalFile(entry.source) }
+    val fallbackIcon = placeholderArtworkIconForFile(
+        file = localFile,
+        decoderName = null,
+        allowCurrentDecoderFallback = false
+    )
+    val artworkThumbnailCacheKey by produceState<String?>(
+        initialValue = entry.artworkThumbnailCacheKey,
+        key1 = entry.id,
+        key2 = entry.source,
+        key3 = entry.artworkThumbnailCacheKey
+    ) {
+        if (!entry.artworkThumbnailCacheKey.isNullOrBlank()) {
+            value = entry.artworkThumbnailCacheKey
+            return@produceState
+        }
+        value = withContext(Dispatchers.IO) {
+            ensureRecentArtworkThumbnailCached(
+                context = context,
+                sourceId = entry.source
+            )
+        }
+    }
+    val artwork by produceState<ImageBitmap?>(
+        initialValue = null,
+        key1 = artworkThumbnailCacheKey
+    ) {
+        value = withContext(Dispatchers.IO) {
+            val artworkFile = recentArtworkThumbnailFile(context, artworkThumbnailCacheKey)
+                ?: return@withContext null
+            BitmapFactory.decodeFile(artworkFile.absolutePath)?.asImageBitmap()
+        }
+    }
+    Surface(
+        modifier = Modifier.size(46.dp),
+        shape = MaterialTheme.shapes.large,
+        color = if (isCurrent) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        }
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = fallbackIcon,
+                contentDescription = null,
+                tint = if (isCurrent) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier.size(28.dp)
+            )
+            artwork?.let { resolvedArtwork ->
+                Image(
+                    bitmap = resolvedArtwork,
+                    contentDescription = "Album artwork",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+    }
 }
 
 @Composable

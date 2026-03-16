@@ -1260,6 +1260,7 @@ private fun AppNavigation(
     var externalTrackInfoDialogRequestToken by remember { mutableIntStateOf(0) }
     var activePlaylist by remember { mutableStateOf<StoredPlaylist?>(null) }
     var activePlaylistEntryId by remember { mutableStateOf<String?>(null) }
+    var activePlaylistShuffleActive by remember { mutableStateOf(false) }
     var lastStoppedPlaylistResume by remember { mutableStateOf<LastStoppedPlaylistResume?>(null) }
     var pendingPlaylistSubtuneSelection by remember { mutableStateOf<PendingPlaylistSubtuneSelection?>(null) }
     var pendingBrowserPlaylistDocument by remember { mutableStateOf<ParsedPlaylistDocument?>(null) }
@@ -2276,7 +2277,10 @@ private fun AppNavigation(
             manualOpenDelegates = manualOpenDelegates,
             autoPlayOnTrackSelect = autoPlayOnTrackSelect,
             openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-            onActivePlaylistChanged = { activePlaylist = it },
+            onActivePlaylistChanged = {
+                activePlaylist = it
+                activePlaylistShuffleActive = false
+            },
             onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
             onShowPlaylistSelectorDialogChanged = { showPlaylistSelectorDialog = it },
             onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it },
@@ -3222,7 +3226,9 @@ private fun AppNavigation(
             currentSubtuneIndex = currentSubtuneIndex,
             onShowSubtuneSelectorDialogChanged = { showSubtuneSelectorDialog = it },
             showPlaylistSelectorDialog = showPlaylistSelectorDialog,
-            playlistDialogTitle = activePlaylist?.title ?: "Playlist",
+            playlistDialogTitle = "Playlist",
+            playlistDialogSubtitle = activePlaylist?.title,
+            playlistDialogShuffleActive = activePlaylistShuffleActive,
             playlistEntries = activePlaylist?.entries.orEmpty(),
             currentPlaylistEntryId = activePlaylistEntryId,
             onShowPlaylistSelectorDialogChanged = { showPlaylistSelectorDialog = it },
@@ -3235,7 +3241,8 @@ private fun AppNavigation(
             onPlayPlaylistFromFile = playPendingBrowserPlaylistAction,
             onBrowsePlaylistFromFile = browsePendingBrowserPlaylistAction,
             showPlaylistPreviewDialog = showPlaylistPreviewDialog,
-            playlistPreviewTitle = pendingBrowserPlaylistDocument?.title ?: "Playlist",
+            playlistPreviewTitle = "Playlist",
+            playlistPreviewSubtitle = pendingBrowserPlaylistDocument?.title,
             playlistPreviewEntries = pendingBrowserPlaylistDocument?.entries.orEmpty(),
             onShowPlaylistPreviewDialogChanged = { showPlaylistPreviewDialog = it },
             onDismissPlaylistPreviewDialog = dismissPendingBrowserPlaylistAction,
@@ -3812,9 +3819,11 @@ private fun AppNavigation(
                 if (sortedFavorites.isEmpty()) {
                     activePlaylist = null
                     activePlaylistEntryId = null
+                    activePlaylistShuffleActive = false
                     pendingPlaylistSubtuneSelection = null
                 } else {
                     activePlaylist = buildFavoritesPlaybackPlaylist(sortedFavorites)
+                    activePlaylistShuffleActive = false
                     val playbackMatchedEntryId = sortedFavorites.firstOrNull { entry ->
                         playlistEntryMatchesPlayback(
                             entry = entry,
@@ -3898,7 +3907,10 @@ private fun AppNavigation(
                         manualOpenDelegates = manualOpenDelegates,
                         autoPlayOnTrackSelect = true,
                         openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                        onActivePlaylistChanged = { activePlaylist = it },
+                        onActivePlaylistChanged = {
+                            activePlaylist = it
+                            activePlaylistShuffleActive = false
+                        },
                         onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
                         onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
                     )
@@ -3906,6 +3918,7 @@ private fun AppNavigation(
                 onPlayStoredPlaylist = { playlist ->
                     activePlaylist = playlist
                     activePlaylistEntryId = playlist.entries.firstOrNull()?.id
+                    activePlaylistShuffleActive = false
                     playlist.entries.firstOrNull()?.let { entry ->
                         playPlaylistEntryAction(entry, playlist)
                     }
@@ -3915,6 +3928,7 @@ private fun AppNavigation(
                     val shuffledPlaylist = playlist.copy(entries = shuffledEntries)
                     activePlaylist = shuffledPlaylist
                     activePlaylistEntryId = shuffledPlaylist.entries.firstOrNull()?.id
+                    activePlaylistShuffleActive = true
                     shuffledPlaylist.entries.firstOrNull()?.let { entry ->
                         playPlaylistEntryAction(entry, shuffledPlaylist)
                     }
@@ -3922,6 +3936,7 @@ private fun AppNavigation(
                 onOpenStoredPlaylistEntry = { entry, playlist ->
                     activePlaylist = playlist
                     activePlaylistEntryId = entry.id
+                    activePlaylistShuffleActive = false
                     playPlaylistEntryAction(entry, playlist)
                 },
                 onPlayFavoritePlaylist = {
@@ -3937,7 +3952,10 @@ private fun AppNavigation(
                             manualOpenDelegates = manualOpenDelegates,
                             autoPlayOnTrackSelect = true,
                             openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                            onActivePlaylistChanged = { activePlaylist = it },
+                            onActivePlaylistChanged = {
+                                activePlaylist = it
+                                activePlaylistShuffleActive = false
+                            },
                             onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
                             onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
                         )
@@ -3948,6 +3966,7 @@ private fun AppNavigation(
                     val shuffledPlaylist = buildFavoritesPlaybackPlaylist(shuffledEntries)
                     activePlaylist = shuffledPlaylist
                     activePlaylistEntryId = shuffledPlaylist.entries.firstOrNull()?.id
+                    activePlaylistShuffleActive = true
                     shuffledPlaylist.entries.firstOrNull()?.let { entry ->
                         openPlaylistEntry(
                             context = context,
@@ -3997,6 +4016,7 @@ private fun AppNavigation(
                     } else {
                         activePlaylist = favoritesPlaybackPlaylist
                         activePlaylistEntryId = entry.id
+                        activePlaylistShuffleActive = false
                         pendingPlaylistSubtuneSelection =
                             entry.subtuneIndex?.let { PendingPlaylistSubtuneSelection(entry.source, it) }
                         trackLoadDelegates.applyTrackSelection(
@@ -4083,7 +4103,10 @@ private fun AppNavigation(
                             autoPlayOnTrackSelect = false,
                             openPlayerOnTrackSelect = true,
                             expandOverride = true,
-                            onActivePlaylistChanged = { activePlaylist = it },
+                            onActivePlaylistChanged = {
+                                activePlaylist = it
+                                activePlaylistShuffleActive = false
+                            },
                             onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
                             onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
                         )
@@ -4170,6 +4193,7 @@ private fun AppNavigation(
                 onClearActivePlaylistContext = {
                     activePlaylist = null
                     activePlaylistEntryId = null
+                    activePlaylistShuffleActive = false
                     lastStoppedPlaylistResume = null
                     pendingPlaylistSubtuneSelection = null
                     showPlaylistSelectorDialog = false

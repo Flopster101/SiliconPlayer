@@ -13,6 +13,7 @@ private const val PLAYLIST_ENTRY_ARTIST_KEY = "artist"
 private const val PLAYLIST_ENTRY_ALBUM_KEY = "album"
 private const val PLAYLIST_ENTRY_ARTWORK_CACHE_KEY = "artworkThumbnailCacheKey"
 private const val PLAYLIST_ENTRY_SUBTUNE_KEY = "subtune_index"
+private const val PLAYLIST_ENTRY_DURATION_OVERRIDE_KEY = "duration_seconds_override"
 private const val PLAYLIST_ENTRY_ADDED_AT_KEY = "added_at_ms"
 private const val STORED_PLAYLIST_ID_KEY = "id"
 private const val STORED_PLAYLIST_TITLE_KEY = "title"
@@ -175,6 +176,8 @@ private fun readPlaylistTrackEntries(array: JSONArray): List<PlaylistTrackEntry>
             artworkThumbnailCacheKey = item.optString(PLAYLIST_ENTRY_ARTWORK_CACHE_KEY).trim().ifBlank { null },
             subtuneIndex = item.optInt(PLAYLIST_ENTRY_SUBTUNE_KEY, Int.MIN_VALUE)
                 .takeUnless { it == Int.MIN_VALUE || it < 0 },
+            durationSecondsOverride = item.optDouble(PLAYLIST_ENTRY_DURATION_OVERRIDE_KEY, Double.NaN)
+                .takeIf { it.isFinite() && it > 0.0 },
             addedAtMs = item.optLong(PLAYLIST_ENTRY_ADDED_AT_KEY)
                 .takeIf { it > 0L }
                 ?: fallbackAddedAt
@@ -208,4 +211,9 @@ private fun writePlaylistTrackEntry(entry: PlaylistTrackEntry): JSONObject {
         .put(PLAYLIST_ENTRY_ARTWORK_CACHE_KEY, entry.artworkThumbnailCacheKey ?: "")
         .put(PLAYLIST_ENTRY_SUBTUNE_KEY, entry.subtuneIndex ?: -1)
         .put(PLAYLIST_ENTRY_ADDED_AT_KEY, entry.addedAtMs)
+        .apply {
+            entry.durationSecondsOverride
+                ?.takeIf { it.isFinite() && it > 0.0 }
+                ?.let { put(PLAYLIST_ENTRY_DURATION_OVERRIDE_KEY, it) }
+        }
 }

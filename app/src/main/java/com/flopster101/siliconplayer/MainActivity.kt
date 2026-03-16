@@ -287,6 +287,18 @@ private data class PendingPlaylistSubtuneSelection(
     val subtuneIndex: Int
 )
 
+private fun resolvePendingPlaylistEntry(
+    activePlaylist: StoredPlaylist?,
+    pendingPlaylistSubtuneSelection: PendingPlaylistSubtuneSelection?
+): PlaylistTrackEntry? {
+    val playlist = activePlaylist ?: return null
+    val pendingSelection = pendingPlaylistSubtuneSelection ?: return null
+    return playlist.entries.firstOrNull { entry ->
+        samePath(entry.source, pendingSelection.sourceId) &&
+            entry.subtuneIndex == pendingSelection.subtuneIndex
+    }
+}
+
 private data class LastStoppedPlaylistResume(
     val playlist: StoredPlaylist,
     val entryId: String
@@ -594,6 +606,7 @@ private fun buildFavoriteEntryForSource(
     metadataTitle: String,
     metadataArtist: String,
     metadataAlbum: String,
+    durationSecondsOverride: Double?,
     subtuneCount: Int,
     currentSubtuneIndex: Int
 ): PlaylistTrackEntry {
@@ -612,6 +625,8 @@ private fun buildFavoriteEntryForSource(
             context = context,
             sourceId = sourceId
         ),
+        durationSecondsOverride = durationSecondsOverride
+            ?.takeIf { it.isFinite() && it > 0.0 },
         subtuneIndex = if (subtuneCount > 1) currentSubtuneIndex else null
     )
 }
@@ -624,6 +639,7 @@ private fun toggleCurrentTrackFavorite(
     metadataTitle: String,
     metadataArtist: String,
     metadataAlbum: String,
+    durationSecondsOverride: Double?,
     subtuneCount: Int,
     currentSubtuneIndex: Int,
     onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit
@@ -650,6 +666,7 @@ private fun toggleCurrentTrackFavorite(
                 metadataTitle = metadataTitle,
                 metadataArtist = metadataArtist,
                 metadataAlbum = metadataAlbum,
+                durationSecondsOverride = durationSecondsOverride,
                 subtuneCount = subtuneCount,
                 currentSubtuneIndex = currentSubtuneIndex
             )
@@ -664,14 +681,14 @@ internal fun toggleFavoriteForFile(
     file: File,
     onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit
 ) {
-    val matchingFavorites = playlistLibraryState.favorites.filter { entry ->
-        samePath(entry.source, file.absolutePath)
+    val matchingFileLevelFavorites = playlistLibraryState.favorites.filter { entry ->
+        samePath(entry.source, file.absolutePath) && entry.subtuneIndex == null
     }
-    if (matchingFavorites.isNotEmpty()) {
+    if (matchingFileLevelFavorites.isNotEmpty()) {
         onPlaylistLibraryStateChanged(
             playlistLibraryState.copy(
                 favorites = playlistLibraryState.favorites.filterNot { entry ->
-                    matchingFavorites.any { existing -> existing.id == entry.id }
+                    matchingFileLevelFavorites.any { existing -> existing.id == entry.id }
                 }
             )
         )
@@ -703,12 +720,14 @@ private fun mergeFavoritePlaybackMetadata(
     title: String,
     artist: String?,
     album: String?,
-    artworkThumbnailCacheKey: String?
+    artworkThumbnailCacheKey: String?,
+    durationSecondsOverride: Double?
 ): PlaylistLibraryState {
     val normalizedTitle = title.trim()
     val normalizedArtist = artist?.trim().takeUnless { it.isNullOrBlank() }
     val normalizedAlbum = album?.trim().takeUnless { it.isNullOrBlank() }
     val normalizedArtworkKey = artworkThumbnailCacheKey?.trim().takeUnless { it.isNullOrBlank() }
+    val normalizedDurationOverride = durationSecondsOverride?.takeIf { it.isFinite() && it > 0.0 }
     var changed = false
     val updatedFavorites = playlistLibraryState.favorites.map { entry ->
         if (entry.id != favoriteId) return@map entry
@@ -716,7 +735,8 @@ private fun mergeFavoritePlaybackMetadata(
             title = normalizedTitle.ifBlank { entry.title },
             artist = normalizedArtist ?: entry.artist,
             album = normalizedAlbum ?: entry.album,
-            artworkThumbnailCacheKey = normalizedArtworkKey ?: entry.artworkThumbnailCacheKey
+            artworkThumbnailCacheKey = normalizedArtworkKey ?: entry.artworkThumbnailCacheKey,
+            durationSecondsOverride = normalizedDurationOverride ?: entry.durationSecondsOverride
         )
         if (updatedEntry != entry) {
             changed = true
@@ -763,11 +783,23 @@ private fun AppNavigationPlaylistEffects(
         currentPlaybackSourceId,
         selectedFile?.absolutePath,
         currentSubtuneIndex,
+        pendingPlaylistSubtuneSelection?.sourceId,
+        pendingPlaylistSubtuneSelection?.subtuneIndex,
         activePlaylist?.id,
         activePlaylist?.sourceIdHint
     ) {
+        val pendingEntry = resolvePendingPlaylistEntry(
+            activePlaylist = activePlaylist,
+            pendingPlaylistSubtuneSelection = pendingPlaylistSubtuneSelection
+        )
+        if (pendingEntry != null) {
+            if (pendingEntry.id != activePlaylistEntryId) {
+                onActivePlaylistEntryIdChanged(pendingEntry.id)
+            }
+            return@LaunchedEffect
+        }
         val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath ?: return@LaunchedEffect
-        val matchedEntry = activePlaylist
+        val playbackMatchedEntry = activePlaylist
             ?.entries
             ?.firstOrNull { entry ->
                 playlistEntryMatchesPlayback(
@@ -776,8 +808,8 @@ private fun AppNavigationPlaylistEffects(
                     currentSubtuneIndex = currentSubtuneIndex
                 )
             }
-        if (matchedEntry != null && matchedEntry.id != activePlaylistEntryId) {
-            onActivePlaylistEntryIdChanged(matchedEntry.id)
+        if (playbackMatchedEntry != null && playbackMatchedEntry.id != activePlaylistEntryId) {
+            onActivePlaylistEntryIdChanged(playbackMatchedEntry.id)
         }
     }
 
@@ -1646,19 +1678,25 @@ private fun AppNavigation(
     var currentPlaybackSourceId by settingsStates.currentPlaybackSourceId
     var currentPlaybackRequestUrl by remember { mutableStateOf<String?>(null) }
     val currentTrackPathOrUrl = currentPlaybackSourceId ?: selectedFile?.absolutePath
+    val pendingPlaylistEntry = resolvePendingPlaylistEntry(
+        activePlaylist = activePlaylist,
+        pendingPlaylistSubtuneSelection = pendingPlaylistSubtuneSelection
+    )
     val activePlaylistMetadataEntry = resolveActivePlaylistMetadataEntry(
         activePlaylist = activePlaylist,
         activePlaylistEntryId = activePlaylistEntryId,
         activeSourceId = currentTrackPathOrUrl,
         currentSubtuneIndex = currentSubtuneIndex
-    )
+    ) ?: pendingPlaylistEntry
     val currentFavoriteEntry = resolveFavoriteEntryForPlayback(
         playlistLibraryState = playlistLibraryState,
         activeSourceId = currentTrackPathOrUrl,
         currentSubtuneIndex = currentSubtuneIndex
     )
     val isCurrentTrackFavorited = currentFavoriteEntry != null
-    val currentPlaylistNavigationEntryId = activePlaylist
+    val currentPlaylistNavigationEntryId = pendingPlaylistEntry
+        ?.id
+        ?: activePlaylist
         ?.entries
         ?.firstOrNull { entry ->
             playlistEntryMatchesPlayback(
@@ -1758,7 +1796,8 @@ private fun AppNavigation(
             title = effectiveMetadataTitle,
             artist = resolvedArtist,
             album = effectiveMetadataAlbum,
-            artworkThumbnailCacheKey = artworkCacheKey
+            artworkThumbnailCacheKey = artworkCacheKey,
+            durationSecondsOverride = playlistDurationOverride
         )
         if (updatedState != playlistLibraryState) {
             onPlaylistLibraryStateChanged(updatedState)
@@ -2311,6 +2350,7 @@ private fun AppNavigation(
             metadataTitle = effectiveMetadataTitle,
             metadataArtist = effectiveMetadataArtist,
             metadataAlbum = effectiveMetadataAlbum,
+            durationSecondsOverride = playlistDurationOverride,
             subtuneCount = subtuneCount,
             currentSubtuneIndex = currentSubtuneIndex,
             onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged

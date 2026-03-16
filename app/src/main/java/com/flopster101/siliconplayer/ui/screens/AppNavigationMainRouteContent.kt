@@ -773,7 +773,9 @@ internal fun AppNavigationMainContentHost(
                 isPlayerExpanded = isPlayerExpanded,
                 selectedFile = selectedFile,
                 playingPlaylistFile = playingPlaylistFile,
-                favoriteSourcePaths = playlistLibraryState.favorites.map { it.source },
+                favoriteSourcePaths = playlistLibraryState.favorites
+                    .filter { it.subtuneIndex == null }
+                    .map { it.source },
                 networkNodes = networkNodes,
                 autoPlayOnTrackSelect = autoPlayOnTrackSelect,
                 openPlayerOnTrackSelect = openPlayerOnTrackSelect,

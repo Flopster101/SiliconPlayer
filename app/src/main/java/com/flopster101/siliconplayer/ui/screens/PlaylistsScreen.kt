@@ -17,6 +17,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
@@ -213,6 +214,7 @@ internal fun PlaylistsScreen(
         showingStoredPlaylistDetail -> selectedStoredPlaylist?.title
         else -> null
     }
+    val detailCollapseFraction = scrollBehavior.state.collapsedFraction.coerceIn(0f, 1f)
     val showCollapsedDetailSubtitle = detailSubtitle != null &&
         scrollBehavior.state.collapsedFraction >= 0.999f
     LaunchedEffect(pagerState.currentPage) {
@@ -256,9 +258,33 @@ internal fun PlaylistsScreen(
         topBar = {
             LargeTopAppBar(
                 title = {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(text = if (showingPlaylistDetail) "Playlists" else "Library")
-                        if (detailSubtitle != null) {
+                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                        if (showingPlaylistDetail && detailSubtitle != null) {
+                            val detailTitleAlpha = ((detailCollapseFraction - 0.58f) / 0.42f)
+                                .coerceIn(0f, 1f)
+                            val playlistsTitleAlpha = 1f - detailTitleAlpha
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(36.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Text(
+                                    text = "Playlists",
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Clip,
+                                    modifier = Modifier.graphicsLayer(alpha = playlistsTitleAlpha)
+                                )
+                                Text(
+                                    text = detailSubtitle,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Clip,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .graphicsLayer(alpha = detailTitleAlpha)
+                                        .basicMarquee()
+                                )
+                            }
                             Box(
                                 modifier = Modifier.height(18.dp),
                                 contentAlignment = Alignment.TopStart
@@ -279,12 +305,14 @@ internal fun PlaylistsScreen(
                                     )
                                 ) {
                                     Text(
-                                        text = detailSubtitle,
+                                        text = "Playlist",
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
+                        } else {
+                            Text(text = if (showingPlaylistDetail) "Playlists" else "Library")
                         }
                     }
                 },

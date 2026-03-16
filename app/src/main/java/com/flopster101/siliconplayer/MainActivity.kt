@@ -120,6 +120,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import com.flopster101.siliconplayer.playback.loadPlayableSiblingFilesForExternalIntent
 import com.flopster101.siliconplayer.playback.applyTrackSelectionAction
 import com.flopster101.siliconplayer.session.exportCachedFilesToTree
+import com.flopster101.siliconplayer.ui.screens.PlaylistEntrySortMode
+import com.flopster101.siliconplayer.ui.screens.sortPlaylistEntries
 import com.flopster101.siliconplayer.ui.visualization.rememberVisualizationModeCoordinator
 import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import java.io.BufferedInputStream
@@ -1251,6 +1253,9 @@ private fun AppNavigation(
     }
     var playlistLibraryState by remember {
         mutableStateOf(readPlaylistLibraryState(prefs))
+    }
+    var favoritesSortMode by remember {
+        mutableStateOf(PlaylistEntrySortMode.Custom)
     }
     var externalTrackInfoDialogRequestToken by remember { mutableIntStateOf(0) }
     var activePlaylist by remember { mutableStateOf<StoredPlaylist?>(null) }
@@ -2549,6 +2554,58 @@ private fun AppNavigation(
             moved
         }
     }
+    val playPreviousTrackFromUiAction: () -> Boolean = {
+        val restartCurrentSelection = {
+            NativeBridge.seekTo(0.0)
+            position = 0.0
+            playbackSessionCoordinator.syncPlaybackService()
+        }
+        val currentEntryId = currentPlaylistNavigationEntryId
+        val playlistEntries = activePlaylist?.entries
+        val usePlaylistNavigation = playlistEntries?.isNotEmpty() == true &&
+            !currentEntryId.isNullOrBlank()
+        if (!usePlaylistNavigation) {
+            trackNavDelegates.handlePreviousTrackAction()
+        } else {
+            val currentIndex = playlistEntries
+                ?.indexOfFirst { entry -> entry.id == currentEntryId }
+                ?: -1
+            val hasPreviousTrack = if (playlistWrapNavigation) {
+                currentIndex >= 0 && playlistEntries.isNotEmpty()
+            } else {
+                currentIndex > 0 && playlistEntries.isNotEmpty()
+            }
+            when (
+                resolvePreviousTrackAction(
+                    previousRestartsAfterThreshold = previousRestartsAfterThreshold,
+                    hasTrackLoaded = selectedFile != null,
+                    positionSeconds = position,
+                    hasPreviousTrack = hasPreviousTrack
+                )
+            ) {
+                PreviousTrackAction.RestartCurrent -> {
+                    restartCurrentSelection()
+                    true
+                }
+
+                PreviousTrackAction.PlayPreviousTrack -> {
+                    val moved = playAdjacentTrackFromUiAction(-1, false)
+                    if (moved) {
+                        true
+                    } else if (selectedFile != null) {
+                        restartCurrentSelection()
+                        true
+                    } else {
+                        false
+                    }
+                }
+
+                PreviousTrackAction.NoAction -> {
+                    false
+                }
+            }
+        }
+    }
 
     AppNavigationPlaybackPollEffects(
         selectedFile = selectedFile,
@@ -2807,7 +2864,7 @@ private fun AppNavigation(
             deferredPlaybackSeek = null
             playbackStateDelegates.resetAndOptionallyKeepLastTrack(keepLastTrack = true)
         },
-        onPreviousTrackRequested = { trackNavDelegates.handlePreviousTrackAction() },
+        onPreviousTrackRequested = { playPreviousTrackFromUiAction() },
         onNextTrackRequested = { playAdjacentTrackFromUiAction(1, true) }
     )
 
@@ -3043,7 +3100,7 @@ private fun AppNavigation(
             onMiniPlayerExpandRequested = { restoreMiniPlayerFocusOnCollapse = true },
             canResumeStoppedTrack = canResumeStoppedTrack,
             onHidePlayerSurface = { hidePlayerSurface() },
-            onPreviousTrack = { trackNavDelegates.handlePreviousTrackAction() },
+            onPreviousTrack = { playPreviousTrackFromUiAction() },
             onForcePreviousTrack = { playAdjacentTrackFromUiAction(-1, false) },
             onNextTrack = { playAdjacentTrackFromUiAction(1, true) },
             onPlayPause = {
@@ -3739,16 +3796,26 @@ private fun AppNavigation(
             expandFromMiniDrag = false
             miniExpandPreviewProgress = 0f
         }
-        val favoritesPlaybackPlaylist = buildFavoritesPlaybackPlaylist(playlistLibraryState.favorites)
+        val sortedFavoriteEntries = remember(playlistLibraryState.favorites, favoritesSortMode) {
+            sortPlaylistEntries(
+                entries = playlistLibraryState.favorites,
+                sortMode = favoritesSortMode
+            )
+        }
+        val favoritesPlaybackPlaylist = buildFavoritesPlaybackPlaylist(sortedFavoriteEntries)
         val syncActiveFavoritesContextAfterMutation: (List<PlaylistTrackEntry>) -> Unit = { favorites ->
+            val sortedFavorites = sortPlaylistEntries(
+                entries = favorites,
+                sortMode = favoritesSortMode
+            )
             if (activePlaylist?.id == "__favorites__") {
-                if (favorites.isEmpty()) {
+                if (sortedFavorites.isEmpty()) {
                     activePlaylist = null
                     activePlaylistEntryId = null
                     pendingPlaylistSubtuneSelection = null
                 } else {
-                    activePlaylist = buildFavoritesPlaybackPlaylist(favorites)
-                    val playbackMatchedEntryId = favorites.firstOrNull { entry ->
+                    activePlaylist = buildFavoritesPlaybackPlaylist(sortedFavorites)
+                    val playbackMatchedEntryId = sortedFavorites.firstOrNull { entry ->
                         playlistEntryMatchesPlayback(
                             entry = entry,
                             activeSourceId = currentTrackPathOrUrl,
@@ -3756,11 +3823,15 @@ private fun AppNavigation(
                         )
                     }?.id
                     val retainedEntryId = activePlaylistEntryId?.takeIf { currentId ->
-                        favorites.any { it.id == currentId }
+                        sortedFavorites.any { it.id == currentId }
                     }
-                    activePlaylistEntryId = playbackMatchedEntryId ?: retainedEntryId ?: favorites.first().id
+                    activePlaylistEntryId =
+                        playbackMatchedEntryId ?: retainedEntryId ?: sortedFavorites.first().id
                 }
             }
+        }
+        LaunchedEffect(favoritesSortMode, playlistLibraryState.favorites, activePlaylist?.id) {
+            syncActiveFavoritesContextAfterMutation(playlistLibraryState.favorites)
         }
         Box(
             modifier = Modifier
@@ -3805,6 +3876,7 @@ private fun AppNavigation(
                 recentFilesLimit = recentFilesLimit,
                 playlistLibraryState = playlistLibraryState,
                 activePlaylist = activePlaylist,
+                favoritesSortMode = favoritesSortMode,
                 networkNodes = networkNodes,
                 storageDescriptors = storageDescriptors,
                 miniPlayerListInset = miniPlayerListInset,
@@ -3816,6 +3888,7 @@ private fun AppNavigation(
                 onRecentFoldersChanged = { recentFolders = it },
                 onRecentPlayedFilesChanged = { recentPlayedFiles = it },
                 onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
+                onFavoritesSortModeChange = { favoritesSortMode = it },
                 onOpenFavorite = { entry ->
                     openPlaylistEntry(
                         context = context,
@@ -3838,7 +3911,7 @@ private fun AppNavigation(
                     }
                 },
                 onPlayFavoritePlaylist = {
-                    val firstEntry = playlistLibraryState.favorites.firstOrNull()
+                    val firstEntry = sortedFavoriteEntries.firstOrNull()
                     if (firstEntry == null) {
                         Toast.makeText(context, "Favorites is empty", Toast.LENGTH_SHORT).show()
                     } else {

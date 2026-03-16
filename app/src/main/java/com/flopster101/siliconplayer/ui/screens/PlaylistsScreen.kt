@@ -140,7 +140,7 @@ private enum class AlbumCollectionLayout {
     List
 }
 
-private enum class PlaylistEntrySortMode(
+internal enum class PlaylistEntrySortMode(
     val label: String
 ) {
     Custom("Custom"),
@@ -161,8 +161,10 @@ internal fun PlaylistsScreen(
     currentPlaybackSourceId: String?,
     currentSubtuneIndex: Int,
     bottomContentPadding: Dp,
+    favoritesSortMode: PlaylistEntrySortMode,
     backHandlingEnabled: Boolean = true,
     onBack: () -> Unit,
+    onFavoritesSortModeChange: (PlaylistEntrySortMode) -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
     onOpenPlaylist: (StoredPlaylist) -> Unit,
     onPlayFavoritePlaylist: () -> Unit,
@@ -186,7 +188,6 @@ internal fun PlaylistsScreen(
     )
     val coroutineScope = rememberCoroutineScope()
     val showingFavoritesDetail = destination == PlaylistsSurfaceDestination.Favorites
-    var favoritesSortMode by rememberSaveable { mutableStateOf(PlaylistEntrySortMode.Custom) }
     var favoritesEditModeEnabled by rememberSaveable { mutableStateOf(false) }
     var favoritesDraggingEntryId by remember { mutableStateOf<String?>(null) }
     var showDeleteAllFavoritesConfirm by rememberSaveable { mutableStateOf(false) }
@@ -333,7 +334,7 @@ internal fun PlaylistsScreen(
                         heroIcon = Icons.Default.Star,
                         emptyBody = "Your favorites will show up here.",
                         selectedSortMode = favoritesSortMode,
-                        onSortModeSelected = { favoritesSortMode = it },
+                        onSortModeSelected = onFavoritesSortModeChange,
                         isEditMode = favoritesEditModeEnabled,
                         onEditModeChanged = { enabled ->
                             favoritesEditModeEnabled = enabled
@@ -1164,7 +1165,7 @@ private fun PlaylistActionPill(
     }
 }
 
-private fun sortPlaylistEntries(
+internal fun sortPlaylistEntries(
     entries: List<PlaylistTrackEntry>,
     sortMode: PlaylistEntrySortMode
 ): List<PlaylistTrackEntry> {

@@ -21,6 +21,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.ExperimentalComposeUiApi
+import com.flopster101.siliconplayer.ui.screens.PlaylistEntrySortMode
 import java.io.File
 
 @Composable
@@ -97,7 +98,9 @@ internal fun AppNavigationPlaylistsRouteSection(
     activePlaylist: StoredPlaylist?,
     currentPlaybackSourceId: String?,
     currentSubtuneIndex: Int,
+    favoritesSortMode: PlaylistEntrySortMode,
     onExitPlaylists: () -> Unit,
+    onFavoritesSortModeChange: (PlaylistEntrySortMode) -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
     onOpenPlaylist: (StoredPlaylist) -> Unit,
     onPlayFavoritePlaylist: () -> Unit,
@@ -118,7 +121,9 @@ internal fun AppNavigationPlaylistsRouteSection(
         activePlaylist = activePlaylist,
         currentPlaybackSourceId = currentPlaybackSourceId,
         currentSubtuneIndex = currentSubtuneIndex,
+        favoritesSortMode = favoritesSortMode,
         onExitPlaylists = onExitPlaylists,
+        onFavoritesSortModeChange = onFavoritesSortModeChange,
         onOpenFavorite = onOpenFavorite,
         onOpenPlaylist = onOpenPlaylist,
         onPlayFavoritePlaylist = onPlayFavoritePlaylist,

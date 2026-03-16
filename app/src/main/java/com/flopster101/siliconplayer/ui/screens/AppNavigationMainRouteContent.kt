@@ -9,6 +9,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.Dp
 import com.flopster101.siliconplayer.data.parseArchiveLogicalPath
 import com.flopster101.siliconplayer.data.FileRepository
+import com.flopster101.siliconplayer.ui.screens.PlaylistEntrySortMode
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -312,7 +313,9 @@ internal fun AppNavigationPlaylistsContentSection(
     activePlaylist: StoredPlaylist?,
     currentPlaybackSourceId: String?,
     currentSubtuneIndex: Int,
+    favoritesSortMode: PlaylistEntrySortMode,
     onCurrentViewChanged: (MainView) -> Unit,
+    onFavoritesSortModeChange: (PlaylistEntrySortMode) -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
     onOpenPlaylist: (StoredPlaylist) -> Unit,
     onPlayFavoritePlaylist: () -> Unit,
@@ -333,7 +336,9 @@ internal fun AppNavigationPlaylistsContentSection(
         activePlaylist = activePlaylist,
         currentPlaybackSourceId = currentPlaybackSourceId,
         currentSubtuneIndex = currentSubtuneIndex,
+        favoritesSortMode = favoritesSortMode,
         onExitPlaylists = { onCurrentViewChanged(MainView.Home) },
+        onFavoritesSortModeChange = onFavoritesSortModeChange,
         onOpenFavorite = onOpenFavorite,
         onOpenPlaylist = onOpenPlaylist,
         onPlayFavoritePlaylist = onPlayFavoritePlaylist,
@@ -567,6 +572,7 @@ internal fun AppNavigationMainContentHost(
     recentFilesLimit: Int,
     playlistLibraryState: PlaylistLibraryState,
     activePlaylist: StoredPlaylist?,
+    favoritesSortMode: PlaylistEntrySortMode,
     networkNodes: List<NetworkNode>,
     storageDescriptors: List<StorageDescriptor>,
     miniPlayerListInset: Dp,
@@ -578,6 +584,7 @@ internal fun AppNavigationMainContentHost(
     onRecentFoldersChanged: (List<RecentPathEntry>) -> Unit,
     onRecentPlayedFilesChanged: (List<RecentPathEntry>) -> Unit,
     onPlaylistLibraryStateChanged: (PlaylistLibraryState) -> Unit,
+    onFavoritesSortModeChange: (PlaylistEntrySortMode) -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
     onOpenPlaylist: (StoredPlaylist) -> Unit,
     onPlayFavoritePlaylist: () -> Unit,
@@ -724,7 +731,9 @@ internal fun AppNavigationMainContentHost(
                 activePlaylist = activePlaylist,
                 currentPlaybackSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath,
                 currentSubtuneIndex = currentSubtuneIndex,
+                favoritesSortMode = favoritesSortMode,
                 onCurrentViewChanged = onCurrentViewChanged,
+                onFavoritesSortModeChange = onFavoritesSortModeChange,
                 onOpenFavorite = onOpenFavorite,
                 onOpenPlaylist = onOpenPlaylist,
                 onPlayFavoritePlaylist = onPlayFavoritePlaylist,

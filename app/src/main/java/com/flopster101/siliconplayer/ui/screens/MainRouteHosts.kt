@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import com.flopster101.siliconplayer.ui.screens.FileBrowserScreen
 import com.flopster101.siliconplayer.ui.screens.HttpFileBrowserScreen
 import com.flopster101.siliconplayer.ui.screens.NetworkBrowserScreen
+import com.flopster101.siliconplayer.ui.screens.PlaylistEntrySortMode
 import com.flopster101.siliconplayer.ui.screens.PlaylistsScreen
 import com.flopster101.siliconplayer.ui.screens.SmbFileBrowserScreen
 import com.flopster101.siliconplayer.RemotePlayableSourceIdsHolder
@@ -129,7 +130,9 @@ internal fun MainPlaylistsRouteHost(
     activePlaylist: StoredPlaylist?,
     currentPlaybackSourceId: String?,
     currentSubtuneIndex: Int,
+    favoritesSortMode: PlaylistEntrySortMode,
     onExitPlaylists: () -> Unit,
+    onFavoritesSortModeChange: (PlaylistEntrySortMode) -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
     onOpenPlaylist: (StoredPlaylist) -> Unit,
     onPlayFavoritePlaylist: () -> Unit,
@@ -149,8 +152,10 @@ internal fun MainPlaylistsRouteHost(
             currentPlaybackSourceId = currentPlaybackSourceId,
             currentSubtuneIndex = currentSubtuneIndex,
             bottomContentPadding = bottomContentPadding,
+            favoritesSortMode = favoritesSortMode,
             backHandlingEnabled = backHandlingEnabled,
             onBack = onExitPlaylists,
+            onFavoritesSortModeChange = onFavoritesSortModeChange,
             onOpenFavorite = onOpenFavorite,
             onOpenPlaylist = onOpenPlaylist,
             onPlayFavoritePlaylist = onPlayFavoritePlaylist,

@@ -190,7 +190,6 @@ internal fun PlaylistsScreen(
     var favoritesEditModeEnabled by rememberSaveable { mutableStateOf(false) }
     var favoritesDraggingEntryId by remember { mutableStateOf<String?>(null) }
     var showDeleteAllFavoritesConfirm by rememberSaveable { mutableStateOf(false) }
-    var showDeleteFavoritesPlaylistConfirm by rememberSaveable { mutableStateOf(false) }
     var trackInfoDialogState by remember {
         mutableStateOf<PlaylistTrackInfoDialogState?>(null)
     }
@@ -349,7 +348,7 @@ internal fun PlaylistsScreen(
                         currentSubtuneIndex = currentSubtuneIndex,
                         onEntryClick = onOpenFavorite,
                         onPlayPlaylist = onPlayFavoritePlaylist,
-                        onDeletePlaylist = { showDeleteFavoritesPlaylistConfirm = true },
+                        onDeletePlaylist = {},
                         canDeletePlaylist = false,
                         onDeleteAllEntries = { showDeleteAllFavoritesConfirm = true },
                         onPlayEntry = onOpenFavorite,
@@ -433,18 +432,6 @@ internal fun PlaylistsScreen(
             dismissButton = {
                 TextButton(onClick = { showDeleteAllFavoritesConfirm = false }) {
                     Text("Cancel")
-                }
-            }
-        )
-    }
-    if (showDeleteFavoritesPlaylistConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteFavoritesPlaylistConfirm = false },
-            title = { Text("Delete playlist?") },
-            text = { Text("Favorites cannot be deleted.") },
-            confirmButton = {
-                TextButton(onClick = { showDeleteFavoritesPlaylistConfirm = false }) {
-                    Text("OK")
                 }
             }
         )

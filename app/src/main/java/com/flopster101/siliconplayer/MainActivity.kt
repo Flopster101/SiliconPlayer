@@ -3903,12 +3903,17 @@ private fun AppNavigation(
                         onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
                     )
                 },
-                onOpenPlaylist = { playlist ->
+                onPlayStoredPlaylist = { playlist ->
                     activePlaylist = playlist
                     activePlaylistEntryId = playlist.entries.firstOrNull()?.id
                     playlist.entries.firstOrNull()?.let { entry ->
                         playPlaylistEntryAction(entry, playlist)
                     }
+                },
+                onOpenStoredPlaylistEntry = { entry, playlist ->
+                    activePlaylist = playlist
+                    activePlaylistEntryId = entry.id
+                    playPlaylistEntryAction(entry, playlist)
                 },
                 onPlayFavoritePlaylist = {
                     val firstEntry = sortedFavoriteEntries.firstOrNull()

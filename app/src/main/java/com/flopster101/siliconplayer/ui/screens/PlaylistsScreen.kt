@@ -126,7 +126,8 @@ import kotlinx.coroutines.withContext
 
 private enum class PlaylistsSurfaceDestination {
     Library,
-    Favorites
+    Favorites,
+    StoredPlaylist
 }
 
 private enum class LibrarySurfaceTab {
@@ -166,7 +167,8 @@ internal fun PlaylistsScreen(
     onBack: () -> Unit,
     onFavoritesSortModeChange: (PlaylistEntrySortMode) -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
-    onOpenPlaylist: (StoredPlaylist) -> Unit,
+    onPlayStoredPlaylist: (StoredPlaylist) -> Unit,
+    onOpenStoredPlaylistEntry: (PlaylistTrackEntry, StoredPlaylist) -> Unit,
     onPlayFavoritePlaylist: () -> Unit,
     onDeleteAllFavorites: () -> Unit,
     onDeleteFavoriteTrack: (PlaylistTrackEntry) -> Unit,
@@ -179,6 +181,7 @@ internal fun PlaylistsScreen(
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     var destination by rememberSaveable { mutableStateOf(PlaylistsSurfaceDestination.Library) }
+    var selectedStoredPlaylistId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     var albumCollectionLayout by rememberSaveable { mutableStateOf(AlbumCollectionLayout.Grid) }
     val libraryTabs = rememberLibraryTabs()
@@ -188,22 +191,46 @@ internal fun PlaylistsScreen(
     )
     val coroutineScope = rememberCoroutineScope()
     val showingFavoritesDetail = destination == PlaylistsSurfaceDestination.Favorites
+    val selectedStoredPlaylist = selectedStoredPlaylistId?.let { playlistId ->
+        libraryState.playlists.firstOrNull { playlist -> playlist.id == playlistId }
+    }
+    val showingStoredPlaylistDetail =
+        destination == PlaylistsSurfaceDestination.StoredPlaylist && selectedStoredPlaylist != null
+    val showingPlaylistDetail = showingFavoritesDetail || showingStoredPlaylistDetail
+    var storedPlaylistSortMode by rememberSaveable(selectedStoredPlaylistId) {
+        mutableStateOf(PlaylistEntrySortMode.Custom)
+    }
     var favoritesEditModeEnabled by rememberSaveable { mutableStateOf(false) }
     var favoritesDraggingEntryId by remember { mutableStateOf<String?>(null) }
     var showDeleteAllFavoritesConfirm by rememberSaveable { mutableStateOf(false) }
     var trackInfoDialogState by remember {
         mutableStateOf<PlaylistTrackInfoDialogState?>(null)
     }
-    val showCollapsedDetailSubtitle = showingFavoritesDetail &&
+    val detailSubtitle = when {
+        showingFavoritesDetail -> "Favorites"
+        showingStoredPlaylistDetail -> selectedStoredPlaylist?.title
+        else -> null
+    }
+    val showCollapsedDetailSubtitle = detailSubtitle != null &&
         scrollBehavior.state.collapsedFraction >= 0.999f
     LaunchedEffect(pagerState.currentPage) {
         if (selectedTabIndex != pagerState.currentPage) {
             selectedTabIndex = pagerState.currentPage
         }
     }
-    BackHandler(enabled = backHandlingEnabled && showingFavoritesDetail) {
+    LaunchedEffect(destination, selectedStoredPlaylistId, libraryState.playlists) {
+        if (
+            destination == PlaylistsSurfaceDestination.StoredPlaylist &&
+            selectedStoredPlaylist == null
+        ) {
+            destination = PlaylistsSurfaceDestination.Library
+            selectedStoredPlaylistId = null
+        }
+    }
+    BackHandler(enabled = backHandlingEnabled && showingPlaylistDetail) {
         favoritesEditModeEnabled = false
         favoritesDraggingEntryId = null
+        selectedStoredPlaylistId = null
         destination = PlaylistsSurfaceDestination.Library
     }
     LaunchedEffect(favoritesEditModeEnabled, favoritesSortMode, libraryState.favorites) {
@@ -228,8 +255,8 @@ internal fun PlaylistsScreen(
             LargeTopAppBar(
                 title = {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(text = if (showingFavoritesDetail) "Playlists" else "Library")
-                        if (showingFavoritesDetail) {
+                        Text(text = if (showingPlaylistDetail) "Playlists" else "Library")
+                        if (detailSubtitle != null) {
                             Box(
                                 modifier = Modifier.height(18.dp),
                                 contentAlignment = Alignment.TopStart
@@ -250,7 +277,7 @@ internal fun PlaylistsScreen(
                                     )
                                 ) {
                                     Text(
-                                        text = "Favorites",
+                                        text = detailSubtitle,
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -262,9 +289,10 @@ internal fun PlaylistsScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = {
-                            if (showingFavoritesDetail) {
+                            if (showingPlaylistDetail) {
                                 favoritesEditModeEnabled = false
                                 favoritesDraggingEntryId = null
+                                selectedStoredPlaylistId = null
                                 destination = PlaylistsSurfaceDestination.Library
                             } else {
                                 onBack()
@@ -367,6 +395,69 @@ internal fun PlaylistsScreen(
                         }
                     )
                 }
+            } else if (
+                currentDestination == PlaylistsSurfaceDestination.StoredPlaylist &&
+                selectedStoredPlaylist != null
+            ) {
+                val sortedStoredPlaylistEntries = sortPlaylistEntries(
+                    entries = selectedStoredPlaylist.entries,
+                    sortMode = storedPlaylistSortMode
+                )
+                val sortedStoredPlaylist = selectedStoredPlaylist.copy(entries = sortedStoredPlaylistEntries)
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        top = 8.dp,
+                        end = 16.dp,
+                        bottom = bottomContentPadding + 16.dp
+                    )
+                ) {
+                    playlistDetailContent(
+                        title = selectedStoredPlaylist.title,
+                        entries = sortedStoredPlaylistEntries,
+                        heroIcon = null,
+                        emptyBody = "This playlist has no tracks.",
+                        selectedSortMode = storedPlaylistSortMode,
+                        onSortModeSelected = { storedPlaylistSortMode = it },
+                        isEditMode = false,
+                        onEditModeChanged = {},
+                        showAddAction = false,
+                        showEditAction = false,
+                        showDeleteAllEntriesAction = false,
+                        canReorderEntries = false,
+                        draggingEntryId = null,
+                        onDraggingEntryIdChange = {},
+                        activeSourceId = currentPlaybackSourceId,
+                        currentSubtuneIndex = currentSubtuneIndex,
+                        onEntryClick = { entry -> onOpenStoredPlaylistEntry(entry, sortedStoredPlaylist) },
+                        onPlayPlaylist = { onPlayStoredPlaylist(sortedStoredPlaylist) },
+                        onDeletePlaylist = {},
+                        canDeletePlaylist = false,
+                        onDeleteAllEntries = {},
+                        canDeleteEntries = false,
+                        onPlayEntry = { entry -> onOpenStoredPlaylistEntry(entry, sortedStoredPlaylist) },
+                        onPlayEntryAsCached = {},
+                        onDeleteEntry = {},
+                        onMoveEntry = { _, _ -> },
+                        onOpenEntryLocation = {},
+                        onShareEntry = {},
+                        onCopyEntrySource = {},
+                        onOpenEntryInfo = { entry ->
+                            trackInfoDialogState = buildPlaylistTrackInfoDialogState(
+                                playlistTitle = selectedStoredPlaylist.title,
+                                entry = entry
+                            )
+                        },
+                        showPlayAsCachedAction = false,
+                        showLocationAction = false,
+                        showShareAction = false,
+                        showCopySourceAction = false,
+                        showInfoAction = true
+                    )
+                }
             } else {
                 Column(
                     modifier = Modifier
@@ -394,7 +485,10 @@ internal fun PlaylistsScreen(
                                     libraryState = libraryState,
                                     bottomContentPadding = bottomContentPadding,
                                     onOpenFavorites = { destination = PlaylistsSurfaceDestination.Favorites },
-                                    onOpenPlaylist = onOpenPlaylist
+                                    onOpenPlaylist = { playlist ->
+                                        selectedStoredPlaylistId = playlist.id
+                                        destination = PlaylistsSurfaceDestination.StoredPlaylist
+                                    }
                                 )
                             }
                             LibrarySurfaceTab.Albums -> {
@@ -866,12 +960,15 @@ private fun rememberLibraryTabs(): List<LibrarySurfaceTab> {
 private fun LazyListScope.playlistDetailContent(
     title: String,
     entries: List<PlaylistTrackEntry>,
-    heroIcon: ImageVector,
+    heroIcon: ImageVector?,
     emptyBody: String,
     selectedSortMode: PlaylistEntrySortMode,
     onSortModeSelected: (PlaylistEntrySortMode) -> Unit,
     isEditMode: Boolean,
     onEditModeChanged: (Boolean) -> Unit,
+    showAddAction: Boolean = true,
+    showEditAction: Boolean = true,
+    showDeleteAllEntriesAction: Boolean = true,
     canReorderEntries: Boolean,
     draggingEntryId: String?,
     onDraggingEntryIdChange: (String?) -> Unit,
@@ -882,6 +979,7 @@ private fun LazyListScope.playlistDetailContent(
     onDeletePlaylist: () -> Unit,
     canDeletePlaylist: Boolean,
     onDeleteAllEntries: () -> Unit,
+    canDeleteEntries: Boolean = true,
     onPlayEntry: (PlaylistTrackEntry) -> Unit,
     onPlayEntryAsCached: (PlaylistTrackEntry) -> Unit,
     onDeleteEntry: (PlaylistTrackEntry) -> Unit,
@@ -889,7 +987,12 @@ private fun LazyListScope.playlistDetailContent(
     onOpenEntryLocation: (PlaylistTrackEntry) -> Unit,
     onShareEntry: (PlaylistTrackEntry) -> Unit,
     onCopyEntrySource: (PlaylistTrackEntry) -> Unit,
-    onOpenEntryInfo: (PlaylistTrackEntry) -> Unit
+    onOpenEntryInfo: (PlaylistTrackEntry) -> Unit,
+    showPlayAsCachedAction: Boolean = true,
+    showLocationAction: Boolean = true,
+    showShareAction: Boolean = true,
+    showCopySourceAction: Boolean = true,
+    showInfoAction: Boolean = true
 ) {
     item {
         PlaylistHeroCard(
@@ -901,6 +1004,9 @@ private fun LazyListScope.playlistDetailContent(
             onSortModeSelected = onSortModeSelected,
             isEditMode = isEditMode,
             onEditModeChanged = onEditModeChanged,
+            showAddAction = showAddAction,
+            showEditAction = showEditAction,
+            showDeleteAllEntriesAction = showDeleteAllEntriesAction,
             onPlayPlaylist = onPlayPlaylist,
             onDeletePlaylist = onDeletePlaylist,
             canDeletePlaylist = canDeletePlaylist,
@@ -954,6 +1060,7 @@ private fun LazyListScope.playlistDetailContent(
                 onClick = { onEntryClick(entry) },
                 onPlay = { onPlayEntry(entry) },
                 onPlayAsCached = { onPlayEntryAsCached(entry) },
+                canDelete = canDeleteEntries,
                 onDelete = { onDeleteEntry(entry) },
                 onMoveUp = { onMoveEntry(entry, -1) },
                 onMoveDown = { onMoveEntry(entry, 1) },
@@ -977,7 +1084,12 @@ private fun LazyListScope.playlistDetailContent(
                 onOpenLocation = { onOpenEntryLocation(entry) },
                 onShare = { onShareEntry(entry) },
                 onCopySource = { onCopyEntrySource(entry) },
-                onOpenInfo = { onOpenEntryInfo(entry) }
+                onOpenInfo = { onOpenEntryInfo(entry) },
+                showPlayAsCachedAction = showPlayAsCachedAction,
+                showLocationAction = showLocationAction,
+                showShareAction = showShareAction,
+                showCopySourceAction = showCopySourceAction,
+                showInfoAction = showInfoAction
             )
         }
     }
@@ -993,6 +1105,9 @@ private fun PlaylistHeroCard(
     onSortModeSelected: (PlaylistEntrySortMode) -> Unit,
     isEditMode: Boolean,
     onEditModeChanged: (Boolean) -> Unit,
+    showAddAction: Boolean,
+    showEditAction: Boolean,
+    showDeleteAllEntriesAction: Boolean,
     onPlayPlaylist: () -> Unit,
     onDeletePlaylist: () -> Unit,
     canDeletePlaylist: Boolean,
@@ -1057,13 +1172,15 @@ private fun PlaylistHeroCard(
                             onDeletePlaylist()
                         }
                     )
-                    DropdownMenuItem(
-                        text = { Text("Delete all entries") },
-                        onClick = {
-                            menuExpanded = false
-                            onDeleteAllEntries()
-                        }
-                    )
+                    if (showDeleteAllEntriesAction) {
+                        DropdownMenuItem(
+                            text = { Text("Delete all entries") },
+                            onClick = {
+                                menuExpanded = false
+                                onDeleteAllEntries()
+                            }
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.weight(1f))
@@ -1092,16 +1209,20 @@ private fun PlaylistHeroCard(
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            PlaylistActionPill(
-                label = "Add",
-                icon = Icons.Default.Add,
-                onClick = {}
-            )
-            PlaylistActionPill(
-                label = if (isEditMode) "Done" else "Edit",
-                icon = if (isEditMode) Icons.Default.Check else Icons.Default.Edit,
-                onClick = { onEditModeChanged(!isEditMode) }
-            )
+            if (showAddAction) {
+                PlaylistActionPill(
+                    label = "Add",
+                    icon = Icons.Default.Add,
+                    onClick = {}
+                )
+            }
+            if (showEditAction) {
+                PlaylistActionPill(
+                    label = if (isEditMode) "Done" else "Edit",
+                    icon = if (isEditMode) Icons.Default.Check else Icons.Default.Edit,
+                    onClick = { onEditModeChanged(!isEditMode) }
+                )
+            }
             Box {
                 PlaylistActionPill(
                     label = "Sort",
@@ -1394,6 +1515,7 @@ private fun playlistsSurfaceDestinationOrder(destination: PlaylistsSurfaceDestin
     when (destination) {
         PlaylistsSurfaceDestination.Library -> 0
         PlaylistsSurfaceDestination.Favorites -> 1
+        PlaylistsSurfaceDestination.StoredPlaylist -> 1
     }
 
 private fun playlistTrackCountLabel(trackCount: Int): String =
@@ -1439,6 +1561,7 @@ private fun PlaylistTrackRow(
     onClick: () -> Unit,
     onPlay: () -> Unit,
     onPlayAsCached: () -> Unit,
+    canDelete: Boolean,
     onDelete: () -> Unit,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
@@ -1448,7 +1571,12 @@ private fun PlaylistTrackRow(
     onOpenLocation: () -> Unit,
     onShare: () -> Unit,
     onCopySource: () -> Unit,
-    onOpenInfo: () -> Unit
+    onOpenInfo: () -> Unit,
+    showPlayAsCachedAction: Boolean,
+    showLocationAction: Boolean,
+    showShareAction: Boolean,
+    showCopySourceAction: Boolean,
+    showInfoAction: Boolean
 ) {
     var menuExpanded by rememberSaveable(entry.id) { mutableStateOf(false) }
     val isRemoteSource = remember(entry.source) { isRemotePlaylistSource(entry.source) }
@@ -1549,7 +1677,7 @@ private fun PlaylistTrackRow(
                             onPlay()
                         }
                     )
-                    if (isRemoteSource) {
+                    if (showPlayAsCachedAction && isRemoteSource) {
                         DropdownMenuItem(
                             text = { Text("Play as cached") },
                             onClick = {
@@ -1558,14 +1686,16 @@ private fun PlaylistTrackRow(
                             }
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text("Delete") },
-                        onClick = {
-                            menuExpanded = false
-                            onDelete()
-                        }
-                    )
-                    if (canOpenLocalLocation) {
+                    if (canDelete) {
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            onClick = {
+                                menuExpanded = false
+                                onDelete()
+                            }
+                        )
+                    }
+                    if (showLocationAction && canOpenLocalLocation) {
                         DropdownMenuItem(
                             text = { Text("Open location") },
                             onClick = {
@@ -1574,7 +1704,7 @@ private fun PlaylistTrackRow(
                             }
                         )
                     }
-                    if (isRemoteSource) {
+                    if (showCopySourceAction && isRemoteSource) {
                         DropdownMenuItem(
                             text = { Text("Copy URL") },
                             onClick = {
@@ -1582,7 +1712,7 @@ private fun PlaylistTrackRow(
                                 onCopySource()
                             }
                         )
-                    } else if (canOpenLocalLocation) {
+                    } else if (showShareAction && canOpenLocalLocation) {
                         DropdownMenuItem(
                             text = { Text("Share") },
                             onClick = {
@@ -1591,13 +1721,15 @@ private fun PlaylistTrackRow(
                             }
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text("Info") },
-                        onClick = {
-                            menuExpanded = false
-                            onOpenInfo()
-                        }
-                    )
+                    if (showInfoAction) {
+                        DropdownMenuItem(
+                            text = { Text("Info") },
+                            onClick = {
+                                menuExpanded = false
+                                onOpenInfo()
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("Move up") },
                         enabled = canReorder && canMoveUp,

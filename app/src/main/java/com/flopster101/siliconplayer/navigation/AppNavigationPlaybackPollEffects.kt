@@ -204,6 +204,12 @@ internal fun AppNavigationPlaybackPollEffects(
                                     onStopPlaybackAndUnload()
                                 }
                             }
+                            RepeatMode.LoopPoint -> {
+                                // For playlist-backed tracks with a duration override, LoopPoint
+                                // should still behave like the direct-file path: let the native
+                                // loop-point repeat continue instead of downgrading to a full
+                                // high-level restart at the override boundary.
+                            }
                             else -> {
                                 onRestartCurrentTrack()
                             }

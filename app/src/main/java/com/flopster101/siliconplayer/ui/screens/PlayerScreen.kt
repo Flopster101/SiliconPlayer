@@ -648,6 +648,9 @@ internal fun PlayerScreen(
     onOpenPlaylistSelector: () -> Unit = {},
     currentSubtuneIndex: Int = 0,
     subtuneCount: Int = 0,
+    titleCurrentSubtuneIndex: Int = 0,
+    titleSubtuneCount: Int = 0,
+    subtuneTitleClickable: Boolean = false,
     onCycleRepeatMode: () -> Unit,
     canOpenCoreSettings: Boolean,
     onOpenCoreSettings: () -> Unit,
@@ -1108,8 +1111,9 @@ internal fun PlayerScreen(
                                         filenameDisplayMode = filenameDisplayMode,
                                         decoderName = decoderName,
                                         filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
-                                        currentSubtuneIndex = currentSubtuneIndex,
-                                        subtuneCount = subtuneCount,
+                                        currentSubtuneIndex = titleCurrentSubtuneIndex,
+                                        subtuneCount = titleSubtuneCount,
+                                        subtuneTitleClickable = subtuneTitleClickable,
                                         onOpenSubtuneSelector = onOpenSubtuneSelector,
                                         layoutScale = landscapeLayoutScale,
                                         titleScaleBoost = landscapeTitleScaleBoost,
@@ -1468,8 +1472,9 @@ internal fun PlayerScreen(
                                         filenameDisplayMode = filenameDisplayMode,
                                         decoderName = decoderName,
                                         filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
-                                        currentSubtuneIndex = currentSubtuneIndex,
-                                        subtuneCount = subtuneCount,
+                                        currentSubtuneIndex = titleCurrentSubtuneIndex,
+                                        subtuneCount = titleSubtuneCount,
+                                        subtuneTitleClickable = subtuneTitleClickable,
                                         onOpenSubtuneSelector = onOpenSubtuneSelector,
                                         layoutScale = portraitLayoutScale,
                                         technicalSummary = trackTechnicalSummary,
@@ -2413,6 +2418,7 @@ private fun PortraitTrackMetadataBlock(
     filenameOnlyWhenTitleMissing: Boolean,
     currentSubtuneIndex: Int = 0,
     subtuneCount: Int = 0,
+    subtuneTitleClickable: Boolean = false,
     onOpenSubtuneSelector: () -> Unit = {},
     layoutScale: Float = 1f,
     titleScaleBoost: Float = 0f,
@@ -2469,7 +2475,6 @@ private fun PortraitTrackMetadataBlock(
             null
         }
     }
-    val subtuneTitleClickable = subtuneCount > 1
     val subtuneTitleFlashAlpha = remember { Animatable(0f) }
     var lastFlashedSubtuneSong by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(filename, subtuneTitleClickable) {
@@ -2500,7 +2505,7 @@ private fun PortraitTrackMetadataBlock(
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.Top
     ) {
-        if (subtuneTitleClickable) {
+        if (subtuneBadge != null) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start,
@@ -2512,7 +2517,13 @@ private fun PortraitTrackMetadataBlock(
                         .background(
                             MaterialTheme.colorScheme.primary.copy(alpha = subtuneTitleFlashAlpha.value)
                         )
-                        .clickable(onClick = onOpenSubtuneSelector)
+                        .then(
+                            if (subtuneTitleClickable) {
+                                Modifier.clickable(onClick = onOpenSubtuneSelector)
+                            } else {
+                                Modifier
+                            }
+                        )
                         .padding(start = 0.dp, end = 6.dp, top = 3.dp, bottom = 3.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -2533,7 +2544,7 @@ private fun PortraitTrackMetadataBlock(
                     }
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = subtuneBadge ?: "",
+                        text = subtuneBadge,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                         maxLines = 1

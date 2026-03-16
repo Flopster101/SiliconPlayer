@@ -1689,6 +1689,9 @@ private fun AppNavigation(
         ?.takeIf { it.isFinite() && it > 0.0 }
     val effectiveDuration = playlistDurationOverride ?: duration
     val pinnedPlaylistSubtune = activePlaylistMetadataEntry?.subtuneIndex != null
+    val titleSubtuneCount = subtuneCount
+    val titleCurrentSubtuneIndex = currentSubtuneIndex
+    val subtuneTitleClickable = !pinnedPlaylistSubtune && subtuneCount > 1
     val transportSubtuneCount = if (pinnedPlaylistSubtune) 0 else subtuneCount
     val transportCurrentSubtuneIndex = if (pinnedPlaylistSubtune) 0 else currentSubtuneIndex
     val activePlaylistBrowserFile = activePlaylist
@@ -3091,6 +3094,9 @@ private fun AppNavigation(
             onOpenPlaylistSelector = { showPlaylistSelectorDialog = true },
             currentSubtuneIndex = transportCurrentSubtuneIndex,
             subtuneCount = transportSubtuneCount,
+            titleCurrentSubtuneIndex = titleCurrentSubtuneIndex,
+            titleSubtuneCount = titleSubtuneCount,
+            subtuneTitleClickable = subtuneTitleClickable,
             onCycleRepeatMode = { runtimeDelegates.cycleRepeatMode() }
         )
         AppNavigationPlaybackDialogsSection(

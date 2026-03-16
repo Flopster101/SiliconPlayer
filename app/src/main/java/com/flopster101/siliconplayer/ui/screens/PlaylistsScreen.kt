@@ -168,8 +168,10 @@ internal fun PlaylistsScreen(
     onFavoritesSortModeChange: (PlaylistEntrySortMode) -> Unit,
     onOpenFavorite: (PlaylistTrackEntry) -> Unit,
     onPlayStoredPlaylist: (StoredPlaylist) -> Unit,
+    onShuffleStoredPlaylist: (StoredPlaylist) -> Unit,
     onOpenStoredPlaylistEntry: (PlaylistTrackEntry, StoredPlaylist) -> Unit,
     onPlayFavoritePlaylist: () -> Unit,
+    onShuffleFavoritePlaylist: () -> Unit,
     onDeleteAllFavorites: () -> Unit,
     onDeleteFavoriteTrack: (PlaylistTrackEntry) -> Unit,
     onMoveFavoriteTrack: (PlaylistTrackEntry, Int) -> Unit,
@@ -377,6 +379,7 @@ internal fun PlaylistsScreen(
                         currentSubtuneIndex = currentSubtuneIndex,
                         onEntryClick = onOpenFavorite,
                         onPlayPlaylist = onPlayFavoritePlaylist,
+                        onShufflePlaylist = onShuffleFavoritePlaylist,
                         onDeletePlaylist = {},
                         canDeletePlaylist = false,
                         onDeleteAllEntries = { showDeleteAllFavoritesConfirm = true },
@@ -434,6 +437,7 @@ internal fun PlaylistsScreen(
                         currentSubtuneIndex = currentSubtuneIndex,
                         onEntryClick = { entry -> onOpenStoredPlaylistEntry(entry, sortedStoredPlaylist) },
                         onPlayPlaylist = { onPlayStoredPlaylist(sortedStoredPlaylist) },
+                        onShufflePlaylist = { onShuffleStoredPlaylist(sortedStoredPlaylist) },
                         onDeletePlaylist = {},
                         canDeletePlaylist = false,
                         onDeleteAllEntries = {},
@@ -976,6 +980,7 @@ private fun LazyListScope.playlistDetailContent(
     currentSubtuneIndex: Int,
     onEntryClick: (PlaylistTrackEntry) -> Unit,
     onPlayPlaylist: () -> Unit,
+    onShufflePlaylist: () -> Unit,
     onDeletePlaylist: () -> Unit,
     canDeletePlaylist: Boolean,
     onDeleteAllEntries: () -> Unit,
@@ -1008,6 +1013,7 @@ private fun LazyListScope.playlistDetailContent(
             showEditAction = showEditAction,
             showDeleteAllEntriesAction = showDeleteAllEntriesAction,
             onPlayPlaylist = onPlayPlaylist,
+            onShufflePlaylist = onShufflePlaylist,
             onDeletePlaylist = onDeletePlaylist,
             canDeletePlaylist = canDeletePlaylist,
             onDeleteAllEntries = onDeleteAllEntries
@@ -1109,6 +1115,7 @@ private fun PlaylistHeroCard(
     showEditAction: Boolean,
     showDeleteAllEntriesAction: Boolean,
     onPlayPlaylist: () -> Unit,
+    onShufflePlaylist: () -> Unit,
     onDeletePlaylist: () -> Unit,
     canDeletePlaylist: Boolean,
     onDeleteAllEntries: () -> Unit
@@ -1184,7 +1191,7 @@ private fun PlaylistHeroCard(
                 }
             }
             Spacer(modifier = Modifier.weight(1f))
-            IconButton(onClick = {}) {
+            IconButton(onClick = onShufflePlaylist) {
                 Icon(
                     imageVector = Icons.Default.Shuffle,
                     contentDescription = "Shuffle"

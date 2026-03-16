@@ -3910,6 +3910,15 @@ private fun AppNavigation(
                         playPlaylistEntryAction(entry, playlist)
                     }
                 },
+                onShuffleStoredPlaylist = { playlist ->
+                    val shuffledEntries = playlist.entries.shuffled()
+                    val shuffledPlaylist = playlist.copy(entries = shuffledEntries)
+                    activePlaylist = shuffledPlaylist
+                    activePlaylistEntryId = shuffledPlaylist.entries.firstOrNull()?.id
+                    shuffledPlaylist.entries.firstOrNull()?.let { entry ->
+                        playPlaylistEntryAction(entry, shuffledPlaylist)
+                    }
+                },
                 onOpenStoredPlaylistEntry = { entry, playlist ->
                     activePlaylist = playlist
                     activePlaylistEntryId = entry.id
@@ -3924,6 +3933,26 @@ private fun AppNavigation(
                             context = context,
                             entry = firstEntry,
                             playlist = favoritesPlaybackPlaylist,
+                            trackLoadDelegates = trackLoadDelegates,
+                            manualOpenDelegates = manualOpenDelegates,
+                            autoPlayOnTrackSelect = true,
+                            openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                            onActivePlaylistChanged = { activePlaylist = it },
+                            onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                            onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+                        )
+                    }
+                },
+                onShuffleFavoritePlaylist = {
+                    val shuffledEntries = sortedFavoriteEntries.shuffled()
+                    val shuffledPlaylist = buildFavoritesPlaybackPlaylist(shuffledEntries)
+                    activePlaylist = shuffledPlaylist
+                    activePlaylistEntryId = shuffledPlaylist.entries.firstOrNull()?.id
+                    shuffledPlaylist.entries.firstOrNull()?.let { entry ->
+                        openPlaylistEntry(
+                            context = context,
+                            entry = entry,
+                            playlist = shuffledPlaylist,
                             trackLoadDelegates = trackLoadDelegates,
                             manualOpenDelegates = manualOpenDelegates,
                             autoPlayOnTrackSelect = true,

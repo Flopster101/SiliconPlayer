@@ -165,9 +165,18 @@ private data class PendingM3uMetadata(
 
 private data class EmbeddedM3uEntryMetadata(
     val rawTarget: String,
-    val subtuneIndex: Int?,
+    val rawSubtuneNumber: Int?,
     val title: String?,
     val artist: String?,
+    val durationSecondsOverride: Double?
+)
+
+private data class PendingParsedM3uEntry(
+    val source: String,
+    val title: String,
+    val artist: String?,
+    val embeddedRawSubtuneNumber: Int?,
+    val fragmentSubtuneIndex: Int?,
     val durationSecondsOverride: Double?
 )
 
@@ -184,7 +193,7 @@ private fun parseM3uPlaylist(
     val lines = readPlaylistLines(file)
     if (lines.isEmpty()) return null
     var pendingMetadata: PendingM3uMetadata? = null
-    val entries = buildList {
+    val pendingEntries = buildList {
         lines.forEachIndexed { index, rawLine ->
             val line = rawLine.trim()
             if (line.isBlank()) return@forEachIndexed
@@ -206,21 +215,33 @@ private fun parseM3uPlaylist(
                 source = resolved.source,
                 lineIndex = index
             )
-            val resolvedSubtuneIndex = embeddedMetadata?.subtuneIndex ?: resolved.subtuneIndex
             add(
-                PlaylistTrackEntry(
+                PendingParsedM3uEntry(
                     source = resolved.source,
                     title = metadata?.title?.takeIf { it.isNotBlank() }
                         ?: embeddedMetadata?.title?.takeIf { it.isNotBlank() }
                         ?: fallbackTitle,
                     artist = metadata?.artist ?: embeddedMetadata?.artist,
-                    subtuneIndex = resolvedSubtuneIndex,
+                    embeddedRawSubtuneNumber = embeddedMetadata?.rawSubtuneNumber,
+                    fragmentSubtuneIndex = resolved.subtuneIndex,
                     durationSecondsOverride = metadata?.durationSecondsOverride ?: embeddedMetadata?.durationSecondsOverride
                 )
             )
         }
     }
-    if (entries.isEmpty()) return null
+    if (pendingEntries.isEmpty()) return null
+    val embeddedSubtuneMode = determineEmbeddedM3uSubtuneMode(pendingEntries)
+    val entries = pendingEntries.map { entry ->
+        PlaylistTrackEntry(
+            source = entry.source,
+            title = entry.title,
+            artist = entry.artist,
+            subtuneIndex = entry.embeddedRawSubtuneNumber?.let { rawSubtuneNumber ->
+                normalizeEmbeddedM3uSubtuneNumber(rawSubtuneNumber, embeddedSubtuneMode)
+            } ?: entry.fragmentSubtuneIndex,
+            durationSecondsOverride = entry.durationSecondsOverride
+        )
+    }
     return ParsedPlaylistDocument(
         title = file.nameWithoutExtension.ifBlank { file.name },
         format = format,
@@ -283,15 +304,41 @@ private fun parseEmbeddedM3uEntryMetadata(rawEntry: String): EmbeddedM3uEntryMet
     if (payload.isBlank()) return null
     val fields = splitEscapedPlaylistFields(payload)
     if (fields.size < 2) return null
-    val numericField = fields.getOrNull(1)?.trim()?.toIntOrNull() ?: return null
-    val subtuneIndex = numericField.coerceAtLeast(0)
+    val rawSubtuneNumber = fields.getOrNull(1)?.trim()?.toIntOrNull() ?: return null
     return EmbeddedM3uEntryMetadata(
         rawTarget = rawTarget,
-        subtuneIndex = subtuneIndex,
+        rawSubtuneNumber = rawSubtuneNumber.coerceAtLeast(0),
         title = fields.getOrNull(2)?.trim()?.takeIf { it.isNotBlank() },
         artist = null,
         durationSecondsOverride = parsePlaylistDurationSeconds(fields.getOrNull(3))
     )
+}
+
+private enum class EmbeddedM3uSubtuneMode {
+    ZeroBased,
+    HumanOneBased
+}
+
+private fun determineEmbeddedM3uSubtuneMode(entries: List<PendingParsedM3uEntry>): EmbeddedM3uSubtuneMode {
+    val embeddedSubtuneNumbers = entries.mapNotNull { it.embeddedRawSubtuneNumber }
+    if (embeddedSubtuneNumbers.size <= 1) {
+        return EmbeddedM3uSubtuneMode.ZeroBased
+    }
+    return if (embeddedSubtuneNumbers.any { it == 0 }) {
+        EmbeddedM3uSubtuneMode.ZeroBased
+    } else {
+        EmbeddedM3uSubtuneMode.HumanOneBased
+    }
+}
+
+private fun normalizeEmbeddedM3uSubtuneNumber(
+    rawSubtuneNumber: Int,
+    mode: EmbeddedM3uSubtuneMode
+): Int {
+    return when (mode) {
+        EmbeddedM3uSubtuneMode.ZeroBased -> rawSubtuneNumber.coerceAtLeast(0)
+        EmbeddedM3uSubtuneMode.HumanOneBased -> normalizeHumanPlaylistSubtuneIndex(rawSubtuneNumber) ?: 0
+    }
 }
 
 private fun splitEscapedPlaylistFields(payload: String): List<String> {

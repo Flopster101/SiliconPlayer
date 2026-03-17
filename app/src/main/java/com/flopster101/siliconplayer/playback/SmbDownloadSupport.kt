@@ -6,8 +6,11 @@ import com.hierynomus.msfscc.fileinformation.FileStandardInformation
 import com.hierynomus.mssmb2.SMB2CreateDisposition
 import com.hierynomus.mssmb2.SMB2ShareAccess
 import com.hierynomus.smbj.share.DiskShare
+import com.hierynomus.smbj.share.File as SmbFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
@@ -23,6 +26,14 @@ internal suspend fun downloadSmbSourceToCache(
     val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
     val target = remoteCacheFileForSource(cacheRoot, sourceId)
     val temp = File(target.absolutePath + ".part")
+    var activeSmbFile: SmbFile? = null
+    var activeInput: BufferedInputStream? = null
+    var activeOutput: FileOutputStream? = null
+    val cancellationHandle = currentCoroutineContext()[Job]?.invokeOnCompletion {
+        runCatching { activeInput?.close() }
+        runCatching { activeOutput?.close() }
+        runCatching { activeSmbFile?.close() }
+    }
 
     suspend fun emitStatus(state: RemoteLoadUiState) {
         withContext(Dispatchers.Main.immediate) {
@@ -71,13 +82,16 @@ internal suspend fun downloadSmbSourceToCache(
                 SMB2CreateDisposition.FILE_OPEN,
                 null
             ).use { smbFile ->
+                activeSmbFile = smbFile
                 val expectedBytes = runCatching {
                     smbFile.getFileInformation(FileStandardInformation::class.java)
                         .getEndOfFile()
                         .coerceAtLeast(0L)
                 }.getOrNull()?.takeIf { it > 0L }
                 BufferedInputStream(smbFile.inputStream).use { input ->
+                    activeInput = input
                     FileOutputStream(temp).use { output ->
+                        activeOutput = output
                         val buffer = ByteArray(16 * 1024)
                         var totalBytes = 0L
                         var latestBytesPerSecond: Long? = null
@@ -140,7 +154,10 @@ internal suspend fun downloadSmbSourceToCache(
                             )
                         )
                     }
+                    activeOutput = null
                 }
+                activeInput = null
+                activeSmbFile = null
             }
         }
         if (temp.length() <= 0L) {
@@ -164,6 +181,10 @@ internal suspend fun downloadSmbSourceToCache(
             errorMessage = "${t::class.java.simpleName}: ${t.message ?: "unknown error"}"
         )
     } finally {
+        cancellationHandle?.dispose()
+        activeInput = null
+        activeOutput = null
+        activeSmbFile = null
         if (temp.exists() && target.length() <= 0L) {
             temp.delete()
         }

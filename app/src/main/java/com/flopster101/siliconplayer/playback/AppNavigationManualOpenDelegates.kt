@@ -50,6 +50,7 @@ internal class AppNavigationManualOpenDelegates(
     private val onApplyTrackSelection: (file: File, autoStart: Boolean, expandOverride: Boolean?, sourceIdOverride: String?, initialSubtuneIndex: Int?) -> Unit
 ) {
     private var manualInputSelectionJob: Job? = null
+    private var remoteOpenRequestId: Long = 0L
 
     init {
         ManualRemoteOpenCoordinator.registerCancellationCallback {
@@ -118,10 +119,13 @@ internal class AppNavigationManualOpenDelegates(
         options: ManualSourceOpenOptions,
         expandOverride: Boolean?
     ) {
+        remoteOpenRequestId += 1L
+        val requestId = remoteOpenRequestId
         launchManualRemoteSelectionAction(
             context = context,
             appScope = appScope,
             currentJob = currentRemoteLoadJobProvider(),
+            requestId = requestId,
             resolved = resolved,
             options = options,
             expandOverride = expandOverride,
@@ -132,6 +136,7 @@ internal class AppNavigationManualOpenDelegates(
             onRemoteLoadUiStateChanged = onRemoteLoadUiStateChanged,
             currentRemoteLoadJobProvider = currentRemoteLoadJobProvider,
             onRemoteLoadJobChanged = onRemoteLoadJobChanged,
+            isRemoteOpenRequestActive = { remoteOpenRequestId == requestId },
             onPrimeManualRemoteOpenState = { source -> primeManualRemoteOpenState(source) },
             currentPlayerExpandedProvider = isPlayerExpandedProvider,
             onApplyManualRemoteOpenSuccess = { success, expandTarget, playerExpandedAtLaunch ->
@@ -180,6 +185,7 @@ internal class AppNavigationManualOpenDelegates(
     }
 
     fun cancelPendingOpenWork() {
+        remoteOpenRequestId += 1L
         cancelPendingManualInputSelection()
         currentRemoteLoadJobProvider()?.cancel()
         onRemoteLoadJobChanged(null)

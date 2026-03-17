@@ -108,6 +108,7 @@ internal fun launchManualRemoteSelectionAction(
     context: Context,
     appScope: CoroutineScope,
     currentJob: Job?,
+    requestId: Long,
     resolved: ManualSourceResolution,
     options: ManualSourceOpenOptions,
     expandOverride: Boolean?,
@@ -119,6 +120,7 @@ internal fun launchManualRemoteSelectionAction(
     onRemoteLoadUiStateChanged: (RemoteLoadUiState?) -> Unit,
     currentRemoteLoadJobProvider: () -> Job?,
     onRemoteLoadJobChanged: (Job?) -> Unit,
+    isRemoteOpenRequestActive: () -> Boolean,
     onPrimeManualRemoteOpenState: (ManualSourceResolution) -> Unit,
     onApplyManualRemoteOpenSuccess: (ManualRemoteOpenSuccess, Boolean?, Boolean) -> Unit,
     onFailManualOpen: (String) -> Unit
@@ -128,6 +130,7 @@ internal fun launchManualRemoteSelectionAction(
     val launchedJob = appScope.launch {
         val thisJob = currentCoroutineContext()[Job]
         try {
+            if (!isRemoteOpenRequestActive()) return@launch
             onPrimeManualRemoteOpenState(resolved)
             val remoteResult = when (resolved.type) {
                 ManualSourceType.RemoteUrl -> {
@@ -157,7 +160,11 @@ internal fun launchManualRemoteSelectionAction(
                         selectedFileAbsolutePath = selectedFileAbsolutePathProvider(),
                         urlCacheMaxTracks = urlCacheMaxTracks,
                         urlCacheMaxBytes = urlCacheMaxBytes,
-                        onStatus = { state -> onRemoteLoadUiStateChanged(state) },
+                        onStatus = { state ->
+                            if (isRemoteOpenRequestActive()) {
+                                onRemoteLoadUiStateChanged(state)
+                            }
+                        },
                         downloadToCache = { sourceId, requestUrl, onStatus ->
                             downloadRemoteUrlToCache(
                                 context = context,
@@ -229,7 +236,11 @@ internal fun launchManualRemoteSelectionAction(
                             selectedFileAbsolutePath = selectedFileAbsolutePathProvider(),
                             urlCacheMaxTracks = urlCacheMaxTracks,
                             urlCacheMaxBytes = urlCacheMaxBytes,
-                            onStatus = { state -> onRemoteLoadUiStateChanged(state) },
+                            onStatus = { state ->
+                                if (isRemoteOpenRequestActive()) {
+                                    onRemoteLoadUiStateChanged(state)
+                                }
+                            },
                             downloadToCache = { sourceId, _, onStatus ->
                                 downloadSmbSourceToCache(
                                     context = context,
@@ -274,6 +285,9 @@ internal fun launchManualRemoteSelectionAction(
                 }
             }
             currentCoroutineContext().ensureActive()
+            if (!isRemoteOpenRequestActive()) {
+                return@launch
+            }
             when (remoteResult) {
                 is ManualRemoteOpenResult.Success -> {
                     onApplyManualRemoteOpenSuccess(
@@ -297,7 +311,7 @@ internal fun launchManualRemoteSelectionAction(
                     }
                     Log.e(
                         URL_SOURCE_TAG,
-                        "Cache download/open failed for URL: ${resolved.sourceId} reason=${remoteResult.reason}"
+                        "Cache download/open failed for URL: ${resolved.sourceId} requestId=$requestId reason=${remoteResult.reason}"
                     )
                     onFailManualOpen(remoteResult.reason)
                     return@launch

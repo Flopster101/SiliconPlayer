@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
@@ -20,6 +22,14 @@ internal suspend fun downloadRemoteUrlToCache(
 ): RemoteDownloadResult = withContext(Dispatchers.IO) {
     val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
     var target = remoteCacheFileForSource(cacheRoot, url)
+    var activeConnection: HttpURLConnection? = null
+    var activeInput: BufferedInputStream? = null
+    var activeOutput: FileOutputStream? = null
+    val cancellationHandle = currentCoroutineContext()[Job]?.invokeOnCompletion {
+        runCatching { activeInput?.close() }
+        runCatching { activeOutput?.close() }
+        runCatching { activeConnection?.disconnect() }
+    }
 
     suspend fun emitStatus(state: RemoteLoadUiState) {
         withContext(Dispatchers.Main.immediate) {
@@ -69,6 +79,7 @@ internal suspend fun downloadRemoteUrlToCache(
                     }
                 }
             }
+            activeConnection = connection
             val responseCode = connection.responseCode
             if (responseCode in 300..399) {
                 val location = connection.getHeaderField("Location")
@@ -77,6 +88,9 @@ internal suspend fun downloadRemoteUrlToCache(
                     "Redirect hop=$hop code=$responseCode from=${sanitizeHttpUrlForLog(currentUrl)} to=${location ?: "<missing>"}"
                 )
                 connection.disconnect()
+                if (activeConnection === connection) {
+                    activeConnection = null
+                }
                 if (location.isNullOrBlank()) {
                     return Pair(null, "Redirect missing Location header (HTTP $responseCode)")
                 }
@@ -89,6 +103,9 @@ internal suspend fun downloadRemoteUrlToCache(
             )
             if (responseCode !in 200..299) {
                 connection.disconnect()
+                if (activeConnection === connection) {
+                    activeConnection = null
+                }
                 return Pair(null, "HTTP $responseCode")
             }
             return Pair(connection, null)
@@ -162,7 +179,9 @@ internal suspend fun downloadRemoteUrlToCache(
 
             publishDownloadStatus(force = true)
             BufferedInputStream(connection.inputStream).use { input ->
+                activeInput = input
                 FileOutputStream(temp).use { output ->
+                    activeOutput = output
                     val buffer = ByteArray(16 * 1024)
                     while (true) {
                         kotlin.coroutines.coroutineContext.ensureActive()
@@ -182,7 +201,9 @@ internal suspend fun downloadRemoteUrlToCache(
                     }
                     output.flush()
                 }
+                activeOutput = null
             }
+            activeInput = null
             publishDownloadStatus(force = true)
             Log.d(
                 URL_SOURCE_TAG,
@@ -228,7 +249,11 @@ internal suspend fun downloadRemoteUrlToCache(
             errorMessage = "${t::class.java.simpleName}: ${t.message ?: "unknown error"}"
         )
     } finally {
+        cancellationHandle?.dispose()
+        activeInput = null
+        activeOutput = null
         connection?.disconnect()
+        activeConnection = null
         if (temp.exists() && (target.length() <= 0L)) {
             temp.delete()
         }

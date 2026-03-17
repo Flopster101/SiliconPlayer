@@ -1117,7 +1117,8 @@ internal fun PlayerScreen(
                             val rightPaneContentWidth = minOf(rightPaneMaxWidth, transportRowWidth + 8.dp)
                             var actionStripHeightPx by remember { mutableIntStateOf(0) }
                             val actionStripHeightDp = with(density) { actionStripHeightPx.toDp() }
-                            val centerLandscapeContent = landscapeLayoutScale >= 0.76f
+                            val centerLandscapeContent =
+                                landscapeLayoutScale >= 0.76f || maxHeight >= 420.dp
                             val showLandscapeFilename = landscapeLayoutScale >= 0.74f
                             var centeredLandscapeContentHeightPx by remember { mutableIntStateOf(0) }
                             val centeredLandscapeContentHeightDp = with(density) {

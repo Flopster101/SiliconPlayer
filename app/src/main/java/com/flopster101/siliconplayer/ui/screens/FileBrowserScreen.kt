@@ -1,5 +1,6 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import android.app.ActivityManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -134,8 +135,11 @@ private const val BROWSER_PAGE_DURATION_MS = 280
 private const val MIN_LOADING_SPINNER_MS = 220L
 private const val FILE_ENTRY_ANIM_DURATION_MS = 280
 private const val DIRECTORY_DIRECT_PUBLISH_MAX_ITEMS = 3000
+private const val DIRECTORY_ENTRY_ANIM_MAX_ITEMS = 180
 private const val LOCAL_BROWSER_THUMBNAIL_STAGGER_BASE_MS = 36L
 private const val LOCAL_BROWSER_THUMBNAIL_STAGGER_RANGE_MS = 120L
+private const val LOCAL_BROWSER_THUMBNAIL_PREVIEW_MAX_ITEMS = 180
+private const val LOCAL_BROWSER_THUMBNAIL_PREVIEW_CONSTRAINED_MAX_ITEMS = 72
 private val FILE_ICON_BOX_SIZE = 38.dp
 private val FILE_ICON_GLYPH_SIZE = 26.dp
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -270,6 +274,18 @@ internal fun FileBrowserScreen(
     var pendingDeleteFilePaths by remember { mutableStateOf<List<String>>(emptyList()) }
     var pendingPinConfirmation by remember { mutableStateOf<Pair<RecentPathEntry, Boolean>?>(null) }
     var pendingPinEvictionCandidate by remember { mutableStateOf<HomePinnedEntry?>(null) }
+    val folderSummaryCache = remember { mutableStateMapOf<String, String>() }
+    val activityManager = remember(context) {
+        context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+    }
+    val isTvDevice = remember(context) {
+        context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+    }
+    val isConstrainedBrowserDevice = remember(activityManager, isTvDevice) {
+        isTvDevice ||
+            (activityManager?.isLowRamDevice == true) ||
+            Runtime.getRuntime().availableProcessors().coerceAtLeast(1) <= 4
+    }
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val hasActiveDirectory = currentDirectory != null
@@ -318,6 +334,7 @@ internal fun FileBrowserScreen(
         isLoadingDirectory = true
         directoryAnimationEpoch += 1
         fileList.clear()
+        folderSummaryCache.clear()
         loadingLogLines.clear()
         appendLoadingLog("Opening ${directory.absolutePath}")
         appendLoadingLog("Listing directory entries")
@@ -1051,6 +1068,17 @@ internal fun FileBrowserScreen(
             }
         }
     }
+    val shouldAnimateDirectoryEntries = !isConstrainedBrowserDevice &&
+        filteredFileList.size <= DIRECTORY_ENTRY_ANIM_MAX_ITEMS
+    val allowThumbnailPreviewLoads = showLocalThumbnailPreviews &&
+        !directoryListState.isScrollInProgress &&
+        filteredFileList.size <= (
+            if (isConstrainedBrowserDevice) {
+                LOCAL_BROWSER_THUMBNAIL_PREVIEW_CONSTRAINED_MAX_ITEMS
+            } else {
+                LOCAL_BROWSER_THUMBNAIL_PREVIEW_MAX_ITEMS
+            }
+        )
 
     Scaffold(
         topBar = {
@@ -1551,7 +1579,8 @@ internal fun FileBrowserScreen(
                                 AnimatedFileBrowserEntry(
                                     itemKey = parentEntryKey,
                                     animationEpoch = directoryAnimationEpoch,
-                                    animateOnFirstComposition = isLoadingDirectory
+                                    animateOnFirstComposition = isLoadingDirectory,
+                                    enabled = shouldAnimateDirectoryEntries
                                 ) {
                                     val rowFocusRequester = remember(parentEntryKey) { FocusRequester() }
                                     DisposableEffect(parentEntryKey) {
@@ -1593,7 +1622,8 @@ internal fun FileBrowserScreen(
                                 AnimatedFileBrowserEntry(
                                     itemKey = entryKey,
                                     animationEpoch = directoryAnimationEpoch,
-                                    animateOnFirstComposition = isLoadingDirectory
+                                    animateOnFirstComposition = isLoadingDirectory,
+                                    enabled = shouldAnimateDirectoryEntries
                                 ) {
                                     val rowFocusRequester = remember(entryKey) { FocusRequester() }
                                     DisposableEffect(entryKey) {
@@ -1613,6 +1643,8 @@ internal fun FileBrowserScreen(
                                         showFavoriteToggle = browserSelectionController.isSelectionMode,
                                         showFileIconChipBackground = showFileIconChipBackground,
                                         showLocalThumbnailPreviews = showLocalThumbnailPreviews,
+                                        allowThumbnailPreviewLoads = allowThumbnailPreviewLoads,
+                                        folderSummaryCache = folderSummaryCache,
                                         decoderExtensionArtworkHints = decoderExtensionArtworkHints,
                                         rightFocusRequester = selectorButtonFocusRequester,
                                         rowFocusRequester = rowFocusRequester,
@@ -1862,8 +1894,13 @@ private fun AnimatedFileBrowserEntry(
     itemKey: String,
     animationEpoch: Int,
     animateOnFirstComposition: Boolean,
+    enabled: Boolean,
     content: @Composable () -> Unit
 ) {
+    if (!enabled) {
+        content()
+        return
+    }
     var visible by remember(itemKey, animationEpoch) {
         mutableStateOf(!animateOnFirstComposition)
     }
@@ -2241,6 +2278,8 @@ fun FileItemRow(
     showFavoriteToggle: Boolean = false,
     showFileIconChipBackground: Boolean,
     showLocalThumbnailPreviews: Boolean,
+    allowThumbnailPreviewLoads: Boolean,
+    folderSummaryCache: MutableMap<String, String>,
     decoderExtensionArtworkHints: Map<String, DecoderArtworkHint> = emptyMap(),
     rightFocusRequester: FocusRequester? = null,
     rowFocusRequester: FocusRequester? = null,
@@ -2271,12 +2310,16 @@ fun FileItemRow(
     val thumbnailPreview by produceState<ImageBitmap?>(
         initialValue = null,
         shouldShowThumbnailPreview,
+        allowThumbnailPreviewLoads,
         item.file.absolutePath,
         item.file.lastModified(),
         item.size
     ) {
         if (!shouldShowThumbnailPreview) {
             value = null
+            return@produceState
+        }
+        if (!allowThumbnailPreviewLoads) {
             return@produceState
         }
         delay(
@@ -2289,7 +2332,9 @@ fun FileItemRow(
         }
     }
     val subtitle by produceState(
-        initialValue = if (item.isDirectory && !item.isArchive) "Loading..." else {
+        initialValue = if (item.isDirectory && !item.isArchive) {
+            folderSummaryCache[item.file.absolutePath] ?: "Loading..."
+        } else {
             val format = inferredPrimaryExtensionForName(item.file.name)?.uppercase(Locale.ROOT) ?: "UNKNOWN"
             "$format • ${formatFileSizeHumanReadable(item.size)}"
         },
@@ -2297,15 +2342,29 @@ fun FileItemRow(
         key2 = item.kind,
         key3 = item.size
     ) {
-        value = withContext(Dispatchers.IO) {
-            if (item.isArchive) {
+        if (item.isArchive) {
+            value = withContext(Dispatchers.IO) {
                 "ZIP archive • ${formatFileSizeHumanReadable(item.size)}"
-            } else if (item.isDirectory) {
-                buildFolderSummary(item.file)
-            } else {
-                val format = inferredPrimaryExtensionForName(item.file.name)?.uppercase(Locale.ROOT) ?: "UNKNOWN"
-                "$format • ${formatFileSizeHumanReadable(item.size)}"
             }
+            return@produceState
+        }
+        if (item.isDirectory) {
+            val cacheKey = item.file.absolutePath
+            val cached = folderSummaryCache[cacheKey]
+            if (cached != null) {
+                value = cached
+                return@produceState
+            }
+            val resolved = withContext(Dispatchers.IO) {
+                buildFolderSummary(item.file)
+            }
+            folderSummaryCache[cacheKey] = resolved
+            value = resolved
+            return@produceState
+        }
+        value = withContext(Dispatchers.IO) {
+            val format = inferredPrimaryExtensionForName(item.file.name)?.uppercase(Locale.ROOT) ?: "UNKNOWN"
+            "$format • ${formatFileSizeHumanReadable(item.size)}"
         }
     }
 

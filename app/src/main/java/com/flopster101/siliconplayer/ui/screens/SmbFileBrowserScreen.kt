@@ -88,6 +88,7 @@ import com.flopster101.siliconplayer.buildSmbDisplayUri
 import com.flopster101.siliconplayer.buildSmbRequestUri
 import com.flopster101.siliconplayer.buildSmbSourceId
 import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
+import com.flopster101.siliconplayer.tvKeyLongPress
 import com.flopster101.siliconplayer.fileMatchesSupportedExtensions
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
 import com.flopster101.siliconplayer.isSupportedPlaylistFileName
@@ -1826,6 +1827,7 @@ private fun SmbEntryRow(
                     MaterialTheme.colorScheme.surface.copy(alpha = 0f)
                 }
             )
+            .tvKeyLongPress(onLongClick)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick

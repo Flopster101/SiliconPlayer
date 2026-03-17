@@ -19,6 +19,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -138,14 +139,8 @@ internal fun MainNavigationScaffold(
                     if (showHomeBar) {
                         LargeTopAppBar(
                             title = {
-                                Text(
-                                    text = "Silicon Player",
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier
-                                        .focusProperties { canFocus = false }
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .clickable(onClick = onOpenPlayerSurface)
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                MainTopBarPlayerTitle(
+                                    onClick = onOpenPlayerSurface
                                 )
                             },
                             actions = {
@@ -179,14 +174,8 @@ internal fun MainNavigationScaffold(
                     } else {
                         TopAppBar(
                             title = {
-                                Text(
-                                    text = "Silicon Player",
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier
-                                        .focusProperties { canFocus = false }
-                                        .clip(RoundedCornerShape(999.dp))
-                                        .clickable(onClick = onOpenPlayerSurface)
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                MainTopBarPlayerTitle(
+                                    onClick = onOpenPlayerSurface
                                 )
                             },
                             actions = {
@@ -294,4 +283,19 @@ internal fun MainNavigationScaffold(
                 content(targetRoutePadding, targetView)
             }
     }
+}
+
+@Composable
+private fun MainTopBarPlayerTitle(
+    onClick: () -> Unit
+) {
+    Text(
+        text = "Silicon Player",
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .clickable(onClick = onClick)
+            .focusable()
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    )
 }

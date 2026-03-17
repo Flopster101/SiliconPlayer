@@ -137,6 +137,7 @@ import com.flopster101.siliconplayer.rememberScrollStateScrollbarDragHandler
 import com.flopster101.siliconplayer.sanitizeRemoteCachedMetadataTitle
 import com.flopster101.siliconplayer.shouldRestartCurrentTrackOnPrevious
 import com.flopster101.siliconplayer.stripRemoteCacheHashPrefix
+import com.flopster101.siliconplayer.tvKeyLongPress
 import com.flopster101.siliconplayer.ui.dialogs.dialogScrollableContentNavigation
 import com.flopster101.siliconplayer.ui.dialogs.VisualizationModePickerDialog
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
@@ -3224,6 +3225,13 @@ private fun TransportControls(
                         modifier = Modifier
                             .focusRequester(previousTrackFocusRequester)
                             .matchParentSize()
+                            .tvKeyLongPress(
+                                if (useSubtuneTransport && previousTransportEnabled) {
+                                    onForcePreviousTrack
+                                } else {
+                                    null
+                                }
+                            )
                             .focusProperties {
                                 left = firstAvailableRequester(
                                     canFocusStop to stopFocusRequester,
@@ -3344,6 +3352,13 @@ private fun TransportControls(
                         modifier = Modifier
                             .focusRequester(nextTrackFocusRequester)
                             .matchParentSize()
+                            .tvKeyLongPress(
+                                if (useSubtuneTransport && nextTransportEnabled) {
+                                    onNextTrack
+                                } else {
+                                    null
+                                }
+                            )
                             .focusProperties {
                                 left = firstAvailableRequester(
                                     canFocusPlayPause to playPauseFocusRequester,
@@ -3606,6 +3621,7 @@ private fun FutureActionStrip(
 ) {
     val visualizationModeFocusRequester = actionStripFirstFocusRequester ?: remember { FocusRequester() }
     val coreSettingsFocusRequester = remember { FocusRequester() }
+    val playlistSelectorFocusRequester = remember { FocusRequester() }
     val favoriteTrackFocusRequester = remember { FocusRequester() }
     val trackInfoFocusRequester = remember { FocusRequester() }
     val audioEffectsFocusRequester = remember { FocusRequester() }
@@ -3617,8 +3633,32 @@ private fun FutureActionStrip(
     val canFocusPlaylistSelector = canOpenPlaylistSelector
     val canFocusAudioEffects = true
     val canFocusChannelControls = true
-    fun firstAvailableActionRequester(vararg options: Pair<Boolean, FocusRequester>): FocusRequester? {
-        return options.firstOrNull { it.first }?.second
+
+    data class ActionFocusNode(
+        val key: String,
+        val enabled: Boolean,
+        val requester: FocusRequester
+    )
+
+    val actionFocusNodes = listOf(
+        ActionFocusNode("visualization", canFocusVisualizationMode, visualizationModeFocusRequester),
+        ActionFocusNode("core", canFocusCoreSettings, coreSettingsFocusRequester),
+        ActionFocusNode("playlist", canFocusPlaylistSelector, playlistSelectorFocusRequester),
+        ActionFocusNode("favorite", canFocusFavoriteTrack, favoriteTrackFocusRequester),
+        ActionFocusNode("info", canFocusTrackInfo, trackInfoFocusRequester),
+        ActionFocusNode("effects", canFocusAudioEffects, audioEffectsFocusRequester),
+        ActionFocusNode("channels", canFocusChannelControls, channelControlsFocusRequester)
+    )
+
+    fun neighboringActionRequester(key: String, step: Int): FocusRequester? {
+        val enabledNodes = actionFocusNodes.filter { it.enabled }
+        if (enabledNodes.isEmpty()) return null
+        val currentIndex = enabledNodes.indexOfFirst { it.key == key }
+        if (currentIndex == -1) {
+            return if (step < 0) enabledNodes.last().requester else enabledNodes.first().requester
+        }
+        val neighborIndex = (currentIndex + step + enabledNodes.size) % enabledNodes.size
+        return enabledNodes[neighborIndex].requester
     }
     BoxWithConstraints(modifier = modifier) {
         val stripMaxWidth = maxWidth
@@ -3703,20 +3743,8 @@ private fun FutureActionStrip(
                         .size(iconButtonSize)
                         .focusRequester(visualizationModeFocusRequester)
                         .focusProperties {
-                            left = firstAvailableActionRequester(
-                                canFocusChannelControls to channelControlsFocusRequester,
-                                canFocusAudioEffects to audioEffectsFocusRequester,
-                                canFocusTrackInfo to trackInfoFocusRequester,
-                                canFocusCoreSettings to coreSettingsFocusRequester,
-                                canFocusVisualizationMode to visualizationModeFocusRequester
-                            ) ?: visualizationModeFocusRequester
-                            right = firstAvailableActionRequester(
-                                canFocusCoreSettings to coreSettingsFocusRequester,
-                                canFocusTrackInfo to trackInfoFocusRequester,
-                                canFocusAudioEffects to audioEffectsFocusRequester,
-                                canFocusChannelControls to channelControlsFocusRequester,
-                                canFocusVisualizationMode to visualizationModeFocusRequester
-                            ) ?: visualizationModeFocusRequester
+                            neighboringActionRequester("visualization", -1)?.let { left = it }
+                            neighboringActionRequester("visualization", 1)?.let { right = it }
                             if (transportAnchorFocusRequester != null) {
                                 up = transportAnchorFocusRequester
                             }
@@ -3724,6 +3752,7 @@ private fun FutureActionStrip(
                         .clip(CircleShape)
                         .playerFocusHalo(shape = CircleShape)
                         .focusable()
+                        .tvKeyLongPress(onOpenVisualizationPicker)
                         .combinedClickable(
                             onClick = onCycleVisualizationMode,
                             onLongClick = onOpenVisualizationPicker
@@ -3743,20 +3772,8 @@ private fun FutureActionStrip(
                         .size(iconButtonSize)
                         .focusRequester(coreSettingsFocusRequester)
                         .focusProperties {
-                            left = firstAvailableActionRequester(
-                                canFocusVisualizationMode to visualizationModeFocusRequester,
-                                canFocusChannelControls to channelControlsFocusRequester,
-                                canFocusAudioEffects to audioEffectsFocusRequester,
-                                canFocusTrackInfo to trackInfoFocusRequester,
-                                canFocusCoreSettings to coreSettingsFocusRequester
-                            ) ?: coreSettingsFocusRequester
-                            right = firstAvailableActionRequester(
-                                canFocusTrackInfo to trackInfoFocusRequester,
-                                canFocusAudioEffects to audioEffectsFocusRequester,
-                                canFocusChannelControls to channelControlsFocusRequester,
-                                canFocusVisualizationMode to visualizationModeFocusRequester,
-                                canFocusCoreSettings to coreSettingsFocusRequester
-                            ) ?: coreSettingsFocusRequester
+                            neighboringActionRequester("core", -1)?.let { left = it }
+                            neighboringActionRequester("core", 1)?.let { right = it }
                             if (transportAnchorFocusRequester != null) {
                                 up = transportAnchorFocusRequester
                             }
@@ -3775,25 +3792,10 @@ private fun FutureActionStrip(
                     enabled = canOpenPlaylistSelector,
                     modifier = Modifier
                         .size(iconButtonSize)
+                        .focusRequester(playlistSelectorFocusRequester)
                         .focusProperties {
-                            left = firstAvailableActionRequester(
-                                canFocusCoreSettings to coreSettingsFocusRequester,
-                                canFocusVisualizationMode to visualizationModeFocusRequester,
-                                canFocusChannelControls to channelControlsFocusRequester,
-                                canFocusAudioEffects to audioEffectsFocusRequester,
-                                canFocusFavoriteTrack to favoriteTrackFocusRequester,
-                                canFocusTrackInfo to trackInfoFocusRequester,
-                                canFocusPlaylistSelector to trackInfoFocusRequester
-                            ) ?: trackInfoFocusRequester
-                            right = firstAvailableActionRequester(
-                                canFocusFavoriteTrack to favoriteTrackFocusRequester,
-                                canFocusTrackInfo to trackInfoFocusRequester,
-                                canFocusAudioEffects to audioEffectsFocusRequester,
-                                canFocusChannelControls to channelControlsFocusRequester,
-                                canFocusVisualizationMode to visualizationModeFocusRequester,
-                                canFocusCoreSettings to coreSettingsFocusRequester,
-                                canFocusPlaylistSelector to trackInfoFocusRequester
-                            ) ?: trackInfoFocusRequester
+                            neighboringActionRequester("playlist", -1)?.let { left = it }
+                            neighboringActionRequester("playlist", 1)?.let { right = it }
                             if (transportAnchorFocusRequester != null) {
                                 up = transportAnchorFocusRequester
                             }
@@ -3819,22 +3821,8 @@ private fun FutureActionStrip(
                         .size(iconButtonSize)
                         .focusRequester(favoriteTrackFocusRequester)
                         .focusProperties {
-                            left = firstAvailableActionRequester(
-                                canFocusPlaylistSelector to trackInfoFocusRequester,
-                                canFocusCoreSettings to coreSettingsFocusRequester,
-                                canFocusVisualizationMode to visualizationModeFocusRequester,
-                                canFocusChannelControls to channelControlsFocusRequester,
-                                canFocusAudioEffects to audioEffectsFocusRequester,
-                                canFocusFavoriteTrack to favoriteTrackFocusRequester
-                            ) ?: favoriteTrackFocusRequester
-                            right = firstAvailableActionRequester(
-                                canFocusTrackInfo to trackInfoFocusRequester,
-                                canFocusAudioEffects to audioEffectsFocusRequester,
-                                canFocusChannelControls to channelControlsFocusRequester,
-                                canFocusVisualizationMode to visualizationModeFocusRequester,
-                                canFocusCoreSettings to coreSettingsFocusRequester,
-                                canFocusFavoriteTrack to favoriteTrackFocusRequester
-                            ) ?: favoriteTrackFocusRequester
+                            neighboringActionRequester("favorite", -1)?.let { left = it }
+                            neighboringActionRequester("favorite", 1)?.let { right = it }
                             if (transportAnchorFocusRequester != null) {
                                 up = transportAnchorFocusRequester
                             }
@@ -3866,21 +3854,8 @@ private fun FutureActionStrip(
                         .size(iconButtonSize)
                         .focusRequester(trackInfoFocusRequester)
                         .focusProperties {
-                            left = firstAvailableActionRequester(
-                                canFocusFavoriteTrack to favoriteTrackFocusRequester,
-                                canFocusCoreSettings to coreSettingsFocusRequester,
-                                canFocusVisualizationMode to visualizationModeFocusRequester,
-                                canFocusChannelControls to channelControlsFocusRequester,
-                                canFocusAudioEffects to audioEffectsFocusRequester,
-                                canFocusTrackInfo to trackInfoFocusRequester
-                            ) ?: trackInfoFocusRequester
-                            right = firstAvailableActionRequester(
-                                canFocusAudioEffects to audioEffectsFocusRequester,
-                                canFocusChannelControls to channelControlsFocusRequester,
-                                canFocusVisualizationMode to visualizationModeFocusRequester,
-                                canFocusCoreSettings to coreSettingsFocusRequester,
-                                canFocusTrackInfo to trackInfoFocusRequester
-                            ) ?: trackInfoFocusRequester
+                            neighboringActionRequester("info", -1)?.let { left = it }
+                            neighboringActionRequester("info", 1)?.let { right = it }
                             if (transportAnchorFocusRequester != null) {
                                 up = transportAnchorFocusRequester
                             }
@@ -3901,20 +3876,8 @@ private fun FutureActionStrip(
                         .size(iconButtonSize)
                         .focusRequester(audioEffectsFocusRequester)
                         .focusProperties {
-                            left = firstAvailableActionRequester(
-                                canFocusTrackInfo to trackInfoFocusRequester,
-                                canFocusCoreSettings to coreSettingsFocusRequester,
-                                canFocusVisualizationMode to visualizationModeFocusRequester,
-                                canFocusChannelControls to channelControlsFocusRequester,
-                                canFocusAudioEffects to audioEffectsFocusRequester
-                            ) ?: audioEffectsFocusRequester
-                            right = firstAvailableActionRequester(
-                                canFocusChannelControls to channelControlsFocusRequester,
-                                canFocusVisualizationMode to visualizationModeFocusRequester,
-                                canFocusTrackInfo to trackInfoFocusRequester,
-                                canFocusCoreSettings to coreSettingsFocusRequester,
-                                canFocusAudioEffects to audioEffectsFocusRequester
-                            ) ?: audioEffectsFocusRequester
+                            neighboringActionRequester("effects", -1)?.let { left = it }
+                            neighboringActionRequester("effects", 1)?.let { right = it }
                             if (transportAnchorFocusRequester != null) {
                                 up = transportAnchorFocusRequester
                             }
@@ -3935,19 +3898,8 @@ private fun FutureActionStrip(
                         .size(iconButtonSize)
                         .focusRequester(channelControlsFocusRequester)
                         .focusProperties {
-                            left = firstAvailableActionRequester(
-                                canFocusAudioEffects to audioEffectsFocusRequester,
-                                canFocusTrackInfo to trackInfoFocusRequester,
-                                canFocusCoreSettings to coreSettingsFocusRequester,
-                                canFocusVisualizationMode to visualizationModeFocusRequester,
-                                canFocusChannelControls to channelControlsFocusRequester
-                            ) ?: channelControlsFocusRequester
-                            right = firstAvailableActionRequester(
-                                canFocusVisualizationMode to visualizationModeFocusRequester,
-                                canFocusCoreSettings to coreSettingsFocusRequester,
-                                canFocusAudioEffects to audioEffectsFocusRequester,
-                                canFocusChannelControls to channelControlsFocusRequester
-                            ) ?: channelControlsFocusRequester
+                            neighboringActionRequester("channels", -1)?.let { left = it }
+                            neighboringActionRequester("channels", 1)?.let { right = it }
                             if (transportAnchorFocusRequester != null) {
                                 up = transportAnchorFocusRequester
                             }
@@ -4258,6 +4210,7 @@ private fun ChannelControlGrid(
                             modifier = Modifier
                                 .weight(1f)
                                 .clip(MaterialTheme.shapes.large)
+                                .tvKeyLongPress(if (item.available) { { onSoloHold(item) } } else null)
                                 .combinedClickable(
                                     enabled = item.available,
                                     onClick = { onToggleMute(item) },

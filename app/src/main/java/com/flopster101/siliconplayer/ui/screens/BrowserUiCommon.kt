@@ -26,6 +26,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.rememberScrollState
@@ -118,6 +119,7 @@ import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.buildDecoderExtensionArtworkHintMap
 import com.flopster101.siliconplayer.canonicalDecoderNameForAlias
+import com.flopster101.siliconplayer.tvKeyLongPress
 import com.flopster101.siliconplayer.DecoderArtworkHint
 import com.flopster101.siliconplayer.decodePercentEncodedForDisplay
 import com.flopster101.siliconplayer.extensionCandidatesForName
@@ -1347,9 +1349,11 @@ internal fun BrowserToolbarPathRow(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 internal fun BrowserToolbarSelectorLabel(
     expanded: Boolean,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     label: String = "File Browser",
     enabled: Boolean = true,
@@ -1364,7 +1368,12 @@ internal fun BrowserToolbarSelectorLabel(
         modifier = modifier
             .then(focusModifier)
             .clip(RoundedCornerShape(8.dp))
-            .clickable(enabled = enabled, onClick = onClick)
+            .tvKeyLongPress(if (enabled) onLongClick else null)
+            .combinedClickable(
+                enabled = enabled,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .focusable(enabled = enabled)
             .padding(horizontal = 6.dp, vertical = 1.dp),
         verticalAlignment = Alignment.CenterVertically

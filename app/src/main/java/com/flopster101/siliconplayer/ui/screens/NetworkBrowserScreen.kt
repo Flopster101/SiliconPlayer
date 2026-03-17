@@ -108,6 +108,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.NetworkNode
 import com.flopster101.siliconplayer.NetworkNodeType
+import com.flopster101.siliconplayer.tvKeyLongPress
 import com.flopster101.siliconplayer.NetworkSourceKind
 import com.flopster101.siliconplayer.SmbSourceSpec
 import com.flopster101.siliconplayer.HttpSourceSpec
@@ -1723,7 +1724,14 @@ internal fun NetworkBrowserScreen(
                                                     nextRowFocusRequester?.let { down = it }
                                                 }
                                                 .focusRequester(rowFocusRequester)
-                                            .combinedClickable(
+                                                .tvKeyLongPress {
+                                                    expandedEntryMenuNodeId = null
+                                                    showSelectionActionsMenu = false
+                                                    clipboardState = null
+                                                    selectionModeEnabled = true
+                                                    selectedNodeIds = selectedNodeIds + entry.id
+                                                }
+                                                .combinedClickable(
                                                     onClick = {
                                                         when {
                                                             isSelectionMode -> toggleSelection(entry.id)

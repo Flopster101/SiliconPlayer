@@ -172,6 +172,13 @@ internal fun CacheManagerSettingsRouteContent(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .tvKeyLongPress {
+                        selectedPaths = if (isSelected) {
+                            selectedPaths - entry.absolutePath
+                        } else {
+                            selectedPaths + entry.absolutePath
+                        }
+                    }
                     .combinedClickable(
                         onLongClick = {
                             selectedPaths = if (isSelected) {

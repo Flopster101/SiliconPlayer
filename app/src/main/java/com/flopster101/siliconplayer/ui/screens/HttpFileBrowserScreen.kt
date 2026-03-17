@@ -88,6 +88,7 @@ import com.flopster101.siliconplayer.RemoteExportCancelledException
 import com.flopster101.siliconplayer.AppDefaults
 import com.flopster101.siliconplayer.AppPreferenceKeys
 import com.flopster101.siliconplayer.HomePinnedEntry
+import com.flopster101.siliconplayer.tvKeyLongPress
 import com.flopster101.siliconplayer.PINNED_HOME_ENTRIES_LIMIT
 import com.flopster101.siliconplayer.RecentPathEntry
 import com.flopster101.siliconplayer.ManualSmbAuthCoordinator
@@ -1843,6 +1844,7 @@ private fun HttpEntryRow(
                     MaterialTheme.colorScheme.surface.copy(alpha = 0f)
                 }
             )
+            .tvKeyLongPress(onLongClick)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick

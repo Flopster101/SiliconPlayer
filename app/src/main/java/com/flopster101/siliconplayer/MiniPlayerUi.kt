@@ -423,6 +423,13 @@ internal fun MiniPlayerBar(
                         enabled = hasTrack && canPreviousTrack,
                         modifier = Modifier
                             .focusRequester(previousButtonFocusRequester)
+                            .tvKeyLongPress(
+                                if (useSubtuneTransport && hasTrack && canPreviousTrack) {
+                                    onForcePreviousTrack
+                                } else {
+                                    null
+                                }
+                            )
                             .size(controlButtonSize)
                     ) {
                         Box(
@@ -478,6 +485,13 @@ internal fun MiniPlayerBar(
                         enabled = hasTrack && canNextTrack,
                         modifier = Modifier
                             .focusRequester(nextButtonFocusRequester)
+                            .tvKeyLongPress(
+                                if (useSubtuneTransport && hasTrack && canNextTrack) {
+                                    onNextTrack
+                                } else {
+                                    null
+                                }
+                            )
                             .size(controlButtonSize)
                     ) {
                         Box(
@@ -560,6 +574,7 @@ private fun BoxScope.MiniPlayerLongPressTransportOverlay(
         modifier = Modifier
             .matchParentSize()
             .clip(CircleShape)
+            .tvKeyLongPress(if (enabled) onLongClick else null)
             .combinedClickable(
                 enabled = enabled,
                 onClick = onClick,

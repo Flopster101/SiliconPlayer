@@ -103,6 +103,7 @@ import com.flopster101.siliconplayer.parseHttpSourceSpecFromInput
 import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
 import com.flopster101.siliconplayer.folderTitleForDisplay
 import com.flopster101.siliconplayer.isSupportedPlaylistFile
+import com.flopster101.siliconplayer.tvKeyLongPress
 import com.flopster101.siliconplayer.data.buildArchiveSourceId
 import com.flopster101.siliconplayer.data.buildArchiveDirectoryPath
 import com.flopster101.siliconplayer.data.parseArchiveSourceId
@@ -1187,6 +1188,11 @@ internal fun FileBrowserScreen(
                                     onClick = {
                                         if (showLocalStorageSelector) {
                                             selectorExpanded = true
+                                        }
+                                    },
+                                    onLongClick = {
+                                        if (resolveCurrentFolderPathForActions() != null) {
+                                            currentFolderMenuExpanded = true
                                         }
                                     },
                                     modifier = Modifier.padding(start = 6.dp),
@@ -2431,6 +2437,7 @@ fun FileItemRow(
             }
             .then(if (rowFocusRequester != null) Modifier.focusRequester(rowFocusRequester) else Modifier)
             .onFocusChanged { state -> if (state.isFocused) onFocused?.invoke() }
+            .tvKeyLongPress(onLongClick)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick

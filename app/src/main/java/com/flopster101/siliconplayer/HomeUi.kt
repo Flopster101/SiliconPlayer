@@ -463,6 +463,10 @@ internal fun HomeScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .tvKeyLongPress {
+                                            pinnedFileActionTarget = null
+                                            pinnedFolderActionTarget = pinnedEntry
+                                        }
                                         .combinedClickable(
                                             onClick = { onOpenPinnedFolder(pinnedEntry) },
                                             onLongClick = {
@@ -574,6 +578,10 @@ internal fun HomeScreen(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .tvKeyLongPress {
+                                            pinnedFolderActionTarget = null
+                                            pinnedFileActionTarget = pinnedEntry
+                                        }
                                         .combinedClickable(
                                             onClick = { onPlayPinnedFile(pinnedEntry) },
                                             onLongClick = {
@@ -715,6 +723,10 @@ internal fun HomeScreen(
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
+                                                .tvKeyLongPress {
+                                                    fileActionTargetEntry = null
+                                                    folderActionTargetEntry = entry
+                                                }
                                                 .combinedClickable(
                                                     onClick = { onOpenRecentFolder(entry) },
                                                     onLongClick = {
@@ -1004,6 +1016,10 @@ internal fun HomeScreen(
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
+                                                    .tvKeyLongPress {
+                                                        folderActionTargetEntry = null
+                                                        fileActionTargetEntry = entry
+                                                    }
                                                     .combinedClickable(
                                                         onClick = {
                                                             activePlayedPromoteKey = null

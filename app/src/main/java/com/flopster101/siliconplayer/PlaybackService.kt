@@ -539,6 +539,7 @@ class PlaybackService : Service() {
     }
 
     private fun updateMediaSessionState() {
+        mediaSession?.isActive = currentPath != null
         val positionBucket = positionSeconds.coerceAtLeast(0.0).toInt()
         val durationBucket = durationSeconds.coerceAtLeast(0.0).toInt()
         val artworkKey = currentArtworkPath ?: "__fallback__"
@@ -598,6 +599,20 @@ class PlaybackService : Service() {
         }
     }
 
+    private fun recordNotificationSnapshot(
+        positionBucket: Int,
+        durationBucket: Int,
+        artworkKey: String
+    ) {
+        lastNotificationPath = currentPath
+        lastNotificationTitle = currentTitle
+        lastNotificationArtist = currentArtist
+        lastNotificationArtworkKey = artworkKey
+        lastNotificationDurationBucket = durationBucket
+        lastNotificationPositionBucket = positionBucket
+        lastNotificationIsPlaying = isPlaying
+    }
+
     private fun pushNotification() {
         if (currentPath == null) return
         val positionBucket = positionSeconds.coerceAtLeast(0.0).toInt()
@@ -619,6 +634,11 @@ class PlaybackService : Service() {
                 isForegroundNotificationShown = false
             }
             notificationManager.notify(NOTIFICATION_ID, notification)
+            recordNotificationSnapshot(
+                positionBucket = positionBucket,
+                durationBucket = durationBucket,
+                artworkKey = artworkKey
+            )
             return
         }
         try {
@@ -631,13 +651,11 @@ class PlaybackService : Service() {
             if (!blockedForegroundStart) throw error
             notificationManager.notify(NOTIFICATION_ID, notification)
         }
-        lastNotificationPath = currentPath
-        lastNotificationTitle = currentTitle
-        lastNotificationArtist = currentArtist
-        lastNotificationArtworkKey = artworkKey
-        lastNotificationDurationBucket = durationBucket
-        lastNotificationPositionBucket = positionBucket
-        lastNotificationIsPlaying = isPlaying
+        recordNotificationSnapshot(
+            positionBucket = positionBucket,
+            durationBucket = durationBucket,
+            artworkKey = artworkKey
+        )
     }
 
     private fun buildNotification(): Notification {

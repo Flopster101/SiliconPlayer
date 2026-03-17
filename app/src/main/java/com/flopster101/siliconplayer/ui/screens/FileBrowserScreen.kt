@@ -284,6 +284,7 @@ internal fun FileBrowserScreen(
     var currentFolderMenuExpanded by remember { mutableStateOf(false) }
     var browserNavDirection by remember { mutableStateOf(BrowserPageNavDirection.Forward) }
     var isLoadingDirectory by remember { mutableStateOf(false) }
+    var lastCompletedDirectoryPath by rememberSaveable { mutableStateOf<String?>(null) }
     var lastAppliedInitialNavigationKey by rememberSaveable { mutableStateOf<String?>(null) }
     val directoryListState = rememberLazyListState()
     var launchAutoScrollTargetKey by remember { mutableStateOf<String?>(null) }
@@ -365,6 +366,7 @@ internal fun FileBrowserScreen(
     fun loadDirectoryAsync(directory: File) {
         directoryLoadJob?.cancel()
         isLoadingDirectory = true
+        lastCompletedDirectoryPath = null
         directoryAnimationEpoch += 1
         fileList = emptyList()
         folderSummaryCache.clear()
@@ -436,7 +438,7 @@ internal fun FileBrowserScreen(
                         .map { it.file }
                         .toList()
                 )
-                val stillOnSameDirectory = currentDirectory?.absolutePath == targetPath
+                val stillOnSameDirectory = currentDirectoryPath == targetPath
                 if (stillOnSameDirectory) {
                     val folders = loadedFiles.count { it.isDirectory }
                     val files = loadedFiles.size - folders
@@ -453,7 +455,7 @@ internal fun FileBrowserScreen(
                         var index = 0
                         while (index < loadedFiles.size) {
                             ensureActive()
-                            if (currentDirectory?.absolutePath != targetPath) break
+                            if (currentDirectoryPath != targetPath) break
 
                             val end = min(index + publishBatchSize, loadedFiles.size)
                             val chunk = loadedFiles.subList(index, end)
@@ -465,11 +467,12 @@ internal fun FileBrowserScreen(
                             }
                         }
                     }
+                    lastCompletedDirectoryPath = targetPath
                 }
             } catch (_: CancellationException) {
                 // Directory load was superseded by another navigation action.
             } finally {
-                if (currentDirectory?.absolutePath == targetPath) {
+                if (currentDirectoryPath == targetPath) {
                     val elapsed = System.currentTimeMillis() - loadingStartedAt
                     if (elapsed < MIN_LOADING_SPINNER_MS) {
                         delay(MIN_LOADING_SPINNER_MS - elapsed)
@@ -501,6 +504,7 @@ internal fun FileBrowserScreen(
         selectedLocationId = null
         currentDirectoryPath = null
         fileList = emptyList()
+        lastCompletedDirectoryPath = null
         loadingLogLines.clear()
         onVisiblePlayableFilesChanged(emptyList())
         onBrowserLocationChanged(BrowserLaunchState())
@@ -1015,6 +1019,14 @@ internal fun FileBrowserScreen(
             "${restoredDirectory.absolutePath}|$playingPath"
         } else {
             null
+        }
+    }
+
+    LaunchedEffect(currentDirectory?.absolutePath, isLoadingDirectory, lastCompletedDirectoryPath) {
+        val activeDirectory = currentDirectory ?: return@LaunchedEffect
+        val activePath = activeDirectory.absolutePath
+        if (!isLoadingDirectory && activePath != lastCompletedDirectoryPath) {
+            loadDirectoryAsync(activeDirectory)
         }
     }
 

@@ -57,6 +57,18 @@ namespace {
         }
     }
 
+    const char* aaudioPerformanceModeName(aaudio_performance_mode_t mode) {
+        switch (mode) {
+            case AAUDIO_PERFORMANCE_MODE_LOW_LATENCY:
+                return "low-latency";
+            case AAUDIO_PERFORMANCE_MODE_POWER_SAVING:
+                return "power-saving";
+            case AAUDIO_PERFORMANCE_MODE_NONE:
+            default:
+                return "none";
+        }
+    }
+
     bool openSlOk(SLresult result, const char* step) {
         if (result == SL_RESULT_SUCCESS) {
             return true;
@@ -176,7 +188,11 @@ bool AudioEngine::createAaudioStream() {
     aaudio.streamBuilderSetChannelCount(builder, 2);
     const int configuredPerformanceMode = outputPerformanceMode;
     aaudio_performance_mode_t performanceMode = AAUDIO_PERFORMANCE_MODE_LOW_LATENCY;
-    if (configuredPerformanceMode == 2) {
+    if (configuredPerformanceMode == 0) {
+        performanceMode = outputBufferPreset >= 3
+                ? AAUDIO_PERFORMANCE_MODE_NONE
+                : AAUDIO_PERFORMANCE_MODE_LOW_LATENCY;
+    } else if (configuredPerformanceMode == 2) {
         performanceMode = AAUDIO_PERFORMANCE_MODE_NONE;
     } else if (configuredPerformanceMode == 3) {
         performanceMode = AAUDIO_PERFORMANCE_MODE_POWER_SAVING;
@@ -203,10 +219,11 @@ bool AudioEngine::createAaudioStream() {
         if (streamChannelCount <= 0) streamChannelCount = 2;
         applyStreamBufferPreset();
         LOGD(
-                "AAudio stream opened: sampleRate=%d, channels=%d, backendPref=%d, perfMode=%d, bufferPreset=%d, allowFallback=%d",
+                "AAudio stream opened: sampleRate=%d, channels=%d, backendPref=%d, perfMode=%s(%d), bufferPreset=%d, allowFallback=%d",
                 streamSampleRate,
                 streamChannelCount,
                 outputBackendPreference,
+                aaudioPerformanceModeName(performanceMode),
                 outputPerformanceMode,
                 outputBufferPreset,
                 outputAllowFallback ? 1 : 0
@@ -572,11 +589,6 @@ bool AudioEngine::renderOutputCallbackFrames(float* outputData, int32_t numFrame
             outputData[base + 1u] *= fadeGain;
         }
     }
-    uint32_t visualizationFeatures = 0u;
-    if (shouldUpdateVisualization(&visualizationFeatures)) {
-        updateVisualizationDataFromOutputCallback(outputData, numFrames, 2, visualizationFeatures);
-    }
-
     if (pauseResumeFadeOutStopPending) {
         pauseResumeFadeOutStopPending = false;
         isPlaying.store(false);

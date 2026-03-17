@@ -536,56 +536,119 @@ void AudioEngine::renderSoxrResampledLocked(
 
 void AudioEngine::clearRenderQueue() {
     std::lock_guard<std::mutex> lock(renderQueueMutex);
-    renderQueueSamples.clear();
-    renderQueueOffset = 0;
+    renderQueueReadIndex = 0;
+    renderQueueWriteIndex = 0;
+    renderQueueSampleCount = 0;
     renderTerminalStopPending.store(false);
+}
+
+void AudioEngine::ensureRenderQueueCapacityLocked(size_t minSampleCapacity) {
+    minSampleCapacity = std::max<size_t>(minSampleCapacity, 4096u);
+    if (renderQueueRing.size() >= minSampleCapacity) {
+        return;
+    }
+
+    size_t newCapacity = renderQueueRing.empty() ? 4096u : renderQueueRing.size();
+    while (newCapacity < minSampleCapacity) {
+        newCapacity *= 2u;
+    }
+
+    std::vector<float> resizedRing(newCapacity, 0.0f);
+    if (renderQueueSampleCount > 0 && !renderQueueRing.empty()) {
+        const size_t firstChunk = std::min(
+                renderQueueSampleCount,
+                renderQueueRing.size() - renderQueueReadIndex
+        );
+        std::memcpy(
+                resizedRing.data(),
+                renderQueueRing.data() + renderQueueReadIndex,
+                firstChunk * sizeof(float)
+        );
+        if (renderQueueSampleCount > firstChunk) {
+            std::memcpy(
+                    resizedRing.data() + firstChunk,
+                    renderQueueRing.data(),
+                    (renderQueueSampleCount - firstChunk) * sizeof(float)
+            );
+        }
+    }
+
+    renderQueueRing.swap(resizedRing);
+    renderQueueReadIndex = 0;
+    renderQueueWriteIndex = renderQueueSampleCount % renderQueueRing.size();
 }
 
 void AudioEngine::appendRenderQueue(const float* data, int numFrames, int channels) {
     if (!data || numFrames <= 0 || channels <= 0) return;
     std::lock_guard<std::mutex> lock(renderQueueMutex);
-    if (channels == 2) {
-        const size_t sampleCount = static_cast<size_t>(numFrames) * 2u;
-        renderQueueSamples.insert(renderQueueSamples.end(), data, data + sampleCount);
+    const size_t requestedStereoSamples = static_cast<size_t>(numFrames) * 2u;
+    if (renderQueueRing.empty()) {
+        ensureRenderQueueCapacityLocked(requestedStereoSamples);
+    }
+    if (renderQueueRing.empty()) {
+        return;
+    }
+    const size_t freeSamples = renderQueueRing.size() - renderQueueSampleCount;
+    if (freeSamples == 0u) {
         return;
     }
 
-    renderQueueSamples.reserve(renderQueueSamples.size() + static_cast<size_t>(numFrames) * 2u);
-    for (int i = 0; i < numFrames; ++i) {
-        const float mono = data[i * channels];
-        renderQueueSamples.push_back(mono);
-        renderQueueSamples.push_back(mono);
+    if (channels == 2) {
+        const size_t sampleCount = std::min(requestedStereoSamples, freeSamples);
+        const size_t firstChunk = std::min(sampleCount, renderQueueRing.size() - renderQueueWriteIndex);
+        std::memcpy(
+                renderQueueRing.data() + renderQueueWriteIndex,
+                data,
+                firstChunk * sizeof(float)
+        );
+        if (sampleCount > firstChunk) {
+            std::memcpy(
+                    renderQueueRing.data(),
+                    data + firstChunk,
+                    (sampleCount - firstChunk) * sizeof(float)
+            );
+        }
+        renderQueueWriteIndex = (renderQueueWriteIndex + sampleCount) % renderQueueRing.size();
+        renderQueueSampleCount += sampleCount;
+        return;
     }
+
+    const size_t framesToWrite = std::min(static_cast<size_t>(numFrames), freeSamples / 2u);
+    for (size_t i = 0; i < framesToWrite; ++i) {
+        const float mono = data[i * channels];
+        renderQueueRing[renderQueueWriteIndex] = mono;
+        renderQueueWriteIndex = (renderQueueWriteIndex + 1u) % renderQueueRing.size();
+        renderQueueRing[renderQueueWriteIndex] = mono;
+        renderQueueWriteIndex = (renderQueueWriteIndex + 1u) % renderQueueRing.size();
+    }
+    renderQueueSampleCount += framesToWrite * 2u;
 }
 
 int AudioEngine::popRenderQueue(float* outputData, int numFrames, int channels) {
     if (!outputData || numFrames <= 0 || channels <= 0) return 0;
     std::lock_guard<std::mutex> lock(renderQueueMutex);
-    const size_t availableSamples = renderQueueSamples.size() > renderQueueOffset
-            ? (renderQueueSamples.size() - renderQueueOffset)
-            : 0u;
-    const int availableFrames = static_cast<int>(availableSamples / static_cast<size_t>(channels));
+    const int availableFrames = static_cast<int>(renderQueueSampleCount / static_cast<size_t>(channels));
     const int framesToCopy = std::min(numFrames, availableFrames);
-    const int samplesToCopy = framesToCopy * channels;
-    if (samplesToCopy > 0) {
+    const size_t samplesToCopy = static_cast<size_t>(framesToCopy) * static_cast<size_t>(channels);
+    if (samplesToCopy > 0u) {
+        const size_t firstChunk = std::min(samplesToCopy, renderQueueRing.size() - renderQueueReadIndex);
         std::memcpy(
                 outputData,
-                renderQueueSamples.data() + renderQueueOffset,
-                static_cast<size_t>(samplesToCopy) * sizeof(float)
+                renderQueueRing.data() + renderQueueReadIndex,
+                firstChunk * sizeof(float)
         );
-        renderQueueOffset += static_cast<size_t>(samplesToCopy);
-        if (renderQueueOffset >= renderQueueSamples.size()) {
-            renderQueueSamples.clear();
-            renderQueueOffset = 0;
-        } else if (renderQueueOffset > 65536u) {
-            const size_t remaining = renderQueueSamples.size() - renderQueueOffset;
-            std::memmove(
-                    renderQueueSamples.data(),
-                    renderQueueSamples.data() + renderQueueOffset,
-                    remaining * sizeof(float)
+        if (samplesToCopy > firstChunk) {
+            std::memcpy(
+                    outputData + firstChunk,
+                    renderQueueRing.data(),
+                    (samplesToCopy - firstChunk) * sizeof(float)
             );
-            renderQueueSamples.resize(remaining);
-            renderQueueOffset = 0;
+        }
+        renderQueueReadIndex = (renderQueueReadIndex + samplesToCopy) % renderQueueRing.size();
+        renderQueueSampleCount -= samplesToCopy;
+        if (renderQueueSampleCount == 0u) {
+            renderQueueReadIndex = 0;
+            renderQueueWriteIndex = 0;
         }
     }
     return framesToCopy;
@@ -593,10 +656,7 @@ int AudioEngine::popRenderQueue(float* outputData, int numFrames, int channels) 
 
 int AudioEngine::renderQueueFrames() const {
     std::lock_guard<std::mutex> lock(renderQueueMutex);
-    const size_t availableSamples = renderQueueSamples.size() > renderQueueOffset
-            ? (renderQueueSamples.size() - renderQueueOffset)
-            : 0u;
-    return static_cast<int>(availableSamples / 2u);
+    return static_cast<int>(renderQueueSampleCount / 2u);
 }
 
 void AudioEngine::renderWorkerLoop() {
@@ -626,10 +686,7 @@ void AudioEngine::renderWorkerLoop() {
             renderWorkerCv.wait_for(lock, std::chrono::milliseconds(5), [this, targetFrames]() {
                 if (renderWorkerStop) return true;
                 if (!isPlaying.load() || seekInProgress.load()) return false;
-                const size_t availableSamples = renderQueueSamples.size() > renderQueueOffset
-                        ? (renderQueueSamples.size() - renderQueueOffset)
-                        : 0u;
-                const int bufferedFrames = static_cast<int>(availableSamples / 2u);
+                const int bufferedFrames = static_cast<int>(renderQueueSampleCount / 2u);
                 return bufferedFrames < targetFrames;
             });
             if (renderWorkerStop) {
@@ -638,10 +695,7 @@ void AudioEngine::renderWorkerLoop() {
             if (!isPlaying.load() || seekInProgress.load()) {
                 continue;
             }
-            const size_t availableSamples = renderQueueSamples.size() > renderQueueOffset
-                    ? (renderQueueSamples.size() - renderQueueOffset)
-                    : 0u;
-            const int bufferedFrames = static_cast<int>(availableSamples / 2u);
+            const int bufferedFrames = static_cast<int>(renderQueueSampleCount / 2u);
             needsFill = bufferedFrames < targetFrames;
 
             // Allow a small overshoot above target to keep scope snapshots
@@ -770,6 +824,16 @@ void AudioEngine::renderWorkerLoop() {
         }
 
         appendRenderQueue(localBuffer.data(), chunkFrames, channels);
+
+        uint32_t requestedVisualizationFeatures = 0u;
+        if (shouldUpdateVisualization(&requestedVisualizationFeatures)) {
+            updateVisualizationDataFromOutputCallback(
+                    localBuffer.data(),
+                    chunkFrames,
+                    channels,
+                    requestedVisualizationFeatures
+            );
+        }
 
         // Pace chunk renders so scope captures are spread evenly across
         // time rather than clustering in a burst after each AAudio callback.

@@ -393,6 +393,7 @@ private:
     void appendRenderQueue(const float* data, int numFrames, int channels);
     int popRenderQueue(float* outputData, int numFrames, int channels);
     int renderQueueFrames() const;
+    void ensureRenderQueueCapacityLocked(size_t minSampleCapacity);
     void renderWorkerLoop();
     void updateRenderQueueTuning();
     bool requestStreamStart();
@@ -460,8 +461,10 @@ private:
     std::thread renderWorkerThread;
     mutable std::mutex renderQueueMutex;
     std::condition_variable renderWorkerCv;
-    std::vector<float> renderQueueSamples;
-    size_t renderQueueOffset = 0;
+    std::vector<float> renderQueueRing;
+    size_t renderQueueReadIndex = 0;
+    size_t renderQueueWriteIndex = 0;
+    size_t renderQueueSampleCount = 0;
     std::atomic<int> renderWorkerChunkFrames { 256 };
     std::atomic<int> renderWorkerTargetFrames { 16384 };
     std::atomic<int64_t> renderQueueRecoveryBoostUntilNs { 0 };

@@ -31,6 +31,7 @@ internal fun AppNavigationTrackPreferenceEffects(
     sortArchivesBeforeFiles: Boolean,
     browserNameSortMode: BrowserNameSortMode,
     onArtworkBitmapChanged: (androidx.compose.ui.graphics.ImageBitmap?) -> Unit,
+    onArtworkResolvedTrackKeyChanged: (String?) -> Unit,
     refreshRepeatModeForTrack: () -> Unit,
     refreshSubtuneState: () -> Unit,
     resetSubtuneUiState: () -> Unit,
@@ -41,6 +42,12 @@ internal fun AppNavigationTrackPreferenceEffects(
     }
 
     LaunchedEffect(selectedFile, currentPlaybackSourceId, currentPlaybackRequestUrl) {
+        val artworkTrackKey = currentPlaybackSourceId ?: selectedFile?.absolutePath
+        if (artworkTrackKey == null) {
+            onArtworkBitmapChanged(null)
+            onArtworkResolvedTrackKeyChanged(null)
+            return@LaunchedEffect
+        }
         var resolvedArtwork: androidx.compose.ui.graphics.ImageBitmap? = null
         repeat(8) { attempt ->
             resolvedArtwork = withContext(Dispatchers.IO) {
@@ -57,6 +64,7 @@ internal fun AppNavigationTrackPreferenceEffects(
             }
         }
         onArtworkBitmapChanged(resolvedArtwork)
+        onArtworkResolvedTrackKeyChanged(artworkTrackKey)
     }
 
     LaunchedEffect(selectedFile, currentPlaybackSourceId, isPlayerSurfaceVisible) {

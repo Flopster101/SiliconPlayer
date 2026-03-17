@@ -147,6 +147,49 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
 
+private const val PLAYER_ARTWORK_STOP_GRACE_MS = 180L
+
+@Composable
+private fun rememberDisplayedPlayerArtwork(
+    trackKey: String?,
+    artwork: ImageBitmap?,
+    resolvedTrackKey: String?
+): ImageBitmap? {
+    var displayedArtwork by remember { mutableStateOf<ImageBitmap?>(artwork) }
+    val latestTrackKey by rememberUpdatedState(trackKey)
+    val latestArtwork by rememberUpdatedState(artwork)
+    val latestResolvedTrackKey by rememberUpdatedState(resolvedTrackKey)
+    val artworkLookupPending = trackKey != null &&
+        artwork == null &&
+        resolvedTrackKey != trackKey
+
+    LaunchedEffect(trackKey, artwork, resolvedTrackKey) {
+        if (artwork != null) {
+            displayedArtwork = artwork
+            return@LaunchedEffect
+        }
+        if (artworkLookupPending) {
+            return@LaunchedEffect
+        }
+        if (displayedArtwork == null) {
+            return@LaunchedEffect
+        }
+        val expectedTrackKey = trackKey
+        val expectedResolvedTrackKey = resolvedTrackKey
+        val holdMs = if (trackKey == null) PLAYER_ARTWORK_STOP_GRACE_MS else 0L
+        delay(holdMs)
+        if (
+            latestTrackKey == expectedTrackKey &&
+            latestArtwork == null &&
+            latestResolvedTrackKey == expectedResolvedTrackKey
+        ) {
+            displayedArtwork = null
+        }
+    }
+
+    return displayedArtwork
+}
+
 class MainActivity : ComponentActivity() {
     private var initialFileToOpen: File? = null
     private var initialFileFromExternalIntent: Boolean = false
@@ -1231,6 +1274,7 @@ private fun AppNavigation(
     }
     var lastUsedCoreName by remember { mutableStateOf<String?>(null) }
     var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    var artworkResolvedTrackKey by remember { mutableStateOf<String?>(null) }
     var visiblePlayableFiles by remember { mutableStateOf<List<File>>(emptyList()) }
     val browserNavigator = remember { BrowserNavigatorState() }
     var networkCurrentFolderId by remember { mutableStateOf<Long?>(null) }
@@ -2237,6 +2281,11 @@ private fun AppNavigation(
             deferredPlaybackSeek = null
         }
     }
+    val displayedArtworkBitmap = rememberDisplayedPlayerArtwork(
+        trackKey = currentPlaybackSourceId ?: selectedFile?.absolutePath,
+        artwork = artworkBitmap,
+        resolvedTrackKey = artworkResolvedTrackKey
+    )
     LaunchedEffect(isPlayerExpanded, isPlayerSurfaceVisible, restoreMiniPlayerFocusOnCollapse) {
         if (!isPlayerExpanded && restoreMiniPlayerFocusOnCollapse && isPlayerSurfaceVisible) {
             withFrameNanos { }
@@ -2747,6 +2796,7 @@ private fun AppNavigation(
         sortArchivesBeforeFiles = sortArchivesBeforeFiles,
         browserNameSortMode = browserNameSortMode,
         onArtworkBitmapChanged = { artworkBitmap = it },
+        onArtworkResolvedTrackKeyChanged = { artworkResolvedTrackKey = it },
         refreshRepeatModeForTrack = { runtimeDelegates.refreshRepeatModeForTrack() },
         refreshSubtuneState = { runtimeDelegates.refreshSubtuneState() },
         resetSubtuneUiState = {
@@ -3123,7 +3173,7 @@ private fun AppNavigation(
             playlistFormatLabel = trackInfoPlaylistFormatLabel,
             playlistTrackCount = trackInfoPlaylistTrackCount,
             playlistPathOrUrl = trackInfoPlaylistPathOrUrl,
-            artworkBitmap = artworkBitmap,
+            artworkBitmap = displayedArtworkBitmap,
             isCurrentTrackFavorited = isCurrentTrackFavorited,
             activeRepeatMode = activeRepeatMode,
             playbackCapabilitiesFlags = effectivePlaybackCapabilitiesFlags,

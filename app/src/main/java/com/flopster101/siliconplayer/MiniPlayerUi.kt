@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 import android.webkit.MimeTypeMap
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -315,26 +316,28 @@ internal fun MiniPlayerBar(
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(artworkCornerRadius),
                     color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
-                    if (artwork != null) {
-                        Image(
-                            bitmap = artwork,
-                            contentDescription = "Mini player artwork",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = noArtworkIcon,
-                                contentDescription = "No artwork",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(24.dp)
+                    Crossfade(targetState = artwork, label = "miniPlayerArtworkCrossfade") { displayedArtwork ->
+                        if (displayedArtwork != null) {
+                            Image(
+                                bitmap = displayedArtwork,
+                                contentDescription = "Mini player artwork",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
                             )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = noArtworkIcon,
+                                    contentDescription = "No artwork",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
                     }
                 }

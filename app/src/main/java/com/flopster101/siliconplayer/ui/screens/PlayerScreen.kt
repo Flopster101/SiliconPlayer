@@ -137,6 +137,7 @@ import com.flopster101.siliconplayer.rememberScrollStateScrollbarDragHandler
 import com.flopster101.siliconplayer.sanitizeRemoteCachedMetadataTitle
 import com.flopster101.siliconplayer.shouldRestartCurrentTrackOnPrevious
 import com.flopster101.siliconplayer.stripRemoteCacheHashPrefix
+import com.flopster101.siliconplayer.ui.dialogs.dialogScrollableContentNavigation
 import com.flopster101.siliconplayer.ui.dialogs.VisualizationModePickerDialog
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
 import java.io.File
@@ -1982,6 +1983,9 @@ private fun TrackInfoDetailsDialog(
         isDialogVisible = isDialogVisible
     )
     val detailsScrollState = rememberScrollState()
+    val detailsFocusRequester = remember { FocusRequester() }
+    val closeButtonFocusRequester = remember { FocusRequester() }
+    val copyButtonFocusRequester = remember { FocusRequester() }
     var detailsViewportHeightPx by remember { mutableIntStateOf(0) }
     val detailsScrollbarAlpha = rememberDialogScrollbarAlpha(
         enabled = true,
@@ -2015,6 +2019,11 @@ private fun TrackInfoDetailsDialog(
             "${formatSampleRateForDetails(liveMetadata.renderRateHz)} -> " +
             formatSampleRateForDetails(liveMetadata.outputRateHz)
     val pathOrUrlLabel = pathOrUrl?.ifBlank { "Unavailable" } ?: "Unavailable"
+    LaunchedEffect(isDialogVisible) {
+        if (isDialogVisible) {
+            detailsFocusRequester.requestFocus()
+        }
+    }
     val copyAllText = buildString {
         fun row(label: String, value: String) {
             append(label).append(": ").append(value).append('\n')
@@ -2068,6 +2077,12 @@ private fun TrackInfoDetailsDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .onSizeChanged { detailsViewportHeightPx = it.height }
+                        .dialogScrollableContentNavigation(
+                            scrollState = detailsScrollState,
+                            focusRequester = detailsFocusRequester,
+                            viewportHeightPx = detailsViewportHeightPx,
+                            actionFocusRequester = closeButtonFocusRequester
+                        )
                         .padding(end = 10.dp)
                         .verticalScroll(detailsScrollState),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -2149,6 +2164,12 @@ private fun TrackInfoDetailsDialog(
         },
         confirmButton = {
             TextButton(
+                modifier = Modifier
+                    .focusRequester(copyButtonFocusRequester)
+                    .focusProperties {
+                        up = detailsFocusRequester
+                        left = closeButtonFocusRequester
+                    },
                 onClick = {
                     clipboardManager.setText(AnnotatedString(copyAllText.trim()))
                     Toast.makeText(context, "Copied track and decoder info", Toast.LENGTH_SHORT).show()
@@ -2158,7 +2179,15 @@ private fun TrackInfoDetailsDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                modifier = Modifier
+                    .focusRequester(closeButtonFocusRequester)
+                    .focusProperties {
+                        up = detailsFocusRequester
+                        right = copyButtonFocusRequester
+                    },
+                onClick = onDismiss
+            ) {
                 Text("Close")
             }
         }

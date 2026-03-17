@@ -92,12 +92,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -129,6 +131,7 @@ import com.flopster101.siliconplayer.RemoteLoadPhase
 import com.flopster101.siliconplayer.RemoteLoadUiState
 import com.flopster101.siliconplayer.R
 import com.flopster101.siliconplayer.rememberDialogScrollbarAlpha
+import com.flopster101.siliconplayer.ui.dialogs.dialogScrollableContentNavigation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -545,11 +548,17 @@ internal fun BrowserInfoDialog(
     onDismiss: () -> Unit
 ) {
     val contentScrollState = rememberScrollState()
+    val contentFocusRequester = remember { FocusRequester() }
+    val closeButtonFocusRequester = remember { FocusRequester() }
+    var contentViewportHeightPx by remember { mutableStateOf(0) }
     val scrollbarAlpha = rememberDialogScrollbarAlpha(
         enabled = true,
         scrollState = contentScrollState,
         label = "browserInfoDialogScrollbarAlpha"
     )
+    LaunchedEffect(Unit) {
+        contentFocusRequester.requestFocus()
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -558,11 +567,18 @@ internal fun BrowserInfoDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 320.dp)
+                    .onSizeChanged { contentViewportHeightPx = it.height }
             ) {
                 SelectionContainer {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .dialogScrollableContentNavigation(
+                                scrollState = contentScrollState,
+                                focusRequester = contentFocusRequester,
+                                viewportHeightPx = contentViewportHeightPx,
+                                actionFocusRequester = closeButtonFocusRequester
+                            )
                             .verticalScroll(contentScrollState)
                             .padding(end = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -593,7 +609,14 @@ internal fun BrowserInfoDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                modifier = Modifier
+                    .focusRequester(closeButtonFocusRequester)
+                    .focusProperties {
+                        up = contentFocusRequester
+                    },
+                onClick = onDismiss
+            ) {
                 Text("Close")
             }
         }
@@ -608,11 +631,18 @@ internal fun BrowserTextPreviewDialog(
 ) {
     val clipboardManager = LocalClipboardManager.current
     val contentScrollState = rememberScrollState()
+    val contentFocusRequester = remember { FocusRequester() }
+    val closeButtonFocusRequester = remember { FocusRequester() }
+    val copyButtonFocusRequester = remember { FocusRequester() }
+    var contentViewportHeightPx by remember { mutableStateOf(0) }
     val scrollbarAlpha = rememberDialogScrollbarAlpha(
         enabled = true,
         scrollState = contentScrollState,
         label = "browserTextPreviewScrollbarAlpha"
     )
+    LaunchedEffect(Unit) {
+        contentFocusRequester.requestFocus()
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(text = decodePercentEncodedForDisplay(fileName) ?: fileName) },
@@ -621,10 +651,17 @@ internal fun BrowserTextPreviewDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 360.dp)
+                    .onSizeChanged { contentViewportHeightPx = it.height }
             ) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .dialogScrollableContentNavigation(
+                            scrollState = contentScrollState,
+                            focusRequester = contentFocusRequester,
+                            viewportHeightPx = contentViewportHeightPx,
+                            actionFocusRequester = closeButtonFocusRequester
+                        )
                         .verticalScroll(contentScrollState)
                         .padding(end = 10.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
@@ -655,6 +692,12 @@ internal fun BrowserTextPreviewDialog(
         },
         confirmButton = {
             TextButton(
+                modifier = Modifier
+                    .focusRequester(copyButtonFocusRequester)
+                    .focusProperties {
+                        up = contentFocusRequester
+                        left = closeButtonFocusRequester
+                    },
                 onClick = {
                     clipboardManager.setText(AnnotatedString(textContent))
                 }
@@ -663,7 +706,15 @@ internal fun BrowserTextPreviewDialog(
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                modifier = Modifier
+                    .focusRequester(closeButtonFocusRequester)
+                    .focusProperties {
+                        up = contentFocusRequester
+                        right = copyButtonFocusRequester
+                    },
+                onClick = onDismiss
+            ) {
                 Text("Close")
             }
         }

@@ -278,6 +278,18 @@ class PlaybackService : Service() {
         stopSelf()
     }
 
+    private fun stopServicePreservingSession() {
+        abandonAudioFocus()
+        resumeOnFocusGain = false
+        NativeBridge.stopEngine()
+        isPlaying = false
+        persistResumeCheckpointIfNeeded(force = true)
+        stopForegroundCompat(removeNotification = true)
+        isForegroundNotificationShown = false
+        notificationManager.cancel(NOTIFICATION_ID)
+        stopSelf()
+    }
+
     private fun stopForegroundCompat(removeNotification: Boolean) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(
@@ -317,7 +329,7 @@ class PlaybackService : Service() {
 
             override fun onStop() {
                 if (!prefs.getBoolean(PREF_RESPOND_MEDIA_BUTTONS, true)) return
-                stopAndClear()
+                stopServicePreservingSession()
             }
 
             override fun onSeekTo(pos: Long) {

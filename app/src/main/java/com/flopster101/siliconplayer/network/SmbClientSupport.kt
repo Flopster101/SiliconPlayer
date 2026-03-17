@@ -1,8 +1,11 @@
 package com.flopster101.siliconplayer
 
+import com.hierynomus.smbj.SMBClient
 import com.hierynomus.smbj.connection.Connection
 import com.hierynomus.smbj.auth.AuthenticationContext
 import com.hierynomus.smbj.session.Session
+import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 
 internal enum class SmbAuthenticationFailureReason {
     WrongPassword,
@@ -11,6 +14,66 @@ internal enum class SmbAuthenticationFailureReason {
     AccountRestricted,
     AuthenticationRequired,
     Unknown
+}
+
+private val sharedAppSmbClient by lazy { SMBClient() }
+private data class SmbSessionCacheKey(
+    val host: String,
+    val username: String,
+    val password: String
+)
+private val sharedAppSmbSessions = ConcurrentHashMap<SmbSessionCacheKey, Session>()
+private val sharedAppSmbSessionLocks = ConcurrentHashMap<SmbSessionCacheKey, Any>()
+
+private fun smbSessionCacheKey(spec: SmbSourceSpec): SmbSessionCacheKey {
+    return SmbSessionCacheKey(
+        host = spec.host.trim(),
+        username = spec.username?.trim().orEmpty(),
+        password = spec.password?.trim().orEmpty()
+    )
+}
+
+private fun createAuthenticatedSmbSession(spec: SmbSourceSpec): Session {
+    val connection = sharedAppSmbClient.connect(spec.host)
+    return authenticateSmbSession(connection, spec)
+}
+
+internal fun invalidateAppSmbSession(spec: SmbSourceSpec) {
+    val key = smbSessionCacheKey(spec)
+    val cached = sharedAppSmbSessions.remove(key) ?: return
+    runCatching { cached.close() }
+}
+
+internal fun getOrCreateAppSmbSession(spec: SmbSourceSpec): Session {
+    val key = smbSessionCacheKey(spec)
+    sharedAppSmbSessions[key]?.let { return it }
+    val lock = sharedAppSmbSessionLocks.getOrPut(key) { Any() }
+    synchronized(lock) {
+        sharedAppSmbSessions[key]?.let { return it }
+        return createAuthenticatedSmbSession(spec).also { session ->
+            sharedAppSmbSessions[key] = session
+        }
+    }
+}
+
+internal inline fun <T> withAppSmbSession(
+    spec: SmbSourceSpec,
+    block: (Session) -> T
+): T {
+    var shouldRetryAfterInvalidation = true
+    while (true) {
+        val session = getOrCreateAppSmbSession(spec)
+        try {
+            return block(session)
+        } catch (t: Throwable) {
+            val retryable = t is IOException || t.message.orEmpty().contains("STATUS_USER_SESSION_DELETED", ignoreCase = true)
+            if (!retryable || !shouldRetryAfterInvalidation) {
+                throw t
+            }
+            invalidateAppSmbSession(spec)
+            shouldRetryAfterInvalidation = false
+        }
+    }
 }
 
 internal fun authenticateSmbSession(connection: Connection, spec: SmbSourceSpec): Session {

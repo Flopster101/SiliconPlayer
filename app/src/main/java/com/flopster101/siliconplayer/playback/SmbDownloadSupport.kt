@@ -5,7 +5,6 @@ import com.hierynomus.msdtyp.AccessMask
 import com.hierynomus.msfscc.fileinformation.FileStandardInformation
 import com.hierynomus.mssmb2.SMB2CreateDisposition
 import com.hierynomus.mssmb2.SMB2ShareAccess
-import com.hierynomus.smbj.SMBClient
 import com.hierynomus.smbj.share.DiskShare
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -54,97 +53,92 @@ internal suspend fun downloadSmbSourceToCache(
     )
 
     return@withContext try {
-        SMBClient().use { smbClient ->
-            smbClient.connect(spec.host).use { connection ->
-                authenticateSmbSession(connection, spec).use { session ->
-                    val share = session.connectShare(spec.share)
-                    if (share !is DiskShare) {
-                        share.close()
-                        return@withContext RemoteDownloadResult(
-                            file = null,
-                            errorMessage = "SMB share is not a disk share"
-                        )
-                    }
-                    share.use { diskShare ->
-                        diskShare.openFile(
-                            remotePath,
-                            setOf(AccessMask.GENERIC_READ),
-                            null,
-                            SMB2ShareAccess.ALL,
-                            SMB2CreateDisposition.FILE_OPEN,
-                            null
-                        ).use { smbFile ->
-                            val expectedBytes = runCatching {
-                                smbFile.getFileInformation(FileStandardInformation::class.java)
-                                    .getEndOfFile()
-                                    .coerceAtLeast(0L)
-                            }.getOrNull()?.takeIf { it > 0L }
-                            BufferedInputStream(smbFile.inputStream).use { input ->
-                                FileOutputStream(temp).use { output ->
-                                    val buffer = ByteArray(16 * 1024)
-                                    var totalBytes = 0L
-                                    var latestBytesPerSecond: Long? = null
-                                    val startedAtMs = System.currentTimeMillis()
-                                    var lastSpeedSampleBytes = 0L
-                                    var lastSpeedSampleMs = startedAtMs
-                                    var lastUiUpdateMs = 0L
+        withAppSmbSession(spec) { session ->
+            val share = session.connectShare(spec.share)
+            if (share !is DiskShare) {
+                share.close()
+                return@withContext RemoteDownloadResult(
+                    file = null,
+                    errorMessage = "SMB share is not a disk share"
+                )
+            }
+            val diskShare = share
+            diskShare.openFile(
+                remotePath,
+                setOf(AccessMask.GENERIC_READ),
+                null,
+                SMB2ShareAccess.ALL,
+                SMB2CreateDisposition.FILE_OPEN,
+                null
+            ).use { smbFile ->
+                val expectedBytes = runCatching {
+                    smbFile.getFileInformation(FileStandardInformation::class.java)
+                        .getEndOfFile()
+                        .coerceAtLeast(0L)
+                }.getOrNull()?.takeIf { it > 0L }
+                BufferedInputStream(smbFile.inputStream).use { input ->
+                    FileOutputStream(temp).use { output ->
+                        val buffer = ByteArray(16 * 1024)
+                        var totalBytes = 0L
+                        var latestBytesPerSecond: Long? = null
+                        val startedAtMs = System.currentTimeMillis()
+                        var lastSpeedSampleBytes = 0L
+                        var lastSpeedSampleMs = startedAtMs
+                        var lastUiUpdateMs = 0L
 
-                                    suspend fun publishDownloadStatus(force: Boolean = false) {
-                                        val now = System.currentTimeMillis()
-                                        if (!force && now - lastUiUpdateMs < 120L) return
-                                        lastUiUpdateMs = now
-                                        val percentValue = expectedBytes?.let { expected ->
-                                            ((totalBytes * 100L) / expected).toInt().coerceIn(0, 100)
-                                        }
-                                        emitStatus(
-                                            RemoteLoadUiState(
-                                                sourceId = sourceId,
-                                                phase = RemoteLoadPhase.Downloading,
-                                                downloadedBytes = totalBytes,
-                                                totalBytes = expectedBytes,
-                                                bytesPerSecond = latestBytesPerSecond,
-                                                percent = percentValue,
-                                                indeterminate = expectedBytes == null
-                                            )
-                                        )
-                                    }
-
-                                    publishDownloadStatus(force = true)
-                                    while (true) {
-                                        kotlin.coroutines.coroutineContext.ensureActive()
-                                        val read = input.read(buffer)
-                                        if (read <= 0) break
-                                        output.write(buffer, 0, read)
-                                        totalBytes += read
-                                        val now = System.currentTimeMillis()
-                                        val deltaMs = now - lastSpeedSampleMs
-                                        if (deltaMs >= 350L) {
-                                            val deltaBytes = totalBytes - lastSpeedSampleBytes
-                                            latestBytesPerSecond =
-                                                ((deltaBytes * 1000L) / deltaMs).coerceAtLeast(0L)
-                                            lastSpeedSampleBytes = totalBytes
-                                            lastSpeedSampleMs = now
-                                        }
-                                        publishDownloadStatus()
-                                    }
-                                    output.flush()
-                                    publishDownloadStatus(force = true)
-                                    val elapsedMs = (System.currentTimeMillis() - startedAtMs).coerceAtLeast(1L)
-                                    val avgSpeed = (totalBytes * 1000L) / elapsedMs
-                                    emitStatus(
-                                        RemoteLoadUiState(
-                                            sourceId = sourceId,
-                                            phase = RemoteLoadPhase.Downloading,
-                                            downloadedBytes = totalBytes,
-                                            totalBytes = expectedBytes,
-                                            bytesPerSecond = latestBytesPerSecond ?: avgSpeed,
-                                            percent = expectedBytes?.let { 100 },
-                                            indeterminate = expectedBytes == null
-                                        )
-                                    )
-                                }
+                        suspend fun publishDownloadStatus(force: Boolean = false) {
+                            val now = System.currentTimeMillis()
+                            if (!force && now - lastUiUpdateMs < 120L) return
+                            lastUiUpdateMs = now
+                            val percentValue = expectedBytes?.let { expected ->
+                                ((totalBytes * 100L) / expected).toInt().coerceIn(0, 100)
                             }
+                            emitStatus(
+                                RemoteLoadUiState(
+                                    sourceId = sourceId,
+                                    phase = RemoteLoadPhase.Downloading,
+                                    downloadedBytes = totalBytes,
+                                    totalBytes = expectedBytes,
+                                    bytesPerSecond = latestBytesPerSecond,
+                                    percent = percentValue,
+                                    indeterminate = expectedBytes == null
+                                )
+                            )
                         }
+
+                        publishDownloadStatus(force = true)
+                        while (true) {
+                            kotlin.coroutines.coroutineContext.ensureActive()
+                            val read = input.read(buffer)
+                            if (read <= 0) break
+                            output.write(buffer, 0, read)
+                            totalBytes += read
+                            val now = System.currentTimeMillis()
+                            val deltaMs = now - lastSpeedSampleMs
+                            if (deltaMs >= 350L) {
+                                val deltaBytes = totalBytes - lastSpeedSampleBytes
+                                latestBytesPerSecond =
+                                    ((deltaBytes * 1000L) / deltaMs).coerceAtLeast(0L)
+                                lastSpeedSampleBytes = totalBytes
+                                lastSpeedSampleMs = now
+                            }
+                            publishDownloadStatus()
+                        }
+                        output.flush()
+                        publishDownloadStatus(force = true)
+                        val elapsedMs = (System.currentTimeMillis() - startedAtMs).coerceAtLeast(1L)
+                        val avgSpeed = (totalBytes * 1000L) / elapsedMs
+                        emitStatus(
+                            RemoteLoadUiState(
+                                sourceId = sourceId,
+                                phase = RemoteLoadPhase.Downloading,
+                                downloadedBytes = totalBytes,
+                                totalBytes = expectedBytes,
+                                bytesPerSecond = latestBytesPerSecond ?: avgSpeed,
+                                percent = expectedBytes?.let { 100 },
+                                indeterminate = expectedBytes == null
+                            )
+                        )
                     }
                 }
             }

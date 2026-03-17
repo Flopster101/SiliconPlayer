@@ -1,8 +1,8 @@
 package com.flopster101.siliconplayer
 
 import com.hierynomus.msfscc.FileAttributes
+import com.hierynomus.msfscc.fileinformation.FileDirectoryInformation
 import com.hierynomus.smbj.SmbConfig
-import com.hierynomus.smbj.SMBClient
 import com.hierynomus.smbj.share.DiskShare
 import com.rapid7.client.dcerpc.mssrvs.ServerService
 import com.rapid7.client.dcerpc.transport.SMBTransportFactories
@@ -41,47 +41,42 @@ internal suspend fun listSmbDirectoryEntries(
     spec: SmbSourceSpec,
     pathInsideShare: String?
 ): Result<List<SmbBrowserEntry>> = withContext(Dispatchers.IO) {
+    val normalizedPath = normalizeSmbPathForShare(pathInsideShare).orEmpty()
     runCatching {
         val shareName = spec.share.trim()
         if (shareName.isBlank()) {
             throw IllegalStateException("SMB share name is required to list directories")
         }
-        SMBClient().use { smbClient ->
-            smbClient.connect(spec.host).use { connection ->
-                authenticateSmbSession(connection, spec).use { session ->
-                    val share = session.connectShare(shareName)
-                    if (share !is DiskShare) {
-                        share.close()
-                        throw IllegalStateException("SMB share is not a disk share")
-                    }
-                    share.use { diskShare ->
-                        val path = normalizeSmbPathForShare(pathInsideShare).orEmpty()
-                        val rawEntries = diskShare.list(path)
-                        rawEntries
-                            .asSequence()
-                            .mapNotNull { entry ->
-                                val name = entry.fileName?.trim().orEmpty()
-                                if (name.isBlank() || name == "." || name == "..") return@mapNotNull null
-                                val attributes = entry.fileAttributes
-                                val isDirectory = (attributes and FileAttributes.FILE_ATTRIBUTE_DIRECTORY.value) != 0L
-                                val isHidden = (attributes and FileAttributes.FILE_ATTRIBUTE_HIDDEN.value) != 0L
-                                val size = entry.endOfFile
-                                SmbBrowserEntry(
-                                    name = name,
-                                    isDirectory = isDirectory,
-                                    sizeBytes = if (isDirectory) 0L else size,
-                                    isHidden = isHidden
-                                )
-                            }
-                            .sortedWith(
-                                compareBy<SmbBrowserEntry> { !it.isDirectory }
-                                    .thenBy { it.name.lowercase(Locale.ROOT) }
-                                    .thenBy { it.name }
-                            )
-                            .toList()
-                    }
-                }
+        withAppSmbSession(spec) { session ->
+            val share = session.connectShare(shareName)
+            if (share !is DiskShare) {
+                share.close()
+                throw IllegalStateException("SMB share is not a disk share")
             }
+            val diskShare = share
+            val rawEntries = diskShare.list(normalizedPath, FileDirectoryInformation::class.java)
+            rawEntries
+                .asSequence()
+                .mapNotNull { entry ->
+                    val name = entry.fileName?.trim().orEmpty()
+                    if (name.isBlank() || name == "." || name == "..") return@mapNotNull null
+                    val attributes = entry.fileAttributes
+                    val isDirectory = (attributes and FileAttributes.FILE_ATTRIBUTE_DIRECTORY.value) != 0L
+                    val isHidden = (attributes and FileAttributes.FILE_ATTRIBUTE_HIDDEN.value) != 0L
+                    val size = entry.endOfFile
+                    SmbBrowserEntry(
+                        name = name,
+                        isDirectory = isDirectory,
+                        sizeBytes = if (isDirectory) 0L else size,
+                        isHidden = isHidden
+                    )
+                }
+                .sortedWith(
+                    compareBy<SmbBrowserEntry> { !it.isDirectory }
+                        .thenBy { it.name.lowercase(Locale.ROOT) }
+                        .thenBy { it.name }
+                )
+                .toList()
         }
     }
 }
@@ -90,38 +85,30 @@ internal suspend fun listSmbHostShareEntries(
     spec: SmbSourceSpec
 ): Result<List<SmbBrowserEntry>> = withContext(Dispatchers.IO) {
     runCatching {
-        SMBClient().use { smbClient ->
-            smbClient.connect(spec.host).use { connection ->
-                authenticateSmbSession(connection, spec).use { session ->
-                    val transport = SMBTransportFactories.SRVSVC.getTransport(
-                        session,
-                        SmbConfig.createDefaultConfig()
+        withAppSmbSession(spec) { session ->
+            val transport = SMBTransportFactories.SRVSVC.getTransport(
+                session,
+                SmbConfig.createDefaultConfig()
+            )
+            ServerService(transport)
+                .getShares0()
+                .asSequence()
+                .mapNotNull { share ->
+                    val name = share.netName?.trim().orEmpty()
+                    if (name.isBlank()) return@mapNotNull null
+                    if (name.equals("IPC$", ignoreCase = true)) return@mapNotNull null
+                    SmbBrowserEntry(
+                        name = name,
+                        isDirectory = true,
+                        sizeBytes = 0L,
+                        isHidden = name.endsWith("$")
                     )
-                    val shares = ServerService(transport)
-                        .getShares1()
-                        .asSequence()
-                        .filter { share ->
-                            // Base share type 0 is disk tree. Hidden shares keep their base type.
-                            (share.type and 0xFFFF) == 0
-                        }
-                        .mapNotNull { share ->
-                            val name = share.netName?.trim().orEmpty()
-                            if (name.isBlank()) return@mapNotNull null
-                            SmbBrowserEntry(
-                                name = name,
-                                isDirectory = true,
-                                sizeBytes = 0L,
-                                isHidden = name.endsWith("$")
-                            )
-                        }
-                        .sortedWith(
-                            compareBy<SmbBrowserEntry> { it.name.lowercase(Locale.ROOT) }
-                                .thenBy { it.name }
-                        )
-                        .toList()
-                    shares
                 }
-            }
+                .sortedWith(
+                    compareBy<SmbBrowserEntry> { it.name.lowercase(Locale.ROOT) }
+                        .thenBy { it.name }
+                )
+                .toList()
         }
     }
 }
@@ -146,22 +133,19 @@ internal suspend fun resolveSmbHostDisplayName(
         }
 
         runCatching {
-            SMBClient().use { smbClient ->
-                smbClient.connect(spec.host).use { connection ->
-                    authenticateSmbSession(connection, spec).use { session ->
-                        val probeShare = spec.share.ifBlank { "IPC$" }
-                        runCatching { session.connectShare(probeShare).close() }
-                        val context = connection.connectionContext
-                        sequenceOf(
-                            context.serverName,
-                            context.netBiosName,
-                            connection.remoteHostname
-                        ).forEach { raw ->
-                            normalizeDiscoveredHostCandidate(raw)?.let(candidates::add)
-                        }
-                        querySrvsvcCanonicalHostName(session, spec)?.let(candidates::add)
-                    }
+            withAppSmbSession(spec) { session ->
+                val probeShare = spec.share.ifBlank { "IPC$" }
+                runCatching { session.connectShare(probeShare) }
+                val connection = session.connection
+                val context = connection.connectionContext
+                sequenceOf(
+                    context.serverName,
+                    context.netBiosName,
+                    connection.remoteHostname
+                ).forEach { raw ->
+                    normalizeDiscoveredHostCandidate(raw)?.let(candidates::add)
                 }
+                querySrvsvcCanonicalHostName(session, spec)?.let(candidates::add)
             }
         }
         candidates.firstOrNull()

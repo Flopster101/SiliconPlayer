@@ -6,7 +6,57 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberUpdatedState
 import java.io.File
 import kotlin.math.abs
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+
+private data class PlaybackPollSnapshot(
+    val seekInProgress: Boolean,
+    val isPlaying: Boolean,
+    val durationSeconds: Double,
+    val positionSeconds: Double
+)
+
+private suspend fun readPlaybackPollSnapshot(
+    localDuration: Double,
+    durationRefreshCountdown: Int,
+    activeSourceId: String?,
+    deferredPlaybackSeek: DeferredPlaybackSeek?
+): PlaybackPollSnapshot = withContext(Dispatchers.Default) {
+    val nextSeekInProgress = NativeBridge.isSeekInProgress()
+    val nextIsPlaying = NativeBridge.isEnginePlaying()
+    val nextDuration = if (nextSeekInProgress) {
+        localDuration
+    } else if (
+        durationRefreshCountdown <= 0 ||
+        !(localDuration > 0.0) ||
+        !localDuration.isFinite()
+    ) {
+        NativeBridge.getDuration()
+    } else {
+        localDuration
+    }
+    val nextPosition = if (
+        deferredPlaybackSeek != null &&
+        activeSourceId != null &&
+        deferredPlaybackSeek.sourceId == activeSourceId
+    ) {
+        val maxDuration = nextDuration.coerceAtLeast(0.0)
+        if (maxDuration > 0.0) {
+            deferredPlaybackSeek.positionSeconds.coerceIn(0.0, maxDuration)
+        } else {
+            deferredPlaybackSeek.positionSeconds.coerceAtLeast(0.0)
+        }
+    } else {
+        NativeBridge.getPosition()
+    }
+    PlaybackPollSnapshot(
+        seekInProgress = nextSeekInProgress,
+        isPlaying = nextIsPlaying,
+        durationSeconds = nextDuration,
+        positionSeconds = nextPosition
+    )
+}
 
 @Composable
 internal fun AppNavigationPlaybackPollEffects(
@@ -64,8 +114,16 @@ internal fun AppNavigationPlaybackPollEffects(
 
         while (selectedFileProvider() != null) {
             val currentFile = selectedFileProvider()
-            val nextSeekInProgress = NativeBridge.isSeekInProgress()
-            val nextIsPlaying = NativeBridge.isEnginePlaying()
+            val activeSourceId = currentPlaybackSourceIdProvider() ?: currentFile?.absolutePath
+            val deferredPlaybackSeek = deferredPlaybackSeekProvider()
+            val snapshot = readPlaybackPollSnapshot(
+                localDuration = localDuration,
+                durationRefreshCountdown = durationRefreshCountdown,
+                activeSourceId = activeSourceId,
+                deferredPlaybackSeek = deferredPlaybackSeek
+            )
+            val nextSeekInProgress = snapshot.seekInProgress
+            val nextIsPlaying = snapshot.isPlaying
             val pollDelayMs = when {
                 nextSeekInProgress -> 120L
                 nextIsPlaying -> 180L
@@ -91,36 +149,21 @@ internal fun AppNavigationPlaybackPollEffects(
                 onSeekRequestedAtMsChanged(0L)
                 onSeekUiBusyChanged(false)
             }
-            val nextDuration = if (nextSeekInProgress) {
-                localDuration
-            } else if (
-                durationRefreshCountdown <= 0 ||
-                !(localDuration > 0.0) ||
-                !localDuration.isFinite()
-            ) {
-                val refreshed = NativeBridge.getDuration()
-                durationRefreshCountdown = if (nextIsPlaying) 6 else 2
-                refreshed
-            } else {
-                durationRefreshCountdown -= 1
-                localDuration
-            }
-            val activeSourceId = currentPlaybackSourceIdProvider() ?: currentFile?.absolutePath
-            val deferredPlaybackSeek = deferredPlaybackSeekProvider()
-            val nextPosition = if (
-                deferredPlaybackSeek != null &&
-                activeSourceId != null &&
-                deferredPlaybackSeek.sourceId == activeSourceId
-            ) {
-                val maxDuration = nextDuration.coerceAtLeast(0.0)
-                if (maxDuration > 0.0) {
-                    deferredPlaybackSeek.positionSeconds.coerceIn(0.0, maxDuration)
+            val nextDuration = snapshot.durationSeconds
+            if (!nextSeekInProgress) {
+                if (
+                    durationRefreshCountdown <= 0 ||
+                    !(localDuration > 0.0) ||
+                    !localDuration.isFinite()
+                ) {
+                    durationRefreshCountdown = if (nextIsPlaying) 6 else 2
                 } else {
-                    deferredPlaybackSeek.positionSeconds.coerceAtLeast(0.0)
+                    durationRefreshCountdown -= 1
                 }
             } else {
-                NativeBridge.getPosition()
+                durationRefreshCountdown = durationRefreshCountdown.coerceAtLeast(0)
             }
+            val nextPosition = snapshot.positionSeconds
             val previousDuration = localDuration
             localSeekInProgress = nextSeekInProgress
             localDuration = nextDuration
@@ -157,7 +200,9 @@ internal fun AppNavigationPlaybackPollEffects(
                 val subtunePollIntervalMs = if (nextIsPlaying) 360L else 900L
                 if (subtunePollElapsedMs >= subtunePollIntervalMs) {
                     subtunePollElapsedMs = 0L
-                    val nativeSubtuneCursor = readNativeSubtuneCursor()
+                    val nativeSubtuneCursor = withContext(Dispatchers.Default) {
+                        readNativeSubtuneCursor()
+                    }
                     if (hasNativeSubtuneCursorChanged(
                             nativeSubtuneCursor,
                             subtuneCountProvider(),
@@ -237,11 +282,12 @@ internal fun AppNavigationPlaybackPollEffects(
                 val currentMetadataArtist = metadataArtistProvider()
                 if (shouldPollTrackMetadata(metadataPollElapsedMs, currentMetadataTitle, currentMetadataArtist)) {
                     metadataPollElapsedMs = 0L
-                    val nextTitle = sanitizeRemoteCachedMetadataTitle(
-                        rawTitle = NativeBridge.getTrackTitle(),
-                        selectedFile = currentFile
-                    )
-                    val nextArtist = NativeBridge.getTrackArtist()
+                    val (nextTitle, nextArtist) = withContext(Dispatchers.Default) {
+                        sanitizeRemoteCachedMetadataTitle(
+                            rawTitle = NativeBridge.getTrackTitle(),
+                            selectedFile = currentFile
+                        ) to NativeBridge.getTrackArtist()
+                    }
                     val titleChanged = nextTitle != currentMetadataTitle
                     val artistChanged = nextArtist != currentMetadataArtist
                     if (titleChanged) {

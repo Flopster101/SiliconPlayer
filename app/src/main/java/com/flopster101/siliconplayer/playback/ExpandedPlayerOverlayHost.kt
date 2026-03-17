@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -35,13 +37,16 @@ import android.view.MotionEvent
 internal fun ExpandedPlayerOverlayHost(
     isPlayerSurfaceVisible: Boolean,
     isPlayerExpanded: Boolean,
+    miniExpandPreviewProgress: Float,
     expandFromMiniDrag: Boolean,
     collapseFromSwipe: Boolean,
     onCollapseFromSwipeChanged: (Boolean) -> Unit,
     onCollapseDragProgressChanged: (Boolean) -> Unit,
+    onExpandedOverlayCurrentVisibleChanged: (Boolean) -> Unit,
     onExpandedOverlaySettledVisibleChanged: (Boolean) -> Unit,
     onMiniExpandPreviewProgressChanged: (Float) -> Unit,
     onPlayerExpandedChanged: (Boolean) -> Unit,
+    screenHeightPx: Float,
     selectedFile: File?,
     isPlaying: Boolean,
     playbackStartInProgress: Boolean,
@@ -119,25 +124,39 @@ internal fun ExpandedPlayerOverlayHost(
     onHardwareNavigationInput: () -> Unit,
     onTouchInteraction: () -> Unit
 ) {
+    val dragPreviewVisible =
+        isPlayerSurfaceVisible && !isPlayerExpanded && miniExpandPreviewProgress > 0f
     val expandedOverlayVisible = isPlayerSurfaceVisible && isPlayerExpanded
+    val overlayVisible = dragPreviewVisible || expandedOverlayVisible
+    val noOp: () -> Unit = {}
+    val noOpSeek: (Double) -> Unit = {}
+    val noOpVisualizationModeSelect: (VisualizationMode) -> Unit = {}
     val expandedVisibilityState = remember { MutableTransitionState(false) }
 
-    LaunchedEffect(expandedOverlayVisible) {
-        expandedVisibilityState.targetState = expandedOverlayVisible
+    LaunchedEffect(overlayVisible) {
+        expandedVisibilityState.targetState = overlayVisible
+    }
+    LaunchedEffect(expandedVisibilityState.currentState) {
+        onExpandedOverlayCurrentVisibleChanged(expandedVisibilityState.currentState)
     }
     LaunchedEffect(
         expandedVisibilityState.isIdle,
         expandedVisibilityState.currentState,
-        expandedVisibilityState.targetState
+        expandedVisibilityState.targetState,
+        expandedOverlayVisible
     ) {
         onExpandedOverlaySettledVisibleChanged(
             expandedVisibilityState.isIdle &&
                 expandedVisibilityState.currentState &&
-                expandedVisibilityState.targetState
+                expandedVisibilityState.targetState &&
+                expandedOverlayVisible
         )
     }
     DisposableEffect(Unit) {
-        onDispose { onExpandedOverlaySettledVisibleChanged(false) }
+        onDispose {
+            onExpandedOverlayCurrentVisibleChanged(false)
+            onExpandedOverlaySettledVisibleChanged(false)
+        }
     }
 
     LaunchedEffect(isPlayerSurfaceVisible, isPlayerExpanded) {
@@ -148,28 +167,50 @@ internal fun ExpandedPlayerOverlayHost(
 
     AnimatedVisibility(
         visibleState = expandedVisibilityState,
-        enter = if (expandFromMiniDrag) {
+        enter = if (expandFromMiniDrag || dragPreviewVisible) {
             EnterTransition.None
         } else {
-            slideInVertically(initialOffsetY = { it / 3 }) + fadeIn() + scaleIn(initialScale = 0.96f)
+            slideInVertically(
+                initialOffsetY = { it / 3 },
+                animationSpec = tween(durationMillis = 320, easing = LinearOutSlowInEasing)
+            ) + fadeIn(animationSpec = tween(durationMillis = 240)) + scaleIn(
+                initialScale = 0.96f,
+                animationSpec = tween(durationMillis = 320, easing = LinearOutSlowInEasing)
+            )
         },
         exit = if (collapseFromSwipe) {
-            fadeOut(animationSpec = tween(120))
+            fadeOut(animationSpec = tween(1))
+        } else if (dragPreviewVisible) {
+            fadeOut(animationSpec = tween(1))
         } else {
-            slideOutVertically(targetOffsetY = { it / 3 }) + fadeOut()
+            slideOutVertically(
+                targetOffsetY = { it / 4 },
+                animationSpec = tween(durationMillis = 320, easing = LinearOutSlowInEasing)
+            ) + fadeOut(animationSpec = tween(durationMillis = 250))
         }
     ) {
+        val previewProgress = miniExpandPreviewProgress.coerceIn(0f, 1f)
+        val previewMode = !expandedOverlayVisible && previewProgress > 0f
+        val previewOffsetPx = (1f - previewProgress) * screenHeightPx
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .graphicsLayer {
+                    if (previewMode) {
+                        translationY = previewOffsetPx
+                        alpha = previewProgress
+                    }
+                }
                 .pointerInteropFilter { event ->
-                    if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    if (expandedOverlayVisible && event.actionMasked == MotionEvent.ACTION_DOWN) {
                         onTouchInteraction()
                     }
                     false
                 }
                 .onPreviewKeyEvent { keyEvent ->
-                    if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    if (!expandedOverlayVisible || keyEvent.type != KeyEventType.KeyDown) {
+                        return@onPreviewKeyEvent false
+                    }
                     if (
                         keyEvent.key == Key.DirectionLeft ||
                         keyEvent.key == Key.DirectionRight ||
@@ -188,23 +229,31 @@ internal fun ExpandedPlayerOverlayHost(
             CompositionLocalProvider(LocalPlayerFocusIndicatorsEnabled provides showFocusIndicators) {
                 PlayerScreen(
                     file = selectedFile,
-                    onBack = {
-                        onCollapseFromSwipeChanged(false)
-                        onCollapseDragProgressChanged(false)
-                        onMiniExpandPreviewProgressChanged(0f)
-                        onPlayerExpandedChanged(false)
+                    onBack = if (expandedOverlayVisible) {
+                        {
+                            onCollapseFromSwipeChanged(false)
+                            onCollapseDragProgressChanged(false)
+                            onMiniExpandPreviewProgressChanged(0f)
+                            onPlayerExpandedChanged(false)
+                        }
+                    } else {
+                        noOp
                     },
-                    onCollapseBySwipe = {
-                        onCollapseFromSwipeChanged(true)
-                        onCollapseDragProgressChanged(false)
-                        onMiniExpandPreviewProgressChanged(0f)
-                        onPlayerExpandedChanged(false)
+                    onCollapseBySwipe = if (expandedOverlayVisible) {
+                        {
+                            onCollapseFromSwipeChanged(true)
+                            onCollapseDragProgressChanged(false)
+                            onMiniExpandPreviewProgressChanged(0f)
+                            onPlayerExpandedChanged(false)
+                        }
+                    } else {
+                        noOp
                     },
                     isPlaying = isPlaying,
-                    canResumeStoppedTrack = canResumeStoppedTrack,
-                    onPlay = onPlay,
-                    onPause = onPause,
-                    onStopAndClear = onStopAndClear,
+                    canResumeStoppedTrack = if (expandedOverlayVisible) canResumeStoppedTrack else false,
+                    onPlay = if (expandedOverlayVisible) onPlay else noOp,
+                    onPause = if (expandedOverlayVisible) onPause else noOp,
+                    onStopAndClear = if (expandedOverlayVisible) onStopAndClear else noOp,
                     durationSeconds = durationSeconds,
                     positionSeconds = positionSeconds,
                     canPreviousTrack = canPreviousTrack,
@@ -231,32 +280,32 @@ internal fun ExpandedPlayerOverlayHost(
                     playbackStartInProgress = playbackStartInProgress,
                     seekInProgress = seekInProgress,
                     previousRestartsAfterThreshold = previousRestartsAfterThreshold,
-                    onSeek = onSeek,
-                    onPreviousTrack = onPreviousTrack,
-                    onForcePreviousTrack = onForcePreviousTrack,
-                    onNextTrack = onNextTrack,
-                    onPreviousSubtune = onPreviousSubtune,
-                    onNextSubtune = onNextSubtune,
-                    onOpenSubtuneSelector = onOpenSubtuneSelector,
-                    canPreviousSubtune = canPreviousSubtune,
-                    canNextSubtune = canNextSubtune,
-                    canOpenSubtuneSelector = canOpenSubtuneSelector,
-                    canOpenPlaylistSelector = canOpenPlaylistSelector,
-                    onOpenPlaylistSelector = onOpenPlaylistSelector,
+                    onSeek = if (expandedOverlayVisible) onSeek else noOpSeek,
+                    onPreviousTrack = if (expandedOverlayVisible) onPreviousTrack else noOp,
+                    onForcePreviousTrack = if (expandedOverlayVisible) onForcePreviousTrack else noOp,
+                    onNextTrack = if (expandedOverlayVisible) onNextTrack else noOp,
+                    onPreviousSubtune = if (expandedOverlayVisible) onPreviousSubtune else noOp,
+                    onNextSubtune = if (expandedOverlayVisible) onNextSubtune else noOp,
+                    onOpenSubtuneSelector = if (expandedOverlayVisible) onOpenSubtuneSelector else noOp,
+                    canPreviousSubtune = if (expandedOverlayVisible) canPreviousSubtune else false,
+                    canNextSubtune = if (expandedOverlayVisible) canNextSubtune else false,
+                    canOpenSubtuneSelector = if (expandedOverlayVisible) canOpenSubtuneSelector else false,
+                    canOpenPlaylistSelector = if (expandedOverlayVisible) canOpenPlaylistSelector else false,
+                    onOpenPlaylistSelector = if (expandedOverlayVisible) onOpenPlaylistSelector else noOp,
                     currentSubtuneIndex = currentSubtuneIndex,
                     subtuneCount = subtuneCount,
                     titleCurrentSubtuneIndex = titleCurrentSubtuneIndex,
                     titleSubtuneCount = titleSubtuneCount,
-                    subtuneTitleClickable = subtuneTitleClickable,
-                    onCycleRepeatMode = onCycleRepeatMode,
-                    canOpenCoreSettings = canOpenCoreSettings,
-                    onOpenCoreSettings = onOpenCoreSettings,
+                    subtuneTitleClickable = if (expandedOverlayVisible) subtuneTitleClickable else false,
+                    onCycleRepeatMode = if (expandedOverlayVisible) onCycleRepeatMode else noOp,
+                    canOpenCoreSettings = if (expandedOverlayVisible) canOpenCoreSettings else false,
+                    onOpenCoreSettings = if (expandedOverlayVisible) onOpenCoreSettings else noOp,
                     visualizationMode = visualizationMode,
                     availableVisualizationModes = availableVisualizationModes,
-                    onCycleVisualizationMode = onCycleVisualizationMode,
-                    onSelectVisualizationMode = onSelectVisualizationMode,
-                    onOpenVisualizationSettings = onOpenVisualizationSettings,
-                    onOpenSelectedVisualizationSettings = onOpenSelectedVisualizationSettings,
+                    onCycleVisualizationMode = if (expandedOverlayVisible) onCycleVisualizationMode else noOp,
+                    onSelectVisualizationMode = if (expandedOverlayVisible) onSelectVisualizationMode else noOpVisualizationModeSelect,
+                    onOpenVisualizationSettings = if (expandedOverlayVisible) onOpenVisualizationSettings else noOp,
+                    onOpenSelectedVisualizationSettings = if (expandedOverlayVisible) onOpenSelectedVisualizationSettings else noOp,
                     visualizationBarCount = visualizationBarCount,
                     visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
                     visualizationBarRoundnessDp = visualizationBarRoundnessDp,
@@ -270,8 +319,8 @@ internal fun ExpandedPlayerOverlayHost(
                     visualizationVuRenderBackend = visualizationVuRenderBackend,
                     visualizationShowDebugInfo = visualizationShowDebugInfo,
                     artworkCornerRadiusDp = artworkCornerRadiusDp,
-                    onToggleFavoriteTrack = onToggleFavoriteTrack,
-                    onOpenAudioEffects = onOpenAudioEffects,
+                    onToggleFavoriteTrack = if (expandedOverlayVisible) onToggleFavoriteTrack else noOp,
+                    onOpenAudioEffects = if (expandedOverlayVisible) onOpenAudioEffects else noOp,
                     filenameDisplayMode = filenameDisplayMode,
                     filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing,
                     externalTrackInfoDialogRequestToken = externalTrackInfoDialogRequestToken,

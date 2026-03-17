@@ -84,10 +84,26 @@ class PlaybackService : Service() {
     private var currentArtist: String = "Silicon Player"
     private var currentArtwork: Bitmap? = null
     private var currentArtworkPath: String? = null
+    private var cachedFallbackIconBitmap: Bitmap? = null
     private var durationSeconds: Double = 0.0
     private var positionSeconds: Double = 0.0
     private var isPlaying: Boolean = false
     private var durationRefreshCountdown = 0
+    private var lastNotificationPath: String? = null
+    private var lastNotificationTitle: String? = null
+    private var lastNotificationArtist: String? = null
+    private var lastNotificationArtworkKey: String? = null
+    private var lastNotificationDurationBucket: Int = Int.MIN_VALUE
+    private var lastNotificationPositionBucket: Int = Int.MIN_VALUE
+    private var lastNotificationIsPlaying: Boolean? = null
+    private var lastMediaSessionPlaybackPositionBucket: Int = Int.MIN_VALUE
+    private var lastMediaSessionPlaybackIsPlaying: Boolean? = null
+    private var lastMediaSessionPlaybackDurationBucket: Int = Int.MIN_VALUE
+    private var lastMediaSessionMetadataPath: String? = null
+    private var lastMediaSessionMetadataTitle: String? = null
+    private var lastMediaSessionMetadataArtist: String? = null
+    private var lastMediaSessionMetadataArtworkKey: String? = null
+    private var lastMediaSessionMetadataDurationBucket: Int = Int.MIN_VALUE
     private var lastPersistedResumeSourceId: String? = null
     private var lastPersistedResumePositionBucket: Int = Int.MIN_VALUE
     private var lastPersistedResumeDurationBucket: Int = Int.MIN_VALUE
@@ -490,41 +506,79 @@ class PlaybackService : Service() {
     }
 
     private fun updateMediaSessionState() {
-        val state = PlaybackState.Builder()
-            .setActions(
-                PlaybackState.ACTION_PLAY or
-                    PlaybackState.ACTION_PAUSE or
-                    PlaybackState.ACTION_STOP or
-                    PlaybackState.ACTION_PLAY_PAUSE or
-                    PlaybackState.ACTION_SEEK_TO or
-                    PlaybackState.ACTION_FAST_FORWARD or
-                    PlaybackState.ACTION_REWIND or
-                    PlaybackState.ACTION_SKIP_TO_PREVIOUS or
-                    PlaybackState.ACTION_SKIP_TO_NEXT
-            )
-            .setState(
-                if (isPlaying) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED,
-                (positionSeconds * 1000.0).toLong(),
-                if (isPlaying) 1f else 0f
-            )
-            .build()
-        mediaSession?.setPlaybackState(state)
-        mediaSession?.setMetadata(
-            android.media.MediaMetadata.Builder().apply {
-                putString(android.media.MediaMetadata.METADATA_KEY_TITLE, currentTitle)
-                putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, currentArtist)
-                putLong(
-                    android.media.MediaMetadata.METADATA_KEY_DURATION,
-                    (durationSeconds * 1000.0).toLong()
+        val positionBucket = positionSeconds.coerceAtLeast(0.0).toInt()
+        val durationBucket = durationSeconds.coerceAtLeast(0.0).toInt()
+        val artworkKey = currentArtworkPath ?: "__fallback__"
+        val playbackChanged =
+            lastMediaSessionPlaybackPositionBucket != positionBucket ||
+                lastMediaSessionPlaybackIsPlaying != isPlaying ||
+                lastMediaSessionPlaybackDurationBucket != durationBucket
+        if (playbackChanged) {
+            val state = PlaybackState.Builder()
+                .setActions(
+                    PlaybackState.ACTION_PLAY or
+                        PlaybackState.ACTION_PAUSE or
+                        PlaybackState.ACTION_STOP or
+                        PlaybackState.ACTION_PLAY_PAUSE or
+                        PlaybackState.ACTION_SEEK_TO or
+                        PlaybackState.ACTION_FAST_FORWARD or
+                        PlaybackState.ACTION_REWIND or
+                        PlaybackState.ACTION_SKIP_TO_PREVIOUS or
+                        PlaybackState.ACTION_SKIP_TO_NEXT
                 )
-                val art = currentArtwork ?: fallbackIconBitmap()
-                putBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART, art)
-            }.build()
-        )
+                .setState(
+                    if (isPlaying) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED,
+                    (positionSeconds * 1000.0).toLong(),
+                    if (isPlaying) 1f else 0f
+                )
+                .build()
+            mediaSession?.setPlaybackState(state)
+            lastMediaSessionPlaybackPositionBucket = positionBucket
+            lastMediaSessionPlaybackIsPlaying = isPlaying
+            lastMediaSessionPlaybackDurationBucket = durationBucket
+        }
+
+        val metadataChanged =
+            lastMediaSessionMetadataPath != currentPath ||
+                lastMediaSessionMetadataTitle != currentTitle ||
+                lastMediaSessionMetadataArtist != currentArtist ||
+                lastMediaSessionMetadataArtworkKey != artworkKey ||
+                lastMediaSessionMetadataDurationBucket != durationBucket
+        if (metadataChanged) {
+            mediaSession?.setMetadata(
+                android.media.MediaMetadata.Builder().apply {
+                    putString(android.media.MediaMetadata.METADATA_KEY_TITLE, currentTitle)
+                    putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, currentArtist)
+                    putLong(
+                        android.media.MediaMetadata.METADATA_KEY_DURATION,
+                        (durationSeconds * 1000.0).toLong()
+                    )
+                    val art = currentArtwork ?: fallbackIconBitmap()
+                    putBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART, art)
+                }.build()
+            )
+            lastMediaSessionMetadataPath = currentPath
+            lastMediaSessionMetadataTitle = currentTitle
+            lastMediaSessionMetadataArtist = currentArtist
+            lastMediaSessionMetadataArtworkKey = artworkKey
+            lastMediaSessionMetadataDurationBucket = durationBucket
+        }
     }
 
     private fun pushNotification() {
         if (currentPath == null) return
+        val positionBucket = positionSeconds.coerceAtLeast(0.0).toInt()
+        val durationBucket = durationSeconds.coerceAtLeast(0.0).toInt()
+        val artworkKey = currentArtworkPath ?: "__fallback__"
+        val shouldRefresh =
+            lastNotificationPath != currentPath ||
+                lastNotificationTitle != currentTitle ||
+                lastNotificationArtist != currentArtist ||
+                lastNotificationArtworkKey != artworkKey ||
+                lastNotificationDurationBucket != durationBucket ||
+                lastNotificationIsPlaying != isPlaying ||
+                (isPlaying && lastNotificationPositionBucket != positionBucket)
+        if (!shouldRefresh) return
         val notification = buildNotification()
         if (!isPlaying) {
             if (isForegroundNotificationShown) {
@@ -544,6 +598,13 @@ class PlaybackService : Service() {
             if (!blockedForegroundStart) throw error
             notificationManager.notify(NOTIFICATION_ID, notification)
         }
+        lastNotificationPath = currentPath
+        lastNotificationTitle = currentTitle
+        lastNotificationArtist = currentArtist
+        lastNotificationArtworkKey = artworkKey
+        lastNotificationDurationBucket = durationBucket
+        lastNotificationPositionBucket = positionBucket
+        lastNotificationIsPlaying = isPlaying
     }
 
     private fun buildNotification(): Notification {
@@ -706,7 +767,12 @@ class PlaybackService : Service() {
     }
 
     private fun fallbackIconBitmap(): Bitmap? {
+        val cached = cachedFallbackIconBitmap
+        if (cached != null && !cached.isRecycled) {
+            return cached
+        }
         return drawableToBitmap(R.drawable.ic_launcher_foreground, sizePx = 2048)
+            ?.also { cachedFallbackIconBitmap = it }
     }
 
     private fun drawableToBitmap(drawableId: Int, sizePx: Int = 1024): Bitmap? {

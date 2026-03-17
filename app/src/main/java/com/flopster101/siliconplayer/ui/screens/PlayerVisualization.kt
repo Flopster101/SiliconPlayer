@@ -90,6 +90,170 @@ private data class AlbumArtCrossfadeState(
     val placeholderIcon: ImageVector
 )
 
+@Composable
+private fun VisualizationModeBadge(
+    visualizationMode: VisualizationMode,
+    visualizationModeBadgeText: String,
+    badgeBackground: Color,
+    badgeContentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(999.dp),
+        color = badgeBackground
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = when (visualizationMode) {
+                    VisualizationMode.Off -> Icons.Default.GraphicEq
+                    VisualizationMode.Bars -> Icons.Default.GraphicEq
+                    VisualizationMode.Oscilloscope -> Icons.Default.MonitorHeart
+                    VisualizationMode.VuMeters -> Icons.Default.Equalizer
+                    VisualizationMode.ChannelScope -> Icons.Default.MonitorHeart
+                },
+                contentDescription = null,
+                tint = badgeContentColor,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                text = visualizationModeBadgeText,
+                style = MaterialTheme.typography.labelMedium,
+                color = badgeContentColor
+            )
+        }
+    }
+}
+
+@Composable
+private fun StaticAlbumArtCard(
+    file: File?,
+    artwork: ImageBitmap?,
+    placeholderIcon: ImageVector,
+    artworkCornerRadiusDp: Int,
+    visualizationMode: VisualizationMode,
+    visualizationModeBadgeText: String,
+    showVisualizationModeBadge: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val artworkBrightness = remember(artwork) {
+        val bitmap = artwork ?: return@remember null
+        runCatching {
+            val pixels = bitmap.toPixelMap()
+            if (pixels.width <= 0 || pixels.height <= 0) return@runCatching 0.5f
+            val stepX = maxOf(1, pixels.width / 32)
+            val stepY = maxOf(1, pixels.height / 32)
+            var sum = 0f
+            var count = 0
+            var y = 0
+            while (y < pixels.height) {
+                var x = 0
+                while (x < pixels.width) {
+                    sum += pixels[x, y].luminance()
+                    count++
+                    x += stepX
+                }
+                y += stepY
+            }
+            if (count > 0) (sum / count) else 0.5f
+        }.getOrNull()
+    }
+    val badgeBackground = when {
+        artworkBrightness == null -> MaterialTheme.colorScheme.surface.copy(alpha = 0.62f)
+        artworkBrightness > 0.5f -> Color.Black.copy(alpha = 0.52f)
+        else -> Color.White.copy(alpha = 0.4f)
+    }
+    val badgeContentColor = when {
+        artworkBrightness == null -> MaterialTheme.colorScheme.onSurface
+        artworkBrightness > 0.5f -> Color.White
+        else -> Color.Black
+    }
+
+    ElevatedCard(
+        modifier = modifier,
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        shape = RoundedCornerShape(artworkCornerRadiusDp.coerceIn(0, 48).dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            val albumArtCrossfadeState = remember(file?.absolutePath, artwork, placeholderIcon) {
+                AlbumArtCrossfadeState(
+                    trackKey = file?.absolutePath,
+                    artwork = artwork,
+                    placeholderIcon = placeholderIcon
+                )
+            }
+            Crossfade(targetState = albumArtCrossfadeState, label = "albumArtCrossfade") { state ->
+                val art = state.artwork
+                if (art != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Image(
+                            bitmap = art,
+                            contentDescription = "Album artwork",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = state.placeholderIcon,
+                                contentDescription = "No album artwork",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(72.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showVisualizationModeBadge,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 10.dp),
+                enter = fadeIn(animationSpec = tween(170)),
+                exit = fadeOut(animationSpec = tween(260))
+            ) {
+                VisualizationModeBadge(
+                    visualizationMode = visualizationMode,
+                    visualizationModeBadgeText = visualizationModeBadgeText,
+                    badgeBackground = badgeBackground,
+                    badgeContentColor = badgeContentColor
+                )
+            }
+        }
+    }
+}
+
 private class VisualizationDebugAccumulator {
     var frameCount: Int = 0
     var windowStartNs: Long = 0L
@@ -1335,6 +1499,20 @@ internal fun AlbumArtPlaceholder(
     artworkCornerRadiusDp: Int = AppDefaults.Player.artworkCornerRadiusDp,
     modifier: Modifier = Modifier
 ) {
+    if (visualizationMode == VisualizationMode.Off || file == null || !isPlaying) {
+        StaticAlbumArtCard(
+            file = file,
+            artwork = artwork,
+            placeholderIcon = placeholderIcon,
+            artworkCornerRadiusDp = artworkCornerRadiusDp,
+            visualizationMode = visualizationMode,
+            visualizationModeBadgeText = visualizationModeBadgeText,
+            showVisualizationModeBadge = showVisualizationModeBadge,
+            modifier = modifier
+        )
+        return
+    }
+
     var visWaveLeft by remember { mutableStateOf(FloatArray(0)) }
     var visWaveRight by remember { mutableStateOf(FloatArray(0)) }
     var visBars by remember { mutableStateOf(FloatArray(0)) }
@@ -1384,51 +1562,11 @@ internal fun AlbumArtPlaceholder(
         }
     }
 
-    LaunchedEffect(file?.absolutePath, isPlaying, channelScopePrefs.windowMs, sampleRateHz) {
-        if (file != null && isPlaying) return@LaunchedEffect
-        visWaveLeft = FloatArray(256)
-        visWaveRight = FloatArray(256)
-        visBars = FloatArray(256)
-        visBarsSmoothed = FloatArray(256)
-        visVu = FloatArray(2)
-        visVuSmoothed = FloatArray(2)
-        visChannelCount = 2
-        val points = computeChannelScopeSampleCount(
-            windowMs = channelScopePrefs.windowMs,
-            sampleRateHz = sampleRateHz
-        )
-        val channels = visChannelScopeHistories.size
-            .takeIf { it > 0 }
-            ?: visChannelScopeLastChannelCount.coerceIn(1, 64)
-        visChannelScopeHistories = List(channels) { FloatArray(points) }
-        visChannelScopeTriggerIndices = IntArray(channels) { points / 2 }
-        visChannelScopeTextStates = emptyList()
-        visChannelScopeTextRawCache = IntArray(0)
-        visChannelScopeLastTextPollNs = 0L
-        visOpenMptInstrumentNamesByIndex = emptyMap()
-        visOpenMptSampleNamesByIndex = emptyMap()
-        visDebugUpdateFps = 0
-        visDebugUpdateFrameMs = 0
-        visDebugSourceUniqueFps = 0
-        visDebugSourceUniqueFrameMs = 0
-        visDebugSourceDuplicatePercent = 0
-        visDebugDrawFps = 0
-        visDebugDrawFrameMs = 0
-        visDebugAccumulator.frameCount = 0
-        visDebugAccumulator.windowStartNs = 0L
-        visDebugAccumulator.lastFrameNs = 0L
-        visDebugAccumulator.latestFrameMs = 0
-        visDebugAccumulator.lastUiPublishNs = 0L
-        visSourceDebugAccumulator.lastSignature = Long.MIN_VALUE
-        visSourceDebugAccumulator.updateCount = 0
-        visSourceDebugAccumulator.uniqueCount = 0
-        visSourceDebugAccumulator.windowStartNs = 0L
-        visSourceDebugAccumulator.lastUniqueFrameNs = 0L
-        visSourceDebugAccumulator.latestUniqueFrameMs = 0
-        visSourceDebugAccumulator.lastUiPublishNs = 0L
-    }
-    LaunchedEffect(file?.absolutePath, decoderName) {
-        if (file == null || pluginNameForCoreName(decoderName) != DecoderNames.LIB_OPEN_MPT) {
+    LaunchedEffect(file?.absolutePath, decoderName, visualizationMode) {
+        if (
+            visualizationMode != VisualizationMode.ChannelScope ||
+            pluginNameForCoreName(decoderName) != DecoderNames.LIB_OPEN_MPT
+        ) {
             visOpenMptInstrumentNamesByIndex = emptyMap()
             visOpenMptSampleNamesByIndex = emptyMap()
             return@LaunchedEffect
@@ -1485,9 +1623,6 @@ internal fun AlbumArtPlaceholder(
         sampleRateHz,
         decoderName
     ) {
-        if (visualizationMode == VisualizationMode.Off || file == null || !isPlaying) {
-            return@LaunchedEffect
-        }
         val displayRefreshHz = contextDisplayRefreshRateHz(context)
         withContext(visualizationUpdateDispatcher) {
             var nextFrameTickNs = 0L
@@ -2088,34 +2223,12 @@ internal fun AlbumArtPlaceholder(
                 enter = fadeIn(animationSpec = tween(170)),
                 exit = fadeOut(animationSpec = tween(260))
             ) {
-                Surface(
-                    shape = RoundedCornerShape(999.dp),
-                    color = badgeBackground
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = when (visualizationMode) {
-                                VisualizationMode.Off -> Icons.Default.GraphicEq
-                                VisualizationMode.Bars -> Icons.Default.GraphicEq
-                                VisualizationMode.Oscilloscope -> Icons.Default.MonitorHeart
-                                VisualizationMode.VuMeters -> Icons.Default.Equalizer
-                                VisualizationMode.ChannelScope -> Icons.Default.MonitorHeart
-                            },
-                            contentDescription = null,
-                            tint = badgeContentColor,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = visualizationModeBadgeText,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = badgeContentColor
-                        )
-                    }
-                }
+                VisualizationModeBadge(
+                    visualizationMode = visualizationMode,
+                    visualizationModeBadgeText = visualizationModeBadgeText,
+                    badgeBackground = badgeBackground,
+                    badgeContentColor = badgeContentColor
+                )
             }
         }
     }

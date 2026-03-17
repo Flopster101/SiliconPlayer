@@ -1,7 +1,6 @@
 package com.flopster101.siliconplayer
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -10,11 +9,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -22,8 +19,7 @@ import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,10 +38,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
-import com.flopster101.siliconplayer.ui.screens.PlayerScreen
-import com.flopster101.siliconplayer.ui.screens.LocalPlayerFocusIndicatorsEnabled
 import java.io.File
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,7 +52,6 @@ internal fun BoxScope.MiniPlayerOverlayHost(
     onExpandFromMiniDragChanged: (Boolean) -> Unit,
     onCollapseFromSwipeChanged: (Boolean) -> Unit,
     onPlayerExpandedChanged: (Boolean) -> Unit,
-    screenHeightPx: Float,
     miniPreviewLiftPx: Float,
     selectedFile: File?,
     isPlaying: Boolean,
@@ -124,96 +116,30 @@ internal fun BoxScope.MiniPlayerOverlayHost(
     currentSubtuneIndex: Int,
     subtuneCount: Int
 ) {
-    val uiScope = rememberCoroutineScope()
-
-    if (isPlayerSurfaceVisible && !isPlayerExpanded && miniExpandPreviewProgress > 0f) {
-        val previewProgress = miniExpandPreviewProgress.coerceIn(0f, 1f)
-        val previewOffsetPx = (1f - previewProgress) * screenHeightPx
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .align(Alignment.BottomCenter)
-                .graphicsLayer {
-                    translationY = previewOffsetPx
-                    alpha = (previewProgress * 0.98f).coerceIn(0f, 1f)
-                }
-        ) {
-            CompositionLocalProvider(LocalPlayerFocusIndicatorsEnabled provides showMiniPlayerFocusHighlight) {
-                PlayerScreen(
-                    file = selectedFile,
-                    onBack = {},
-                    enableCollapseGesture = false,
-                    isPlaying = isPlaying,
-                    canResumeStoppedTrack = false,
-                    onPlay = {},
-                    onPause = {},
-                    onStopAndClear = {},
-                    durationSeconds = durationSeconds,
-                    positionSeconds = positionSeconds,
-                    canPreviousTrack = canPreviousTrack,
-                    canNextTrack = canNextTrack,
-                    title = metadataTitle,
-                    artist = metadataArtist,
-                    sampleRateHz = metadataSampleRate,
-                    channelCount = metadataChannelCount,
-                    bitDepthLabel = metadataBitDepthLabel,
-                    decoderName = decoderName,
-                    playbackSourceLabel = playbackSourceLabel,
-                    pathOrUrl = pathOrUrl,
-                    artwork = artworkBitmap,
-                    isTrackFavorited = isTrackFavorited,
-                    noArtworkIcon = placeholderArtworkIconForFile(selectedFile, decoderName),
-                    repeatMode = activeRepeatMode,
-                    canCycleRepeatMode = supportsLiveRepeatMode(playbackCapabilitiesFlags),
-                    canSeek = canSeekPlayback(playbackCapabilitiesFlags),
-                    hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
-                    playbackStartInProgress = playbackStartInProgress,
-                    seekInProgress = seekUiBusy,
-                    onSeek = {},
-                    onPreviousTrack = {},
-                    onForcePreviousTrack = {},
-                    onNextTrack = {},
-                    onPreviousSubtune = {},
-                    onNextSubtune = {},
-                    onOpenSubtuneSelector = {},
-                    canPreviousSubtune = false,
-                    canNextSubtune = false,
-                    canOpenSubtuneSelector = false,
-                    onCycleRepeatMode = {},
-                    canOpenCoreSettings = canOpenCurrentCoreSettings,
-                    onOpenCoreSettings = openCurrentCoreSettings,
-                    visualizationMode = visualizationMode,
-                    availableVisualizationModes = availableVisualizationModes,
-                    onCycleVisualizationMode = cycleVisualizationMode,
-                    onSelectVisualizationMode = setVisualizationMode,
-                    onOpenVisualizationSettings = openVisualizationSettings,
-                    onOpenSelectedVisualizationSettings = openSelectedVisualizationSettings,
-                    visualizationBarCount = visualizationBarCount,
-                    visualizationBarSmoothingPercent = visualizationBarSmoothingPercent,
-                    visualizationBarRoundnessDp = visualizationBarRoundnessDp,
-                    visualizationBarOverlayArtwork = visualizationBarOverlayArtwork,
-                    visualizationBarUseThemeColor = visualizationBarUseThemeColor,
-                    visualizationBarRenderBackend = visualizationBarRenderBackend,
-                    visualizationOscStereo = visualizationOscStereo,
-                    visualizationVuAnchor = visualizationVuAnchor,
-                    visualizationVuUseThemeColor = visualizationVuUseThemeColor,
-                    visualizationVuSmoothingPercent = visualizationVuSmoothingPercent,
-                    visualizationVuRenderBackend = visualizationVuRenderBackend,
-                    onOpenAudioEffects = onOpenAudioEffects,
-                    onToggleFavoriteTrack = onToggleFavoriteTrack,
-                    visualizationShowDebugInfo = visualizationShowDebugInfo,
-                    artworkCornerRadiusDp = playerArtworkCornerRadiusDp,
-                    filenameDisplayMode = filenameDisplayMode,
-                    filenameOnlyWhenTitleMissing = filenameOnlyWhenTitleMissing
-                )
-            }
+    var dragExpandCommitInProgress by remember { mutableStateOf(false) }
+    LaunchedEffect(isPlayerExpanded, miniExpandPreviewProgress) {
+        if (!isPlayerExpanded && miniExpandPreviewProgress <= 0f) {
+            dragExpandCommitInProgress = false
         }
     }
 
     AnimatedVisibility(
-        visible = isPlayerSurfaceVisible && !isPlayerExpanded,
-        enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn() + scaleIn(initialScale = 0.96f),
-        exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut(),
+        visible = isPlayerSurfaceVisible && !isPlayerExpanded && !dragExpandCommitInProgress,
+        enter = slideInVertically(
+            initialOffsetY = { it / 2 },
+            animationSpec = tween(durationMillis = 320, easing = LinearOutSlowInEasing)
+        ) + fadeIn(animationSpec = tween(durationMillis = 240)) + scaleIn(
+            initialScale = 0.96f,
+            animationSpec = tween(durationMillis = 320, easing = LinearOutSlowInEasing)
+        ),
+        exit = if (dragExpandCommitInProgress || expandFromMiniDrag) {
+            fadeOut(animationSpec = tween(1))
+        } else {
+            slideOutVertically(
+                targetOffsetY = { it / 2 },
+                animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing)
+            ) + fadeOut(animationSpec = tween(durationMillis = 230))
+        },
         modifier = Modifier
             .align(Alignment.BottomCenter)
             .padding(horizontal = 14.dp, vertical = 6.dp)
@@ -244,9 +170,8 @@ internal fun BoxScope.MiniPlayerOverlayHost(
         val miniPlayerModifier = Modifier
             .graphicsLayer {
                 val dragProgress = miniExpandPreviewProgress.coerceIn(0f, 1f)
-                val hideMini = expandFromMiniDrag || isPlayerExpanded
-                val alphaFloor = if (hideMini) 0f else 0.16f
-                alpha = (1f - dragProgress).coerceIn(alphaFloor, 1f)
+                val hideMini = dragExpandCommitInProgress || expandFromMiniDrag || isPlayerExpanded
+                alpha = if (hideMini) 0f else (1f - dragProgress).coerceIn(0f, 1f)
                 translationY = -miniPreviewLiftPx * dragProgress
             }
             .onFocusChanged { state -> miniPlayerHasFocus = state.hasFocus }
@@ -322,24 +247,17 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                     onMiniExpandPreviewProgressChanged(0f)
                     onPlayerExpandedChanged(true)
                 },
-                onExpandDragProgress = { progress ->
-                    onMiniExpandPreviewProgressChanged(progress)
-                },
+                onExpandDragProgress = onMiniExpandPreviewProgressChanged,
                 onExpandDragCommit = {
-                    val start = miniExpandPreviewProgress.coerceIn(0f, 1f)
-                    uiScope.launch {
-                        onMiniPlayerExpandRequested()
-                        onExpandFromMiniDragChanged(true)
-                        val anim = Animatable(start)
-                        anim.animateTo(
-                            targetValue = 1f,
-                            animationSpec = tween(durationMillis = 200, easing = LinearOutSlowInEasing)
-                        ) {
-                            onMiniExpandPreviewProgressChanged(value)
-                        }
-                        onCollapseFromSwipeChanged(false)
-                        onPlayerExpandedChanged(true)
+                    if (dragExpandCommitInProgress) {
+                        return@MiniPlayerBar
                     }
+                    dragExpandCommitInProgress = true
+                    onMiniPlayerExpandRequested()
+                    onExpandFromMiniDragChanged(true)
+                    onCollapseFromSwipeChanged(false)
+                    onPlayerExpandedChanged(true)
+                    onMiniExpandPreviewProgressChanged(0f)
                 },
                 onPreviousTrack = { onPreviousTrack(); Unit },
                 onForcePreviousTrack = { onForcePreviousTrack(); Unit },

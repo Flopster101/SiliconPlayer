@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 import android.webkit.MimeTypeMap
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -39,9 +40,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +69,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.io.File
 import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private val artworkFallbackVideoExtensions = setOf(
     "3g2", "3gp", "asf", "avi", "divx", "f4v", "flv", "m2ts", "m2v", "m4v",
@@ -176,6 +182,16 @@ internal fun MiniPlayerBar(
     val screenHeightPx = with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val previewDistancePx = screenHeightPx * 0.72f
     var upwardDragPx by remember { mutableFloatStateOf(0f) }
+    var expandSettleAnimating by remember { mutableStateOf(false) }
+    var suppressNextExpandClick by remember { mutableStateOf(false) }
+    val uiScope = rememberCoroutineScope()
+    val previewProgressAnim = remember { Animatable(0f) }
+    LaunchedEffect(suppressNextExpandClick) {
+        if (suppressNextExpandClick) {
+            delay(250)
+            suppressNextExpandClick = false
+        }
+    }
     val artworkCornerRatio = artworkCornerRadiusDp.coerceIn(0, 48) / 48f
     val miniArtworkSize = 46.dp
     val artworkCornerRadius = miniArtworkSize * (0.5f * artworkCornerRatio)
@@ -205,32 +221,90 @@ internal fun MiniPlayerBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .pointerInput(expandSwipeThresholdPx) {
+                    .pointerInput(expandSwipeThresholdPx, previewDistancePx, expandSettleAnimating) {
                         detectVerticalDragGestures(
                             onVerticalDrag = { change, dragAmount ->
+                                if (expandSettleAnimating) return@detectVerticalDragGestures
                                 val next = (upwardDragPx - dragAmount).coerceAtLeast(0f)
                                 if (next > 0f || upwardDragPx > 0f) {
+                                    suppressNextExpandClick = true
                                     upwardDragPx = next
                                     onExpandDragProgress((upwardDragPx / previewDistancePx).coerceIn(0f, 1f))
                                     change.consume()
                                 }
                             },
                             onDragEnd = {
+                                if (expandSettleAnimating) return@detectVerticalDragGestures
+                                val releaseProgress = (upwardDragPx / previewDistancePx).coerceIn(0f, 1f)
                                 if (upwardDragPx >= expandSwipeThresholdPx) {
-                                    onExpandDragCommit()
+                                    upwardDragPx = 0f
+                                    expandSettleAnimating = true
+                                    uiScope.launch {
+                                        previewProgressAnim.snapTo(releaseProgress)
+                                        val remainingProgress = (1f - releaseProgress).coerceIn(0f, 1f)
+                                        val settleDurationMs = (200f + (160f * remainingProgress)).toInt()
+                                        previewProgressAnim.animateTo(
+                                            targetValue = 1f,
+                                            animationSpec = tween(
+                                                durationMillis = settleDurationMs,
+                                                easing = LinearOutSlowInEasing
+                                            )
+                                        ) {
+                                            onExpandDragProgress(value)
+                                        }
+                                        onExpandDragCommit()
+                                    }
                                     upwardDragPx = 0f
                                     return@detectVerticalDragGestures
                                 }
                                 upwardDragPx = 0f
-                                onExpandDragProgress(0f)
+                                expandSettleAnimating = true
+                                uiScope.launch {
+                                    previewProgressAnim.snapTo(releaseProgress)
+                                    val settleDurationMs = (200f + (160f * releaseProgress)).toInt()
+                                    previewProgressAnim.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = tween(
+                                            durationMillis = settleDurationMs,
+                                            easing = LinearOutSlowInEasing
+                                        )
+                                    ) {
+                                        onExpandDragProgress(value)
+                                    }
+                                    expandSettleAnimating = false
+                                }
                             },
                             onDragCancel = {
+                                if (expandSettleAnimating) return@detectVerticalDragGestures
+                                val releaseProgress = (upwardDragPx / previewDistancePx).coerceIn(0f, 1f)
                                 upwardDragPx = 0f
-                                onExpandDragProgress(0f)
+                                expandSettleAnimating = true
+                                uiScope.launch {
+                                    previewProgressAnim.snapTo(releaseProgress)
+                                    val settleDurationMs = (200f + (160f * releaseProgress)).toInt()
+                                    previewProgressAnim.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = tween(
+                                            durationMillis = settleDurationMs,
+                                            easing = LinearOutSlowInEasing
+                                        )
+                                    ) {
+                                        onExpandDragProgress(value)
+                                    }
+                                    expandSettleAnimating = false
+                                }
                             }
                         )
                     }
-                    .clickable(onClick = onExpand)
+                    .clickable {
+                        if (expandSettleAnimating) {
+                            return@clickable
+                        } else if (suppressNextExpandClick) {
+                            suppressNextExpandClick = false
+                        } else {
+                            onExpand()
+                        }
+                    }
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {

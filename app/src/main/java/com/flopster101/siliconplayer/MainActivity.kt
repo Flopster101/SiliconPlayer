@@ -90,6 +90,7 @@ import androidx.compose.material.icons.filled.Usb
 import androidx.compose.material.icons.filled.Slideshow
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.runtime.* // Import for remember, mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -107,7 +108,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -2832,6 +2832,7 @@ private fun AppNavigation(
     var expandFromMiniDrag by remember { mutableStateOf(false) }
     var collapseFromSwipe by remember { mutableStateOf(false) }
     var collapseDragInProgress by remember { mutableStateOf(false) }
+    var expandedOverlayCurrentVisible by remember { mutableStateOf(false) }
     var expandedOverlaySettledVisible by remember { mutableStateOf(false) }
     val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val miniPreviewLiftPx = with(LocalDensity.current) { 28.dp.toPx() }
@@ -2906,6 +2907,11 @@ private fun AppNavigation(
         onExpandFromMiniDragChanged = { expandFromMiniDrag = it },
         onCollapseFromSwipeChanged = { collapseFromSwipe = it }
     )
+    LaunchedEffect(expandedOverlaySettledVisible, isPlayerExpanded, expandFromMiniDrag) {
+        if (expandedOverlaySettledVisible && isPlayerExpanded && expandFromMiniDrag) {
+            expandFromMiniDrag = false
+        }
+    }
 
     val hidePlayerSurface = buildHidePlayerSurfaceDelegate(
         onStopAndEmptyTrack = stopAndEmptyTrack,
@@ -3067,6 +3073,7 @@ private fun AppNavigation(
             collapseFromSwipe = collapseFromSwipe,
             onCollapseFromSwipeChanged = { collapseFromSwipe = it },
             onCollapseDragProgressChanged = { collapseDragInProgress = it },
+            onExpandedOverlayCurrentVisibleChanged = { expandedOverlayCurrentVisible = it },
             onExpandedOverlaySettledVisibleChanged = { expandedOverlaySettledVisible = it },
             onPlayerExpandedChanged = { expanded ->
                 if (
@@ -3837,8 +3844,9 @@ private fun AppNavigation(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        val shouldRenderBackgroundContent =
-            !isPlayerExpanded || collapseDragInProgress || !expandedOverlaySettledVisible
+        val shouldComposeBackgroundContent =
+            collapseDragInProgress || !expandedOverlayCurrentVisible || !expandedOverlaySettledVisible
+        val backgroundContentStateHolder = rememberSaveableStateHolder()
         val openBrowser: (BrowserOpenRequest) -> Unit = { request ->
             browserNavigator.open(
                 request = request,
@@ -3850,6 +3858,7 @@ private fun AppNavigation(
             isPlayerExpanded = true
             collapseFromSwipe = false
             collapseDragInProgress = false
+            expandedOverlayCurrentVisible = false
             expandedOverlaySettledVisible = false
             expandFromMiniDrag = false
             miniExpandPreviewProgress = 0f
@@ -3893,79 +3902,73 @@ private fun AppNavigation(
         LaunchedEffect(favoritesSortMode, playlistLibraryState.favorites, activePlaylist?.id) {
             syncActiveFavoritesContextAfterMutation(playlistLibraryState.favorites)
         }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .drawWithContent {
-                    if (shouldRenderBackgroundContent) {
-                        drawContent()
-                    }
-                }
-        ) {
-            AppNavigationMainContentHost(
-                currentView = currentView,
-                mainContentFocusRequester = mainContentFocusRequester,
-                canFocusMiniPlayer = isPlayerSurfaceVisible && !isPlayerExpanded,
-                requestMiniPlayerFocus = { miniPlayerFocusRequester.requestFocus() },
-                onHardwareNavigationInput = { showMiniPlayerFocusHighlight = true },
-                onTouchInteraction = { showMiniPlayerFocusHighlight = false },
-                onOpenPlayerSurface = openPlayerSurfaceAction,
-                onHomeRequested = { currentView = MainView.Home },
-                onSettingsRequested = {
-                    settingsLaunchedFromPlayer = false
-                    settingsReturnView =
-                        (if (currentView == MainView.Settings) settingsReturnView else currentView)
-                            .takeUnless { it == MainView.Settings }
-                            ?: MainView.Home
-                    openSettingsRoute(SettingsRoute.Root, true)
-                    currentView = MainView.Settings
-                },
-                context = context,
-                prefs = prefs,
-                currentPlaybackSourceId = currentPlaybackSourceId,
-                currentPlaybackRequestUrl = currentPlaybackRequestUrl,
-                selectedFile = selectedFile,
-                playingPlaylistFile = activePlaylistBrowserFile,
-                metadataTitle = effectiveMetadataTitle,
-                metadataArtist = effectiveMetadataArtist,
-                isPlaying = isPlaying,
-                currentSubtuneIndex = currentSubtuneIndex,
-                recentFolders = recentFolders,
-                recentPlayedFiles = recentPlayedFiles,
-                recentFoldersLimit = recentFoldersLimit,
-                recentFilesLimit = recentFilesLimit,
-                playlistLibraryState = playlistLibraryState,
-                activePlaylist = activePlaylist,
-                favoritesSortMode = favoritesSortMode,
-                networkNodes = networkNodes,
-                storageDescriptors = storageDescriptors,
-                miniPlayerListInset = miniPlayerListInset,
-                openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                autoPlayOnTrackSelect = autoPlayOnTrackSelect,
-                trackLoadDelegates = trackLoadDelegates,
-                manualOpenDelegates = manualOpenDelegates,
-                runtimeDelegates = runtimeDelegates,
-                onRecentFoldersChanged = { recentFolders = it },
-                onRecentPlayedFilesChanged = { recentPlayedFiles = it },
-                onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
-                onFavoritesSortModeChange = { favoritesSortMode = it },
-                onOpenFavorite = { entry ->
-                    openPlaylistEntry(
+        if (shouldComposeBackgroundContent) {
+            backgroundContentStateHolder.SaveableStateProvider("main_background_content") {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AppNavigationMainContentHost(
+                        currentView = currentView,
+                        mainContentFocusRequester = mainContentFocusRequester,
+                        canFocusMiniPlayer = isPlayerSurfaceVisible && !isPlayerExpanded,
+                        requestMiniPlayerFocus = { miniPlayerFocusRequester.requestFocus() },
+                        onHardwareNavigationInput = { showMiniPlayerFocusHighlight = true },
+                        onTouchInteraction = { showMiniPlayerFocusHighlight = false },
+                        onOpenPlayerSurface = openPlayerSurfaceAction,
+                        onHomeRequested = { currentView = MainView.Home },
+                        onSettingsRequested = {
+                            settingsLaunchedFromPlayer = false
+                            settingsReturnView =
+                                (if (currentView == MainView.Settings) settingsReturnView else currentView)
+                                    .takeUnless { it == MainView.Settings }
+                                    ?: MainView.Home
+                            openSettingsRoute(SettingsRoute.Root, true)
+                            currentView = MainView.Settings
+                        },
                         context = context,
-                        entry = entry,
-                        playlist = favoritesPlaybackPlaylist,
+                        prefs = prefs,
+                        currentPlaybackSourceId = currentPlaybackSourceId,
+                        currentPlaybackRequestUrl = currentPlaybackRequestUrl,
+                        selectedFile = selectedFile,
+                        playingPlaylistFile = activePlaylistBrowserFile,
+                        metadataTitle = effectiveMetadataTitle,
+                        metadataArtist = effectiveMetadataArtist,
+                        isPlaying = isPlaying,
+                        currentSubtuneIndex = currentSubtuneIndex,
+                        recentFolders = recentFolders,
+                        recentPlayedFiles = recentPlayedFiles,
+                        recentFoldersLimit = recentFoldersLimit,
+                        recentFilesLimit = recentFilesLimit,
+                        playlistLibraryState = playlistLibraryState,
+                        activePlaylist = activePlaylist,
+                        favoritesSortMode = favoritesSortMode,
+                        networkNodes = networkNodes,
+                        storageDescriptors = storageDescriptors,
+                        miniPlayerListInset = miniPlayerListInset,
+                        openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                        autoPlayOnTrackSelect = autoPlayOnTrackSelect,
                         trackLoadDelegates = trackLoadDelegates,
                         manualOpenDelegates = manualOpenDelegates,
-                        autoPlayOnTrackSelect = true,
-                        openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                        onActivePlaylistChanged = {
-                            activePlaylist = it
-                            activePlaylistShuffleActive = false
+                        runtimeDelegates = runtimeDelegates,
+                        onRecentFoldersChanged = { recentFolders = it },
+                        onRecentPlayedFilesChanged = { recentPlayedFiles = it },
+                        onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
+                        onFavoritesSortModeChange = { favoritesSortMode = it },
+                        onOpenFavorite = { entry ->
+                            openPlaylistEntry(
+                                context = context,
+                                entry = entry,
+                                playlist = favoritesPlaybackPlaylist,
+                                trackLoadDelegates = trackLoadDelegates,
+                                manualOpenDelegates = manualOpenDelegates,
+                                autoPlayOnTrackSelect = true,
+                                openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                                onActivePlaylistChanged = {
+                                    activePlaylist = it
+                                    activePlaylistShuffleActive = false
+                                },
+                                onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                                onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+                            )
                         },
-                        onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
-                        onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
-                    )
-                },
                 onPlayStoredPlaylist = { playlist ->
                     activePlaylist = playlist
                     activePlaylistEntryId = playlist.entries.firstOrNull()?.id
@@ -4257,7 +4260,9 @@ private fun AppNavigation(
                     rememberNetworkHttpCredentials(sourceNodeId, sourceId, username, password)
                 },
                 settingsContent = settingsRouteContent
-            )
+                    )
+                }
+            }
         }
         PlayerOverlayAndDialogsSection()
     }

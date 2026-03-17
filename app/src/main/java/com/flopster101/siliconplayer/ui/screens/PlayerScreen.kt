@@ -143,6 +143,7 @@ import kotlin.math.roundToInt
 import kotlin.math.pow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.coroutineContext
@@ -688,6 +689,7 @@ internal fun PlayerScreen(
     var isTimelineTouchActive by remember { mutableStateOf(false) }
     var downwardDragPx by remember { mutableFloatStateOf(0f) }
     var isDraggingDown by remember { mutableStateOf(false) }
+    var collapseAnimatingOut by remember { mutableStateOf(false) }
     var showTrackInfoDialog by remember { mutableStateOf(false) }
     var showVisualizationPickerDialog by remember { mutableStateOf(false) }
     var showChannelControlDialog by remember { mutableStateOf(false) }
@@ -717,10 +719,15 @@ internal fun PlayerScreen(
         portraitDeviceAspectRatio < 1.9f ||
             configuration.screenHeightDp < 640
     )
-    val collapseThresholdPx = with(density) { 132.dp.toPx() }
+    val collapseThresholdPx = with(density) { 120.dp.toPx() }
+    val collapseDecisionThresholdPx = with(density) { 96.dp.toPx() }
+    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+    val maxCollapseDragPx = screenHeightPx
+    val uiScope = rememberCoroutineScope()
+    val latestOnCollapseBySwipe by rememberUpdatedState(onCollapseBySwipe)
 
-    LaunchedEffect(isDraggingDown) {
-        onCollapseDragProgressChanged(isDraggingDown)
+    LaunchedEffect(isDraggingDown, collapseAnimatingOut) {
+        onCollapseDragProgressChanged(isDraggingDown || collapseAnimatingOut)
     }
     DisposableEffect(Unit) {
         onDispose {
@@ -738,12 +745,13 @@ internal fun PlayerScreen(
             sliderPosition = positionSeconds.coerceIn(0.0, durationSeconds.coerceAtLeast(0.0))
         }
     }
-    val animatedPanelOffsetPx by animateFloatAsState(
-        targetValue = if (isDraggingDown) downwardDragPx else 0f,
-        animationSpec = tween(durationMillis = 180, easing = LinearOutSlowInEasing),
-        label = "playerCollapseDragOffset"
-    )
-    val panelOffsetPx = if (isDraggingDown) downwardDragPx else animatedPanelOffsetPx
+    val panelOffsetAnim = remember { Animatable(0f) }
+    LaunchedEffect(isDraggingDown, downwardDragPx) {
+        if (isDraggingDown) {
+            panelOffsetAnim.snapTo(downwardDragPx)
+        }
+    }
+    val panelOffsetPx = panelOffsetAnim.value
     val dragFadeProgress = (panelOffsetPx / (collapseThresholdPx * 1.4f)).coerceIn(0f, 1f)
     val panelAlpha = 1f - (0.22f * dragFadeProgress)
     val topArrowFocusRequester = remember { FocusRequester() }
@@ -889,8 +897,8 @@ internal fun PlayerScreen(
                     Modifier.pointerInput(collapseThresholdPx, isTimelineTouchActive) {
                         detectVerticalDragGestures(
                             onVerticalDrag = { change, dragAmount ->
-                                if (isTimelineTouchActive) return@detectVerticalDragGestures
-                                val next = (downwardDragPx + dragAmount).coerceAtLeast(0f)
+                                if (isTimelineTouchActive || collapseAnimatingOut) return@detectVerticalDragGestures
+                                val next = (downwardDragPx + dragAmount).coerceIn(0f, maxCollapseDragPx)
                                 if (next > 0f || downwardDragPx > 0f) {
                                     isDraggingDown = true
                                     downwardDragPx = next
@@ -898,22 +906,69 @@ internal fun PlayerScreen(
                                 }
                             },
                             onDragEnd = {
-                                if (isTimelineTouchActive) return@detectVerticalDragGestures
-                                val shouldCollapse = downwardDragPx >= collapseThresholdPx
+                                if (isTimelineTouchActive || collapseAnimatingOut) return@detectVerticalDragGestures
+                                val shouldCollapse = downwardDragPx >= collapseDecisionThresholdPx
                                 if (shouldCollapse) {
-                                    // Preserve the dragged-down offset until the parent
-                                    // actually collapses the expanded player, so the panel
-                                    // does not snap back upward for a frame first.
-                                    onCollapseBySwipe()
-                                } else {
+                                    val releaseOffsetPx = downwardDragPx.coerceIn(0f, maxCollapseDragPx)
                                     isDraggingDown = false
-                                    downwardDragPx = 0f
+                                    collapseAnimatingOut = true
+                                    val collapseSettleTargetPx = screenHeightPx
+                                    uiScope.launch {
+                                        panelOffsetAnim.snapTo(releaseOffsetPx)
+                                        val remainingDistancePx =
+                                            (collapseSettleTargetPx - releaseOffsetPx).coerceAtLeast(0f)
+                                        if (remainingDistancePx > 1f) {
+                                            val remainingRatio =
+                                                (remainingDistancePx / screenHeightPx).coerceIn(0f, 1f)
+                                            val settleDurationMs =
+                                                (130f + (190f * remainingRatio)).toInt()
+                                            panelOffsetAnim.animateTo(
+                                                targetValue = collapseSettleTargetPx,
+                                                animationSpec = tween(
+                                                    durationMillis = settleDurationMs,
+                                                    easing = LinearOutSlowInEasing
+                                                )
+                                            )
+                                        }
+                                        latestOnCollapseBySwipe()
+                                    }
+                                } else {
+                                    val releaseOffsetPx = downwardDragPx
+                                    isDraggingDown = false
+                                    uiScope.launch {
+                                        panelOffsetAnim.snapTo(releaseOffsetPx)
+                                        val settleDurationMs = (
+                                            190f + (170f * (releaseOffsetPx / collapseDecisionThresholdPx).coerceIn(0f, 1f))
+                                            ).toInt()
+                                        panelOffsetAnim.animateTo(
+                                            targetValue = 0f,
+                                            animationSpec = tween(
+                                                durationMillis = settleDurationMs,
+                                                easing = LinearOutSlowInEasing
+                                            )
+                                        )
+                                        downwardDragPx = 0f
+                                    }
                                 }
                             },
                             onDragCancel = {
-                                if (isTimelineTouchActive) return@detectVerticalDragGestures
+                                if (isTimelineTouchActive || collapseAnimatingOut) return@detectVerticalDragGestures
+                                val releaseOffsetPx = downwardDragPx
                                 isDraggingDown = false
-                                downwardDragPx = 0f
+                                uiScope.launch {
+                                    panelOffsetAnim.snapTo(releaseOffsetPx)
+                                    val settleDurationMs = (
+                                        190f + (170f * (releaseOffsetPx / collapseDecisionThresholdPx).coerceIn(0f, 1f))
+                                        ).toInt()
+                                    panelOffsetAnim.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = tween(
+                                            durationMillis = settleDurationMs,
+                                            easing = LinearOutSlowInEasing
+                                        )
+                                    )
+                                    downwardDragPx = 0f
+                                }
                             }
                         )
                     }

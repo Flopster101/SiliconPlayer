@@ -23,6 +23,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import java.io.File
@@ -35,6 +36,7 @@ class PlaybackService : Service() {
         NotificationManagerCompat.from(this)
     }
     private val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    private val powerManager by lazy { getSystemService(Context.POWER_SERVICE) as PowerManager }
 
     private var mediaSession: MediaSession? = null
     private var audioFocusRequest: AudioFocusRequest? = null // For Android O+
@@ -118,13 +120,17 @@ class PlaybackService : Service() {
     private val ticker = object : Runnable {
         override fun run() {
             if (currentPath != null) {
+                val deviceInteractive = powerManager.isInteractive
                 val trackLoaded = NativeBridge.getTrackSampleRate() > 0
                 val seekInProgress = trackLoaded && NativeBridge.isSeekInProgress()
                 if (!seekInProgress && trackLoaded) {
                     positionSeconds = NativeBridge.getPosition()
                     if (durationRefreshCountdown <= 0) {
                         durationSeconds = NativeBridge.getDuration()
-                        durationRefreshCountdown = if (isPlaying) 5 else 2
+                        durationRefreshCountdown = nextDurationRefreshCountdown(
+                            isPlaying = isPlaying,
+                            deviceInteractive = deviceInteractive
+                        )
                     } else {
                         durationRefreshCountdown -= 1
                     }
@@ -133,13 +139,40 @@ class PlaybackService : Service() {
                 persistResumeCheckpointIfNeeded()
                 updateMediaSessionState()
                 pushNotification()
-                val delayMs = when {
-                    seekInProgress -> 180L
-                    isPlaying -> 400L
-                    else -> 900L
-                }
+                val delayMs = nextTickerDelayMs(
+                    seekInProgress = seekInProgress,
+                    isPlaying = isPlaying,
+                    deviceInteractive = deviceInteractive
+                )
                 handler.postDelayed(this, delayMs)
             }
+        }
+    }
+
+    private fun nextDurationRefreshCountdown(
+        isPlaying: Boolean,
+        deviceInteractive: Boolean
+    ): Int {
+        return when {
+            isPlaying && deviceInteractive -> 5
+            isPlaying -> 12
+            deviceInteractive -> 2
+            else -> 4
+        }
+    }
+
+    private fun nextTickerDelayMs(
+        seekInProgress: Boolean,
+        isPlaying: Boolean,
+        deviceInteractive: Boolean
+    ): Long {
+        return when {
+            seekInProgress && deviceInteractive -> 180L
+            seekInProgress -> 320L
+            isPlaying && deviceInteractive -> 400L
+            isPlaying -> 1200L
+            deviceInteractive -> 900L
+            else -> 2200L
         }
     }
 

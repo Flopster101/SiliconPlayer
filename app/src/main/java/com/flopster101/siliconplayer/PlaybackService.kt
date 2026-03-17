@@ -587,7 +587,7 @@ class PlaybackService : Service() {
             Notification.Builder(this).setPriority(Notification.PRIORITY_LOW)
         }
         notificationBuilder
-            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setSmallIcon(R.drawable.ic_notification_small)
             .setLargeIcon(currentArtwork ?: fallbackIconBitmap())
             .setContentTitle(currentTitle)
             .setContentText(currentArtist)
@@ -706,7 +706,7 @@ class PlaybackService : Service() {
     }
 
     private fun fallbackIconBitmap(): Bitmap? {
-        return drawableToBitmap(R.drawable.ic_placeholder_music_note)
+        return drawableToBitmap(R.drawable.ic_launcher_foreground, sizePx = 2048)
     }
 
     private fun drawableToBitmap(drawableId: Int, sizePx: Int = 1024): Bitmap? {

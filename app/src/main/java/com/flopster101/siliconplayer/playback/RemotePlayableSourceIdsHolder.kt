@@ -22,4 +22,16 @@ internal object RemotePlayableSourceIdsHolder {
                 lastNonEmpty = value
             }
         }
+
+    fun resolvedCurrentOrLastForSource(activeSourceId: String?): List<String> {
+        val normalizedActiveSourceId = activeSourceId?.takeIf { it.isNotBlank() } ?: return emptyList()
+        val currentIds = current
+        currentIds.takeIf { ids ->
+            ids.any { candidateSourceId -> samePath(candidateSourceId, normalizedActiveSourceId) }
+        }?.let { return it }
+        val fallbackIds = lastNonEmpty
+        return fallbackIds.takeIf { ids ->
+            ids.any { candidateSourceId -> samePath(candidateSourceId, normalizedActiveSourceId) }
+        }.orEmpty()
+    }
 }

@@ -41,11 +41,9 @@ internal fun rememberRemoteNextTrackPreloadCanceller(
         remotePreloadJob?.cancel()
         remotePreloadJob = null
         RemotePreloadUiStateHolder.current = null
-        val resolvedPlayableSourceIds = if (visiblePlayableSourceIds.isNotEmpty()) {
-            visiblePlayableSourceIds
-        } else {
-            RemotePlayableSourceIdsHolder.lastNonEmpty
-        }
+        val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
+        val resolvedPlayableSourceIds = RemotePlayableSourceIdsHolder
+            .resolvedCurrentOrLastForSource(activeSourceId)
         val repeatModeCanAdvanceToNextTrack = when (activeRepeatMode) {
             RepeatMode.None,
             RepeatMode.Playlist -> true

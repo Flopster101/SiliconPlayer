@@ -569,6 +569,14 @@ private fun playAdjacentBrowserFileFromAnchor(
     return true
 }
 
+private fun isRemoteQueuePlaybackSource(sourceId: String?): Boolean {
+    val normalizedSourceId = normalizeSourceIdentity(sourceId) ?: return false
+    return when (Uri.parse(normalizedSourceId).scheme?.lowercase()) {
+        "http", "https", "smb" -> true
+        else -> false
+    }
+}
+
 private fun resolveActivePlaylistMetadataEntry(
     activePlaylist: StoredPlaylist?,
     activePlaylistEntryId: String?,
@@ -2571,31 +2579,36 @@ private fun AppNavigation(
                 onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
             )
         } else {
-            val localAnchorPath = selectedFile?.absolutePath
-            if (localAnchorPath != null) {
-                playAdjacentBrowserFileFromAnchor(
-                    context = context,
-                    anchorPath = localAnchorPath,
-                    offset = offset,
-                    wrapOverride = wrapAtBoundary,
-                    playlistWrapNavigation = playlistWrapNavigation,
-                    notifyWrap = true,
-                    activePlaylist = null,
-                    repository = repository,
-                    visiblePlayableFiles = visiblePlayableFiles,
-                    playlistLibraryState = playlistLibraryState,
-                    trackLoadDelegates = trackLoadDelegates,
-                    manualOpenDelegates = manualOpenDelegates,
-                    openPlayerOnTrackSelect = openPlayerOnTrackSelect,
-                    expandOverride = isPlayerExpanded,
-                    onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
-                    onActivePlaylistChanged = { activePlaylist = it },
-                    onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
-                    onShowPlaylistSelectorDialogChanged = { showPlaylistSelectorDialog = it },
-                    onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
-                )
-            } else {
+            val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
+            if (isRemoteQueuePlaybackSource(activeSourceId)) {
                 false
+            } else {
+                val localAnchorPath = selectedFile?.absolutePath
+                if (localAnchorPath != null) {
+                    playAdjacentBrowserFileFromAnchor(
+                        context = context,
+                        anchorPath = localAnchorPath,
+                        offset = offset,
+                        wrapOverride = wrapAtBoundary,
+                        playlistWrapNavigation = playlistWrapNavigation,
+                        notifyWrap = true,
+                        activePlaylist = null,
+                        repository = repository,
+                        visiblePlayableFiles = visiblePlayableFiles,
+                        playlistLibraryState = playlistLibraryState,
+                        trackLoadDelegates = trackLoadDelegates,
+                        manualOpenDelegates = manualOpenDelegates,
+                        openPlayerOnTrackSelect = openPlayerOnTrackSelect,
+                        expandOverride = isPlayerExpanded,
+                        onPlaylistLibraryStateChanged = onPlaylistLibraryStateChanged,
+                        onActivePlaylistChanged = { activePlaylist = it },
+                        onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+                        onShowPlaylistSelectorDialogChanged = { showPlaylistSelectorDialog = it },
+                        onPendingPlaylistSubtuneSelectionChanged = { pendingPlaylistSubtuneSelection = it }
+                    )
+                } else {
+                    false
+                }
             }
         } || trackNavDelegates.playAdjacentTrack(
             offset = offset,

@@ -25,8 +25,8 @@ internal class AppNavigationTrackNavDelegates(
     private val onApplyManualInputSelection: (String, ManualSourceOpenOptions, Boolean?) -> Unit
 ) {
     private fun resolvedVisiblePlayableSourceIds(): List<String> {
-        val currentIds = visiblePlayableSourceIdsProvider()
-        return if (currentIds.isNotEmpty()) currentIds else RemotePlayableSourceIdsHolder.lastNonEmpty
+        val activeSourceId = currentPlaybackSourceIdProvider() ?: selectedFileProvider()?.absolutePath
+        return RemotePlayableSourceIdsHolder.resolvedCurrentOrLastForSource(activeSourceId)
     }
 
     fun resumeLastStoppedTrack(autoStart: Boolean = true): Boolean {

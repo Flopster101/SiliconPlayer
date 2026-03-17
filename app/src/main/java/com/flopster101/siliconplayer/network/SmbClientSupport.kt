@@ -66,7 +66,10 @@ internal inline fun <T> withAppSmbSession(
         try {
             return block(session)
         } catch (t: Throwable) {
-            val retryable = t is IOException || t.message.orEmpty().contains("STATUS_USER_SESSION_DELETED", ignoreCase = true)
+            val message = t.message.orEmpty()
+            val retryable = t is IOException ||
+                message.contains("STATUS_USER_SESSION_DELETED", ignoreCase = true) ||
+                message.contains("already been closed", ignoreCase = true)
             if (!retryable || !shouldRetryAfterInvalidation) {
                 throw t
             }

@@ -134,8 +134,6 @@ internal suspend fun resolveSmbHostDisplayName(
 
         runCatching {
             withAppSmbSession(spec) { session ->
-                val probeShare = spec.share.ifBlank { "IPC$" }
-                runCatching { session.connectShare(probeShare) }
                 val connection = session.connection
                 val context = connection.connectionContext
                 sequenceOf(

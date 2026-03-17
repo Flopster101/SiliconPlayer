@@ -96,6 +96,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -3516,20 +3517,15 @@ private fun TransportControls(
                     verticalArrangement = Arrangement.Top
                 ) {
                     Spacer(modifier = Modifier.height(loadingSpacer))
-                    AnimatedContent(
-                        targetState = remoteLoadProgressLabel(remoteLoadUiState),
-                        transitionSpec = {
-                            fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 20)) togetherWith
-                                fadeOut(animationSpec = tween(durationMillis = 110))
-                        },
-                        label = "playerLoadingStatusSwap"
-                    ) { loadingLabel ->
-                        Text(
-                            text = loadingLabel,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    Text(
+                        text = remoteLoadProgressLabel(remoteLoadUiState),
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontFamily = FontFamily.Monospace
+                        ),
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
 

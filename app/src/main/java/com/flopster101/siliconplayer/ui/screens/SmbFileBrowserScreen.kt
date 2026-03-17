@@ -1053,6 +1053,244 @@ internal fun SmbFileBrowserScreen(
         showBrowserInfoDialog = false
         pendingExportTargets = emptyList()
     }
+    val isConstrainedBrowserDevice = rememberIsConstrainedBrowserDevice()
+    val renderBrowserContent: @Composable (SmbBrowserContentState) -> Unit = { state ->
+        val statePathParts = state.pathKey.split('|', limit = 2)
+        val stateShare = statePathParts.firstOrNull().orEmpty()
+        val stateSubPath = statePathParts.getOrNull(1).orEmpty()
+        val stateSharePickerMode = stateShare.isBlank()
+        val stateBrowsableEntries = if (state.pathKey == "$currentShare|$currentSubPath") {
+            browsableEntries
+        } else {
+            directoryEntriesCache[directoryCacheKeyFor(stateShare, stateSubPath)]
+                ?.filter { entry ->
+                    shouldShowRemoteBrowserEntry(
+                        name = entry.name,
+                        isDirectory = entry.isDirectory,
+                        supportedExtensions = supportedExtensions,
+                        showUnsupportedFiles = showUnsupportedFiles,
+                        showHiddenFilesAndFolders = showHiddenFilesAndFolders,
+                        isHiddenHint = entry.isHidden
+                    )
+                }
+                .orEmpty()
+        }
+        val stateFilteredEntries = if (browserSearchController.debouncedQuery.isBlank()) {
+            stateBrowsableEntries
+        } else {
+            stateBrowsableEntries.filter { entry ->
+                matchesBrowserSearchQuery(entry.name, browserSearchController.debouncedQuery)
+            }
+        }
+        val stateCanNavigateUp = stateSubPath.isNotBlank() ||
+            (canBrowseHostShares && stateShare.isNotBlank())
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = if (state.pane == SmbBrowserPane.Entries) {
+                entriesListState
+            } else {
+                nonEntriesListState
+            },
+            contentPadding = PaddingValues(bottom = bottomContentPadding)
+        ) {
+            if (stateCanNavigateUp && state.pane != SmbBrowserPane.Loading) {
+                item("parent") {
+                    SmbParentDirectoryRow(
+                        onClick = {
+                            navigateUpWithinBrowser()
+                        }
+                    )
+                }
+            }
+
+            if (state.pane == SmbBrowserPane.Loading) {
+                item("loading") {
+                    SmbLoadingCard(
+                        title = if (stateSharePickerMode) {
+                            "Loading SMB shares..."
+                        } else {
+                            "Loading SMB directory..."
+                        },
+                        subtitle = if (stateSharePickerMode) {
+                            "Fetching available shares from host"
+                        } else {
+                            "Fetching folder entries"
+                        },
+                        logLines = loadingLogLines
+                    )
+                }
+            } else if (state.pane == SmbBrowserPane.Error) {
+                item("error") {
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.errorContainer)
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.WarningAmber,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = if (stateSharePickerMode) {
+                                        "Unable to list SMB shares"
+                                    } else {
+                                        "Unable to open SMB directory"
+                                    },
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Text(
+                                text = errorMessage.orEmpty(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            TextButton(onClick = {
+                                openDirectory(
+                                    targetShare = currentShare,
+                                    targetSubPath = currentSubPath,
+                                    navigationDirection = BrowserPageNavDirection.Neutral,
+                                    forceReload = true
+                                )
+                            }) {
+                                Text("Retry")
+                            }
+                        }
+                    }
+                }
+            } else if (state.pane == SmbBrowserPane.Empty) {
+                item("empty") {
+                    SmbInfoCard(
+                        title = if (stateSharePickerMode) {
+                            "No SMB shares found"
+                        } else {
+                            "This directory is empty"
+                        },
+                        subtitle = if (stateSharePickerMode) {
+                            "No accessible disk shares on this host"
+                        } else {
+                            "No files or folders found"
+                        }
+                    )
+                }
+            } else {
+                if (stateFilteredEntries.isEmpty() && browserSearchController.debouncedQuery.isNotBlank()) {
+                    item("search-empty") {
+                        BrowserSearchNoResultsCard(query = browserSearchController.debouncedQuery)
+                    }
+                } else {
+                    itemsIndexed(
+                        stateFilteredEntries,
+                        key = { _, entry -> "${entry.isDirectory}:${entry.name}" }
+                    ) { index, entry ->
+                        val entrySelectionKey = entrySelectionKeyFor(entry)
+                        val hasSelectedAbove = if (index > 0) {
+                            val aboveKey = entrySelectionKeyFor(stateFilteredEntries[index - 1])
+                            browserSelectionController.selectedKeys.contains(aboveKey)
+                        } else {
+                            false
+                        }
+                        val hasSelectedBelow = if (index < stateFilteredEntries.lastIndex) {
+                            val belowKey = entrySelectionKeyFor(stateFilteredEntries[index + 1])
+                            browserSelectionController.selectedKeys.contains(belowKey)
+                        } else {
+                            false
+                        }
+                        SmbEntryRow(
+                            entry = entry,
+                            supportedExtensions = supportedExtensions,
+                            decoderExtensionArtworkHints = decoderExtensionArtworkHints,
+                            isSelected = browserSelectionController.selectedKeys.contains(entrySelectionKey),
+                            hasSelectedAbove = hasSelectedAbove,
+                            hasSelectedBelow = hasSelectedBelow,
+                            showAsShare = stateSharePickerMode,
+                            onLongClick = {
+                                if (browserSelectionController.isSelectionMode) {
+                                    val didSelectRange =
+                                        browserSelectionController.selectedKeys.size == 1 &&
+                                            browserSelectionController.selectRangeTo(
+                                                key = entrySelectionKey,
+                                                orderedKeys = stateFilteredEntries.map { stateEntry ->
+                                                    entrySelectionKeyFor(stateEntry)
+                                                }
+                                            )
+                                    if (!didSelectRange) {
+                                        browserSelectionController.toggleSelection(entrySelectionKey)
+                                    }
+                                } else {
+                                    browserSelectionController.enterSelectionWith(entrySelectionKey)
+                                }
+                            },
+                            onClick = {
+                                if (browserSelectionController.isSelectionMode) {
+                                    browserSelectionController.toggleSelection(entrySelectionKey)
+                                    return@SmbEntryRow
+                                }
+                                if (stateSharePickerMode) {
+                                    openDirectory(
+                                        targetShare = entry.name,
+                                        targetSubPath = "",
+                                        navigationDirection = BrowserPageNavDirection.Forward
+                                    )
+                                } else if (entry.isDirectory) {
+                                    openDirectory(
+                                        targetShare = stateShare,
+                                        targetSubPath = joinSmbRelativePath(stateSubPath, entry.name),
+                                        navigationDirection = BrowserPageNavDirection.Forward
+                                    )
+                                } else {
+                                    if (isSupportedPlaylistFileName(entry.name)) {
+                                        openPlaylistEntry(entry)
+                                        return@SmbEntryRow
+                                    }
+                                    if (openPreviewEntry(entry)) {
+                                        return@SmbEntryRow
+                                    }
+                                    when (browserArchiveCapabilityForName(entry.name)) {
+                                        BrowserArchiveCapability.Browsable -> openArchiveEntry(entry)
+                                        BrowserArchiveCapability.KnownUnsupported -> {
+                                            Toast.makeText(
+                                                context,
+                                                "Archive format not supported yet",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+
+                                        BrowserArchiveCapability.None -> {
+                                            val targetPath = joinSmbRelativePath(stateSubPath, entry.name)
+                                            val targetSpec = buildSmbEntrySourceSpec(
+                                                credentialsSpec.copy(share = stateShare),
+                                                targetPath
+                                            )
+                                            onOpenRemoteSource(buildSmbRequestUri(targetSpec))
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -1216,254 +1454,25 @@ internal fun SmbFileBrowserScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            AnimatedContent(
-                targetState = browserContentState,
-                transitionSpec = {
-                    val loadingTransition =
-                        initialState.pane == SmbBrowserPane.Loading ||
-                            targetState.pane == SmbBrowserPane.Loading
-                    browserContentTransform(
-                        navDirection = browserNavDirection,
-                        loadingTransition = loadingTransition
-                    )
-                },
-                label = "smbBrowserLoadingTransition",
-                modifier = Modifier.fillMaxSize()
-            ) { state ->
-                val statePathParts = state.pathKey.split('|', limit = 2)
-                val stateShare = statePathParts.firstOrNull().orEmpty()
-                val stateSubPath = statePathParts.getOrNull(1).orEmpty()
-                val stateSharePickerMode = stateShare.isBlank()
-                val stateBrowsableEntries = if (state.pathKey == "$currentShare|$currentSubPath") {
-                    browsableEntries
-                } else {
-                    directoryEntriesCache[directoryCacheKeyFor(stateShare, stateSubPath)]
-                        ?.filter { entry ->
-                            shouldShowRemoteBrowserEntry(
-                                name = entry.name,
-                                isDirectory = entry.isDirectory,
-                                supportedExtensions = supportedExtensions,
-                                showUnsupportedFiles = showUnsupportedFiles,
-                                showHiddenFilesAndFolders = showHiddenFilesAndFolders,
-                                isHiddenHint = entry.isHidden
-                            )
-                        }
-                        .orEmpty()
-                }
-                val stateFilteredEntries = if (browserSearchController.debouncedQuery.isBlank()) {
-                    stateBrowsableEntries
-                } else {
-                    stateBrowsableEntries.filter { entry ->
-                        matchesBrowserSearchQuery(entry.name, browserSearchController.debouncedQuery)
-                    }
-                }
-                val stateCanNavigateUp = stateSubPath.isNotBlank() ||
-                    (canBrowseHostShares && stateShare.isNotBlank())
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    state = if (state.pane == SmbBrowserPane.Entries) {
-                        entriesListState
-                    } else {
-                        nonEntriesListState
+            if (isConstrainedBrowserDevice) {
+                renderBrowserContent(browserContentState)
+            } else {
+                AnimatedContent(
+                    targetState = browserContentState,
+                    transitionSpec = {
+                        val loadingTransition =
+                            initialState.pane == SmbBrowserPane.Loading ||
+                                targetState.pane == SmbBrowserPane.Loading
+                        browserContentTransform(
+                            navDirection = browserNavDirection,
+                            loadingTransition = loadingTransition
+                        )
                     },
-                    contentPadding = PaddingValues(bottom = bottomContentPadding)
-                ) {
-                if (stateCanNavigateUp && state.pane != SmbBrowserPane.Loading) {
-                    item("parent") {
-                        SmbParentDirectoryRow(
-                            onClick = {
-                                navigateUpWithinBrowser()
-                            }
-                        )
-                    }
+                    label = "smbBrowserLoadingTransition",
+                    modifier = Modifier.fillMaxSize()
+                ) { state ->
+                    renderBrowserContent(state)
                 }
-
-                if (state.pane == SmbBrowserPane.Loading) {
-                    item("loading") {
-                        SmbLoadingCard(
-                            title = if (stateSharePickerMode) {
-                                "Loading SMB shares..."
-                            } else {
-                                "Loading SMB directory..."
-                            },
-                            subtitle = if (stateSharePickerMode) {
-                                "Fetching available shares from host"
-                            } else {
-                                "Fetching folder entries"
-                            },
-                                logLines = loadingLogLines
-                        )
-                    }
-                } else if (state.pane == SmbBrowserPane.Error) {
-                    item("error") {
-                        ElevatedCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(MaterialTheme.colorScheme.errorContainer)
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.WarningAmber,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        text = if (stateSharePickerMode) {
-                                            "Unable to list SMB shares"
-                                        } else {
-                                            "Unable to open SMB directory"
-                                        },
-                                        style = MaterialTheme.typography.titleSmall,
-                                        color = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-                                Text(
-                                    text = errorMessage.orEmpty(),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                TextButton(onClick = {
-                                    openDirectory(
-                                        targetShare = currentShare,
-                                        targetSubPath = currentSubPath,
-                                        navigationDirection = BrowserPageNavDirection.Neutral,
-                                        forceReload = true
-                                    )
-                                }) {
-                                    Text("Retry")
-                                }
-                            }
-                        }
-                    }
-                } else if (state.pane == SmbBrowserPane.Empty) {
-                    item("empty") {
-                        SmbInfoCard(
-                            title = if (stateSharePickerMode) {
-                                "No SMB shares found"
-                            } else {
-                                "This directory is empty"
-                            },
-                            subtitle = if (stateSharePickerMode) {
-                                "No accessible disk shares on this host"
-                            } else {
-                                "No files or folders found"
-                            }
-                        )
-                    }
-                } else {
-                    if (stateFilteredEntries.isEmpty() && browserSearchController.debouncedQuery.isNotBlank()) {
-                        item("search-empty") {
-                            BrowserSearchNoResultsCard(query = browserSearchController.debouncedQuery)
-                        }
-                    } else {
-                        itemsIndexed(
-                            stateFilteredEntries,
-                            key = { _, entry -> "${entry.isDirectory}:${entry.name}" }
-                        ) { index, entry ->
-                            val entrySelectionKey = entrySelectionKeyFor(entry)
-                            val hasSelectedAbove = if (index > 0) {
-                                val aboveKey = entrySelectionKeyFor(stateFilteredEntries[index - 1])
-                                browserSelectionController.selectedKeys.contains(aboveKey)
-                            } else {
-                                false
-                            }
-                            val hasSelectedBelow = if (index < stateFilteredEntries.lastIndex) {
-                                val belowKey = entrySelectionKeyFor(stateFilteredEntries[index + 1])
-                                browserSelectionController.selectedKeys.contains(belowKey)
-                            } else {
-                                false
-                            }
-                            SmbEntryRow(
-                                entry = entry,
-                                supportedExtensions = supportedExtensions,
-                                decoderExtensionArtworkHints = decoderExtensionArtworkHints,
-                                isSelected = browserSelectionController.selectedKeys.contains(entrySelectionKey),
-                                hasSelectedAbove = hasSelectedAbove,
-                                hasSelectedBelow = hasSelectedBelow,
-                                showAsShare = stateSharePickerMode,
-                                onLongClick = {
-                                    if (browserSelectionController.isSelectionMode) {
-                                        val didSelectRange =
-                                            browserSelectionController.selectedKeys.size == 1 &&
-                                                browserSelectionController.selectRangeTo(
-                                                    key = entrySelectionKey,
-                                                    orderedKeys = stateFilteredEntries.map { stateEntry ->
-                                                        entrySelectionKeyFor(stateEntry)
-                                                    }
-                                                )
-                                        if (!didSelectRange) {
-                                            browserSelectionController.toggleSelection(entrySelectionKey)
-                                        }
-                                    } else {
-                                        browserSelectionController.enterSelectionWith(entrySelectionKey)
-                                    }
-                                },
-                                onClick = {
-                                    if (browserSelectionController.isSelectionMode) {
-                                        browserSelectionController.toggleSelection(entrySelectionKey)
-                                        return@SmbEntryRow
-                                    }
-                                    if (stateSharePickerMode) {
-                                        openDirectory(
-                                            targetShare = entry.name,
-                                            targetSubPath = "",
-                                            navigationDirection = BrowserPageNavDirection.Forward
-                                        )
-                                    } else if (entry.isDirectory) {
-                                        openDirectory(
-                                            targetShare = stateShare,
-                                            targetSubPath = joinSmbRelativePath(stateSubPath, entry.name),
-                                            navigationDirection = BrowserPageNavDirection.Forward
-                                        )
-                                    } else {
-                                        if (isSupportedPlaylistFileName(entry.name)) {
-                                            openPlaylistEntry(entry)
-                                            return@SmbEntryRow
-                                        }
-                                        if (openPreviewEntry(entry)) {
-                                            return@SmbEntryRow
-                                        }
-                                        when (browserArchiveCapabilityForName(entry.name)) {
-                                            BrowserArchiveCapability.Browsable -> openArchiveEntry(entry)
-                                            BrowserArchiveCapability.KnownUnsupported -> {
-                                                Toast.makeText(
-                                                    context,
-                                                    "Archive format not supported yet",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            }
-                                            BrowserArchiveCapability.None -> {
-                                                val targetPath = joinSmbRelativePath(stateSubPath, entry.name)
-                                                val targetSpec = buildSmbEntrySourceSpec(
-                                                    credentialsSpec.copy(share = stateShare),
-                                                    targetPath
-                                                )
-                                                onOpenRemoteSource(buildSmbRequestUri(targetSpec))
-                                            }
-                                        }
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
             }
             if (browserContentState.pane == SmbBrowserPane.Entries) {
                 BrowserLazyListScrollbar(

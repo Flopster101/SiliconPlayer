@@ -1,5 +1,7 @@
 package com.flopster101.siliconplayer.ui.screens
 
+import android.app.ActivityManager
+import android.content.Context
 import com.flopster101.siliconplayer.VerticalScrollbarTrack
 import com.flopster101.siliconplayer.rememberLazyListScrollbarDragHandler
 import com.flopster101.siliconplayer.rememberScrollStateScrollbarDragHandler
@@ -98,6 +100,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.AnnotatedString
@@ -228,6 +231,22 @@ internal class BrowserSelectionController<K> {
         isSelectionMode = false
         selectedKeys = emptySet()
         rangeAnchorKey = null
+    }
+}
+
+@Composable
+internal fun rememberIsConstrainedBrowserDevice(): Boolean {
+    val context = LocalContext.current
+    val activityManager = remember(context) {
+        context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+    }
+    val isTvDevice = remember(context) {
+        context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK)
+    }
+    return remember(activityManager, isTvDevice) {
+        isTvDevice ||
+            (activityManager?.isLowRamDevice == true) ||
+            Runtime.getRuntime().availableProcessors().coerceAtLeast(1) <= 4
     }
 }
 

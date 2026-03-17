@@ -1054,6 +1054,246 @@ internal fun HttpFileBrowserScreen(
         showBrowserInfoDialog = false
         pendingExportTargets = emptyList()
     }
+    val isConstrainedBrowserDevice = rememberIsConstrainedBrowserDevice()
+    val renderBrowserContent: @Composable (HttpBrowserContentState) -> Unit = { state ->
+        val stateBrowsableEntries = if (state.path == normalizeHttpDirectoryPath(currentSpec.path)) {
+            browsableEntries
+        } else {
+            val cachedSpec = currentSpec.copy(
+                path = state.path,
+                query = null,
+                username = sessionUsername,
+                password = sessionPassword
+            )
+            directoryEntriesCache[directoryCacheKeyFor(cachedSpec)]
+                ?.filter { entry ->
+                    shouldShowRemoteBrowserEntry(
+                        name = entry.name,
+                        isDirectory = entry.isDirectory,
+                        supportedExtensions = supportedExtensions,
+                        showUnsupportedFiles = showUnsupportedFiles,
+                        showHiddenFilesAndFolders = showHiddenFilesAndFolders
+                    )
+                }
+                .orEmpty()
+        }
+        val stateFilteredEntries = if (browserSearchController.debouncedQuery.isBlank()) {
+            stateBrowsableEntries
+        } else {
+            stateBrowsableEntries.filter { entry ->
+                matchesBrowserSearchQuery(entry.name, browserSearchController.debouncedQuery)
+            }
+        }
+        val stateCanNavigateUp = canNavigateUpWithinHttpBrowser(
+            currentPath = state.path,
+            rootPath = effectiveRootPath
+        )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = if (state.pane == HttpBrowserPane.Entries) {
+                entriesListState
+            } else {
+                nonEntriesListState
+            },
+            contentPadding = PaddingValues(bottom = bottomContentPadding)
+        ) {
+            if (stateCanNavigateUp && state.pane != HttpBrowserPane.Loading) {
+                item("parent") {
+                    HttpParentDirectoryRow(
+                        onClick = {
+                            if (!isLoading) {
+                                navigateUpWithinBrowser()
+                            }
+                        }
+                    )
+                }
+            }
+
+            if (state.pane == HttpBrowserPane.Loading) {
+                item("loading") {
+                    HttpLoadingCard(
+                        title = "Loading $protocolLabel directory...",
+                        subtitle = if (loadingLoadedCount > 0) {
+                            "$loadingLoadedCount entries loaded so far"
+                        } else {
+                            "Fetching folder entries"
+                        },
+                        logLines = loadingLogLines,
+                        protocolLabel = protocolLabel,
+                        onShowNow = { showLoadedEntriesNow() },
+                        onCancel = { cancelCurrentLoadAndGoBack() },
+                        showNowEnabled = loadingLoadedCount > 0
+                    )
+                }
+            } else if (state.pane == HttpBrowserPane.Error) {
+                item("error") {
+                    ElevatedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.errorContainer)
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.WarningAmber,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "Unable to open HTTP directory",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Text(
+                                text = errorMessage.orEmpty(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            TextButton(
+                                onClick = {
+                                    openDirectory(
+                                        targetSpec = currentSpec,
+                                        cancelState = HttpLoadingCancelState(
+                                            previousSpec = currentSpec,
+                                            previousEntries = entries,
+                                            previousErrorMessage = errorMessage
+                                        ),
+                                        forceReload = true,
+                                        navigationDirection = BrowserPageNavDirection.Neutral
+                                    )
+                                }
+                            ) {
+                                Text("Retry")
+                            }
+                        }
+                    }
+                }
+            } else if (state.pane == HttpBrowserPane.Empty) {
+                item("empty") {
+                    HttpInfoCard(
+                        title = "This directory is empty",
+                        subtitle = "No files or folders found"
+                    )
+                }
+            } else {
+                if (stateFilteredEntries.isEmpty() && browserSearchController.debouncedQuery.isNotBlank()) {
+                    item("search-empty") {
+                        BrowserSearchNoResultsCard(query = browserSearchController.debouncedQuery)
+                    }
+                } else {
+                    itemsIndexed(
+                        stateFilteredEntries,
+                        key = { _, entry -> entry.sourceId }
+                    ) { index, entry ->
+                        val entrySelectionKey = entrySelectionKeyFor(entry)
+                        val hasSelectedAbove = if (index > 0) {
+                            val aboveKey = entrySelectionKeyFor(stateFilteredEntries[index - 1])
+                            browserSelectionController.selectedKeys.contains(aboveKey)
+                        } else {
+                            false
+                        }
+                        val hasSelectedBelow = if (index < stateFilteredEntries.lastIndex) {
+                            val belowKey = entrySelectionKeyFor(stateFilteredEntries[index + 1])
+                            browserSelectionController.selectedKeys.contains(belowKey)
+                        } else {
+                            false
+                        }
+                        HttpEntryRow(
+                            entry = entry,
+                            supportedExtensions = supportedExtensions,
+                            decoderExtensionArtworkHints = decoderExtensionArtworkHints,
+                            isSelected = browserSelectionController.selectedKeys.contains(entrySelectionKey),
+                            hasSelectedAbove = hasSelectedAbove,
+                            hasSelectedBelow = hasSelectedBelow,
+                            onLongClick = {
+                                if (browserSelectionController.isSelectionMode) {
+                                    val didSelectRange =
+                                        browserSelectionController.selectedKeys.size == 1 &&
+                                            browserSelectionController.selectRangeTo(
+                                                key = entrySelectionKey,
+                                                orderedKeys = stateFilteredEntries.map { stateEntry ->
+                                                    entrySelectionKeyFor(stateEntry)
+                                                }
+                                            )
+                                    if (!didSelectRange) {
+                                        browserSelectionController.toggleSelection(entrySelectionKey)
+                                    }
+                                } else {
+                                    browserSelectionController.enterSelectionWith(entrySelectionKey)
+                                }
+                            },
+                            onClick = {
+                                if (browserSelectionController.isSelectionMode) {
+                                    browserSelectionController.toggleSelection(entrySelectionKey)
+                                    return@HttpEntryRow
+                                }
+                                if (entry.isDirectory) {
+                                    val nextSpec = parseHttpSourceSpecFromInput(entry.requestUrl)
+                                        ?: return@HttpEntryRow
+                                    val cancelSnapshot = HttpLoadingCancelState(
+                                        previousSpec = currentSpec,
+                                        previousEntries = entries,
+                                        previousErrorMessage = errorMessage
+                                    )
+                                    openDirectory(
+                                        targetSpec = nextSpec.copy(
+                                            username = sessionUsername,
+                                            password = sessionPassword
+                                        ),
+                                        cancelState = cancelSnapshot,
+                                        navigationDirection = BrowserPageNavDirection.Forward
+                                    )
+                                } else {
+                                    if (isSupportedPlaylistFileName(entry.name)) {
+                                        openPlaylistEntry(entry)
+                                        return@HttpEntryRow
+                                    }
+                                    if (openPreviewEntry(entry)) {
+                                        return@HttpEntryRow
+                                    }
+                                    when (browserArchiveCapabilityForName(entry.name)) {
+                                        BrowserArchiveCapability.Browsable -> openArchiveEntry(entry)
+                                        BrowserArchiveCapability.KnownUnsupported -> {
+                                            Toast.makeText(
+                                                context,
+                                                "Archive format not supported yet",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+
+                                        BrowserArchiveCapability.None -> {
+                                            onOpenRemoteSource(
+                                                appendHttpDisplayNameFragment(
+                                                    sourceUrl = entry.requestUrl,
+                                                    displayName = entry.name
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -1224,255 +1464,24 @@ internal fun HttpFileBrowserScreen(
                 .padding(paddingValues)
                 .pullRefresh(pullRefreshState)
         ) {
-            AnimatedContent(
-                targetState = browserContentState,
-                transitionSpec = {
-                    val loadingTransition =
-                        initialState.pane == HttpBrowserPane.Loading ||
-                            targetState.pane == HttpBrowserPane.Loading
-                    browserContentTransform(
-                        navDirection = browserNavDirection,
-                        loadingTransition = loadingTransition
-                    )
-                },
-                label = "httpBrowserLoadingTransition",
-                modifier = Modifier.fillMaxSize()
-            ) { state ->
-                val stateBrowsableEntries = if (state.path == normalizeHttpDirectoryPath(currentSpec.path)) {
-                    browsableEntries
-                } else {
-                    val cachedSpec = currentSpec.copy(
-                        path = state.path,
-                        query = null,
-                        username = sessionUsername,
-                        password = sessionPassword
-                    )
-                    directoryEntriesCache[directoryCacheKeyFor(cachedSpec)]
-                        ?.filter { entry ->
-                            shouldShowRemoteBrowserEntry(
-                                name = entry.name,
-                                isDirectory = entry.isDirectory,
-                                supportedExtensions = supportedExtensions,
-                                showUnsupportedFiles = showUnsupportedFiles,
-                                showHiddenFilesAndFolders = showHiddenFilesAndFolders
-                            )
-                        }
-                        .orEmpty()
-                }
-                val stateFilteredEntries = if (browserSearchController.debouncedQuery.isBlank()) {
-                    stateBrowsableEntries
-                } else {
-                    stateBrowsableEntries.filter { entry ->
-                        matchesBrowserSearchQuery(entry.name, browserSearchController.debouncedQuery)
-                    }
-                }
-                val stateCanNavigateUp = canNavigateUpWithinHttpBrowser(
-                    currentPath = state.path,
-                    rootPath = effectiveRootPath
-                )
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    state = if (state.pane == HttpBrowserPane.Entries) {
-                        entriesListState
-                    } else {
-                        nonEntriesListState
+            if (isConstrainedBrowserDevice) {
+                renderBrowserContent(browserContentState)
+            } else {
+                AnimatedContent(
+                    targetState = browserContentState,
+                    transitionSpec = {
+                        val loadingTransition =
+                            initialState.pane == HttpBrowserPane.Loading ||
+                                targetState.pane == HttpBrowserPane.Loading
+                        browserContentTransform(
+                            navDirection = browserNavDirection,
+                            loadingTransition = loadingTransition
+                        )
                     },
-                    contentPadding = PaddingValues(bottom = bottomContentPadding)
-                ) {
-                    if (stateCanNavigateUp && state.pane != HttpBrowserPane.Loading) {
-                        item("parent") {
-                            HttpParentDirectoryRow(
-                                onClick = {
-                                    if (!isLoading) {
-                                        navigateUpWithinBrowser()
-                                    }
-                                }
-                            )
-                        }
-                    }
-
-                    if (state.pane == HttpBrowserPane.Loading) {
-                        item("loading") {
-                            HttpLoadingCard(
-                                title = "Loading $protocolLabel directory...",
-                                subtitle = if (loadingLoadedCount > 0) {
-                                    "$loadingLoadedCount entries loaded so far"
-                                } else {
-                                    "Fetching folder entries"
-                                },
-                                logLines = loadingLogLines,
-                                protocolLabel = protocolLabel,
-                                onShowNow = { showLoadedEntriesNow() },
-                                onCancel = { cancelCurrentLoadAndGoBack() },
-                                showNowEnabled = loadingLoadedCount > 0
-                            )
-                        }
-                    } else if (state.pane == HttpBrowserPane.Error) {
-                        item("error") {
-                            ElevatedCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(MaterialTheme.colorScheme.errorContainer)
-                                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.WarningAmber,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Text(
-                                            text = "Unable to open HTTP directory",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-                                    Text(
-                                        text = errorMessage.orEmpty(),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-                                    TextButton(
-                                        onClick = {
-                                            openDirectory(
-                                                targetSpec = currentSpec,
-                                                cancelState = HttpLoadingCancelState(
-                                                    previousSpec = currentSpec,
-                                                    previousEntries = entries,
-                                                    previousErrorMessage = errorMessage
-                                                ),
-                                                forceReload = true,
-                                                navigationDirection = BrowserPageNavDirection.Neutral
-                                            )
-                                        }
-                                    ) {
-                                        Text("Retry")
-                                    }
-                                }
-                            }
-                        }
-                    } else if (state.pane == HttpBrowserPane.Empty) {
-                        item("empty") {
-                            HttpInfoCard(
-                                title = "This directory is empty",
-                                subtitle = "No files or folders found"
-                            )
-                        }
-                    } else {
-                        if (stateFilteredEntries.isEmpty() && browserSearchController.debouncedQuery.isNotBlank()) {
-                            item("search-empty") {
-                                BrowserSearchNoResultsCard(query = browserSearchController.debouncedQuery)
-                            }
-                        } else {
-                            itemsIndexed(
-                                stateFilteredEntries,
-                                key = { _, entry -> entry.sourceId }
-                            ) { index, entry ->
-                                val entrySelectionKey = entrySelectionKeyFor(entry)
-                                val hasSelectedAbove = if (index > 0) {
-                                    val aboveKey = entrySelectionKeyFor(stateFilteredEntries[index - 1])
-                                    browserSelectionController.selectedKeys.contains(aboveKey)
-                                } else {
-                                    false
-                                }
-                                val hasSelectedBelow = if (index < stateFilteredEntries.lastIndex) {
-                                    val belowKey = entrySelectionKeyFor(stateFilteredEntries[index + 1])
-                                    browserSelectionController.selectedKeys.contains(belowKey)
-                                } else {
-                                    false
-                                }
-                                HttpEntryRow(
-                                    entry = entry,
-                                    supportedExtensions = supportedExtensions,
-                                    decoderExtensionArtworkHints = decoderExtensionArtworkHints,
-                                    isSelected = browserSelectionController.selectedKeys.contains(entrySelectionKey),
-                                    hasSelectedAbove = hasSelectedAbove,
-                                    hasSelectedBelow = hasSelectedBelow,
-                                    onLongClick = {
-                                        if (browserSelectionController.isSelectionMode) {
-                                            val didSelectRange =
-                                                browserSelectionController.selectedKeys.size == 1 &&
-                                                    browserSelectionController.selectRangeTo(
-                                                        key = entrySelectionKey,
-                                                        orderedKeys = stateFilteredEntries.map { stateEntry ->
-                                                            entrySelectionKeyFor(stateEntry)
-                                                        }
-                                                    )
-                                            if (!didSelectRange) {
-                                                browserSelectionController.toggleSelection(entrySelectionKey)
-                                            }
-                                        } else {
-                                            browserSelectionController.enterSelectionWith(entrySelectionKey)
-                                        }
-                                    },
-                                    onClick = {
-                                        if (browserSelectionController.isSelectionMode) {
-                                            browserSelectionController.toggleSelection(entrySelectionKey)
-                                            return@HttpEntryRow
-                                        }
-                                        if (entry.isDirectory) {
-                                            val nextSpec = parseHttpSourceSpecFromInput(entry.requestUrl)
-                                                ?: return@HttpEntryRow
-                                            val cancelSnapshot = HttpLoadingCancelState(
-                                                previousSpec = currentSpec,
-                                                previousEntries = entries,
-                                                previousErrorMessage = errorMessage
-                                            )
-                                            openDirectory(
-                                                targetSpec = nextSpec.copy(
-                                                    username = sessionUsername,
-                                                    password = sessionPassword
-                                                ),
-                                                cancelState = cancelSnapshot,
-                                                navigationDirection = BrowserPageNavDirection.Forward
-                                            )
-                                        } else {
-                                            if (isSupportedPlaylistFileName(entry.name)) {
-                                                openPlaylistEntry(entry)
-                                                return@HttpEntryRow
-                                            }
-                                            if (openPreviewEntry(entry)) {
-                                                return@HttpEntryRow
-                                            }
-                                            when (browserArchiveCapabilityForName(entry.name)) {
-                                                BrowserArchiveCapability.Browsable -> openArchiveEntry(entry)
-                                                BrowserArchiveCapability.KnownUnsupported -> {
-                                                    Toast.makeText(
-                                                        context,
-                                                        "Archive format not supported yet",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                }
-                                                BrowserArchiveCapability.None -> {
-                                                    onOpenRemoteSource(
-                                                        appendHttpDisplayNameFragment(
-                                                            sourceUrl = entry.requestUrl,
-                                                            displayName = entry.name
-                                                        )
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
+                    label = "httpBrowserLoadingTransition",
+                    modifier = Modifier.fillMaxSize()
+                ) { state ->
+                    renderBrowserContent(state)
                 }
             }
             PullRefreshIndicator(

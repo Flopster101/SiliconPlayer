@@ -138,25 +138,40 @@ internal fun moveFavoriteTrack(
     return state.copy(favorites = reorderedFavorites)
 }
 
+internal fun readStoredPlaylistFromJson(raw: String?): StoredPlaylist? {
+    val normalized = raw?.trim().takeUnless { it.isNullOrBlank() } ?: return null
+    return runCatching {
+        readStoredPlaylist(JSONObject(normalized))
+    }.getOrNull()
+}
+
+internal fun writeStoredPlaylistToJson(playlist: StoredPlaylist): String {
+    return writeStoredPlaylist(playlist).toString()
+}
+
 private fun readStoredPlaylists(array: JSONArray): List<StoredPlaylist> {
     val playlists = mutableListOf<StoredPlaylist>()
     for (index in 0 until array.length()) {
         val item = array.optJSONObject(index) ?: continue
-        val title = item.optString(STORED_PLAYLIST_TITLE_KEY).trim()
-        val entriesArray = item.optJSONArray(STORED_PLAYLIST_ENTRIES_KEY) ?: continue
-        val entries = readPlaylistTrackEntries(entriesArray)
-        if (title.isBlank() || entries.isEmpty()) continue
-        playlists += StoredPlaylist(
-            id = item.optString(STORED_PLAYLIST_ID_KEY).trim().ifBlank { java.util.UUID.randomUUID().toString() },
-            title = title,
-            format = PlaylistStoredFormat.fromStorage(item.optString(STORED_PLAYLIST_FORMAT_KEY)),
-            sourceIdHint = item.optString(STORED_PLAYLIST_SOURCE_HINT_KEY).trim().ifBlank { null },
-            entries = entries,
-            updatedAtMs = item.optLong(STORED_PLAYLIST_UPDATED_AT_KEY).takeIf { it > 0L }
-                ?: System.currentTimeMillis()
-        )
+        readStoredPlaylist(item)?.let { playlists += it }
     }
     return playlists
+}
+
+private fun readStoredPlaylist(item: JSONObject): StoredPlaylist? {
+    val title = item.optString(STORED_PLAYLIST_TITLE_KEY).trim()
+    val entriesArray = item.optJSONArray(STORED_PLAYLIST_ENTRIES_KEY) ?: return null
+    val entries = readPlaylistTrackEntries(entriesArray)
+    if (title.isBlank() || entries.isEmpty()) return null
+    return StoredPlaylist(
+        id = item.optString(STORED_PLAYLIST_ID_KEY).trim().ifBlank { java.util.UUID.randomUUID().toString() },
+        title = title,
+        format = PlaylistStoredFormat.fromStorage(item.optString(STORED_PLAYLIST_FORMAT_KEY)),
+        sourceIdHint = item.optString(STORED_PLAYLIST_SOURCE_HINT_KEY).trim().ifBlank { null },
+        entries = entries,
+        updatedAtMs = item.optLong(STORED_PLAYLIST_UPDATED_AT_KEY).takeIf { it > 0L }
+            ?: System.currentTimeMillis()
+    )
 }
 
 private fun readPlaylistTrackEntries(array: JSONArray): List<PlaylistTrackEntry> {

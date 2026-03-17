@@ -320,6 +320,10 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
     cacheRoot: File,
     onSelectedFileChanged: (File) -> Unit,
     onCurrentPlaybackSourceIdChanged: (String) -> Unit,
+    onActivePlaylistChanged: (StoredPlaylist?) -> Unit,
+    onActivePlaylistEntryIdChanged: (String?) -> Unit,
+    onActivePlaylistShuffleActiveChanged: (Boolean) -> Unit,
+    onPendingPlaylistSubtuneSelectionChanged: (String?, Int?) -> Unit,
     onVisiblePlayableFilesChanged: (List<File>) -> Unit,
     onPlayerSurfaceVisibleChanged: (Boolean) -> Unit,
     onPlayerExpandedChanged: (Boolean) -> Unit,
@@ -337,8 +341,20 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
         rawSessionPath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null),
         cacheRoot = cacheRoot
     ) ?: return
+    val playlistContext = readSessionResumePlaylistContextForSource(prefs, restoreTarget.sourceId)
     onSelectedFileChanged(restoreTarget.displayFile)
     onCurrentPlaybackSourceIdChanged(restoreTarget.sourceId)
+    onActivePlaylistChanged(playlistContext?.playlist)
+    onActivePlaylistEntryIdChanged(playlistContext?.entryId)
+    onActivePlaylistShuffleActiveChanged(playlistContext?.shuffleActive == true)
+    val restoredPlaylistEntry = playlistContext
+        ?.playlist
+        ?.entries
+        ?.firstOrNull { it.id == playlistContext.entryId }
+    onPendingPlaylistSubtuneSelectionChanged(
+        restoreTarget.sourceId,
+        restoredPlaylistEntry?.subtuneIndex
+    )
     val sourceScheme = Uri.parse(restoreTarget.sourceId).scheme?.lowercase(Locale.ROOT)
     val restoredContextualPlayableFiles = if (
         sourceScheme == "http" ||
@@ -450,6 +466,12 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
     onPlayerSurfaceVisibleChanged(true)
 }
 
+private data class SessionResumePlaylistContext(
+    val playlist: StoredPlaylist,
+    val entryId: String,
+    val shuffleActive: Boolean
+)
+
 private data class SessionResumeCheckpoint(
     val positionSeconds: Double,
     val durationSeconds: Double,
@@ -497,6 +519,33 @@ private fun readSessionResumeCheckpointForSource(
         artist = artist,
         playbackCapabilitiesFlags = playbackCapabilitiesFlags,
         repeatCapabilitiesFlags = repeatCapabilitiesFlags
+    )
+}
+
+private fun readSessionResumePlaylistContextForSource(
+    prefs: SharedPreferences,
+    sourceId: String
+): SessionResumePlaylistContext? {
+    val playlist = readStoredPlaylistFromJson(
+        prefs.getString(AppPreferenceKeys.SESSION_RESUME_ACTIVE_PLAYLIST_JSON, null)
+    ) ?: return null
+    val entryId = prefs.getString(AppPreferenceKeys.SESSION_RESUME_ACTIVE_PLAYLIST_ENTRY_ID, null)
+        ?.trim()
+        .takeUnless { it.isNullOrBlank() }
+        ?: return null
+    val entry = playlist.entries.firstOrNull { it.id == entryId } ?: return null
+    val storedSourceId = prefs.getString(AppPreferenceKeys.SESSION_RESUME_ACTIVE_PLAYLIST_SOURCE_ID, null)
+    val matchesRestoreTarget =
+        samePath(storedSourceId, sourceId) ||
+            samePath(entry.source, sourceId)
+    if (!matchesRestoreTarget) return null
+    return SessionResumePlaylistContext(
+        playlist = playlist,
+        entryId = entryId,
+        shuffleActive = prefs.getBoolean(
+            AppPreferenceKeys.SESSION_RESUME_ACTIVE_PLAYLIST_SHUFFLE_ACTIVE,
+            false
+        )
     )
 }
 

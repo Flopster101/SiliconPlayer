@@ -1713,6 +1713,46 @@ private fun AppNavigation(
         }
         ?.id
         ?: activePlaylistEntryId
+    LaunchedEffect(
+        activePlaylist,
+        currentPlaylistNavigationEntryId,
+        activePlaylistShuffleActive,
+        currentTrackPathOrUrl
+    ) {
+        val sourceId = currentTrackPathOrUrl?.trim().takeUnless { it.isNullOrBlank() }
+        val playlist = activePlaylist
+        val entryId = currentPlaylistNavigationEntryId?.trim().takeUnless { it.isNullOrBlank() }
+        if (
+            sourceId != null &&
+            playlist != null &&
+            entryId != null &&
+            playlist.entries.any { it.id == entryId }
+        ) {
+            prefs.edit()
+                .putString(AppPreferenceKeys.SESSION_RESUME_ACTIVE_PLAYLIST_SOURCE_ID, sourceId)
+                .putString(
+                    AppPreferenceKeys.SESSION_RESUME_ACTIVE_PLAYLIST_JSON,
+                    writeStoredPlaylistToJson(playlist)
+                )
+                .putString(AppPreferenceKeys.SESSION_RESUME_ACTIVE_PLAYLIST_ENTRY_ID, entryId)
+                .putBoolean(
+                    AppPreferenceKeys.SESSION_RESUME_ACTIVE_PLAYLIST_SHUFFLE_ACTIVE,
+                    activePlaylistShuffleActive
+                )
+                .apply()
+        } else if (
+            sourceId != null ||
+                playlist != null ||
+                entryId != null
+        ) {
+            prefs.edit()
+                .remove(AppPreferenceKeys.SESSION_RESUME_ACTIVE_PLAYLIST_SOURCE_ID)
+                .remove(AppPreferenceKeys.SESSION_RESUME_ACTIVE_PLAYLIST_JSON)
+                .remove(AppPreferenceKeys.SESSION_RESUME_ACTIVE_PLAYLIST_ENTRY_ID)
+                .remove(AppPreferenceKeys.SESSION_RESUME_ACTIVE_PLAYLIST_SHUFFLE_ACTIVE)
+                .apply()
+        }
+    }
     val effectiveMetadataTitle = activePlaylistMetadataEntry
         ?.title
         ?.trim()
@@ -2141,6 +2181,17 @@ private fun AppNavigation(
         onCurrentPlaybackSourceIdChanged = {
             currentPlaybackSourceId = it
             currentPlaybackRequestUrl = null
+        },
+        onActivePlaylistChanged = { activePlaylist = it },
+        onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
+        onActivePlaylistShuffleActiveChanged = { activePlaylistShuffleActive = it },
+        onPendingPlaylistSubtuneSelectionChanged = { sourceId, subtuneIndex ->
+            pendingPlaylistSubtuneSelection =
+                if (!sourceId.isNullOrBlank() && subtuneIndex != null) {
+                    PendingPlaylistSubtuneSelection(sourceId, subtuneIndex)
+                } else {
+                    null
+                }
         },
         onVisiblePlayableFilesChanged = { visiblePlayableFiles = it },
         onPlayerSurfaceVisibleChanged = { isPlayerSurfaceVisible = it },

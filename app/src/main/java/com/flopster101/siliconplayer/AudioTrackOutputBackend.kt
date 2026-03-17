@@ -21,9 +21,12 @@ internal object AudioTrackOutputBackend {
 
     private fun framesForPreset(bufferPreset: Int): Int {
         return when (bufferPreset) {
+            0 -> 512
             1 -> 1024
+            2 -> 2048
             3 -> 4096
-            else -> 2048
+            4 -> 8192
+            else -> 4096
         }
     }
 

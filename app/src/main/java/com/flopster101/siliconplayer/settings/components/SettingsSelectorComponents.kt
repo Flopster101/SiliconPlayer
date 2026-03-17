@@ -208,7 +208,8 @@ internal fun AudioBufferPresetSelectorCard(
             EnumChoice(AudioBufferPreset.VerySmall, AudioBufferPreset.VerySmall.label),
             EnumChoice(AudioBufferPreset.Small, AudioBufferPreset.Small.label),
             EnumChoice(AudioBufferPreset.Medium, AudioBufferPreset.Medium.label),
-            EnumChoice(AudioBufferPreset.Large, AudioBufferPreset.Large.label)
+            EnumChoice(AudioBufferPreset.Large, AudioBufferPreset.Large.label),
+            EnumChoice(AudioBufferPreset.VeryLarge, AudioBufferPreset.VeryLarge.label)
         ),
         onSelected = onSelectedPresetChanged
     )

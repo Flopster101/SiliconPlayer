@@ -278,12 +278,12 @@ private:
     std::array<std::vector<int16_t>, kOpenSlBufferQueueCount> openSlPcmBuffers {};
     std::vector<float> openSlFloatBuffer;
     size_t openSlNextBufferIndex = 0;
-    int openSlBufferFrames = 1024;
+    int openSlBufferFrames = 4096;
     std::atomic<bool> openSlStopAfterCurrentBuffer { false };
     std::thread audioTrackWriteThread;
     std::vector<float> audioTrackFloatBuffer;
     std::vector<int16_t> audioTrackPcmBuffer;
-    int audioTrackBufferFrames = 2048;
+    int audioTrackBufferFrames = 4096;
     std::atomic<bool> audioTrackStopRequested { false };
     int streamSampleRate = 48000;
     int streamChannelCount = 2;
@@ -294,7 +294,7 @@ private:
     std::atomic<int> activeOutputBackend { 0 }; // 0 inactive, 1 AAudio, 2 OpenSL ES, 3 AudioTrack
     int outputBackendPreference = 0; // 0 auto, 1 aaudio, 2 opensl, 3 audiotrack
     int outputPerformanceMode = 2; // 0 auto, 1 low-latency, 2 none, 3 power-saving
-    int outputBufferPreset = 1; // 0 very small, 1 small, 2 medium, 3 large
+    int outputBufferPreset = 3; // 0 very small, 1 small, 2 medium, 3 large, 4 very large
     int outputResamplerPreference = 1; // 1 built-in, 2 sox
     bool outputAllowFallback = true;
     std::atomic<bool> isPlaying { false };
@@ -462,8 +462,8 @@ private:
     std::condition_variable renderWorkerCv;
     std::vector<float> renderQueueSamples;
     size_t renderQueueOffset = 0;
-    std::atomic<int> renderWorkerChunkFrames { 1024 };
-    std::atomic<int> renderWorkerTargetFrames { 8192 };
+    std::atomic<int> renderWorkerChunkFrames { 256 };
+    std::atomic<int> renderWorkerTargetFrames { 16384 };
     std::atomic<int64_t> renderQueueRecoveryBoostUntilNs { 0 };
     std::atomic<uint64_t> renderQueueUnderrunCount { 0 };
     std::atomic<uint64_t> renderQueueUnderrunFrames { 0 };

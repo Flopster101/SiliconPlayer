@@ -14,10 +14,12 @@ namespace {
     constexpr int kRenderChunkFramesSmall = 256;
     constexpr int kRenderChunkFramesMedium = 256;
     constexpr int kRenderChunkFramesLarge = 256;
+    constexpr int kRenderChunkFramesVeryLarge = 512;
     constexpr int kRenderTargetFramesVerySmall = 2048;
     constexpr int kRenderTargetFramesSmall = 4096;
     constexpr int kRenderTargetFramesMedium = 8192;
     constexpr int kRenderTargetFramesLarge = 16384;
+    constexpr int kRenderTargetFramesVeryLarge = 32768;
 }
 
 void AudioEngine::setAudioPipelineConfig(
@@ -28,7 +30,7 @@ void AudioEngine::setAudioPipelineConfig(
         bool allowFallback) {
     const int normalizedBackend = (backendPreference >= 0 && backendPreference <= 3) ? backendPreference : 0;
     const int normalizedPerformance = (performanceMode >= 0 && performanceMode <= 3) ? performanceMode : 1;
-    const int normalizedBufferPreset = (bufferPreset >= 0 && bufferPreset <= 3) ? bufferPreset : 1;
+    const int normalizedBufferPreset = (bufferPreset >= 0 && bufferPreset <= 4) ? bufferPreset : 3;
     const int normalizedResampler = (resamplerPreference >= 1 && resamplerPreference <= 2) ? resamplerPreference : 1;
 
     const bool changed =
@@ -75,6 +77,10 @@ void AudioEngine::updateRenderQueueTuning() {
         case 3:
             chunkFrames = kRenderChunkFramesLarge;
             targetFrames = kRenderTargetFramesLarge;
+            break;
+        case 4:
+            chunkFrames = kRenderChunkFramesVeryLarge;
+            targetFrames = kRenderTargetFramesVeryLarge;
             break;
         case 2:
         default:

@@ -144,7 +144,7 @@ internal fun GeneralAudioRouteContent(
                 selectedPreset = state.audioBufferPreset,
                 onSelectedPresetChanged = actions.onAudioBufferPresetChanged,
                 title = "AAudio buffer preset",
-                description = "AAudio buffer sizing profile. Smaller lowers latency, larger improves underrun resistance."
+                description = "AAudio buffer sizing profile. Large is the recommended default; Very large adds extra underrun headroom on slower devices."
             )
         }
         AudioBackendPreference.OpenSLES -> {
@@ -153,7 +153,7 @@ internal fun GeneralAudioRouteContent(
                 selectedPreset = state.audioBufferPreset,
                 onSelectedPresetChanged = actions.onAudioBufferPresetChanged,
                 title = "OpenSL ES buffer preset",
-                description = "OpenSL ES queue buffer profile. Medium is a good default for most devices."
+                description = "OpenSL ES queue buffer profile. Large is the recommended default; Very large adds extra underrun headroom on slower devices."
             )
         }
         AudioBackendPreference.AudioTrack -> {
@@ -162,7 +162,7 @@ internal fun GeneralAudioRouteContent(
                 selectedPreset = state.audioBufferPreset,
                 onSelectedPresetChanged = actions.onAudioBufferPresetChanged,
                 title = "AudioTrack buffer preset",
-                description = "AudioTrack write buffer profile. Increase size if you hear underruns on older devices."
+                description = "AudioTrack write buffer profile. Large is the recommended default; Very large adds extra underrun headroom on slower devices."
             )
         }
     }

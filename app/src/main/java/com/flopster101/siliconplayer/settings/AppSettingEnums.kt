@@ -53,11 +53,7 @@ fun AudioBackendPreference.defaultPerformanceMode(): AudioPerformanceMode {
 }
 
 fun AudioBackendPreference.defaultBufferPreset(): AudioBufferPreset {
-    return when (this) {
-        AudioBackendPreference.AAudio,
-        AudioBackendPreference.OpenSLES,
-        AudioBackendPreference.AudioTrack -> AudioBufferPreset.Small
-    }
+    return recommendedAudioBufferPresetForCurrentDevice()
 }
 
 enum class AudioPerformanceMode(val storageValue: String, val label: String, val nativeValue: Int) {
@@ -76,12 +72,21 @@ enum class AudioBufferPreset(val storageValue: String, val label: String, val na
     VerySmall("very_small", "Very small", 0),
     Small("small", "Small", 1),
     Medium("medium", "Medium", 2),
-    Large("large", "Large", 3);
+    Large("large", "Large", 3),
+    VeryLarge("very_large", "Very large", 4);
 
     companion object {
         fun fromStorage(value: String?): AudioBufferPreset {
-            return entries.firstOrNull { it.storageValue == value } ?: Small
+            return entries.firstOrNull { it.storageValue == value } ?: recommendedAudioBufferPresetForCurrentDevice()
         }
+    }
+}
+
+private fun recommendedAudioBufferPresetForCurrentDevice(): AudioBufferPreset {
+    return if (Runtime.getRuntime().availableProcessors().coerceAtLeast(1) <= 4) {
+        AudioBufferPreset.VeryLarge
+    } else {
+        AudioBufferPreset.Large
     }
 }
 

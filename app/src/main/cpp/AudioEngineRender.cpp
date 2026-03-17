@@ -618,12 +618,12 @@ void AudioEngine::renderWorkerLoop() {
         const int64_t boostUntilNs = renderQueueRecoveryBoostUntilNs.load(std::memory_order_relaxed);
         const bool recoveryBoostActive = nowNs < boostUntilNs;
         const int targetFrames = recoveryBoostActive
-                ? std::max(baseTargetFrames, baseTargetFrames * 3)
+                ? std::max(baseTargetFrames, baseTargetFrames * 4)
                 : baseTargetFrames;
         bool needsFill = false;
         {
             std::unique_lock<std::mutex> lock(renderQueueMutex);
-            renderWorkerCv.wait_for(lock, std::chrono::milliseconds(7), [this, targetFrames]() {
+            renderWorkerCv.wait_for(lock, std::chrono::milliseconds(5), [this, targetFrames]() {
                 if (renderWorkerStop) return true;
                 if (!isPlaying.load() || seekInProgress.load()) return false;
                 const size_t availableSamples = renderQueueSamples.size() > renderQueueOffset
@@ -646,7 +646,7 @@ void AudioEngine::renderWorkerLoop() {
 
             // Allow a small overshoot above target to keep scope snapshots
             // flowing during idle gaps between AAudio callbacks.
-            if (!needsFill && bufferedFrames < targetFrames + 512) {
+            if (!needsFill && bufferedFrames < targetFrames + std::max(512, renderWorkerChunkFrames.load(std::memory_order_relaxed))) {
                 needsFill = true;
             }
         }

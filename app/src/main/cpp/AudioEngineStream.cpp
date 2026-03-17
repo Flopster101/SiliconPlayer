@@ -33,8 +33,10 @@ namespace {
                 return 2048;
             case 3:
                 return 4096;
+            case 4:
+                return 8192;
             default:
-                return 2048;
+                return 4096;
         }
     }
 
@@ -48,8 +50,10 @@ namespace {
                 return 2048;
             case 3:
                 return 4096;
+            case 4:
+                return 8192;
             default:
-                return 2048;
+                return 4096;
         }
     }
 
@@ -457,13 +461,25 @@ void AudioEngine::applyStreamBufferPreset() {
     const int32_t bufferCapacity = aaudio.streamGetBufferCapacityInFrames(stream);
     if (burstFrames <= 0 || bufferCapacity <= 0) return;
 
-    int multiplier = 1;
-    if (outputBufferPreset == 1) {
-        multiplier = 2;
-    } else if (outputBufferPreset == 2) {
-        multiplier = 4;
-    } else if (outputBufferPreset == 3) {
-        multiplier = 8;
+    int multiplier = 8;
+    switch (outputBufferPreset) {
+        case 0:
+            multiplier = 1;
+            break;
+        case 1:
+            multiplier = 2;
+            break;
+        case 2:
+            multiplier = 4;
+            break;
+        case 3:
+            multiplier = 8;
+            break;
+        case 4:
+            multiplier = 16;
+            break;
+        default:
+            break;
     }
 
     const int32_t target = std::clamp(

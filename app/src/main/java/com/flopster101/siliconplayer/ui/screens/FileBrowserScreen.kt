@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.os.storage.StorageManager
@@ -55,6 +56,8 @@ import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -180,6 +183,35 @@ private data class ArchiveToolbarContext(
     val sourceIcon: ImageVector
 )
 
+private fun encodeSavedFileItem(item: FileItem): String {
+    return listOf(
+        Uri.encode(item.file.absolutePath),
+        Uri.encode(item.name),
+        if (item.isDirectory) "1" else "0",
+        item.size.toString(),
+        item.kind.name
+    ).joinToString("\u001f")
+}
+
+private fun decodeSavedFileItem(encoded: String): FileItem? {
+    val parts = encoded.split("\u001f")
+    if (parts.size != 5) return null
+    return runCatching {
+        FileItem(
+            file = File(Uri.decode(parts[0])),
+            name = Uri.decode(parts[1]),
+            isDirectory = parts[2] == "1",
+            size = parts[3].toLong(),
+            kind = FileItem.Kind.valueOf(parts[4])
+        )
+    }.getOrNull()
+}
+
+private val LocalBrowserFileListSaver = listSaver<List<FileItem>, String>(
+    save = { items -> items.map(::encodeSavedFileItem) },
+    restore = { encodedItems -> encodedItems.mapNotNull(::decodeSavedFileItem) }
+)
+
 private const val LOCAL_BROWSER_SHOW_INTERMEDIARY_LOADING_PAGE = false
 
 @OptIn(
@@ -244,14 +276,15 @@ internal fun FileBrowserScreen(
     val localListingAdapter = remember(repository) { LocalBrowserListingAdapter(repository) }
     var storageLocationsRefreshToken by remember { mutableIntStateOf(0) }
     val storageLocations = remember(context, storageLocationsRefreshToken) { detectStorageLocations(context) }
-    var selectedLocationId by remember { mutableStateOf<String?>(null) }
-    var currentDirectory by remember { mutableStateOf<File?>(null) }
-    val fileList = remember { mutableStateListOf<FileItem>() }
+    var selectedLocationId by rememberSaveable { mutableStateOf<String?>(null) }
+    var currentDirectoryPath by rememberSaveable { mutableStateOf<String?>(null) }
+    val currentDirectory = currentDirectoryPath?.let(::File)
+    var fileList by rememberSaveable(stateSaver = LocalBrowserFileListSaver) { mutableStateOf(emptyList<FileItem>()) }
     var selectorExpanded by remember { mutableStateOf(false) }
     var currentFolderMenuExpanded by remember { mutableStateOf(false) }
     var browserNavDirection by remember { mutableStateOf(BrowserPageNavDirection.Forward) }
     var isLoadingDirectory by remember { mutableStateOf(false) }
-    var lastAppliedInitialNavigationKey by remember { mutableStateOf<String?>(null) }
+    var lastAppliedInitialNavigationKey by rememberSaveable { mutableStateOf<String?>(null) }
     val directoryListState = rememberLazyListState()
     var launchAutoScrollTargetKey by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
@@ -333,7 +366,7 @@ internal fun FileBrowserScreen(
         directoryLoadJob?.cancel()
         isLoadingDirectory = true
         directoryAnimationEpoch += 1
-        fileList.clear()
+        fileList = emptyList()
         folderSummaryCache.clear()
         loadingLogLines.clear()
         appendLoadingLog("Opening ${directory.absolutePath}")
@@ -412,9 +445,9 @@ internal fun FileBrowserScreen(
                     appendLoadingLog("Load finished")
                     // Publish all items at once for normal folders. For very large folders,
                     // chunk without artificial delays to avoid blocking the main thread.
-                    fileList.clear()
+                    fileList = emptyList()
                     if (shouldPublishDirectoryAllAtOnce(loadedFiles.size)) {
-                        fileList.addAll(loadedFiles)
+                        fileList = loadedFiles
                     } else {
                         val publishBatchSize = directoryPublishBatchSize(loadedFiles.size)
                         var index = 0
@@ -424,7 +457,7 @@ internal fun FileBrowserScreen(
 
                             val end = min(index + publishBatchSize, loadedFiles.size)
                             val chunk = loadedFiles.subList(index, end)
-                            fileList.addAll(chunk)
+                            fileList = fileList + chunk
                             index = end
                             if (index < loadedFiles.size) {
                                 // Yield once per chunk to avoid UI stalls for huge folders.
@@ -466,8 +499,8 @@ internal fun FileBrowserScreen(
         launchAutoScrollTargetKey = null
         browserNavDirection = BrowserPageNavDirection.Backward
         selectedLocationId = null
-        currentDirectory = null
-        fileList.clear()
+        currentDirectoryPath = null
+        fileList = emptyList()
         loadingLogLines.clear()
         onVisiblePlayableFilesChanged(emptyList())
         onBrowserLocationChanged(BrowserLaunchState())
@@ -477,7 +510,7 @@ internal fun FileBrowserScreen(
         launchAutoScrollTargetKey = null
         browserNavDirection = BrowserPageNavDirection.Forward
         selectedLocationId = location.id
-        currentDirectory = location.directory
+        currentDirectoryPath = location.directory.absolutePath
         loadDirectoryAsync(location.directory)
         onBrowserLocationChanged(
             BrowserLaunchState(
@@ -565,7 +598,7 @@ internal fun FileBrowserScreen(
         } else {
             BrowserPageNavDirection.Backward
         }
-        currentDirectory = directory
+        currentDirectoryPath = directory.absolutePath
         loadDirectoryAsync(directory)
         emitBrowserLocationChange(directory)
     }
@@ -941,7 +974,7 @@ internal fun FileBrowserScreen(
 
         browserNavDirection = BrowserPageNavDirection.Forward
         selectedLocationId = resolvedLocationId
-        currentDirectory = restoredDirectory
+        currentDirectoryPath = restoredDirectory.absolutePath
         loadDirectoryAsync(restoredDirectory)
         val restoredMountInfo = findArchiveMount(restoredDirectory.absolutePath)?.second
         val restoredLogicalArchivePath = resolveLogicalArchivePath(restoredDirectory)
@@ -1060,7 +1093,7 @@ internal fun FileBrowserScreen(
     val filteredFileList by remember(browserSearchController.debouncedQuery) {
         derivedStateOf {
             if (browserSearchController.debouncedQuery.isBlank()) {
-                fileList.toList()
+                fileList
             } else {
                 fileList.filter { item ->
                     matchesBrowserSearchQuery(item.name, browserSearchController.debouncedQuery)

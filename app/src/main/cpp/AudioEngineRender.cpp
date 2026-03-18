@@ -668,22 +668,29 @@ void AudioEngine::renderWorkerLoop() {
     localBuffer.resize(1024u * 2u);
 
     for (;;) {
+        const bool backgroundHeadroomActive = backgroundPlaybackMode.load(std::memory_order_relaxed);
+        const int configuredChunkFrames = std::max(256, renderWorkerChunkFrames.load(std::memory_order_relaxed));
+        const int baseChunkFrames = backgroundHeadroomActive
+                ? std::max(configuredChunkFrames, 1024)
+                : configuredChunkFrames;
         const int baseTargetFrames = std::max(
-                renderWorkerChunkFrames.load(std::memory_order_relaxed) * 2,
-                renderWorkerTargetFrames.load(std::memory_order_relaxed)
+                baseChunkFrames * 2,
+                renderWorkerTargetFrames.load(std::memory_order_relaxed) * (backgroundHeadroomActive ? 2 : 1)
         );
         const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()
         ).count();
         const int64_t boostUntilNs = renderQueueRecoveryBoostUntilNs.load(std::memory_order_relaxed);
         const bool recoveryBoostActive = nowNs < boostUntilNs;
+        const int recoveryTargetMultiplier = backgroundHeadroomActive ? 2 : 4;
         const int targetFrames = recoveryBoostActive
-                ? std::max(baseTargetFrames, baseTargetFrames * 4)
+                ? std::max(baseTargetFrames, baseTargetFrames * recoveryTargetMultiplier)
                 : baseTargetFrames;
         bool needsFill = false;
+        int bufferedFramesBeforeFill = 0;
         {
             std::unique_lock<std::mutex> lock(renderQueueMutex);
-            renderWorkerCv.wait_for(lock, std::chrono::milliseconds(5), [this, targetFrames]() {
+            renderWorkerCv.wait(lock, [this, targetFrames]() {
                 if (renderWorkerStop) return true;
                 if (!isPlaying.load() || seekInProgress.load()) return false;
                 const int bufferedFrames = static_cast<int>(renderQueueSampleCount / 2u);
@@ -695,14 +702,8 @@ void AudioEngine::renderWorkerLoop() {
             if (!isPlaying.load() || seekInProgress.load()) {
                 continue;
             }
-            const int bufferedFrames = static_cast<int>(renderQueueSampleCount / 2u);
-            needsFill = bufferedFrames < targetFrames;
-
-            // Allow a small overshoot above target to keep scope snapshots
-            // flowing during idle gaps between AAudio callbacks.
-            if (!needsFill && bufferedFrames < targetFrames + std::max(512, renderWorkerChunkFrames.load(std::memory_order_relaxed))) {
-                needsFill = true;
-            }
+            bufferedFramesBeforeFill = static_cast<int>(renderQueueSampleCount / 2u);
+            needsFill = bufferedFramesBeforeFill < targetFrames;
         }
 
         if (!needsFill) {
@@ -711,7 +712,21 @@ void AudioEngine::renderWorkerLoop() {
 
         bool reachedEnd = false;
         int channels = 2;
-        const int chunkFrames = std::max(256, renderWorkerChunkFrames.load(std::memory_order_relaxed));
+        uint32_t requestedVisualizationFeatures = 0u;
+        const bool visualizationActive = shouldUpdateVisualization(&requestedVisualizationFeatures);
+        int chunkFrames = baseChunkFrames;
+        const int deficitFrames = std::max(0, targetFrames - bufferedFramesBeforeFill);
+        if (recoveryBoostActive || backgroundHeadroomActive ||
+            bufferedFramesBeforeFill < std::max(baseChunkFrames * 2, targetFrames / 3)) {
+            const int aggressiveMinimumFrames = backgroundHeadroomActive
+                    ? std::max(baseChunkFrames * 2, 2048)
+                    : std::max(baseChunkFrames * 4, 1024);
+            chunkFrames = std::clamp(
+                    std::max(deficitFrames, aggressiveMinimumFrames),
+                    baseChunkFrames,
+                    backgroundHeadroomActive ? 8192 : 4096
+            );
+        }
         {
             std::lock_guard<std::mutex> lock(decoderMutex);
             if (!decoder || !isPlaying.load()) {
@@ -825,8 +840,7 @@ void AudioEngine::renderWorkerLoop() {
 
         appendRenderQueue(localBuffer.data(), chunkFrames, channels);
 
-        uint32_t requestedVisualizationFeatures = 0u;
-        if (shouldUpdateVisualization(&requestedVisualizationFeatures)) {
+        if (visualizationActive) {
             updateVisualizationDataFromOutputCallback(
                     localBuffer.data(),
                     chunkFrames,
@@ -835,14 +849,14 @@ void AudioEngine::renderWorkerLoop() {
             );
         }
 
-        // Pace chunk renders so scope captures are spread evenly across
-        // time rather than clustering in a burst after each AAudio callback.
-        // Skip pacing when buffer is critically low to avoid underruns.
-        {
+        // Only apply a tiny pacing delay while visualization demand is active.
+        // In background playback, intentional sleeps here just slow underrun
+        // recovery down and can stretch short crackles into audible bursts.
+        if (visualizationActive && !recoveryBoostActive) {
             const int currentLevel = renderQueueFrames();
             const int safetyThreshold = std::max(targetFrames / 4, 1024);
             if (currentLevel > safetyThreshold && currentLevel < targetFrames) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(6));
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
         }
 

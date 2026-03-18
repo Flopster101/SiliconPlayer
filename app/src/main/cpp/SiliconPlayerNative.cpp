@@ -2021,6 +2021,15 @@ Java_com_flopster101_siliconplayer_NativeBridge_setAudioPipelineConfig(
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_com_flopster101_siliconplayer_NativeBridge_setBackgroundPlaybackMode(
+        JNIEnv*,
+        jobject,
+        jboolean enabled) {
+    ensureEngine();
+    audioEngine->setBackgroundPlaybackMode(enabled == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_com_flopster101_siliconplayer_NativeBridge_setEndFadeApplyToAllTracks(
         JNIEnv* env, jobject thiz, jboolean enabled) {
     Java_com_flopster101_siliconplayer_MainActivity_setEndFadeApplyToAllTracks(env, thiz, enabled);

@@ -4,9 +4,14 @@
 #include <android/log.h>
 #include <android/api-level.h>
 #include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <cstring>
 #include <dlfcn.h>
+#include <pthread.h>
+#include <sys/resource.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 
 #define LOG_TAG "AudioEngine"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
@@ -22,6 +27,41 @@ namespace {
     constexpr int kOpenSlStartupMinQueuedBuffersFast = 1;
     constexpr int kAudioTrackStartupReadyWaitMs = 240;
     constexpr int kAudioTrackStartupPollIntervalMs = 2;
+
+    pid_t currentThreadId() {
+#ifdef SYS_gettid
+        return static_cast<pid_t>(syscall(SYS_gettid));
+#else
+        return getpid();
+#endif
+    }
+
+    void promoteThreadForAudio(const char* role, int targetNice) {
+        const pid_t tid = currentThreadId();
+        const int before = getpriority(PRIO_PROCESS, tid);
+        errno = 0;
+        if (setpriority(PRIO_PROCESS, tid, targetNice) == 0) {
+            const int after = getpriority(PRIO_PROCESS, tid);
+            LOGD(
+                    "Thread priority promoted for %s: tid=%d nice(before=%d after=%d target=%d)",
+                    role,
+                    static_cast<int>(tid),
+                    before,
+                    after,
+                    targetNice
+            );
+            return;
+        }
+
+        const int err = errno;
+        LOGD(
+                "Thread priority promotion skipped for %s: tid=%d targetNice=%d errno=%d",
+                role,
+                static_cast<int>(tid),
+                targetNice,
+                err
+        );
+    }
 
     int openSlBufferFramesForPreset(int bufferPreset) {
         switch (bufferPreset) {
@@ -604,10 +644,24 @@ bool AudioEngine::renderOutputCallbackFrames(float* outputData, int32_t numFrame
     }
 
     const int bufferedFrames = renderQueueFrames();
-    const int targetFramesHint = std::max(
-            renderWorkerChunkFrames.load(std::memory_order_relaxed) * 2,
+    const bool backgroundHeadroomActive = backgroundPlaybackMode.load(std::memory_order_relaxed);
+    const int configuredChunkFrames = std::max(256, renderWorkerChunkFrames.load(std::memory_order_relaxed));
+    const int targetFramesBase = std::max(
+            configuredChunkFrames * 2,
             renderWorkerTargetFrames.load(std::memory_order_relaxed)
     );
+    int targetFramesHint = backgroundHeadroomActive
+            ? std::max(targetFramesBase * 2, std::max(configuredChunkFrames, 1024) * 2)
+            : targetFramesBase;
+    const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()
+    ).count();
+    if (nowNs < renderQueueRecoveryBoostUntilNs.load(std::memory_order_relaxed)) {
+        targetFramesHint = std::max(
+                targetFramesHint,
+                targetFramesHint * (backgroundHeadroomActive ? 2 : 4)
+        );
+    }
     if (framesCopied < numFrames || bufferedFrames < targetFramesHint) {
         renderWorkerCv.notify_one();
     }
@@ -951,6 +1005,8 @@ void AudioEngine::closeOpenSlStream() {
 }
 
 void AudioEngine::audioTrackRenderLoop() {
+    pthread_setname_np(pthread_self(), "sp_atrack");
+    promoteThreadForAudio("audiotrack-write", -16);
     int callbackRate = streamSampleRate > 0 ? streamSampleRate : 48000;
     int callbackFrames = std::max(256, audioTrackBufferFrames);
     const size_t sampleCount = static_cast<size_t>(callbackFrames) * 2u;
@@ -1058,6 +1114,12 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
         void *userData,
         void *audioData,
         int32_t numFrames) {
+    static thread_local bool callbackPriorityPromoted = false;
+    if (!callbackPriorityPromoted) {
+        pthread_setname_np(pthread_self(), "sp_aaudio");
+        promoteThreadForAudio("aaudio-callback", -16);
+        callbackPriorityPromoted = true;
+    }
     auto *engine = static_cast<AudioEngine *>(userData);
     const int callbackStreamRate = AAudioDyn::ensureLoaded()
             ? static_cast<int>(AAudioDyn::api().streamGetSampleRate(callbackStream))
@@ -1074,6 +1136,12 @@ aaudio_data_callback_result_t AudioEngine::dataCallback(
 }
 
 void AudioEngine::openSlBufferQueueCallback(SLAndroidSimpleBufferQueueItf /*bufferQueue*/, void *context) {
+    static thread_local bool callbackPriorityPromoted = false;
+    if (!callbackPriorityPromoted) {
+        pthread_setname_np(pthread_self(), "sp_opensl");
+        promoteThreadForAudio("opensl-callback", -16);
+        callbackPriorityPromoted = true;
+    }
     auto* engine = static_cast<AudioEngine*>(context);
     if (engine == nullptr) {
         return;

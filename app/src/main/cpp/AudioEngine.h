@@ -49,6 +49,7 @@ public:
     int getCoreTimelineMode(const std::string& coreName);
     int getCoreFixedSampleRateHz(const std::string& coreName);
     void setAudioPipelineConfig(int backendPreference, int performanceMode, int bufferPreset, int resamplerPreference, bool allowFallback);
+    void setBackgroundPlaybackMode(bool enabled);
     bool consumeNaturalEndEvent();
     std::string getTitle();
     std::string getArtist();
@@ -467,6 +468,7 @@ private:
     size_t renderQueueSampleCount = 0;
     std::atomic<int> renderWorkerChunkFrames { 256 };
     std::atomic<int> renderWorkerTargetFrames { 16384 };
+    std::atomic<bool> backgroundPlaybackMode { false };
     std::atomic<int64_t> renderQueueRecoveryBoostUntilNs { 0 };
     std::atomic<uint64_t> renderQueueUnderrunCount { 0 };
     std::atomic<uint64_t> renderQueueUnderrunFrames { 0 };

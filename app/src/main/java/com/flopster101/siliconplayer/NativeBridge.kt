@@ -269,6 +269,7 @@ object NativeBridge {
         resamplerPreference: Int,
         allowFallback: Boolean
     )
+    external fun setBackgroundPlaybackMode(enabled: Boolean)
     external fun setEndFadeApplyToAllTracks(enabled: Boolean)
     external fun setEndFadeDurationMs(durationMs: Int)
     external fun setEndFadeCurve(curve: Int)

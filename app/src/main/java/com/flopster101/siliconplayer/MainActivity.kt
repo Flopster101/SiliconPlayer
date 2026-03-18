@@ -398,6 +398,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        if (PlaybackService.isPlaybackServiceAlive()) {
+            NativeBridge.setBackgroundPlaybackMode(false)
+        }
+    }
+
+    override fun onStop() {
+        if (PlaybackService.isPlaybackServiceAlive()) {
+            NativeBridge.setBackgroundPlaybackMode(true)
+        }
+        super.onStop()
+    }
+
     external fun getStringFromJNI(): String
     external fun startEngine()
     external fun stopEngine()

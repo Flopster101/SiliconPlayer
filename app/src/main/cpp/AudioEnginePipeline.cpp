@@ -62,6 +62,13 @@ void AudioEngine::setAudioPipelineConfig(
     reconfigureStream(true);
 }
 
+void AudioEngine::setBackgroundPlaybackMode(bool enabled) {
+    const bool changed = backgroundPlaybackMode.exchange(enabled, std::memory_order_relaxed) != enabled;
+    if (!changed) return;
+    LOGD("Background playback headroom mode: %d", enabled ? 1 : 0);
+    renderWorkerCv.notify_all();
+}
+
 void AudioEngine::updateRenderQueueTuning() {
     int chunkFrames = kRenderChunkFramesSmall;
     int targetFrames = kRenderTargetFramesSmall;

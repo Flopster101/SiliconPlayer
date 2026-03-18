@@ -121,7 +121,7 @@ class PlaybackService : Service() {
         override fun run() {
             if (currentPath != null) {
                 val deviceInteractive = powerManager.isInteractive
-                val trackLoaded = NativeBridge.getTrackSampleRate() > 0
+                val trackLoaded = currentPath != null
                 val seekInProgress = trackLoaded && NativeBridge.isSeekInProgress()
                 if (!seekInProgress && trackLoaded) {
                     positionSeconds = NativeBridge.getPosition()
@@ -971,5 +971,7 @@ class PlaybackService : Service() {
             val intent = Intent(context, PlaybackService::class.java).setAction(ACTION_REFRESH_SETTINGS)
             context.startService(intent)
         }
+
+        fun isPlaybackServiceAlive(): Boolean = isServiceAlive
     }
 }

@@ -1,6 +1,10 @@
 package com.flopster101.siliconplayer.pluginsettings
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.flopster101.siliconplayer.*
 
 /**
@@ -34,6 +38,8 @@ class OpenMptSettings(
 
     @Composable
     override fun buildSettings(builder: PluginSettingsBuilder) {
+        var showApplyAllModulesWarning by remember { mutableStateOf(false) }
+
         // Core-specific options
         builder.coreOptions {
             custom {
@@ -94,9 +100,14 @@ class OpenMptSettings(
             custom {
                 PlayerSettingToggleCard(
                     title = "Apply Amiga resampler to all modules",
-                    description = "When disabled, Amiga resampler is used only on Amiga module formats.",
+                    description = "When disabled, Amiga resampler is used only on Amiga module formats. High-channel non-Amiga modules can become very expensive with this enabled.",
                     checked = amigaResamplerApplyAllModules,
-                    onCheckedChange = onAmigaResamplerApplyAllModulesChanged
+                    onCheckedChange = { enabled ->
+                        onAmigaResamplerApplyAllModulesChanged(enabled)
+                        if (enabled) {
+                            showApplyAllModulesWarning = true
+                        }
+                    }
                 )
             }
             spacer()
@@ -138,6 +149,14 @@ class OpenMptSettings(
                     onCheckedChange = onSurroundEnabledChanged
                 )
             }
+        }
+
+        if (showApplyAllModulesWarning) {
+            SettingsInfoDialog(
+                title = "Performance warning",
+                message = "This forces the Amiga resampler onto non-Amiga modules too. High-channel module files can become extremely CPU-intensive and may stutter audio or freeze the UI on weaker devices.",
+                onDismiss = { showApplyAllModulesWarning = false }
+            )
         }
 
         if (includeSampleRateControl) {

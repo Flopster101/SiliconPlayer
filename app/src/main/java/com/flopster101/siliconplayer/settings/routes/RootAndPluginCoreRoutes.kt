@@ -303,7 +303,7 @@ internal fun PluginOpenMptRouteContent(
     SettingsRowSpacer()
     PlayerSettingToggleCard(
         title = "Apply Amiga resampler to all modules",
-        description = "When disabled, Amiga resampler is used only on Amiga module formats.",
+        description = "When disabled, Amiga resampler is used only on Amiga module formats. High-channel non-Amiga modules can become very expensive with this enabled.",
         checked = openMptAmigaResamplerApplyAllModules,
         onCheckedChange = onOpenMptAmigaResamplerApplyAllModulesChanged
     )

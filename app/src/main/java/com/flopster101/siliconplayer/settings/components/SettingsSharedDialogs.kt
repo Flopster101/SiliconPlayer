@@ -74,6 +74,27 @@ internal fun SettingsConfirmDialog(
 }
 
 @Composable
+internal fun SettingsInfoDialog(
+    title: String,
+    message: String,
+    onDismiss: () -> Unit,
+    confirmLabel: String = "OK"
+) {
+    AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(confirmLabel)
+            }
+        }
+    )
+}
+
+@Composable
 internal fun SettingsActionListDialog(
     title: String,
     actions: List<SettingsActionDialogItem>,

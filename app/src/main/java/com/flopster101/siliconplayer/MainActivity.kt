@@ -1380,7 +1380,13 @@ private fun AppNavigation(
     var preferredRepeatMode by remember {
         mutableStateOf(
             RepeatMode.fromStorage(
-                prefs.getString(AppPreferenceKeys.PREFERRED_REPEAT_MODE, RepeatMode.None.storageValue)
+                prefs.getString(
+                    AppPreferenceKeys.SESSION_CURRENT_REPEAT_MODE,
+                    prefs.getString(
+                        AppPreferenceKeys.PREFERRED_REPEAT_MODE,
+                        RepeatMode.None.storageValue
+                    )
+                )
             )
         )
     }
@@ -3132,7 +3138,11 @@ private fun AppNavigation(
             playbackStateDelegates.resetAndOptionallyKeepLastTrack(keepLastTrack = true)
         },
         onPreviousTrackRequested = { playPreviousTrackFromUiAction() },
-        onNextTrackRequested = { playAdjacentTrackFromUiAction(1, true) }
+        onNextTrackRequested = { playAdjacentTrackFromUiAction(1, true) },
+        onRepeatModeChanged = { mode ->
+            preferredRepeatMode = mode
+            activeRepeatMode = mode
+        }
     )
 
     AppNavigationBackHandlers(

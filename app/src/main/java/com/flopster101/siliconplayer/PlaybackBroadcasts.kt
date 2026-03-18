@@ -13,7 +13,8 @@ internal fun RegisterPlaybackBroadcastReceiver(
     context: Context,
     onCleared: () -> Unit,
     onPreviousTrackRequested: () -> Unit,
-    onNextTrackRequested: () -> Unit
+    onNextTrackRequested: () -> Unit,
+    onRepeatModeChanged: (RepeatMode) -> Unit
 ) {
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
@@ -22,12 +23,20 @@ internal fun RegisterPlaybackBroadcastReceiver(
                     PlaybackService.ACTION_BROADCAST_CLEARED -> onCleared()
                     PlaybackService.ACTION_BROADCAST_PREVIOUS_TRACK_REQUEST -> onPreviousTrackRequested()
                     PlaybackService.ACTION_BROADCAST_NEXT_TRACK_REQUEST -> onNextTrackRequested()
+                    PlaybackService.ACTION_BROADCAST_REPEAT_MODE_CHANGED -> {
+                        onRepeatModeChanged(
+                            RepeatMode.fromStorage(
+                                intent.getStringExtra(PlaybackService.EXTRA_REPEAT_MODE)
+                            )
+                        )
+                    }
                 }
             }
         }
         val playbackFilter = IntentFilter(PlaybackService.ACTION_BROADCAST_CLEARED).apply {
             addAction(PlaybackService.ACTION_BROADCAST_PREVIOUS_TRACK_REQUEST)
             addAction(PlaybackService.ACTION_BROADCAST_NEXT_TRACK_REQUEST)
+            addAction(PlaybackService.ACTION_BROADCAST_REPEAT_MODE_CHANGED)
         }
         ContextCompat.registerReceiver(
             context,

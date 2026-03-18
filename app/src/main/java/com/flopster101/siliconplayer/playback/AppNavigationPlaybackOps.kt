@@ -31,7 +31,10 @@ internal fun syncPlaybackServiceFromUiState(
     metadataArtist: String,
     durationSeconds: Double,
     positionSeconds: Double,
-    isPlaying: Boolean
+    isPlaying: Boolean,
+    activeRepeatMode: RepeatMode,
+    repeatModeCapabilitiesFlags: Int,
+    playbackCapabilitiesFlags: Int
 ) {
     val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
     val resolvedSourceId = resolvePlaybackServiceSourceId(
@@ -47,7 +50,10 @@ internal fun syncPlaybackServiceFromUiState(
         metadataArtist = metadataArtist,
         durationSeconds = durationSeconds,
         positionSeconds = positionSeconds,
-        isPlaying = isPlaying
+        isPlaying = isPlaying,
+        activeRepeatMode = activeRepeatMode,
+        repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags,
+        playbackCapabilitiesFlags = playbackCapabilitiesFlags
     )
 }
 
@@ -128,4 +134,3 @@ internal data class ClearedPlaybackState(
         PLAYBACK_CAP_RELIABLE_DURATION or
         PLAYBACK_CAP_LIVE_REPEAT_MODE
 )
-

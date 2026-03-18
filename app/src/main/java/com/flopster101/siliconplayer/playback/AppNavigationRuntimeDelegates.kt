@@ -82,7 +82,10 @@ internal fun buildAppNavigationRuntimeDelegates(
                 metadataArtist = metadataArtistProvider(),
                 durationSeconds = durationProvider(),
                 positionSeconds = positionProvider(),
-                isPlaying = isPlayingProvider()
+                isPlaying = isPlayingProvider(),
+                activeRepeatMode = activeRepeatModeProvider(),
+                repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlagsProvider(),
+                playbackCapabilitiesFlags = playbackCapabilitiesFlagsProvider()
             )
         },
         refreshSubtuneState = {

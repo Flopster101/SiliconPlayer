@@ -43,7 +43,10 @@ internal fun syncPlaybackServiceForState(
     metadataArtist: String,
     durationSeconds: Double,
     positionSeconds: Double,
-    isPlaying: Boolean
+    isPlaying: Boolean,
+    activeRepeatMode: RepeatMode,
+    repeatModeCapabilitiesFlags: Int,
+    playbackCapabilitiesFlags: Int
 ) {
     val sanitizedTitle = sanitizeRemoteCachedMetadataTitle(metadataTitle, selectedFile)
     PlaybackService.syncFromUi(
@@ -55,7 +58,10 @@ internal fun syncPlaybackServiceForState(
         artist = metadataArtist.ifBlank { "Unknown Artist" },
         durationSeconds = durationSeconds,
         positionSeconds = positionSeconds,
-        isPlaying = isPlaying
+        isPlaying = isPlaying,
+        activeRepeatMode = activeRepeatMode,
+        repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags,
+        playbackCapabilitiesFlags = playbackCapabilitiesFlags
     )
 }
 

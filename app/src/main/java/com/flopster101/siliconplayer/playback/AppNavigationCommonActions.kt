@@ -22,7 +22,10 @@ internal fun syncPlaybackServiceAction(
     metadataArtist: String,
     durationSeconds: Double,
     positionSeconds: Double,
-    isPlaying: Boolean
+    isPlaying: Boolean,
+    activeRepeatMode: RepeatMode,
+    repeatModeCapabilitiesFlags: Int,
+    playbackCapabilitiesFlags: Int
 ) {
     syncPlaybackServiceFromUiState(
         context = context,
@@ -32,7 +35,10 @@ internal fun syncPlaybackServiceAction(
         metadataArtist = metadataArtist,
         durationSeconds = durationSeconds,
         positionSeconds = positionSeconds,
-        isPlaying = isPlaying
+        isPlaying = isPlaying,
+        activeRepeatMode = activeRepeatMode,
+        repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags,
+        playbackCapabilitiesFlags = playbackCapabilitiesFlags
     )
 }
 

@@ -31,6 +31,7 @@ internal object AppPreferenceKeys {
     const val PERSIST_REPEAT_MODE = "persist_repeat_mode"
     const val FADE_PAUSE_RESUME = "fade_pause_resume"
     const val PREFERRED_REPEAT_MODE = "preferred_repeat_mode"
+    const val SESSION_CURRENT_REPEAT_MODE = "session_current_repeat_mode"
     const val SESSION_CURRENT_PATH = "session_current_path"
     const val SESSION_RESUME_SOURCE_ID = "session_resume_source_id"
     const val SESSION_RESUME_POSITION_SECONDS = "session_resume_position_seconds"

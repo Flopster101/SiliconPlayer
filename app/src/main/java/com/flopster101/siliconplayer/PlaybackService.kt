@@ -87,6 +87,10 @@ class PlaybackService : Service() {
     private var currentArtwork: Bitmap? = null
     private var currentArtworkPath: String? = null
     private var cachedFallbackIconBitmap: Bitmap? = null
+    private var currentRepeatMode: RepeatMode = RepeatMode.None
+    private var currentRepeatModeCapabilitiesFlags: Int = REPEAT_CAP_ALL
+    private var currentPlaybackCapabilitiesFlags: Int =
+        PLAYBACK_CAP_SEEK or PLAYBACK_CAP_RELIABLE_DURATION or PLAYBACK_CAP_LIVE_REPEAT_MODE
     private var durationSeconds: Double = 0.0
     private var positionSeconds: Double = 0.0
     private var isPlaying: Boolean = false
@@ -98,9 +102,11 @@ class PlaybackService : Service() {
     private var lastNotificationDurationBucket: Int = Int.MIN_VALUE
     private var lastNotificationPositionBucket: Int = Int.MIN_VALUE
     private var lastNotificationIsPlaying: Boolean? = null
+    private var lastNotificationRepeatSignature: String? = null
     private var lastMediaSessionPlaybackPositionBucket: Int = Int.MIN_VALUE
     private var lastMediaSessionPlaybackIsPlaying: Boolean? = null
     private var lastMediaSessionPlaybackDurationBucket: Int = Int.MIN_VALUE
+    private var lastMediaSessionRepeatSignature: String? = null
     private var lastMediaSessionMetadataPath: String? = null
     private var lastMediaSessionMetadataTitle: String? = null
     private var lastMediaSessionMetadataArtist: String? = null
@@ -216,6 +222,7 @@ class PlaybackService : Service() {
             ACTION_NEXT_TRACK -> requestAdjacentTrack(1)
             ACTION_SEEK_BACK -> seekBy(-10.0)
             ACTION_SEEK_FORWARD -> seekBy(10.0)
+            ACTION_REPEAT_CYCLE -> cycleRepeatMode()
             ACTION_STOP_CLEAR -> stopAndClear()
             ACTION_REFRESH_SETTINGS -> {
                 // Settings are read lazily from SharedPreferences in callbacks.
@@ -238,6 +245,20 @@ class PlaybackService : Service() {
         currentArtist = intent.getStringExtra(EXTRA_ARTIST).orEmpty().ifBlank { "Unknown Artist" }
         durationSeconds = intent.getDoubleExtra(EXTRA_DURATION, 0.0)
         positionSeconds = intent.getDoubleExtra(EXTRA_POSITION, 0.0)
+        currentRepeatMode = RepeatMode.fromStorage(
+            intent.getStringExtra(EXTRA_REPEAT_MODE) ?: prefs.getString(
+                AppPreferenceKeys.SESSION_CURRENT_REPEAT_MODE,
+                prefs.getString(AppPreferenceKeys.PREFERRED_REPEAT_MODE, RepeatMode.None.storageValue)
+            )
+        )
+        currentRepeatModeCapabilitiesFlags = intent.getIntExtra(
+            EXTRA_REPEAT_CAPABILITIES,
+            currentRepeatModeCapabilitiesFlags
+        )
+        currentPlaybackCapabilitiesFlags = intent.getIntExtra(
+            EXTRA_PLAYBACK_CAPABILITIES,
+            currentPlaybackCapabilitiesFlags
+        )
         durationRefreshCountdown = 0
         val wasPlaying = isPlaying
         isPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, false)
@@ -252,12 +273,14 @@ class PlaybackService : Service() {
         persistResumeCheckpointIfNeeded(force = true)
 
         if (currentPath == null) {
+            clearSessionRepeatMode()
             stopForegroundCompat(removeNotification = true)
             isForegroundNotificationShown = false
             notificationManager.cancel(NOTIFICATION_ID)
             stopSelf()
             return
         }
+        persistCurrentRepeatMode()
         updateMediaSessionState()
         pushNotification()
         handler.removeCallbacks(ticker)
@@ -314,8 +337,10 @@ class PlaybackService : Service() {
         isPlaying = false
         currentPath = null
         prefs.edit().remove(PREF_SESSION_CURRENT_PATH).apply()
+        clearSessionRepeatMode()
         currentTitle = "No track selected"
         currentArtist = "Silicon Player"
+        currentRepeatMode = RepeatMode.None
         durationSeconds = 0.0
         positionSeconds = 0.0
         clearResumeCheckpoint()
@@ -405,6 +430,14 @@ class PlaybackService : Service() {
                 if (!prefs.getBoolean(PREF_RESPOND_MEDIA_BUTTONS, true)) return
                 requestAdjacentTrack(1)
             }
+
+            override fun onCustomAction(action: String, extras: android.os.Bundle?) {
+                if (!prefs.getBoolean(PREF_RESPOND_MEDIA_BUTTONS, true)) return
+                when (action) {
+                    ACTION_STOP_CLEAR -> stopAndClear()
+                    ACTION_REPEAT_CYCLE -> cycleRepeatMode()
+                }
+            }
         })
         session.isActive = true
         mediaSession = session
@@ -417,6 +450,29 @@ class PlaybackService : Service() {
             ACTION_BROADCAST_NEXT_TRACK_REQUEST
         }
         sendBroadcast(Intent(action).setPackage(packageName))
+    }
+
+    private fun cycleRepeatMode() {
+        if (currentPath == null) return
+        val next = resolveNextRepeatMode(
+            playbackCapabilitiesFlags = currentPlaybackCapabilitiesFlags,
+            seekInProgress = NativeBridge.isSeekInProgress(),
+            selectedFile = currentPath?.let(::File)?.takeIf { it.exists() },
+            durationSeconds = durationSeconds,
+            subtuneCount = NativeBridge.getSubtuneCount(),
+            activeRepeatMode = currentRepeatMode,
+            repeatModeCapabilitiesFlags = currentRepeatModeCapabilitiesFlags
+        ) ?: return
+        currentRepeatMode = next
+        applyRepeatModeToNative(next)
+        persistCurrentRepeatMode()
+        updateMediaSessionState()
+        pushNotification()
+        sendBroadcast(
+            Intent(ACTION_BROADCAST_REPEAT_MODE_CHANGED)
+                .setPackage(packageName)
+                .putExtra(EXTRA_REPEAT_MODE, next.storageValue)
+        )
     }
 
     private fun seekBy(deltaSeconds: Double) {
@@ -538,17 +594,54 @@ class PlaybackService : Service() {
         lastPersistedResumeRepeatCaps = Int.MIN_VALUE
     }
 
+    private fun persistCurrentRepeatMode() {
+        val editor = prefs.edit()
+            .putString(AppPreferenceKeys.SESSION_CURRENT_REPEAT_MODE, currentRepeatMode.storageValue)
+        if (prefs.getBoolean(AppPreferenceKeys.PERSIST_REPEAT_MODE, true)) {
+            editor.putString(AppPreferenceKeys.PREFERRED_REPEAT_MODE, currentRepeatMode.storageValue)
+        }
+        editor.apply()
+    }
+
+    private fun clearSessionRepeatMode() {
+        prefs.edit().remove(AppPreferenceKeys.SESSION_CURRENT_REPEAT_MODE).apply()
+    }
+
+    private fun repeatControlsSignature(): String {
+        return buildString {
+            append(currentRepeatMode.storageValue)
+            append('|')
+            append(currentRepeatModeCapabilitiesFlags)
+            append('|')
+            append(currentPlaybackCapabilitiesFlags)
+        }
+    }
+
+    private fun canCycleRepeatMode(): Boolean {
+        return currentPath != null && supportsLiveRepeatMode(currentPlaybackCapabilitiesFlags)
+    }
+
+    private fun repeatActionTitle(): String {
+        return "Repeat: ${currentRepeatMode.label}"
+    }
+
+    private fun repeatActionIconResId(): Int {
+        return R.drawable.ic_notification_action_repeat
+    }
+
     private fun updateMediaSessionState() {
         mediaSession?.isActive = currentPath != null
         val positionBucket = positionSeconds.coerceAtLeast(0.0).toInt()
         val durationBucket = durationSeconds.coerceAtLeast(0.0).toInt()
         val artworkKey = currentArtworkPath ?: "__fallback__"
+        val repeatSignature = repeatControlsSignature()
         val playbackChanged =
             lastMediaSessionPlaybackPositionBucket != positionBucket ||
                 lastMediaSessionPlaybackIsPlaying != isPlaying ||
-                lastMediaSessionPlaybackDurationBucket != durationBucket
+                lastMediaSessionPlaybackDurationBucket != durationBucket ||
+                lastMediaSessionRepeatSignature != repeatSignature
         if (playbackChanged) {
-            val state = PlaybackState.Builder()
+            val stateBuilder = PlaybackState.Builder()
                 .setActions(
                     PlaybackState.ACTION_PLAY or
                         PlaybackState.ACTION_PAUSE or
@@ -565,11 +658,27 @@ class PlaybackService : Service() {
                     (positionSeconds * 1000.0).toLong(),
                     if (isPlaying) 1f else 0f
                 )
-                .build()
-            mediaSession?.setPlaybackState(state)
+            stateBuilder.addCustomAction(
+                PlaybackState.CustomAction.Builder(
+                    ACTION_STOP_CLEAR,
+                    "Stop",
+                    R.drawable.ic_notification_action_stop
+                ).build()
+            )
+            if (canCycleRepeatMode()) {
+                stateBuilder.addCustomAction(
+                    PlaybackState.CustomAction.Builder(
+                        ACTION_REPEAT_CYCLE,
+                        repeatActionTitle(),
+                        repeatActionIconResId()
+                    ).build()
+                )
+            }
+            mediaSession?.setPlaybackState(stateBuilder.build())
             lastMediaSessionPlaybackPositionBucket = positionBucket
             lastMediaSessionPlaybackIsPlaying = isPlaying
             lastMediaSessionPlaybackDurationBucket = durationBucket
+            lastMediaSessionRepeatSignature = repeatSignature
         }
 
         val metadataChanged =
@@ -602,7 +711,8 @@ class PlaybackService : Service() {
     private fun recordNotificationSnapshot(
         positionBucket: Int,
         durationBucket: Int,
-        artworkKey: String
+        artworkKey: String,
+        repeatSignature: String
     ) {
         lastNotificationPath = currentPath
         lastNotificationTitle = currentTitle
@@ -611,6 +721,7 @@ class PlaybackService : Service() {
         lastNotificationDurationBucket = durationBucket
         lastNotificationPositionBucket = positionBucket
         lastNotificationIsPlaying = isPlaying
+        lastNotificationRepeatSignature = repeatSignature
     }
 
     private fun pushNotification() {
@@ -618,6 +729,7 @@ class PlaybackService : Service() {
         val positionBucket = positionSeconds.coerceAtLeast(0.0).toInt()
         val durationBucket = durationSeconds.coerceAtLeast(0.0).toInt()
         val artworkKey = currentArtworkPath ?: "__fallback__"
+        val repeatSignature = repeatControlsSignature()
         val shouldRefresh =
             lastNotificationPath != currentPath ||
                 lastNotificationTitle != currentTitle ||
@@ -625,6 +737,7 @@ class PlaybackService : Service() {
                 lastNotificationArtworkKey != artworkKey ||
                 lastNotificationDurationBucket != durationBucket ||
                 lastNotificationIsPlaying != isPlaying ||
+                lastNotificationRepeatSignature != repeatSignature ||
                 (isPlaying && lastNotificationPositionBucket != positionBucket)
         if (!shouldRefresh) return
         val notification = buildNotification()
@@ -637,7 +750,8 @@ class PlaybackService : Service() {
             recordNotificationSnapshot(
                 positionBucket = positionBucket,
                 durationBucket = durationBucket,
-                artworkKey = artworkKey
+                artworkKey = artworkKey,
+                repeatSignature = repeatSignature
             )
             return
         }
@@ -654,7 +768,8 @@ class PlaybackService : Service() {
         recordNotificationSnapshot(
             positionBucket = positionBucket,
             durationBucket = durationBucket,
-            artworkKey = artworkKey
+            artworkKey = artworkKey,
+            repeatSignature = repeatSignature
         )
     }
 
@@ -692,6 +807,12 @@ class PlaybackService : Service() {
             Intent(this, PlaybackService::class.java).setAction(ACTION_NEXT_TRACK),
             immutableUpdateCurrentPendingIntentFlags()
         )
+        val repeatIntent = PendingIntent.getService(
+            this,
+            105,
+            Intent(this, PlaybackService::class.java).setAction(ACTION_REPEAT_CYCLE),
+            immutableUpdateCurrentPendingIntentFlags()
+        )
         val notificationBuilder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
         } else {
@@ -723,6 +844,15 @@ class PlaybackService : Service() {
             )
             .addAction(buildNotificationAction(android.R.drawable.ic_media_next, "Next track", nextTrackIntent))
             .addAction(buildNotificationAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopIntent))
+        if (canCycleRepeatMode()) {
+            notificationBuilder.addAction(
+                buildNotificationAction(
+                    repeatActionIconResId(),
+                    repeatActionTitle(),
+                    repeatIntent
+                )
+            )
+        }
         return notificationBuilder.build()
     }
 
@@ -902,6 +1032,8 @@ class PlaybackService : Service() {
         private const val EXTRA_DURATION = "extra_duration"
         private const val EXTRA_POSITION = "extra_position"
         private const val EXTRA_IS_PLAYING = "extra_is_playing"
+        private const val EXTRA_REPEAT_CAPABILITIES = "extra_repeat_capabilities"
+        private const val EXTRA_PLAYBACK_CAPABILITIES = "extra_playback_capabilities"
 
         const val ACTION_SYNC = "com.flopster101.siliconplayer.action.SYNC"
         const val ACTION_PLAY = "com.flopster101.siliconplayer.action.PLAY"
@@ -911,11 +1043,14 @@ class PlaybackService : Service() {
         const val ACTION_NEXT_TRACK = "com.flopster101.siliconplayer.action.NEXT_TRACK"
         const val ACTION_SEEK_BACK = "com.flopster101.siliconplayer.action.SEEK_BACK"
         const val ACTION_SEEK_FORWARD = "com.flopster101.siliconplayer.action.SEEK_FORWARD"
+        const val ACTION_REPEAT_CYCLE = "com.flopster101.siliconplayer.action.REPEAT_CYCLE"
         const val ACTION_STOP_CLEAR = "com.flopster101.siliconplayer.action.STOP_CLEAR"
         const val ACTION_REFRESH_SETTINGS = "com.flopster101.siliconplayer.action.REFRESH_SETTINGS"
         const val ACTION_BROADCAST_CLEARED = "com.flopster101.siliconplayer.action.BROADCAST_CLEARED"
         const val ACTION_BROADCAST_PREVIOUS_TRACK_REQUEST = "com.flopster101.siliconplayer.action.BROADCAST_PREVIOUS_TRACK_REQUEST"
         const val ACTION_BROADCAST_NEXT_TRACK_REQUEST = "com.flopster101.siliconplayer.action.BROADCAST_NEXT_TRACK_REQUEST"
+        const val ACTION_BROADCAST_REPEAT_MODE_CHANGED = "com.flopster101.siliconplayer.action.BROADCAST_REPEAT_MODE_CHANGED"
+        const val EXTRA_REPEAT_MODE = "extra_repeat_mode"
         const val EXTRA_OPEN_PLAYER_FROM_NOTIFICATION = "extra_open_player_from_notification"
         @Volatile
         private var isServiceAlive = false
@@ -938,7 +1073,10 @@ class PlaybackService : Service() {
             artist: String,
             durationSeconds: Double,
             positionSeconds: Double,
-            isPlaying: Boolean
+            isPlaying: Boolean,
+            activeRepeatMode: RepeatMode,
+            repeatModeCapabilitiesFlags: Int,
+            playbackCapabilitiesFlags: Int
         ) {
             val intent = Intent(context, PlaybackService::class.java)
                 .setAction(ACTION_SYNC)
@@ -948,6 +1086,9 @@ class PlaybackService : Service() {
                 .putExtra(EXTRA_DURATION, durationSeconds)
                 .putExtra(EXTRA_POSITION, positionSeconds)
                 .putExtra(EXTRA_IS_PLAYING, isPlaying)
+                .putExtra(EXTRA_REPEAT_MODE, activeRepeatMode.storageValue)
+                .putExtra(EXTRA_REPEAT_CAPABILITIES, repeatModeCapabilitiesFlags)
+                .putExtra(EXTRA_PLAYBACK_CAPABILITIES, playbackCapabilitiesFlags)
             val shouldStartAsForeground = path != null && isPlaying && !isServiceAlive
             if (!shouldStartAsForeground) {
                 startServiceSafely(context, intent)

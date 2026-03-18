@@ -4,15 +4,19 @@ import android.content.Context
 import android.os.Process
 import android.hardware.display.DisplayManager
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -32,14 +36,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -50,8 +59,11 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import com.flopster101.siliconplayer.ArtworkSwipePreviewState
 import com.flopster101.siliconplayer.AppDefaults
 import com.flopster101.siliconplayer.DecoderNames
 import com.flopster101.siliconplayer.NativeBridge
@@ -75,6 +87,7 @@ import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.locks.LockSupport
 import kotlin.coroutines.coroutineContext
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -89,6 +102,86 @@ private data class AlbumArtCrossfadeState(
     val artwork: ImageBitmap?,
     val placeholderIcon: ImageVector
 )
+
+@Composable
+private fun AlbumArtVisual(
+    artwork: ImageBitmap?,
+    placeholderIcon: ImageVector,
+    modifier: Modifier = Modifier
+) {
+    if (artwork != null) {
+        Box(
+            modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                bitmap = artwork,
+                contentDescription = "Album artwork",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+    } else {
+        Box(
+            modifier = modifier.background(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                        MaterialTheme.colorScheme.surfaceVariant
+                    )
+                )
+            ),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = placeholderIcon,
+                    contentDescription = "No album artwork",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(72.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumArtSurfaceContent(
+    trackKey: String?,
+    artwork: ImageBitmap?,
+    placeholderIcon: ImageVector,
+    crossfadeEnabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    if (!crossfadeEnabled) {
+        AlbumArtVisual(
+            artwork = artwork,
+            placeholderIcon = placeholderIcon,
+            modifier = modifier
+        )
+        return
+    }
+    val albumArtCrossfadeState = remember(trackKey, artwork, placeholderIcon) {
+        AlbumArtCrossfadeState(
+            trackKey = trackKey,
+            artwork = artwork,
+            placeholderIcon = placeholderIcon
+        )
+    }
+    Crossfade(targetState = albumArtCrossfadeState, label = "albumArtCrossfade") { state ->
+        AlbumArtVisual(
+            artwork = state.artwork,
+            placeholderIcon = state.placeholderIcon,
+            modifier = modifier
+        )
+    }
+}
 
 @Composable
 private fun VisualizationModeBadge(
@@ -128,7 +221,6 @@ private fun VisualizationModeBadge(
         }
     }
 }
-
 @Composable
 private fun StaticAlbumArtCard(
     file: File?,
@@ -138,6 +230,7 @@ private fun StaticAlbumArtCard(
     visualizationMode: VisualizationMode,
     visualizationModeBadgeText: String,
     showVisualizationModeBadge: Boolean,
+    crossfadeEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val artworkBrightness = remember(artwork) {
@@ -181,60 +274,13 @@ private fun StaticAlbumArtCard(
         shape = RoundedCornerShape(artworkCornerRadiusDp.coerceIn(0, 48).dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            val albumArtCrossfadeState = remember(file?.absolutePath, artwork, placeholderIcon) {
-                AlbumArtCrossfadeState(
-                    trackKey = file?.absolutePath,
-                    artwork = artwork,
-                    placeholderIcon = placeholderIcon
-                )
-            }
-            Crossfade(targetState = albumArtCrossfadeState, label = "albumArtCrossfade") { state ->
-                val art = state.artwork
-                if (art != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            bitmap = art,
-                            contentDescription = "Album artwork",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
-                                        MaterialTheme.colorScheme.surfaceVariant
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(120.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = state.placeholderIcon,
-                                contentDescription = "No album artwork",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(72.dp)
-                            )
-                        }
-                    }
-                }
-            }
+            AlbumArtSurfaceContent(
+                trackKey = file?.absolutePath,
+                artwork = artwork,
+                placeholderIcon = placeholderIcon,
+                crossfadeEnabled = crossfadeEnabled,
+                modifier = Modifier.fillMaxSize()
+            )
             androidx.compose.animation.AnimatedVisibility(
                 visible = showVisualizationModeBadge,
                 modifier = Modifier
@@ -250,6 +296,190 @@ private fun StaticAlbumArtCard(
                     badgeContentColor = badgeContentColor
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SwipeableArtworkContainer(
+    currentTrackKey: String?,
+    swipePreviewState: ArtworkSwipePreviewState,
+    artworkCornerRadiusDp: Int,
+    visualizationMode: VisualizationMode,
+    modifier: Modifier = Modifier,
+    onSwipePreviousTrack: () -> Unit,
+    onSwipeNextTrack: () -> Unit,
+    currentContent: @Composable BoxScope.() -> Unit
+) {
+    val canSwipePrevious = swipePreviewState.canSwipePrevious
+    val canSwipeNext = swipePreviewState.canSwipeNext
+    val widthDependentGestureEnabled = canSwipePrevious || canSwipeNext
+    val latestCurrentTrackKey by rememberUpdatedState(currentTrackKey)
+    var containerWidthPx by remember { mutableIntStateOf(0) }
+    var swipeOffsetPx by remember(currentTrackKey) { mutableFloatStateOf(0f) }
+    var pendingSwipeOffsetPx by remember(currentTrackKey) { mutableFloatStateOf(0f) }
+    var swipeAnimating by remember(currentTrackKey) { mutableStateOf(false) }
+    val uiScope = rememberCoroutineScope()
+    val pageOffsetPx = remember(containerWidthPx) {
+        if (containerWidthPx > 0) {
+            containerWidthPx.toFloat() * 1.32f
+        } else {
+            0f
+        }
+    }
+
+    LaunchedEffect(currentTrackKey) {
+        if (!swipeAnimating) {
+            swipeOffsetPx = 0f
+            pendingSwipeOffsetPx = 0f
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .clipToBounds()
+            .onSizeChanged { size ->
+                containerWidthPx = size.width
+            }
+            .then(
+                if (widthDependentGestureEnabled) {
+                    Modifier.pointerInput(
+                        currentTrackKey,
+                        swipePreviewState,
+                        containerWidthPx
+                    ) {
+                        if (containerWidthPx <= 0) return@pointerInput
+                        fun clampSwipeOffset(candidate: Float): Float {
+                            val minOffset = if (canSwipeNext) -pageOffsetPx else 0f
+                            val maxOffset = if (canSwipePrevious) pageOffsetPx else 0f
+                            return candidate.coerceIn(minOffset, maxOffset)
+                        }
+                        val armThresholdPx = maxOf(
+                            viewConfiguration.touchSlop * 2.25f,
+                            containerWidthPx * 0.06f
+                        )
+                        detectHorizontalDragGestures(
+                            onHorizontalDrag = { change, dragAmount ->
+                                if (swipeAnimating) return@detectHorizontalDragGestures
+                                pendingSwipeOffsetPx += dragAmount
+                                if (swipeOffsetPx == 0f && abs(pendingSwipeOffsetPx) < armThresholdPx) {
+                                    return@detectHorizontalDragGestures
+                                }
+                                swipeOffsetPx = clampSwipeOffset(pendingSwipeOffsetPx)
+                                change.consume()
+                            },
+                            onDragEnd = {
+                                if (swipeAnimating || containerWidthPx <= 0) return@detectHorizontalDragGestures
+                                val thresholdPx = containerWidthPx * 0.24f
+                                val commitDirection = when {
+                                    swipeOffsetPx >= thresholdPx && canSwipePrevious -> -1
+                                    swipeOffsetPx <= -thresholdPx && canSwipeNext -> 1
+                                    else -> 0
+                                }
+                                pendingSwipeOffsetPx = 0f
+                                swipeAnimating = true
+                                uiScope.launch {
+                                    val targetOffsetPx = when (commitDirection) {
+                                        -1 -> pageOffsetPx
+                                        1 -> -pageOffsetPx
+                                        else -> 0f
+                                    }
+                                    animate(
+                                        initialValue = swipeOffsetPx,
+                                        targetValue = targetOffsetPx,
+                                        animationSpec = tween(
+                                            durationMillis = if (commitDirection == 0) 210 else 240,
+                                            easing = LinearOutSlowInEasing
+                                        )
+                                    ) { value, _ ->
+                                        swipeOffsetPx = value
+                                    }
+                                    val targetTrackKey = when (commitDirection) {
+                                        -1 -> swipePreviewState.previousTrackKey
+                                        1 -> swipePreviewState.nextTrackKey
+                                        else -> null
+                                    }
+                                    when (commitDirection) {
+                                        -1 -> onSwipePreviousTrack()
+                                        1 -> onSwipeNextTrack()
+                                    }
+                                    if (targetTrackKey != null) {
+                                        for (frame in 0 until 18) {
+                                            if (latestCurrentTrackKey == targetTrackKey) {
+                                                break
+                                            }
+                                            withFrameNanos { }
+                                        }
+                                    }
+                                    swipeOffsetPx = 0f
+                                    swipeAnimating = false
+                                }
+                            },
+                            onDragCancel = {
+                                if (swipeAnimating) return@detectHorizontalDragGestures
+                                pendingSwipeOffsetPx = 0f
+                                swipeAnimating = true
+                                uiScope.launch {
+                                    animate(
+                                        initialValue = swipeOffsetPx,
+                                        targetValue = 0f,
+                                        animationSpec = tween(
+                                            durationMillis = 210,
+                                            easing = LinearOutSlowInEasing
+                                        )
+                                    ) { value, _ ->
+                                        swipeOffsetPx = value
+                                    }
+                                    swipeAnimating = false
+                                }
+                            }
+                        )
+                    }
+                } else {
+                    Modifier
+                }
+            )
+    ) {
+        if (canSwipePrevious) {
+            StaticAlbumArtCard(
+                file = swipePreviewState.previousTrackKey?.let(::File),
+                artwork = swipePreviewState.previousArtwork,
+                placeholderIcon = swipePreviewState.previousPlaceholderIcon,
+                artworkCornerRadiusDp = artworkCornerRadiusDp,
+                visualizationMode = visualizationMode,
+                visualizationModeBadgeText = "",
+                showVisualizationModeBadge = false,
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        translationX = swipeOffsetPx - pageOffsetPx
+                    }
+            )
+        }
+        if (canSwipeNext) {
+            StaticAlbumArtCard(
+                file = swipePreviewState.nextTrackKey?.let(::File),
+                artwork = swipePreviewState.nextArtwork,
+                placeholderIcon = swipePreviewState.nextPlaceholderIcon,
+                artworkCornerRadiusDp = artworkCornerRadiusDp,
+                visualizationMode = visualizationMode,
+                visualizationModeBadgeText = "",
+                showVisualizationModeBadge = false,
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        translationX = swipeOffsetPx + pageOffsetPx
+                    }
+            )
+        }
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer {
+                    translationX = swipeOffsetPx
+                }
+        ) {
+            currentContent()
         }
     }
 }
@@ -1453,6 +1683,7 @@ internal fun AlbumArtPlaceholder(
     decoderName: String?,
     sampleRateHz: Int,
     artwork: ImageBitmap?,
+    artworkSwipePreviewState: ArtworkSwipePreviewState = ArtworkSwipePreviewState(),
     placeholderIcon: ImageVector,
     visualizationModeBadgeText: String,
     showVisualizationModeBadge: Boolean,
@@ -1497,19 +1728,50 @@ internal fun AlbumArtPlaceholder(
     vuContrastBackdropEnabled: Boolean,
     channelScopePrefs: ChannelScopePrefs,
     artworkCornerRadiusDp: Int = AppDefaults.Player.artworkCornerRadiusDp,
+    onSwipePreviousTrack: () -> Unit = {},
+    onSwipeNextTrack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val currentTrackKey = file?.absolutePath
+    val useResolvedCurrentSwipeAsset =
+        currentTrackKey != null &&
+            artworkSwipePreviewState.currentTrackKey == currentTrackKey &&
+            artworkSwipePreviewState.currentArtworkResolved
+    val effectiveArtwork = if (useResolvedCurrentSwipeAsset) {
+        artworkSwipePreviewState.currentArtwork
+    } else {
+        artwork
+    }
+    val effectivePlaceholderIcon = if (
+        currentTrackKey != null &&
+            artworkSwipePreviewState.currentTrackKey == currentTrackKey
+    ) {
+        artworkSwipePreviewState.currentPlaceholderIcon
+    } else {
+        placeholderIcon
+    }
     if (visualizationMode == VisualizationMode.Off || file == null || !isPlaying) {
-        StaticAlbumArtCard(
-            file = file,
-            artwork = artwork,
-            placeholderIcon = placeholderIcon,
+        SwipeableArtworkContainer(
+            currentTrackKey = currentTrackKey,
+            swipePreviewState = artworkSwipePreviewState,
             artworkCornerRadiusDp = artworkCornerRadiusDp,
             visualizationMode = visualizationMode,
-            visualizationModeBadgeText = visualizationModeBadgeText,
-            showVisualizationModeBadge = showVisualizationModeBadge,
-            modifier = modifier
-        )
+            modifier = modifier,
+            onSwipePreviousTrack = onSwipePreviousTrack,
+            onSwipeNextTrack = onSwipeNextTrack
+        ) {
+            StaticAlbumArtCard(
+                file = file,
+                artwork = effectiveArtwork,
+                placeholderIcon = effectivePlaceholderIcon,
+                artworkCornerRadiusDp = artworkCornerRadiusDp,
+                visualizationMode = visualizationMode,
+                visualizationModeBadgeText = visualizationModeBadgeText,
+                showVisualizationModeBadge = showVisualizationModeBadge,
+                crossfadeEnabled = !useResolvedCurrentSwipeAsset,
+                modifier = Modifier.matchParentSize()
+            )
+        }
         return
     }
 
@@ -2007,69 +2269,31 @@ internal fun AlbumArtPlaceholder(
         }
     }
 
-    ElevatedCard(
+    SwipeableArtworkContainer(
+        currentTrackKey = currentTrackKey,
+        swipePreviewState = artworkSwipePreviewState,
+        artworkCornerRadiusDp = artworkCornerRadiusDp,
+        visualizationMode = visualizationMode,
         modifier = modifier,
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        shape = RoundedCornerShape(artworkCornerRadiusDp.coerceIn(0, 48).dp)
+        onSwipePreviousTrack = onSwipePreviousTrack,
+        onSwipeNextTrack = onSwipeNextTrack
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        ElevatedCard(
+            modifier = Modifier.matchParentSize(),
+            colors = CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            shape = RoundedCornerShape(artworkCornerRadiusDp.coerceIn(0, 48).dp)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
             if (useScopeArtworkBackground) {
-                val albumArtCrossfadeState = remember(file?.absolutePath, artwork, placeholderIcon) {
-                    AlbumArtCrossfadeState(
-                        trackKey = file?.absolutePath,
-                        artwork = artwork,
-                        placeholderIcon = placeholderIcon
-                    )
-                }
-                Crossfade(targetState = albumArtCrossfadeState, label = "albumArtCrossfade") { state ->
-                    val art = state.artwork
-                    if (art != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                bitmap = art,
-                                contentDescription = "Album artwork",
-                                contentScale = ContentScale.Fit,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
-                                            MaterialTheme.colorScheme.surfaceVariant
-                                        )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(120.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = state.placeholderIcon,
-                                    contentDescription = "No album artwork",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(72.dp)
-                                )
-                            }
-                        }
-                    }
-                }
+                AlbumArtSurfaceContent(
+                    trackKey = currentTrackKey,
+                    artwork = effectiveArtwork,
+                    placeholderIcon = effectivePlaceholderIcon,
+                    crossfadeEnabled = !useResolvedCurrentSwipeAsset,
+                    modifier = Modifier.fillMaxSize()
+                )
             } else {
                 Box(
                     modifier = Modifier
@@ -2232,4 +2456,5 @@ internal fun AlbumArtPlaceholder(
             }
         }
     }
+}
 }

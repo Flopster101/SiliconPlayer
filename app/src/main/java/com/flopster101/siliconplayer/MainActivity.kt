@@ -149,6 +149,10 @@ import java.util.Locale
 
 private const val PLAYER_ARTWORK_STOP_GRACE_MS = 180L
 
+private data class LocalArtworkSwipeCacheEntry(
+    val artwork: ImageBitmap?
+)
+
 @Composable
 private fun rememberDisplayedPlayerArtwork(
     trackKey: String?,
@@ -188,6 +192,126 @@ private fun rememberDisplayedPlayerArtwork(
     }
 
     return displayedArtwork
+}
+
+@Composable
+private fun rememberLocalArtworkSwipePreviewState(
+    selectedFile: File?,
+    currentPlaybackSourceId: String?,
+    visiblePlayableFiles: List<File>
+): ArtworkSwipePreviewState {
+    val artworkCache = remember { mutableStateMapOf<String, LocalArtworkSwipeCacheEntry>() }
+    val isLocalSwipeEligible = remember(
+        selectedFile?.absolutePath,
+        currentPlaybackSourceId,
+        visiblePlayableFiles
+    ) {
+        val localFile = selectedFile
+        if (localFile == null || !localFile.exists() || !localFile.isFile) {
+            return@remember false
+        }
+        if (currentTrackIndexForList(localFile, visiblePlayableFiles) < 0) {
+            return@remember false
+        }
+        currentPlaybackSourceId.isNullOrBlank() || samePath(currentPlaybackSourceId, localFile.absolutePath)
+    }
+    val currentTrackKey = if (isLocalSwipeEligible) selectedFile?.absolutePath else null
+    val previousFile = remember(
+        isLocalSwipeEligible,
+        selectedFile?.absolutePath,
+        visiblePlayableFiles
+    ) {
+        if (!isLocalSwipeEligible) {
+            null
+        } else {
+            adjacentTrackForOffset(
+                selectedFile = selectedFile,
+                visiblePlayableFiles = visiblePlayableFiles,
+                offset = -1
+            )
+        }
+    }
+    val nextFile = remember(
+        isLocalSwipeEligible,
+        selectedFile?.absolutePath,
+        visiblePlayableFiles
+    ) {
+        if (!isLocalSwipeEligible) {
+            null
+        } else {
+            adjacentTrackForOffset(
+                selectedFile = selectedFile,
+                visiblePlayableFiles = visiblePlayableFiles,
+                offset = 1
+            )
+        }
+    }
+    LaunchedEffect(isLocalSwipeEligible, previousFile?.absolutePath, nextFile?.absolutePath, selectedFile?.absolutePath) {
+        listOfNotNull(
+            if (isLocalSwipeEligible) selectedFile else null,
+            previousFile,
+            nextFile
+        ).forEach { file ->
+            val key = file.absolutePath
+            if (artworkCache.containsKey(key)) return@forEach
+            val artwork = withContext(Dispatchers.IO) {
+                loadArtworkForFile(file)
+            }
+            artworkCache[key] = LocalArtworkSwipeCacheEntry(artwork = artwork)
+        }
+    }
+
+    val currentArtworkEntry = currentTrackKey?.let { artworkCache[it] }
+    val previousTrackKey = previousFile?.absolutePath
+    val nextTrackKey = nextFile?.absolutePath
+    val previousArtworkEntry = previousTrackKey?.let { artworkCache[it] }
+    val nextArtworkEntry = nextTrackKey?.let { artworkCache[it] }
+    val currentPlaceholderIcon = if (isLocalSwipeEligible) {
+        placeholderArtworkIconForFile(
+            file = selectedFile,
+            decoderName = null,
+            allowCurrentDecoderFallback = false
+        )
+    } else {
+        Icons.Default.MusicNote
+    }
+    val previousPlaceholderIcon = placeholderArtworkIconForFile(
+        file = previousFile,
+        decoderName = null,
+        allowCurrentDecoderFallback = false
+    )
+    val nextPlaceholderIcon = placeholderArtworkIconForFile(
+        file = nextFile,
+        decoderName = null,
+        allowCurrentDecoderFallback = false
+    )
+
+    return remember(
+        currentTrackKey,
+        currentArtworkEntry,
+        currentPlaceholderIcon,
+        previousTrackKey,
+        nextTrackKey,
+        previousArtworkEntry,
+        nextArtworkEntry,
+        previousPlaceholderIcon,
+        nextPlaceholderIcon
+    ) {
+        ArtworkSwipePreviewState(
+            currentTrackKey = currentTrackKey,
+            currentArtworkResolved = currentTrackKey != null && currentArtworkEntry != null,
+            currentArtwork = currentArtworkEntry?.artwork,
+            currentPlaceholderIcon = currentPlaceholderIcon,
+            previousTrackKey = previousTrackKey,
+            nextTrackKey = nextTrackKey,
+            canSwipePrevious = previousTrackKey != null && previousArtworkEntry != null,
+            canSwipeNext = nextTrackKey != null && nextArtworkEntry != null,
+            previousArtwork = previousArtworkEntry?.artwork,
+            nextArtwork = nextArtworkEntry?.artwork,
+            previousPlaceholderIcon = previousPlaceholderIcon,
+            nextPlaceholderIcon = nextPlaceholderIcon
+        )
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -2286,6 +2410,11 @@ private fun AppNavigation(
         artwork = artworkBitmap,
         resolvedTrackKey = artworkResolvedTrackKey
     )
+    val artworkSwipePreviewState = rememberLocalArtworkSwipePreviewState(
+        selectedFile = selectedFile,
+        currentPlaybackSourceId = currentPlaybackSourceId,
+        visiblePlayableFiles = visiblePlayableFiles
+    )
     LaunchedEffect(isPlayerExpanded, isPlayerSurfaceVisible, restoreMiniPlayerFocusOnCollapse) {
         if (!isPlayerExpanded && restoreMiniPlayerFocusOnCollapse && isPlayerSurfaceVisible) {
             withFrameNanos { }
@@ -3174,6 +3303,7 @@ private fun AppNavigation(
             playlistTrackCount = trackInfoPlaylistTrackCount,
             playlistPathOrUrl = trackInfoPlaylistPathOrUrl,
             artworkBitmap = displayedArtworkBitmap,
+            artworkSwipePreviewState = artworkSwipePreviewState,
             isCurrentTrackFavorited = isCurrentTrackFavorited,
             activeRepeatMode = activeRepeatMode,
             playbackCapabilitiesFlags = effectivePlaybackCapabilitiesFlags,

@@ -112,6 +112,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import android.view.MotionEvent
 import com.flopster101.siliconplayer.AppDefaults
+import com.flopster101.siliconplayer.ArtworkSwipePreviewState
 import com.flopster101.siliconplayer.DecoderNames
 import com.flopster101.siliconplayer.inferredDisplayTitleForName
 import com.flopster101.siliconplayer.inferredPrimaryExtensionForName
@@ -630,6 +631,7 @@ internal fun PlayerScreen(
     playlistTrackCount: Int = 0,
     playlistPathOrUrl: String? = null,
     artwork: ImageBitmap?,
+    artworkSwipePreviewState: ArtworkSwipePreviewState = ArtworkSwipePreviewState(),
     noArtworkIcon: ImageVector = Icons.Default.MusicNote,
     repeatMode: RepeatMode,
     canCycleRepeatMode: Boolean,
@@ -1059,6 +1061,7 @@ internal fun PlayerScreen(
                                 decoderName = decoderName,
                                 sampleRateHz = sampleRateHz,
                                 artwork = artwork,
+                                artworkSwipePreviewState = artworkSwipePreviewState,
                                 placeholderIcon = noArtworkIcon,
                                 visualizationModeBadgeText = visualizationModeBadgeText,
                                 showVisualizationModeBadge = showVisualizationModeBadge,
@@ -1103,6 +1106,8 @@ internal fun PlayerScreen(
                                 barContrastBackdropEnabled = visualizationPrefsState.barContrastBackdropEnabled,
                                 channelScopePrefs = channelScopePrefs,
                                 artworkCornerRadiusDp = artworkCornerRadiusDp,
+                                onSwipePreviousTrack = onForcePreviousTrack,
+                                onSwipeNextTrack = onNextTrack,
                                 modifier = Modifier
                                     .align(Alignment.Center)
                                     .size(landscapeArtSize)
@@ -1457,6 +1462,7 @@ internal fun PlayerScreen(
                                         decoderName = decoderName,
                                         sampleRateHz = sampleRateHz,
                                         artwork = artwork,
+                                        artworkSwipePreviewState = artworkSwipePreviewState,
                                         placeholderIcon = noArtworkIcon,
                                         visualizationModeBadgeText = visualizationModeBadgeText,
                                         showVisualizationModeBadge = showVisualizationModeBadge,
@@ -1501,6 +1507,8 @@ internal fun PlayerScreen(
                                         barContrastBackdropEnabled = visualizationPrefsState.barContrastBackdropEnabled,
                                         channelScopePrefs = channelScopePrefs,
                                         artworkCornerRadiusDp = artworkCornerRadiusDp,
+                                        onSwipePreviousTrack = onForcePreviousTrack,
+                                        onSwipeNextTrack = onNextTrack,
                                         modifier = Modifier.size(artworkSize)
                                     )
                                 }

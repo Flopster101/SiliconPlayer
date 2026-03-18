@@ -86,6 +86,7 @@ internal fun placeholderArtworkIconForFile(
     allowCurrentDecoderFallback: Boolean = true
 ): ImageVector {
     val extension = file?.name?.let(::inferredPrimaryExtensionForName) ?: return Icons.Default.MusicNote
+    val decoderExtensionArtworkHints = remember { buildDecoderExtensionArtworkHintMap() }
     val effectiveDecoderName = decoderName
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
@@ -94,7 +95,10 @@ internal fun placeholderArtworkIconForFile(
         } else {
             null
         }
-    return when (decoderArtworkHintForName(effectiveDecoderName)) {
+    val resolvedHint =
+        decoderArtworkHintForName(effectiveDecoderName)
+            ?: file?.name?.let { resolveDecoderArtworkHintForFileName(it, decoderExtensionArtworkHints) }
+    return when (resolvedHint) {
         DecoderArtworkHint.TrackedFile -> ImageVector.vectorResource(R.drawable.ic_placeholder_tracker_chip)
         DecoderArtworkHint.GameFile -> ImageVector.vectorResource(R.drawable.ic_placeholder_gamepad)
         null -> {

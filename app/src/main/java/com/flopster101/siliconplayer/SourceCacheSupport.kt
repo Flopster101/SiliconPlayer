@@ -67,11 +67,13 @@ internal fun sanitizeRemoteCachedMetadataTitle(
     val normalizedTitle = rawTitle.trim()
     if (normalizedTitle.isBlank()) return rawTitle
     val file = selectedFile ?: return rawTitle
-    if (file.parentFile?.name != REMOTE_SOURCE_CACHE_DIR) return rawTitle
+    if (file.parentFile?.name == REMOTE_SOURCE_CACHE_DIR) {
+        val strippedHashPrefix = stripRemoteCacheHashPrefix(normalizedTitle)
+        if (strippedHashPrefix == normalizedTitle) return rawTitle
+        return inferredDisplayTitleForName(strippedHashPrefix)
+    }
 
-    val strippedHashPrefix = stripRemoteCacheHashPrefix(normalizedTitle)
-    if (strippedHashPrefix == normalizedTitle) return rawTitle
-    return inferredDisplayTitleForName(strippedHashPrefix)
+    return rawTitle
 }
 
 internal fun stripUrlFragment(url: String): String {

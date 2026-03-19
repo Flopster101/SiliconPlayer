@@ -66,7 +66,12 @@ internal fun inferredDisplayTitleForName(name: String): String {
         val prefix = baseName.substring(0, firstDot).trim()
         val remainder = baseName.substring(firstDot + 1).trim()
         if (isLikelyExtensionToken(prefix) && remainder.isNotBlank() && !isLikelyExtensionToken(remainder)) {
-            return remainder
+            val remainderLastDot = remainder.lastIndexOf('.')
+            return if (remainderLastDot > 0) {
+                remainder.substring(0, remainderLastDot).ifBlank { remainder }
+            } else {
+                remainder
+            }
         }
     }
 

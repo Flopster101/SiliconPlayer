@@ -223,6 +223,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 artist = metadataArtist.ifBlank {
                     if (selectedFile != null) "Unknown Artist" else "Unknown"
                 },
+                metadataTitleResolved = sanitizedTitle.isNotBlank(),
                 artwork = artworkBitmap,
                 noArtworkIcon = placeholderArtworkIconForFile(selectedFile, decoderName),
                 artworkCornerRadiusDp = playerArtworkCornerRadiusDp,

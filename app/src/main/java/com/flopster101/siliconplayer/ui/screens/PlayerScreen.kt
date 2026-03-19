@@ -112,6 +112,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import android.view.MotionEvent
 import com.flopster101.siliconplayer.AppDefaults
+import com.flopster101.siliconplayer.AnimatedMetadataPlaceholderLine
 import com.flopster101.siliconplayer.ArtworkSwipePreviewState
 import com.flopster101.siliconplayer.DecoderNames
 import com.flopster101.siliconplayer.inferredDisplayTitleForName
@@ -767,8 +768,15 @@ internal fun PlayerScreen(
     val hasTrack = file != null
     val remoteLoadUiState = RemoteLoadUiStateHolder.current
     val sanitizedTitle = sanitizeRemoteCachedMetadataTitle(title, file)
+    val showMetadataLoadingPlaceholder = hasTrack &&
+        (playbackStartInProgress || remoteLoadUiState != null) &&
+        sanitizedTitle.isBlank()
     val displayTitle = sanitizedTitle.ifBlank {
-        if (file != null) inferredDisplayTitleForName(file.name) else "No track loaded"
+        when {
+            file == null -> "No track loaded"
+            showMetadataLoadingPlaceholder -> ""
+            else -> inferredDisplayTitleForName(file.name)
+        }
     }
     val displayArtist = artist.ifBlank { if (hasTrack) "Unknown Artist" else "Unknown" }
     val rawAlbum = if (hasTrack) {
@@ -1171,6 +1179,7 @@ internal fun PlayerScreen(
                                         title = displayTitle,
                                         artist = displayArtist,
                                         album = "",
+                                        showLoadingPlaceholder = showMetadataLoadingPlaceholder,
                                         filename = displayFilename,
                                         filenameDisplayMode = filenameDisplayMode,
                                         decoderName = decoderName,
@@ -1535,6 +1544,7 @@ internal fun PlayerScreen(
                                         title = displayTitle,
                                         artist = displayArtist,
                                         album = displayAlbum,
+                                        showLoadingPlaceholder = showMetadataLoadingPlaceholder,
                                         filename = displayFilename,
                                         filenameDisplayMode = filenameDisplayMode,
                                         decoderName = decoderName,
@@ -2618,6 +2628,7 @@ private fun PortraitTrackMetadataBlock(
     title: String,
     artist: String,
     album: String,
+    showLoadingPlaceholder: Boolean,
     filename: String,
     filenameDisplayMode: com.flopster101.siliconplayer.FilenameDisplayMode,
     decoderName: String?,
@@ -2711,140 +2722,190 @@ private fun PortraitTrackMetadataBlock(
         horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.Top
     ) {
-        PlayerTitleWithOptionalSubtuneBadge(
-            title = title,
-            titleTextStyle = titleTextStyle,
-            subtuneBadge = subtuneBadge,
-            subtuneTitleClickable = subtuneTitleClickable,
-            subtuneTitleFlashAlpha = subtuneTitleFlashAlpha.value,
-            onOpenSubtuneSelector = onOpenSubtuneSelector,
-            textAlign = TextAlign.Start,
-            centered = false
-        )
-        Spacer(modifier = Modifier.height(lerpDp(2.dp, 5.dp, layoutScale)))
         AnimatedContent(
-            targetState = artist,
+            targetState = showLoadingPlaceholder,
             transitionSpec = {
-                fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 25)) togetherWith
-                    fadeOut(animationSpec = tween(durationMillis = 110))
+                fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 20)) togetherWith
+                    fadeOut(animationSpec = tween(durationMillis = 120))
             },
-            label = "portraitTrackArtistSwap"
-        ) { animatedArtist ->
-            Text(
-                text = animatedArtist,
-                style = artistTextStyle,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Start,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        AnimatedVisibility(
-            visible = album.isNotBlank(),
-            enter = fadeIn(animationSpec = tween(durationMillis = 180)) + expandVertically(
-                animationSpec = tween(durationMillis = 220),
-                expandFrom = Alignment.Top
-            ),
-            exit = fadeOut(animationSpec = tween(durationMillis = 120)) + shrinkVertically(
-                animationSpec = tween(durationMillis = 220),
-                shrinkTowards = Alignment.Top
-            )
-        ) {
-            Column {
-                Spacer(modifier = Modifier.height(lerpDp(2.dp, 4.dp, layoutScale)))
-                AnimatedContent(
-                    targetState = album,
-                    transitionSpec = {
-                        fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 25)) togetherWith
-                            fadeOut(animationSpec = tween(durationMillis = 110))
-                    },
-                    label = "portraitTrackAlbumSwap"
-                ) { animatedAlbum ->
-                    Text(
-                        text = animatedAlbum,
-                        style = albumTextStyle,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Start,
+            label = "portraitTrackMetadataLoadingSwap"
+        ) { loading ->
+            if (loading) {
+                val titlePlaceholderHeight = with(LocalDensity.current) {
+                    titleTextStyle.lineHeight.toDp() * 0.68f
+                }
+                val supportingPlaceholderHeight = with(LocalDensity.current) {
+                    artistTextStyle.lineHeight.toDp() * 0.62f
+                }
+                val detailPlaceholderHeight = with(LocalDensity.current) {
+                    technicalSummaryTextStyle.lineHeight.toDp() * 0.6f
+                }
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.Top
+                ) {
+                    AnimatedMetadataPlaceholderLine(
+                        widthFraction = 0.74f,
+                        height = titlePlaceholderHeight,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(lerpDp(6.dp, 10.dp, layoutScale)))
+                    AnimatedMetadataPlaceholderLine(
+                        widthFraction = 0.46f,
+                        height = supportingPlaceholderHeight,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(lerpDp(6.dp, 10.dp, layoutScale)))
+                    AnimatedMetadataPlaceholderLine(
+                        widthFraction = 0.58f,
+                        height = detailPlaceholderHeight,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
-            }
-        }
-        AnimatedVisibility(
-            visible = shouldShowFilename,
-            enter = fadeIn(animationSpec = tween(durationMillis = 180)) + expandVertically(
-                animationSpec = tween(durationMillis = 220),
-                expandFrom = Alignment.Top
-            ),
-            exit = fadeOut(animationSpec = tween(durationMillis = 120)) + shrinkVertically(
-                animationSpec = tween(durationMillis = 220),
-                shrinkTowards = Alignment.Top
-            )
-        ) {
-            Column {
-                Spacer(
-                    modifier = Modifier.height(
-                        if (album.isNotBlank()) {
-                            lerpDp(2.dp, 5.dp, layoutScale)
-                        } else {
-                            lerpDp(2.dp, 4.dp, layoutScale)
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.Start,
+                    verticalArrangement = Arrangement.Top
+                ) {
+                    PlayerTitleWithOptionalSubtuneBadge(
+                        title = title,
+                        titleTextStyle = titleTextStyle,
+                        subtuneBadge = subtuneBadge,
+                        subtuneTitleClickable = subtuneTitleClickable,
+                        subtuneTitleFlashAlpha = subtuneTitleFlashAlpha.value,
+                        onOpenSubtuneSelector = onOpenSubtuneSelector,
+                        textAlign = TextAlign.Start,
+                        centered = false
+                    )
+                    Spacer(modifier = Modifier.height(lerpDp(2.dp, 5.dp, layoutScale)))
+                    AnimatedContent(
+                        targetState = artist,
+                        transitionSpec = {
+                            fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 25)) togetherWith
+                                fadeOut(animationSpec = tween(durationMillis = 110))
+                        },
+                        label = "portraitTrackArtistSwap"
+                    ) { animatedArtist ->
+                        Text(
+                            text = animatedArtist,
+                            style = artistTextStyle,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    AnimatedVisibility(
+                        visible = album.isNotBlank(),
+                        enter = fadeIn(animationSpec = tween(durationMillis = 180)) + expandVertically(
+                            animationSpec = tween(durationMillis = 220),
+                            expandFrom = Alignment.Top
+                        ),
+                        exit = fadeOut(animationSpec = tween(durationMillis = 120)) + shrinkVertically(
+                            animationSpec = tween(durationMillis = 220),
+                            shrinkTowards = Alignment.Top
+                        )
+                    ) {
+                        Column {
+                            Spacer(modifier = Modifier.height(lerpDp(2.dp, 4.dp, layoutScale)))
+                            AnimatedContent(
+                                targetState = album,
+                                transitionSpec = {
+                                    fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 25)) togetherWith
+                                        fadeOut(animationSpec = tween(durationMillis = 110))
+                                },
+                                label = "portraitTrackAlbumSwap"
+                            ) { animatedAlbum ->
+                                Text(
+                                    text = animatedAlbum,
+                                    style = albumTextStyle,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Start,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
-                    )
-                )
-                AnimatedContent(
-                    targetState = filename,
-                    transitionSpec = {
-                        fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 20)) togetherWith
-                            fadeOut(animationSpec = tween(durationMillis = 110))
-                    },
-                    label = "portraitTrackFilenameSwap"
-                ) { animatedFilename ->
-                    Text(
-                        text = animatedFilename,
-                        style = filenameTextStyle,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Start,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-        }
-        AnimatedVisibility(
-            visible = !technicalSummary.isNullOrBlank(),
-            enter = fadeIn(animationSpec = tween(durationMillis = 180)) + expandVertically(
-                animationSpec = tween(durationMillis = 220),
-                expandFrom = Alignment.Top
-            ),
-            exit = fadeOut(animationSpec = tween(durationMillis = 120)) + shrinkVertically(
-                animationSpec = tween(durationMillis = 220),
-                shrinkTowards = Alignment.Top
-            )
-        ) {
-            Column {
-                Spacer(modifier = Modifier.height(lerpDp(3.dp, 7.dp, layoutScale)))
-                AnimatedContent(
-                    targetState = technicalSummary.orEmpty(),
-                    transitionSpec = {
-                        fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 20)) togetherWith
-                            fadeOut(animationSpec = tween(durationMillis = 110))
-                    },
-                    label = "portraitTrackTechnicalSummarySwap"
-                ) { animatedTechnicalSummary ->
-                    Text(
-                        text = animatedTechnicalSummary,
-                        style = technicalSummaryTextStyle,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Start,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    }
+                    AnimatedVisibility(
+                        visible = shouldShowFilename,
+                        enter = fadeIn(animationSpec = tween(durationMillis = 180)) + expandVertically(
+                            animationSpec = tween(durationMillis = 220),
+                            expandFrom = Alignment.Top
+                        ),
+                        exit = fadeOut(animationSpec = tween(durationMillis = 120)) + shrinkVertically(
+                            animationSpec = tween(durationMillis = 220),
+                            shrinkTowards = Alignment.Top
+                        )
+                    ) {
+                        Column {
+                            Spacer(
+                                modifier = Modifier.height(
+                                    if (album.isNotBlank()) {
+                                        lerpDp(2.dp, 5.dp, layoutScale)
+                                    } else {
+                                        lerpDp(2.dp, 4.dp, layoutScale)
+                                    }
+                                )
+                            )
+                            AnimatedContent(
+                                targetState = filename,
+                                transitionSpec = {
+                                    fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 20)) togetherWith
+                                        fadeOut(animationSpec = tween(durationMillis = 110))
+                                },
+                                label = "portraitTrackFilenameSwap"
+                            ) { animatedFilename ->
+                                Text(
+                                    text = animatedFilename,
+                                    style = filenameTextStyle,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.86f),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Start,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                    AnimatedVisibility(
+                        visible = !technicalSummary.isNullOrBlank(),
+                        enter = fadeIn(animationSpec = tween(durationMillis = 180)) + expandVertically(
+                            animationSpec = tween(durationMillis = 220),
+                            expandFrom = Alignment.Top
+                        ),
+                        exit = fadeOut(animationSpec = tween(durationMillis = 120)) + shrinkVertically(
+                            animationSpec = tween(durationMillis = 220),
+                            shrinkTowards = Alignment.Top
+                        )
+                    ) {
+                        Column {
+                            Spacer(modifier = Modifier.height(lerpDp(3.dp, 7.dp, layoutScale)))
+                            AnimatedContent(
+                                targetState = technicalSummary.orEmpty(),
+                                transitionSpec = {
+                                    fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 20)) togetherWith
+                                        fadeOut(animationSpec = tween(durationMillis = 110))
+                                },
+                                label = "portraitTrackTechnicalSummarySwap"
+                            ) { animatedTechnicalSummary ->
+                                Text(
+                                    text = animatedTechnicalSummary,
+                                    style = technicalSummaryTextStyle,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Start,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

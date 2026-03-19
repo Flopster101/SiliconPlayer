@@ -129,6 +129,7 @@ internal fun MiniPlayerBar(
     file: File?,
     title: String,
     artist: String,
+    metadataTitleResolved: Boolean,
     artwork: ImageBitmap?,
     noArtworkIcon: ImageVector,
     artworkCornerRadiusDp: Int,
@@ -167,6 +168,7 @@ internal fun MiniPlayerBar(
     val remoteLoadUiState = RemoteLoadUiStateHolder.current
     val remoteLoadActive = remoteLoadUiState != null
     val showLoadingIndicator = playbackStartInProgress || remoteLoadActive
+    val showMetadataLoadingPlaceholder = hasTrack && showLoadingIndicator && !metadataTitleResolved
     val formatLabel = file?.name?.let(::inferredPrimaryExtensionForName)?.uppercase(Locale.ROOT) ?: "EMPTY"
     val positionLabel = formatTimeForMini(positionSeconds)
     val durationLabel = if (durationSeconds > 0.0) {
@@ -354,36 +356,63 @@ internal fun MiniPlayerBar(
                         .padding(end = 8.dp)
                 ) {
                     AnimatedContent(
-                        targetState = title,
+                        targetState = showMetadataLoadingPlaceholder,
                         transitionSpec = {
-                            fadeIn(animationSpec = tween(durationMillis = 170, delayMillis = 35)) togetherWith
-                                fadeOut(animationSpec = tween(durationMillis = 110))
+                            fadeIn(animationSpec = tween(durationMillis = 180, delayMillis = 20)) togetherWith
+                                fadeOut(animationSpec = tween(durationMillis = 120))
                         },
-                        label = "miniTitleSwap"
-                    ) { animatedTitle ->
-                        Text(
-                            text = animatedTitle,
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    AnimatedContent(
-                        targetState = artist,
-                        transitionSpec = {
-                            fadeIn(animationSpec = tween(durationMillis = 170, delayMillis = 25)) togetherWith
-                                fadeOut(animationSpec = tween(durationMillis = 100))
-                        },
-                        label = "miniArtistSwap"
-                    ) { animatedArtist ->
-                        Text(
-                            text = animatedArtist,
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier
-                        )
+                        label = "miniMetadataLoadingSwap"
+                    ) { loading ->
+                        if (loading) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                AnimatedMetadataPlaceholderLine(
+                                    widthFraction = 0.72f,
+                                    height = 11.dp,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(7.dp))
+                                AnimatedMetadataPlaceholderLine(
+                                    widthFraction = 0.46f,
+                                    height = 7.dp,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        } else {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                AnimatedContent(
+                                    targetState = title,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = tween(durationMillis = 170, delayMillis = 35)) togetherWith
+                                            fadeOut(animationSpec = tween(durationMillis = 110))
+                                    },
+                                    label = "miniTitleSwap"
+                                ) { animatedTitle ->
+                                    Text(
+                                        text = animatedTitle,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                AnimatedContent(
+                                    targetState = artist,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = tween(durationMillis = 170, delayMillis = 25)) togetherWith
+                                            fadeOut(animationSpec = tween(durationMillis = 100))
+                                    },
+                                    label = "miniArtistSwap"
+                                ) { animatedArtist ->
+                                    Text(
+                                        text = animatedArtist,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                    )
+                                }
+                            }
+                        }
                     }
                     Text(
                         text = if (remoteLoadActive) {

@@ -1,6 +1,7 @@
 package com.flopster101.siliconplayer
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -9,7 +10,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.padding
@@ -21,8 +24,10 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -32,13 +37,16 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import java.io.File
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -149,6 +157,11 @@ internal fun BoxScope.MiniPlayerOverlayHost(
         val playPauseButtonFocusRequester = remember { FocusRequester() }
         val nextButtonFocusRequester = remember { FocusRequester() }
         var miniPlayerHasFocus by remember { mutableStateOf(false) }
+        val miniPlayerUiScope = rememberCoroutineScope()
+        val blockedDismissSettleOffset = remember { Animatable(0f) }
+        var blockedDismissOffsetPx by remember { mutableFloatStateOf(0f) }
+        var blockedDismissSettling by remember { mutableStateOf(false) }
+        val blockedDismissMaxOffsetPx = with(LocalDensity.current) { 108.dp.toPx() }
         val miniPlayerFocusHighlight by animateFloatAsState(
             targetValue = if (miniPlayerHasFocus && showMiniPlayerFocusHighlight) 1f else 0f,
             animationSpec = tween(durationMillis = 180, easing = LinearOutSlowInEasing),
@@ -167,11 +180,18 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 }
             }
         )
+        LaunchedEffect(isPlaying, isPlayerSurfaceVisible) {
+            if (!isPlaying || !isPlayerSurfaceVisible) {
+                blockedDismissSettling = false
+                blockedDismissOffsetPx = 0f
+            }
+        }
         val miniPlayerModifier = Modifier
             .graphicsLayer {
                 val dragProgress = miniExpandPreviewProgress.coerceIn(0f, 1f)
                 val hideMini = dragExpandCommitInProgress || expandFromMiniDrag || isPlayerExpanded
                 alpha = if (hideMini) 0f else (1f - dragProgress).coerceIn(0f, 1f)
+                translationX = if (isPlaying) blockedDismissOffsetPx else 0f
                 translationY = -miniPreviewLiftPx * dragProgress
             }
             .onFocusChanged { state -> miniPlayerHasFocus = state.hasFocus }
@@ -211,6 +231,61 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.58f * miniPlayerFocusHighlight),
                 shape = MaterialTheme.shapes.large
             )
+        val blockedDismissModifier = if (isPlaying) {
+            Modifier.pointerInput(blockedDismissMaxOffsetPx) {
+                detectHorizontalDragGestures(
+                    onHorizontalDrag = { change, dragAmount ->
+                        if (blockedDismissSettling) {
+                            return@detectHorizontalDragGestures
+                        }
+                        blockedDismissOffsetPx =
+                            (blockedDismissOffsetPx + dragAmount).coerceIn(
+                                -blockedDismissMaxOffsetPx,
+                                blockedDismissMaxOffsetPx
+                            )
+                        change.consume()
+                    },
+                    onDragEnd = {
+                        val releaseOffset = blockedDismissOffsetPx
+                        miniPlayerUiScope.launch {
+                            blockedDismissSettling = true
+                            blockedDismissSettleOffset.snapTo(releaseOffset)
+                            blockedDismissSettleOffset.animateTo(
+                                targetValue = 0f,
+                                animationSpec = tween(
+                                    durationMillis = 220,
+                                    easing = LinearOutSlowInEasing
+                                )
+                            ) {
+                                blockedDismissOffsetPx = value
+                            }
+                            blockedDismissSettling = false
+                            blockedDismissOffsetPx = 0f
+                        }
+                    },
+                    onDragCancel = {
+                        val releaseOffset = blockedDismissOffsetPx
+                        miniPlayerUiScope.launch {
+                            blockedDismissSettling = true
+                            blockedDismissSettleOffset.snapTo(releaseOffset)
+                            blockedDismissSettleOffset.animateTo(
+                                targetValue = 0f,
+                                animationSpec = tween(
+                                    durationMillis = 220,
+                                    easing = LinearOutSlowInEasing
+                                )
+                            ) {
+                                blockedDismissOffsetPx = value
+                            }
+                            blockedDismissSettling = false
+                            blockedDismissOffsetPx = 0f
+                        }
+                    }
+                )
+            }
+        } else {
+            Modifier
+        }
 
         val miniPlayerContent: @Composable () -> Unit = {
             val sanitizedTitle = sanitizeRemoteCachedMetadataTitle(metadataTitle, selectedFile)
@@ -275,14 +350,22 @@ internal fun BoxScope.MiniPlayerOverlayHost(
             )
         }
 
-        SwipeToDismissBox(
-            state = dismissState,
-            modifier = miniPlayerModifier,
-            backgroundContent = {},
-            enableDismissFromStartToEnd = !isPlaying,
-            enableDismissFromEndToStart = !isPlaying
-        ) {
-            miniPlayerContent()
+        if (isPlaying) {
+            Box(
+                modifier = miniPlayerModifier.then(blockedDismissModifier)
+            ) {
+                miniPlayerContent()
+            }
+        } else {
+            SwipeToDismissBox(
+                state = dismissState,
+                modifier = miniPlayerModifier,
+                backgroundContent = {},
+                enableDismissFromStartToEnd = true,
+                enableDismissFromEndToStart = true
+            ) {
+                miniPlayerContent()
+            }
         }
     }
 }

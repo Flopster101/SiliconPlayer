@@ -15,11 +15,9 @@ internal fun stopAndEmptyTrackAction(
 }
 
 internal fun hidePlayerSurfaceAction(
-    onStopAndEmptyTrack: () -> Unit,
     onPlayerExpandedChanged: (Boolean) -> Unit,
     onPlayerSurfaceVisibleChanged: (Boolean) -> Unit
 ) {
-    onStopAndEmptyTrack()
     onPlayerExpandedChanged(false)
     onPlayerSurfaceVisibleChanged(false)
 }

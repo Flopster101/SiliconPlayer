@@ -3225,7 +3225,6 @@ private fun AppNavigation(
     }
 
     val hidePlayerSurface = buildHidePlayerSurfaceDelegate(
-        onStopAndEmptyTrack = stopAndEmptyTrack,
         onPlayerExpandedChanged = { isPlayerExpanded = it },
         onPlayerSurfaceVisibleChanged = { isPlayerSurfaceVisible = it }
     )

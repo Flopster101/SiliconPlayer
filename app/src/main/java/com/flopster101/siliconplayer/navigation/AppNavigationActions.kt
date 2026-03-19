@@ -45,12 +45,10 @@ internal fun buildStopAndEmptyTrackDelegate(
 }
 
 internal fun buildHidePlayerSurfaceDelegate(
-    onStopAndEmptyTrack: () -> Unit,
     onPlayerExpandedChanged: (Boolean) -> Unit,
     onPlayerSurfaceVisibleChanged: (Boolean) -> Unit
 ): () -> Unit = {
     hidePlayerSurfaceAction(
-        onStopAndEmptyTrack = onStopAndEmptyTrack,
         onPlayerExpandedChanged = onPlayerExpandedChanged,
         onPlayerSurfaceVisibleChanged = onPlayerSurfaceVisibleChanged
     )

@@ -25,6 +25,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.net.wifi.WifiManager
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import java.io.File
@@ -44,6 +45,20 @@ class PlaybackService : Service() {
     }
     private val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     private val powerManager by lazy { getSystemService(Context.POWER_SERVICE) as PowerManager }
+    private val wifiManager by lazy { applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager }
+    private val smbWifiLock by lazy {
+        wifiManager.createWifiLock(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+            } else {
+                @Suppress("DEPRECATION")
+                WifiManager.WIFI_MODE_FULL_HIGH_PERF
+            },
+            "SiliconPlayer:SmbPlayback"
+        ).apply {
+            setReferenceCounted(false)
+        }
+    }
 
     private var mediaSession: MediaSession? = null
     private var audioFocusRequest: AudioFocusRequest? = null // For Android O+
@@ -89,6 +104,7 @@ class PlaybackService : Service() {
     }
 
     private var currentPath: String? = null
+    private var currentRequestUrl: String? = null
     private var currentTitle: String = "No track selected"
     private var currentArtist: String = "Silicon Player"
     private var currentArtwork: Bitmap? = null
@@ -216,6 +232,7 @@ class PlaybackService : Service() {
         isServiceAlive = false
         handler.removeCallbacks(ticker)
         serviceScope.cancel()
+        releaseSmbWifiLockIfHeld()
         unregisterReceiver(noisyReceiver)
         mediaSession?.release()
     }
@@ -248,6 +265,7 @@ class PlaybackService : Service() {
         val newRequestUrl = intent.getStringExtra(EXTRA_REQUEST_URL)
         val newArtworkKey = newRequestUrl?.takeIf { it.isNotBlank() } ?: newPath
         currentPath = newPath
+        currentRequestUrl = newRequestUrl
         prefs.edit()
             .putString(PREF_SESSION_CURRENT_PATH, currentPath)
             .putString(PREF_SESSION_CURRENT_REQUEST_URL, newRequestUrl)
@@ -293,6 +311,7 @@ class PlaybackService : Service() {
             abandonAudioFocus()
             resumeOnFocusGain = false
         }
+        updateNetworkPlaybackLocks()
         persistResumeCheckpointIfNeeded(force = true)
 
         if (currentPath == null) {
@@ -321,6 +340,7 @@ class PlaybackService : Service() {
             NativeBridge.startEngine()
         }
         isPlaying = true
+        updateNetworkPlaybackLocks()
         persistResumeCheckpointIfNeeded(force = true)
         updateMediaSessionState()
         pushNotification()
@@ -334,6 +354,7 @@ class PlaybackService : Service() {
         if (!shouldApplyPauseResumeFade() || !NativeBridge.isEnginePlaying()) {
             NativeBridge.stopEngine()
             isPlaying = false
+            updateNetworkPlaybackLocks()
             persistResumeCheckpointIfNeeded(force = true)
             updateMediaSessionState()
             pushNotification()
@@ -341,6 +362,7 @@ class PlaybackService : Service() {
         }
         NativeBridge.stopEngineWithPauseResumeFade()
         isPlaying = false
+        updateNetworkPlaybackLocks()
         persistResumeCheckpointIfNeeded(force = true)
         updateMediaSessionState()
         pushNotification()
@@ -359,6 +381,8 @@ class PlaybackService : Service() {
         NativeBridge.stopEngine()
         isPlaying = false
         currentPath = null
+        currentRequestUrl = null
+        updateNetworkPlaybackLocks()
         prefs.edit().remove(PREF_SESSION_CURRENT_PATH).apply()
         clearSessionRepeatMode()
         currentTitle = "No track selected"
@@ -380,6 +404,7 @@ class PlaybackService : Service() {
         resumeOnFocusGain = false
         NativeBridge.stopEngine()
         isPlaying = false
+        updateNetworkPlaybackLocks()
         persistResumeCheckpointIfNeeded(force = true)
         stopForegroundCompat(removeNotification = true)
         isForegroundNotificationShown = false
@@ -409,6 +434,33 @@ class PlaybackService : Service() {
         }
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
+    }
+
+    private fun updateNetworkPlaybackLocks() {
+        if (shouldHoldNetworkWifiLock()) {
+            acquireSmbWifiLockIfNeeded()
+        } else {
+            releaseSmbWifiLockIfHeld()
+        }
+    }
+
+    private fun shouldHoldNetworkWifiLock(): Boolean {
+        if (!isPlaying) return false
+        val activeSource = currentRequestUrl?.takeIf { it.isNotBlank() }
+            ?: currentPath?.takeIf { it.isNotBlank() }
+            ?: return false
+        val scheme = runCatching { Uri.parse(activeSource).scheme?.lowercase() }.getOrNull()
+        return scheme == "smb" || scheme == "http" || scheme == "https"
+    }
+
+    private fun acquireSmbWifiLockIfNeeded() {
+        if (smbWifiLock.isHeld) return
+        runCatching { smbWifiLock.acquire() }
+    }
+
+    private fun releaseSmbWifiLockIfHeld() {
+        if (!smbWifiLock.isHeld) return
+        runCatching { smbWifiLock.release() }
     }
 
     private fun setupMediaSession() {

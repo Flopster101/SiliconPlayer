@@ -33,6 +33,27 @@ object NativeBridge {
     }
 
     @JvmStatic
+    fun openSmbAvioHandle(requestUri: String): Long = SmbAvioBridge.openHandle(requestUri)
+
+    @JvmStatic
+    fun readSmbAvioHandle(handleId: Long, offset: Long, buffer: ByteArray, length: Int): Int {
+        return SmbAvioBridge.readHandle(
+            handleId = handleId,
+            offset = offset,
+            buffer = buffer,
+            length = length
+        )
+    }
+
+    @JvmStatic
+    fun getSmbAvioHandleSize(handleId: Long): Long = SmbAvioBridge.getHandleSize(handleId)
+
+    @JvmStatic
+    fun closeSmbAvioHandle(handleId: Long) {
+        SmbAvioBridge.closeHandle(handleId)
+    }
+
+    @JvmStatic
     fun createAudioTrackOutput(
         sampleRate: Int,
         bufferFrames: Int,

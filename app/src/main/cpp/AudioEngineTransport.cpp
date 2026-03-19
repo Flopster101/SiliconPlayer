@@ -421,8 +421,9 @@ void AudioEngine::seekToSeconds(double seconds) {
         std::lock_guard<std::mutex> lock(decoderMutex);
         if (decoder) {
             const int capabilities = decoder->getPlaybackCapabilities();
-            if ((capabilities & AudioDecoder::PLAYBACK_CAP_DIRECT_SEEK) != 0 &&
-                (capabilities & AudioDecoder::PLAYBACK_CAP_SEEK) != 0) {
+    if ((capabilities & AudioDecoder::PLAYBACK_CAP_DIRECT_SEEK) != 0 &&
+        (capabilities & AudioDecoder::PLAYBACK_CAP_ASYNC_DIRECT_SEEK) == 0 &&
+        (capabilities & AudioDecoder::PLAYBACK_CAP_SEEK) != 0) {
                 decoder->seek(normalizedTarget);
                 const double decoderPosition = decoder->getPlaybackPositionSeconds();
                 const double resolvedPosition = decoderPosition >= 0.0 ? decoderPosition : normalizedTarget;
@@ -477,7 +478,8 @@ double AudioEngine::runAsyncSeekLocked(double targetSeconds) {
 
     // Prefer direct/random-access seek when a decoder can do it reliably.
     // We still execute it on the async seek worker to keep UI interactions non-blocking.
-    if ((capabilities & AudioDecoder::PLAYBACK_CAP_DIRECT_SEEK) != 0) {
+    if ((capabilities & (AudioDecoder::PLAYBACK_CAP_DIRECT_SEEK |
+            AudioDecoder::PLAYBACK_CAP_ASYNC_DIRECT_SEEK)) != 0) {
         decoder->seek(clampedTarget);
         const double decoderPosition = decoder->getPlaybackPositionSeconds();
         return decoderPosition >= 0.0 ? decoderPosition : clampedTarget;

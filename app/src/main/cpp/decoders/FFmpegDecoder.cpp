@@ -8,14 +8,22 @@
 #include <optional>
 #include <cstdlib>
 #include <set>
+#include <cstdio>
+#include <strings.h>
 #include <libavutil/error.h>
 
 #define LOG_TAG "FFmpegDecoder"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 
+extern bool openSmbAvioHandleForNative(const std::string& requestUri, int64_t* outHandleId);
+extern int readSmbAvioHandleForNative(int64_t handleId, int64_t offset, uint8_t* buffer, int length);
+extern int64_t getSmbAvioHandleSizeForNative(int64_t handleId);
+extern void closeSmbAvioHandleForNative(int64_t handleId);
+
 namespace {
 std::once_flag gFfmpegNetworkInitOnce;
+constexpr int kSmbAvioBufferSize = 64 * 1024;
 
 std::string ffErrString(int errnum) {
     char errbuf[AV_ERROR_MAX_STRING_SIZE] = {0};
@@ -188,6 +196,14 @@ std::string getMetadataValueLoopAware(
     }
     return "";
 }
+
+bool isSmbRequestPath(const char* path) {
+    if (path == nullptr) {
+        return false;
+    }
+    constexpr char kPrefix[] = "smb://";
+    return strncasecmp(path, kPrefix, sizeof(kPrefix) - 1) == 0;
+}
 }
 
 FFmpegDecoder::FFmpegDecoder() {
@@ -205,20 +221,33 @@ bool FFmpegDecoder::open(const char* path) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     close(); // close if already open
     decoderDrainStarted = false;
+    return openLocked(path);
+}
+
+bool FFmpegDecoder::openLocked(const char* path) {
     ensureFfmpegNetworkInitialized();
 
-    // Open input
-    const int openResult = avformat_open_input(&formatContext, path, nullptr, nullptr);
-    if (openResult != 0) {
-        char errbuf[AV_ERROR_MAX_STRING_SIZE] = {0};
-        av_strerror(openResult, errbuf, sizeof(errbuf));
-        LOGE("Failed to open file: %s (fferr=%d msg=%s)", path, openResult, errbuf);
-        return false;
+    usingSmbCustomIo = isSmbRequestPath(path);
+    if (usingSmbCustomIo) {
+        if (!openSmbCustomIoLocked(path)) {
+            close();
+            return false;
+        }
+    } else {
+        const int openResult = avformat_open_input(&formatContext, path, nullptr, nullptr);
+        if (openResult != 0) {
+            char errbuf[AV_ERROR_MAX_STRING_SIZE] = {0};
+            av_strerror(openResult, errbuf, sizeof(errbuf));
+            LOGE("Failed to open file: %s (fferr=%d msg=%s)", path, openResult, errbuf);
+            close();
+            return false;
+        }
     }
 
     // Find stream info
     if (avformat_find_stream_info(formatContext, nullptr) < 0) {
         LOGE("Failed to find stream info");
+        close();
         return false;
     }
 
@@ -233,6 +262,7 @@ bool FFmpegDecoder::open(const char* path) {
 
     if (audioStreamIndex == -1) {
         LOGE("No audio stream found");
+        close();
         return false;
     }
 
@@ -240,22 +270,26 @@ bool FFmpegDecoder::open(const char* path) {
     const AVCodec* codec = avcodec_find_decoder(codecParams->codec_id);
     if (!codec) {
         LOGE("Decoder not found for codec ID: %d", codecParams->codec_id);
+        close();
         return false;
     }
 
     codecContext = avcodec_alloc_context3(codec);
     if (!codecContext) {
         LOGE("Failed to allocate codec context");
+        close();
         return false;
     }
 
     if (avcodec_parameters_to_context(codecContext, codecParams) < 0) {
         LOGE("Failed to copy codec params to context");
+        close();
         return false;
     }
 
     if (avcodec_open2(codecContext, codec, nullptr) < 0) {
         LOGE("Failed to open codec");
+        close();
         return false;
     }
 
@@ -295,6 +329,7 @@ bool FFmpegDecoder::open(const char* path) {
 
     if (!initResampler()) {
         LOGE("Failed to initialize resampler");
+        close();
         return false;
     }
 
@@ -418,6 +453,7 @@ bool FFmpegDecoder::open(const char* path) {
     vbr = (bitrate == 0) || (codecContext->rc_max_rate > 0 && codecContext->rc_max_rate != bitrate);
 
     totalFramesOutput = 0;
+    openedPath = path ? path : "";
     LOGD("Opened file: %s, duration: %.2f", path, duration);
     return true;
 }
@@ -434,6 +470,7 @@ void FFmpegDecoder::close() {
         avformat_close_input(&formatContext);
         formatContext = nullptr;
     }
+    closeSmbCustomIoLocked();
     sampleBuffer.clear();
     sampleBufferCursor = 0;
     decoderDrainStarted = false;
@@ -464,6 +501,152 @@ void FFmpegDecoder::close() {
     gaplessRepeatTrack = false;
     toggleChannelNames.clear();
     toggleChannelMuted.clear();
+    openedPath.clear();
+}
+
+bool FFmpegDecoder::openSmbCustomIoLocked(const char* path) {
+    if (path == nullptr) {
+        return false;
+    }
+
+    formatContext = avformat_alloc_context();
+    if (formatContext == nullptr) {
+        LOGE("Failed to allocate format context for SMB AVIO");
+        return false;
+    }
+
+    if (!openSmbAvioHandleForNative(path, &smbAvioHandleId)) {
+        LOGE("Failed to open SMB AVIO handle for %s", path);
+        return false;
+    }
+
+    smbAvioPosition = 0;
+    avioBuffer = static_cast<uint8_t*>(av_malloc(kSmbAvioBufferSize));
+    if (avioBuffer == nullptr) {
+        LOGE("Failed to allocate SMB AVIO buffer");
+        return false;
+    }
+
+    avioContext = avio_alloc_context(
+            avioBuffer,
+            kSmbAvioBufferSize,
+            0,
+            this,
+            &FFmpegDecoder::readPacketCallback,
+            nullptr,
+            &FFmpegDecoder::seekCallback
+    );
+    if (avioContext == nullptr) {
+        LOGE("Failed to allocate SMB AVIO context");
+        return false;
+    }
+    avioContext->seekable = AVIO_SEEKABLE_NORMAL;
+    avioContext->direct = 1;
+
+    formatContext->pb = avioContext;
+    formatContext->flags |= AVFMT_FLAG_CUSTOM_IO;
+    const int openResult = avformat_open_input(&formatContext, nullptr, nullptr, nullptr);
+    if (openResult < 0) {
+        LOGE(
+                "Failed to open SMB AVIO input: %s (fferr=%d msg=%s)",
+                path,
+                openResult,
+                ffErrString(openResult).c_str()
+        );
+        return false;
+    }
+
+    LOGD("Opened SMB AVIO input: %s", path);
+    return true;
+}
+
+void FFmpegDecoder::closeSmbCustomIoLocked() {
+    if (formatContext != nullptr && formatContext->pb == avioContext) {
+        formatContext->pb = nullptr;
+    }
+    if (avioContext != nullptr) {
+        if (avioContext->buffer != nullptr) {
+            av_freep(&avioContext->buffer);
+        }
+        avio_context_free(&avioContext);
+    }
+    avioBuffer = nullptr;
+    if (smbAvioHandleId > 0) {
+        closeSmbAvioHandleForNative(smbAvioHandleId);
+        smbAvioHandleId = 0;
+    }
+    smbAvioPosition = 0;
+    usingSmbCustomIo = false;
+}
+
+int FFmpegDecoder::readPacketCallback(void* opaque, uint8_t* buffer, int bufferSize) {
+    auto* decoder = static_cast<FFmpegDecoder*>(opaque);
+    if (decoder == nullptr || decoder->smbAvioHandleId <= 0 || buffer == nullptr || bufferSize <= 0) {
+        return AVERROR(EINVAL);
+    }
+
+    const int bytesRead = readSmbAvioHandleForNative(
+            decoder->smbAvioHandleId,
+            decoder->smbAvioPosition,
+            buffer,
+            bufferSize
+    );
+    if (bytesRead < 0) {
+        return AVERROR(EIO);
+    }
+    if (bytesRead == 0) {
+        return AVERROR_EOF;
+    }
+    decoder->smbAvioPosition += bytesRead;
+    return bytesRead;
+}
+
+int64_t FFmpegDecoder::currentSmbLogicalPositionLocked() const {
+    if (avioContext == nullptr) {
+        return smbAvioPosition;
+    }
+    const int64_t unreadBytes = std::max<int64_t>(0, avioContext->buf_end - avioContext->buf_ptr);
+    return std::max<int64_t>(0, smbAvioPosition - unreadBytes);
+}
+
+int64_t FFmpegDecoder::seekCallback(void* opaque, int64_t offset, int whence) {
+    auto* decoder = static_cast<FFmpegDecoder*>(opaque);
+    if (decoder == nullptr || decoder->smbAvioHandleId <= 0) {
+        return AVERROR(EINVAL);
+    }
+
+    if ((whence & AVSEEK_SIZE) == AVSEEK_SIZE) {
+        return getSmbAvioHandleSizeForNative(decoder->smbAvioHandleId);
+    }
+
+    const int baseWhence = whence & ~AVSEEK_FORCE;
+    const int64_t sizeBytes = getSmbAvioHandleSizeForNative(decoder->smbAvioHandleId);
+    if (sizeBytes < 0) {
+        return AVERROR(EIO);
+    }
+
+    int64_t base = 0;
+    switch (baseWhence) {
+        case SEEK_SET:
+            base = 0;
+            break;
+        case SEEK_CUR:
+            base = decoder->currentSmbLogicalPositionLocked();
+            break;
+        case SEEK_END:
+            base = sizeBytes;
+            break;
+        default:
+            return AVERROR(EINVAL);
+    }
+
+    const int64_t target = base + offset;
+    if (target < 0) {
+        return AVERROR(EINVAL);
+    }
+    const int64_t clampedTarget = std::min(target, sizeBytes);
+    decoder->smbAvioPosition = clampedTarget;
+    return clampedTarget;
 }
 
 bool FFmpegDecoder::initResampler() {
@@ -709,7 +892,8 @@ int FFmpegDecoder::decodeFrame() {
         }
 
         // Read packet
-        if (av_read_frame(formatContext, packet) < 0) {
+        const int readFrameResult = av_read_frame(formatContext, packet);
+        if (readFrameResult < 0) {
              // No more packets: flush buffered decoder frames once.
              if (!decoderDrainStarted) {
                  decoderDrainStarted = true;
@@ -745,12 +929,32 @@ int FFmpegDecoder::decodeFrame() {
     }
 }
 
-bool FFmpegDecoder::seekInternalLocked(double seconds) {
+bool FFmpegDecoder::performSeekWithinCurrentContextLocked(double seconds) {
     if (!formatContext || !codecContext) return false;
 
     const double clamped = std::max(0.0, seconds);
     const int64_t targetTimestamp = static_cast<int64_t>(clamped * AV_TIME_BASE);
-    int seekResult = av_seek_frame(formatContext, -1, targetTimestamp, AVSEEK_FLAG_BACKWARD);
+    if (packet != nullptr) {
+        av_packet_unref(packet);
+    }
+    if (frame != nullptr) {
+        av_frame_unref(frame);
+    }
+
+    int seekResult = AVERROR(ENOSYS);
+    if (smbAvioHandleId > 0) {
+        seekResult = avformat_seek_file(
+                formatContext,
+                -1,
+                INT64_MIN,
+                targetTimestamp,
+                INT64_MAX,
+                0
+        );
+    }
+    if (seekResult < 0) {
+        seekResult = av_seek_frame(formatContext, -1, targetTimestamp, AVSEEK_FLAG_BACKWARD);
+    }
     if (seekResult < 0 && audioStreamIndex >= 0 && audioStreamIndex < static_cast<int>(formatContext->nb_streams)) {
         AVStream* stream = formatContext->streams[audioStreamIndex];
         if (stream) {
@@ -759,7 +963,19 @@ bool FFmpegDecoder::seekInternalLocked(double seconds) {
                     AV_TIME_BASE_Q,
                     stream->time_base
             );
-            seekResult = av_seek_frame(formatContext, audioStreamIndex, streamTimestamp, AVSEEK_FLAG_BACKWARD);
+            if (smbAvioHandleId > 0) {
+                seekResult = avformat_seek_file(
+                        formatContext,
+                        audioStreamIndex,
+                        INT64_MIN,
+                        streamTimestamp,
+                        INT64_MAX,
+                        AVSEEK_FLAG_BACKWARD
+                );
+            }
+            if (seekResult < 0) {
+                seekResult = av_seek_frame(formatContext, audioStreamIndex, streamTimestamp, AVSEEK_FLAG_BACKWARD);
+            }
         }
     }
     if (seekResult < 0) {
@@ -767,7 +983,21 @@ bool FFmpegDecoder::seekInternalLocked(double seconds) {
         return false;
     }
 
+    avformat_flush(formatContext);
     avcodec_flush_buffers(codecContext);
+    if (packet != nullptr) {
+        av_packet_unref(packet);
+    }
+    if (frame != nullptr) {
+        av_frame_unref(frame);
+    }
+    if (avioContext != nullptr) {
+        avioContext->eof_reached = 0;
+        avioContext->error = 0;
+        avioContext->buf_ptr = avioContext->buffer;
+        avioContext->buf_end = avioContext->buffer;
+        avioContext->pos = smbAvioPosition;
+    }
     sampleBuffer.clear();
     sampleBufferCursor = 0;
     decoderDrainStarted = false;
@@ -778,6 +1008,39 @@ bool FFmpegDecoder::seekInternalLocked(double seconds) {
         totalFramesOutput = 0;
     }
     return true;
+}
+
+bool FFmpegDecoder::reopenSmbContextForSeekLocked(double seconds) {
+    if (openedPath.empty()) {
+        return false;
+    }
+
+    const std::string reopenPath = openedPath;
+    const int preservedRepeatMode = repeatMode;
+    const bool preservedGaplessRepeatTrack = gaplessRepeatTrack;
+
+    close();
+    decoderDrainStarted = false;
+    if (!openLocked(reopenPath.c_str())) {
+        return false;
+    }
+
+    repeatMode = preservedRepeatMode;
+    gaplessRepeatTrack = preservedGaplessRepeatTrack;
+
+    if (seconds <= 0.0) {
+        totalFramesOutput = 0;
+        return true;
+    }
+
+    return performSeekWithinCurrentContextLocked(seconds);
+}
+
+bool FFmpegDecoder::seekInternalLocked(double seconds) {
+    if (smbAvioHandleId > 0) {
+        return reopenSmbContextForSeekLocked(seconds);
+    }
+    return performSeekWithinCurrentContextLocked(seconds);
 }
 
 void FFmpegDecoder::seek(double seconds) {
@@ -958,6 +1221,21 @@ int FFmpegDecoder::getRepeatModeCapabilities() const {
     int capabilities = REPEAT_CAP_TRACK;
     if (hasLoopPoint) {
         capabilities |= REPEAT_CAP_LOOP_POINT;
+    }
+    return capabilities;
+}
+
+int FFmpegDecoder::getPlaybackCapabilities() const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    int capabilities = PLAYBACK_CAP_SEEK |
+            PLAYBACK_CAP_RELIABLE_DURATION |
+            PLAYBACK_CAP_LIVE_REPEAT_MODE |
+            PLAYBACK_CAP_CUSTOM_SAMPLE_RATE |
+            PLAYBACK_CAP_LIVE_SAMPLE_RATE_CHANGE;
+    if (usingSmbCustomIo) {
+        capabilities |= PLAYBACK_CAP_ASYNC_DIRECT_SEEK;
+    } else {
+        capabilities |= PLAYBACK_CAP_DIRECT_SEEK;
     }
     return capabilities;
 }

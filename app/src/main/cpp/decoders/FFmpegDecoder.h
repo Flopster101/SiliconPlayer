@@ -6,6 +6,7 @@
 #include <mutex>
 #include <memory>
 #include <cstdint>
+#include <string>
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -53,14 +54,7 @@ public:
     void setOption(const char* name, const char* value) override;
     int getOptionApplyPolicy(const char* name) const override;
     int getRepeatModeCapabilities() const override;
-    int getPlaybackCapabilities() const override {
-        return PLAYBACK_CAP_SEEK |
-               PLAYBACK_CAP_RELIABLE_DURATION |
-               PLAYBACK_CAP_LIVE_REPEAT_MODE |
-               PLAYBACK_CAP_CUSTOM_SAMPLE_RATE |
-               PLAYBACK_CAP_LIVE_SAMPLE_RATE_CHANGE |
-               PLAYBACK_CAP_DIRECT_SEEK;
-    }
+    int getPlaybackCapabilities() const override;
     double getPlaybackPositionSeconds() override;
     TimelineMode getTimelineMode() const override { return TimelineMode::ContinuousLinear; }
 
@@ -118,12 +112,26 @@ private:
     bool gaplessRepeatTrack = false;
 
     mutable std::mutex decodeMutex;
+    AVIOContext* avioContext = nullptr;
+    uint8_t* avioBuffer = nullptr;
+    int64_t smbAvioHandleId = 0;
+    int64_t smbAvioPosition = 0;
+    bool usingSmbCustomIo = false;
+    std::string openedPath;
 
+    bool openLocked(const char* path);
     bool initResampler();
     void freeResampler();
+    int64_t currentSmbLogicalPositionLocked() const;
+    bool performSeekWithinCurrentContextLocked(double seconds);
+    bool reopenSmbContextForSeekLocked(double seconds);
     bool seekInternalLocked(double seconds);
     void rebuildToggleChannelsLocked();
     int decodeFrame(); // Decodes one frame and appends to sampleBuffer. Returns 0 on success, <0 on error/EOF
+    bool openSmbCustomIoLocked(const char* path);
+    void closeSmbCustomIoLocked();
+    static int readPacketCallback(void* opaque, uint8_t* buffer, int bufferSize);
+    static int64_t seekCallback(void* opaque, int64_t offset, int whence);
 };
 
 #endif //SILICONPLAYER_FFMPEGDECODER_H

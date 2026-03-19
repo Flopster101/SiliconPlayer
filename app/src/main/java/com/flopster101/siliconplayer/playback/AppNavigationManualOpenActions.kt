@@ -230,7 +230,7 @@ internal fun launchManualRemoteSelectionAction(
                         val firstAttemptSpec = effectiveSpec
                         var remoteAttempt = executeManualRemoteOpen(
                             resolved = resolvedSource,
-                            forceCaching = true,
+                            forceCaching = options.forceCaching,
                             initialSubtuneIndex = options.initialSubtuneIndex,
                             cacheRoot = cacheRoot,
                             selectedFileAbsolutePath = selectedFileAbsolutePathProvider(),
@@ -275,6 +275,16 @@ internal fun launchManualRemoteSelectionAction(
                                 remoteAttempt
                             }
                         } else {
+                            if (
+                                remoteAttempt is ManualRemoteOpenResult.Success &&
+                                (!effectiveSpec.username.isNullOrBlank() || !effectiveSpec.password.isNullOrBlank())
+                            ) {
+                                ManualSmbAuthCoordinator.rememberCredentials(
+                                    effectiveSpec,
+                                    effectiveSpec.username,
+                                    effectiveSpec.password
+                                )
+                            }
                             remoteAttempt
                         }
                     }

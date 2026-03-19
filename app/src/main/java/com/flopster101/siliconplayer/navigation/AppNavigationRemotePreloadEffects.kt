@@ -44,12 +44,18 @@ internal fun rememberRemoteNextTrackPreloadCanceller(
         val activeSourceId = currentPlaybackSourceId ?: selectedFile?.absolutePath
         val resolvedPlayableSourceIds = RemotePlayableSourceIdsHolder
             .resolvedCurrentOrLastForSource(activeSourceId)
+        val currentTrackIsCachedRemote = isCachedRemoteSourceFile(selectedFile)
         val repeatModeCanAdvanceToNextTrack = when (activeRepeatMode) {
             RepeatMode.None,
             RepeatMode.Playlist -> true
             else -> false
         }
-        if (!isPlaying || !preloadNextCachedRemoteTrack || !repeatModeCanAdvanceToNextTrack) {
+        if (
+            !isPlaying ||
+            !preloadNextCachedRemoteTrack ||
+            !repeatModeCanAdvanceToNextTrack ||
+            !currentTrackIsCachedRemote
+        ) {
             return@LaunchedEffect
         }
         val nextSourceId = resolveNextRemoteSourceIdForPreload(

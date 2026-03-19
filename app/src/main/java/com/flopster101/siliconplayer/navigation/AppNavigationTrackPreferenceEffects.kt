@@ -2,6 +2,7 @@ package com.flopster101.siliconplayer
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import java.io.File
@@ -16,6 +17,7 @@ internal fun AppNavigationTrackPreferenceEffects(
     selectedFile: File?,
     currentPlaybackSourceId: String?,
     currentPlaybackRequestUrl: String?,
+    artworkReloadToken: Int,
     preferredRepeatMode: RepeatMode,
     isPlayerSurfaceVisible: Boolean,
     autoPlayOnTrackSelect: Boolean,
@@ -41,11 +43,20 @@ internal fun AppNavigationTrackPreferenceEffects(
         refreshRepeatModeForTrack()
     }
 
-    LaunchedEffect(selectedFile, currentPlaybackSourceId, currentPlaybackRequestUrl) {
+    LaunchedEffect(selectedFile, currentPlaybackSourceId, currentPlaybackRequestUrl, artworkReloadToken) {
         val artworkTrackKey = currentPlaybackSourceId ?: selectedFile?.absolutePath
         if (artworkTrackKey == null) {
             onArtworkBitmapChanged(null)
             onArtworkResolvedTrackKeyChanged(null)
+            return@LaunchedEffect
+        }
+        peekCachedArtworkBitmapForSource(
+            displayFile = selectedFile,
+            sourceId = currentPlaybackSourceId,
+            requestUrl = currentPlaybackRequestUrl
+        )?.let { cachedArtwork ->
+            onArtworkBitmapChanged(cachedArtwork.asImageBitmap())
+            onArtworkResolvedTrackKeyChanged(artworkTrackKey)
             return@LaunchedEffect
         }
         var resolvedArtwork: androidx.compose.ui.graphics.ImageBitmap? = null

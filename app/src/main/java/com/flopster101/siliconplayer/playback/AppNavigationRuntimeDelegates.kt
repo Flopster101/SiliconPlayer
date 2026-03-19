@@ -78,6 +78,7 @@ internal fun buildAppNavigationRuntimeDelegates(
                 context = context,
                 selectedFile = selectedFileProvider(),
                 currentPlaybackSourceId = currentPlaybackSourceIdProvider(),
+                currentPlaybackRequestUrl = currentPlaybackRequestUrlProvider(),
                 metadataTitle = metadataTitleProvider(),
                 metadataArtist = metadataArtistProvider(),
                 durationSeconds = durationProvider(),

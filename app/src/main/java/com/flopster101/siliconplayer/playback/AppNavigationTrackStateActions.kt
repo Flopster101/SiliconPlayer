@@ -301,12 +301,16 @@ internal fun resetAndOptionallyKeepLastTrackAction(
     keepLastTrack: Boolean,
     selectedFile: File?,
     currentPlaybackSourceId: String?,
+    currentPlaybackRequestUrl: String?,
     onLastStoppedChanged: (File?, String?) -> Unit,
     onStopEngine: () -> Unit,
     clearPlaybackMetadataState: () -> Unit
 ) {
     if (keepLastTrack && (selectedFile != null || currentPlaybackSourceId != null)) {
-        onLastStoppedChanged(selectedFile, currentPlaybackSourceId ?: selectedFile?.absolutePath)
+        onLastStoppedChanged(
+            selectedFile,
+            currentPlaybackRequestUrl ?: currentPlaybackSourceId ?: selectedFile?.absolutePath
+        )
     }
     onStopEngine()
     clearPlaybackMetadataState()
@@ -320,6 +324,7 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
     cacheRoot: File,
     onSelectedFileChanged: (File) -> Unit,
     onCurrentPlaybackSourceIdChanged: (String) -> Unit,
+    onCurrentPlaybackRequestUrlChanged: (String?) -> Unit,
     onActivePlaylistChanged: (StoredPlaylist?) -> Unit,
     onActivePlaylistEntryIdChanged: (String?) -> Unit,
     onActivePlaylistShuffleActiveChanged: (Boolean) -> Unit,
@@ -339,11 +344,13 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
     val restoreTarget = resolveSessionRestoreTarget(
         context = context,
         rawSessionPath = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_PATH, null),
+        rawSessionRequestUrl = prefs.getString(AppPreferenceKeys.SESSION_CURRENT_REQUEST_URL, null),
         cacheRoot = cacheRoot
     ) ?: return
     val playlistContext = readSessionResumePlaylistContextForSource(prefs, restoreTarget.sourceId)
     onSelectedFileChanged(restoreTarget.displayFile)
     onCurrentPlaybackSourceIdChanged(restoreTarget.sourceId)
+    onCurrentPlaybackRequestUrlChanged(restoreTarget.requestUrl)
     onActivePlaylistChanged(playlistContext?.playlist)
     onActivePlaylistEntryIdChanged(playlistContext?.entryId)
     onActivePlaylistShuffleActiveChanged(playlistContext?.shuffleActive == true)
@@ -356,6 +363,10 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
         restoredPlaylistEntry?.subtuneIndex
     )
     val sourceScheme = Uri.parse(restoreTarget.sourceId).scheme?.lowercase(Locale.ROOT)
+    val restoreOpenPath = when (sourceScheme) {
+        "http", "https", "smb" -> restoreTarget.requestUrl
+        else -> restoreTarget.displayFile.absolutePath
+    }
     val restoredContextualPlayableFiles = if (
         sourceScheme == "http" ||
         sourceScheme == "https" ||
@@ -409,12 +420,14 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
         onPlayerSurfaceVisibleChanged(true)
 
         val initialized = withContext(Dispatchers.IO) {
-            if (!restoreTarget.displayFile.exists() || !restoreTarget.displayFile.isFile) {
+            if (restoreOpenPath.isNullOrBlank()) {
                 null
             } else {
-                loadSongVolumeForFile(restoreTarget.displayFile.absolutePath)
                 runWithNativeAudioSession {
-                    NativeBridge.loadAudio(restoreTarget.displayFile.absolutePath)
+                    if (sourceScheme != "http" && sourceScheme != "https" && sourceScheme != "smb") {
+                        loadSongVolumeForFile(restoreTarget.displayFile.absolutePath)
+                    }
+                    NativeBridge.loadAudio(restoreOpenPath)
                     readNativeTrackSnapshot()
                 }
             }
@@ -444,10 +457,12 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
 
     onDeferredPlaybackSeekChanged(null)
     val snapshotAndState = withContext(Dispatchers.IO) {
-        if (!isLoaded && restoreTarget.displayFile.exists() && restoreTarget.displayFile.isFile) {
-            loadSongVolumeForFile(restoreTarget.displayFile.absolutePath)
+        if (!isLoaded && !restoreOpenPath.isNullOrBlank()) {
             runWithNativeAudioSession {
-                NativeBridge.loadAudio(restoreTarget.displayFile.absolutePath)
+                if (sourceScheme != "http" && sourceScheme != "https" && sourceScheme != "smb") {
+                    loadSongVolumeForFile(restoreTarget.displayFile.absolutePath)
+                }
+                NativeBridge.loadAudio(restoreOpenPath)
             }
         }
         Triple(

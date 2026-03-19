@@ -118,6 +118,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.ExperimentalComposeUiApi
 import com.flopster101.siliconplayer.playback.loadPlayableSiblingFilesForExternalIntent
+import org.json.JSONArray
 import com.flopster101.siliconplayer.playback.applyTrackSelectionAction
 import com.flopster101.siliconplayer.session.exportCachedFilesToTree
 import com.flopster101.siliconplayer.ui.screens.PlaylistEntrySortMode
@@ -1419,6 +1420,7 @@ private fun AppNavigation(
     var lastUsedCoreName by remember { mutableStateOf<String?>(null) }
     var artworkBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
     var artworkResolvedTrackKey by remember { mutableStateOf<String?>(null) }
+    var artworkReloadToken by remember { mutableIntStateOf(0) }
     var visiblePlayableFiles by remember { mutableStateOf<List<File>>(emptyList()) }
     val browserNavigator = remember { BrowserNavigatorState() }
     var networkCurrentFolderId by remember { mutableStateOf<Long?>(null) }
@@ -1878,7 +1880,53 @@ private fun AppNavigation(
     var openPlayerFromNotification by settingsStates.openPlayerFromNotification
     var playbackWatchPath by settingsStates.playbackWatchPath
     var currentPlaybackSourceId by settingsStates.currentPlaybackSourceId
-    var currentPlaybackRequestUrl by remember { mutableStateOf<String?>(null) }
+    var currentPlaybackRequestUrl by remember {
+        mutableStateOf(prefs.getString(AppPreferenceKeys.SESSION_CURRENT_REQUEST_URL, null))
+    }
+    fun persistSessionRemotePlayableSourceIds(sourceIds: List<String>) {
+        val normalized = sourceIds
+            .mapNotNull { it.trim().takeIf { trimmed -> trimmed.isNotBlank() } }
+            .distinct()
+        if (normalized.isEmpty()) {
+            prefs.edit().remove(AppPreferenceKeys.SESSION_REMOTE_PLAYABLE_SOURCE_IDS_JSON).apply()
+            return
+        }
+        val json = JSONArray().apply {
+            normalized.forEach { put(it) }
+        }.toString()
+        prefs.edit()
+            .putString(AppPreferenceKeys.SESSION_REMOTE_PLAYABLE_SOURCE_IDS_JSON, json)
+            .apply()
+    }
+    fun readSessionRemotePlayableSourceIds(): List<String> {
+        val raw = prefs.getString(AppPreferenceKeys.SESSION_REMOTE_PLAYABLE_SOURCE_IDS_JSON, null)
+            ?.trim()
+            .takeUnless { it.isNullOrBlank() }
+            ?: return emptyList()
+        return try {
+            val json = JSONArray(raw)
+            buildList {
+                repeat(json.length()) { index ->
+                    json.optString(index)
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let(::add)
+                }
+            }
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+    fun updateCurrentPlaybackSource(sourceId: String?) {
+        val preserveRequestUrl =
+            !sourceId.isNullOrBlank() &&
+                !currentPlaybackRequestUrl.isNullOrBlank() &&
+                samePath(sourceId, currentPlaybackRequestUrl)
+        currentPlaybackSourceId = sourceId
+        if (!preserveRequestUrl) {
+            currentPlaybackRequestUrl = null
+        }
+    }
     val currentTrackPathOrUrl = currentPlaybackSourceId ?: selectedFile?.absolutePath
     val pendingPlaylistEntry = resolvePendingPlaylistEntry(
         activePlaylist = activePlaylist,
@@ -2312,10 +2360,8 @@ private fun AppNavigation(
         selectedFileProvider = { selectedFile },
         onSelectedFileChanged = { selectedFile = it },
         currentPlaybackSourceIdProvider = { currentPlaybackSourceId },
-        onCurrentPlaybackSourceIdChanged = {
-            currentPlaybackSourceId = it
-            currentPlaybackRequestUrl = null
-        },
+        currentPlaybackRequestUrlProvider = { currentPlaybackRequestUrl },
+        onCurrentPlaybackSourceIdChanged = { updateCurrentPlaybackSource(it) },
         isPlayingProvider = { isPlaying },
         lastBrowserLocationIdProvider = { lastBrowserLocationId },
         isLocalPlayableFile = isLocalPlayableFile,
@@ -2352,7 +2398,11 @@ private fun AppNavigation(
         onShowSubtuneSelectorDialogChanged = { showSubtuneSelectorDialog = it },
         onRepeatModeCapabilitiesFlagsChanged = { repeatModeCapabilitiesFlags = it },
         onPlaybackCapabilitiesFlagsChanged = { playbackCapabilitiesFlags = it },
-        onArtworkBitmapCleared = { artworkBitmap = null },
+        onArtworkBitmapCleared = {
+            artworkBitmap = null
+            artworkResolvedTrackKey = null
+            artworkReloadToken += 1
+        },
         onIgnoreCoreVolumeForSongChanged = { ignoreCoreVolumeForSong = it },
         onLastStoppedChanged = { file, sourceId ->
             lastStoppedFile = file
@@ -2374,10 +2424,8 @@ private fun AppNavigation(
             playbackStateDelegates.resetAndOptionallyKeepLastTrack(keepLastTrack = false)
         },
         onSelectedFileChanged = { selectedFile = it },
-        onCurrentPlaybackSourceIdChanged = {
-            currentPlaybackSourceId = it
-            currentPlaybackRequestUrl = null
-        },
+        onCurrentPlaybackSourceIdChanged = { updateCurrentPlaybackSource(it) },
+        onCurrentPlaybackRequestUrlChanged = { currentPlaybackRequestUrl = it },
         onActivePlaylistChanged = { activePlaylist = it },
         onActivePlaylistEntryIdChanged = { activePlaylistEntryId = it },
         onActivePlaylistShuffleActiveChanged = { activePlaylistShuffleActive = it },
@@ -2401,7 +2449,11 @@ private fun AppNavigation(
         applyNativeTrackSnapshot = { snapshot -> playbackStateDelegates.applyNativeTrackSnapshot(snapshot) },
         refreshSubtuneState = { runtimeDelegates.refreshSubtuneState() },
         onPositionChanged = { position = it },
-        onArtworkBitmapCleared = { artworkBitmap = null },
+        onArtworkBitmapCleared = {
+            artworkBitmap = null
+            artworkResolvedTrackKey = null
+            artworkReloadToken += 1
+        },
         onIsPlayingChanged = { isPlaying = it },
         refreshRepeatModeForTrack = { runtimeDelegates.refreshRepeatModeForTrack() },
         onAddRecentPlayedTrack = { path, locationId, title, artist ->
@@ -2445,6 +2497,27 @@ private fun AppNavigation(
         }
     }
 
+    LaunchedEffect(currentPlaybackSourceId, RemotePlayableSourceIdsHolder.current) {
+        val activeSourceId = currentPlaybackSourceId?.trim().takeUnless { it.isNullOrBlank() }
+            ?: return@LaunchedEffect
+        val resolvedQueue = RemotePlayableSourceIdsHolder.resolvedCurrentOrLastForSource(activeSourceId)
+        if (resolvedQueue.isNotEmpty()) {
+            persistSessionRemotePlayableSourceIds(resolvedQueue)
+        }
+    }
+
+    LaunchedEffect(currentPlaybackSourceId) {
+        val activeSourceId = currentPlaybackSourceId?.trim().takeUnless { it.isNullOrBlank() }
+            ?: return@LaunchedEffect
+        if (RemotePlayableSourceIdsHolder.resolvedCurrentOrLastForSource(activeSourceId).isNotEmpty()) {
+            return@LaunchedEffect
+        }
+        val restoredQueue = readSessionRemotePlayableSourceIds()
+        if (restoredQueue.any { samePath(it, activeSourceId) }) {
+            RemotePlayableSourceIdsHolder.current = restoredQueue
+        }
+    }
+
     val playbackSessionCoordinator = buildPlaybackSessionCoordinator(
         runtimeDelegates = runtimeDelegates,
         trackLoadDelegates = trackLoadDelegates
@@ -2478,7 +2551,11 @@ private fun AppNavigation(
         applyNativeTrackSnapshot = { snapshot -> playbackStateDelegates.applyNativeTrackSnapshot(snapshot) },
         refreshSubtuneState = { runtimeDelegates.refreshSubtuneState() },
         onPositionChanged = { position = it },
-        onArtworkBitmapCleared = { artworkBitmap = null },
+        onArtworkBitmapCleared = {
+            artworkBitmap = null
+            artworkResolvedTrackKey = null
+            artworkReloadToken += 1
+        },
         refreshRepeatModeForTrack = { runtimeDelegates.refreshRepeatModeForTrack() },
         onAddRecentPlayedTrack = { path, locationId, title, artist ->
             addRecentPlayedTrackFromPlaybackContext(path, locationId, title, artist)
@@ -2930,6 +3007,7 @@ private fun AppNavigation(
         selectedFile = selectedFile,
         currentPlaybackSourceId = currentPlaybackSourceId,
         currentPlaybackRequestUrl = currentPlaybackRequestUrl,
+        artworkReloadToken = artworkReloadToken,
         preferredRepeatMode = preferredRepeatMode,
         isPlayerSurfaceVisible = isPlayerSurfaceVisible,
         autoPlayOnTrackSelect = autoPlayOnTrackSelect,

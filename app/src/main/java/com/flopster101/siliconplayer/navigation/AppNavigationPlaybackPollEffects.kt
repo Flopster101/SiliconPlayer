@@ -96,6 +96,7 @@ internal fun AppNavigationPlaybackPollEffects(
     isLocalPlayableFile: (File?) -> Boolean
 ) {
     val latestDurationOverrideSeconds = rememberUpdatedState(durationOverrideSeconds)
+    val latestSeekRequestedAtMs = rememberUpdatedState(seekRequestedAtMs)
 
     LaunchedEffect(selectedFile) {
         var metadataPollElapsedMs = 0L
@@ -108,6 +109,8 @@ internal fun AppNavigationPlaybackPollEffects(
         var hasPublishedPosition = false
         var localIsPlaying = isPlayingProvider()
         var localPlaybackWatchPath = playbackWatchPath
+        var lastObservedExplicitSeekRequestMs = seekRequestedAtMs
+        var suppressTrackEndEventsUntilMs = 0L
         var durationRefreshCountdown = 0
         var lastPersistedRecentMetadata: Triple<String, String, String>? = null
         var suppressedSyntheticEndSourceId: String? = null
@@ -130,6 +133,14 @@ internal fun AppNavigationPlaybackPollEffects(
                 else -> 320L
             }
             val nowMs = SystemClock.elapsedRealtime()
+            val externalSeekRequestMs = latestSeekRequestedAtMs.value
+            if (externalSeekRequestMs > lastObservedExplicitSeekRequestMs) {
+                lastObservedExplicitSeekRequestMs = externalSeekRequestMs
+                suppressTrackEndEventsUntilMs = maxOf(
+                    suppressTrackEndEventsUntilMs,
+                    externalSeekRequestMs + 1500L
+                )
+            }
             if (nextSeekInProgress) {
                 if (!localSeekInProgress) {
                     localSeekStartedAtMs = if (localSeekRequestedAtMs > 0L) localSeekRequestedAtMs else nowMs
@@ -182,6 +193,7 @@ internal fun AppNavigationPlaybackPollEffects(
             }
 
             if (!nextSeekInProgress) {
+                val suppressTrackEndEvents = nowMs < suppressTrackEndEventsUntilMs
                 val durationOverrideThreshold = latestDurationOverrideSeconds.value
                     ?.takeIf { it.isFinite() && it > 0.0 }
                 val syntheticEndPositionResetThreshold = durationOverrideThreshold
@@ -231,6 +243,7 @@ internal fun AppNavigationPlaybackPollEffects(
                     val endedAtPlaylistDuration = durationOverrideThreshold != null &&
                         currentPath != null &&
                         nextIsPlaying &&
+                        !suppressTrackEndEvents &&
                         suppressedSyntheticEndSourceId == null &&
                         nextPosition + 0.02 >= durationOverrideThreshold
                     if (endedAtPlaylistDuration) {
@@ -262,6 +275,9 @@ internal fun AppNavigationPlaybackPollEffects(
                         continue
                     }
                     val endedNaturally = NativeBridge.consumeNaturalEndEvent()
+                    if (endedNaturally && suppressTrackEndEvents) {
+                        continue
+                    }
                     if (endedNaturally) {
                         val repeatMode = activeRepeatModeProvider()
                         val moved = when (repeatMode) {

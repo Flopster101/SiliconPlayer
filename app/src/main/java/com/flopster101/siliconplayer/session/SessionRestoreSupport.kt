@@ -8,12 +8,14 @@ import java.util.Locale
 
 internal data class SessionRestoreTarget(
     val sourceId: String,
-    val displayFile: File
+    val displayFile: File,
+    val requestUrl: String?
 )
 
 internal fun resolveSessionRestoreTarget(
     context: Context,
     rawSessionPath: String?,
+    rawSessionRequestUrl: String?,
     cacheRoot: File
 ): SessionRestoreTarget? {
     var sourcePath = rawSessionPath?.trim()?.takeIf { it.isNotBlank() } ?: return null
@@ -56,6 +58,7 @@ internal fun resolveSessionRestoreTarget(
 
     return SessionRestoreTarget(
         sourceId = normalizedSource,
-        displayFile = displayFile
+        displayFile = displayFile,
+        requestUrl = rawSessionRequestUrl?.trim()?.takeIf { it.isNotBlank() }
     )
 }

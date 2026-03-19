@@ -144,6 +144,11 @@ internal fun isRemoteSourceCached(context: Context, url: String): Boolean {
     return findExistingCachedFileForSource(cacheRoot, url) != null
 }
 
+internal fun isCachedRemoteSourceFile(file: File?): Boolean {
+    val candidate = file ?: return false
+    return candidate.isFile && candidate.parentFile?.name == REMOTE_SOURCE_CACHE_DIR
+}
+
 private fun cacheIndexFile(cacheRoot: File): File = File(cacheRoot, SOURCE_CACHE_INDEX_FILE)
 
 private fun loadSourceCacheIndex(cacheRoot: File): MutableMap<String, String> {

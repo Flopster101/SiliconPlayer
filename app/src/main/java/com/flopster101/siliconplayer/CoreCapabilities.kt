@@ -36,6 +36,14 @@ internal fun buildCoreCapabilitySections(
                 )
             )
         }
+        if (supportsAsyncDirectSeek(playbackCapabilities)) {
+            add(
+                CoreCapabilityItem(
+                    id = "PLAYBACK_CAP_ASYNC_DIRECT_SEEK",
+                    description = "Seek requests use direct random access, but they are executed asynchronously rather than on the caller thread."
+                )
+            )
+        }
     }
 
     val repeatItems = buildList {

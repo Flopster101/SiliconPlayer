@@ -5,6 +5,7 @@ import com.hierynomus.smbj.connection.Connection
 import com.hierynomus.smbj.auth.AuthenticationContext
 import com.hierynomus.smbj.session.Session
 import java.io.IOException
+import java.net.SocketException
 import java.util.concurrent.ConcurrentHashMap
 
 internal enum class SmbAuthenticationFailureReason {
@@ -17,12 +18,16 @@ internal enum class SmbAuthenticationFailureReason {
 }
 
 private val sharedAppSmbClient by lazy { SMBClient() }
+internal data class OpenedSmbSession(
+    val connection: Connection,
+    val session: Session
+)
 private data class SmbSessionCacheKey(
     val host: String,
     val username: String,
     val password: String
 )
-private val sharedAppSmbSessions = ConcurrentHashMap<SmbSessionCacheKey, Session>()
+private val sharedAppSmbSessions = ConcurrentHashMap<SmbSessionCacheKey, OpenedSmbSession>()
 private val sharedAppSmbSessionLocks = ConcurrentHashMap<SmbSessionCacheKey, Any>()
 
 private fun smbSessionCacheKey(spec: SmbSourceSpec): SmbSessionCacheKey {
@@ -33,25 +38,79 @@ private fun smbSessionCacheKey(spec: SmbSourceSpec): SmbSessionCacheKey {
     )
 }
 
-private fun createAuthenticatedSmbSession(spec: SmbSourceSpec): Session {
+private fun createOpenedSmbSession(spec: SmbSourceSpec): OpenedSmbSession {
     val connection = sharedAppSmbClient.connect(spec.host)
-    return authenticateSmbSession(connection, spec)
+    return try {
+        val session = authenticateSmbSession(connection, spec)
+        OpenedSmbSession(
+            connection = connection,
+            session = session
+        )
+    } catch (t: Throwable) {
+        runCatching { connection.close() }
+        throw t
+    }
+}
+
+internal fun openDedicatedSmbSession(spec: SmbSourceSpec): OpenedSmbSession {
+    var shouldRetry = true
+    while (true) {
+        try {
+            return createOpenedSmbSession(spec)
+        } catch (t: Throwable) {
+            if (!shouldRetry || !isRetryableSmbTransportFailure(t)) {
+                throw t
+            }
+            shouldRetry = false
+        }
+    }
+}
+
+private fun closeOpenedSmbSession(opened: OpenedSmbSession) {
+    runCatching { opened.session.close() }
+    runCatching { opened.connection.close() }
+}
+
+internal fun isRetryableSmbTransportFailure(throwable: Throwable?): Boolean {
+    var current = throwable
+    while (current != null) {
+        val message = current.message.orEmpty()
+        if (current is IOException || current is SocketException) {
+            return true
+        }
+        if (current::class.java.name.contains("TransportException", ignoreCase = true)) {
+            return true
+        }
+        if (
+            message.contains("STATUS_USER_SESSION_DELETED", ignoreCase = true) ||
+            message.contains("already been closed", ignoreCase = true) ||
+            message.contains("broken pipe", ignoreCase = true) ||
+            message.contains("socket closed", ignoreCase = true) ||
+            message.contains("connection reset", ignoreCase = true) ||
+            message.contains("connection abort", ignoreCase = true) ||
+            message.contains("transportexception", ignoreCase = true)
+        ) {
+            return true
+        }
+        current = current.cause
+    }
+    return false
 }
 
 internal fun invalidateAppSmbSession(spec: SmbSourceSpec) {
     val key = smbSessionCacheKey(spec)
     val cached = sharedAppSmbSessions.remove(key) ?: return
-    runCatching { cached.close() }
+    closeOpenedSmbSession(cached)
 }
 
-internal fun getOrCreateAppSmbSession(spec: SmbSourceSpec): Session {
+internal fun getOrCreateAppSmbSession(spec: SmbSourceSpec): OpenedSmbSession {
     val key = smbSessionCacheKey(spec)
     sharedAppSmbSessions[key]?.let { return it }
     val lock = sharedAppSmbSessionLocks.getOrPut(key) { Any() }
     synchronized(lock) {
         sharedAppSmbSessions[key]?.let { return it }
-        return createAuthenticatedSmbSession(spec).also { session ->
-            sharedAppSmbSessions[key] = session
+        return createOpenedSmbSession(spec).also { openedSession ->
+            sharedAppSmbSessions[key] = openedSession
         }
     }
 }
@@ -62,14 +121,11 @@ internal inline fun <T> withAppSmbSession(
 ): T {
     var shouldRetryAfterInvalidation = true
     while (true) {
-        val session = getOrCreateAppSmbSession(spec)
+        val openedSession = getOrCreateAppSmbSession(spec)
         try {
-            return block(session)
+            return block(openedSession.session)
         } catch (t: Throwable) {
-            val message = t.message.orEmpty()
-            val retryable = t is IOException ||
-                message.contains("STATUS_USER_SESSION_DELETED", ignoreCase = true) ||
-                message.contains("already been closed", ignoreCase = true)
+            val retryable = isRetryableSmbTransportFailure(t)
             if (!retryable || !shouldRetryAfterInvalidation) {
                 throw t
             }

@@ -6,6 +6,7 @@
 #include "ChannelScopeTrigger.h"
 #include "decoders/DecoderRegistry.h"
 #include "decoders/UadeDecoder.h"
+#include <algorithm>
 #include <vector>
 #include <string_view>
 #include <thread>
@@ -18,6 +19,39 @@ static jstring toJString(JNIEnv* env, std::string_view value);
 static JavaVM* gJavaVm = nullptr;
 static jclass gNativeBridgeClass = nullptr;
 static jmethodID gResolveArchiveCompanionMethod = nullptr;
+static jmethodID gOpenSmbAvioHandleMethod = nullptr;
+static jmethodID gReadSmbAvioHandleMethod = nullptr;
+static jmethodID gGetSmbAvioHandleSizeMethod = nullptr;
+static jmethodID gCloseSmbAvioHandleMethod = nullptr;
+
+namespace {
+struct AttachedEnv {
+    JNIEnv* env = nullptr;
+    bool didAttach = false;
+
+    AttachedEnv() {
+        if (gJavaVm == nullptr) {
+            return;
+        }
+        const jint getEnvResult = gJavaVm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6);
+        if (getEnvResult == JNI_EDETACHED) {
+            if (gJavaVm->AttachCurrentThread(&env, nullptr) == JNI_OK && env != nullptr) {
+                didAttach = true;
+            } else {
+                env = nullptr;
+            }
+        } else if (getEnvResult != JNI_OK || env == nullptr) {
+            env = nullptr;
+        }
+    }
+
+    ~AttachedEnv() {
+        if (didAttach && gJavaVm != nullptr) {
+            gJavaVm->DetachCurrentThread();
+        }
+    }
+};
+}
 
 std::string resolveArchiveCompanionPathForNative(
         const std::string& basePath,
@@ -66,6 +100,142 @@ std::string resolveArchiveCompanionPathForNative(
     return resolvedPath;
 }
 
+bool openSmbAvioHandleForNative(const std::string& requestUri, int64_t* outHandleId) {
+    if (outHandleId == nullptr ||
+        gNativeBridgeClass == nullptr ||
+        gOpenSmbAvioHandleMethod == nullptr) {
+        return false;
+    }
+
+    AttachedEnv attachedEnv;
+    if (attachedEnv.env == nullptr) {
+        return false;
+    }
+
+    JNIEnv* env = attachedEnv.env;
+    jstring jRequestUri = env->NewStringUTF(requestUri.c_str());
+    if (jRequestUri == nullptr) {
+        return false;
+    }
+
+    const jlong handleId = env->CallStaticLongMethod(
+            gNativeBridgeClass,
+            gOpenSmbAvioHandleMethod,
+            jRequestUri
+    );
+    env->DeleteLocalRef(jRequestUri);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        return false;
+    }
+    if (handleId <= 0) {
+        return false;
+    }
+    *outHandleId = static_cast<int64_t>(handleId);
+    return true;
+}
+
+int readSmbAvioHandleForNative(int64_t handleId, int64_t offset, uint8_t* buffer, int length) {
+    if (handleId <= 0 ||
+        buffer == nullptr ||
+        length <= 0 ||
+        gNativeBridgeClass == nullptr ||
+        gReadSmbAvioHandleMethod == nullptr) {
+        return -1;
+    }
+
+    AttachedEnv attachedEnv;
+    if (attachedEnv.env == nullptr) {
+        return -1;
+    }
+
+    JNIEnv* env = attachedEnv.env;
+    jbyteArray jBuffer = env->NewByteArray(length);
+    if (jBuffer == nullptr) {
+        return -1;
+    }
+
+    const jint readCount = env->CallStaticIntMethod(
+            gNativeBridgeClass,
+            gReadSmbAvioHandleMethod,
+            static_cast<jlong>(handleId),
+            static_cast<jlong>(offset),
+            jBuffer,
+            static_cast<jint>(length)
+    );
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        env->DeleteLocalRef(jBuffer);
+        return -1;
+    }
+
+    const int bytesRead = static_cast<int>(readCount);
+    if (bytesRead > 0) {
+        env->GetByteArrayRegion(
+                jBuffer,
+                0,
+                static_cast<jsize>(std::min(bytesRead, length)),
+                reinterpret_cast<jbyte*>(buffer)
+        );
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            env->DeleteLocalRef(jBuffer);
+            return -1;
+        }
+    }
+
+    env->DeleteLocalRef(jBuffer);
+    return std::max(0, bytesRead);
+}
+
+int64_t getSmbAvioHandleSizeForNative(int64_t handleId) {
+    if (handleId <= 0 ||
+        gNativeBridgeClass == nullptr ||
+        gGetSmbAvioHandleSizeMethod == nullptr) {
+        return -1;
+    }
+
+    AttachedEnv attachedEnv;
+    if (attachedEnv.env == nullptr) {
+        return -1;
+    }
+
+    JNIEnv* env = attachedEnv.env;
+    const jlong sizeBytes = env->CallStaticLongMethod(
+            gNativeBridgeClass,
+            gGetSmbAvioHandleSizeMethod,
+            static_cast<jlong>(handleId)
+    );
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        return -1;
+    }
+    return static_cast<int64_t>(sizeBytes);
+}
+
+void closeSmbAvioHandleForNative(int64_t handleId) {
+    if (handleId <= 0 ||
+        gNativeBridgeClass == nullptr ||
+        gCloseSmbAvioHandleMethod == nullptr) {
+        return;
+    }
+
+    AttachedEnv attachedEnv;
+    if (attachedEnv.env == nullptr) {
+        return;
+    }
+
+    JNIEnv* env = attachedEnv.env;
+    env->CallStaticVoidMethod(
+            gNativeBridgeClass,
+            gCloseSmbAvioHandleMethod,
+            static_cast<jlong>(handleId)
+    );
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+}
+
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     gJavaVm = vm;
     JNIEnv* env = nullptr;
@@ -91,6 +261,43 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     if (gResolveArchiveCompanionMethod == nullptr) {
         return JNI_ERR;
     }
+
+    gOpenSmbAvioHandleMethod = env->GetStaticMethodID(
+            gNativeBridgeClass,
+            "openSmbAvioHandle",
+            "(Ljava/lang/String;)J"
+    );
+    if (gOpenSmbAvioHandleMethod == nullptr) {
+        return JNI_ERR;
+    }
+
+    gReadSmbAvioHandleMethod = env->GetStaticMethodID(
+            gNativeBridgeClass,
+            "readSmbAvioHandle",
+            "(JJ[BI)I"
+    );
+    if (gReadSmbAvioHandleMethod == nullptr) {
+        return JNI_ERR;
+    }
+
+    gGetSmbAvioHandleSizeMethod = env->GetStaticMethodID(
+            gNativeBridgeClass,
+            "getSmbAvioHandleSize",
+            "(J)J"
+    );
+    if (gGetSmbAvioHandleSizeMethod == nullptr) {
+        return JNI_ERR;
+    }
+
+    gCloseSmbAvioHandleMethod = env->GetStaticMethodID(
+            gNativeBridgeClass,
+            "closeSmbAvioHandle",
+            "(J)V"
+    );
+    if (gCloseSmbAvioHandleMethod == nullptr) {
+        return JNI_ERR;
+    }
+
     if (!initAudioTrackJniBridge(vm, env)) {
         return JNI_ERR;
     }
@@ -108,6 +315,10 @@ extern "C" JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void*) {
         gNativeBridgeClass = nullptr;
     }
     gResolveArchiveCompanionMethod = nullptr;
+    gOpenSmbAvioHandleMethod = nullptr;
+    gReadSmbAvioHandleMethod = nullptr;
+    gGetSmbAvioHandleSizeMethod = nullptr;
+    gCloseSmbAvioHandleMethod = nullptr;
 }
 
 static void ensureEngine() {

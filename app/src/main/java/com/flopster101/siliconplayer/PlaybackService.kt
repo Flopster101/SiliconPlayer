@@ -17,6 +17,7 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
@@ -27,6 +28,12 @@ import android.os.PowerManager
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import java.io.File
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class PlaybackService : Service() {
     private val prefs by lazy {
@@ -85,7 +92,7 @@ class PlaybackService : Service() {
     private var currentTitle: String = "No track selected"
     private var currentArtist: String = "Silicon Player"
     private var currentArtwork: Bitmap? = null
-    private var currentArtworkPath: String? = null
+    private var currentArtworkKey: String? = null
     private var cachedFallbackIconBitmap: Bitmap? = null
     private var currentRepeatMode: RepeatMode = RepeatMode.None
     private var currentRepeatModeCapabilitiesFlags: Int = REPEAT_CAP_ALL
@@ -123,6 +130,8 @@ class PlaybackService : Service() {
     private var hasPersistedResumeCheckpoint: Boolean = false
 
     private val handler = Handler(Looper.getMainLooper())
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var artworkLoadGeneration = 0L
     private val ticker = object : Runnable {
         override fun run() {
             if (currentPath != null) {
@@ -206,6 +215,7 @@ class PlaybackService : Service() {
         super.onDestroy()
         isServiceAlive = false
         handler.removeCallbacks(ticker)
+        serviceScope.cancel()
         unregisterReceiver(noisyReceiver)
         mediaSession?.release()
     }
@@ -235,12 +245,25 @@ class PlaybackService : Service() {
 
     private fun syncFromIntent(intent: Intent) {
         val newPath = intent.getStringExtra(EXTRA_PATH)
-        if (newPath != currentArtworkPath) {
-            currentArtwork = loadArtworkForPath(newPath)
-            currentArtworkPath = newPath
-        }
+        val newRequestUrl = intent.getStringExtra(EXTRA_REQUEST_URL)
+        val newArtworkKey = newRequestUrl?.takeIf { it.isNotBlank() } ?: newPath
         currentPath = newPath
-        prefs.edit().putString(PREF_SESSION_CURRENT_PATH, currentPath).apply()
+        prefs.edit()
+            .putString(PREF_SESSION_CURRENT_PATH, currentPath)
+            .putString(PREF_SESSION_CURRENT_REQUEST_URL, newRequestUrl)
+            .apply()
+        if (newArtworkKey != currentArtworkKey) {
+            currentArtworkKey = newArtworkKey
+            if (newArtworkKey == null) {
+                currentArtwork = null
+            } else {
+                scheduleArtworkLoad(
+                    path = newPath,
+                    requestUrl = newRequestUrl,
+                    artworkKey = newArtworkKey
+                )
+            }
+        }
         currentTitle = intent.getStringExtra(EXTRA_TITLE).orEmpty().ifBlank { "Unknown Title" }
         currentArtist = intent.getStringExtra(EXTRA_ARTIST).orEmpty().ifBlank { "Unknown Artist" }
         durationSeconds = intent.getDoubleExtra(EXTRA_DURATION, 0.0)
@@ -633,7 +656,7 @@ class PlaybackService : Service() {
         mediaSession?.isActive = currentPath != null
         val positionBucket = positionSeconds.coerceAtLeast(0.0).toInt()
         val durationBucket = durationSeconds.coerceAtLeast(0.0).toInt()
-        val artworkKey = currentArtworkPath ?: "__fallback__"
+        val artworkKey = currentArtworkKey ?: "__fallback__"
         val repeatSignature = repeatControlsSignature()
         val playbackChanged =
             lastMediaSessionPlaybackPositionBucket != positionBucket ||
@@ -728,7 +751,7 @@ class PlaybackService : Service() {
         if (currentPath == null) return
         val positionBucket = positionSeconds.coerceAtLeast(0.0).toInt()
         val durationBucket = durationSeconds.coerceAtLeast(0.0).toInt()
-        val artworkKey = currentArtworkPath ?: "__fallback__"
+        val artworkKey = currentArtworkKey ?: "__fallback__"
         val repeatSignature = repeatControlsSignature()
         val shouldRefresh =
             lastNotificationPath != currentPath ||
@@ -882,57 +905,38 @@ class PlaybackService : Service() {
         }
     }
 
-    private fun loadArtworkForPath(path: String?): Bitmap? {
-        if (path.isNullOrBlank()) return null
-        val file = File(path)
-        if (!file.exists() || !file.isFile) return null
-        loadEmbeddedArtwork(file)?.let { return it }
-        findFolderArtworkFile(file)?.let { return decodeScaledBitmapFromFile(it) }
-        return null
-    }
-
-    private fun loadEmbeddedArtwork(file: File): Bitmap? {
-        val retriever = MediaMetadataRetriever()
-        return try {
-            retriever.setDataSource(file.absolutePath)
-            val embedded = retriever.embeddedPicture ?: return null
-            decodeScaledBitmapFromBytes(embedded)
-        } catch (_: Exception) {
-            null
-        } finally {
-            retriever.release()
-        }
-    }
-
-    private fun findFolderArtworkFile(trackFile: File): File? {
-        val parent = trackFile.parentFile ?: return null
-        if (!parent.isDirectory) return null
-        val allowedNames = setOf(
-            "cover.jpg", "cover.jpeg", "cover.png", "cover.webp",
-            "folder.jpg", "folder.jpeg", "folder.png", "folder.webp",
-            "album.jpg", "album.jpeg", "album.png", "album.webp",
-            "front.jpg", "front.jpeg", "front.png", "front.webp",
-            "artwork.jpg", "artwork.jpeg", "artwork.png", "artwork.webp"
+    private fun loadArtworkForPlaybackSource(path: String?, requestUrl: String?): Bitmap? {
+        val localFile = path
+            ?.takeIf { Uri.parse(it).scheme.isNullOrBlank() || Uri.parse(it).scheme.equals("file", ignoreCase = true) }
+            ?.let(::File)
+            ?.takeIf { it.exists() && it.isFile }
+        return loadArtworkBitmapForSource(
+            context = this,
+            displayFile = localFile,
+            sourceId = path,
+            requestUrl = requestUrl
         )
-        return parent.listFiles()?.firstOrNull { it.isFile && it.name.lowercase() in allowedNames }
     }
 
-    private fun decodeScaledBitmapFromFile(file: File, maxDimension: Int = 512): Bitmap? {
-        val optionsBounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(file.absolutePath, optionsBounds)
-        if (optionsBounds.outWidth <= 0 || optionsBounds.outHeight <= 0) return null
-        val sampleSize = computeInSampleSize(optionsBounds.outWidth, optionsBounds.outHeight, maxDimension)
-        val optionsDecode = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-        return BitmapFactory.decodeFile(file.absolutePath, optionsDecode)
-    }
-
-    private fun decodeScaledBitmapFromBytes(bytes: ByteArray, maxDimension: Int = 512): Bitmap? {
-        val optionsBounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, optionsBounds)
-        if (optionsBounds.outWidth <= 0 || optionsBounds.outHeight <= 0) return null
-        val sampleSize = computeInSampleSize(optionsBounds.outWidth, optionsBounds.outHeight, maxDimension)
-        val optionsDecode = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, optionsDecode)
+    private fun scheduleArtworkLoad(path: String?, requestUrl: String?, artworkKey: String) {
+        val generation = ++artworkLoadGeneration
+        serviceScope.launch {
+            val loadedArtwork = withContext(Dispatchers.IO) {
+                loadArtworkForPlaybackSource(path, requestUrl)
+            }
+            if (
+                generation != artworkLoadGeneration ||
+                    currentArtworkKey != artworkKey ||
+                    currentPath != path
+            ) {
+                return@launch
+            }
+            currentArtwork = loadedArtwork
+            lastMediaSessionMetadataArtworkKey = null
+            lastNotificationArtworkKey = null
+            updateMediaSessionState()
+            pushNotification()
+        }
     }
 
     private fun computeInSampleSize(width: Int, height: Int, maxDimension: Int): Int {
@@ -1025,8 +1029,10 @@ class PlaybackService : Service() {
         private const val PREF_AUDIO_FOCUS_INTERRUPT = "audio_focus_interrupt"
         private const val PREF_AUDIO_DUCKING = "audio_ducking"
         private const val PREF_SESSION_CURRENT_PATH = "session_current_path"
+        private const val PREF_SESSION_CURRENT_REQUEST_URL = "session_current_request_url"
         private const val RESUME_POSITION_DURATION_EPSILON_SECONDS = 0.05
         private const val EXTRA_PATH = "extra_path"
+        private const val EXTRA_REQUEST_URL = "extra_request_url"
         private const val EXTRA_TITLE = "extra_title"
         private const val EXTRA_ARTIST = "extra_artist"
         private const val EXTRA_DURATION = "extra_duration"
@@ -1069,6 +1075,7 @@ class PlaybackService : Service() {
         fun syncFromUi(
             context: Context,
             path: String?,
+            requestUrl: String?,
             title: String,
             artist: String,
             durationSeconds: Double,
@@ -1081,6 +1088,7 @@ class PlaybackService : Service() {
             val intent = Intent(context, PlaybackService::class.java)
                 .setAction(ACTION_SYNC)
                 .putExtra(EXTRA_PATH, path)
+                .putExtra(EXTRA_REQUEST_URL, requestUrl)
                 .putExtra(EXTRA_TITLE, title)
                 .putExtra(EXTRA_ARTIST, artist)
                 .putExtra(EXTRA_DURATION, durationSeconds)

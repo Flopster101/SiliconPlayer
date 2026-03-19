@@ -10,6 +10,7 @@ internal class AppNavigationPlaybackStateDelegates(
     private val selectedFileProvider: () -> File?,
     private val onSelectedFileChanged: (File?) -> Unit,
     private val currentPlaybackSourceIdProvider: () -> String?,
+    private val currentPlaybackRequestUrlProvider: () -> String?,
     private val onCurrentPlaybackSourceIdChanged: (String?) -> Unit,
     private val isPlayingProvider: () -> Boolean,
     private val lastBrowserLocationIdProvider: () -> String?,
@@ -151,6 +152,7 @@ internal class AppNavigationPlaybackStateDelegates(
             keepLastTrack = keepLastTrack,
             selectedFile = selectedFileProvider(),
             currentPlaybackSourceId = currentPlaybackSourceIdProvider(),
+            currentPlaybackRequestUrl = currentPlaybackRequestUrlProvider(),
             onLastStoppedChanged = onLastStoppedChanged,
             onStopEngine = onStopEngine,
             clearPlaybackMetadataState = ::clearPlaybackMetadataState

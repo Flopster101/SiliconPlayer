@@ -31,6 +31,7 @@ internal enum class PlaylistStoredFormat(
 internal data class PlaylistTrackEntry(
     val id: String = UUID.randomUUID().toString(),
     val source: String,
+    val requestUrlHint: String? = null,
     val title: String,
     val artist: String? = null,
     val album: String? = null,
@@ -173,6 +174,7 @@ private data class EmbeddedM3uEntryMetadata(
 
 private data class PendingParsedM3uEntry(
     val source: String,
+    val requestUrlHint: String?,
     val title: String,
     val artist: String?,
     val embeddedRawSubtuneNumber: Int?,
@@ -182,6 +184,7 @@ private data class PendingParsedM3uEntry(
 
 private data class PlaylistTargetResolution(
     val source: String,
+    val requestUrlHint: String?,
     val subtuneIndex: Int?
 )
 
@@ -218,6 +221,7 @@ private fun parseM3uPlaylist(
             add(
                 PendingParsedM3uEntry(
                     source = resolved.source,
+                    requestUrlHint = resolved.requestUrlHint,
                     title = metadata?.title?.takeIf { it.isNotBlank() }
                         ?: embeddedMetadata?.title?.takeIf { it.isNotBlank() }
                         ?: fallbackTitle,
@@ -234,6 +238,7 @@ private fun parseM3uPlaylist(
     val entries = pendingEntries.map { entry ->
         PlaylistTrackEntry(
             source = entry.source,
+            requestUrlHint = entry.requestUrlHint,
             title = entry.title,
             artist = entry.artist,
             subtuneIndex = entry.embeddedRawSubtuneNumber?.let { rawSubtuneNumber ->
@@ -378,12 +383,14 @@ private fun resolvePlaylistTarget(
     parseHttpSourceSpecFromInput(normalized)?.let { spec ->
         return PlaylistTargetResolution(
             source = buildHttpSourceId(spec),
+            requestUrlHint = stripUrlFragment(buildHttpRequestUri(spec)),
             subtuneIndex = fragmentSubtune
         )
     }
     parseSmbSourceSpecFromInput(normalized)?.let { spec ->
         return PlaylistTargetResolution(
             source = buildSmbSourceId(spec),
+            requestUrlHint = buildSmbRequestUri(spec),
             subtuneIndex = fragmentSubtune
         )
     }
@@ -394,13 +401,29 @@ private fun resolvePlaylistTarget(
         if (!resolved.exists() || !resolved.isFile) return null
         return PlaylistTargetResolution(
             source = resolved.absolutePath,
+            requestUrlHint = null,
             subtuneIndex = fragmentSubtune
         )
     }
     val remoteRelative = resolveRelativeRemotePlaylistSource(normalized, sourceIdHint)
     if (remoteRelative != null) {
+        parseHttpSourceSpecFromInput(remoteRelative)?.let { spec ->
+            return PlaylistTargetResolution(
+                source = buildHttpSourceId(spec),
+                requestUrlHint = stripUrlFragment(buildHttpRequestUri(spec)),
+                subtuneIndex = fragmentSubtune
+            )
+        }
+        parseSmbSourceSpecFromInput(remoteRelative)?.let { spec ->
+            return PlaylistTargetResolution(
+                source = buildSmbSourceId(spec),
+                requestUrlHint = buildSmbRequestUri(spec),
+                subtuneIndex = fragmentSubtune
+            )
+        }
         return PlaylistTargetResolution(
             source = remoteRelative,
+            requestUrlHint = remoteRelative,
             subtuneIndex = fragmentSubtune
         )
     }
@@ -413,6 +436,7 @@ private fun resolvePlaylistTarget(
     if (!normalizedFile.exists() || !normalizedFile.isFile) return null
     return PlaylistTargetResolution(
         source = normalizedFile.absolutePath,
+        requestUrlHint = null,
         subtuneIndex = fragmentSubtune
     )
 }

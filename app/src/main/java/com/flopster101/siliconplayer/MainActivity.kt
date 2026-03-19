@@ -551,7 +551,8 @@ private fun openPlaylistEntry(
         )
     } else {
         manualOpenDelegates.applyManualInputSelection(
-            rawInput = entry.source,
+            rawInput = sanitizePlaylistTrackRequestUrlHint(entry.source, entry.requestUrlHint)
+                ?: entry.source,
             options = ManualSourceOpenOptions(initialSubtuneIndex = entry.subtuneIndex),
             expandOverride = expandOverride
         )
@@ -791,9 +792,18 @@ private fun resolveFavoriteEntryForPlayback(
     }
 }
 
+private fun sanitizePlaylistTrackRequestUrlHint(
+    source: String,
+    requestUrlHint: String?
+): String? {
+    val normalizedHint = requestUrlHint?.trim().takeUnless { it.isNullOrBlank() } ?: return null
+    return normalizedHint.takeUnless { it == source.trim() }
+}
+
 private fun buildFavoriteEntryForSource(
     context: Context,
     sourceId: String,
+    requestUrlHint: String?,
     fallbackFile: File?,
     metadataTitle: String,
     metadataArtist: String,
@@ -810,12 +820,14 @@ private fun buildFavoriteEntryForSource(
     }
     return PlaylistTrackEntry(
         source = sourceId,
+        requestUrlHint = sanitizePlaylistTrackRequestUrlHint(sourceId, requestUrlHint),
         title = derivedTitle,
         artist = metadataArtist.trim().takeIf { it.isNotBlank() },
         album = metadataAlbum.trim().takeIf { it.isNotBlank() },
         artworkThumbnailCacheKey = ensureRecentArtworkThumbnailCached(
             context = context,
-            sourceId = sourceId
+            sourceId = sourceId,
+            requestUrlHint = requestUrlHint
         ),
         durationSecondsOverride = durationSecondsOverride
             ?.takeIf { it.isFinite() && it > 0.0 },
@@ -827,6 +839,7 @@ private fun toggleCurrentTrackFavorite(
     context: Context,
     playlistLibraryState: PlaylistLibraryState,
     currentPlaybackSourceId: String?,
+    currentPlaybackRequestUrl: String?,
     selectedFile: File?,
     metadataTitle: String,
     metadataArtist: String,
@@ -854,6 +867,7 @@ private fun toggleCurrentTrackFavorite(
             track = buildFavoriteEntryForSource(
                 context = context,
                 sourceId = sourceId,
+                requestUrlHint = currentPlaybackRequestUrl,
                 fallbackFile = selectedFile,
                 metadataTitle = metadataTitle,
                 metadataArtist = metadataArtist,
@@ -913,7 +927,8 @@ private fun mergeFavoritePlaybackMetadata(
     artist: String?,
     album: String?,
     artworkThumbnailCacheKey: String?,
-    durationSecondsOverride: Double?
+    durationSecondsOverride: Double?,
+    requestUrlHint: String?
 ): PlaylistLibraryState {
     val normalizedTitle = title.trim()
     val normalizedArtist = artist?.trim().takeUnless { it.isNullOrBlank() }
@@ -928,7 +943,11 @@ private fun mergeFavoritePlaybackMetadata(
             artist = normalizedArtist ?: entry.artist,
             album = normalizedAlbum ?: entry.album,
             artworkThumbnailCacheKey = normalizedArtworkKey ?: entry.artworkThumbnailCacheKey,
-            durationSecondsOverride = normalizedDurationOverride ?: entry.durationSecondsOverride
+            durationSecondsOverride = normalizedDurationOverride ?: entry.durationSecondsOverride,
+            requestUrlHint = sanitizePlaylistTrackRequestUrlHint(
+                source = entry.source,
+                requestUrlHint = requestUrlHint
+            ) ?: entry.requestUrlHint
         )
         if (updatedEntry != entry) {
             changed = true
@@ -2087,7 +2106,8 @@ private fun AppNavigation(
             artist = resolvedArtist,
             album = effectiveMetadataAlbum,
             artworkThumbnailCacheKey = artworkCacheKey,
-            durationSecondsOverride = playlistDurationOverride
+            durationSecondsOverride = playlistDurationOverride,
+            requestUrlHint = currentPlaybackRequestUrl
         )
         if (updatedState != playlistLibraryState) {
             onPlaylistLibraryStateChanged(updatedState)
@@ -2689,6 +2709,7 @@ private fun AppNavigation(
             context = context,
             playlistLibraryState = playlistLibraryState,
             currentPlaybackSourceId = currentPlaybackSourceId,
+            currentPlaybackRequestUrl = currentPlaybackRequestUrl,
             selectedFile = selectedFile,
             metadataTitle = effectiveMetadataTitle,
             metadataArtist = effectiveMetadataArtist,

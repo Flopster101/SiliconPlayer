@@ -8,6 +8,7 @@ private const val PLAYLIST_LIBRARY_FAVORITES_KEY = "favorites"
 private const val PLAYLIST_LIBRARY_PLAYLISTS_KEY = "playlists"
 private const val PLAYLIST_ENTRY_ID_KEY = "id"
 private const val PLAYLIST_ENTRY_SOURCE_KEY = "source"
+private const val PLAYLIST_ENTRY_REQUEST_URL_HINT_KEY = "request_url_hint"
 private const val PLAYLIST_ENTRY_TITLE_KEY = "title"
 private const val PLAYLIST_ENTRY_ARTIST_KEY = "artist"
 private const val PLAYLIST_ENTRY_ALBUM_KEY = "album"
@@ -185,6 +186,7 @@ private fun readPlaylistTrackEntries(array: JSONArray): List<PlaylistTrackEntry>
         entries += PlaylistTrackEntry(
             id = item.optString(PLAYLIST_ENTRY_ID_KEY).trim().ifBlank { java.util.UUID.randomUUID().toString() },
             source = source,
+            requestUrlHint = item.optString(PLAYLIST_ENTRY_REQUEST_URL_HINT_KEY).trim().ifBlank { null },
             title = title,
             artist = item.optString(PLAYLIST_ENTRY_ARTIST_KEY).trim().ifBlank { null },
             album = item.optString(PLAYLIST_ENTRY_ALBUM_KEY).trim().ifBlank { null },
@@ -220,6 +222,7 @@ private fun writePlaylistTrackEntry(entry: PlaylistTrackEntry): JSONObject {
     return JSONObject()
         .put(PLAYLIST_ENTRY_ID_KEY, entry.id)
         .put(PLAYLIST_ENTRY_SOURCE_KEY, entry.source)
+        .put(PLAYLIST_ENTRY_REQUEST_URL_HINT_KEY, entry.requestUrlHint ?: "")
         .put(PLAYLIST_ENTRY_TITLE_KEY, entry.title)
         .put(PLAYLIST_ENTRY_ARTIST_KEY, entry.artist ?: "")
         .put(PLAYLIST_ENTRY_ALBUM_KEY, entry.album ?: "")

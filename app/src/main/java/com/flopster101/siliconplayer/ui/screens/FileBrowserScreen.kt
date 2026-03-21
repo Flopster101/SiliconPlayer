@@ -324,10 +324,32 @@ internal fun FileBrowserScreen(
 
     val selectedLocation = storageLocations.firstOrNull { it.id == selectedLocationId }
     val hasActiveDirectory = currentDirectory != null
+    val initialNavigationKey = remember(
+        initialLocationId,
+        initialDirectoryPath,
+        initialSmbSourceNodeId,
+        initialHttpSourceNodeId,
+        initialHttpRootPath
+    ) {
+        buildString {
+            append(initialLocationId.orEmpty())
+            append('|')
+            append(initialDirectoryPath.orEmpty())
+            append('|')
+            append(initialSmbSourceNodeId ?: -1L)
+            append('|')
+            append(initialHttpSourceNodeId ?: -1L)
+            append('|')
+            append(initialHttpRootPath.orEmpty())
+        }
+    }
+    val hasRequestedInitialNavigation =
+        initialLocationId != null || !initialDirectoryPath.isNullOrBlank()
     val hasPendingInitialNavigation =
         selectedLocationId == null &&
             !hasActiveDirectory &&
-            !initialDirectoryPath.isNullOrBlank()
+            hasRequestedInitialNavigation &&
+            lastAppliedInitialNavigationKey != initialNavigationKey
     val browserContentState = remember(
         selectedLocationId,
         currentDirectory?.absolutePath,
@@ -932,19 +954,8 @@ internal fun FileBrowserScreen(
         val initialLocation = initialLocationId?.let { id ->
             storageLocations.firstOrNull { it.id == id }
         }
-        val navigationKey = buildString {
-            append(initialLocationId.orEmpty())
-            append('|')
-            append(initialDirectoryPath.orEmpty())
-            append('|')
-            append(initialSmbSourceNodeId ?: -1L)
-            append('|')
-            append(initialHttpSourceNodeId ?: -1L)
-            append('|')
-            append(initialHttpRootPath.orEmpty())
-        }
-        if (lastAppliedInitialNavigationKey == navigationKey) return@LaunchedEffect
-        lastAppliedInitialNavigationKey = navigationKey
+        if (lastAppliedInitialNavigationKey == initialNavigationKey) return@LaunchedEffect
+        lastAppliedInitialNavigationKey = initialNavigationKey
 
         val rawInitialDirectory = initialDirectoryPath?.trim().takeUnless { it.isNullOrBlank() }
         val resolvedArchive = rawInitialDirectory?.let { path ->

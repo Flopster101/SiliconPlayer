@@ -688,13 +688,23 @@ void AudioEngine::renderWorkerLoop() {
                 : baseTargetFrames;
         bool needsFill = false;
         int bufferedFramesBeforeFill = 0;
+
+        // Check vis demand early so we can adjust the target queue depth.
+        // When visualization is active, a higher target creates a larger deficit
+        // that the worker fills with multiple small decode iterations, producing
+        // more frequent vis captures and channel-scope serial increments.
+        const bool visualizationDemand = shouldUpdateVisualization(nullptr);
+        const int visualizationHeadroom =
+                (visualizationDemand && !recoveryBoostActive && !backgroundHeadroomActive)
+                ? std::max(baseChunkFrames * 8, 2048) : 0;
+        const int effectiveTarget = targetFrames + visualizationHeadroom;
         {
             std::unique_lock<std::mutex> lock(renderQueueMutex);
-            renderWorkerCv.wait(lock, [this, targetFrames]() {
+            renderWorkerCv.wait(lock, [this, effectiveTarget]() {
                 if (renderWorkerStop) return true;
                 if (!isPlaying.load() || seekInProgress.load()) return false;
                 const int bufferedFrames = static_cast<int>(renderQueueSampleCount / 2u);
-                return bufferedFrames < targetFrames;
+                return bufferedFrames < effectiveTarget;
             });
             if (renderWorkerStop) {
                 break;
@@ -703,7 +713,7 @@ void AudioEngine::renderWorkerLoop() {
                 continue;
             }
             bufferedFramesBeforeFill = static_cast<int>(renderQueueSampleCount / 2u);
-            needsFill = bufferedFramesBeforeFill < targetFrames;
+            needsFill = bufferedFramesBeforeFill < effectiveTarget;
         }
 
         if (!needsFill) {
@@ -714,13 +724,11 @@ void AudioEngine::renderWorkerLoop() {
         int channels = 2;
         uint32_t requestedVisualizationFeatures = 0u;
         const bool visualizationActive = shouldUpdateVisualization(&requestedVisualizationFeatures);
-        const bool visualizeFromRenderWorker =
-                visualizationActive &&
-                activeOutputBackend.load(std::memory_order_relaxed) != 1;
+        const bool visualizeFromRenderWorker = visualizationActive;
         int chunkFrames = baseChunkFrames;
-        const int deficitFrames = std::max(0, targetFrames - bufferedFramesBeforeFill);
+        const int deficitFrames = std::max(0, effectiveTarget - bufferedFramesBeforeFill);
         if (recoveryBoostActive || backgroundHeadroomActive ||
-            bufferedFramesBeforeFill < std::max(baseChunkFrames * 2, targetFrames / 3)) {
+            bufferedFramesBeforeFill < std::max(baseChunkFrames * 2, effectiveTarget / 3)) {
             const int aggressiveMinimumFrames = backgroundHeadroomActive
                     ? std::max(baseChunkFrames * 2, 2048)
                     : std::max(baseChunkFrames * 4, 1024);
@@ -729,6 +737,13 @@ void AudioEngine::renderWorkerLoop() {
                     baseChunkFrames,
                     backgroundHeadroomActive ? 8192 : 4096
             );
+        }
+        // When visualization is active, force small decode chunks so the loop
+        // iterates many times per wake-up.  Each iteration triggers a new
+        // decoder read (incrementing the channel-scope serial) and a fresh
+        // visualization capture, keeping all visualizations at a high refresh rate.
+        if (visualizeFromRenderWorker && !recoveryBoostActive && !backgroundHeadroomActive) {
+            chunkFrames = std::min(chunkFrames, std::max(64, baseChunkFrames / 4));
         }
         {
             std::lock_guard<std::mutex> lock(decoderMutex);
@@ -858,7 +873,7 @@ void AudioEngine::renderWorkerLoop() {
         if (visualizationActive && !recoveryBoostActive) {
             const int currentLevel = renderQueueFrames();
             const int safetyThreshold = std::max(targetFrames / 4, 1024);
-            if (currentLevel > safetyThreshold && currentLevel < targetFrames) {
+            if (currentLevel > safetyThreshold && currentLevel < effectiveTarget) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
         }

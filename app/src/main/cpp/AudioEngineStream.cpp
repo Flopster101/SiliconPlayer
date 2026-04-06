@@ -633,21 +633,6 @@ bool AudioEngine::renderOutputCallbackFrames(float* outputData, int32_t numFrame
         }
     }
 
-    uint32_t requestedVisualizationFeatures = 0u;
-    const bool visualizeFromOutputCallback =
-            activeOutputBackend.load(std::memory_order_relaxed) == 1 &&
-            shouldUpdateVisualization(&requestedVisualizationFeatures);
-    if (visualizeFromOutputCallback) {
-        // AAudio callbacks stay burst-sized even with larger stream buffers, so we can
-        // capture visualization data here to keep it aligned with the audio reaching output.
-        updateVisualizationDataFromOutputCallback(
-                outputData,
-                numFrames,
-                2,
-                requestedVisualizationFeatures
-        );
-    }
-
     if (pauseResumeFadeOutStopPending) {
         pauseResumeFadeOutStopPending = false;
         isPlaying.store(false);

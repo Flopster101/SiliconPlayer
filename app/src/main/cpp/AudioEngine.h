@@ -286,6 +286,7 @@ private:
     std::vector<int16_t> audioTrackPcmBuffer;
     int audioTrackBufferFrames = 4096;
     std::atomic<bool> audioTrackStopRequested { false };
+    int aaudioBufferFrames = 0;
     int streamSampleRate = 48000;
     int streamChannelCount = 2;
     bool streamStartupPrerollPending = true;

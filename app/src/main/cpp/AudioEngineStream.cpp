@@ -494,6 +494,7 @@ void AudioEngine::createStream() {
 void AudioEngine::applyStreamBufferPreset() {
     const int backend = activeOutputBackend.load(std::memory_order_relaxed);
     if (backend == 2) {
+        aaudioBufferFrames = 0;
         openSlBufferFrames = openSlBufferFramesForPreset(outputBufferPreset);
         openSlFloatBuffer.assign(static_cast<size_t>(openSlBufferFrames) * 2u, 0.0f);
         for (auto& buffer : openSlPcmBuffers) {
@@ -503,6 +504,7 @@ void AudioEngine::applyStreamBufferPreset() {
         return;
     }
     if (backend == 3) {
+        aaudioBufferFrames = 0;
         audioTrackBufferFrames = audioTrackBufferFramesForPreset(outputBufferPreset);
         audioTrackFloatBuffer.assign(static_cast<size_t>(audioTrackBufferFrames) * 2u, 0.0f);
         audioTrackPcmBuffer.assign(static_cast<size_t>(audioTrackBufferFrames) * 2u, 0);
@@ -545,6 +547,7 @@ void AudioEngine::applyStreamBufferPreset() {
             bufferCapacity
     );
     const int32_t applied = aaudio.streamSetBufferSizeInFrames(stream, target);
+    aaudioBufferFrames = std::max<int>(applied > 0 ? applied : target, burstFrames);
     LOGD(
             "AAudio buffer preset applied: burst=%d capacity=%d target=%d applied=%d",
             burstFrames,
@@ -629,6 +632,22 @@ bool AudioEngine::renderOutputCallbackFrames(float* outputData, int32_t numFrame
             outputData[base + 1u] *= fadeGain;
         }
     }
+
+    uint32_t requestedVisualizationFeatures = 0u;
+    const bool visualizeFromOutputCallback =
+            activeOutputBackend.load(std::memory_order_relaxed) == 1 &&
+            shouldUpdateVisualization(&requestedVisualizationFeatures);
+    if (visualizeFromOutputCallback) {
+        // AAudio callbacks stay burst-sized even with larger stream buffers, so we can
+        // capture visualization data here to keep it aligned with the audio reaching output.
+        updateVisualizationDataFromOutputCallback(
+                outputData,
+                numFrames,
+                2,
+                requestedVisualizationFeatures
+        );
+    }
+
     if (pauseResumeFadeOutStopPending) {
         pauseResumeFadeOutStopPending = false;
         isPlaying.store(false);

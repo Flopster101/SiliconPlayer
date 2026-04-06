@@ -274,7 +274,11 @@ std::vector<float> AudioEngine::getChannelScopeSamples(int samplesPerChannel) {
         state = openMptDecoder->getChannelScopeSharedState();
     }
     if (!state) return {};
-    return state->getProcessedSamples(samplesPerChannel);
+    int presentationDelayFrames = renderQueueFrames();
+    if (activeOutputBackend.load(std::memory_order_relaxed) == 1) {
+        presentationDelayFrames += std::max(aaudioBufferFrames, 0);
+    }
+    return state->getProcessedSamples(samplesPerChannel, presentationDelayFrames);
 }
 
 std::vector<int32_t> AudioEngine::getChannelScopeTextState(int maxChannels) {

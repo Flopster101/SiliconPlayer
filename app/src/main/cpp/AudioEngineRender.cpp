@@ -714,6 +714,9 @@ void AudioEngine::renderWorkerLoop() {
         int channels = 2;
         uint32_t requestedVisualizationFeatures = 0u;
         const bool visualizationActive = shouldUpdateVisualization(&requestedVisualizationFeatures);
+        const bool visualizeFromRenderWorker =
+                visualizationActive &&
+                activeOutputBackend.load(std::memory_order_relaxed) != 1;
         int chunkFrames = baseChunkFrames;
         const int deficitFrames = std::max(0, targetFrames - bufferedFramesBeforeFill);
         if (recoveryBoostActive || backgroundHeadroomActive ||
@@ -840,7 +843,7 @@ void AudioEngine::renderWorkerLoop() {
 
         appendRenderQueue(localBuffer.data(), chunkFrames, channels);
 
-        if (visualizationActive) {
+        if (visualizeFromRenderWorker) {
             updateVisualizationDataFromOutputCallback(
                     localBuffer.data(),
                     chunkFrames,

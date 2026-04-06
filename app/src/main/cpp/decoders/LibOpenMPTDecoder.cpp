@@ -552,14 +552,11 @@ void ChannelScopeSharedState::clear() {
     interpolatedCurr.clear();
     frozenFrameCount.clear();
     lastChannels = 0;
-    lastSamplesPerChannel = 0;
     consumedSerial = 0;
     interpolationInitialized = false;
-    cachedOutput.clear();
-    outputSerial = 0;
 }
 
-std::vector<float> ChannelScopeSharedState::getProcessedSamples(int samplesPerChannel) {
+std::vector<float> ChannelScopeSharedState::getProcessedSamples(int samplesPerChannel, int presentationDelayFrames) {
     std::vector<float> localRaw;
     std::vector<float> localVu;
     int localChannels = 0;
@@ -577,40 +574,36 @@ std::vector<float> ChannelScopeSharedState::getProcessedSamples(int samplesPerCh
 
     const int clampedSamples = std::clamp(samplesPerChannel, 16, kMaxSamples);
     const int totalChannels = localChannels;
+    const int fullSamplesPerChannel = kMaxSamples;
+    const size_t processedFullSize = static_cast<size_t>(totalChannels * fullSamplesPerChannel);
     const size_t flattenedSize = static_cast<size_t>(totalChannels * clampedSamples);
-    std::vector<float> flattened(flattenedSize, 0.0f);
 
     const bool scopeShapeChanged =
             lastChannels != totalChannels ||
-            lastSamplesPerChannel != clampedSamples ||
-            prevSnapshot.size() != flattenedSize ||
-            interpolatedPrev.size() != flattenedSize ||
-            interpolatedCurr.size() != flattenedSize ||
+            prevSnapshot.size() != processedFullSize ||
+            interpolatedPrev.size() != processedFullSize ||
+            interpolatedCurr.size() != processedFullSize ||
             frozenFrameCount.size() != static_cast<size_t>(totalChannels);
     if (scopeShapeChanged) {
-        prevSnapshot.assign(flattenedSize, 0.0f);
-        interpolatedPrev.assign(flattenedSize, 0.0f);
-        interpolatedCurr.assign(flattenedSize, 0.0f);
+        prevSnapshot.assign(processedFullSize, 0.0f);
+        interpolatedPrev.assign(processedFullSize, 0.0f);
+        interpolatedCurr.assign(processedFullSize, 0.0f);
         frozenFrameCount.assign(static_cast<size_t>(totalChannels), 0);
         lastChannels = totalChannels;
-        lastSamplesPerChannel = clampedSamples;
         interpolationInitialized = false;
         consumedSerial = localSerial;
     }
     if (localSerial != consumedSerial || !interpolationInitialized) {
-        std::vector<float> raw(flattenedSize, 0.0f);
-        std::vector<float> processed(flattenedSize, 0.0f);
+        std::vector<float> raw(processedFullSize, 0.0f);
+        std::vector<float> processed(processedFullSize, 0.0f);
         for (int channel = 0; channel < totalChannels; ++channel) {
-            const size_t channelOffset = static_cast<size_t>(channel) * clampedSamples;
+            const size_t channelOffset = static_cast<size_t>(channel) * fullSamplesPerChannel;
             float* rawDestination = raw.data() + channelOffset;
             const size_t snapshotOffset = static_cast<size_t>(channel) * kMaxSamples;
-            const int copyLen = std::min(clampedSamples, kMaxSamples);
+            const int copyLen = fullSamplesPerChannel;
             std::copy(localRaw.data() + snapshotOffset,
                       localRaw.data() + snapshotOffset + copyLen,
                       rawDestination);
-            if (copyLen < clampedSamples) {
-                std::fill(rawDestination + copyLen, rawDestination + clampedSamples, 0.0f);
-            }
 
             const float* previous = prevSnapshot.data() + channelOffset;
             bool sameAsPrevious = true;
@@ -618,7 +611,7 @@ std::vector<float> ChannelScopeSharedState::getProcessedSamples(int samplesPerCh
             float prevPeak = 0.0f;
             float deltaSum = 0.0f;
             float rmsAcc = 0.0f;
-            for (int i = 0; i < clampedSamples; ++i) {
+            for (int i = 0; i < fullSamplesPerChannel; ++i) {
                 const float value = rawDestination[i];
                 const float prevValue = previous[i];
                 if (prevValue != value) sameAsPrevious = false;
@@ -632,8 +625,8 @@ std::vector<float> ChannelScopeSharedState::getProcessedSamples(int samplesPerCh
             const float channelVu = (static_cast<size_t>(channel) < localVu.size())
                     ? localVu[static_cast<size_t>(channel)]
                     : 0.0f;
-            const float meanDelta = deltaSum / static_cast<float>(clampedSamples);
-            const float rms = std::sqrt(rmsAcc / static_cast<float>(clampedSamples));
+            const float meanDelta = deltaSum / static_cast<float>(fullSamplesPerChannel);
+            const float rms = std::sqrt(rmsAcc / static_cast<float>(fullSamplesPerChannel));
             const bool frameNearlyFrozen = meanDelta < 0.0005f;
             const bool looksSilentNow = (channelVu < 0.00035f) && (rms < 0.0045f);
             const bool abruptTailFreeze =
@@ -667,9 +660,9 @@ std::vector<float> ChannelScopeSharedState::getProcessedSamples(int samplesPerCh
 
             float* processedDestination = processed.data() + channelOffset;
             if (suppressStaleScope) {
-                std::fill(processedDestination, processedDestination + clampedSamples, 0.0f);
+                std::fill(processedDestination, processedDestination + fullSamplesPerChannel, 0.0f);
             } else {
-                std::copy(rawDestination, rawDestination + clampedSamples, processedDestination);
+                std::copy(rawDestination, rawDestination + fullSamplesPerChannel, processedDestination);
             }
         }
         prevSnapshot = std::move(raw);
@@ -682,19 +675,30 @@ std::vector<float> ChannelScopeSharedState::getProcessedSamples(int samplesPerCh
             interpolatedCurr = processed;
         }
         consumedSerial = localSerial;
-        for (int channel = 0; channel < totalChannels; ++channel) {
-            const size_t channelOffset = static_cast<size_t>(channel) * static_cast<size_t>(clampedSamples);
-            const float* curr = interpolatedCurr.data() + channelOffset;
-            float* out = flattened.data() + channelOffset;
-            std::copy(curr, curr + clampedSamples, out);
-        }
-        cachedOutput = flattened;
-        outputSerial = consumedSerial;
-        return flattened;
     }
-    // No new audio data — return cached output.
-    if (!cachedOutput.empty() && cachedOutput.size() == flattenedSize) {
-        return cachedOutput;
+
+    if (!interpolationInitialized || interpolatedCurr.size() != processedFullSize) {
+        return std::vector<float>(flattenedSize, 0.0f);
+    }
+
+    // The custom libopenmpt scope buffer stores samples oldest -> newest.
+    // Shift the visible window backward by the amount of audio that is still queued
+    // so channel scope tracks what is actually audible instead of decoder-head state.
+    const int maxPresentationDelay = std::max(0, fullSamplesPerChannel - clampedSamples);
+    const int clampedDelay = std::clamp(presentationDelayFrames, 0, maxPresentationDelay);
+    const int windowStart = maxPresentationDelay - clampedDelay;
+
+    std::vector<float> flattened(flattenedSize, 0.0f);
+    for (int channel = 0; channel < totalChannels; ++channel) {
+        const size_t sourceOffset =
+                static_cast<size_t>(channel) * static_cast<size_t>(fullSamplesPerChannel) +
+                static_cast<size_t>(windowStart);
+        const size_t destinationOffset = static_cast<size_t>(channel) * static_cast<size_t>(clampedSamples);
+        std::copy(
+                interpolatedCurr.data() + sourceOffset,
+                interpolatedCurr.data() + sourceOffset + clampedSamples,
+                flattened.data() + destinationOffset
+        );
     }
     return flattened;
 }

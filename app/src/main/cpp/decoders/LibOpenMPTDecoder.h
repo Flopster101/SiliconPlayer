@@ -26,13 +26,10 @@ struct ChannelScopeSharedState {
     std::vector<float> interpolatedCurr;
     std::vector<std::uint8_t> frozenFrameCount;
     int lastChannels = 0;
-    int lastSamplesPerChannel = 0;
     uint64_t consumedSerial = 0;
     bool interpolationInitialized = false;
-    std::vector<float> cachedOutput;
-    uint64_t outputSerial = 0;
 
-    std::vector<float> getProcessedSamples(int samplesPerChannel);
+    std::vector<float> getProcessedSamples(int samplesPerChannel, int presentationDelayFrames = 0);
     void clear();
 };
 

@@ -110,6 +110,7 @@ class PlaybackService : Service() {
     private var currentArtwork: Bitmap? = null
     private var currentArtworkKey: String? = null
     private var cachedFallbackIconBitmap: Bitmap? = null
+    private var currentPreferredRepeatMode: RepeatMode = RepeatMode.None
     private var currentRepeatMode: RepeatMode = RepeatMode.None
     private var currentRepeatModeCapabilitiesFlags: Int = REPEAT_CAP_ALL
     private var currentPlaybackCapabilitiesFlags: Int =
@@ -290,6 +291,15 @@ class PlaybackService : Service() {
             intent.getStringExtra(EXTRA_REPEAT_MODE) ?: prefs.getString(
                 AppPreferenceKeys.SESSION_CURRENT_REPEAT_MODE,
                 prefs.getString(AppPreferenceKeys.PREFERRED_REPEAT_MODE, RepeatMode.None.storageValue)
+            )
+        )
+        currentPreferredRepeatMode = RepeatMode.fromStorage(
+            intent.getStringExtra(EXTRA_PREFERRED_REPEAT_MODE) ?: prefs.getString(
+                AppPreferenceKeys.PREFERRED_REPEAT_MODE,
+                intent.getStringExtra(EXTRA_REPEAT_MODE) ?: prefs.getString(
+                    AppPreferenceKeys.SESSION_CURRENT_REPEAT_MODE,
+                    RepeatMode.None.storageValue
+                )
             )
         )
         currentRepeatModeCapabilitiesFlags = intent.getIntExtra(
@@ -539,6 +549,7 @@ class PlaybackService : Service() {
             repeatModeCapabilitiesFlags = currentRepeatModeCapabilitiesFlags
         ) ?: return
         currentRepeatMode = next
+        currentPreferredRepeatMode = next
         applyRepeatModeToNative(next)
         persistCurrentRepeatMode()
         updateMediaSessionState()
@@ -673,7 +684,7 @@ class PlaybackService : Service() {
         val editor = prefs.edit()
             .putString(AppPreferenceKeys.SESSION_CURRENT_REPEAT_MODE, currentRepeatMode.storageValue)
         if (prefs.getBoolean(AppPreferenceKeys.PERSIST_REPEAT_MODE, true)) {
-            editor.putString(AppPreferenceKeys.PREFERRED_REPEAT_MODE, currentRepeatMode.storageValue)
+            editor.putString(AppPreferenceKeys.PREFERRED_REPEAT_MODE, currentPreferredRepeatMode.storageValue)
         }
         editor.apply()
     }
@@ -1090,6 +1101,7 @@ class PlaybackService : Service() {
         private const val EXTRA_DURATION = "extra_duration"
         private const val EXTRA_POSITION = "extra_position"
         private const val EXTRA_IS_PLAYING = "extra_is_playing"
+        private const val EXTRA_PREFERRED_REPEAT_MODE = "extra_preferred_repeat_mode"
         private const val EXTRA_REPEAT_CAPABILITIES = "extra_repeat_capabilities"
         private const val EXTRA_PLAYBACK_CAPABILITIES = "extra_playback_capabilities"
 
@@ -1133,6 +1145,7 @@ class PlaybackService : Service() {
             durationSeconds: Double,
             positionSeconds: Double,
             isPlaying: Boolean,
+            preferredRepeatMode: RepeatMode,
             activeRepeatMode: RepeatMode,
             repeatModeCapabilitiesFlags: Int,
             playbackCapabilitiesFlags: Int
@@ -1146,6 +1159,7 @@ class PlaybackService : Service() {
                 .putExtra(EXTRA_DURATION, durationSeconds)
                 .putExtra(EXTRA_POSITION, positionSeconds)
                 .putExtra(EXTRA_IS_PLAYING, isPlaying)
+                .putExtra(EXTRA_PREFERRED_REPEAT_MODE, preferredRepeatMode.storageValue)
                 .putExtra(EXTRA_REPEAT_MODE, activeRepeatMode.storageValue)
                 .putExtra(EXTRA_REPEAT_CAPABILITIES, repeatModeCapabilitiesFlags)
                 .putExtra(EXTRA_PLAYBACK_CAPABILITIES, playbackCapabilitiesFlags)

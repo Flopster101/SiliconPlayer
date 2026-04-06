@@ -33,6 +33,7 @@ internal fun syncPlaybackServiceFromUiState(
     durationSeconds: Double,
     positionSeconds: Double,
     isPlaying: Boolean,
+    preferredRepeatMode: RepeatMode,
     activeRepeatMode: RepeatMode,
     repeatModeCapabilitiesFlags: Int,
     playbackCapabilitiesFlags: Int
@@ -53,6 +54,7 @@ internal fun syncPlaybackServiceFromUiState(
         durationSeconds = durationSeconds,
         positionSeconds = positionSeconds,
         isPlaying = isPlaying,
+        preferredRepeatMode = preferredRepeatMode,
         activeRepeatMode = activeRepeatMode,
         repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags,
         playbackCapabilitiesFlags = playbackCapabilitiesFlags

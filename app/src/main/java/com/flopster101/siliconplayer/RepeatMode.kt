@@ -123,6 +123,8 @@ fun resolveRepeatModeForFlags(
         RepeatMode.LoopPoint -> {
             if (supportsLoopPointRepeat) {
                 RepeatMode.LoopPoint
+            } else if (includeTrackRepeat) {
+                RepeatMode.Track
             } else {
                 RepeatMode.Playlist
             }

@@ -1401,9 +1401,9 @@ private fun AppNavigation(
         mutableStateOf(
             RepeatMode.fromStorage(
                 prefs.getString(
-                    AppPreferenceKeys.SESSION_CURRENT_REPEAT_MODE,
+                    AppPreferenceKeys.PREFERRED_REPEAT_MODE,
                     prefs.getString(
-                        AppPreferenceKeys.PREFERRED_REPEAT_MODE,
+                        AppPreferenceKeys.SESSION_CURRENT_REPEAT_MODE,
                         RepeatMode.None.storageValue
                     )
                 )

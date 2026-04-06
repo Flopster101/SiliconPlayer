@@ -24,6 +24,7 @@ internal fun syncPlaybackServiceAction(
     durationSeconds: Double,
     positionSeconds: Double,
     isPlaying: Boolean,
+    preferredRepeatMode: RepeatMode,
     activeRepeatMode: RepeatMode,
     repeatModeCapabilitiesFlags: Int,
     playbackCapabilitiesFlags: Int
@@ -38,6 +39,7 @@ internal fun syncPlaybackServiceAction(
         durationSeconds = durationSeconds,
         positionSeconds = positionSeconds,
         isPlaying = isPlaying,
+        preferredRepeatMode = preferredRepeatMode,
         activeRepeatMode = activeRepeatMode,
         repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlags,
         playbackCapabilitiesFlags = playbackCapabilitiesFlags

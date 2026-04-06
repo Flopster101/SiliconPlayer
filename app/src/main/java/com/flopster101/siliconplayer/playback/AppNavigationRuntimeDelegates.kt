@@ -84,6 +84,7 @@ internal fun buildAppNavigationRuntimeDelegates(
                 durationSeconds = durationProvider(),
                 positionSeconds = positionProvider(),
                 isPlaying = isPlayingProvider(),
+                preferredRepeatMode = preferredRepeatModeProvider(),
                 activeRepeatMode = activeRepeatModeProvider(),
                 repeatModeCapabilitiesFlags = repeatModeCapabilitiesFlagsProvider(),
                 playbackCapabilitiesFlags = playbackCapabilitiesFlagsProvider()

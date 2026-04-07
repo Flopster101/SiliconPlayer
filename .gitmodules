@@ -60,7 +60,7 @@
 	url = https://github.com/pete-gordon/hivelytracker
 [submodule "external/klystrack"]
 	path = external/klystrack
-	url = https://github.com/kometbomb/klystrack/
+	url = https://github.com/LTVA1/klystrack.git
 [submodule "external/furnace"]
 	path = external/furnace
 	url = https://github.com/tildearrow/furnace

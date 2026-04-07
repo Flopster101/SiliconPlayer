@@ -33,10 +33,6 @@ internal object AboutCatalog {
             links = listOf(
                 AboutEntityLink("Project", "https://ffmpeg.org/"),
                 AboutEntityLink("Source", "https://git.ffmpeg.org/ffmpeg.git")
-            ),
-            integrationNotes = listOf(
-                "Used as fallback/general decoder for broad format coverage.",
-                "Integrated through libavformat/libavcodec/libswresample with native channel controls."
             )
         ),
         AboutEntity(
@@ -49,10 +45,6 @@ internal object AboutCatalog {
             links = listOf(
                 AboutEntityLink("Project", "https://lib.openmpt.org/"),
                 AboutEntityLink("Source", "https://github.com/OpenMPT/openmpt.git")
-            ),
-            integrationNotes = listOf(
-                "Primary module/tracker playback core in Silicon Player.",
-                "Per-song channel naming is exposed for channel mute/solo controls."
             )
         ),
         AboutEntity(
@@ -64,10 +56,6 @@ internal object AboutCatalog {
             license = "Mixed per-chip licenses (BSD/LGPL/GPL and others; see upstream sources)",
             links = listOf(
                 AboutEntityLink("Source", "https://github.com/ValleyBell/libvgm.git")
-            ),
-            integrationNotes = listOf(
-                "Integrated with per-chip/per-channel muting via libvgm device muting masks.",
-                "Chip core selection and playback options are exposed in core settings."
             )
         ),
         AboutEntity(
@@ -79,9 +67,6 @@ internal object AboutCatalog {
             license = "LGPL-2.1+ (some optional emulation paths are GPL-2.0+)",
             links = listOf(
                 AboutEntityLink("Source", "https://github.com/libgme/game-music-emu.git")
-            ),
-            integrationNotes = listOf(
-                "Integrated with tempo, EQ, stereo controls, and per-voice channel muting."
             )
         ),
         AboutEntity(
@@ -94,9 +79,6 @@ internal object AboutCatalog {
             links = listOf(
                 AboutEntityLink("Project", "https://libsidplayfp.github.io/libsidplayfp/"),
                 AboutEntityLink("Source", "https://github.com/libsidplayfp/libsidplayfp")
-            ),
-            integrationNotes = listOf(
-                "Integrated with reSID/reSIDfp backend controls and per-voice mute toggles."
             )
         ),
         AboutEntity(
@@ -108,10 +90,6 @@ internal object AboutCatalog {
             license = "GPL-2.0-or-later",
             links = listOf(
                 AboutEntityLink("Source", "https://bitbucket.org/losnoco/lazyusf2/")
-            ),
-            integrationNotes = listOf(
-                "Integrated with HLE audio and dynamic voice-channel mute controls.",
-                "Silicon Player carries local patches for voice-mask APIs and channel availability reporting."
             )
         ),
         AboutEntity(
@@ -123,11 +101,6 @@ internal object AboutCatalog {
             license = "GPL-2.0-or-later",
             links = listOf(
                 AboutEntityLink("Source", "https://bitbucket.org/kode54/vio2sf")
-            ),
-            integrationNotes = listOf(
-                "Uses PSFLib for 2SF/mini2SF container loading and library resolution.",
-                "Integrated with DS voice channel controls and interpolation quality selection.",
-                "Behavior and compatibility were cross-checked against existing 2SF player implementations."
             )
         ),
         AboutEntity(
@@ -140,10 +113,6 @@ internal object AboutCatalog {
             links = listOf(
                 AboutEntityLink("Project", "https://sourceforge.net/p/sc68/"),
                 AboutEntityLink("Source", "https://sourceforge.net/p/sc68/code/HEAD/tree/")
-            ),
-            integrationNotes = listOf(
-                "Integrated as a native decoder using libsc68 + file68 + unice68.",
-                "Current baseline targets playback, seek, subtunes, and core metadata fields."
             )
         ),
         AboutEntity(
@@ -156,10 +125,6 @@ internal object AboutCatalog {
             links = listOf(
                 AboutEntityLink("Project", "https://adplug.github.io/"),
                 AboutEntityLink("Source", "https://github.com/adplug/adplug")
-            ),
-            integrationNotes = listOf(
-                "Integrated with EmuOPL rendering for baseline playback and seek support.",
-                "Current baseline focuses on playback compatibility and core metadata."
             )
         ),
         AboutEntity(
@@ -172,10 +137,6 @@ internal object AboutCatalog {
             links = listOf(
                 AboutEntityLink("Project", "https://zakalwe.fi/uade/"),
                 AboutEntityLink("Source", "https://github.com/viznut/uade")
-            ),
-            integrationNotes = listOf(
-                "Integrated as a native decoder for Amiga-oriented legacy formats and prefix-style extensions.",
-                "Baseline integration includes playback, seek, subtunes, repeat handling, and core metadata."
             )
         ),
         AboutEntity(
@@ -187,10 +148,6 @@ internal object AboutCatalog {
             license = "BSD-3-Clause",
             links = listOf(
                 AboutEntityLink("Source", "https://github.com/pete-gordon/hivelytracker")
-            ),
-            integrationNotes = listOf(
-                "Integrated as a baseline core with playback, subtunes, repeat handling, and seek support.",
-                "Uses native HivelyTracker replay routines with configurable output sample rate."
             )
         ),
         AboutEntity(
@@ -203,10 +160,6 @@ internal object AboutCatalog {
             links = listOf(
                 AboutEntityLink("Project", "https://github.com/LTVA1/klystrack"),
                 AboutEntityLink("Source", "https://github.com/LTVA1/klystrack")
-            ),
-            integrationNotes = listOf(
-                "Integrated as baseline playback support for Klystrack-plus song modules.",
-                "Uses static klystron replay library build from the bundled submodule."
             )
         ),
         AboutEntity(
@@ -219,10 +172,6 @@ internal object AboutCatalog {
             links = listOf(
                 AboutEntityLink("Project", "https://tildearrow.org/furnace/"),
                 AboutEntityLink("Source", "https://github.com/tildearrow/furnace")
-            ),
-            integrationNotes = listOf(
-                "Integrated as baseline playback support with seek, repeat handling, subtunes, and core metadata.",
-                "Uses upstream Furnace engine in headless mode (no tracker GUI stack)."
             )
         )
     )

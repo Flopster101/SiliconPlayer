@@ -2198,6 +2198,39 @@ typedef int64_t Sint64;
 
 typedef struct SDL_mutex SDL_mutex;
 typedef struct SDL_RWops SDL_RWops;
+typedef struct SDL_Surface SDL_Surface;
+typedef struct SDL_Texture SDL_Texture;
+typedef struct SDL_Window SDL_Window;
+typedef struct SDL_Renderer SDL_Renderer;
+typedef struct SDL_Cursor SDL_Cursor;
+typedef Uint32 SDL_TimerID;
+
+typedef struct SDL_Keysym {
+    Uint32 scancode;
+    Uint32 sym;
+    Uint16 mod;
+    Uint32 unused;
+} SDL_Keysym;
+
+typedef struct SDL_KeyboardEvent {
+    Uint32 type;
+    Uint32 timestamp;
+    Uint32 windowID;
+    Uint8 state;
+    Uint8 repeat;
+    Uint8 padding2;
+    Uint8 padding3;
+    SDL_Keysym keysym;
+} SDL_KeyboardEvent;
+
+typedef struct SDL_Rect {
+    int x;
+    int y;
+    int w;
+    int h;
+} SDL_Rect;
+
+typedef struct SDL_Event SDL_Event;
 
 typedef struct SDL_AudioSpec {
     int freq;
@@ -2220,9 +2253,28 @@ void SDL_DestroyMutex(SDL_mutex* mutex);
 int SDL_LockMutex(SDL_mutex* mutex);
 int SDL_UnlockMutex(SDL_mutex* mutex);
 size_t SDL_RWread(SDL_RWops* context, void* ptr, size_t size, size_t maxnum);
+Sint64 SDL_RWseek(SDL_RWops* context, Sint64 offset, int whence);
+Sint64 SDL_RWtell(SDL_RWops* context);
+int SDL_RWclose(SDL_RWops* context);
+SDL_RWops* SDL_RWFromMem(void* mem, int size);
+SDL_RWops* SDL_RWFromFP(void* fp, int autoclose);
+SDL_RWops* SDL_RWFromFile(const char* file, const char* mode);
+SDL_RWops* SDL_AllocRW(void);
+const char* SDL_GetError(void);
 int SDL_OpenAudio(void* desired, void* obtained);
 void SDL_PauseAudio(int pauseOn);
 void SDL_CloseAudio(void);
+
+#endif
+EOF
+
+    cat > "$SDL_SHIM_DIR/SDL_rwops.h" <<'EOF'
+#ifndef SILICONPLAYER_KLYSTRACK_SDL_RWOPS_H
+#define SILICONPLAYER_KLYSTRACK_SDL_RWOPS_H
+
+#include "SDL.h"
+
+typedef struct SDL_RWops SDL_RWops;
 
 #endif
 EOF
@@ -2256,7 +2308,8 @@ static inline Uint32 SDL_Swap32(Uint32 value) {
 EOF
 
     local common_flags
-    common_flags="$KLYSTRACK_COMMON_FLAGS -DNOSDL_MIXER -DSTEREOOUTPUT -DUSESDLMUTEXES -I$SDL_SHIM_DIR -I$KLYSTRON_PATH/src"
+    # klystrack's replay sources need standalone mode to avoid editor globals, plus libm symbols and M_PI.
+    common_flags="$KLYSTRACK_COMMON_FLAGS -include math.h -DM_PI=3.14159265358979323846 -DSTANDALONE_COMPILE -DNOSDL_MIXER -DSTEREOOUTPUT -DUSESDLMUTEXES -I$SDL_SHIM_DIR -I$KLYSTRON_PATH/src"
 
     local src
     for src in "$KLYSTRON_PATH"/src/snd/*.c "$KLYSTRON_PATH"/src/lib/ksnd.c; do

@@ -50,7 +50,7 @@ public:
     double getPlaybackPositionSeconds() override;
     TimelineMode getTimelineMode() const override;
 
-    const char* getName() const override { return "Klystrack"; }
+    const char* getName() const override { return "Klystrack-plus"; }
     static std::vector<std::string> getSupportedExtensions();
 
 private:

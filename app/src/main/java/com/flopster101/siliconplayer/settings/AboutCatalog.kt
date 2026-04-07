@@ -197,15 +197,15 @@ internal object AboutCatalog {
             id = "core.klystrack",
             kind = AboutEntityKind.Core,
             name = DecoderNames.KLYSTRACK,
-            description = "Klystrack module replay core using the klystron audio engine.",
-            author = "Tero Lindeman (kometbomb) and Klystrack/Klystron contributors",
+            description = "Klystrack-plus module replay core using the klystron audio engine.",
+            author = "Georgy Saraykin (LTVA1) and Klystrack-plus contributors",
             license = "zlib License",
             links = listOf(
-                AboutEntityLink("Project", "https://github.com/kometbomb/klystrack"),
-                AboutEntityLink("Source", "https://github.com/kometbomb/klystrack")
+                AboutEntityLink("Project", "https://github.com/LTVA1/klystrack"),
+                AboutEntityLink("Source", "https://github.com/LTVA1/klystrack")
             ),
             integrationNotes = listOf(
-                "Integrated as baseline playback support for Klystrack song modules.",
+                "Integrated as baseline playback support for Klystrack-plus song modules.",
                 "Uses static klystron replay library build from the bundled submodule."
             )
         ),
@@ -361,7 +361,8 @@ internal object AboutCatalog {
     }
 
     fun resolveCoreForPlugin(pluginName: String): AboutEntity? {
-        val id = pluginNameToCoreId[pluginName] ?: return null
+        val canonicalName = canonicalDecoderNameForAlias(pluginName) ?: pluginName
+        val id = pluginNameToCoreId[canonicalName] ?: return null
         return entityById[id]
     }
 }

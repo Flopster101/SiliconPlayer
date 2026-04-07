@@ -62,7 +62,7 @@ namespace {
                 return std::make_unique<HivelyTrackerDecoder>();
             }, 13);
 
-            DecoderRegistry::getInstance().registerDecoder("Klystrack", KlystrackDecoder::getSupportedExtensions(), []() {
+            DecoderRegistry::getInstance().registerDecoder("Klystrack-plus", KlystrackDecoder::getSupportedExtensions(), []() {
                 return std::make_unique<KlystrackDecoder>();
             }, 15);
 

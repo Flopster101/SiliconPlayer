@@ -12,7 +12,7 @@ internal object DecoderNames {
     const val AD_PLUG = "AdPlug"
     const val UADE = "UADE"
     const val HIVELY_TRACKER = "HivelyTracker"
-    const val KLYSTRACK = "Klystrack"
+    const val KLYSTRACK = "Klystrack-plus"
     const val FURNACE = "Furnace"
 
     val trackedFileDecoders: Set<String> = setOf(
@@ -46,7 +46,7 @@ internal fun canonicalDecoderNameForAlias(coreName: String?): String? {
         "sc68", "sndh" -> DecoderNames.SC68
         "adplug", "opl" -> DecoderNames.AD_PLUG
         "hivelytracker", "hively", "hvl", "ahx" -> DecoderNames.HIVELY_TRACKER
-        "klystrack", "kly", "kt" -> DecoderNames.KLYSTRACK
+        "klystrack-plus", "klystrack", "kly", "kt" -> DecoderNames.KLYSTRACK
         "furnace", "fur", "dmf" -> DecoderNames.FURNACE
         "uade", "amiga" -> DecoderNames.UADE
         else -> null
@@ -54,5 +54,5 @@ internal fun canonicalDecoderNameForAlias(coreName: String?): String? {
 }
 
 internal fun String?.matchesDecoderName(canonicalName: String): Boolean {
-    return this?.trim()?.equals(canonicalName, ignoreCase = true) == true
+    return canonicalDecoderNameForAlias(this)?.equals(canonicalName, ignoreCase = true) == true
 }

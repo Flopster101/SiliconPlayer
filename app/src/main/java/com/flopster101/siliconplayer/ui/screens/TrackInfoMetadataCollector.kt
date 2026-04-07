@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.flopster101.siliconplayer.DecoderNames
 import com.flopster101.siliconplayer.NativeBridge
+import com.flopster101.siliconplayer.matchesDecoderName
 import kotlinx.coroutines.delay
 
 internal data class OpenMptMetadata(
@@ -392,7 +393,7 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals(DecoderNames.KLYSTRACK, ignoreCase = true) -> common.copy(
+        decoderName.matchesDecoderName(DecoderNames.KLYSTRACK) -> common.copy(
             klystrack = KlystrackMetadata(
                 formatName = NativeBridge.getKlystrackFormatName(),
                 trackCount = NativeBridge.getKlystrackTrackCount(),

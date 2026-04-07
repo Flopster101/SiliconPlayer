@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.DecoderNames
+import com.flopster101.siliconplayer.matchesDecoderName
 import java.util.Locale
 
 @Composable
@@ -170,7 +171,7 @@ internal fun TrackInfoCoreSections(
             if (metadata.hivelyTracker.instrumentNames.isNotBlank()) TrackInfoDetailsRow("Instrument names", metadata.hivelyTracker.instrumentNames)
         }
 
-        decoderName.equals(DecoderNames.KLYSTRACK, ignoreCase = true) -> {
+        decoderName.matchesDecoderName(DecoderNames.KLYSTRACK) -> {
             TrackInfoSectionHeader(DecoderNames.KLYSTRACK)
             if (metadata.klystrack.formatName.isNotBlank()) TrackInfoDetailsRow("Format", metadata.klystrack.formatName)
             if (metadata.klystrack.trackCount > 0) TrackInfoDetailsRow("Tracks", metadata.klystrack.trackCount.toString())
@@ -372,8 +373,8 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.hivelyTracker.instrumentNames.isNotBlank()) row("Instrument names", metadata.hivelyTracker.instrumentNames)
         }
 
-        decoderName.equals(DecoderNames.KLYSTRACK, ignoreCase = true) -> {
-            builder.append('\n').append("[Klystrack]").append('\n')
+        decoderName.matchesDecoderName(DecoderNames.KLYSTRACK) -> {
+            builder.append('\n').append('[').append(DecoderNames.KLYSTRACK).append(']').append('\n')
             if (metadata.klystrack.formatName.isNotBlank()) row("Format", metadata.klystrack.formatName)
             if (metadata.klystrack.trackCount > 0) row("Tracks", metadata.klystrack.trackCount.toString())
             if (metadata.klystrack.instrumentCount > 0) row("Instruments", metadata.klystrack.instrumentCount.toString())

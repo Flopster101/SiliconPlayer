@@ -19,6 +19,7 @@ add_library(
         siliconplayer
         SHARED
         SiliconPlayerNative.cpp
+        ChannelScopeSharedState.cpp
         ChannelScopeTrigger.cpp
         AudioTrackJniBridge.cpp
         AudioEngine.cpp

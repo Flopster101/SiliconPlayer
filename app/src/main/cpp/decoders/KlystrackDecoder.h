@@ -2,9 +2,11 @@
 #define SILICONPLAYER_KLYSTRACKDECODER_H
 
 #include "AudioDecoder.h"
+#include "../ChannelScopeSharedState.h"
 
 #include <atomic>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -36,6 +38,7 @@ public:
     int getSongLengthRowsInfo();
     int getCurrentRowInfo();
     std::string getInstrumentNamesInfo();
+    std::shared_ptr<ChannelScopeSharedState> getChannelScopeSharedState() const override { return channelScopeState; }
     std::vector<std::string> getToggleChannelNames() override;
     std::vector<uint8_t> getToggleChannelAvailability() override;
     void setToggleChannelMuted(int channelIndex, bool enabled) override;
@@ -79,12 +82,15 @@ private:
     double playbackPositionSeconds = 0.0;
     int songLengthRows = 0;
     std::vector<int16_t> pcmScratch;
+    std::shared_ptr<ChannelScopeSharedState> channelScopeState;
+    uint64_t channelScopeSourceSerial = 0;
 
     void closeInternalLocked();
     void applyRepeatModeLocked();
     void updateSongInfoLocked();
     void syncToggleChannelsLocked();
     void applyToggleMutesLocked();
+    void captureChannelScopeSnapshotLocked();
     int resolveRowForTimeMsLocked(int targetMs) const;
     static int normalizeRepeatMode(int mode);
 };

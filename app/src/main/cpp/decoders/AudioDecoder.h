@@ -2,8 +2,11 @@
 #define SILICONPLAYER_AUDIODECODER_H
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
+
+struct ChannelScopeSharedState;
 
 class AudioDecoder {
 public:
@@ -71,6 +74,7 @@ public:
     // Configuration
     virtual void setOption(const char* /*name*/, const char* /*value*/) {}
     virtual int getOptionApplyPolicy(const char* /*name*/) const { return OPTION_APPLY_LIVE; }
+    virtual std::shared_ptr<ChannelScopeSharedState> getChannelScopeSharedState() const { return {}; }
     // Flat per-channel state payload for channel-scope text overlays.
     // Stride/field semantics are defined on the app side.
     virtual std::vector<int32_t> getChannelScopeTextState(int /*maxChannels*/) { return {}; }

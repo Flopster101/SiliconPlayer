@@ -109,10 +109,17 @@ internal fun isVisualizationModeSupported(
     coreNameForUi: String?
 ): Boolean {
     return when (mode) {
-        VisualizationMode.ChannelScope ->
-            pluginNameForCoreName(coreNameForUi) == DecoderNames.LIB_OPEN_MPT
+        VisualizationMode.ChannelScope -> supportsChannelScopeVisualization(coreNameForUi)
 
         else -> true
+    }
+}
+
+internal fun supportsChannelScopeVisualization(coreNameForUi: String?): Boolean {
+    return when (pluginNameForCoreName(coreNameForUi)) {
+        DecoderNames.LIB_OPEN_MPT,
+        DecoderNames.KLYSTRACK -> true
+        else -> false
     }
 }
 

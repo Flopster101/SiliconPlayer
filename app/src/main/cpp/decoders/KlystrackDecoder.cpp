@@ -12,6 +12,10 @@ extern "C" {
 __attribute__((weak))
 #endif
 void KSND_SetChannelMute(KPlayer* player, int channel, int muted);
+#if defined(__GNUC__)
+__attribute__((weak))
+#endif
+int KSND_GetChannelScopeSamples(KPlayer* player, float* scope, int samples_per_channel, int n_channels);
 }
 
 namespace {
@@ -34,7 +38,7 @@ int parseIntOptionString(const char* value, int fallback) {
 }
 }
 
-KlystrackDecoder::KlystrackDecoder() = default;
+KlystrackDecoder::KlystrackDecoder() : channelScopeState(std::make_shared<ChannelScopeSharedState>()) {}
 
 KlystrackDecoder::~KlystrackDecoder() {
     close();
@@ -67,6 +71,10 @@ bool KlystrackDecoder::open(const char* path) {
     durationSeconds = 0.0;
     durationReliable = false;
     songLengthRows = 0;
+    channelScopeSourceSerial = 0;
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
 
     const int openRateHz = clampSampleRate(requestedSampleRateHz);
     player = KSND_CreatePlayerUnregistered(openRateHz);
@@ -128,6 +136,10 @@ void KlystrackDecoder::closeInternalLocked() {
     sampleRateHz = 44100;
     channels = 2;
     pcmScratch.clear();
+    channelScopeSourceSerial = 0;
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
 }
 
 void KlystrackDecoder::close() {
@@ -208,6 +220,47 @@ void KlystrackDecoder::applyRepeatModeLocked() {
     KSND_SetLooping(player, mode == 2 ? 0 : 1);
 }
 
+void KlystrackDecoder::captureChannelScopeSnapshotLocked() {
+    if (!player || !channelScopeState || KSND_GetChannelScopeSamples == nullptr) {
+        return;
+    }
+    const int totalChannels = std::clamp(trackCount, 0, 64);
+    if (totalChannels <= 0) {
+        channelScopeState->clear();
+        return;
+    }
+
+    std::vector<float> raw(static_cast<size_t>(totalChannels) * ChannelScopeSharedState::kMaxSamples, 0.0f);
+    const int capturedChannels = std::max(
+            0,
+            KSND_GetChannelScopeSamples(
+                    player,
+                    raw.data(),
+                    ChannelScopeSharedState::kMaxSamples,
+                    totalChannels
+            )
+    );
+    if (capturedChannels <= 0) {
+        return;
+    }
+    raw.resize(static_cast<size_t>(capturedChannels) * ChannelScopeSharedState::kMaxSamples);
+
+    int rawVu[64] = { 0 };
+    KSND_GetVUMeters(player, rawVu, capturedChannels);
+    std::vector<float> vu(static_cast<size_t>(capturedChannels), 0.0f);
+    for (int i = 0; i < capturedChannels; ++i) {
+        vu[static_cast<size_t>(i)] = std::clamp(rawVu[i] / 128.0f, 0.0f, 1.0f);
+    }
+
+    {
+        std::lock_guard<std::mutex> scopeLock(channelScopeState->mutex);
+        channelScopeState->snapshotRaw = std::move(raw);
+        channelScopeState->snapshotVu = std::move(vu);
+        channelScopeState->snapshotChannels = capturedChannels;
+        channelScopeState->snapshotSerial = ++channelScopeSourceSerial;
+    }
+}
+
 int KlystrackDecoder::read(float* buffer, int numFrames) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (!player || !song || !buffer || numFrames <= 0) {
@@ -236,6 +289,7 @@ int KlystrackDecoder::read(float* buffer, int numFrames) {
         } else {
             playbackPositionSeconds += static_cast<double>(framesRead) / static_cast<double>(sampleRateHz);
         }
+        captureChannelScopeSnapshotLocked();
     }
 
     return framesRead;
@@ -293,6 +347,10 @@ void KlystrackDecoder::seek(double seconds) {
     KSND_PlaySong(player, song, targetRow);
     applyRepeatModeLocked();
     applyToggleMutesLocked();
+    channelScopeSourceSerial = 0;
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
 
     const int resolvedMs = KSND_GetPlayTime(song, targetRow);
     playbackPositionSeconds = resolvedMs >= 0

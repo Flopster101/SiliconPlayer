@@ -80,6 +80,7 @@ import com.flopster101.siliconplayer.VisualizationOscFpsMode
 import com.flopster101.siliconplayer.VisualizationRenderBackend
 import com.flopster101.siliconplayer.VisualizationVuAnchor
 import com.flopster101.siliconplayer.pluginNameForCoreName
+import com.flopster101.siliconplayer.supportsChannelScopeVisualization
 import com.flopster101.siliconplayer.visualizationRenderBackendForMode
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
 import com.flopster101.siliconplayer.ui.visualization.channel.ChannelScopeChannelTextState
@@ -763,7 +764,7 @@ private fun readVisualizationSnapshot(
             )
         }
         VisualizationMode.ChannelScope -> {
-            if (pluginNameForCoreName(decoderName) != DecoderNames.LIB_OPEN_MPT) {
+            if (!supportsChannelScopeVisualization(decoderName)) {
                 VisualizationSnapshot()
             } else {
                 val scopeSamples = computeChannelScopeSampleCount(

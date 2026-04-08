@@ -269,9 +269,7 @@ std::vector<float> AudioEngine::getChannelScopeSamples(int samplesPerChannel) {
     {
         std::lock_guard<std::mutex> lock(decoderMutex);
         if (!decoder) return {};
-        auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
-        if (!openMptDecoder) return {};
-        state = openMptDecoder->getChannelScopeSharedState();
+        state = decoder->getChannelScopeSharedState();
     }
     if (!state) return {};
     int presentationDelayFrames = renderQueueFrames();
@@ -284,8 +282,7 @@ std::vector<float> AudioEngine::getChannelScopeSamples(int samplesPerChannel) {
 std::vector<int32_t> AudioEngine::getChannelScopeTextState(int maxChannels) {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return {};
-    auto* openMptDecoder = dynamic_cast<LibOpenMPTDecoder*>(decoder.get());
-    return openMptDecoder ? openMptDecoder->getChannelScopeTextState(maxChannels) : std::vector<int32_t>{};
+    return decoder->getChannelScopeTextState(maxChannels);
 }
 
 std::vector<std::string> AudioEngine::getDecoderToggleChannelNames() {

@@ -65,6 +65,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.ArtworkSwipePreviewState
 import com.flopster101.siliconplayer.AppDefaults
+import com.flopster101.siliconplayer.ChannelScopeVisibleElementId
 import com.flopster101.siliconplayer.DecoderNames
 import com.flopster101.siliconplayer.NativeBridge
 import com.flopster101.siliconplayer.VisualizationChannelScopeLayout
@@ -79,7 +80,9 @@ import com.flopster101.siliconplayer.VisualizationOscColorMode
 import com.flopster101.siliconplayer.VisualizationOscFpsMode
 import com.flopster101.siliconplayer.VisualizationRenderBackend
 import com.flopster101.siliconplayer.VisualizationVuAnchor
+import com.flopster101.siliconplayer.isChannelScopeVisibleElementEnabled
 import com.flopster101.siliconplayer.pluginNameForCoreName
+import com.flopster101.siliconplayer.readChannelScopeVisibleElementSelection
 import com.flopster101.siliconplayer.supportsChannelScopeVisualization
 import com.flopster101.siliconplayer.visualizationRenderBackendForMode
 import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOverlay
@@ -954,11 +957,13 @@ private fun parseChannelScopeTextStates(
             channelIndex = flat.getOrElse(base + 0) { channel },
             note = flat.getOrElse(base + 1) { -1 },
             volume = flat.getOrElse(base + 2) { 0 },
-            effectLetterAscii = flat.getOrElse(base + 3) { 0 },
-            effectParam = flat.getOrElse(base + 4) { -1 },
-            instrumentIndex = flat.getOrElse(base + 5) { -1 },
-            sampleIndex = flat.getOrElse(base + 6) { -1 },
-            flags = flat.getOrElse(base + 7) { 0 }
+            effectPrimaryLetterAscii = flat.getOrElse(base + 3) { 0 },
+            effectPrimaryParam = flat.getOrElse(base + 4) { -1 },
+            effectSecondaryLetterAscii = flat.getOrElse(base + 5) { 0 },
+            effectSecondaryParam = flat.getOrElse(base + 6) { -1 },
+            instrumentIndex = flat.getOrElse(base + 7) { -1 },
+            sampleIndex = flat.getOrElse(base + 8) { -1 },
+            flags = flat.getOrElse(base + 9) { 0 }
         )
     }
 }
@@ -1335,10 +1340,7 @@ internal data class ChannelScopePrefs(
     val textNoteFormat: VisualizationNoteNameFormat,
     val textShowChannel: Boolean,
     val textShowNote: Boolean,
-    val textShowVolume: Boolean,
-    val textShowEffect: Boolean,
-    val textShowInstrument: Boolean,
-    val textShowSample: Boolean,
+    val textVisibleElementSelection: Set<String>,
     val textVuEnabled: Boolean,
     val textVuAnchor: VisualizationVuAnchor,
     val textVuColorMode: VisualizationChannelScopeTextColorMode,
@@ -1379,10 +1381,6 @@ internal data class ChannelScopePrefs(
         private const val KEY_TEXT_NOTE_FORMAT = "visualization_channel_scope_text_note_format"
         private const val KEY_TEXT_SHOW_CHANNEL = "visualization_channel_scope_text_show_channel"
         private const val KEY_TEXT_SHOW_NOTE = "visualization_channel_scope_text_show_note"
-        private const val KEY_TEXT_SHOW_VOLUME = "visualization_channel_scope_text_show_volume"
-        private const val KEY_TEXT_SHOW_EFFECT = "visualization_channel_scope_text_show_effect"
-        private const val KEY_TEXT_SHOW_INSTRUMENT = "visualization_channel_scope_text_show_instrument"
-        private const val KEY_TEXT_SHOW_SAMPLE = "visualization_channel_scope_text_show_sample"
         private const val KEY_TEXT_VU_ENABLED = "visualization_channel_scope_text_vu_enabled"
         private const val KEY_TEXT_VU_ANCHOR = "visualization_channel_scope_text_vu_anchor"
         private const val KEY_TEXT_VU_COLOR_MODE = "visualization_channel_scope_text_vu_color_mode"
@@ -1579,22 +1577,7 @@ internal data class ChannelScopePrefs(
                     KEY_TEXT_SHOW_NOTE,
                     AppDefaults.Visualization.ChannelScope.textShowNote
                 ),
-                textShowVolume = sharedPrefs.getBoolean(
-                    KEY_TEXT_SHOW_VOLUME,
-                    AppDefaults.Visualization.ChannelScope.textShowVolume
-                ),
-                textShowEffect = sharedPrefs.getBoolean(
-                    KEY_TEXT_SHOW_EFFECT,
-                    AppDefaults.Visualization.ChannelScope.textShowEffect
-                ),
-                textShowInstrument = sharedPrefs.getBoolean(
-                    KEY_TEXT_SHOW_INSTRUMENT,
-                    AppDefaults.Visualization.ChannelScope.textShowInstrument
-                ),
-                textShowSample = sharedPrefs.getBoolean(
-                    KEY_TEXT_SHOW_SAMPLE,
-                    AppDefaults.Visualization.ChannelScope.textShowSample
-                ),
+                textVisibleElementSelection = readChannelScopeVisibleElementSelection(sharedPrefs),
                 textVuEnabled = sharedPrefs.getBoolean(
                     KEY_TEXT_VU_ENABLED,
                     AppDefaults.Visualization.ChannelScope.textVuEnabled
@@ -1675,7 +1658,8 @@ private data class ChannelScopeVisualState(
     val textShowChannel: Boolean,
     val textShowNote: Boolean,
     val textShowVolume: Boolean,
-    val textShowEffect: Boolean,
+    val textShowEffectPrimary: Boolean,
+    val textShowEffectSecondary: Boolean,
     val textShowInstrument: Boolean,
     val textShowSample: Boolean,
     val textVuEnabled: Boolean,
@@ -1848,6 +1832,11 @@ internal fun AlbumArtPlaceholder(
             DecoderNames.KLYSTRACK -> {
                 visChannelScopeInstrumentNamesByIndex =
                     parseIndexedNames(NativeBridge.getKlystrackInstrumentNames())
+                visChannelScopeSampleNamesByIndex = emptyMap()
+            }
+            DecoderNames.HIVELY_TRACKER -> {
+                visChannelScopeInstrumentNamesByIndex =
+                    parseIndexedNames(NativeBridge.getHivelyInstrumentNames())
                 visChannelScopeSampleNamesByIndex = emptyMap()
             }
             else -> {
@@ -2135,10 +2124,31 @@ internal fun AlbumArtPlaceholder(
         textNoteFormat = channelScopePrefs.textNoteFormat,
         textShowChannel = channelScopePrefs.textShowChannel,
         textShowNote = channelScopePrefs.textShowNote,
-        textShowVolume = channelScopePrefs.textShowVolume,
-        textShowEffect = channelScopePrefs.textShowEffect,
-        textShowInstrument = channelScopePrefs.textShowInstrument,
-        textShowSample = channelScopePrefs.textShowSample,
+        textShowVolume = isChannelScopeVisibleElementEnabled(
+            selectedStorageKeys = channelScopePrefs.textVisibleElementSelection,
+            decoderName = decoderName,
+            elementId = ChannelScopeVisibleElementId.Volume
+        ),
+        textShowEffectPrimary = isChannelScopeVisibleElementEnabled(
+            selectedStorageKeys = channelScopePrefs.textVisibleElementSelection,
+            decoderName = decoderName,
+            elementId = ChannelScopeVisibleElementId.EffectPrimary
+        ),
+        textShowEffectSecondary = isChannelScopeVisibleElementEnabled(
+            selectedStorageKeys = channelScopePrefs.textVisibleElementSelection,
+            decoderName = decoderName,
+            elementId = ChannelScopeVisibleElementId.EffectSecondary
+        ),
+        textShowInstrument = isChannelScopeVisibleElementEnabled(
+            selectedStorageKeys = channelScopePrefs.textVisibleElementSelection,
+            decoderName = decoderName,
+            elementId = ChannelScopeVisibleElementId.Instrument
+        ),
+        textShowSample = isChannelScopeVisibleElementEnabled(
+            selectedStorageKeys = channelScopePrefs.textVisibleElementSelection,
+            decoderName = decoderName,
+            elementId = ChannelScopeVisibleElementId.Sample
+        ),
         textVuEnabled = channelScopePrefs.textVuEnabled,
         textVuAnchor = channelScopePrefs.textVuAnchor,
         textVuColorMode = channelScopePrefs.textVuColorMode,
@@ -2405,7 +2415,8 @@ internal fun AlbumArtPlaceholder(
                     channelScopeTextShowChannel = channelScopeState.textShowChannel,
                     channelScopeTextShowNote = channelScopeState.textShowNote,
                     channelScopeTextShowVolume = channelScopeState.textShowVolume,
-                    channelScopeTextShowEffect = channelScopeState.textShowEffect,
+                    channelScopeTextShowEffectPrimary = channelScopeState.textShowEffectPrimary,
+                    channelScopeTextShowEffectSecondary = channelScopeState.textShowEffectSecondary,
                     channelScopeTextShowInstrument = channelScopeState.textShowInstrument,
                     channelScopeTextShowSample = channelScopeState.textShowSample,
                     channelScopeTextVuEnabled = channelScopeState.textVuEnabled,

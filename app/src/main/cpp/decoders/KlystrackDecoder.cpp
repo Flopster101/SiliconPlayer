@@ -23,7 +23,7 @@ int KSND_GetChannelPatternState(KPlayer* player, int* state, int stride, int n_c
 }
 
 namespace {
-constexpr int kChannelScopeTextStride = 8;
+constexpr int kChannelScopeTextStride = 10;
 constexpr int kKlystrackPatternStateStride = 7;
 constexpr int kChannelScopeTextFlagActive = 1 << 0;
 constexpr int kKlystrackEffectCodeSentinel = 0x100;
@@ -346,9 +346,11 @@ std::vector<int32_t> KlystrackDecoder::getChannelScopeTextState(int maxChannels)
         flat[base + 2] = volume;
         flat[base + 3] = rawEffect >= 0 ? (kKlystrackEffectCodeSentinel | ((rawEffect >> 8) & 0xFF)) : 0;
         flat[base + 4] = rawEffect >= 0 ? (rawEffect & 0xFF) : -1;
-        flat[base + 5] = instrument;
+        flat[base + 5] = 0;
         flat[base + 6] = -1;
-        flat[base + 7] = flags;
+        flat[base + 7] = instrument;
+        flat[base + 8] = -1;
+        flat[base + 9] = flags;
     }
     return flat;
 }

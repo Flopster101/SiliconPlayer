@@ -4,7 +4,7 @@ import android.content.Context
 import com.flopster101.siliconplayer.data.resolveArchiveMountedCompanionPath
 
 object NativeBridge {
-    const val CHANNEL_SCOPE_TEXT_STATE_STRIDE = 8
+    const val CHANNEL_SCOPE_TEXT_STATE_STRIDE = 10
     const val CHANNEL_SCOPE_TEXT_FLAG_ACTIVE = 1 shl 0
     const val CHANNEL_SCOPE_TEXT_FLAG_AMIGA_LEFT = 1 shl 1
     const val CHANNEL_SCOPE_TEXT_FLAG_AMIGA_RIGHT = 1 shl 2

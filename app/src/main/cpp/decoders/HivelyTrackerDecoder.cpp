@@ -11,9 +11,24 @@ extern "C" {
 #include <hivelytracker/hvl_replay.h>
 void hvl_play_irq(struct hvl_tune* ht);
 void hvl_mixchunk(struct hvl_tune* ht, uint32 samples, int8* buf1, int8* buf2, int32 bufmod);
+#if defined(__GNUC__)
+__attribute__((weak))
+#endif
+int hvl_GetChannelScopeSamples(const struct hvl_tune* ht, float* scope, int samples_per_channel, int n_channels);
+#if defined(__GNUC__)
+__attribute__((weak))
+#endif
+int hvl_GetChannelPatternState(const struct hvl_tune* ht, int* state, int stride, int n_channels);
 }
 
 namespace {
+constexpr int kChannelScopeTextStride = 10;
+constexpr int kHivelyPatternStateStride = 8;
+constexpr int kChannelScopeTextFlagActive = 1 << 0;
+constexpr int kChannelScopeTextFlagAmigaLeft = 1 << 1;
+constexpr int kChannelScopeTextFlagAmigaRight = 1 << 2;
+constexpr int kHivelyEffectCodeSentinel = 0x100;
+
 std::string copyFixedString(const char* value, std::size_t maxLen) {
     if (!value || maxLen == 0) {
         return {};
@@ -83,9 +98,15 @@ std::string lowercase(std::string value) {
     });
     return value;
 }
+
+bool isAmigaLeftChannel(int channel) {
+    const int mod4 = channel & 3;
+    return mod4 == 0 || mod4 == 3;
+}
 }
 
-HivelyTrackerDecoder::HivelyTrackerDecoder() = default;
+HivelyTrackerDecoder::HivelyTrackerDecoder()
+    : channelScopeState(std::make_shared<ChannelScopeSharedState>()) {}
 
 HivelyTrackerDecoder::~HivelyTrackerDecoder() {
     close();
@@ -154,6 +175,10 @@ bool HivelyTrackerDecoder::open(const char* path) {
     pendingReadOffset = 0;
     playbackPositionSeconds = 0.0;
     decodeInterleavedScratch.clear();
+    channelScopeSourceSerial = 0;
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
     subtuneDurationSeconds.assign(static_cast<size_t>(subtuneCount), 0.0);
     subtuneDurationKnown.assign(static_cast<size_t>(subtuneCount), 0u);
     subtuneDurationReliable.assign(static_cast<size_t>(subtuneCount), 0u);
@@ -192,6 +217,10 @@ void HivelyTrackerDecoder::closeInternalLocked() {
     subtuneDurationReliable.clear();
     toggleChannelNames.clear();
     toggleChannelMuted.clear();
+    channelScopeSourceSerial = 0;
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
 }
 
 void HivelyTrackerDecoder::close() {
@@ -247,7 +276,61 @@ bool HivelyTrackerDecoder::decodeFrameIntoPendingLocked() {
         !durationReliable.load()) {
         stopAfterPendingDrain = true;
     }
+    captureChannelScopeSnapshotLocked();
     return true;
+}
+
+void HivelyTrackerDecoder::captureChannelScopeSnapshotLocked() {
+    if (!tune || !channelScopeState || hvl_GetChannelScopeSamples == nullptr) {
+        return;
+    }
+    const int totalChannels = std::clamp(static_cast<int>(tune->ht_Channels), 0, MAX_CHANNELS);
+    if (totalChannels <= 0) {
+        channelScopeState->clear();
+        return;
+    }
+
+    std::vector<float> raw(
+            static_cast<size_t>(totalChannels) * ChannelScopeSharedState::kMaxSamples,
+            0.0f
+    );
+    const int capturedChannels = std::max(
+            0,
+            hvl_GetChannelScopeSamples(
+                    tune,
+                    raw.data(),
+                    ChannelScopeSharedState::kMaxSamples,
+                    totalChannels
+            )
+    );
+    if (capturedChannels <= 0) {
+        return;
+    }
+    raw.resize(static_cast<size_t>(capturedChannels) * ChannelScopeSharedState::kMaxSamples);
+
+    std::vector<float> vu(static_cast<size_t>(capturedChannels), 0.0f);
+    const int trailingSamples = std::clamp(sampleRateHz / 50, 64, 1024);
+    for (int channel = 0; channel < capturedChannels; ++channel) {
+        const size_t channelOffset =
+                static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples;
+        const int start = std::max(0, ChannelScopeSharedState::kMaxSamples - trailingSamples);
+        float peak = 0.0f;
+        for (int sample = start; sample < ChannelScopeSharedState::kMaxSamples; ++sample) {
+            peak = std::max(
+                    peak,
+                    std::abs(raw[channelOffset + static_cast<size_t>(sample)])
+            );
+        }
+        vu[static_cast<size_t>(channel)] = std::clamp(peak, 0.0f, 1.0f);
+    }
+
+    {
+        std::lock_guard<std::mutex> scopeLock(channelScopeState->mutex);
+        channelScopeState->snapshotRaw = std::move(raw);
+        channelScopeState->snapshotVu = std::move(vu);
+        channelScopeState->snapshotChannels = capturedChannels;
+        channelScopeState->snapshotSerial = ++channelScopeSourceSerial;
+    }
 }
 
 bool HivelyTrackerDecoder::resetToSubtuneStartLocked() {
@@ -261,6 +344,10 @@ bool HivelyTrackerDecoder::resetToSubtuneStartLocked() {
     pendingInterleaved.clear();
     pendingReadOffset = 0;
     playbackPositionSeconds = 0.0;
+    channelScopeSourceSerial = 0;
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
     return true;
 }
 
@@ -465,6 +552,7 @@ void HivelyTrackerDecoder::seek(double seconds) {
             pendingReadOffset = 0;
             playbackPositionSeconds =
                     static_cast<double>(decodedFrames) / static_cast<double>(sampleRateHz);
+            captureChannelScopeSnapshotLocked();
             return;
         }
     }
@@ -488,6 +576,7 @@ void HivelyTrackerDecoder::seek(double seconds) {
     }
 
     playbackPositionSeconds = static_cast<double>(decodedFrames) / static_cast<double>(sampleRateHz);
+    captureChannelScopeSnapshotLocked();
 }
 
 double HivelyTrackerDecoder::getDuration() {
@@ -541,6 +630,10 @@ bool HivelyTrackerDecoder::selectSubtune(int index) {
     pendingInterleaved.clear();
     pendingReadOffset = 0;
     playbackPositionSeconds = 0.0;
+    channelScopeSourceSerial = 0;
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
     return true;
 }
 
@@ -667,6 +760,73 @@ std::string HivelyTrackerDecoder::getInstrumentNamesInfo() {
         names.append(name);
     }
     return names;
+}
+
+std::vector<int32_t> HivelyTrackerDecoder::getChannelScopeTextState(int maxChannels) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!tune || hvl_GetChannelPatternState == nullptr) {
+        return {};
+    }
+
+    const int totalChannels = std::clamp(static_cast<int>(tune->ht_Channels), 0, MAX_CHANNELS);
+    if (totalChannels <= 0) {
+        return {};
+    }
+
+    const int requestedChannels = std::clamp(maxChannels, 1, MAX_CHANNELS);
+    const int channels = std::min(totalChannels, requestedChannels);
+    std::vector<int> nativeState(static_cast<size_t>(channels * kHivelyPatternStateStride), -1);
+    const int writtenChannels = std::max(
+            0,
+            hvl_GetChannelPatternState(
+                    tune,
+                    nativeState.data(),
+                    kHivelyPatternStateStride,
+                    channels
+            )
+    );
+    if (writtenChannels <= 0) {
+        return {};
+    }
+
+    std::vector<int32_t> flat(static_cast<size_t>(writtenChannels * kChannelScopeTextStride), -1);
+    for (int channel = 0; channel < writtenChannels; ++channel) {
+        const size_t nativeBase = static_cast<size_t>(channel * kHivelyPatternStateStride);
+        const size_t base = static_cast<size_t>(channel * kChannelScopeTextStride);
+        const int note = nativeState[nativeBase + 0];
+        const int volume = std::clamp(nativeState[nativeBase + 1], 0, 255);
+        const int effectPrimary = nativeState[nativeBase + 2];
+        const int effectPrimaryParam = nativeState[nativeBase + 3];
+        const int effectSecondary = nativeState[nativeBase + 4];
+        const int effectSecondaryParam = nativeState[nativeBase + 5];
+        const int instrument = nativeState[nativeBase + 6];
+        int flags = 0;
+        if (nativeState[nativeBase + 7] != 0 ||
+            note > 0 ||
+            volume > 0 ||
+            instrument > 0 ||
+            effectPrimary >= 0 ||
+            effectSecondary >= 0) {
+            flags |= kChannelScopeTextFlagActive;
+        }
+        if (isAmigaLeftChannel(channel)) {
+            flags |= kChannelScopeTextFlagAmigaLeft;
+        } else {
+            flags |= kChannelScopeTextFlagAmigaRight;
+        }
+
+        flat[base + 0] = channel;
+        flat[base + 1] = note;
+        flat[base + 2] = volume;
+        flat[base + 3] = effectPrimary >= 0 ? (kHivelyEffectCodeSentinel | (effectPrimary & 0xFF)) : 0;
+        flat[base + 4] = effectPrimary >= 0 ? effectPrimaryParam : -1;
+        flat[base + 5] = effectSecondary >= 0 ? (kHivelyEffectCodeSentinel | (effectSecondary & 0xFF)) : 0;
+        flat[base + 6] = effectSecondary >= 0 ? effectSecondaryParam : -1;
+        flat[base + 7] = instrument;
+        flat[base + 8] = -1;
+        flat[base + 9] = flags;
+    }
+    return flat;
 }
 
 std::vector<std::string> HivelyTrackerDecoder::getToggleChannelNames() {

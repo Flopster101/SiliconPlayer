@@ -2,10 +2,12 @@
 #define SILICONPLAYER_HIVELYTRACKERDECODER_H
 
 #include "AudioDecoder.h"
+#include "../ChannelScopeSharedState.h"
 
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -50,6 +52,8 @@ public:
     int getCurrentTempoInfo();
     int getMixGainPercentInfo();
     std::string getInstrumentNamesInfo();
+    std::shared_ptr<ChannelScopeSharedState> getChannelScopeSharedState() const override { return channelScopeState; }
+    std::vector<int32_t> getChannelScopeTextState(int maxChannels) override;
     std::vector<std::string> getToggleChannelNames() override;
     std::vector<uint8_t> getToggleChannelAvailability() override;
     void setToggleChannelMuted(int channelIndex, bool enabled) override;
@@ -102,6 +106,8 @@ private:
     std::vector<uint8_t> subtuneDurationReliable;
     std::vector<std::string> toggleChannelNames;
     std::vector<bool> toggleChannelMuted;
+    std::shared_ptr<ChannelScopeSharedState> channelScopeState;
+    uint64_t channelScopeSourceSerial = 0;
     bool stopAfterPendingDrain = false;
 
     void closeInternalLocked();
@@ -114,6 +120,7 @@ private:
     void applyMixGainLocked();
     void applyStereoPanningLocked();
     void applyToggleMutesLocked();
+    void captureChannelScopeSnapshotLocked();
 };
 
 #endif // SILICONPLAYER_HIVELYTRACKERDECODER_H

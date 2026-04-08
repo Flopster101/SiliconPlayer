@@ -191,6 +191,11 @@ internal object AppPreferenceKeys {
         val coreToken = sanitizeKeyToken(decoderName)
         return "audio_dsp_core_${coreToken}_$suffix"
     }
+    fun visualizationChannelScopeVisibleElementKey(coreId: String, elementId: String): String {
+        val coreToken = sanitizeKeyToken(coreId)
+        val elementToken = sanitizeKeyToken(elementId)
+        return "visualization_channel_scope_text_visible_${coreToken}_$elementToken"
+    }
     fun audioDspCoreBassEnabledKey(decoderName: String) = audioDspCoreKey(decoderName, "bass_enabled")
     fun audioDspCoreBassDepthKey(decoderName: String) = audioDspCoreKey(decoderName, "bass_depth")
     fun audioDspCoreBassRangeKey(decoderName: String) = audioDspCoreKey(decoderName, "bass_range")

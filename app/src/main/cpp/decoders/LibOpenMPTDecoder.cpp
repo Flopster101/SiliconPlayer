@@ -549,7 +549,7 @@ std::vector<int32_t> LibOpenMPTDecoder::getChannelScopeTextState(int maxChannels
     if constexpr (!HasChannelTextStateApi<openmpt::module>) {
         return {};
     }
-    constexpr int kStride = 8;
+    constexpr int kStride = 10;
     constexpr int kFlagActive = 1 << 0;
     constexpr int kFlagAmigaLeft = 1 << 1;
     constexpr int kFlagAmigaRight = 1 << 2;
@@ -592,9 +592,11 @@ std::vector<int32_t> LibOpenMPTDecoder::getChannelScopeTextState(int maxChannels
         flat[base + 2] = volume;
         flat[base + 3] = effectLetter;
         flat[base + 4] = effectParam;
-        flat[base + 5] = instrument;
-        flat[base + 6] = sample;
-        flat[base + 7] = flags;
+        flat[base + 5] = 0;
+        flat[base + 6] = -1;
+        flat[base + 7] = instrument;
+        flat[base + 8] = sample;
+        flat[base + 9] = flags;
     }
     return flat;
 }

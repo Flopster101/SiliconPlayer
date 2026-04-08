@@ -126,7 +126,8 @@ fun BasicVisualizationOverlay(
     channelScopeTextShowChannel: Boolean,
     channelScopeTextShowNote: Boolean,
     channelScopeTextShowVolume: Boolean,
-    channelScopeTextShowEffect: Boolean,
+    channelScopeTextShowEffectPrimary: Boolean,
+    channelScopeTextShowEffectSecondary: Boolean,
     channelScopeTextShowInstrument: Boolean,
     channelScopeTextShowSample: Boolean,
     channelScopeTextVuEnabled: Boolean,
@@ -410,7 +411,8 @@ fun BasicVisualizationOverlay(
                         showChannel = channelScopeTextEnabled && channelScopeTextShowChannel,
                         showNote = channelScopeTextEnabled && channelScopeTextShowNote,
                         showVolume = channelScopeTextEnabled && channelScopeTextShowVolume,
-                        showEffect = channelScopeTextEnabled && channelScopeTextShowEffect,
+                        showEffectPrimary = channelScopeTextEnabled && channelScopeTextShowEffectPrimary,
+                        showEffectSecondary = channelScopeTextEnabled && channelScopeTextShowEffectSecondary,
                         showInstrument = channelScopeTextEnabled && channelScopeTextShowInstrument,
                         showSample = channelScopeTextEnabled && channelScopeTextShowSample,
                         vuEnabled = channelScopeTextVuEnabled,
@@ -508,7 +510,8 @@ private fun ChannelScopeTextOverlay(
     showChannel: Boolean,
     showNote: Boolean,
     showVolume: Boolean,
-    showEffect: Boolean,
+    showEffectPrimary: Boolean,
+    showEffectSecondary: Boolean,
     showInstrument: Boolean,
     showSample: Boolean,
     vuEnabled: Boolean,
@@ -541,7 +544,7 @@ private fun ChannelScopeTextOverlay(
             showChannel = showChannel,
             showNote = showNote,
             showVolume = showVolume,
-            showEffect = showEffect,
+            effectSlotCount = listOf(showEffectPrimary, showEffectSecondary).count { it },
             showInstrument = showInstrument,
             showSample = showSample
         )
@@ -551,7 +554,7 @@ private fun ChannelScopeTextOverlay(
             showChannel = showChannel,
             showNote = showNote,
             showVolume = showVolume,
-            showEffect = showEffect,
+            effectSlotCount = listOf(showEffectPrimary, showEffectSecondary).count { it },
             showInstrument = showInstrument,
             showSample = showSample
         ) <= cellWidth.value
@@ -569,7 +572,8 @@ private fun ChannelScopeTextOverlay(
                         showChannel = showChannel,
                         showNote = showNote,
                         showVolume = showVolume,
-                        showEffect = showEffect,
+                        showEffectPrimary = showEffectPrimary,
+                        showEffectSecondary = showEffectSecondary,
                         showInstrument = showInstrument,
                         showSample = showSample,
                         sideCounts = sideCounts
@@ -579,15 +583,15 @@ private fun ChannelScopeTextOverlay(
                         channel = null,
                         note = null,
                         volume = null,
-                        effect = null,
+                        effects = emptyList(),
                         instrumentOrSample = null
                     )
                 }
                 val hasContent =
-                    content.channel != null ||
+                        content.channel != null ||
                         content.note != null ||
                         content.volume != null ||
-                        content.effect != null ||
+                        content.effects.isNotEmpty() ||
                         content.instrumentOrSample != null
                 Box(
                     modifier = Modifier
@@ -689,11 +693,11 @@ private fun ChannelScopeTextOverlay(
                                 }
                                 hasPrevious = true
                             }
-                            if (content.effect != null) {
+                            content.effects.forEach { effect ->
                                 if (hasPrevious) Text("•", color = textPalette.separator, style = textStyle)
                                 Box(modifier = Modifier.width(effectSlot), contentAlignment = Alignment.Center) {
                                     Text(
-                                        text = content.effect,
+                                        text = effect,
                                         color = textPalette.effect,
                                         style = textStyle,
                                         textAlign = TextAlign.Center,
@@ -760,7 +764,7 @@ private data class ChannelScopeTextFields(
     val channel: String?,
     val note: String?,
     val volume: String?,
-    val effect: String?,
+    val effects: List<String>,
     val instrumentOrSample: String?
 )
 
@@ -773,16 +777,30 @@ private fun buildChannelScopeTextFields(
     showChannel: Boolean,
     showNote: Boolean,
     showVolume: Boolean,
-    showEffect: Boolean,
+    showEffectPrimary: Boolean,
+    showEffectSecondary: Boolean,
     showInstrument: Boolean,
     showSample: Boolean,
     sideCounts: IntArray
 ): ChannelScopeTextFields {
+    val effects = ArrayList<String>(2)
+    if (showEffectPrimary) {
+        effects += formatEffect(
+            effectLetterAscii = state?.effectPrimaryLetterAscii ?: 0,
+            effectParam = state?.effectPrimaryParam ?: -1
+        )
+    }
+    if (showEffectSecondary) {
+        effects += formatEffect(
+            effectLetterAscii = state?.effectSecondaryLetterAscii ?: 0,
+            effectParam = state?.effectSecondaryParam ?: -1
+        )
+    }
     return ChannelScopeTextFields(
         channel = if (showChannel) resolveChannelLabel(channel, state, sideCounts) else null,
         note = if (showNote) (formatNoteName(state?.note ?: -1, noteFormat) ?: "--") else null,
         volume = if (showVolume) formatVolume(state?.volume ?: 0) else null,
-        effect = if (showEffect) formatEffect(state) else null,
+        effects = effects,
         instrumentOrSample = if (showInstrument || showSample) {
             formatInstrumentOrSample(
                 state = state,
@@ -832,16 +850,15 @@ private fun formatVolume(volume: Int): String {
     return "V" + volume.coerceIn(0, 999).toString().padStart(3, '0')
 }
 
-private fun formatEffect(state: ChannelScopeChannelTextState?): String {
-    if (state == null) return "---"
-    if (state.effectLetterAscii <= 0 || state.effectParam < 0) return "---"
-    if (state.effectLetterAscii >= 0x100) {
-        val effectCodeHex = (state.effectLetterAscii and 0xFF).toString(16).uppercase().padStart(2, '0')
-        val paramHex = state.effectParam.coerceIn(0, 255).toString(16).uppercase().padStart(2, '0')
+private fun formatEffect(effectLetterAscii: Int, effectParam: Int): String {
+    if (effectLetterAscii <= 0 || effectParam < 0) return "---"
+    if (effectLetterAscii >= 0x100) {
+        val effectCodeHex = (effectLetterAscii and 0xFF).toString(16).uppercase().padStart(2, '0')
+        val paramHex = effectParam.coerceIn(0, 255).toString(16).uppercase().padStart(2, '0')
         return effectCodeHex + paramHex
     }
-    val effectChar = state.effectLetterAscii.toChar()
-    val paramHex = state.effectParam.coerceIn(0, 255).toString(16).uppercase().padStart(2, '0')
+    val effectChar = effectLetterAscii.toChar()
+    val paramHex = effectParam.coerceIn(0, 255).toString(16).uppercase().padStart(2, '0')
     return "$effectChar$paramHex"
 }
 
@@ -881,7 +898,7 @@ private fun computeAutoChannelScopeTextSizeSp(
     showChannel: Boolean,
     showNote: Boolean,
     showVolume: Boolean,
-    showEffect: Boolean,
+    effectSlotCount: Int,
     showInstrument: Boolean,
     showSample: Boolean
 ): Int {
@@ -895,7 +912,7 @@ private fun computeAutoChannelScopeTextSizeSp(
             showChannel = showChannel,
             showNote = showNote,
             showVolume = showVolume,
-            showEffect = showEffect,
+            effectSlotCount = effectSlotCount,
             showInstrument = showInstrument,
             showSample = showSample
         ) <= availableWidth
@@ -911,7 +928,7 @@ private fun computeAutoChannelScopeTextSizeSp(
                 showChannel = showChannel,
                 showNote = showNote,
                 showVolume = showVolume,
-                showEffect = showEffect,
+                effectSlotCount = effectSlotCount,
                 showInstrument = showInstrument,
                 showSample = showSample
             ) > availableWidth
@@ -927,7 +944,7 @@ private fun estimateChannelScopeTextWidthDp(
     showChannel: Boolean,
     showNote: Boolean,
     showVolume: Boolean,
-    showEffect: Boolean,
+    effectSlotCount: Int,
     showInstrument: Boolean,
     showSample: Boolean
 ): Float {
@@ -946,7 +963,7 @@ private fun estimateChannelScopeTextWidthDp(
         width += 30f * scale
         fieldCount++
     }
-    if (showEffect) {
+    repeat(effectSlotCount.coerceAtLeast(0)) {
         width += 20f * scale
         fieldCount++
     }

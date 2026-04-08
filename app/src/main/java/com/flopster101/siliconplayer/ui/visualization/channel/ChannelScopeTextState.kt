@@ -4,8 +4,10 @@ data class ChannelScopeChannelTextState(
     val channelIndex: Int,
     val note: Int,
     val volume: Int,
-    val effectLetterAscii: Int,
-    val effectParam: Int,
+    val effectPrimaryLetterAscii: Int,
+    val effectPrimaryParam: Int,
+    val effectSecondaryLetterAscii: Int,
+    val effectSecondaryParam: Int,
     val instrumentIndex: Int,
     val sampleIndex: Int,
     val flags: Int

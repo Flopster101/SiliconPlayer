@@ -667,6 +667,7 @@ internal fun resetVisualizationChannelScopeSettingsAction(
             AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_EFFECT,
             AppDefaults.Visualization.ChannelScope.textShowEffect
         )
+        .putChannelScopeVisibleElementSelection(defaultChannelScopeVisibleElementSelection())
         .remove(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT_SAMPLE)
         .putBoolean(
             AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT,

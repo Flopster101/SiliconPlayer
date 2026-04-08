@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import java.io.File
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -18,6 +19,7 @@ internal fun rememberRemoteNextTrackPreloadCanceller(
     isPlaying: Boolean,
     selectedFile: File?,
     currentPlaybackSourceId: String?,
+    currentPlaybackRequestUrl: String?,
     activeRepeatMode: RepeatMode,
     preloadNextCachedRemoteTrack: Boolean,
     playlistWrapNavigation: Boolean,
@@ -32,6 +34,7 @@ internal fun rememberRemoteNextTrackPreloadCanceller(
         isPlaying,
         selectedFile?.absolutePath,
         currentPlaybackSourceId,
+        currentPlaybackRequestUrl,
         activeRepeatMode,
         preloadNextCachedRemoteTrack,
         playlistWrapNavigation,
@@ -45,6 +48,9 @@ internal fun rememberRemoteNextTrackPreloadCanceller(
         val resolvedPlayableSourceIds = RemotePlayableSourceIdsHolder
             .resolvedCurrentOrLastForSource(activeSourceId)
         val currentTrackIsCachedRemote = isCachedRemoteSourceFile(selectedFile)
+        val currentTrackIsDirectSmbRemote =
+            !currentTrackIsCachedRemote &&
+                parseSmbSourceSpecFromInput(currentPlaybackRequestUrl ?: currentPlaybackSourceId.orEmpty()) != null
         val repeatModeCanAdvanceToNextTrack = when (activeRepeatMode) {
             RepeatMode.None,
             RepeatMode.Playlist -> true
@@ -54,7 +60,7 @@ internal fun rememberRemoteNextTrackPreloadCanceller(
             !isPlaying ||
             !preloadNextCachedRemoteTrack ||
             !repeatModeCanAdvanceToNextTrack ||
-            !currentTrackIsCachedRemote
+            (!currentTrackIsCachedRemote && !currentTrackIsDirectSmbRemote)
         ) {
             return@LaunchedEffect
         }
@@ -67,17 +73,26 @@ internal fun rememberRemoteNextTrackPreloadCanceller(
         ) ?: return@LaunchedEffect
         remotePreloadJob = appScope.launch {
             try {
-                RemotePreloadUiStateHolder.current = RemoteLoadUiState(
-                    sourceId = nextSourceId,
-                    phase = RemoteLoadPhase.Connecting,
-                    indeterminate = true
-                )
-                preloadRemoteSourceToCache(
-                    context = context,
-                    sourceId = nextSourceId,
-                    allowHttpCaching = urlOrPathForceCaching
-                ) { state ->
-                    RemotePreloadUiStateHolder.current = state
+                if (currentTrackIsCachedRemote) {
+                    RemotePreloadUiStateHolder.current = RemoteLoadUiState(
+                        sourceId = nextSourceId,
+                        phase = RemoteLoadPhase.Connecting,
+                        indeterminate = true
+                    )
+                    preloadRemoteSourceToCache(
+                        context = context,
+                        sourceId = nextSourceId,
+                        allowHttpCaching = urlOrPathForceCaching
+                    ) { state ->
+                        RemotePreloadUiStateHolder.current = state
+                    }
+                } else if (currentTrackIsDirectSmbRemote) {
+                    delay(NEXT_TRACK_WARM_PREFETCH_START_DELAY_MS)
+                    warmProgressiveSmbSourcePrefix(
+                        context = context,
+                        sourceId = nextSourceId,
+                        credentialHintRequestUrl = currentPlaybackRequestUrl
+                    )
                 }
             } finally {
                 RemotePreloadUiStateHolder.current = null

@@ -1,6 +1,7 @@
 package com.flopster101.siliconplayer
 
 import android.content.Context
+import android.os.SystemClock
 import java.io.File
 import java.io.RandomAccessFile
 import kotlinx.coroutines.CancellationException
@@ -9,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlin.math.min
@@ -28,6 +30,11 @@ internal interface ProgressiveRandomAccessTransport {
 
     fun close()
 }
+
+internal data class ProgressiveRandomAccessPrefetchConfig(
+    val maxBytesToPrefetch: Long? = null,
+    val rateLimitBytesPerSecond: Long? = null
+)
 
 private data class ProgressiveRandomAccessCacheFiles(
     val dataFile: File,
@@ -77,7 +84,8 @@ internal class ProgressiveRandomAccessCache(
     context: Context,
     private val transport: ProgressiveRandomAccessTransport,
     private val chunkSizeBytes: Int = DEFAULT_PROGRESSIVE_CACHE_CHUNK_SIZE_BYTES,
-    private val prefetchTransportFactory: (() -> ProgressiveRandomAccessTransport)? = null
+    private val prefetchTransportFactory: (() -> ProgressiveRandomAccessTransport)? = null,
+    private val prefetchConfig: ProgressiveRandomAccessPrefetchConfig = ProgressiveRandomAccessPrefetchConfig()
 ) {
     private val lock = Object()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -96,6 +104,9 @@ internal class ProgressiveRandomAccessCache(
 
     val sizeBytes: Long
         get() = transport.sizeBytes
+
+    val cachedPrefixBytes: Long
+        get() = synchronized(lock) { cachedPrefixBytesLocked() }
 
     init {
         val parent = files.dataFile.parentFile
@@ -145,7 +156,11 @@ internal class ProgressiveRandomAccessCache(
             sanitizePersistedChunkStateLocked()
         }
 
-        if (chunkCount > 0 && prefetchTransportFactory != null && hasUncachedChunksLocked()) {
+        if (
+            chunkCount > 0 &&
+            prefetchTransportFactory != null &&
+            hasRemainingPrefetchWorkLocked()
+        ) {
             startBackgroundPrefetch(prefetchTransportFactory)
         }
     }
@@ -236,11 +251,31 @@ internal class ProgressiveRandomAccessCache(
                 if (backgroundTransport.sizeBytes != transport.sizeBytes) {
                     return@launch
                 }
+                val prefetchTargetBytes = prefetchTargetBytes()
+                val rateLimitBytesPerSecond = prefetchConfig.rateLimitBytesPerSecond
+                    ?.coerceAtLeast(1L)
+                var backgroundBytesFetched = 0L
+                val startedAtMs = SystemClock.elapsedRealtime()
                 for (chunkIndex in 0 until chunkCount) {
                     ensureActive()
                     if (isClosed()) break
+                    val chunkEndOffset = currentChunkEndOffset(chunkIndex)
+                    if (chunkEndOffset > prefetchTargetBytes) {
+                        break
+                    }
                     try {
-                        ensureChunkCached(chunkIndex, backgroundTransport)
+                        val fetchedByThisCall = ensureChunkCached(chunkIndex, backgroundTransport)
+                        if (fetchedByThisCall && rateLimitBytesPerSecond != null) {
+                            backgroundBytesFetched += currentChunkSizeBytes(chunkIndex).toLong()
+                            val targetElapsedMs =
+                                (backgroundBytesFetched * 1000L) / rateLimitBytesPerSecond
+                            val actualElapsedMs =
+                                (SystemClock.elapsedRealtime() - startedAtMs).coerceAtLeast(0L)
+                            val delayMs = (targetElapsedMs - actualElapsedMs).coerceAtLeast(0L)
+                            if (delayMs > 0L) {
+                                delay(delayMs)
+                            }
+                        }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Throwable) {
@@ -268,8 +303,26 @@ internal class ProgressiveRandomAccessCache(
         return chunkIndex.toLong() * chunkSizeBytes.toLong() + currentChunkSizeBytes(chunkIndex)
     }
 
-    private fun hasUncachedChunksLocked(): Boolean {
-        return chunkStates.any { it == CHUNK_STATE_UNCACHED }
+    private fun cachedPrefixBytesLocked(): Long {
+        if (chunkCount <= 0) return 0L
+        var prefixBytes = 0L
+        for (chunkIndex in 0 until chunkCount) {
+            if (chunkStates[chunkIndex] != CHUNK_STATE_CACHED) break
+            prefixBytes = currentChunkEndOffset(chunkIndex)
+        }
+        return prefixBytes.coerceAtMost(transport.sizeBytes)
+    }
+
+    private fun prefetchTargetBytes(): Long {
+        val requested = prefetchConfig.maxBytesToPrefetch?.coerceAtLeast(0L)
+            ?: transport.sizeBytes
+        return requested.coerceAtMost(transport.sizeBytes)
+    }
+
+    private fun hasRemainingPrefetchWorkLocked(): Boolean {
+        val targetBytes = prefetchTargetBytes()
+        if (targetBytes <= 0L) return false
+        return cachedPrefixBytesLocked() < targetBytes
     }
 
     private fun isChunkPersistedLocked(chunkIndex: Int): Boolean {
@@ -289,7 +342,7 @@ internal class ProgressiveRandomAccessCache(
     private fun ensureChunkCached(
         chunkIndex: Int,
         activeTransport: ProgressiveRandomAccessTransport
-    ) {
+    ): Boolean {
         if (chunkIndex !in 0 until chunkCount) {
             throw IllegalArgumentException("Invalid progressive cache chunk index: $chunkIndex")
         }
@@ -298,7 +351,7 @@ internal class ProgressiveRandomAccessCache(
             synchronized(lock) {
                 check(!closed) { "Progressive cache is closed" }
                 when (chunkStates[chunkIndex]) {
-                    CHUNK_STATE_CACHED -> return
+                    CHUNK_STATE_CACHED -> return false
                     CHUNK_STATE_FETCHING -> {
                         lock.wait()
                         continue
@@ -315,7 +368,7 @@ internal class ProgressiveRandomAccessCache(
                     if (closed) {
                         chunkStates[chunkIndex] = CHUNK_STATE_UNCACHED
                         lock.notifyAll()
-                        return
+                        return false
                     }
                     val chunkOffset = chunkIndex.toLong() * chunkSizeBytes.toLong()
                     dataFileRaf.seek(chunkOffset)
@@ -324,7 +377,7 @@ internal class ProgressiveRandomAccessCache(
                     chunkMapRaf.seek(chunkIndex.toLong())
                     chunkMapRaf.write(1)
                     lock.notifyAll()
-                    return
+                    return true
                 }
             } catch (t: Throwable) {
                 synchronized(lock) {

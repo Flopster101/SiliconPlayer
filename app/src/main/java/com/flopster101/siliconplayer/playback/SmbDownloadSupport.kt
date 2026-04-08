@@ -23,6 +23,7 @@ internal suspend fun downloadSmbSourceToCache(
     spec: SmbSourceSpec,
     onStatus: suspend (RemoteLoadUiState) -> Unit
 ): RemoteDownloadResult = withContext(Dispatchers.IO) {
+    val credentialedSpec = NetworkCredentialStore.applyTo(spec)
     val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
     val target = remoteCacheFileForSource(cacheRoot, sourceId)
     val temp = File(target.absolutePath + ".part")
@@ -47,7 +48,7 @@ internal suspend fun downloadSmbSourceToCache(
         return@withContext RemoteDownloadResult(file = existing)
     }
 
-    val remotePath = spec.path?.trim().orEmpty()
+    val remotePath = credentialedSpec.path?.trim().orEmpty()
     if (remotePath.isBlank()) {
         return@withContext RemoteDownloadResult(
             file = null,
@@ -64,8 +65,8 @@ internal suspend fun downloadSmbSourceToCache(
     )
 
     return@withContext try {
-        withAppSmbSession(spec) { session ->
-            val share = session.connectShare(spec.share)
+        withAppSmbSession(credentialedSpec) { session ->
+            val share = session.connectShare(credentialedSpec.share)
             if (share !is DiskShare) {
                 share.close()
                 return@withContext RemoteDownloadResult(

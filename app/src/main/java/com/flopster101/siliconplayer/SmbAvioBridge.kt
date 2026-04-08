@@ -22,7 +22,7 @@ internal object SmbAvioBridge {
     private val activeHandles = ConcurrentHashMap<Long, SmbAvioHandle>()
 
     fun openHandle(requestUri: String): Long {
-        val spec = parseSmbSourceSpecFromInput(requestUri)
+        val spec = resolveCredentialedSmbSpec(requestUri)
             ?: throw IllegalArgumentException("Invalid SMB AVIO request URI")
         val remotePath = spec.path?.trim().orEmpty()
         if (spec.share.isBlank()) {

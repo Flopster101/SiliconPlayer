@@ -32,7 +32,7 @@ internal suspend fun listHttpDirectoryEntries(
     onProgress: (suspend (loadedCount: Int, partialEntries: List<HttpBrowserEntry>) -> Unit)? = null
 ): Result<HttpDirectoryListingResult> = withContext(Dispatchers.IO) {
     runCatching {
-        val listing = openHttpDirectoryListingConnection(spec)
+        val listing = openHttpDirectoryListingConnection(NetworkCredentialStore.applyTo(spec))
         val resolvedDirectorySpec = listing.resolvedSpec.copy(
             path = normalizeHttpDirectoryPath(listing.resolvedSpec.path)
         )

@@ -231,7 +231,7 @@ private fun loadEmbeddedArtworkFromRemote(url: String): Bitmap? {
 }
 
 private fun loadFolderArtworkFromHttpSource(sourceId: String): Bitmap? {
-    val spec = parseHttpSourceSpecFromInput(sourceId) ?: return null
+    val spec = resolveCredentialedHttpSpec(sourceId) ?: return null
     val normalizedPath = normalizeHttpPath(spec.path).trimEnd('/')
     if (normalizedPath.isBlank()) return null
     val parentPath = normalizedPath.substringBeforeLast('/', missingDelimiterValue = "").trim()
@@ -246,7 +246,7 @@ private fun loadFolderArtworkFromHttpSource(sourceId: String): Bitmap? {
 }
 
 private fun loadEmbeddedArtworkFromSmb(requestUri: String): Bitmap? {
-    val spec = parseSmbSourceSpecFromInput(requestUri) ?: return null
+    val spec = resolveCredentialedSmbSpec(requestUri) ?: return null
     val remotePath = normalizeSmbPathForShare(spec.path).orEmpty()
     if (spec.share.isBlank() || remotePath.isBlank()) return null
     return withOpenedSmbFile(spec, remotePath) { _, smbFile, sizeBytes ->
@@ -267,7 +267,7 @@ private fun loadEmbeddedArtworkFromSmb(requestUri: String): Bitmap? {
 }
 
 private fun loadFolderArtworkFromSmb(requestUri: String): Bitmap? {
-    val spec = parseSmbSourceSpecFromInput(requestUri) ?: return null
+    val spec = resolveCredentialedSmbSpec(requestUri) ?: return null
     val normalizedPath = normalizeSmbPathForShare(spec.path).orEmpty()
     if (spec.share.isBlank() || normalizedPath.isBlank()) return null
     val parentPath = normalizedPath.substringBeforeLast('/', missingDelimiterValue = "").trim()
@@ -278,9 +278,10 @@ private fun loadFolderArtworkFromSmb(requestUri: String): Bitmap? {
 }
 
 private fun loadBitmapFromSmbFile(spec: SmbSourceSpec): Bitmap? {
-    val remotePath = normalizeSmbPathForShare(spec.path).orEmpty()
-    if (spec.share.isBlank() || remotePath.isBlank()) return null
-    return withOpenedSmbFile(spec, remotePath) { _, smbFile, _ ->
+    val credentialedSpec = NetworkCredentialStore.applyTo(spec)
+    val remotePath = normalizeSmbPathForShare(credentialedSpec.path).orEmpty()
+    if (credentialedSpec.share.isBlank() || remotePath.isBlank()) return null
+    return withOpenedSmbFile(credentialedSpec, remotePath) { _, smbFile, _ ->
         val input = runCatching { smbFile.inputStream }.getOrNull() ?: return@withOpenedSmbFile null
         try {
             val output = ByteArrayOutputStream()
@@ -371,7 +372,9 @@ private class SmbRetrieverDataSource(
 }
 
 private fun loadBitmapFromHttpUrl(url: String): Bitmap? {
-    val connection = (URL(url).openConnection() as? HttpURLConnection) ?: return null
+    val requestSpec = resolveCredentialedHttpSpec(url) ?: return null
+    val requestUrl = buildHttpRequestUri(requestSpec)
+    val connection = (URL(requestUrl).openConnection() as? HttpURLConnection) ?: return null
     return try {
         connection.connectTimeout = 8_000
         connection.readTimeout = 10_000
@@ -380,13 +383,11 @@ private fun loadBitmapFromHttpUrl(url: String): Bitmap? {
         connection.setRequestProperty("User-Agent", "SiliconPlayer/1.0 (Android)")
         connection.setRequestProperty("Accept", "image/*,*/*;q=0.8")
         connection.setRequestProperty("Connection", "close")
-        parseHttpSourceSpecFromInput(url)?.let { requestSpec ->
-            httpBasicAuthorizationHeader(
-                username = requestSpec.username,
-                password = requestSpec.password
-            )?.let { authHeader ->
-                connection.setRequestProperty("Authorization", authHeader)
-            }
+        httpBasicAuthorizationHeader(
+            username = requestSpec.username,
+            password = requestSpec.password
+        )?.let { authHeader ->
+            connection.setRequestProperty("Authorization", authHeader)
         }
         if (connection.responseCode !in 200..299) return null
         val data = connection.inputStream.use { input ->

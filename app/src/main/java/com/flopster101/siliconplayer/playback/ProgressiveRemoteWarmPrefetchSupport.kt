@@ -17,33 +17,9 @@ private fun resolvedCredentialedSmbSpecForWarmPrefetch(
     sourceId: String,
     credentialHintRequestUrl: String?
 ): SmbSourceSpec? {
-    val parsedSourceSpec = parseSmbSourceSpecFromInput(sourceId) ?: return null
-    if (!parsedSourceSpec.username.isNullOrBlank() || !parsedSourceSpec.password.isNullOrBlank()) {
-        return parsedSourceSpec
-    }
-
-    ManualSmbAuthCoordinator.credentialsFor(parsedSourceSpec)?.let { cachedCredentials ->
-        return parsedSourceSpec.copy(
-            username = cachedCredentials.first?.trim().takeUnless { it.isNullOrBlank() },
-            password = cachedCredentials.second?.trim().takeUnless { it.isNullOrBlank() }
-        )
-    }
-
-    val hintSpec = credentialHintRequestUrl
-        ?.let(::parseSmbSourceSpecFromInput)
-        ?.takeIf { hint ->
-            hint.host.equals(parsedSourceSpec.host, ignoreCase = true) &&
-                hint.share.equals(parsedSourceSpec.share, ignoreCase = true)
-        }
-        ?: return parsedSourceSpec
-
-    if (hintSpec.username.isNullOrBlank() && hintSpec.password.isNullOrBlank()) {
-        return parsedSourceSpec
-    }
-
-    return parsedSourceSpec.copy(
-        username = hintSpec.username?.trim().takeUnless { it.isNullOrBlank() },
-        password = hintSpec.password?.trim().takeUnless { it.isNullOrBlank() }
+    return resolveCredentialedSmbSpec(
+        input = sourceId,
+        credentialHint = credentialHintRequestUrl
     )
 }
 

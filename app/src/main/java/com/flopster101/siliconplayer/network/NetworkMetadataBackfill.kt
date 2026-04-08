@@ -64,10 +64,20 @@ private suspend fun readNetworkSourceMetadata(
     val retriever = MediaMetadataRetriever()
     return try {
         when (scheme) {
-            "http", "https" -> retriever.setDataSource(sourceId, emptyMap())
+            "http", "https" -> {
+                val requestSpec = resolveCredentialedHttpSpec(sourceId) ?: return null
+                val headers = mutableMapOf<String, String>()
+                httpBasicAuthorizationHeader(
+                    username = requestSpec.username,
+                    password = requestSpec.password
+                )?.let { authorizationHeader ->
+                    headers["Authorization"] = authorizationHeader
+                }
+                retriever.setDataSource(buildHttpRequestUri(requestSpec), headers)
+            }
             "file" -> retriever.setDataSource(uri.path ?: return null)
             "smb" -> {
-                val smbSpec = parseSmbSourceSpecFromInput(sourceId) ?: return null
+                val smbSpec = resolveCredentialedSmbSpec(sourceId) ?: return null
                 val downloadResult = downloadSmbSourceToCache(
                     context = context,
                     sourceId = sourceId,

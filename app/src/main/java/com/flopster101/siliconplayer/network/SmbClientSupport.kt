@@ -53,10 +53,11 @@ private fun createOpenedSmbSession(spec: SmbSourceSpec): OpenedSmbSession {
 }
 
 internal fun openDedicatedSmbSession(spec: SmbSourceSpec): OpenedSmbSession {
+    val credentialedSpec = NetworkCredentialStore.applyTo(spec)
     var shouldRetry = true
     while (true) {
         try {
-            return createOpenedSmbSession(spec)
+            return createOpenedSmbSession(credentialedSpec)
         } catch (t: Throwable) {
             if (!shouldRetry || !isRetryableSmbTransportFailure(t)) {
                 throw t
@@ -119,9 +120,10 @@ internal inline fun <T> withAppSmbSession(
     spec: SmbSourceSpec,
     block: (Session) -> T
 ): T {
+    val credentialedSpec = NetworkCredentialStore.applyTo(spec)
     var shouldRetryAfterInvalidation = true
     while (true) {
-        val openedSession = getOrCreateAppSmbSession(spec)
+        val openedSession = getOrCreateAppSmbSession(credentialedSpec)
         try {
             return block(openedSession.session)
         } catch (t: Throwable) {
@@ -129,7 +131,7 @@ internal inline fun <T> withAppSmbSession(
             if (!retryable || !shouldRetryAfterInvalidation) {
                 throw t
             }
-            invalidateAppSmbSession(spec)
+            invalidateAppSmbSession(credentialedSpec)
             shouldRetryAfterInvalidation = false
         }
     }

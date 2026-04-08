@@ -113,6 +113,7 @@ import com.flopster101.siliconplayer.NetworkSourceKind
 import com.flopster101.siliconplayer.SmbSourceSpec
 import com.flopster101.siliconplayer.HttpSourceSpec
 import com.flopster101.siliconplayer.HomePinnedEntry
+import com.flopster101.siliconplayer.NetworkCredentialStore
 import com.flopster101.siliconplayer.buildRecentTrackDisplay
 import com.flopster101.siliconplayer.buildHttpDisplayUri
 import com.flopster101.siliconplayer.buildHttpRequestUri
@@ -135,8 +136,10 @@ import com.flopster101.siliconplayer.parseSmbSourceSpecFromInput
 import com.flopster101.siliconplayer.placeholderArtworkIconForFile
 import com.flopster101.siliconplayer.previewPinnedHomeEntryInsertion
 import com.flopster101.siliconplayer.RecentPathEntry
+import com.flopster101.siliconplayer.resolveCredentialedHttpSpec
 import com.flopster101.siliconplayer.resolveNetworkNodeDisplaySource
 import com.flopster101.siliconplayer.resolveNetworkNodeDisplayTitle
+import com.flopster101.siliconplayer.resolveNetworkNodeHttpSpec
 import com.flopster101.siliconplayer.resolveNetworkNodeHttpRootPath
 import com.flopster101.siliconplayer.resolveNetworkNodeOpenInput
 import com.flopster101.siliconplayer.resolveNetworkNodeSmbSpec
@@ -398,7 +401,7 @@ internal fun NetworkBrowserScreen(
             }
 
             isHttpFolderLikeSource(entry, sourceId) -> {
-                val httpSpec = parseHttpSourceSpecFromInput(sourceId)
+                val httpSpec = resolveNetworkNodeHttpSpec(entry) ?: resolveCredentialedHttpSpec(sourceId)
                 editingHttpNodeId = entry.id
                 val currentTitle = entry.title.trim()
                 val isLegacyAutoTitle = httpSpec?.let {
@@ -548,12 +551,12 @@ internal fun NetworkBrowserScreen(
                 .filter { nodeIds.contains(it.id) }
                 .firstNotNullOfOrNull { node ->
                     if (node.type == NetworkNodeType.RemoteSource && node.sourceKind != NetworkSourceKind.Smb) {
-                        parseHttpSourceSpecFromInput(resolveNetworkNodeSourceId(node).orEmpty())
+                        resolveNetworkNodeHttpSpec(node)
                     } else {
                         null
                     }
                 }
-            ?: parseHttpSourceSpecFromInput(sourceId)
+            ?: resolveCredentialedHttpSpec(sourceId)
         if (httpSpec == null || httpSpec.host.isBlank()) {
             onSettled?.invoke()
             return
@@ -571,7 +574,7 @@ internal fun NetworkBrowserScreen(
                     if (node.type != NetworkNodeType.RemoteSource || node.sourceKind == NetworkSourceKind.Smb) {
                         return@map node
                     }
-                    val nodeHttpSpec = parseHttpSourceSpecFromInput(resolveNetworkNodeSourceId(node).orEmpty())
+                    val nodeHttpSpec = resolveNetworkNodeHttpSpec(node)
                     val isDirectTarget = nodeIds.contains(node.id)
                     val isSameHost = isSameHttpHost(nodeHttpSpec, httpSpec)
                     if (!isDirectTarget && !isSameHost) {
@@ -662,7 +665,7 @@ internal fun NetworkBrowserScreen(
             onResolveRemoteSourceMetadata(smbRequestSourceId, ::settleOne)
             return
         }
-        val httpSpec = parseHttpSourceSpecFromInput(sourceId)
+        val httpSpec = resolveNetworkNodeHttpSpec(entry) ?: resolveCredentialedHttpSpec(sourceId)
         if (httpSpec != null) {
             val isHttpFolderLike = isHttpFolderLikeSource(entry, sourceId)
             var pendingSettleCount = if (isHttpFolderLike) 1 else 2
@@ -773,7 +776,8 @@ internal fun NetworkBrowserScreen(
                 nodeIds = targetNodeIdsForSource,
                 specOverride = representativeSmbSpec
             )
-            val representativeHttpSpec = parseHttpSourceSpecFromInput(sourceId)
+            val representativeHttpSpec = representativeNode?.let(::resolveNetworkNodeHttpSpec)
+                ?: resolveCredentialedHttpSpec(sourceId)
             requestHttpSiteDisplayName(
                 sourceId = sourceId,
                 nodeIds = targetNodeIdsForSource,
@@ -1041,7 +1045,14 @@ internal fun NetworkBrowserScreen(
             username = username,
             password = password
         ) ?: return
-        val sourceId = buildSmbSourceId(smbSpec)
+        if (!smbSpec.username.isNullOrBlank() || !smbSpec.password.isNullOrBlank()) {
+            NetworkCredentialStore.remember(smbSpec)
+        }
+        val storedSourceSpec = smbSpec.copy(
+            username = null,
+            password = null
+        )
+        val sourceId = buildSmbSourceId(storedSourceSpec)
         val explicitTitle = name.trim()
         val upsertedNodeId: Long
         val updated = if (editingSmbNodeId == null) {
@@ -1054,11 +1065,11 @@ internal fun NetworkBrowserScreen(
                 title = explicitTitle,
                 source = sourceId,
                 sourceKind = NetworkSourceKind.Smb,
-                smbHost = smbSpec.host,
-                smbShare = smbSpec.share,
-                smbPath = smbSpec.path,
-                smbUsername = smbSpec.username,
-                smbPassword = smbSpec.password,
+                smbHost = storedSourceSpec.host,
+                smbShare = storedSourceSpec.share,
+                smbPath = storedSourceSpec.path,
+                smbUsername = null,
+                smbPassword = null,
                 smbDiscoveredHostName = null
             )
         } else {
@@ -1070,11 +1081,11 @@ internal fun NetworkBrowserScreen(
                         title = explicitTitle,
                         source = sourceId,
                         sourceKind = NetworkSourceKind.Smb,
-                        smbHost = smbSpec.host,
-                        smbShare = smbSpec.share,
-                        smbPath = smbSpec.path,
-                        smbUsername = smbSpec.username,
-                        smbPassword = smbSpec.password,
+                        smbHost = storedSourceSpec.host,
+                        smbShare = storedSourceSpec.share,
+                        smbPath = storedSourceSpec.path,
+                        smbUsername = null,
+                        smbPassword = null,
                         httpRootPath = null,
                         smbDiscoveredHostName = if (sourceChanged) null else node.smbDiscoveredHostName,
                         metadataTitle = if (sourceChanged) null else node.metadataTitle,
@@ -1099,7 +1110,7 @@ internal fun NetworkBrowserScreen(
         requestSmbHostDisplayName(
             sourceId = sourceId,
             nodeIds = setOf(upsertedNodeId),
-            specOverride = smbSpec,
+            specOverride = storedSourceSpec,
             onSettled = ::settleOne
         )
         if (!isSmbFolderLike) {
@@ -1133,11 +1144,14 @@ internal fun NetworkBrowserScreen(
             username = normalizedUsername,
             password = normalizedPassword
         )
-        val sourceId = if (normalizedUsername == null && normalizedPassword == null) {
-            buildHttpSourceId(finalSpec)
-        } else {
-            buildHttpRequestUri(finalSpec)
+        if (!finalSpec.username.isNullOrBlank() || !finalSpec.password.isNullOrBlank()) {
+            NetworkCredentialStore.remember(finalSpec)
         }
+        val storedSourceSpec = finalSpec.copy(
+            username = null,
+            password = null
+        )
+        val sourceId = buildHttpSourceId(storedSourceSpec)
         val normalizedRootPath = if (isDirectoryLike && treatUrlDirectoryAsRoot) {
             normalizeHttpDirectoryPath(finalSpec.path)
         } else {
@@ -1199,11 +1213,11 @@ internal fun NetworkBrowserScreen(
         requestHttpSiteDisplayName(
             sourceId = sourceId,
             nodeIds = setOf(upsertedNodeId),
-            specOverride = finalSpec,
+            specOverride = storedSourceSpec,
             onSettled = ::settleOne
         )
         if (!isDirectoryLike) {
-            onResolveRemoteSourceMetadata(sourceId, ::settleOne)
+            onResolveRemoteSourceMetadata(buildHttpRequestUri(finalSpec), ::settleOne)
         }
     }
 
@@ -2750,7 +2764,7 @@ private fun isSameHttpHost(left: HttpSourceSpec?, right: HttpSourceSpec?): Boole
 private suspend fun resolveHttpSiteDisplayName(spec: HttpSourceSpec): Result<String?> =
     withContext(Dispatchers.IO) {
         runCatching {
-            val normalizedSpec = spec.copy(query = null)
+            val normalizedSpec = NetworkCredentialStore.applyTo(spec).copy(query = null)
             val rootSpec = normalizedSpec.copy(path = "/", query = null)
             resolveHttpSiteDisplayNameForSpec(normalizedSpec)
                 ?: resolveHttpSiteDisplayNameForSpec(rootSpec)
@@ -2887,7 +2901,7 @@ private fun buildCurrentNetworkInfoFields(entry: NetworkNode): List<NetworkInfoF
             }
 
             scheme == "http" || scheme == "https" -> {
-                val spec = parseHttpSourceSpecFromInput(sourceId)
+                val spec = resolveNetworkNodeHttpSpec(entry) ?: resolveCredentialedHttpSpec(sourceId)
                 fields += NetworkInfoField(
                     "Uses password",
                     if (spec?.password?.isNotBlank() == true) "Yes" else "No"
@@ -2919,8 +2933,12 @@ private suspend fun fetchRemoteNetworkInfoFields(entry: NetworkNode): List<Netwo
     if (sourceId.isBlank()) return emptyList()
     return when {
         entry.sourceKind == NetworkSourceKind.Smb -> fetchSmbRemoteInfoFields(entry, sourceId)
-        parseHttpSourceSpecFromInput(sourceId) != null ->
-            fetchHttpRemoteInfoFields(parseHttpSourceSpecFromInput(sourceId) ?: return emptyList())
+        resolveNetworkNodeHttpSpec(entry) != null || resolveCredentialedHttpSpec(sourceId) != null ->
+            fetchHttpRemoteInfoFields(
+                resolveNetworkNodeHttpSpec(entry)
+                    ?: resolveCredentialedHttpSpec(sourceId)
+                    ?: return emptyList()
+            )
         else -> emptyList()
     }
 }
@@ -2960,16 +2978,17 @@ private suspend fun fetchSmbRemoteInfoFields(
 
 private suspend fun fetchHttpRemoteInfoFields(spec: HttpSourceSpec): List<NetworkInfoField> {
     return withContext(Dispatchers.IO) {
-        val resolvedSiteName = resolveHttpSiteDisplayName(spec).getOrNull()
+        val credentialedSpec = NetworkCredentialStore.applyTo(spec)
+        val resolvedSiteName = resolveHttpSiteDisplayName(credentialedSpec).getOrNull()
             ?.trim()
             .takeUnless { it.isNullOrBlank() }
-        val connection = (URL(buildHttpRequestUri(spec)).openConnection() as HttpURLConnection).apply {
+        val connection = (URL(buildHttpRequestUri(credentialedSpec)).openConnection() as HttpURLConnection).apply {
             connectTimeout = 15_000
             readTimeout = 20_000
             instanceFollowRedirects = true
             requestMethod = "HEAD"
             setRequestProperty("User-Agent", "SiliconPlayer/1.0 (Android)")
-            httpBasicAuthorizationHeader(spec.username, spec.password)?.let { header ->
+            httpBasicAuthorizationHeader(credentialedSpec.username, credentialedSpec.password)?.let { header ->
                 setRequestProperty("Authorization", header)
             }
         }

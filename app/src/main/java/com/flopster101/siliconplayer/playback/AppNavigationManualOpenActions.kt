@@ -343,7 +343,6 @@ private const val MANUAL_SMB_AUTH_PROMPT_PENDING = "__manual_smb_auth_prompt_pen
 private const val MANUAL_HTTP_AUTH_PROMPT_PENDING = "__manual_http_auth_prompt_pending__"
 
 internal fun clearManualSmbSessionCredentialCache() {
-    ManualSmbAuthCoordinator.clearSessionCredentials()
     ManualSmbAuthCoordinator.clearPrompt()
     ManualSmbAuthCoordinator.clearHttpPrompt()
 }

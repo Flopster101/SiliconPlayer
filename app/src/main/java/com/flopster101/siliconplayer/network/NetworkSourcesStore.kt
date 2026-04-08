@@ -69,6 +69,7 @@ internal fun readNetworkNodes(prefs: SharedPreferences): List<NetworkNode> {
 
                     NETWORK_NODE_TYPE_REMOTE_SOURCE -> {
                         val source = objectValue.optString("source", "").trim()
+                        rememberEmbeddedNetworkCredentials(source)
                         var sourceKind = when (objectValue.optString("sourceKind", "").trim()) {
                             NETWORK_SOURCE_KIND_SMB -> NetworkSourceKind.Smb
                             else -> NetworkSourceKind.Generic
@@ -99,14 +100,29 @@ internal fun readNetworkNodes(prefs: SharedPreferences): List<NetworkNode> {
                                 path = path,
                                 username = username,
                                 password = password
-                            ) ?: parseSmbSourceSpecFromInput(source)
+                            )?.also { spec ->
+                                if (!spec.username.isNullOrBlank() || !spec.password.isNullOrBlank()) {
+                                    NetworkCredentialStore.remember(spec)
+                                }
+                            } ?: parseSmbSourceSpecFromInput(source)?.also { spec ->
+                                if (!spec.username.isNullOrBlank() || !spec.password.isNullOrBlank()) {
+                                    NetworkCredentialStore.remember(spec)
+                                }
+                            }
                         } else {
                             null
                         }
                         val normalizedSource = if (sourceKind == NetworkSourceKind.Smb) {
                             smbSpec?.let(::buildSmbSourceId)
                         } else {
-                            source.takeIf { it.isNotBlank() }
+                            parseHttpSourceSpecFromInput(source)
+                                ?.also { spec ->
+                                    if (!spec.username.isNullOrBlank() || !spec.password.isNullOrBlank()) {
+                                        NetworkCredentialStore.remember(spec)
+                                    }
+                                }
+                                ?.let(::buildHttpSourceId)
+                                ?: source.takeIf { it.isNotBlank() }
                         }
                         if (normalizedSource.isNullOrBlank()) continue
                         add(
@@ -120,8 +136,8 @@ internal fun readNetworkNodes(prefs: SharedPreferences): List<NetworkNode> {
                                 smbHost = smbSpec?.host,
                                 smbShare = smbSpec?.share,
                                 smbPath = smbSpec?.path,
-                                smbUsername = smbSpec?.username,
-                                smbPassword = smbSpec?.password,
+                                smbUsername = null,
+                                smbPassword = null,
                                 httpRootPath = httpRootPath,
                                 smbDiscoveredHostName = smbDiscoveredHostName,
                                 httpDiscoveredSiteName = httpDiscoveredSiteName,
@@ -170,7 +186,9 @@ internal fun writeNetworkNodes(
                 val sourceToWrite = if (node.sourceKind == NetworkSourceKind.Smb) {
                     resolvedSmbSpec?.let(::buildSmbSourceId)
                 } else {
-                    node.source
+                    node.source?.trim()?.takeUnless { it.isNullOrBlank() }?.let { source ->
+                        parseHttpSourceSpecFromInput(source)?.let(::buildHttpSourceId) ?: source
+                    }
                 }.orEmpty()
                 objectValue
                     .put("type", NETWORK_NODE_TYPE_REMOTE_SOURCE)
@@ -186,8 +204,8 @@ internal fun writeNetworkNodes(
                     .put("smbHost", resolvedSmbSpec?.host.orEmpty())
                     .put("smbShare", resolvedSmbSpec?.share.orEmpty())
                     .put("smbPath", resolvedSmbSpec?.path.orEmpty())
-                    .put("smbUsername", resolvedSmbSpec?.username.orEmpty())
-                    .put("smbPassword", resolvedSmbSpec?.password.orEmpty())
+                    .put("smbUsername", "")
+                    .put("smbPassword", "")
                     .put("httpRootPath", node.httpRootPath.orEmpty())
                     .put("smbDiscoveredHostName", node.smbDiscoveredHostName.orEmpty())
                     .put("httpDiscoveredSiteName", node.httpDiscoveredSiteName.orEmpty())
@@ -250,13 +268,23 @@ private fun pluralizeNetworkCount(count: Int, singular: String): String {
 
 internal fun resolveNetworkNodeSmbSpec(node: NetworkNode): SmbSourceSpec? {
     if (node.type != NetworkNodeType.RemoteSource || node.sourceKind != NetworkSourceKind.Smb) return null
-    return buildSmbSourceSpec(
+    val parsed = buildSmbSourceSpec(
         host = node.smbHost.orEmpty(),
         share = node.smbShare.orEmpty(),
         path = node.smbPath,
         username = node.smbUsername,
         password = node.smbPassword
     ) ?: node.source?.let(::parseSmbSourceSpecFromInput)
+    return parsed?.let(NetworkCredentialStore::applyTo)
+}
+
+internal fun resolveNetworkNodeHttpSpec(node: NetworkNode): HttpSourceSpec? {
+    if (node.type != NetworkNodeType.RemoteSource || node.sourceKind == NetworkSourceKind.Smb) {
+        return null
+    }
+    val source = node.source?.trim().takeUnless { it.isNullOrBlank() } ?: return null
+    val parsed = parseHttpSourceSpecFromInput(source) ?: return null
+    return NetworkCredentialStore.applyTo(parsed)
 }
 
 internal fun resolveNetworkNodeSourceId(node: NetworkNode): String? {
@@ -264,7 +292,8 @@ internal fun resolveNetworkNodeSourceId(node: NetworkNode): String? {
     return if (node.sourceKind == NetworkSourceKind.Smb) {
         resolveNetworkNodeSmbSpec(node)?.let(::buildSmbSourceId)
     } else {
-        node.source?.trim().takeUnless { it.isNullOrBlank() }
+        resolveNetworkNodeHttpSpec(node)?.let(::buildHttpSourceId)
+            ?: node.source?.trim().takeUnless { it.isNullOrBlank() }
     }
 }
 
@@ -273,12 +302,11 @@ internal fun resolveNetworkNodeOpenInput(node: NetworkNode): String? {
     return if (node.sourceKind == NetworkSourceKind.Smb) {
         resolveNetworkNodeSmbSpec(node)?.let(::buildSmbRequestUri)
     } else {
-        val source = node.source?.trim().takeUnless { it.isNullOrBlank() } ?: return null
-        val httpSpec = parseHttpSourceSpecFromInput(source)
+        val httpSpec = resolveNetworkNodeHttpSpec(node)
         if (httpSpec != null) {
             buildHttpRequestUri(httpSpec)
         } else {
-            source
+            node.source?.trim().takeUnless { it.isNullOrBlank() }
         }
     }
 }
@@ -353,38 +381,13 @@ internal fun rememberHttpCredentialsForNetworkNode(
     username: String?,
     password: String?
 ): List<NetworkNode> {
-    if (sourceNodeId == null) return nodes
-    val normalizedUsername = username?.trim().takeUnless { it.isNullOrBlank() }
-    val normalizedPassword = password?.trim().takeUnless { it.isNullOrBlank() }
-    var changed = false
-    val updated = nodes.map { node ->
-        if (node.id != sourceNodeId || node.type != NetworkNodeType.RemoteSource) {
-            return@map node
-        }
-        if (node.sourceKind == NetworkSourceKind.Smb) {
-            return@map node
-        }
-        val source = resolveNetworkNodeSourceId(node).orEmpty()
-        val httpSpec = parseHttpSourceSpecFromInput(source) ?: return@map node
-        val updatedSpec = httpSpec.copy(
-            username = normalizedUsername,
-            password = normalizedPassword
-        )
-        val updatedSource = if (
-            normalizedUsername == null &&
-            normalizedPassword == null
-        ) {
-            buildHttpSourceId(updatedSpec)
-        } else {
-            buildHttpRequestUri(updatedSpec)
-        }
-        if (samePath(source, updatedSource) && source == updatedSource) {
-            return@map node
-        }
-        changed = true
-        node.copy(source = updatedSource)
+    val targetSpec = sourceNodeId
+        ?.let { id -> nodes.firstOrNull { it.id == id } }
+        ?.let(::resolveNetworkNodeHttpSpec)
+    if (targetSpec != null) {
+        NetworkCredentialStore.remember(targetSpec, username, password)
     }
-    return if (changed) updated else nodes
+    return nodes
 }
 
 private fun isLegacyAutoSmbTitle(title: String, spec: SmbSourceSpec?): Boolean {

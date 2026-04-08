@@ -117,25 +117,20 @@ private fun loadRemoteEmbeddedArtworkBitmap(
     sourceId: String,
     requestUrlHint: String?
 ): Bitmap? {
-    val candidateRequestUrl = requestUrlHint
-        ?.trim()
-        .takeUnless { it.isNullOrBlank() }
-        ?: sourceId
-    val parsed = Uri.parse(candidateRequestUrl)
-    val scheme = parsed.scheme?.lowercase(Locale.ROOT)
-    if (scheme != "http" && scheme != "https") return null
-    val requestUrl = stripUrlFragment(candidateRequestUrl)
+    val requestSpec = resolveCredentialedHttpSpec(
+        input = sourceId,
+        credentialHint = requestUrlHint
+    ) ?: return null
+    val requestUrl = stripUrlFragment(buildHttpRequestUri(requestSpec))
     val headers = mutableMapOf(
         "User-Agent" to "SiliconPlayer/1.0 (Android)",
         "Icy-MetaData" to "1"
     )
-    parseHttpSourceSpecFromInput(requestUrl)?.let { spec ->
-        httpBasicAuthorizationHeader(
-            username = spec.username,
-            password = spec.password
-        )?.let { authHeader ->
-            headers["Authorization"] = authHeader
-        }
+    httpBasicAuthorizationHeader(
+        username = requestSpec.username,
+        password = requestSpec.password
+    )?.let { authHeader ->
+        headers["Authorization"] = authHeader
     }
     val retriever = MediaMetadataRetriever()
     return try {

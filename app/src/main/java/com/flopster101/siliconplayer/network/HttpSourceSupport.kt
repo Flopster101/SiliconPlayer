@@ -36,7 +36,13 @@ internal fun parseHttpSourceSpecFromInput(input: String): HttpSourceSpec? {
 }
 
 internal fun buildHttpSourceId(spec: HttpSourceSpec): String {
-    return buildHttpUri(spec = spec, includePassword = false)
+    return buildHttpUri(
+        spec = spec.copy(
+            username = null,
+            password = null
+        ),
+        includePassword = false
+    )
 }
 
 internal fun buildHttpRequestUri(spec: HttpSourceSpec): String {

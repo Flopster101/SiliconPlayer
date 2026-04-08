@@ -20,6 +20,17 @@ internal suspend fun downloadRemoteUrlToCache(
     requestUrl: String,
     onStatus: suspend (RemoteLoadUiState) -> Unit
 ): RemoteDownloadResult = withContext(Dispatchers.IO) {
+    val resolvedRequestSpec = resolveCredentialedHttpSpec(
+        input = url,
+        credentialHint = requestUrl
+    ) ?: resolveCredentialedHttpSpec(
+        input = requestUrl,
+        credentialHint = requestUrl
+    )
+    val effectiveRequestUrl = resolvedRequestSpec
+        ?.let(::buildHttpRequestUri)
+        ?.let(::stripUrlFragment)
+        ?: requestUrl
     val cacheRoot = File(context.cacheDir, REMOTE_SOURCE_CACHE_DIR)
     var target = remoteCacheFileForSource(cacheRoot, url)
     var activeConnection: HttpURLConnection? = null
@@ -47,7 +58,7 @@ internal suspend fun downloadRemoteUrlToCache(
     var temp = File(target.absolutePath + ".part")
     Log.d(
         URL_SOURCE_TAG,
-        "Downloading URL to cache: source=${sanitizeHttpUrlForLog(url)} request=${sanitizeHttpUrlForLog(requestUrl)}"
+        "Downloading URL to cache: source=${sanitizeHttpUrlForLog(url)} request=${sanitizeHttpUrlForLog(effectiveRequestUrl)}"
     )
     emitStatus(
         RemoteLoadUiState(
@@ -70,7 +81,7 @@ internal suspend fun downloadRemoteUrlToCache(
                 setRequestProperty("Accept", "*/*")
                 setRequestProperty("Connection", "close")
                 setRequestProperty("Icy-MetaData", "1")
-                parseHttpSourceSpecFromInput(currentUrl)?.let { spec ->
+                resolveCredentialedHttpSpec(currentUrl, initialUrl)?.let { spec ->
                     httpBasicAuthorizationHeader(
                         username = spec.username,
                         password = spec.password
@@ -116,12 +127,12 @@ internal suspend fun downloadRemoteUrlToCache(
 
     var connection: HttpURLConnection? = null
     return@withContext try {
-        val (openedConnection, openError) = openWithRedirects(requestUrl)
+        val (openedConnection, openError) = openWithRedirects(effectiveRequestUrl)
         connection = openedConnection
         if (connection == null) {
             Log.e(
                 URL_SOURCE_TAG,
-                "HTTP open failed for URL: source=${sanitizeHttpUrlForLog(url)} request=${sanitizeHttpUrlForLog(requestUrl)}"
+                "HTTP open failed for URL: source=${sanitizeHttpUrlForLog(url)} request=${sanitizeHttpUrlForLog(effectiveRequestUrl)}"
             )
             RemoteDownloadResult(
                 file = null,

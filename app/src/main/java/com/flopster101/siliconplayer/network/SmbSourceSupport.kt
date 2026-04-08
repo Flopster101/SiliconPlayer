@@ -76,7 +76,13 @@ internal fun parseSmbSourceSpecFromInput(input: String): SmbSourceSpec? {
 }
 
 internal fun buildSmbSourceId(spec: SmbSourceSpec): String {
-    return buildSmbUri(spec = spec, includePassword = false)
+    return buildSmbUri(
+        spec = spec.copy(
+            username = null,
+            password = null
+        ),
+        includePassword = false
+    )
 }
 
 internal fun buildSmbRequestUri(spec: SmbSourceSpec): String {

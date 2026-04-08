@@ -3,7 +3,6 @@ package com.flopster101.siliconplayer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import java.util.concurrent.ConcurrentHashMap
 
 internal data class ManualSmbAuthPromptState(
     val resolved: ManualSourceResolution,
@@ -31,9 +30,6 @@ internal object ManualSmbAuthCoordinator {
     var pendingHttpPrompt: ManualHttpAuthPromptState? by mutableStateOf(null)
         private set
 
-    private val smbSessionCredentials: MutableMap<String, Pair<String?, String?>> = ConcurrentHashMap()
-    private val httpSessionCredentials: MutableMap<String, Pair<String?, String?>> = ConcurrentHashMap()
-
     fun requestPrompt(state: ManualSmbAuthPromptState) {
         pendingPrompt = state
     }
@@ -51,41 +47,30 @@ internal object ManualSmbAuthCoordinator {
     }
 
     fun credentialsFor(spec: SmbSourceSpec): Pair<String?, String?>? {
-        val exactKey = smbCacheKey(spec)
-        return smbSessionCredentials[exactKey]
-            ?: smbSessionCredentials[smbHostCacheKey(spec)]
+        val resolved = NetworkCredentialStore.applyTo(spec)
+        val username = resolved.username?.trim().takeUnless { it.isNullOrBlank() }
+        val password = resolved.password?.trim().takeUnless { it.isNullOrBlank() }
+        if (username == null && password == null) return null
+        return username to password
     }
 
     fun credentialsFor(spec: HttpSourceSpec): Pair<String?, String?>? {
-        return httpSessionCredentials[httpCacheKey(spec)]
+        val resolved = NetworkCredentialStore.applyTo(spec)
+        val username = resolved.username?.trim().takeUnless { it.isNullOrBlank() }
+        val password = resolved.password?.trim().takeUnless { it.isNullOrBlank() }
+        if (username == null && password == null) return null
+        return username to password
     }
 
     fun rememberCredentials(spec: SmbSourceSpec, username: String?, password: String?) {
-        val credentials = Pair(username, password)
-        smbSessionCredentials[smbCacheKey(spec)] = credentials
-        // Also remember host-level credentials so an auth done at host/share-picker
-        // level can be reused when entering a concrete share path.
-        smbSessionCredentials[smbHostCacheKey(spec)] = credentials
+        NetworkCredentialStore.remember(spec, username, password)
     }
 
     fun rememberCredentials(spec: HttpSourceSpec, username: String?, password: String?) {
-        httpSessionCredentials[httpCacheKey(spec)] = Pair(username, password)
+        NetworkCredentialStore.remember(spec, username, password)
     }
 
     fun clearSessionCredentials() {
-        smbSessionCredentials.clear()
-        httpSessionCredentials.clear()
-    }
-
-    private fun smbCacheKey(spec: SmbSourceSpec): String {
-        return "${spec.host.trim().lowercase()}|${spec.share.trim().lowercase()}"
-    }
-
-    private fun smbHostCacheKey(spec: SmbSourceSpec): String {
-        return "${spec.host.trim().lowercase()}|*"
-    }
-
-    private fun httpCacheKey(spec: HttpSourceSpec): String {
-        return "${spec.scheme.trim().lowercase()}|${spec.host.trim().lowercase()}|${spec.port ?: -1}"
+        NetworkCredentialStore.clearAll()
     }
 }

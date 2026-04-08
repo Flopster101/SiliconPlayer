@@ -197,16 +197,13 @@ private fun resolveSmbLaunchRequestUriForRestore(
     val resolvedNodeSpec = sourceNodeId
         ?.let { id -> networkNodes.firstOrNull { it.id == id } }
         ?.let(::resolveNetworkNodeSmbSpec)
-    return if (resolvedNodeSpec != null) {
-        buildSmbRequestUri(
-            spec.copy(
-                username = resolvedNodeSpec.username ?: spec.username,
-                password = resolvedNodeSpec.password
-            )
+    val merged = resolvedNodeSpec?.let {
+        spec.copy(
+            username = it.username ?: spec.username,
+            password = it.password ?: spec.password
         )
-    } else {
-        buildSmbRequestUri(spec)
-    }
+    } ?: spec
+    return buildSmbRequestUri(NetworkCredentialStore.applyTo(merged))
 }
 
 private fun resolveHttpLaunchRequestUriForRestore(
@@ -216,16 +213,12 @@ private fun resolveHttpLaunchRequestUriForRestore(
 ): String {
     val nodeHttpSpec = sourceNodeId
         ?.let { id -> networkNodes.firstOrNull { it.id == id } }
-        ?.let(::resolveNetworkNodeSourceId)
-        ?.let(::parseHttpSourceSpecFromInput)
-    return if (nodeHttpSpec != null) {
-        buildHttpRequestUri(
-            spec.copy(
-                username = nodeHttpSpec.username ?: spec.username,
-                password = nodeHttpSpec.password ?: spec.password
-            )
+        ?.let(::resolveNetworkNodeHttpSpec)
+    val merged = nodeHttpSpec?.let {
+        spec.copy(
+            username = it.username ?: spec.username,
+            password = it.password ?: spec.password
         )
-    } else {
-        buildHttpRequestUri(spec)
-    }
+    } ?: spec
+    return buildHttpRequestUri(NetworkCredentialStore.applyTo(merged))
 }

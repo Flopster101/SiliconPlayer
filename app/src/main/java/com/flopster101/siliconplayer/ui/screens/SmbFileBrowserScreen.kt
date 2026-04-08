@@ -178,17 +178,13 @@ internal fun SmbFileBrowserScreen(
     )
     val coroutineScope = rememberCoroutineScope()
     val smbListingAdapter = remember { SmbBrowserListingAdapter() }
-    val allowCredentialRemember = sourceNodeId != null
+    val allowCredentialRemember = true
     val adhocSessionCredentials: Pair<String?, String?>? = remember(
         sourceNodeId,
         sourceSpec.host,
         sourceSpec.share
     ) {
-        if (sourceNodeId == null) {
-            ManualSmbAuthCoordinator.credentialsFor(sourceSpec)
-        } else {
-            null
-        }
+        ManualSmbAuthCoordinator.credentialsFor(sourceSpec)
     }
     val screenSessionKey = remember(
         sourceNodeId,
@@ -1596,20 +1592,19 @@ internal fun SmbFileBrowserScreen(
                         val normalizedPassword = authDialogPassword.trim().ifBlank { null }
                         sessionUsername = normalizedUsername
                         sessionPassword = normalizedPassword
-                        if (allowCredentialRemember && authRememberPassword) {
-                            onRememberSmbCredentials(
-                                sourceNodeId,
-                                sourceId,
-                                normalizedUsername,
-                                normalizedPassword
-                            )
-                        } else if (sourceNodeId == null) {
+                        if (authRememberPassword) {
                             ManualSmbAuthCoordinator.rememberCredentials(
                                 credentialsSpec.copy(
                                     share = currentShare,
                                     username = normalizedUsername,
                                     password = normalizedPassword
                                 ),
+                                normalizedUsername,
+                                normalizedPassword
+                            )
+                            onRememberSmbCredentials(
+                                sourceNodeId,
+                                sourceId,
                                 normalizedUsername,
                                 normalizedPassword
                             )

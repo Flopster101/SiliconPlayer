@@ -630,7 +630,7 @@ internal fun resolveSmbRecentOpenTarget(
     }
     return SmbTargetResolution(
         sourceNodeId = resolvedNodeId,
-        requestUri = buildSmbRequestUri(finalSpec)
+        requestUri = buildSmbRequestUri(NetworkCredentialStore.applyTo(finalSpec))
     )
 }
 
@@ -721,6 +721,6 @@ internal fun resolveHttpRecentOpenTarget(
     }
     return HttpTargetResolution(
         sourceNodeId = resolvedNodeId,
-        requestUri = buildHttpRequestUri(finalSpec)
+        requestUri = buildHttpRequestUri(NetworkCredentialStore.applyTo(finalSpec))
     )
 }

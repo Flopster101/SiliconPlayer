@@ -1501,52 +1501,20 @@ private fun AppNavigation(
         }
     }
     val rememberNetworkSmbCredentials: (Long?, String, String?, String?) -> Unit = { sourceNodeId, _, username, password ->
-        val normalizedUsername = username?.trim().takeUnless { it.isNullOrBlank() }
-        val normalizedPassword = password?.trim().takeUnless { it.isNullOrBlank() }
-        var changed = false
-        val updated = networkNodes.map { node ->
-            if (node.type != NetworkNodeType.RemoteSource || node.sourceKind != NetworkSourceKind.Smb) {
-                return@map node
+        sourceNodeId
+            ?.let { id -> networkNodes.firstOrNull { it.id == id } }
+            ?.let(::resolveNetworkNodeSmbSpec)
+            ?.let { spec ->
+                NetworkCredentialStore.remember(spec, username, password)
             }
-            val nodeSpec = resolveNetworkNodeSmbSpec(node) ?: return@map node
-            if (node.id != sourceNodeId) {
-                return@map node
-            }
-            val updatedSpec = nodeSpec.copy(
-                username = normalizedUsername,
-                password = normalizedPassword
-            )
-            val updatedSourceId = buildSmbSourceId(updatedSpec)
-            if (
-                node.smbUsername == normalizedUsername &&
-                node.smbPassword == normalizedPassword &&
-                samePath(resolveNetworkNodeSourceId(node), updatedSourceId)
-            ) {
-                return@map node
-            }
-            changed = true
-            node.copy(
-                source = updatedSourceId,
-                smbUsername = normalizedUsername,
-                smbPassword = normalizedPassword
-            )
-        }
-        if (changed) {
-            networkNodes = updated
-            writeNetworkNodes(prefs, updated)
-        }
     }
     val rememberNetworkHttpCredentials: (Long?, String, String?, String?) -> Unit = { sourceNodeId, _, username, password ->
-        val updated = rememberHttpCredentialsForNetworkNode(
-            nodes = networkNodes,
-            sourceNodeId = sourceNodeId,
-            username = username,
-            password = password
-        )
-        if (updated != networkNodes) {
-            networkNodes = updated
-            writeNetworkNodes(prefs, updated)
-        }
+        sourceNodeId
+            ?.let { id -> networkNodes.firstOrNull { it.id == id } }
+            ?.let(::resolveNetworkNodeHttpSpec)
+            ?.let { spec ->
+                NetworkCredentialStore.remember(spec, username, password)
+            }
     }
     AppNavigationStartupEffects(
         prefs = prefs,

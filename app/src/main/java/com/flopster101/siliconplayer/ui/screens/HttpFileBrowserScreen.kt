@@ -191,18 +191,14 @@ internal fun HttpFileBrowserScreen(
     )
     val coroutineScope = rememberCoroutineScope()
     val httpListingAdapter = remember { HttpBrowserListingAdapter() }
-    val allowCredentialRemember = sourceNodeId != null
+    val allowCredentialRemember = true
     val adhocSessionCredentials: Pair<String?, String?>? = remember(
         sourceNodeId,
         sourceSpec.scheme,
         sourceSpec.host,
         sourceSpec.port
     ) {
-        if (sourceNodeId == null) {
-            ManualSmbAuthCoordinator.credentialsFor(sourceSpec)
-        } else {
-            null
-        }
+        ManualSmbAuthCoordinator.credentialsFor(sourceSpec)
     }
     val screenSessionKey = remember(
         sourceNodeId,
@@ -1613,19 +1609,18 @@ internal fun HttpFileBrowserScreen(
                         val normalizedPassword = authDialogPassword.trim().ifBlank { null }
                         sessionUsername = normalizedUsername
                         sessionPassword = normalizedPassword
-                        if (allowCredentialRemember && authRememberPassword) {
-                            onRememberHttpCredentials(
-                                sourceNodeId,
-                                currentDirectorySourceId(),
-                                normalizedUsername,
-                                normalizedPassword
-                            )
-                        } else if (sourceNodeId == null) {
+                        if (authRememberPassword) {
                             ManualSmbAuthCoordinator.rememberCredentials(
                                 currentSpec.copy(
                                     username = normalizedUsername,
                                     password = normalizedPassword
                                 ),
+                                normalizedUsername,
+                                normalizedPassword
+                            )
+                            onRememberHttpCredentials(
+                                sourceNodeId,
+                                currentDirectorySourceId(),
                                 normalizedUsername,
                                 normalizedPassword
                             )

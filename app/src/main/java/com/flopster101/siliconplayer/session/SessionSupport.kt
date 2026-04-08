@@ -172,11 +172,12 @@ internal fun resolvePlaybackSourceLabel(
 internal fun resolveManualSourceInput(rawInput: String): ManualSourceResolution? {
     val trimmed = rawInput.trim()
     if (trimmed.isEmpty()) return null
+    rememberEmbeddedNetworkCredentials(trimmed)
 
     val uri = Uri.parse(trimmed)
     val scheme = uri.scheme?.lowercase(Locale.ROOT)
     if (scheme == "http" || scheme == "https") {
-        val httpSpec = parseHttpSourceSpecFromInput(trimmed) ?: return null
+        val httpSpec = resolveCredentialedHttpSpec(trimmed) ?: return null
         val normalizedUrl = buildHttpSourceId(httpSpec)
         val requestUrl = stripUrlFragment(buildHttpRequestUri(httpSpec))
         val safeName = remoteFilenameHintFromUri(uri) ?: sanitizeRemoteLeafName(uri.host) ?: "remote"
@@ -192,7 +193,7 @@ internal fun resolveManualSourceInput(rawInput: String): ManualSourceResolution?
     }
 
     if (scheme == "smb") {
-        val smbSpec = parseSmbSourceSpecFromInput(trimmed) ?: return null
+        val smbSpec = resolveCredentialedSmbSpec(trimmed) ?: return null
         val sourceId = buildSmbSourceId(smbSpec)
         val requestUri = buildSmbRequestUri(smbSpec)
         val safeName = sanitizeRemoteLeafName(smbSpec.path?.substringAfterLast('/'))

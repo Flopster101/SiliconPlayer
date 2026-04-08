@@ -1,0 +1,26 @@
+From dc2242da9f30ba9c13b8f761f9d845b1ec9f1995 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Wed, 8 Apr 2026 03:03:32 -0300
+Subject: [PATCH 9/9] soundlib: increase channel scope history depth for output
+ sync
+
+---
+ soundlib/Sndfile.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/soundlib/Sndfile.h b/soundlib/Sndfile.h
+index 56f99e0..f667aaa 100644
+--- a/soundlib/Sndfile.h
++++ b/soundlib/Sndfile.h
+@@ -445,7 +445,7 @@ private:
+ 	// End-of-sample pop reduction tail level
+ 	mixsample_t m_dryLOfsVol = 0, m_dryROfsVol = 0;
+ 	mixsample_t m_surroundLOfsVol = 0, m_surroundROfsVol = 0;
+-	static constexpr std::size_t kChannelScopeBufferSize = 16384;
++	static constexpr std::size_t kChannelScopeBufferSize = 32768;
+ 	struct ChannelScopeBuffer
+ 	{
+ 		std::array<float, kChannelScopeBufferSize> data{};
+-- 
+2.53.0
+

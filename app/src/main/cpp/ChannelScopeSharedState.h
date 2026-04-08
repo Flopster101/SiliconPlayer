@@ -7,7 +7,7 @@
 
 struct ChannelScopeSharedState {
     mutable std::mutex mutex;
-    static constexpr int kMaxSamples = 8192;
+    static constexpr int kMaxSamples = 32768;
 
     std::vector<float> snapshotRaw;
     std::vector<float> snapshotVu;

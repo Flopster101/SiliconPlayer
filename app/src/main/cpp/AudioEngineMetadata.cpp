@@ -14,6 +14,9 @@
 #include "decoders/FurnaceDecoder.h"
 #include "decoders/UadeDecoder.h"
 
+#include <algorithm>
+#include <cmath>
+
 bool AudioEngine::consumeNaturalEndEvent() {
     return naturalEndPending.exchange(false);
 }
@@ -266,17 +269,50 @@ std::vector<float> AudioEngine::getOpenMptChannelVuLevels() {
 
 std::vector<float> AudioEngine::getChannelScopeSamples(int samplesPerChannel) {
     std::shared_ptr<ChannelScopeSharedState> state;
+    int decoderSampleRate = 0;
     {
         std::lock_guard<std::mutex> lock(decoderMutex);
         if (!decoder) return {};
         state = decoder->getChannelScopeSharedState();
+        decoderSampleRate = decoderRenderSampleRate > 0 ? decoderRenderSampleRate : decoder->getSampleRate();
     }
     if (!state) return {};
-    int presentationDelayFrames = renderQueueFrames();
-    if (activeOutputBackend.load(std::memory_order_relaxed) == 1) {
-        presentationDelayFrames += std::max(aaudioBufferFrames, 0);
+    const int outputSampleRate = streamSampleRate > 0 ? streamSampleRate : decoderSampleRate;
+    int callbackFrames = 0;
+    int64_t callbackNs = 0;
+    {
+        std::lock_guard<std::mutex> lock(visualizationMutex);
+        callbackFrames = std::max(visualizationLastCallbackFrames, 0);
+        callbackNs = visualizationLastCallbackNs;
     }
-    return state->getProcessedSamples(samplesPerChannel, presentationDelayFrames);
+
+    double presentationDelayOutputFrames = static_cast<double>(renderQueueFrames());
+    if (callbackFrames > 0 && outputSampleRate > 0 && callbackNs > 0) {
+        const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()
+        ).count();
+        const int64_t elapsedNs = std::max<int64_t>(0, nowNs - callbackNs);
+        const double elapsedFrames = std::clamp(
+                (static_cast<double>(elapsedNs) * static_cast<double>(outputSampleRate)) / 1.0e9,
+                0.0,
+                static_cast<double>(callbackFrames)
+        );
+        presentationDelayOutputFrames +=
+                std::max(0.0, static_cast<double>(callbackFrames) - elapsedFrames);
+    }
+    if (activeOutputBackend.load(std::memory_order_relaxed) == 1) {
+        presentationDelayOutputFrames += static_cast<double>(std::max(aaudioBufferFrames, 0));
+    }
+    double presentationDelayDecoderFrames = presentationDelayOutputFrames;
+    if (decoderSampleRate > 0 && outputSampleRate > 0 && decoderSampleRate != outputSampleRate) {
+        presentationDelayDecoderFrames =
+                presentationDelayOutputFrames *
+                (static_cast<double>(decoderSampleRate) / static_cast<double>(outputSampleRate));
+    }
+    return state->getProcessedSamples(
+            samplesPerChannel,
+            static_cast<int>(std::ceil(std::max(0.0, presentationDelayDecoderFrames)))
+    );
 }
 
 std::vector<int32_t> AudioEngine::getChannelScopeTextState(int maxChannels) {

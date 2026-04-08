@@ -1,0 +1,28 @@
+From a793f4d5dbbf89d4d0c72e95e1a603d03d64a8aa Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Tue, 8 Apr 2026 20:15:00 -0300
+Subject: [PATCH] lib: increase channel scope history depth for output sync
+
+Large output buffer presets can leave the host visualizer needing more than
+8192 samples of history to align the scope to the actually audible output.
+Raise the exported Klystrack scope ring depth so host-side delay compensation
+has enough lookback headroom.
+---
+ src/snd/cyd.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/snd/cyd.h b/src/snd/cyd.h
+index 4098084..9a5d069 100644
+--- a/src/snd/cyd.h
++++ b/src/snd/cyd.h
+@@ -266,7 +266,7 @@ enum
+ #define CYD_NUM_WO_BUFFERS 4
+ 
+ #define CYD_NUM_LFSR 16
+-#define CYD_SCOPE_BUFFER_SAMPLES 8192
++#define CYD_SCOPE_BUFFER_SAMPLES 32768
+ 
+ extern Uint16 PulseTri_8580[8192];
+ 
+-- 
+2.53.0

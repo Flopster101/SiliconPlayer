@@ -1,4 +1,5 @@
 package com.flopster101.siliconplayer
+
 import com.hierynomus.smbj.connection.Connection
 import com.hierynomus.smbj.session.Session
 import com.hierynomus.msdtyp.AccessMask
@@ -10,7 +11,7 @@ import com.hierynomus.smbj.share.File as SmbFile
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
-private data class OpenedSmbAvioFile(
+private data class OpenedSmbAvioTransportFile(
     val connection: Connection,
     val session: Session,
     val share: DiskShare,
@@ -18,28 +19,17 @@ private data class OpenedSmbAvioFile(
     val sizeBytes: Long
 )
 
-private class SmbAvioHandle(
-    val spec: SmbSourceSpec,
-    val remotePath: String,
-    openedFile: OpenedSmbAvioFile
-) {
-    val lock = Any()
-    var connection: Connection = openedFile.connection
-    var session: Session = openedFile.session
-    var share: DiskShare = openedFile.share
-    var file: SmbFile = openedFile.file
-    var sizeBytes: Long = openedFile.sizeBytes
-
-    fun replace(openedFile: OpenedSmbAvioFile) {
-        connection = openedFile.connection
-        session = openedFile.session
-        share = openedFile.share
-        file = openedFile.file
-        sizeBytes = openedFile.sizeBytes
-    }
+private fun closeOpenedSmbAvioTransportFile(openedFile: OpenedSmbAvioTransportFile) {
+    runCatching { openedFile.file.close() }
+    runCatching { openedFile.share.close() }
+    runCatching { openedFile.session.close() }
+    runCatching { openedFile.connection.close() }
 }
 
-private fun openSmbAvioFile(spec: SmbSourceSpec, remotePath: String): OpenedSmbAvioFile {
+private fun openSmbAvioTransportFile(
+    spec: SmbSourceSpec,
+    remotePath: String
+): OpenedSmbAvioTransportFile {
     var shouldRetry = true
     while (true) {
         val openedSession = openDedicatedSmbSession(spec)
@@ -68,7 +58,7 @@ private fun openSmbAvioFile(spec: SmbSourceSpec, remotePath: String): OpenedSmbA
                     runCatching { share.close() }
                     throw t
                 }
-                return OpenedSmbAvioFile(
+                return OpenedSmbAvioTransportFile(
                     connection = openedSession.connection,
                     session = openedSession.session,
                     share = share,
@@ -90,11 +80,68 @@ private fun openSmbAvioFile(spec: SmbSourceSpec, remotePath: String): OpenedSmbA
     }
 }
 
-private fun closeSmbAvioHandleResources(handle: SmbAvioHandle) {
-    runCatching { handle.file.close() }
-    runCatching { handle.share.close() }
-    runCatching { handle.session.close() }
-    runCatching { handle.connection.close() }
+private class SmbProgressiveRandomAccessTransport(
+    private val spec: SmbSourceSpec,
+    private val remotePath: String
+) : ProgressiveRandomAccessTransport {
+    private val lock = Any()
+    private var openedFile = openSmbAvioTransportFile(spec, remotePath)
+
+    override val sourceId: String = buildSmbSourceId(spec)
+
+    override val sizeBytes: Long
+        get() = synchronized(lock) { openedFile.sizeBytes }
+
+    override fun readAt(offset: Long, buffer: ByteArray, bufferOffset: Int, length: Int): Int {
+        if (offset < 0L) {
+            throw IllegalArgumentException("SMB AVIO offset must be non-negative")
+        }
+        val clampedLength = length.coerceIn(0, buffer.size - bufferOffset)
+        if (clampedLength <= 0) return 0
+
+        synchronized(lock) {
+            if (offset >= openedFile.sizeBytes) {
+                return 0
+            }
+            return try {
+                openedFile.file.read(buffer, offset, bufferOffset, clampedLength).coerceAtLeast(0)
+            } catch (t: Throwable) {
+                if (!isRetryableSmbTransportFailure(t)) {
+                    closeOpenedSmbAvioTransportFile(openedFile)
+                    throw t
+                }
+                closeOpenedSmbAvioTransportFile(openedFile)
+                val reopened = openSmbAvioTransportFile(spec, remotePath)
+                openedFile = reopened
+                try {
+                    reopened.file.read(buffer, offset, bufferOffset, clampedLength).coerceAtLeast(0)
+                } catch (retryFailure: Throwable) {
+                    closeOpenedSmbAvioTransportFile(reopened)
+                    throw retryFailure
+                }
+            }
+        }
+    }
+
+    override fun close() {
+        synchronized(lock) {
+            closeOpenedSmbAvioTransportFile(openedFile)
+        }
+    }
+}
+
+private class SmbAvioHandle(
+    private val cache: ProgressiveRandomAccessCache
+) {
+    fun read(offset: Long, buffer: ByteArray, length: Int): Int {
+        return cache.readAt(offset, buffer, length)
+    }
+
+    fun sizeBytes(): Long = cache.sizeBytes
+
+    fun close() {
+        cache.close()
+    }
 }
 
 internal object SmbAvioBridge {
@@ -114,9 +161,13 @@ internal object SmbAvioBridge {
 
         val handleId = nextHandleId.getAndIncrement().coerceAtLeast(1L)
         activeHandles[handleId] = SmbAvioHandle(
-            spec = spec,
-            remotePath = remotePath,
-            openedFile = openSmbAvioFile(spec, remotePath)
+            cache = ProgressiveRandomAccessCache(
+                context = NativeBridge.requireAppContext(),
+                transport = SmbProgressiveRandomAccessTransport(
+                    spec = spec,
+                    remotePath = remotePath
+                )
+            )
         )
         return handleId
     }
@@ -124,53 +175,22 @@ internal object SmbAvioBridge {
     fun readHandle(handleId: Long, offset: Long, buffer: ByteArray, length: Int): Int {
         val handle = activeHandles[handleId]
             ?: throw IllegalStateException("SMB AVIO handle is not open")
-        if (offset < 0L) {
-            throw IllegalArgumentException("SMB AVIO offset must be non-negative")
-        }
-        val clampedLength = length.coerceIn(0, buffer.size)
-        if (clampedLength <= 0) {
-            return 0
-        }
-        synchronized(handle.lock) {
-            if (offset >= handle.sizeBytes) {
-                return 0
-            }
-            try {
-                return handle.file.read(buffer, offset, 0, clampedLength).coerceAtLeast(0)
-            } catch (t: Throwable) {
-                if (!isRetryableSmbTransportFailure(t)) {
-                    activeHandles.remove(handleId, handle)
-                    closeSmbAvioHandleResources(handle)
-                    throw t
-                }
-                closeSmbAvioHandleResources(handle)
-                val reopened = try {
-                    openSmbAvioFile(handle.spec, handle.remotePath)
-                } catch (reopenFailure: Throwable) {
-                    activeHandles.remove(handleId, handle)
-                    throw reopenFailure
-                }
-                handle.replace(reopened)
-                return try {
-                    handle.file.read(buffer, offset, 0, clampedLength).coerceAtLeast(0)
-                } catch (retryFailure: Throwable) {
-                    activeHandles.remove(handleId, handle)
-                    closeSmbAvioHandleResources(handle)
-                    throw retryFailure
-                }
-            }
+        return try {
+            handle.read(offset = offset, buffer = buffer, length = length)
+        } catch (t: Throwable) {
+            activeHandles.remove(handleId, handle)
+            handle.close()
+            throw t
         }
     }
 
     fun getHandleSize(handleId: Long): Long {
-        return activeHandles[handleId]?.sizeBytes
+        return activeHandles[handleId]?.sizeBytes()
             ?: throw IllegalStateException("SMB AVIO handle is not open")
     }
 
     fun closeHandle(handleId: Long) {
         val handle = activeHandles.remove(handleId) ?: return
-        synchronized(handle.lock) {
-            closeSmbAvioHandleResources(handle)
-        }
+        handle.close()
     }
 }

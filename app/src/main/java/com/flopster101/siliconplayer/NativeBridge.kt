@@ -23,6 +23,10 @@ object NativeBridge {
         setUadeRuntimePaths(runtimeBaseDir ?: "", runtimeCorePath ?: "")
     }
 
+    internal fun requireAppContext(): Context {
+        return checkNotNull(appContext) { "NativeBridge context is not installed" }
+    }
+
     @JvmStatic
     fun resolveArchiveCompanionPathForNative(basePath: String?, requestedPath: String?): String? {
         if (appContext == null) return null

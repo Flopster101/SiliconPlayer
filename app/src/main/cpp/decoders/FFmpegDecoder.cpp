@@ -1038,6 +1038,9 @@ bool FFmpegDecoder::reopenSmbContextForSeekLocked(double seconds) {
 
 bool FFmpegDecoder::seekInternalLocked(double seconds) {
     if (smbAvioHandleId > 0) {
+        if (performSeekWithinCurrentContextLocked(seconds)) {
+            return true;
+        }
         return reopenSmbContextForSeekLocked(seconds);
     }
     return performSeekWithinCurrentContextLocked(seconds);

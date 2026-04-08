@@ -47,6 +47,11 @@ internal fun channelScopeVisibleElementOptions(): List<ChannelScopeVisibleElemen
             elementId = ChannelScopeVisibleElementId.Sample
         ),
         ChannelScopeVisibleElementOption(
+            coreId = "gme",
+            coreLabel = "Game Music Emu",
+            elementId = ChannelScopeVisibleElementId.Volume
+        ),
+        ChannelScopeVisibleElementOption(
             coreId = "klystrack",
             coreLabel = "Klystrack",
             elementId = ChannelScopeVisibleElementId.Volume
@@ -135,6 +140,7 @@ internal fun channelScopeVisibleElementsSummary(selectedStorageKeys: Set<String>
 internal fun channelScopeCoreIdForDecoderName(decoderName: String?): String? {
     return when (pluginNameForCoreName(decoderName)) {
         DecoderNames.LIB_OPEN_MPT -> "openmpt"
+        DecoderNames.GAME_MUSIC_EMU -> "gme"
         DecoderNames.SC68 -> "sc68"
         DecoderNames.KLYSTRACK -> "klystrack"
         DecoderNames.HIVELY_TRACKER -> "hivelytracker"

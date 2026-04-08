@@ -2,8 +2,11 @@
 #include <android/log.h>
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <limits>
+#include <memory>
 #include <vector>
 
 extern "C" {
@@ -17,6 +20,13 @@ extern "C" {
 namespace {
 constexpr int kRenderBlockFrames = 512;
 constexpr int kUnknownTaggedDurationMs = 150000;
+constexpr int kChannelScopeTextStride = 10;
+constexpr int kChannelScopeTextFlagActive = 1 << 0;
+constexpr int kGmeScopeMaxVoices = 32;
+constexpr int kGmeMultiChannelVoices = 8;
+constexpr float kGmeScopeGain = 0.9f;
+constexpr float kGmeNesScopeGain = 1.35f;
+constexpr float kGmeNesDpcmScopeGain = 0.3f;
 
 std::string safeString(const char* value) {
     return value ? std::string(value) : "";
@@ -100,9 +110,31 @@ bool hasExtension(const char* path, const char* extensionWithDot) {
     if (lowerPath.size() < lowerExt.size()) return false;
     return lowerPath.compare(lowerPath.size() - lowerExt.size(), lowerExt.size(), lowerExt) == 0;
 }
+
+bool isNesGmeType(gme_type_t type) {
+    return type == gme_nsf_type || type == gme_nsfe_type;
 }
 
-GmeDecoder::GmeDecoder() = default;
+bool isDpcmLikeVoiceName(const std::string& name) {
+    const std::string normalized = toLowerAscii(name);
+    return normalized == "dmc" || normalized == "dpcm" || normalized == "pcm";
+}
+
+bool isVrc6SawVoiceName(const std::string& name) {
+    return toLowerAscii(name) == "saw wave";
+}
+
+bool isMmc5VoiceTripletAt(const std::vector<std::string>& names, size_t index) {
+    if (index + 2 >= names.size()) {
+        return false;
+    }
+    return toLowerAscii(names[index]) == "square 3" &&
+           toLowerAscii(names[index + 1]) == "square 4" &&
+           toLowerAscii(names[index + 2]) == "pcm";
+}
+}
+
+GmeDecoder::GmeDecoder() : channelScopeState(std::make_shared<ChannelScopeSharedState>()) {}
 
 GmeDecoder::~GmeDecoder() {
     close();
@@ -117,6 +149,7 @@ bool GmeDecoder::open(const char* path) {
     }
 
     const int openSampleRate = resolveOpenSampleRateLocked(path);
+    sourcePath = path;
     const gme_err_t openErr = gme_open_file(path, &emu, openSampleRate);
     if (openErr != nullptr || emu == nullptr) {
         LOGE("gme_open_file failed: %s", openErr ? openErr : "unknown error");
@@ -179,6 +212,7 @@ bool GmeDecoder::open(const char* path) {
 
     applyRepeatBehaviorLocked();
     applyCoreOptionsLocked();
+    createScopeCaptureLocked();
     return true;
 }
 
@@ -240,7 +274,566 @@ bool GmeDecoder::applyTrackInfoLocked(int trackIndex) {
     return true;
 }
 
+void GmeDecoder::closeScopeCaptureLocked() {
+    if (scopeMultiEmu != nullptr) {
+        gme_delete(scopeMultiEmu);
+        scopeMultiEmu = nullptr;
+    }
+    if (scopeApuEmu != nullptr) {
+        gme_delete(scopeApuEmu);
+        scopeApuEmu = nullptr;
+    }
+    if (scopeVrc6Emu != nullptr) {
+        gme_delete(scopeVrc6Emu);
+        scopeVrc6Emu = nullptr;
+    }
+    if (scopeMmc5Emu != nullptr) {
+        gme_delete(scopeMmc5Emu);
+        scopeMmc5Emu = nullptr;
+    }
+    for (Music_Emu* shadow : scopeVoiceEmus) {
+        if (shadow != nullptr) {
+            gme_delete(shadow);
+        }
+    }
+    scopeVoiceEmus.clear();
+    scopePcmScratch.clear();
+    scopeApuScratch.clear();
+    scopeVrc6Scratch.clear();
+    scopeMmc5Scratch.clear();
+}
+
+Music_Emu* GmeDecoder::createScopeShadowLocked(bool multiChannel) {
+    if (!emu || sourcePath.empty()) {
+        return nullptr;
+    }
+
+    const gme_type_t type = gme_type(emu);
+    if (type == nullptr) {
+        return nullptr;
+    }
+
+    Music_Emu* shadow = multiChannel
+            ? gme_new_emu_multi_channel(type, activeSampleRate)
+            : gme_new_emu(type, activeSampleRate);
+    if (shadow == nullptr) {
+        return nullptr;
+    }
+
+    const gme_err_t loadErr = gme_load_file(shadow, sourcePath.c_str());
+    if (loadErr != nullptr) {
+        LOGW("gme_load_file(scope shadow) failed: %s", loadErr);
+        gme_delete(shadow);
+        return nullptr;
+    }
+    return shadow;
+}
+
+void GmeDecoder::resetChannelScopeLocked() {
+    scopeRingRaw.clear();
+    scopeRingChannels = 0;
+    scopeRingWritePos = 0;
+    scopeRingSamples = 0;
+    scopePcmScratch.clear();
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
+}
+
+void GmeDecoder::ensureScopeRingShapeLocked(int channelsToKeep) {
+    const int clampedChannels = std::clamp(channelsToKeep, 0, kGmeScopeMaxVoices);
+    if (clampedChannels <= 0) {
+        scopeRingRaw.clear();
+        scopeRingChannels = 0;
+        scopeRingWritePos = 0;
+        scopeRingSamples = 0;
+        return;
+    }
+    const size_t requiredSize =
+            static_cast<size_t>(clampedChannels) * ChannelScopeSharedState::kMaxSamples;
+    if (scopeRingChannels == clampedChannels && scopeRingRaw.size() == requiredSize) {
+        return;
+    }
+    scopeRingRaw.assign(requiredSize, 0.0f);
+    scopeRingChannels = clampedChannels;
+    scopeRingWritePos = 0;
+    scopeRingSamples = 0;
+}
+
+void GmeDecoder::appendScopeFrameLocked(const float* perVoiceSamples, int channelsToWrite) {
+    if (!perVoiceSamples || channelsToWrite <= 0) {
+        return;
+    }
+    ensureScopeRingShapeLocked(channelsToWrite);
+    if (scopeRingChannels <= 0 || scopeRingRaw.empty()) {
+        return;
+    }
+    const int storedChannels = std::min(scopeRingChannels, channelsToWrite);
+    for (int channel = 0; channel < storedChannels; ++channel) {
+        scopeRingRaw[
+                static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                static_cast<size_t>(scopeRingWritePos)
+        ] = std::clamp(perVoiceSamples[channel], -1.0f, 1.0f);
+    }
+    for (int channel = storedChannels; channel < scopeRingChannels; ++channel) {
+        scopeRingRaw[
+                static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                static_cast<size_t>(scopeRingWritePos)
+        ] = 0.0f;
+    }
+    scopeRingWritePos = (scopeRingWritePos + 1) % ChannelScopeSharedState::kMaxSamples;
+    scopeRingSamples = std::min(scopeRingSamples + 1, ChannelScopeSharedState::kMaxSamples);
+}
+
+void GmeDecoder::publishScopeSnapshotLocked() {
+    if (!channelScopeState) {
+        return;
+    }
+    if (scopeRingChannels <= 0 || scopeRingRaw.empty() || scopeRingSamples <= 0) {
+        channelScopeState->clear();
+        return;
+    }
+
+    std::vector<float> raw(
+            static_cast<size_t>(scopeRingChannels) * ChannelScopeSharedState::kMaxSamples,
+            0.0f
+    );
+    std::vector<float> vu(static_cast<size_t>(scopeRingChannels), 0.0f);
+    const int filledSamples = std::clamp(scopeRingSamples, 0, ChannelScopeSharedState::kMaxSamples);
+    const int zeroPrefix = ChannelScopeSharedState::kMaxSamples - filledSamples;
+    const int trailingSamples = std::clamp(activeSampleRate > 0 ? activeSampleRate / 50 : 64, 64, 1024);
+
+    for (int channel = 0; channel < scopeRingChannels; ++channel) {
+        float* dst = raw.data() + static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples;
+        for (int i = 0; i < filledSamples; ++i) {
+            const int ringIndex =
+                    (scopeRingWritePos - filledSamples + i + ChannelScopeSharedState::kMaxSamples) %
+                    ChannelScopeSharedState::kMaxSamples;
+            dst[zeroPrefix + i] = scopeRingRaw[
+                    static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                    static_cast<size_t>(ringIndex)
+            ];
+        }
+
+        float peak = 0.0f;
+        const int start = std::max(0, ChannelScopeSharedState::kMaxSamples - trailingSamples);
+        for (int i = start; i < ChannelScopeSharedState::kMaxSamples; ++i) {
+            peak = std::max(peak, std::abs(dst[i]));
+        }
+        vu[static_cast<size_t>(channel)] = std::clamp(peak, 0.0f, 1.0f);
+    }
+
+    std::lock_guard<std::mutex> channelScopeLock(channelScopeState->mutex);
+    channelScopeState->snapshotRaw = std::move(raw);
+    channelScopeState->snapshotVu = std::move(vu);
+    channelScopeState->snapshotChannels = scopeRingChannels;
+    channelScopeState->snapshotSerial = ++channelScopeSourceSerial;
+}
+
+void GmeDecoder::applyRepeatBehaviorToEmuLocked(Music_Emu* target) {
+    if (!target) return;
+    const int mode = repeatMode.load();
+
+    if (mode == 2) {
+        gme_set_autoload_playback_limit(target, 0);
+        gme_ignore_silence(target, 1);
+        gme_set_fade_msecs(target, std::numeric_limits<int>::max() / 2, 1);
+    } else {
+        gme_set_autoload_playback_limit(target, 1);
+        gme_ignore_silence(target, 0);
+        if (duration > 0.0 && !(isSpcTrack && spcUseBuiltInFade)) {
+            const int fadeStartMs = static_cast<int>(duration * 1000.0);
+            gme_set_fade_msecs(target, fadeStartMs, 50);
+        }
+    }
+}
+
+void GmeDecoder::applyCoreOptionsToEmuLocked(Music_Emu* target, bool forScopeCapture) const {
+    if (!target) return;
+    gme_set_tempo(target, tempo);
+    gme_set_stereo_depth(target, forScopeCapture ? 0.0 : stereoDepth);
+    gme_disable_echo(target, echoEnabled ? 0 : 1);
+    gme_enable_accuracy(target, accuracyEnabled ? 1 : 0);
+    gme_equalizer_t eq{};
+    eq.treble = eqTrebleDb;
+    eq.bass = eqBassHz;
+    gme_set_equalizer(target, &eq);
+
+    if (isSpcTrack) {
+        gme_set_spc_interpolation(target, spcInterpolation);
+    }
+}
+
+void GmeDecoder::applyToggleChannelMutesToEmuLocked(Music_Emu* target, int soloVoice) const {
+    if (!target) return;
+    const int totalVoices = std::min(
+            std::max(0, gme_voice_count(target)),
+            static_cast<int>(toggleChannelMuted.size())
+    );
+    for (int voice = 0; voice < totalVoices; ++voice) {
+        bool mute = toggleChannelMuted[static_cast<size_t>(voice)];
+        if (soloVoice >= 0 && voice != soloVoice) {
+            mute = true;
+        }
+        gme_mute_voice(target, voice, mute ? 1 : 0);
+    }
+}
+
+int GmeDecoder::buildScopeVrc6MuteMaskLocked() const {
+    if (scopeVrc6BaseVoice < 0) {
+        return 0;
+    }
+
+    int mask = 0;
+    for (int offset = 0; offset < 3; ++offset) {
+        const int voice = scopeVrc6BaseVoice + offset;
+        if (voice >= static_cast<int>(toggleChannelMuted.size()) ||
+            toggleChannelMuted[static_cast<size_t>(voice)]) {
+            mask |= (1 << offset);
+        }
+    }
+    return mask;
+}
+
+int GmeDecoder::buildScopeApuMuteMaskLocked() const {
+    int mask = 0;
+    const int totalBaseVoices = std::min(5, static_cast<int>(toggleChannelMuted.size()));
+    for (int voice = 0; voice < totalBaseVoices; ++voice) {
+        if (toggleChannelMuted[static_cast<size_t>(voice)]) {
+            mask |= (1 << voice);
+        }
+    }
+    return mask;
+}
+
+int GmeDecoder::buildScopeMmc5MuteMaskLocked() const {
+    if (scopeMmc5BaseVoice < 0) {
+        return 0;
+    }
+
+    int mask = 0;
+    for (int offset = 0; offset < 3; ++offset) {
+        const int voice = scopeMmc5BaseVoice + offset;
+        if (voice >= static_cast<int>(toggleChannelMuted.size()) ||
+            toggleChannelMuted[static_cast<size_t>(voice)]) {
+            mask |= (1 << offset);
+        }
+    }
+    return mask;
+}
+
+bool GmeDecoder::syncScopeCaptureLocked(int positionMs) {
+    if (scopeMultiEmu == nullptr && scopeApuEmu == nullptr && scopeVrc6Emu == nullptr &&
+            scopeMmc5Emu == nullptr && scopeVoiceEmus.empty()) {
+        return false;
+    }
+
+    auto syncShadow = [&](Music_Emu* shadow, int soloVoice) -> bool {
+        if (!shadow) return false;
+        applyRepeatBehaviorToEmuLocked(shadow);
+        applyCoreOptionsToEmuLocked(shadow, true);
+        const gme_err_t startErr = gme_start_track(shadow, activeTrack);
+        if (startErr != nullptr) {
+            LOGW("gme_start_track(scope shadow) failed: %s", startErr);
+            return false;
+        }
+        applyRepeatBehaviorToEmuLocked(shadow);
+        applyCoreOptionsToEmuLocked(shadow, true);
+        applyToggleChannelMutesToEmuLocked(shadow, soloVoice);
+        if (positionMs > 0) {
+            const gme_err_t seekErr = gme_seek(shadow, positionMs);
+            if (seekErr != nullptr) {
+                LOGW("gme_seek(scope shadow) failed: %s", seekErr);
+                return false;
+            }
+        }
+        return true;
+    };
+
+    if (scopeMultiEmu != nullptr && !syncShadow(scopeMultiEmu, -1)) {
+        closeScopeCaptureLocked();
+        resetChannelScopeLocked();
+        return false;
+    }
+    if (scopeApuEmu != nullptr && !syncShadow(scopeApuEmu, -1)) {
+        closeScopeCaptureLocked();
+        resetChannelScopeLocked();
+        return false;
+    }
+    if (scopeVrc6Emu != nullptr && !syncShadow(scopeVrc6Emu, -1)) {
+        closeScopeCaptureLocked();
+        resetChannelScopeLocked();
+        return false;
+    }
+    if (scopeMmc5Emu != nullptr && !syncShadow(scopeMmc5Emu, -1)) {
+        closeScopeCaptureLocked();
+        resetChannelScopeLocked();
+        return false;
+    }
+    if (scopeVrc6Emu != nullptr) {
+        gme_set_nsf_vrc6_scope_mute_mask(scopeVrc6Emu, buildScopeVrc6MuteMaskLocked());
+        gme_clear_nsf_vrc6_scope(scopeVrc6Emu);
+    }
+    if (scopeApuEmu != nullptr) {
+        gme_set_nsf_apu_scope_mute_mask(scopeApuEmu, buildScopeApuMuteMaskLocked());
+        gme_clear_nsf_apu_scope(scopeApuEmu);
+    }
+    if (scopeMmc5Emu != nullptr) {
+        gme_set_nsf_mmc5_scope_mute_mask(scopeMmc5Emu, buildScopeMmc5MuteMaskLocked());
+        gme_clear_nsf_mmc5_scope(scopeMmc5Emu);
+    }
+    for (int voice = 0; voice < static_cast<int>(scopeVoiceEmus.size()); ++voice) {
+        Music_Emu* shadow = scopeVoiceEmus[static_cast<size_t>(voice)];
+        if (shadow == nullptr) {
+            continue;
+        }
+        if (!syncShadow(shadow, voice)) {
+            closeScopeCaptureLocked();
+            resetChannelScopeLocked();
+            return false;
+        }
+    }
+
+    resetChannelScopeLocked();
+    return true;
+}
+
+bool GmeDecoder::createScopeCaptureLocked() {
+    closeScopeCaptureLocked();
+    resetChannelScopeLocked();
+
+    const int totalVoices = std::min(std::max(0, voiceCount), kGmeScopeMaxVoices);
+    if (!emu || sourcePath.empty() || totalVoices <= 0) {
+        return false;
+    }
+
+    if (Music_Emu* multiShadow = createScopeShadowLocked(true)) {
+        if (gme_multi_channel(multiShadow) != 0) {
+            scopeMultiEmu = multiShadow;
+        } else {
+            gme_delete(multiShadow);
+        }
+    }
+
+    scopeVoiceEmus.assign(static_cast<size_t>(totalVoices), nullptr);
+
+    if (scopeMultiEmu == nullptr) {
+        for (int voice = 0; voice < totalVoices; ++voice) {
+            Music_Emu* shadow = createScopeShadowLocked(false);
+            if (shadow == nullptr) {
+                closeScopeCaptureLocked();
+                resetChannelScopeLocked();
+                return false;
+            }
+            scopeVoiceEmus[static_cast<size_t>(voice)] = shadow;
+        }
+    } else {
+        for (int voice = kGmeMultiChannelVoices; voice < totalVoices; ++voice) {
+            Music_Emu* shadow = createScopeShadowLocked(false);
+            if (shadow == nullptr) {
+                closeScopeCaptureLocked();
+                resetChannelScopeLocked();
+                return false;
+            }
+            scopeVoiceEmus[static_cast<size_t>(voice)] = shadow;
+        }
+        if (isNesGmeType(gme_type(emu)) && totalVoices > 0 && gme_nsf_has_apu_scope(emu) != 0) {
+            scopeApuEmu = createScopeShadowLocked(false);
+            if (scopeApuEmu == nullptr) {
+                closeScopeCaptureLocked();
+                resetChannelScopeLocked();
+                return false;
+            }
+        }
+        if (scopeVrc6BaseVoice >= 0 && gme_nsf_has_vrc6(emu) != 0) {
+            scopeVrc6Emu = createScopeShadowLocked(false);
+            if (scopeVrc6Emu == nullptr) {
+                closeScopeCaptureLocked();
+                resetChannelScopeLocked();
+                return false;
+            }
+        }
+        if (scopeMmc5BaseVoice >= 0 && gme_nsf_has_mmc5(emu) != 0) {
+            scopeMmc5Emu = createScopeShadowLocked(false);
+            if (scopeMmc5Emu == nullptr) {
+                closeScopeCaptureLocked();
+                resetChannelScopeLocked();
+                return false;
+            }
+        }
+    }
+
+    return syncScopeCaptureLocked(0);
+}
+
+void GmeDecoder::captureChannelScopeBlockLocked(int frames) {
+    const int totalVoices = std::min(std::max(0, voiceCount), kGmeScopeMaxVoices);
+    if (frames <= 0 || totalVoices <= 0 || (!scopeMultiEmu && scopeApuEmu == nullptr && scopeVrc6Emu == nullptr &&
+            scopeMmc5Emu == nullptr && scopeVoiceEmus.empty())) {
+        return;
+    }
+
+    std::vector<float> perVoiceFrame(static_cast<size_t>(totalVoices), 0.0f);
+    std::vector<float> capturedBlocks(static_cast<size_t>(totalVoices * frames), 0.0f);
+    if (scopeMultiEmu != nullptr) {
+        const int multiVoices = std::min(totalVoices, kGmeMultiChannelVoices);
+        const int outputChannels = kGmeMultiChannelVoices * 2;
+        const int samplesToRead = frames * outputChannels;
+        if (static_cast<int>(scopePcmScratch.size()) < samplesToRead) {
+            scopePcmScratch.resize(static_cast<size_t>(samplesToRead));
+        }
+        const gme_err_t playErr = gme_play(scopeMultiEmu, samplesToRead, scopePcmScratch.data());
+        if (playErr != nullptr) {
+            LOGW("gme_play(scope multi) failed: %s", playErr);
+            closeScopeCaptureLocked();
+            resetChannelScopeLocked();
+            return;
+        }
+
+        for (int frame = 0; frame < frames; ++frame) {
+            for (int voice = 0; voice < multiVoices; ++voice) {
+                const size_t base =
+                        (static_cast<size_t>(frame) * kGmeMultiChannelVoices + static_cast<size_t>(voice)) * 2u;
+                const float left = static_cast<float>(scopePcmScratch[base]) / 32768.0f;
+                const float right = static_cast<float>(scopePcmScratch[base + 1u]) / 32768.0f;
+                const float voiceGain = voice < static_cast<int>(scopeVoiceGains.size())
+                        ? scopeVoiceGains[static_cast<size_t>(voice)]
+                        : kGmeScopeGain;
+                capturedBlocks[static_cast<size_t>(voice * frames + frame)] =
+                        std::clamp(((left + right) * 0.5f) * voiceGain, -1.0f, 1.0f);
+            }
+        }
+    }
+
+    const int stereoSamples = frames * channels;
+    if (static_cast<int>(scopePcmScratch.size()) < stereoSamples) {
+        scopePcmScratch.resize(static_cast<size_t>(stereoSamples));
+    }
+    for (int voice = 0; voice < totalVoices; ++voice) {
+        Music_Emu* shadow = voice < static_cast<int>(scopeVoiceEmus.size())
+                ? scopeVoiceEmus[static_cast<size_t>(voice)]
+                : nullptr;
+        if (!shadow) continue;
+
+        const gme_err_t playErr = gme_play(shadow, stereoSamples, scopePcmScratch.data());
+        if (playErr != nullptr) {
+            LOGW("gme_play(scope voice shadow) failed: %s", playErr);
+            closeScopeCaptureLocked();
+            resetChannelScopeLocked();
+            return;
+        }
+        for (int frame = 0; frame < frames; ++frame) {
+            const size_t base = static_cast<size_t>(frame * channels);
+            const float left = static_cast<float>(scopePcmScratch[base]) / 32768.0f;
+            const float right = static_cast<float>(scopePcmScratch[base + 1u]) / 32768.0f;
+            const float voiceGain = voice < static_cast<int>(scopeVoiceGains.size())
+                    ? scopeVoiceGains[static_cast<size_t>(voice)]
+                    : kGmeScopeGain;
+            capturedBlocks[static_cast<size_t>(voice * frames + frame)] =
+                    std::clamp(((left + right) * 0.5f) * voiceGain, -1.0f, 1.0f);
+        }
+    }
+
+    if (scopeVrc6Emu != nullptr && scopeVrc6BaseVoice >= 0 && scopeVrc6BaseVoice + 2 < totalVoices) {
+        const size_t required = static_cast<size_t>(frames * 3);
+        if (scopeVrc6Scratch.size() < required) {
+            scopeVrc6Scratch.resize(required);
+        }
+        const gme_err_t playErr = gme_play_nsf_vrc6_scope(scopeVrc6Emu, frames, scopeVrc6Scratch.data());
+        if (playErr != nullptr) {
+            LOGW("gme_play_nsf_vrc6_scope failed: %s", playErr);
+            closeScopeCaptureLocked();
+            resetChannelScopeLocked();
+            return;
+        }
+        for (int frame = 0; frame < frames; ++frame) {
+            for (int offset = 0; offset < 3; ++offset) {
+                const int voice = scopeVrc6BaseVoice + offset;
+                float sample = static_cast<float>(scopeVrc6Scratch[static_cast<size_t>(frame * 3 + offset)]) / 32768.0f;
+                const float voiceGain = voice < static_cast<int>(scopeVoiceGains.size())
+                        ? scopeVoiceGains[static_cast<size_t>(voice)]
+                        : kGmeScopeGain;
+                if (voice < static_cast<int>(toggleChannelMuted.size()) &&
+                    toggleChannelMuted[static_cast<size_t>(voice)]) {
+                    sample = 0.0f;
+                } else {
+                    sample = std::clamp(sample * voiceGain, -1.0f, 1.0f);
+                }
+                capturedBlocks[static_cast<size_t>(voice * frames + frame)] = sample;
+            }
+        }
+    }
+    if (scopeApuEmu != nullptr) {
+        const int apuVoices = std::min(5, totalVoices);
+        const size_t required = static_cast<size_t>(frames * 5);
+        if (scopeApuScratch.size() < required) {
+            scopeApuScratch.resize(required);
+        }
+        const gme_err_t playErr = gme_play_nsf_apu_scope(scopeApuEmu, frames, scopeApuScratch.data());
+        if (playErr != nullptr) {
+            LOGW("gme_play_nsf_apu_scope failed: %s", playErr);
+            closeScopeCaptureLocked();
+            resetChannelScopeLocked();
+            return;
+        }
+        for (int frame = 0; frame < frames; ++frame) {
+            for (int voice = 0; voice < apuVoices; ++voice) {
+                float sample = static_cast<float>(scopeApuScratch[static_cast<size_t>(frame * 5 + voice)]) / 32768.0f;
+                const float voiceGain = voice < static_cast<int>(scopeVoiceGains.size())
+                        ? scopeVoiceGains[static_cast<size_t>(voice)]
+                        : kGmeScopeGain;
+                if (voice < static_cast<int>(toggleChannelMuted.size()) &&
+                    toggleChannelMuted[static_cast<size_t>(voice)]) {
+                    sample = 0.0f;
+                } else {
+                    sample = std::clamp(sample * voiceGain, -1.0f, 1.0f);
+                }
+                capturedBlocks[static_cast<size_t>(voice * frames + frame)] = sample;
+            }
+        }
+    }
+    if (scopeMmc5Emu != nullptr && scopeMmc5BaseVoice >= 0 && scopeMmc5BaseVoice + 2 < totalVoices) {
+        const size_t required = static_cast<size_t>(frames * 3);
+        if (scopeMmc5Scratch.size() < required) {
+            scopeMmc5Scratch.resize(required);
+        }
+        const gme_err_t playErr = gme_play_nsf_mmc5_scope(scopeMmc5Emu, frames, scopeMmc5Scratch.data());
+        if (playErr != nullptr) {
+            LOGW("gme_play_nsf_mmc5_scope failed: %s", playErr);
+            closeScopeCaptureLocked();
+            resetChannelScopeLocked();
+            return;
+        }
+        for (int frame = 0; frame < frames; ++frame) {
+            for (int offset = 0; offset < 3; ++offset) {
+                const int voice = scopeMmc5BaseVoice + offset;
+                float sample = static_cast<float>(scopeMmc5Scratch[static_cast<size_t>(frame * 3 + offset)]) / 32768.0f;
+                const float voiceGain = voice < static_cast<int>(scopeVoiceGains.size())
+                        ? scopeVoiceGains[static_cast<size_t>(voice)]
+                        : kGmeScopeGain;
+                if (voice < static_cast<int>(toggleChannelMuted.size()) &&
+                    toggleChannelMuted[static_cast<size_t>(voice)]) {
+                    sample = 0.0f;
+                } else {
+                    sample = std::clamp(sample * voiceGain, -1.0f, 1.0f);
+                }
+                capturedBlocks[static_cast<size_t>(voice * frames + frame)] = sample;
+            }
+        }
+    }
+    for (int frame = 0; frame < frames; ++frame) {
+        std::fill(perVoiceFrame.begin(), perVoiceFrame.end(), 0.0f);
+        for (int voice = 0; voice < totalVoices; ++voice) {
+            perVoiceFrame[static_cast<size_t>(voice)] =
+                    capturedBlocks[static_cast<size_t>(voice * frames + frame)];
+        }
+        appendScopeFrameLocked(perVoiceFrame.data(), totalVoices);
+    }
+    publishScopeSnapshotLocked();
+}
+
 void GmeDecoder::closeInternal() {
+    closeScopeCaptureLocked();
     if (emu != nullptr) {
         gme_delete(emu);
         emu = nullptr;
@@ -267,9 +860,14 @@ void GmeDecoder::closeInternal() {
     copyrightText.clear();
     commentText.clear();
     dumper.clear();
+    sourcePath.clear();
     voiceCount = 0;
     toggleChannelNames.clear();
     toggleChannelMuted.clear();
+    scopeVoiceGains.clear();
+    scopeVrc6BaseVoice = -1;
+    scopeMmc5BaseVoice = -1;
+    resetChannelScopeLocked();
 }
 
 int GmeDecoder::getPlaybackCapabilities() const {
@@ -314,6 +912,7 @@ int GmeDecoder::read(float* buffer, int numFrames) {
         for (int i = 0; i < samplesToRead; ++i) {
             buffer[(framesRead * channels) + i] = static_cast<float>(pcmBlock[i]) / 32768.0f;
         }
+        captureChannelScopeBlockLocked(framesToRead);
         framesRead += framesToRead;
 
         if (gme_track_ended(emu)) {
@@ -331,6 +930,7 @@ int GmeDecoder::read(float* buffer, int numFrames) {
                 applyToggleChannelMutesLocked();
                 playbackPositionSeconds = 0.0;
                 lastTellMs = 0;
+                syncScopeCaptureLocked(0);
                 continue;
             }
             if (mode == 2) {
@@ -345,6 +945,7 @@ int GmeDecoder::read(float* buffer, int numFrames) {
                 }
                 applyCoreOptionsLocked();
                 applyToggleChannelMutesLocked();
+                int scopeRestartMs = 0;
                 if (hasLoopPoint && loopStartMs >= 0) {
                     const gme_err_t loopSeekErr = gme_seek(emu, loopStartMs);
                     if (loopSeekErr != nullptr) {
@@ -352,11 +953,13 @@ int GmeDecoder::read(float* buffer, int numFrames) {
                     } else {
                         playbackPositionSeconds = static_cast<double>(loopStartMs) / 1000.0;
                         lastTellMs = loopStartMs;
+                        scopeRestartMs = loopStartMs;
                     }
                 } else {
                     playbackPositionSeconds = 0.0;
                     lastTellMs = 0;
                 }
+                syncScopeCaptureLocked(scopeRestartMs);
                 continue;
             }
 
@@ -405,6 +1008,7 @@ void GmeDecoder::seek(double seconds) {
     playbackPositionSeconds = static_cast<double>(targetMs) / 1000.0;
     lastTellMs = targetMs;
     pendingTerminalEnd = false;
+    syncScopeCaptureLocked(targetMs);
 }
 
 double GmeDecoder::getDuration() {
@@ -468,6 +1072,7 @@ bool GmeDecoder::selectSubtune(int index) {
     voiceCount = std::max(0, gme_voice_count(emu));
     rebuildToggleChannelsLocked();
     applyToggleChannelMutesLocked();
+    createScopeCaptureLocked();
     return true;
 }
 
@@ -599,6 +1204,7 @@ void GmeDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
     }
     toggleChannelMuted[static_cast<size_t>(channelIndex)] = enabled;
     applyToggleChannelMutesLocked();
+    resetChannelScopeLocked();
 }
 
 bool GmeDecoder::getToggleChannelMuted(int channelIndex) const {
@@ -615,6 +1221,7 @@ void GmeDecoder::clearToggleChannelMutes() {
     if (!emu) return;
     std::fill(toggleChannelMuted.begin(), toggleChannelMuted.end(), false);
     applyToggleChannelMutesLocked();
+    resetChannelScopeLocked();
 }
 
 void GmeDecoder::setOutputSampleRate(int rate) {
@@ -710,6 +1317,51 @@ double GmeDecoder::getPlaybackPositionSeconds() {
     return static_cast<double>(gme_tell(emu)) / 1000.0;
 }
 
+std::vector<int32_t> GmeDecoder::getChannelScopeTextState(int maxChannels) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (scopeRingChannels <= 0 || scopeRingSamples <= 0 || scopeRingRaw.empty()) {
+        return {};
+    }
+
+    const int channelsToExport = std::min(scopeRingChannels, std::clamp(maxChannels, 1, kGmeScopeMaxVoices));
+    std::vector<int32_t> flat(static_cast<size_t>(channelsToExport * kChannelScopeTextStride), -1);
+    const int trailingSamples = std::clamp(activeSampleRate > 0 ? activeSampleRate / 50 : 64, 64, 1024);
+    const int recentSamples = std::min(scopeRingSamples, trailingSamples);
+    for (int channel = 0; channel < channelsToExport; ++channel) {
+        float recentPeak = 0.0f;
+        for (int i = 0; i < recentSamples; ++i) {
+            const int ringIndex =
+                    (scopeRingWritePos - recentSamples + i + ChannelScopeSharedState::kMaxSamples) %
+                    ChannelScopeSharedState::kMaxSamples;
+            recentPeak = std::max(
+                    recentPeak,
+                    std::abs(scopeRingRaw[
+                            static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                            static_cast<size_t>(ringIndex)
+                    ])
+            );
+        }
+
+        const size_t base = static_cast<size_t>(channel * kChannelScopeTextStride);
+        int flags = 0;
+        if (recentPeak > 0.0015f) {
+            flags |= kChannelScopeTextFlagActive;
+        }
+
+        flat[base + 0] = channel;
+        flat[base + 1] = -1;
+        flat[base + 2] = std::clamp(static_cast<int>(std::lround(recentPeak * 64.0f)), 0, 64);
+        flat[base + 3] = 0;
+        flat[base + 4] = -1;
+        flat[base + 5] = 0;
+        flat[base + 6] = -1;
+        flat[base + 7] = -1;
+        flat[base + 8] = -1;
+        flat[base + 9] = flags;
+    }
+    return flat;
+}
+
 AudioDecoder::TimelineMode GmeDecoder::getTimelineMode() const {
     return TimelineMode::Discontinuous;
 }
@@ -735,38 +1387,40 @@ std::vector<std::string> GmeDecoder::getSupportedExtensions() {
 }
 
 void GmeDecoder::applyRepeatBehaviorLocked() {
-    if (!emu) return;
-    const int mode = repeatMode.load();
-
-    if (mode == 2) {
-        // LP mode: prefer emulator-native looping behavior, especially for sets
-        // that do not expose explicit intro/loop metadata.
-        gme_set_autoload_playback_limit(emu, 0);
-        gme_ignore_silence(emu, 1);
-        gme_set_fade_msecs(emu, std::numeric_limits<int>::max() / 2, 1);
-    } else {
-        gme_set_autoload_playback_limit(emu, 1);
-        gme_ignore_silence(emu, 0);
-        if (duration > 0.0 && !(isSpcTrack && spcUseBuiltInFade)) {
-            const int fadeStartMs = static_cast<int>(duration * 1000.0);
-            gme_set_fade_msecs(emu, fadeStartMs, 50);
-        }
+    applyRepeatBehaviorToEmuLocked(emu);
+    if (scopeMultiEmu != nullptr) {
+        applyRepeatBehaviorToEmuLocked(scopeMultiEmu);
+    }
+    if (scopeVrc6Emu != nullptr) {
+        applyRepeatBehaviorToEmuLocked(scopeVrc6Emu);
+    }
+    if (scopeApuEmu != nullptr) {
+        applyRepeatBehaviorToEmuLocked(scopeApuEmu);
+    }
+    if (scopeMmc5Emu != nullptr) {
+        applyRepeatBehaviorToEmuLocked(scopeMmc5Emu);
+    }
+    for (Music_Emu* shadow : scopeVoiceEmus) {
+        applyRepeatBehaviorToEmuLocked(shadow);
     }
 }
 
 void GmeDecoder::applyCoreOptionsLocked() {
-    if (!emu) return;
-    gme_set_tempo(emu, tempo);
-    gme_set_stereo_depth(emu, stereoDepth);
-    gme_disable_echo(emu, echoEnabled ? 0 : 1);
-    gme_enable_accuracy(emu, accuracyEnabled ? 1 : 0);
-    gme_equalizer_t eq{};
-    eq.treble = eqTrebleDb;
-    eq.bass = eqBassHz;
-    gme_set_equalizer(emu, &eq);
-
-    if (isSpcTrack) {
-        gme_set_spc_interpolation(emu, spcInterpolation);
+    applyCoreOptionsToEmuLocked(emu, false);
+    if (scopeMultiEmu != nullptr) {
+        applyCoreOptionsToEmuLocked(scopeMultiEmu, true);
+    }
+    if (scopeVrc6Emu != nullptr) {
+        applyCoreOptionsToEmuLocked(scopeVrc6Emu, true);
+    }
+    if (scopeApuEmu != nullptr) {
+        applyCoreOptionsToEmuLocked(scopeApuEmu, true);
+    }
+    if (scopeMmc5Emu != nullptr) {
+        applyCoreOptionsToEmuLocked(scopeMmc5Emu, true);
+    }
+    for (Music_Emu* shadow : scopeVoiceEmus) {
+        applyCoreOptionsToEmuLocked(shadow, true);
     }
 }
 
@@ -792,20 +1446,78 @@ void GmeDecoder::rebuildToggleChannelsLocked() {
             toggleChannelMuted[static_cast<size_t>(voice)] = previous[static_cast<size_t>(voice)];
         }
     }
+    rebuildScopeVoiceGainsLocked();
+    rebuildScopeVrc6BaseVoiceLocked();
+    rebuildScopeMmc5BaseVoiceLocked();
+}
+
+void GmeDecoder::rebuildScopeVoiceGainsLocked() {
+    scopeVoiceGains.assign(toggleChannelNames.size(), kGmeScopeGain);
+    if (!emu || !isNesGmeType(gme_type(emu))) {
+        return;
+    }
+
+    for (size_t voice = 0; voice < scopeVoiceGains.size(); ++voice) {
+        scopeVoiceGains[voice] = isDpcmLikeVoiceName(toggleChannelNames[voice])
+                ? kGmeNesDpcmScopeGain
+                : kGmeNesScopeGain;
+    }
+}
+
+void GmeDecoder::rebuildScopeVrc6BaseVoiceLocked() {
+    scopeVrc6BaseVoice = -1;
+    if (!emu || !isNesGmeType(gme_type(emu))) {
+        return;
+    }
+
+    auto sawIt = std::find_if(
+            toggleChannelNames.begin(),
+            toggleChannelNames.end(),
+            [](const std::string& name) { return isVrc6SawVoiceName(name); }
+    );
+    if (sawIt == toggleChannelNames.end()) {
+        return;
+    }
+    scopeVrc6BaseVoice = static_cast<int>(std::distance(toggleChannelNames.begin(), sawIt));
+}
+
+void GmeDecoder::rebuildScopeMmc5BaseVoiceLocked() {
+    scopeMmc5BaseVoice = -1;
+    if (!emu || !isNesGmeType(gme_type(emu))) {
+        return;
+    }
+
+    for (size_t index = 0; index < toggleChannelNames.size(); ++index) {
+        if (isMmc5VoiceTripletAt(toggleChannelNames, index)) {
+            scopeMmc5BaseVoice = static_cast<int>(index);
+            return;
+        }
+    }
 }
 
 void GmeDecoder::applyToggleChannelMutesLocked() {
-    if (!emu) return;
-    const int totalVoices = std::min(
-            std::max(0, gme_voice_count(emu)),
+    applyToggleChannelMutesToEmuLocked(emu);
+    if (scopeMultiEmu != nullptr) {
+        applyToggleChannelMutesToEmuLocked(scopeMultiEmu);
+    }
+    if (scopeVrc6Emu != nullptr) {
+        applyToggleChannelMutesToEmuLocked(scopeVrc6Emu);
+        gme_set_nsf_vrc6_scope_mute_mask(scopeVrc6Emu, buildScopeVrc6MuteMaskLocked());
+    }
+    if (scopeApuEmu != nullptr) {
+        applyToggleChannelMutesToEmuLocked(scopeApuEmu);
+        gme_set_nsf_apu_scope_mute_mask(scopeApuEmu, buildScopeApuMuteMaskLocked());
+    }
+    if (scopeMmc5Emu != nullptr) {
+        applyToggleChannelMutesToEmuLocked(scopeMmc5Emu);
+        gme_set_nsf_mmc5_scope_mute_mask(scopeMmc5Emu, buildScopeMmc5MuteMaskLocked());
+    }
+    const int totalShadows = std::min(
+            static_cast<int>(scopeVoiceEmus.size()),
             static_cast<int>(toggleChannelMuted.size())
     );
-    for (int voice = 0; voice < totalVoices; ++voice) {
-        gme_mute_voice(
-                emu,
-                voice,
-                toggleChannelMuted[static_cast<size_t>(voice)] ? 1 : 0
-        );
+    for (int voice = 0; voice < totalShadows; ++voice) {
+        applyToggleChannelMutesToEmuLocked(scopeVoiceEmus[static_cast<size_t>(voice)], voice);
     }
 }
 

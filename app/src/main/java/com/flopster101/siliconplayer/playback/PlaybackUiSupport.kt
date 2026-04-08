@@ -118,6 +118,7 @@ internal fun isVisualizationModeSupported(
 internal fun supportsChannelScopeVisualization(coreNameForUi: String?): Boolean {
     return when (pluginNameForCoreName(coreNameForUi)) {
         DecoderNames.LIB_OPEN_MPT,
+        DecoderNames.GAME_MUSIC_EMU,
         DecoderNames.SC68,
         DecoderNames.HIVELY_TRACKER,
         DecoderNames.KLYSTRACK,

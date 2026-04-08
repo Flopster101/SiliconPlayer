@@ -1,0 +1,257 @@
+From f646ca34166a30f16e0ae0c8852ddd2002aad444 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Wed, 8 Apr 2026 19:12:05 -0300
+Subject: [PATCH] Expose isolated NSF APU scope playback for host visualizers
+
+---
+ gme/Nsf_Emu.cpp | 105 ++++++++++++++++++++++++++++++++++++++++++++++++
+ gme/Nsf_Emu.h   |  11 +++++
+ gme/gme.cpp     |  44 ++++++++++++++++++++
+ gme/gme.h       |  15 +++++++
+ 4 files changed, 175 insertions(+)
+
+diff --git a/gme/Nsf_Emu.cpp b/gme/Nsf_Emu.cpp
+index 71aab7d..a5f8d4f 100644
+--- a/gme/Nsf_Emu.cpp
++++ b/gme/Nsf_Emu.cpp
+@@ -65,6 +65,8 @@ Nsf_Emu::Nsf_Emu()
+ 	apu.dmc_reader( pcm_read, this );
+ 	Music_Emu::set_equalizer( nes_eq );
+ 	set_gain( 1.4 );
++	apu_scope_ready = false;
++	apu_scope_mute_mask = 0;
+ 	vrc6_scope_ready = false;
+ 	vrc6_scope_mute_mask = 0;
+ 	mmc5_scope_ready = false;
+@@ -148,6 +150,109 @@ blargg_err_t Nsf_Emu::init_vrc6_scope_()
+ 	return 0;
+ }
+ 
++blargg_err_t Nsf_Emu::init_apu_scope_()
++{
++	if ( !apu_scope_ready )
++	{
++		for ( int i = 0; i < apu_scope_channel_count; ++i )
++		{
++			RETURN_ERR( apu_scope_buffers [i].set_sample_rate( sample_rate(), 1000 / 20 ) );
++			apu_scope_buffers [i].clock_rate( (uint32_t) clock_rate_ );
++			apu_scope_buffers [i].bass_freq( (int) equalizer().bass );
++		}
++		apu_scope_ready = true;
++	}
++	else
++	{
++		for ( int i = 0; i < apu_scope_channel_count; ++i )
++		{
++			apu_scope_buffers [i].clock_rate( (uint32_t) clock_rate_ );
++			apu_scope_buffers [i].bass_freq( (int) equalizer().bass );
++		}
++	}
++
++	apu.treble_eq( equalizer().treble );
++	route_apu_scope_outputs_();
++	return 0;
++}
++
++void Nsf_Emu::set_apu_scope_mute_mask_( int mask )
++{
++	apu_scope_mute_mask = mask & 0x1F;
++	if ( apu_scope_ready )
++		route_apu_scope_outputs_();
++}
++
++void Nsf_Emu::route_apu_scope_outputs_()
++{
++	if ( namco ) namco->output( NULL );
++	if ( fme7  ) fme7 ->output( NULL );
++	if ( fds   ) fds  ->osc_output( 0, NULL );
++	if ( mmc5  ) mmc5 ->output( NULL );
++	if ( vrc6  ) vrc6 ->output( NULL );
++	if ( vrc7  ) vrc7 ->set_output( NULL );
++
++	for ( int i = 0; i < apu_scope_channel_count; ++i )
++		apu.osc_output( i, (apu_scope_mute_mask & (1 << i)) ? NULL : apu_scope_buffers [i].center() );
++}
++
++void Nsf_Emu::clear_apu_scope_()
++{
++	if ( !apu_scope_ready )
++		return;
++	for ( int i = 0; i < apu_scope_channel_count; ++i )
++		apu_scope_buffers [i].clear();
++}
++
++blargg_err_t Nsf_Emu::play_apu_scope_( long frame_count, sample_t* out )
++{
++	if ( !out || frame_count <= 0 )
++		return 0;
++
++	RETURN_ERR( init_apu_scope_() );
++
++	if ( apu_scope_scratch.resize( frame_count * apu_scope_channel_count ) )
++		return "Out of memory";
++
++	long remain = frame_count;
++	while ( remain > 0 )
++	{
++		long avail = apu_scope_buffers [0].samples_avail();
++		if ( avail > remain )
++			avail = remain;
++
++		if ( avail == 0 )
++		{
++			blip_time_t clocks_emulated = apu_scope_buffers [0].center()->count_clocks( remain );
++			if ( clocks_emulated <= 0 )
++				clocks_emulated = (int32_t) apu_scope_buffers [0].length() * clock_rate_ / 1000;
++
++			int msec = int( clocks_emulated * 1000 / clock_rate_ );
++			RETURN_ERR( run_clocks( clocks_emulated, msec ) );
++			for ( int i = 0; i < apu_scope_channel_count; ++i )
++				apu_scope_buffers [i].end_frame( clocks_emulated );
++			continue;
++		}
++
++		for ( int channel = 0; channel < apu_scope_channel_count; ++channel )
++		{
++			apu_scope_buffers [channel].read_samples(
++					&apu_scope_scratch [channel * frame_count],
++					avail
++			);
++		}
++
++		for ( long frame = 0; frame < avail; ++frame )
++		{
++			for ( int channel = 0; channel < apu_scope_channel_count; ++channel )
++				*out++ = apu_scope_scratch [channel * frame_count + frame];
++		}
++		remain -= avail;
++	}
++
++	return 0;
++}
++
+ void Nsf_Emu::set_vrc6_scope_mute_mask_( int mask )
+ {
+ 	vrc6_scope_mute_mask = mask & 0x07;
+diff --git a/gme/Nsf_Emu.h b/gme/Nsf_Emu.h
+index 37fcc27..1e0518e 100644
+--- a/gme/Nsf_Emu.h
++++ b/gme/Nsf_Emu.h
+@@ -55,6 +55,10 @@ public:
+ 	Nes_Apu* apu_() { return &apu; }
+ 	bool has_vrc6() const { return vrc6 != 0; }
+ 	bool has_mmc5() const { return mmc5 != 0; }
++	bool has_apu_scope() const { return true; }
++	void set_apu_scope_mute_mask_( int mask );
++	blargg_err_t play_apu_scope_( long frame_count, sample_t* out );
++	void clear_apu_scope_();
+ 	void set_vrc6_scope_mute_mask_( int mask );
+ 	blargg_err_t play_vrc6_scope_( long frame_count, sample_t* out );
+ 	void clear_vrc6_scope_();
+@@ -108,6 +112,11 @@ private:
+ 	class Nes_Vrc7_Apu*  vrc7;
+ 	Nes_Apu apu;
+ 	blargg_vector<const char*> apu_names;
++	enum { apu_scope_channel_count = 5 };
++	Mono_Buffer apu_scope_buffers [apu_scope_channel_count];
++	blargg_vector<sample_t> apu_scope_scratch;
++	bool apu_scope_ready;
++	int apu_scope_mute_mask;
+ 	enum { vrc6_scope_channel_count = 3 };
+ 	Mono_Buffer vrc6_scope_buffers [vrc6_scope_channel_count];
+ 	blargg_vector<sample_t> vrc6_scope_scratch;
+@@ -120,8 +129,10 @@ private:
+ 	int mmc5_scope_mute_mask;
+ 	static int pcm_read( void*, nes_addr_t );
+ 	blargg_err_t init_sound();
++	blargg_err_t init_apu_scope_();
+ 	blargg_err_t init_vrc6_scope_();
+ 	blargg_err_t init_mmc5_scope_();
++	void route_apu_scope_outputs_();
+ 	void route_vrc6_scope_outputs_();
+ 	void route_mmc5_scope_outputs_();
+ 
+diff --git a/gme/gme.cpp b/gme/gme.cpp
+index e45edbb..02781e0 100644
+--- a/gme/gme.cpp
++++ b/gme/gme.cpp
+@@ -446,6 +446,50 @@ int       gme_nsf_has_mmc5   ( Music_Emu const* me )
+ 
+ 	return STATIC_CAST(Nsf_Emu const*, me)->has_mmc5() ? 1 : 0;
+ }
++int       gme_nsf_has_apu_scope( Music_Emu const* me )
++{
++	if ( !me )
++		return 0;
++
++	const gme_type_t type = me->type();
++	if ( type != gme_nsf_type && type != gme_nsfe_type )
++		return 0;
++
++	return STATIC_CAST(Nsf_Emu const*, me)->has_apu_scope() ? 1 : 0;
++}
++void gme_set_nsf_apu_scope_mute_mask( Music_Emu* me, int mask )
++{
++	if ( !me )
++		return;
++
++	const gme_type_t type = me->type();
++	if ( type != gme_nsf_type && type != gme_nsfe_type )
++		return;
++
++	STATIC_CAST(Nsf_Emu*, me)->set_apu_scope_mute_mask_( mask );
++}
++gme_err_t gme_play_nsf_apu_scope( Music_Emu* me, int frame_count, short out [] )
++{
++	if ( !me )
++		return "Invalid emulator";
++
++	const gme_type_t type = me->type();
++	if ( type != gme_nsf_type && type != gme_nsfe_type )
++		return "NSF APU scope unavailable";
++
++	return STATIC_CAST(Nsf_Emu*, me)->play_apu_scope_( frame_count, out );
++}
++void gme_clear_nsf_apu_scope( Music_Emu* me )
++{
++	if ( !me )
++		return;
++
++	const gme_type_t type = me->type();
++	if ( type != gme_nsf_type && type != gme_nsfe_type )
++		return;
++
++	STATIC_CAST(Nsf_Emu*, me)->clear_apu_scope_();
++}
+ void gme_set_nsf_vrc6_scope_mute_mask( Music_Emu* me, int mask )
+ {
+ 	if ( !me )
+diff --git a/gme/gme.h b/gme/gme.h
+index 4d8d9d0..0f59683 100644
+--- a/gme/gme.h
++++ b/gme/gme.h
+@@ -260,6 +260,21 @@ BLARGG_EXPORT int gme_nsf_has_vrc6( Music_Emu const* );
+ /* True if this NSF/NSFE emulator currently has MMC5 expansion audio active. */
+ BLARGG_EXPORT int gme_nsf_has_mmc5( Music_Emu const* );
+ 
++/* The base 2A03 APU scope path is always available for NSF/NSFE emulators. */
++BLARGG_EXPORT int gme_nsf_has_apu_scope( Music_Emu const* );
++
++/* Set the mute mask for the dedicated NSF 2A03 APU scope path in voice-name order:
++ * bit 0 = Square 1, bit 1 = Square 2, bit 2 = Triangle, bit 3 = Noise, bit 4 = DMC. */
++BLARGG_EXPORT void gme_set_nsf_apu_scope_mute_mask( Music_Emu*, int mask );
++
++/* Generate frame_count mono scope samples for the five 2A03 APU voices, advancing the
++ * emulator like gme_play(). Output layout is frame-major in voice-name order:
++ * [Square 1, Square 2, Triangle, Noise, DMC]. Intended for dedicated shadow emulators. */
++BLARGG_EXPORT gme_err_t gme_play_nsf_apu_scope( Music_Emu*, int frame_count, short out [] );
++
++/* Clear any unread samples queued by gme_play_nsf_apu_scope() on a dedicated shadow emulator. */
++BLARGG_EXPORT void gme_clear_nsf_apu_scope( Music_Emu* );
++
+ /* Set the mute mask for the dedicated NSF VRC6 scope path in voice-name order:
+  * bit 0 = Saw Wave, bit 1 = Square 3, bit 2 = Square 4. */
+ BLARGG_EXPORT void gme_set_nsf_vrc6_scope_mute_mask( Music_Emu*, int mask );
+-- 
+2.53.0
+

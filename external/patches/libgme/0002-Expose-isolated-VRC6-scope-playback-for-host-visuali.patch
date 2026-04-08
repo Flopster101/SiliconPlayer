@@ -1,0 +1,273 @@
+From 802ec9423db106cde5e6a4c22ce460f055f9ec28 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Wed, 8 Apr 2026 17:55:32 -0300
+Subject: [PATCH] Expose isolated VRC6 scope playback for host visualizers
+
+---
+ gme/Nsf_Emu.cpp | 112 ++++++++++++++++++++++++++++++++++++++++++++++++
+ gme/Nsf_Emu.h   |  12 ++++++
+ gme/gme.cpp     |  45 +++++++++++++++++++
+ gme/gme.h       |  15 +++++++
+ 4 files changed, 184 insertions(+)
+
+diff --git a/gme/Nsf_Emu.cpp b/gme/Nsf_Emu.cpp
+index 796de61..0d6183b 100644
+--- a/gme/Nsf_Emu.cpp
++++ b/gme/Nsf_Emu.cpp
+@@ -65,6 +65,8 @@ Nsf_Emu::Nsf_Emu()
+ 	apu.dmc_reader( pcm_read, this );
+ 	Music_Emu::set_equalizer( nes_eq );
+ 	set_gain( 1.4 );
++	vrc6_scope_ready = false;
++	vrc6_scope_mute_mask = 0;
+ 	memset( unmapped_code, Nes_Cpu::bad_opcode, sizeof unmapped_code );
+ }
+ 
+@@ -115,6 +117,116 @@ blargg_err_t Nsf_Emu::track_info_( track_info_t* out, int ) const
+ 	return 0;
+ }
+ 
++blargg_err_t Nsf_Emu::init_vrc6_scope_()
++{
++	if ( !vrc6 )
++		return "NSF VRC6 scope unavailable";
++
++	if ( !vrc6_scope_ready )
++	{
++		for ( int i = 0; i < vrc6_scope_channel_count; ++i )
++		{
++			RETURN_ERR( vrc6_scope_buffers [i].set_sample_rate( sample_rate(), 1000 / 20 ) );
++			vrc6_scope_buffers [i].clock_rate( (uint32_t) clock_rate_ );
++			vrc6_scope_buffers [i].bass_freq( (int) equalizer().bass );
++		}
++		vrc6_scope_ready = true;
++	}
++	else
++	{
++		for ( int i = 0; i < vrc6_scope_channel_count; ++i )
++		{
++			vrc6_scope_buffers [i].clock_rate( (uint32_t) clock_rate_ );
++			vrc6_scope_buffers [i].bass_freq( (int) equalizer().bass );
++		}
++	}
++
++	vrc6->treble_eq( equalizer().treble );
++	route_vrc6_scope_outputs_();
++	return 0;
++}
++
++void Nsf_Emu::set_vrc6_scope_mute_mask_( int mask )
++{
++	vrc6_scope_mute_mask = mask & 0x07;
++	if ( vrc6_scope_ready )
++		route_vrc6_scope_outputs_();
++}
++
++void Nsf_Emu::route_vrc6_scope_outputs_()
++{
++	if ( !vrc6 )
++		return;
++
++	apu.output( NULL );
++	if ( namco ) namco->output( NULL );
++	if ( fme7  ) fme7 ->output( NULL );
++	if ( fds   ) fds  ->osc_output( 0, NULL );
++	if ( mmc5  ) mmc5 ->output( NULL );
++	if ( vrc7  ) vrc7 ->set_output( NULL );
++
++	vrc6->osc_output( 0, (vrc6_scope_mute_mask & 0x02) ? NULL : vrc6_scope_buffers [1].center() );
++	vrc6->osc_output( 1, (vrc6_scope_mute_mask & 0x04) ? NULL : vrc6_scope_buffers [2].center() );
++	vrc6->osc_output( 2, (vrc6_scope_mute_mask & 0x01) ? NULL : vrc6_scope_buffers [0].center() );
++}
++
++void Nsf_Emu::clear_vrc6_scope_()
++{
++	if ( !vrc6_scope_ready )
++		return;
++	for ( int i = 0; i < vrc6_scope_channel_count; ++i )
++		vrc6_scope_buffers [i].clear();
++}
++
++blargg_err_t Nsf_Emu::play_vrc6_scope_( long frame_count, sample_t* out )
++{
++	if ( !out || frame_count <= 0 )
++		return 0;
++
++	RETURN_ERR( init_vrc6_scope_() );
++
++	if ( vrc6_scope_scratch.resize( frame_count * vrc6_scope_channel_count ) )
++		return "Out of memory";
++
++	long remain = frame_count;
++	while ( remain > 0 )
++	{
++		long avail = vrc6_scope_buffers [0].samples_avail();
++		if ( avail > remain )
++			avail = remain;
++
++		if ( avail == 0 )
++		{
++			blip_time_t clocks_emulated = vrc6_scope_buffers [0].center()->count_clocks( remain );
++			if ( clocks_emulated <= 0 )
++				clocks_emulated = (int32_t) vrc6_scope_buffers [0].length() * clock_rate_ / 1000;
++
++			int msec = int( clocks_emulated * 1000 / clock_rate_ );
++			RETURN_ERR( run_clocks( clocks_emulated, msec ) );
++			for ( int i = 0; i < vrc6_scope_channel_count; ++i )
++				vrc6_scope_buffers [i].end_frame( clocks_emulated );
++			continue;
++		}
++
++		for ( int channel = 0; channel < vrc6_scope_channel_count; ++channel )
++		{
++			vrc6_scope_buffers [channel].read_samples(
++					&vrc6_scope_scratch [channel * frame_count],
++					avail
++			);
++		}
++
++		for ( long frame = 0; frame < avail; ++frame )
++		{
++			for ( int channel = 0; channel < vrc6_scope_channel_count; ++channel )
++				*out++ = vrc6_scope_scratch [channel * frame_count + frame];
++		}
++		remain -= avail;
++	}
++
++	return 0;
++}
++
+ static blargg_err_t check_nsf_header( void const* header )
+ {
+ 	if ( memcmp( header, "NESM\x1A", 5 ) )
+diff --git a/gme/Nsf_Emu.h b/gme/Nsf_Emu.h
+index 7ecabcf..a50dbf9 100644
+--- a/gme/Nsf_Emu.h
++++ b/gme/Nsf_Emu.h
+@@ -5,6 +5,7 @@
+ #define NSF_EMU_H
+ 
+ #include "Classic_Emu.h"
++#include "Multi_Buffer.h"
+ #include "Nes_Apu.h"
+ #include "Nes_Cpu.h"
+ 
+@@ -52,6 +53,10 @@ public:
+ 	Nsf_Emu();
+ 	~Nsf_Emu();
+ 	Nes_Apu* apu_() { return &apu; }
++	bool has_vrc6() const { return vrc6 != 0; }
++	void set_vrc6_scope_mute_mask_( int mask );
++	blargg_err_t play_vrc6_scope_( long frame_count, sample_t* out );
++	void clear_vrc6_scope_();
+ protected:
+ 	blargg_err_t track_info_( track_info_t*, int track ) const;
+ 	blargg_err_t load_( Data_Reader& );
+@@ -99,8 +104,15 @@ private:
+ 	class Nes_Vrc7_Apu*  vrc7;
+ 	Nes_Apu apu;
+ 	blargg_vector<const char*> apu_names;
++	enum { vrc6_scope_channel_count = 3 };
++	Mono_Buffer vrc6_scope_buffers [vrc6_scope_channel_count];
++	blargg_vector<sample_t> vrc6_scope_scratch;
++	bool vrc6_scope_ready;
++	int vrc6_scope_mute_mask;
+ 	static int pcm_read( void*, nes_addr_t );
+ 	blargg_err_t init_sound();
++	blargg_err_t init_vrc6_scope_();
++	void route_vrc6_scope_outputs_();
+ 
+ 	header_t header_;
+ 
+diff --git a/gme/gme.cpp b/gme/gme.cpp
+index 3adba8d..ef00ed6 100644
+--- a/gme/gme.cpp
++++ b/gme/gme.cpp
+@@ -1,6 +1,7 @@
+ // Game_Music_Emu https://bitbucket.org/mpyne/game-music-emu/
+ 
+ #include "Music_Emu.h"
++#include "Nsf_Emu.h"
+ 
+ #ifdef GEN_TYPES_H
+ #include "gen_types.h" /* same as gme_types.h but generated by build system */
+@@ -423,6 +424,50 @@ void      gme_enable_accuracy( Music_Emu* me, int enabled )         { me->enable
+ void      gme_clear_playlist ( Music_Emu* me )                      { me->clear_playlist(); }
+ int       gme_type_multitrack( gme_type_t t )                       { return t->track_count != 1; }
+ int       gme_multi_channel  ( Music_Emu const* me )                { return me->multi_channel(); }
++int       gme_nsf_has_vrc6   ( Music_Emu const* me )
++{
++	if ( !me )
++		return 0;
++
++	const gme_type_t type = me->type();
++	if ( type != gme_nsf_type && type != gme_nsfe_type )
++		return 0;
++
++	return STATIC_CAST(Nsf_Emu const*, me)->has_vrc6() ? 1 : 0;
++}
++void gme_set_nsf_vrc6_scope_mute_mask( Music_Emu* me, int mask )
++{
++	if ( !me )
++		return;
++
++	const gme_type_t type = me->type();
++	if ( type != gme_nsf_type && type != gme_nsfe_type )
++		return;
++
++	STATIC_CAST(Nsf_Emu*, me)->set_vrc6_scope_mute_mask_( mask );
++}
++gme_err_t gme_play_nsf_vrc6_scope( Music_Emu* me, int frame_count, short out [] )
++{
++	if ( !me )
++		return "Invalid emulator";
++
++	const gme_type_t type = me->type();
++	if ( type != gme_nsf_type && type != gme_nsfe_type )
++		return "NSF VRC6 scope unavailable";
++
++	return STATIC_CAST(Nsf_Emu*, me)->play_vrc6_scope_( frame_count, out );
++}
++void gme_clear_nsf_vrc6_scope( Music_Emu* me )
++{
++	if ( !me )
++		return;
++
++	const gme_type_t type = me->type();
++	if ( type != gme_nsf_type && type != gme_nsfe_type )
++		return;
++
++	STATIC_CAST(Nsf_Emu*, me)->clear_vrc6_scope_();
++}
+ 
+ void      gme_set_equalizer  ( Music_Emu* me, gme_equalizer_t const* eq )
+ {
+diff --git a/gme/gme.h b/gme/gme.h
+index 9020638..dbfe950 100644
+--- a/gme/gme.h
++++ b/gme/gme.h
+@@ -254,6 +254,21 @@ BLARGG_EXPORT int gme_type_multitrack( gme_type_t );
+  * @since 0.6.3 */
+ BLARGG_EXPORT int gme_multi_channel( Music_Emu const* );
+ 
++/* True if this NSF/NSFE emulator currently has Konami VRC6 expansion audio active. */
++BLARGG_EXPORT int gme_nsf_has_vrc6( Music_Emu const* );
++
++/* Set the mute mask for the dedicated NSF VRC6 scope path in voice-name order:
++ * bit 0 = Saw Wave, bit 1 = Square 3, bit 2 = Square 4. */
++BLARGG_EXPORT void gme_set_nsf_vrc6_scope_mute_mask( Music_Emu*, int mask );
++
++/* Generate frame_count mono scope samples for the three VRC6 oscillators, advancing the
++ * emulator like gme_play(). Output layout is frame-major in voice-name order:
++ * [Saw Wave, Square 3, Square 4]. Intended for dedicated shadow emulators. */
++BLARGG_EXPORT gme_err_t gme_play_nsf_vrc6_scope( Music_Emu*, int frame_count, short out [] );
++
++/* Clear any unread samples queued by gme_play_nsf_vrc6_scope() on a dedicated shadow emulator. */
++BLARGG_EXPORT void gme_clear_nsf_vrc6_scope( Music_Emu* );
++
+ /******** Advanced file loading ********/
+ 
+ /* Error returned if file type is not supported */
+-- 
+2.53.0
+

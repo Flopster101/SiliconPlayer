@@ -1,0 +1,277 @@
+From 6abf613bdf3ae2699cbdbd9a3accfacea3c94238 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Wed, 8 Apr 2026 18:31:55 -0300
+Subject: [PATCH] Expose isolated MMC5 scope playback for host visualizers
+
+---
+ gme/Nsf_Emu.cpp | 113 ++++++++++++++++++++++++++++++++++++++++++++++++
+ gme/Nsf_Emu.h   |  11 +++++
+ gme/gme.cpp     |  44 +++++++++++++++++++
+ gme/gme.h       |  15 +++++++
+ 4 files changed, 183 insertions(+)
+
+diff --git a/gme/Nsf_Emu.cpp b/gme/Nsf_Emu.cpp
+index 0d6183b..71aab7d 100644
+--- a/gme/Nsf_Emu.cpp
++++ b/gme/Nsf_Emu.cpp
+@@ -67,6 +67,8 @@ Nsf_Emu::Nsf_Emu()
+ 	set_gain( 1.4 );
+ 	vrc6_scope_ready = false;
+ 	vrc6_scope_mute_mask = 0;
++	mmc5_scope_ready = false;
++	mmc5_scope_mute_mask = 0;
+ 	memset( unmapped_code, Nes_Cpu::bad_opcode, sizeof unmapped_code );
+ }
+ 
+@@ -227,6 +229,117 @@ blargg_err_t Nsf_Emu::play_vrc6_scope_( long frame_count, sample_t* out )
+ 	return 0;
+ }
+ 
++blargg_err_t Nsf_Emu::init_mmc5_scope_()
++{
++	if ( !mmc5 )
++		return "NSF MMC5 scope unavailable";
++
++	if ( !mmc5_scope_ready )
++	{
++		for ( int i = 0; i < mmc5_scope_channel_count; ++i )
++		{
++			RETURN_ERR( mmc5_scope_buffers [i].set_sample_rate( sample_rate(), 1000 / 20 ) );
++			mmc5_scope_buffers [i].clock_rate( (uint32_t) clock_rate_ );
++			mmc5_scope_buffers [i].bass_freq( (int) equalizer().bass );
++		}
++		mmc5_scope_ready = true;
++	}
++	else
++	{
++		for ( int i = 0; i < mmc5_scope_channel_count; ++i )
++		{
++			mmc5_scope_buffers [i].clock_rate( (uint32_t) clock_rate_ );
++			mmc5_scope_buffers [i].bass_freq( (int) equalizer().bass );
++		}
++	}
++
++	mmc5->treble_eq( equalizer().treble );
++	route_mmc5_scope_outputs_();
++	return 0;
++}
++
++void Nsf_Emu::set_mmc5_scope_mute_mask_( int mask )
++{
++	mmc5_scope_mute_mask = mask & 0x07;
++	if ( mmc5_scope_ready )
++		route_mmc5_scope_outputs_();
++}
++
++void Nsf_Emu::route_mmc5_scope_outputs_()
++{
++	if ( !mmc5 )
++		return;
++
++	apu.output( NULL );
++	if ( namco ) namco->output( NULL );
++	if ( fme7  ) fme7 ->output( NULL );
++	if ( fds   ) fds  ->osc_output( 0, NULL );
++	if ( vrc6  ) vrc6 ->output( NULL );
++	if ( vrc7  ) vrc7 ->set_output( NULL );
++	mmc5->output( NULL );
++
++	mmc5->osc_output( 0, (mmc5_scope_mute_mask & 0x01) ? NULL : mmc5_scope_buffers [0].center() );
++	mmc5->osc_output( 1, (mmc5_scope_mute_mask & 0x02) ? NULL : mmc5_scope_buffers [1].center() );
++	mmc5->osc_output( 2, (mmc5_scope_mute_mask & 0x04) ? NULL : mmc5_scope_buffers [2].center() );
++}
++
++void Nsf_Emu::clear_mmc5_scope_()
++{
++	if ( !mmc5_scope_ready )
++		return;
++	for ( int i = 0; i < mmc5_scope_channel_count; ++i )
++		mmc5_scope_buffers [i].clear();
++}
++
++blargg_err_t Nsf_Emu::play_mmc5_scope_( long frame_count, sample_t* out )
++{
++	if ( !out || frame_count <= 0 )
++		return 0;
++
++	RETURN_ERR( init_mmc5_scope_() );
++
++	if ( mmc5_scope_scratch.resize( frame_count * mmc5_scope_channel_count ) )
++		return "Out of memory";
++
++	long remain = frame_count;
++	while ( remain > 0 )
++	{
++		long avail = mmc5_scope_buffers [0].samples_avail();
++		if ( avail > remain )
++			avail = remain;
++
++		if ( avail == 0 )
++		{
++			blip_time_t clocks_emulated = mmc5_scope_buffers [0].center()->count_clocks( remain );
++			if ( clocks_emulated <= 0 )
++				clocks_emulated = (int32_t) mmc5_scope_buffers [0].length() * clock_rate_ / 1000;
++
++			int msec = int( clocks_emulated * 1000 / clock_rate_ );
++			RETURN_ERR( run_clocks( clocks_emulated, msec ) );
++			for ( int i = 0; i < mmc5_scope_channel_count; ++i )
++				mmc5_scope_buffers [i].end_frame( clocks_emulated );
++			continue;
++		}
++
++		for ( int channel = 0; channel < mmc5_scope_channel_count; ++channel )
++		{
++			mmc5_scope_buffers [channel].read_samples(
++					&mmc5_scope_scratch [channel * frame_count],
++					avail
++			);
++		}
++
++		for ( long frame = 0; frame < avail; ++frame )
++		{
++			for ( int channel = 0; channel < mmc5_scope_channel_count; ++channel )
++				*out++ = mmc5_scope_scratch [channel * frame_count + frame];
++		}
++		remain -= avail;
++	}
++
++	return 0;
++}
++
+ static blargg_err_t check_nsf_header( void const* header )
+ {
+ 	if ( memcmp( header, "NESM\x1A", 5 ) )
+diff --git a/gme/Nsf_Emu.h b/gme/Nsf_Emu.h
+index a50dbf9..37fcc27 100644
+--- a/gme/Nsf_Emu.h
++++ b/gme/Nsf_Emu.h
+@@ -54,9 +54,13 @@ public:
+ 	~Nsf_Emu();
+ 	Nes_Apu* apu_() { return &apu; }
+ 	bool has_vrc6() const { return vrc6 != 0; }
++	bool has_mmc5() const { return mmc5 != 0; }
+ 	void set_vrc6_scope_mute_mask_( int mask );
+ 	blargg_err_t play_vrc6_scope_( long frame_count, sample_t* out );
+ 	void clear_vrc6_scope_();
++	void set_mmc5_scope_mute_mask_( int mask );
++	blargg_err_t play_mmc5_scope_( long frame_count, sample_t* out );
++	void clear_mmc5_scope_();
+ protected:
+ 	blargg_err_t track_info_( track_info_t*, int track ) const;
+ 	blargg_err_t load_( Data_Reader& );
+@@ -109,10 +113,17 @@ private:
+ 	blargg_vector<sample_t> vrc6_scope_scratch;
+ 	bool vrc6_scope_ready;
+ 	int vrc6_scope_mute_mask;
++	enum { mmc5_scope_channel_count = 3 };
++	Mono_Buffer mmc5_scope_buffers [mmc5_scope_channel_count];
++	blargg_vector<sample_t> mmc5_scope_scratch;
++	bool mmc5_scope_ready;
++	int mmc5_scope_mute_mask;
+ 	static int pcm_read( void*, nes_addr_t );
+ 	blargg_err_t init_sound();
+ 	blargg_err_t init_vrc6_scope_();
++	blargg_err_t init_mmc5_scope_();
+ 	void route_vrc6_scope_outputs_();
++	void route_mmc5_scope_outputs_();
+ 
+ 	header_t header_;
+ 
+diff --git a/gme/gme.cpp b/gme/gme.cpp
+index ef00ed6..e45edbb 100644
+--- a/gme/gme.cpp
++++ b/gme/gme.cpp
+@@ -435,6 +435,17 @@ int       gme_nsf_has_vrc6   ( Music_Emu const* me )
+ 
+ 	return STATIC_CAST(Nsf_Emu const*, me)->has_vrc6() ? 1 : 0;
+ }
++int       gme_nsf_has_mmc5   ( Music_Emu const* me )
++{
++	if ( !me )
++		return 0;
++
++	const gme_type_t type = me->type();
++	if ( type != gme_nsf_type && type != gme_nsfe_type )
++		return 0;
++
++	return STATIC_CAST(Nsf_Emu const*, me)->has_mmc5() ? 1 : 0;
++}
+ void gme_set_nsf_vrc6_scope_mute_mask( Music_Emu* me, int mask )
+ {
+ 	if ( !me )
+@@ -468,6 +479,39 @@ void gme_clear_nsf_vrc6_scope( Music_Emu* me )
+ 
+ 	STATIC_CAST(Nsf_Emu*, me)->clear_vrc6_scope_();
+ }
++void gme_set_nsf_mmc5_scope_mute_mask( Music_Emu* me, int mask )
++{
++	if ( !me )
++		return;
++
++	const gme_type_t type = me->type();
++	if ( type != gme_nsf_type && type != gme_nsfe_type )
++		return;
++
++	STATIC_CAST(Nsf_Emu*, me)->set_mmc5_scope_mute_mask_( mask );
++}
++gme_err_t gme_play_nsf_mmc5_scope( Music_Emu* me, int frame_count, short out [] )
++{
++	if ( !me )
++		return "Invalid emulator";
++
++	const gme_type_t type = me->type();
++	if ( type != gme_nsf_type && type != gme_nsfe_type )
++		return "NSF MMC5 scope unavailable";
++
++	return STATIC_CAST(Nsf_Emu*, me)->play_mmc5_scope_( frame_count, out );
++}
++void gme_clear_nsf_mmc5_scope( Music_Emu* me )
++{
++	if ( !me )
++		return;
++
++	const gme_type_t type = me->type();
++	if ( type != gme_nsf_type && type != gme_nsfe_type )
++		return;
++
++	STATIC_CAST(Nsf_Emu*, me)->clear_mmc5_scope_();
++}
+ 
+ void      gme_set_equalizer  ( Music_Emu* me, gme_equalizer_t const* eq )
+ {
+diff --git a/gme/gme.h b/gme/gme.h
+index dbfe950..4d8d9d0 100644
+--- a/gme/gme.h
++++ b/gme/gme.h
+@@ -257,6 +257,9 @@ BLARGG_EXPORT int gme_multi_channel( Music_Emu const* );
+ /* True if this NSF/NSFE emulator currently has Konami VRC6 expansion audio active. */
+ BLARGG_EXPORT int gme_nsf_has_vrc6( Music_Emu const* );
+ 
++/* True if this NSF/NSFE emulator currently has MMC5 expansion audio active. */
++BLARGG_EXPORT int gme_nsf_has_mmc5( Music_Emu const* );
++
+ /* Set the mute mask for the dedicated NSF VRC6 scope path in voice-name order:
+  * bit 0 = Saw Wave, bit 1 = Square 3, bit 2 = Square 4. */
+ BLARGG_EXPORT void gme_set_nsf_vrc6_scope_mute_mask( Music_Emu*, int mask );
+@@ -269,6 +272,18 @@ BLARGG_EXPORT gme_err_t gme_play_nsf_vrc6_scope( Music_Emu*, int frame_count, sh
+ /* Clear any unread samples queued by gme_play_nsf_vrc6_scope() on a dedicated shadow emulator. */
+ BLARGG_EXPORT void gme_clear_nsf_vrc6_scope( Music_Emu* );
+ 
++/* Set the mute mask for the dedicated NSF MMC5 scope path in voice-name order:
++ * bit 0 = Square 3, bit 1 = Square 4, bit 2 = PCM. */
++BLARGG_EXPORT void gme_set_nsf_mmc5_scope_mute_mask( Music_Emu*, int mask );
++
++/* Generate frame_count mono scope samples for the three MMC5 oscillators, advancing the
++ * emulator like gme_play(). Output layout is frame-major in voice-name order:
++ * [Square 3, Square 4, PCM]. Intended for dedicated shadow emulators. */
++BLARGG_EXPORT gme_err_t gme_play_nsf_mmc5_scope( Music_Emu*, int frame_count, short out [] );
++
++/* Clear any unread samples queued by gme_play_nsf_mmc5_scope() on a dedicated shadow emulator. */
++BLARGG_EXPORT void gme_clear_nsf_mmc5_scope( Music_Emu* );
++
+ /******** Advanced file loading ********/
+ 
+ /* Error returned if file type is not supported */
+-- 
+2.53.0
+

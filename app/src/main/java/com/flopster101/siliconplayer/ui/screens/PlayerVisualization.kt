@@ -81,6 +81,7 @@ import com.flopster101.siliconplayer.VisualizationOscFpsMode
 import com.flopster101.siliconplayer.VisualizationRenderBackend
 import com.flopster101.siliconplayer.VisualizationVuAnchor
 import com.flopster101.siliconplayer.isChannelScopeVisibleElementEnabled
+import com.flopster101.siliconplayer.matchesDecoderName
 import com.flopster101.siliconplayer.pluginNameForCoreName
 import com.flopster101.siliconplayer.readChannelScopeVisibleElementSelection
 import com.flopster101.siliconplayer.supportsChannelScopeVisualization
@@ -92,6 +93,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.locks.LockSupport
 import kotlin.coroutines.coroutineContext
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -721,6 +723,98 @@ private data class VisualizationSnapshot(
     val channelScopeTextRaw: IntArray? = null
 )
 
+private fun resolveChannelScopeGridForSnapshot(
+    channels: Int,
+    layout: VisualizationChannelScopeLayout
+): Pair<Int, Int> {
+    if (channels <= 1) return 1 to 1
+    return when (layout) {
+        VisualizationChannelScopeLayout.ColumnFirst -> {
+            val targetRowsPerColumn = 7
+            val columns = if (channels <= 4) {
+                1
+            } else {
+                ceil(channels / targetRowsPerColumn.toDouble()).toInt().coerceAtLeast(2)
+            }
+            val rows = ceil(channels / columns.toDouble()).toInt().coerceAtLeast(1)
+            columns to rows
+        }
+        VisualizationChannelScopeLayout.BalancedTwoColumn -> {
+            val columns = ceil(kotlin.math.sqrt(channels.toDouble())).toInt().coerceAtLeast(1)
+            val rows = ceil(channels / columns.toDouble()).toInt().coerceAtLeast(1)
+            columns to rows
+        }
+    }
+}
+
+private fun buildScopeDisplayGridPermutation(
+    channels: Int,
+    layout: VisualizationChannelScopeLayout
+): IntArray {
+    if (channels <= 1) return IntArray(channels) { it }
+    val (columns, rows) = resolveChannelScopeGridForSnapshot(channels, layout)
+    val permutation = IntArray(channels) { it }
+    var linearIndex = 0
+    for (row in 0 until rows) {
+        for (col in 0 until columns) {
+            if (linearIndex >= channels) {
+                return permutation
+            }
+            val displayIndex = (col * rows) + row
+            if (displayIndex >= channels) {
+                continue
+            }
+            permutation[displayIndex] = linearIndex
+            linearIndex += 1
+        }
+    }
+    return permutation
+}
+
+private fun remapChannelScopeHistoriesForDisplay(
+    histories: List<FloatArray>,
+    layout: VisualizationChannelScopeLayout
+): List<FloatArray> {
+    if (histories.size <= 1) return histories
+    val permutation = buildScopeDisplayGridPermutation(histories.size, layout)
+    return List(histories.size) { displayIndex ->
+        histories[permutation[displayIndex]]
+    }
+}
+
+private fun remapChannelScopeTriggersForDisplay(
+    triggerIndices: IntArray,
+    channels: Int,
+    layout: VisualizationChannelScopeLayout
+): IntArray {
+    if (channels <= 1 || triggerIndices.isEmpty()) return triggerIndices
+    val permutation = buildScopeDisplayGridPermutation(channels, layout)
+    return IntArray(channels) { displayIndex ->
+        triggerIndices.getOrElse(permutation[displayIndex]) { 0 }
+    }
+}
+
+private fun remapChannelScopeTextRawForDisplay(
+    flat: IntArray,
+    layout: VisualizationChannelScopeLayout
+): IntArray {
+    val stride = NativeBridge.CHANNEL_SCOPE_TEXT_STATE_STRIDE
+    if (stride <= 0 || flat.isEmpty()) return flat
+    val channels = flat.size / stride
+    if (channels <= 1) return flat
+    val permutation = buildScopeDisplayGridPermutation(channels, layout)
+    val reordered = IntArray(channels * stride)
+    for (displayIndex in 0 until channels) {
+        val sourceChannel = permutation[displayIndex]
+        val sourceBase = sourceChannel * stride
+        val destBase = displayIndex * stride
+        for (offset in 0 until stride) {
+            reordered[destBase + offset] = flat.getOrElse(sourceBase + offset) { -1 }
+        }
+    }
+    return reordered
+}
+
 private fun readVisualizationSnapshot(
     visualizationMode: VisualizationMode,
     decoderName: String?,
@@ -731,6 +825,7 @@ private fun readVisualizationSnapshot(
     channelScopeGainPercent: Int,
     channelScopeTriggerModeNative: Int,
     channelScopeTriggerAlgorithmNative: Int,
+    channelScopeLayout: VisualizationChannelScopeLayout,
     channelScopeTriggerStates: MutableList<ChannelScopeTriggerState>,
     sampleRateHz: Int,
     shouldPollChannelScopeText: Boolean
@@ -828,6 +923,25 @@ private fun readVisualizationSnapshot(
                         t - start
                     }
                 }
+                val shouldRemapForDisplay =
+                    decoderName.matchesDecoderName(DecoderNames.GAME_MUSIC_EMU)
+                val displayHistories = if (shouldRemapForDisplay) {
+                    remapChannelScopeHistoriesForDisplay(
+                        histories = histories,
+                        layout = channelScopeLayout
+                    )
+                } else {
+                    histories
+                }
+                val displayTriggerIndices = if (shouldRemapForDisplay) {
+                    remapChannelScopeTriggersForDisplay(
+                        triggerIndices = triggerIndices,
+                        channels = histories.size,
+                        layout = channelScopeLayout
+                    )
+                } else {
+                    triggerIndices
+                }
                 val lastChannelCount = histories.size.coerceIn(1, 64)
                 val scopeChannels = if (nativeSamples > 0) {
                     (channelScopesFlat.size / nativeSamples).coerceIn(1, 64)
@@ -835,11 +949,19 @@ private fun readVisualizationSnapshot(
                     NativeBridge.getVisualizationChannelCount().coerceAtLeast(1).coerceIn(1, 64)
                 }
                 VisualizationSnapshot(
-                    channelScopeHistories = histories,
-                    channelScopeTriggerIndices = triggerIndices,
+                    channelScopeHistories = displayHistories,
+                    channelScopeTriggerIndices = displayTriggerIndices,
                     channelScopeLastChannelCount = lastChannelCount,
                     channelScopeTextRaw = if (shouldPollChannelScopeText) {
-                        NativeBridge.getChannelScopeTextState(scopeChannels)
+                        val raw = NativeBridge.getChannelScopeTextState(scopeChannels)
+                        if (shouldRemapForDisplay) {
+                            remapChannelScopeTextRawForDisplay(
+                                flat = raw,
+                                layout = channelScopeLayout
+                            )
+                        } else {
+                            raw
+                        }
                     } else {
                         null
                     }
@@ -1891,6 +2013,7 @@ internal fun AlbumArtPlaceholder(
         visualizationOscFpsMode,
         channelScopePrefs.windowMs,
         channelScopePrefs.fpsMode,
+        channelScopePrefs.layout,
         sampleRateHz,
         decoderName
     ) {
@@ -1917,6 +2040,7 @@ internal fun AlbumArtPlaceholder(
                     channelScopeGainPercent = channelScopePrefs.gainPercent,
                     channelScopeTriggerModeNative = channelScopePrefs.triggerModeNative,
                     channelScopeTriggerAlgorithmNative = channelScopePrefs.triggerAlgorithmNative,
+                    channelScopeLayout = channelScopePrefs.layout,
                     channelScopeTriggerStates = localChannelScopeTriggerStates,
                     sampleRateHz = sampleRateHz,
                     shouldPollChannelScopeText = shouldPollText

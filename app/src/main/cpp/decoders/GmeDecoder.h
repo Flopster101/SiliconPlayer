@@ -108,6 +108,8 @@ private:
     int voiceCount = 0;
     std::vector<std::string> toggleChannelNames;
     std::vector<bool> toggleChannelMuted;
+    std::vector<int> displayToActualVoice;
+    std::vector<int> actualToDisplayVoice;
     std::vector<float> scopeVoiceGains;
     int scopeVrc6BaseVoice = -1;
     int scopeMmc5BaseVoice = -1;
@@ -142,6 +144,7 @@ private:
     int buildScopeVrc6MuteMaskLocked() const;
     int buildScopeMmc5MuteMaskLocked() const;
     void rebuildToggleChannelsLocked();
+    void rebuildDisplayVoiceOrderLocked();
     void rebuildScopeVoiceGainsLocked();
     void rebuildScopeVrc6BaseVoiceLocked();
     void rebuildScopeMmc5BaseVoiceLocked();

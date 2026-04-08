@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <vector>
 
 extern "C" {
@@ -132,6 +133,42 @@ bool isMmc5VoiceTripletAt(const std::vector<std::string>& names, size_t index) {
            toLowerAscii(names[index + 1]) == "square 4" &&
            toLowerAscii(names[index + 2]) == "pcm";
 }
+
+bool isFme7VoiceTripletAt(const std::vector<std::string>& names, size_t index) {
+    if (index + 2 >= names.size()) {
+        return false;
+    }
+    return toLowerAscii(names[index]) == "square 3" &&
+           toLowerAscii(names[index + 1]) == "square 4" &&
+           toLowerAscii(names[index + 2]) == "square 5";
+}
+
+bool isNamcoVoiceName(const std::string& name) {
+    const std::string normalized = toLowerAscii(name);
+    return normalized.rfind("wave ", 0) == 0 && normalized.size() > 5 &&
+           std::all_of(normalized.begin() + 5, normalized.end(), [](unsigned char c) {
+               return std::isdigit(c) != 0;
+           });
+}
+
+bool isVrc7VoiceName(const std::string& name) {
+    const std::string normalized = toLowerAscii(name);
+    return normalized.rfind("fm ", 0) == 0 && normalized.size() > 3 &&
+           std::all_of(normalized.begin() + 3, normalized.end(), [](unsigned char c) {
+               return std::isdigit(c) != 0;
+           });
+}
+
+enum class GmeVoiceChipGroup {
+    Apu2A03 = 0,
+    Vrc6 = 1,
+    Mmc5 = 2,
+    Namco163 = 3,
+    Fme7 = 4,
+    Fds = 5,
+    Vrc7 = 6,
+    Unknown = 7,
+};
 }
 
 GmeDecoder::GmeDecoder() : channelScopeState(std::make_shared<ChannelScopeSharedState>()) {}
@@ -823,9 +860,16 @@ void GmeDecoder::captureChannelScopeBlockLocked(int frames) {
     }
     for (int frame = 0; frame < frames; ++frame) {
         std::fill(perVoiceFrame.begin(), perVoiceFrame.end(), 0.0f);
-        for (int voice = 0; voice < totalVoices; ++voice) {
-            perVoiceFrame[static_cast<size_t>(voice)] =
-                    capturedBlocks[static_cast<size_t>(voice * frames + frame)];
+        for (int displayVoice = 0; displayVoice < totalVoices; ++displayVoice) {
+            const int actualVoice =
+                    displayVoice < static_cast<int>(displayToActualVoice.size())
+                    ? displayToActualVoice[static_cast<size_t>(displayVoice)]
+                    : displayVoice;
+            if (actualVoice < 0 || actualVoice >= totalVoices) {
+                continue;
+            }
+            perVoiceFrame[static_cast<size_t>(displayVoice)] =
+                    capturedBlocks[static_cast<size_t>(actualVoice * frames + frame)];
         }
         appendScopeFrameLocked(perVoiceFrame.data(), totalVoices);
     }
@@ -864,6 +908,8 @@ void GmeDecoder::closeInternal() {
     voiceCount = 0;
     toggleChannelNames.clear();
     toggleChannelMuted.clear();
+    displayToActualVoice.clear();
+    actualToDisplayVoice.clear();
     scopeVoiceGains.clear();
     scopeVrc6BaseVoice = -1;
     scopeMmc5BaseVoice = -1;
@@ -1193,16 +1239,30 @@ int GmeDecoder::getLoopLengthMsInfo() {
 
 std::vector<std::string> GmeDecoder::getToggleChannelNames() {
     std::lock_guard<std::mutex> lock(decodeMutex);
-    return toggleChannelNames;
+    if (displayToActualVoice.empty()) {
+        return toggleChannelNames;
+    }
+    std::vector<std::string> ordered;
+    ordered.reserve(displayToActualVoice.size());
+    for (int actual : displayToActualVoice) {
+        if (actual >= 0 && actual < static_cast<int>(toggleChannelNames.size())) {
+            ordered.push_back(toggleChannelNames[static_cast<size_t>(actual)]);
+        }
+    }
+    return ordered;
 }
 
 void GmeDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (!emu) return;
-    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(displayToActualVoice.size())) {
         return;
     }
-    toggleChannelMuted[static_cast<size_t>(channelIndex)] = enabled;
+    const int actualIndex = displayToActualVoice[static_cast<size_t>(channelIndex)];
+    if (actualIndex < 0 || actualIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+    toggleChannelMuted[static_cast<size_t>(actualIndex)] = enabled;
     applyToggleChannelMutesLocked();
     resetChannelScopeLocked();
 }
@@ -1210,10 +1270,14 @@ void GmeDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
 bool GmeDecoder::getToggleChannelMuted(int channelIndex) const {
     std::lock_guard<std::mutex> lock(decodeMutex);
     if (!emu) return false;
-    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(displayToActualVoice.size())) {
         return false;
     }
-    return toggleChannelMuted[static_cast<size_t>(channelIndex)];
+    const int actualIndex = displayToActualVoice[static_cast<size_t>(channelIndex)];
+    if (actualIndex < 0 || actualIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return false;
+    }
+    return toggleChannelMuted[static_cast<size_t>(actualIndex)];
 }
 
 void GmeDecoder::clearToggleChannelMutes() {
@@ -1446,9 +1510,105 @@ void GmeDecoder::rebuildToggleChannelsLocked() {
             toggleChannelMuted[static_cast<size_t>(voice)] = previous[static_cast<size_t>(voice)];
         }
     }
+    rebuildDisplayVoiceOrderLocked();
     rebuildScopeVoiceGainsLocked();
     rebuildScopeVrc6BaseVoiceLocked();
     rebuildScopeMmc5BaseVoiceLocked();
+}
+
+void GmeDecoder::rebuildDisplayVoiceOrderLocked() {
+    displayToActualVoice.clear();
+    actualToDisplayVoice.assign(toggleChannelNames.size(), -1);
+    if (toggleChannelNames.empty()) {
+        return;
+    }
+    if (!emu || !isNesGmeType(gme_type(emu))) {
+        displayToActualVoice.resize(toggleChannelNames.size());
+        std::iota(displayToActualVoice.begin(), displayToActualVoice.end(), 0);
+        for (size_t i = 0; i < displayToActualVoice.size(); ++i) {
+            actualToDisplayVoice[i] = static_cast<int>(i);
+        }
+        return;
+    }
+
+    struct VoiceBlock {
+        GmeVoiceChipGroup group;
+        int start;
+        int length;
+    };
+
+    std::vector<VoiceBlock> blocks;
+    for (int index = 0; index < static_cast<int>(toggleChannelNames.size());) {
+        if (index < 5) {
+            const int remainingBase = 5 - index;
+            blocks.push_back({GmeVoiceChipGroup::Apu2A03, index, remainingBase});
+            index += remainingBase;
+            continue;
+        }
+        if (index + 2 < static_cast<int>(toggleChannelNames.size()) &&
+            isVrc6SawVoiceName(toggleChannelNames[static_cast<size_t>(index)])) {
+            blocks.push_back({GmeVoiceChipGroup::Vrc6, index, 3});
+            index += 3;
+            continue;
+        }
+        if (isMmc5VoiceTripletAt(toggleChannelNames, static_cast<size_t>(index))) {
+            blocks.push_back({GmeVoiceChipGroup::Mmc5, index, 3});
+            index += 3;
+            continue;
+        }
+        if (isNamcoVoiceName(toggleChannelNames[static_cast<size_t>(index)])) {
+            int end = index + 1;
+            while (end < static_cast<int>(toggleChannelNames.size()) &&
+                   isNamcoVoiceName(toggleChannelNames[static_cast<size_t>(end)])) {
+                ++end;
+            }
+            blocks.push_back({GmeVoiceChipGroup::Namco163, index, end - index});
+            index = end;
+            continue;
+        }
+        if (isFme7VoiceTripletAt(toggleChannelNames, static_cast<size_t>(index))) {
+            blocks.push_back({GmeVoiceChipGroup::Fme7, index, 3});
+            index += 3;
+            continue;
+        }
+        if (toLowerAscii(toggleChannelNames[static_cast<size_t>(index)]) == "wave") {
+            blocks.push_back({GmeVoiceChipGroup::Fds, index, 1});
+            ++index;
+            continue;
+        }
+        if (isVrc7VoiceName(toggleChannelNames[static_cast<size_t>(index)])) {
+            int end = index + 1;
+            while (end < static_cast<int>(toggleChannelNames.size()) &&
+                   isVrc7VoiceName(toggleChannelNames[static_cast<size_t>(end)])) {
+                ++end;
+            }
+            blocks.push_back({GmeVoiceChipGroup::Vrc7, index, end - index});
+            index = end;
+            continue;
+        }
+        blocks.push_back({GmeVoiceChipGroup::Unknown, index, 1});
+        ++index;
+    }
+
+    std::stable_sort(blocks.begin(), blocks.end(), [](const VoiceBlock& lhs, const VoiceBlock& rhs) {
+        if (lhs.group != rhs.group) {
+            return static_cast<int>(lhs.group) < static_cast<int>(rhs.group);
+        }
+        return lhs.start < rhs.start;
+    });
+
+    displayToActualVoice.reserve(toggleChannelNames.size());
+    for (const VoiceBlock& block : blocks) {
+        for (int offset = 0; offset < block.length; ++offset) {
+            displayToActualVoice.push_back(block.start + offset);
+        }
+    }
+    for (size_t displayIndex = 0; displayIndex < displayToActualVoice.size(); ++displayIndex) {
+        const int actual = displayToActualVoice[displayIndex];
+        if (actual >= 0 && actual < static_cast<int>(actualToDisplayVoice.size())) {
+            actualToDisplayVoice[static_cast<size_t>(actual)] = static_cast<int>(displayIndex);
+        }
+    }
 }
 
 void GmeDecoder::rebuildScopeVoiceGainsLocked() {

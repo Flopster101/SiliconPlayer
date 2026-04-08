@@ -1,0 +1,192 @@
+From 22ccad9547251e9ddc525f176767d81acb326bbf Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Wed, 8 Apr 2026 03:01:34 -0300
+Subject: [PATCH] lib: expose current pattern state for host visualizers
+
+---
+ src/lib/ksnd.c | 124 ++++++++++++++++++++++++++++++++++++++++++++++---
+ src/lib/ksnd.h |  26 +++++++++--
+ 2 files changed, 141 insertions(+), 9 deletions(-)
+
+diff --git a/src/lib/ksnd.c b/src/lib/ksnd.c
+index e9b1544..f8580dc 100644
+--- a/src/lib/ksnd.c
++++ b/src/lib/ksnd.c
+@@ -14,12 +14,76 @@ struct KSong_t
+ };
+ 
+ 
+-struct KPlayer_t 
+-{
+-	CydEngine cyd;
+-	MusEngine mus;
+-	bool cyd_registered;
+-};
++struct KPlayer_t 
++{
++	CydEngine cyd;
++	MusEngine mus;
++	bool cyd_registered;
++};
++
++
++enum
++{
++	KSND_CHANNEL_PATTERN_ROW = 0,
++	KSND_CHANNEL_PATTERN_SEQUENCE_POSITION = 1,
++	KSND_CHANNEL_PATTERN_NOTE = 2,
++	KSND_CHANNEL_PATTERN_NOTE_OFFSET = 3,
++	KSND_CHANNEL_PATTERN_VOLUME = 4,
++	KSND_CHANNEL_PATTERN_EFFECT = 5,
++	KSND_CHANNEL_PATTERN_INSTRUMENT = 6,
++	KSND_CHANNEL_PATTERN_STRIDE = 7,
++};
++
++
++static int ksnd_first_effect_command(const MusStep *step)
++{
++	if (step == NULL)
++	{
++		return -1;
++	}
++
++	for (int i = 0; i < MUS_MAX_COMMANDS; ++i)
++	{
++		const int command = step->command[i];
++		if (command == MUS_FX_END || command == MUS_FX_NOP || command == 0)
++		{
++			continue;
++		}
++		return command;
++	}
++
++	return -1;
++}
++
++
++static int ksnd_active_instrument_index(const KPlayer *player, int channel)
++{
++	if (player == NULL || player->mus.song == NULL || channel < 0 || channel >= MUS_MAX_CHANNELS)
++	{
++		return MUS_NOTE_NO_INSTRUMENT;
++	}
++
++	if (player->mus.song->instrument == NULL || player->mus.song->num_instruments <= 0)
++	{
++		return MUS_NOTE_NO_INSTRUMENT;
++	}
++
++	const MusInstrument *instrument = player->mus.channel[channel].instrument;
++	if (instrument == NULL)
++	{
++		return MUS_NOTE_NO_INSTRUMENT;
++	}
++
++	for (int i = 0; i < player->mus.song->num_instruments; ++i)
++	{
++		if (&player->mus.song->instrument[i] == instrument)
++		{
++			return i;
++		}
++	}
++
++	return MUS_NOTE_NO_INSTRUMENT;
++}
+ 
+ 
+ KLYSAPI KSong* KSND_LoadSong(KPlayer* player, const char *path)
+@@ -296,6 +360,54 @@ KLYSAPI int KSND_GetChannelScopeSamples(KPlayer *player, float *scope, int sampl
+ 
+ 	return channels;
+ }
++
++KLYSAPI int KSND_GetChannelPatternState(KPlayer *player, int *state, int stride, int n_channels)
++{
++	if (player == NULL || state == NULL || stride < KSND_CHANNEL_PATTERN_STRIDE || n_channels <= 0)
++	{
++		return 0;
++	}
++
++	const int channels = my_min(my_min(player->cyd.n_channels, MUS_MAX_CHANNELS), n_channels);
++	if (channels <= 0)
++	{
++		return 0;
++	}
++
++	cyd_lock(&player->cyd, 1);
++
++	for (int i = 0; i < channels; ++i)
++	{
++		int *dest = state + i * stride;
++		MusTrackStatus *track = &player->mus.song_track[i];
++		const int active_instrument = ksnd_active_instrument_index(player, i);
++
++		dest[KSND_CHANNEL_PATTERN_ROW] = -1;
++		dest[KSND_CHANNEL_PATTERN_SEQUENCE_POSITION] = track->sequence_position;
++		dest[KSND_CHANNEL_PATTERN_NOTE] = MUS_NOTE_NONE;
++		dest[KSND_CHANNEL_PATTERN_NOTE_OFFSET] = track->note_offset;
++		dest[KSND_CHANNEL_PATTERN_VOLUME] = my_min(track->volume, MAX_VOLUME);
++		dest[KSND_CHANNEL_PATTERN_EFFECT] = -1;
++		dest[KSND_CHANNEL_PATTERN_INSTRUMENT] = active_instrument;
++
++		if (track->pattern != NULL &&
++			track->pattern->step != NULL &&
++			track->pattern_step < track->pattern->num_steps)
++		{
++			const MusStep *step = &track->pattern->step[track->pattern_step];
++			dest[KSND_CHANNEL_PATTERN_ROW] = track->pattern_step;
++			dest[KSND_CHANNEL_PATTERN_NOTE] = step->note;
++			dest[KSND_CHANNEL_PATTERN_EFFECT] = ksnd_first_effect_command(step);
++			if (step->instrument != MUS_NOTE_NO_INSTRUMENT)
++			{
++				dest[KSND_CHANNEL_PATTERN_INSTRUMENT] = step->instrument;
++			}
++		}
++	}
++
++	cyd_lock(&player->cyd, 0);
++	return channels;
++}
+ 
+ 
+ KLYSAPI const KSongInfo * KSND_GetSongInfo(KSong *song, KSongInfo *data)
+diff --git a/src/lib/ksnd.h b/src/lib/ksnd.h
+index d4b457f..3599893 100644
+--- a/src/lib/ksnd.h
++++ b/src/lib/ksnd.h
+@@ -246,9 +246,29 @@ KLYSAPI extern int KSND_GetChannelScopeSamples(
+ 	int samples_per_channel,
+ 	int n_channels
+ );
+-
+-#ifdef __cplusplus
+-}
++
++/**
++ * Get compact per-channel pattern state for host visualizers and future pattern views.
++ *
++ * For each channel, writes the following fields into @a state:
++ * - 0: current row inside the active pattern, or -1
++ * - 1: current sequence position
++ * - 2: raw note cell value
++ * - 3: current sequence note offset / transpose
++ * - 4: current channel volume
++ * - 5: raw first effect command, or -1
++ * - 6: raw instrument cell value, or the live active instrument when the row leaves it blank
++ *
++ * @param player player context which is currently playing a song set with KSND_PlaySong()
++ * @param[out] state array of 32-bit signed integers
++ * @param stride number of integers reserved for each channel, must be at least 7
++ * @param[in] n_channels get state for the first @c n_channels channels
++ * @return number of channels written
++ */
++KLYSAPI extern int KSND_GetChannelPatternState(KPlayer *player, int *state, int stride, int n_channels);
++
++#ifdef __cplusplus
++}
+ #endif
+ 
+ #endif
+-- 
+2.53.0
+

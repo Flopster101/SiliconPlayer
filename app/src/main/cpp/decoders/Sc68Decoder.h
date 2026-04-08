@@ -1,14 +1,16 @@
 #ifndef SILICONPLAYER_SC68DECODER_H
 #define SILICONPLAYER_SC68DECODER_H
 
+extern "C" {
+#include <sc68/sc68.h>
+}
+
+#include "../ChannelScopeSharedState.h"
 #include "AudioDecoder.h"
 #include <atomic>
 #include <mutex>
 #include <string>
 #include <vector>
-
-struct _sc68_s;
-typedef struct _sc68_s sc68_t;
 
 class Sc68Decoder : public AudioDecoder {
 public:
@@ -63,6 +65,8 @@ public:
     int getPlaybackCapabilities() const override;
     int getFixedSampleRateHz() const override;
     double getPlaybackPositionSeconds() override;
+    std::shared_ptr<ChannelScopeSharedState> getChannelScopeSharedState() const override { return channelScopeState; }
+    std::vector<int32_t> getChannelScopeTextState(int maxChannels) override;
     TimelineMode getTimelineMode() const override { return TimelineMode::ContinuousLinear; }
     void setOption(const char* name, const char* value) override;
     int getOptionApplyPolicy(const char* name) const override;
@@ -71,6 +75,12 @@ public:
     static std::vector<std::string> getSupportedExtensions();
 
 private:
+    struct ScopeAudioShadow {
+        sc68_t* handle = nullptr;
+        int ymMask = 0;
+        int steEnable = 0;
+    };
+
     mutable std::mutex decodeMutex;
     sc68_t* handle = nullptr;
     bool isOpen = false;
@@ -115,18 +125,38 @@ private:
     bool optionAmigaFilter = true;
     int optionAmigaBlend = 0x50;
     int optionAmigaClock = 0;
+    std::shared_ptr<ChannelScopeSharedState> channelScopeState;
+    std::vector<float> scopeRingRaw;
+    std::vector<int> scopeChannelVolumes;
+    std::vector<int> scopeChannelFlags;
+    int scopeRingChannels = 0;
+    int scopeRingWritePos = 0;
+    int scopeRingSamples = 0;
+    uint64_t channelScopeSourceSerial = 0;
+    std::vector<ScopeAudioShadow> scopeAudioShadows;
 
     void closeInternalLocked();
+    void closeScopeAudioShadowsLocked();
+    bool createScopeAudioShadowLocked(ScopeAudioShadow& shadow, int positionMs);
+    void refreshScopeAudioShadowsLocked(int positionMs = -1);
     bool refreshTrackStateLocked();
     void refreshMetadataLocked();
     void refreshDurationLocked();
     void updatePlaybackPositionLocked(int producedFrames);
     void rebuildToggleChannelsLocked();
     void applyToggleChannelMutesLocked();
+    void applyCoreOptionsToHandleLocked(sc68_t* target);
     void applyCoreDefaultsLocked();
     void applyCoreOptionsLocked();
     bool setTrackLocked(int track1Based);
     int processIntoLocked(float* buffer, int numFrames);
+    void resetChannelScopeLocked();
+    void ensureScopeRingShapeLocked(int channels);
+    void appendScopeFrameLocked(const float* perChannelSamples, int channels);
+    void publishScopeSnapshotLocked();
+    void updateScopeTextStateLocked(const sc68_scope_snapshot_t& snapshot);
+    void captureChannelScopeBlockLocked(const sc68_scope_snapshot_t& snapshot, int frames);
+    bool captureChannelScopeFromShadowsLocked(int frames);
 };
 
 #endif // SILICONPLAYER_SC68DECODER_H

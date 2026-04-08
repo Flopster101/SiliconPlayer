@@ -28,6 +28,15 @@ constexpr int kMaxSampleRateHz = 192000;
 constexpr int kSeekDiscardChunkFrames = 1024;
 constexpr int kInfoTrackCurrent = SC68_CUR_TRACK;
 constexpr int kTrackDiskInfo = 0;
+constexpr int kChannelScopeTextStride = 10;
+constexpr int kSc68ScopeMaxChannels = static_cast<int>(SC68_SCOPE_MAX_CHANNELS);
+constexpr int kChannelScopeTextFlagActive = 1 << 0;
+constexpr int kChannelScopeTextFlagAmigaLeft = 1 << 1;
+constexpr int kChannelScopeTextFlagAmigaRight = 1 << 2;
+constexpr float kSc68ShadowScopeGain = 0.9f;
+constexpr float kSc68YmScopeGain = 0.9f;
+constexpr float kSc68SteScopeGain = 0.65f;
+constexpr float kSc68PaulaScopeGain = 0.8f;
 
 std::mutex gSc68ApiMutex;
 int gSc68ApiRefCount = 0;
@@ -217,9 +226,155 @@ std::string detectSndhTimerTagFromFile(const std::string& path) {
     return "";
 }
 
+float clampScopeSample(float value) {
+    return std::clamp(value, -1.0f, 1.0f);
 }
 
-Sc68Decoder::Sc68Decoder() = default;
+float readSignedSampleAt(
+        const uint8_t* memory,
+        uint64_t cursor,
+        uint32_t fixedShift
+) {
+    if (!memory) {
+        return 0.0f;
+    }
+    const size_t index = static_cast<size_t>(cursor >> fixedShift);
+    const int8_t sample = static_cast<int8_t>(memory[index]);
+    return static_cast<float>(sample) / 128.0f;
+}
+
+float synthesizePaulaScopeSample(sc68_scope_channel_t& channel) {
+    if ((channel.flags & SC68_SCOPE_FLAG_ACTIVE) == 0u ||
+        !channel.memory ||
+        channel.end <= channel.cursor ||
+        channel.volume == 0u) {
+        return 0.0f;
+    }
+
+    const uint64_t one = channel.fixed_shift >= 63u ? 0u : (uint64_t{1} << channel.fixed_shift);
+    const uint64_t fracMask = one > 0u ? (one - 1u) : 0u;
+    const float current = readSignedSampleAt(channel.memory, channel.cursor, channel.fixed_shift);
+    float sample = current;
+
+    if (fracMask != 0u) {
+        uint64_t nextCursor = channel.cursor + one;
+        if (nextCursor >= channel.end) {
+            nextCursor = channel.loop_start;
+        }
+        const float next = readSignedSampleAt(channel.memory, nextCursor, channel.fixed_shift);
+        const float frac = static_cast<float>(channel.cursor & fracMask) / static_cast<float>(one);
+        sample = current + (next - current) * frac;
+    }
+
+    sample *= (static_cast<float>(std::clamp<uint32_t>(channel.volume, 0u, 64u)) / 64.0f) * kSc68PaulaScopeGain;
+
+    channel.cursor += channel.step;
+    if (channel.cursor >= channel.end) {
+        const uint64_t loopStart = channel.loop_start;
+        const uint64_t loopEnd = channel.loop_end > loopStart ? channel.loop_end : channel.end;
+        if ((channel.flags & SC68_SCOPE_FLAG_LOOP) != 0u && loopEnd > loopStart) {
+            const uint64_t length = loopEnd - loopStart;
+            if (length > 0u) {
+                channel.cursor = loopStart + ((channel.cursor - loopStart) % length);
+            }
+        } else {
+            channel.flags &= ~SC68_SCOPE_FLAG_ACTIVE;
+        }
+    }
+
+    return clampScopeSample(sample);
+}
+
+float synthesizeSteScopeSample(sc68_scope_channel_t& channel) {
+    if ((channel.flags & SC68_SCOPE_FLAG_ACTIVE) == 0u ||
+        !channel.memory ||
+        channel.end <= channel.cursor) {
+        return 0.0f;
+    }
+
+    float sample = 0.0f;
+    if ((channel.flags & SC68_SCOPE_FLAG_STEREO) != 0u) {
+        size_t index = static_cast<size_t>(channel.cursor >> channel.fixed_shift);
+        index &= ~static_cast<size_t>(1u);
+        const int8_t left = static_cast<int8_t>(channel.memory[index]);
+        const int8_t right = static_cast<int8_t>(channel.memory[index + 1u]);
+        sample = (static_cast<float>(left) + static_cast<float>(right)) / 256.0f;
+    } else {
+        sample = readSignedSampleAt(channel.memory, channel.cursor, channel.fixed_shift);
+    }
+    sample *= kSc68SteScopeGain;
+
+    channel.cursor += channel.step;
+    if (channel.cursor >= channel.end) {
+        const uint64_t loopStart = channel.loop_start;
+        const uint64_t loopEnd = channel.loop_end > loopStart ? channel.loop_end : channel.end;
+        if ((channel.flags & SC68_SCOPE_FLAG_LOOP) != 0u && loopEnd > loopStart) {
+            const uint64_t length = loopEnd - loopStart;
+            if (length > 0u) {
+                channel.cursor = loopStart + ((channel.cursor - loopStart) % length);
+            }
+        } else {
+            channel.flags &= ~SC68_SCOPE_FLAG_ACTIVE;
+        }
+    }
+
+    return clampScopeSample(sample);
+}
+
+float synthesizeYmScopeSample(sc68_scope_channel_t& channel, uint32_t outputHz) {
+    if ((channel.flags & SC68_SCOPE_FLAG_ACTIVE) == 0u ||
+        outputHz == 0u ||
+        channel.volume == 0u ||
+        ((channel.flags & (SC68_SCOPE_FLAG_TONE | SC68_SCOPE_FLAG_NOISE)) == 0u)) {
+        return 0.0f;
+    }
+
+    const bool toneEnabled = (channel.flags & SC68_SCOPE_FLAG_TONE) != 0u;
+    const bool noiseEnabled = (channel.flags & SC68_SCOPE_FLAG_NOISE) != 0u;
+    const bool squareHigh = channel.state != 0u;
+    const bool noiseHigh = channel.aux_state != 0u;
+    const bool toneGate = !toneEnabled || squareHigh;
+    const bool noiseGate = !noiseEnabled || noiseHigh;
+    const float amplitude =
+            (static_cast<float>(std::clamp<uint32_t>(channel.volume, 0u, 31u)) / 31.0f) *
+            kSc68YmScopeGain;
+    const float polarity = toneEnabled
+            ? (squareHigh ? 1.0f : -1.0f)
+            : (noiseHigh ? 1.0f : -1.0f);
+    float sample = (toneGate && noiseGate) ? (amplitude * polarity) : 0.0f;
+
+    if (toneEnabled && channel.period > 0u && channel.rate_hz > 0u) {
+        double cursor = static_cast<double>(channel.cursor);
+        if (cursor <= 0.0) {
+            cursor = static_cast<double>(channel.period);
+        }
+        cursor -= static_cast<double>(channel.rate_hz) / static_cast<double>(outputHz);
+        while (cursor <= 0.0) {
+            cursor += static_cast<double>(channel.period);
+            channel.state = channel.state == 0u ? 1u : 0u;
+        }
+        channel.cursor = static_cast<uint64_t>(std::max<long long>(1LL, std::llround(cursor)));
+    }
+
+    if (noiseEnabled && channel.aux_period > 0u && channel.aux_rate_hz > 0u) {
+        double cursor = static_cast<double>(channel.aux_cursor);
+        if (cursor <= 0.0) {
+            cursor = static_cast<double>(channel.aux_period);
+        }
+        cursor -= static_cast<double>(channel.aux_rate_hz) / static_cast<double>(outputHz);
+        while (cursor <= 0.0) {
+            cursor += static_cast<double>(channel.aux_period);
+            channel.aux_state = channel.aux_state == 0u ? 1u : 0u;
+        }
+        channel.aux_cursor = static_cast<uint64_t>(std::max<long long>(1LL, std::llround(cursor)));
+    }
+
+    return clampScopeSample(sample);
+}
+
+}
+
+Sc68Decoder::Sc68Decoder() : channelScopeState(std::make_shared<ChannelScopeSharedState>()) {}
 
 Sc68Decoder::~Sc68Decoder() {
     close();
@@ -273,11 +428,13 @@ bool Sc68Decoder::open(const char* path) {
     playbackPositionSeconds = 0.0;
     lastCorePositionMs = 0;
     isOpen = true;
+    resetChannelScopeLocked();
     refreshTrackStateLocked();
     refreshMetadataLocked();
     refreshDurationLocked();
     rebuildToggleChannelsLocked();
     applyToggleChannelMutesLocked();
+    refreshScopeAudioShadowsLocked(0);
     return true;
 }
 
@@ -286,7 +443,19 @@ void Sc68Decoder::close() {
     closeInternalLocked();
 }
 
+void Sc68Decoder::closeScopeAudioShadowsLocked() {
+    for (auto& shadow : scopeAudioShadows) {
+        if (shadow.handle) {
+            sc68_close(shadow.handle);
+            sc68_destroy(shadow.handle);
+            shadow.handle = nullptr;
+        }
+    }
+    scopeAudioShadows.clear();
+}
+
 void Sc68Decoder::closeInternalLocked() {
+    closeScopeAudioShadowsLocked();
     if (handle) {
         sc68_close(handle);
         sc68_destroy(handle);
@@ -324,6 +493,325 @@ void Sc68Decoder::closeInternalLocked() {
     lastCorePositionMs = -1;
     toggleChannelNames.clear();
     toggleChannelMuted.clear();
+    resetChannelScopeLocked();
+}
+
+bool Sc68Decoder::createScopeAudioShadowLocked(ScopeAudioShadow& shadow, int positionMs) {
+    if (sourcePath.empty()) {
+        return false;
+    }
+
+    sc68_create_t create{};
+    create.sampling_rate = static_cast<unsigned>(
+            requestedSampleRateHz > 0 ? requestedSampleRateHz : kDefaultSampleRateHz
+    );
+    shadow.handle = sc68_create(&create);
+    if (!shadow.handle) {
+        return false;
+    }
+
+    sc68_cntl(shadow.handle, SC68_SET_PCM, SC68_PCM_S16);
+    sc68_cntl(
+            shadow.handle,
+            SC68_SET_SPR,
+            requestedSampleRateHz > 0 ? requestedSampleRateHz : kDefaultSampleRateHz
+    );
+    applyCoreOptionsToHandleLocked(shadow.handle);
+
+    if (sc68_load_uri(shadow.handle, sourcePath.c_str()) != 0 ||
+        sc68_play(shadow.handle, currentTrack1Based, SC68_INF_LOOP) != 0) {
+        sc68_close(shadow.handle);
+        sc68_destroy(shadow.handle);
+        shadow.handle = nullptr;
+        return false;
+    }
+
+    sc68_cntl(shadow.handle, SC68_SET_OPT_INT, "ym-chans", shadow.ymMask);
+    sc68_cntl(shadow.handle, SC68_SET_OPT_INT, "ste-enable", shadow.steEnable);
+    if (positionMs > 0) {
+        sc68_cntl(shadow.handle, SC68_SET_POS, positionMs);
+    }
+    return true;
+}
+
+void Sc68Decoder::refreshScopeAudioShadowsLocked(int positionMs) {
+    closeScopeAudioShadowsLocked();
+
+    if (!handle || sourcePath.empty() || trackUsesAgaPath || trackHasAmiga) {
+        return;
+    }
+
+    std::vector<ScopeAudioShadow> shadows;
+    if (trackHasYm) {
+        for (int voice = 0; voice < 3; ++voice) {
+            ScopeAudioShadow shadow;
+            shadow.ymMask = 1 << voice;
+            shadow.steEnable = 0;
+            shadows.push_back(shadow);
+        }
+    }
+    if (trackHasSte) {
+        ScopeAudioShadow shadow;
+        shadow.ymMask = 0;
+        shadow.steEnable = 1;
+        shadows.push_back(shadow);
+    }
+    if (shadows.empty()) {
+        return;
+    }
+
+    const int seekPositionMs = positionMs >= 0 ? positionMs : std::max(0, lastCorePositionMs);
+    for (auto& shadow : shadows) {
+        if (!createScopeAudioShadowLocked(shadow, seekPositionMs)) {
+            for (auto& created : shadows) {
+                if (created.handle) {
+                    sc68_close(created.handle);
+                    sc68_destroy(created.handle);
+                    created.handle = nullptr;
+                }
+            }
+            return;
+        }
+    }
+
+    scopeAudioShadows = std::move(shadows);
+    applyToggleChannelMutesLocked();
+}
+
+void Sc68Decoder::resetChannelScopeLocked() {
+    scopeRingRaw.clear();
+    scopeChannelVolumes.clear();
+    scopeChannelFlags.clear();
+    scopeRingChannels = 0;
+    scopeRingWritePos = 0;
+    scopeRingSamples = 0;
+    channelScopeSourceSerial = 0;
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
+}
+
+void Sc68Decoder::ensureScopeRingShapeLocked(int channels) {
+    const int clampedChannels = std::clamp(channels, 0, kSc68ScopeMaxChannels);
+    if (clampedChannels <= 0) {
+        resetChannelScopeLocked();
+        return;
+    }
+    if (scopeRingChannels == clampedChannels &&
+        scopeRingRaw.size() == static_cast<size_t>(clampedChannels * ChannelScopeSharedState::kMaxSamples)) {
+        return;
+    }
+
+    scopeRingChannels = clampedChannels;
+    scopeRingRaw.assign(
+            static_cast<size_t>(clampedChannels * ChannelScopeSharedState::kMaxSamples),
+            0.0f
+    );
+    scopeChannelVolumes.assign(static_cast<size_t>(clampedChannels), 0);
+    scopeChannelFlags.assign(static_cast<size_t>(clampedChannels), 0);
+    scopeRingWritePos = 0;
+    scopeRingSamples = 0;
+    channelScopeSourceSerial = 0;
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
+}
+
+void Sc68Decoder::appendScopeFrameLocked(const float* perChannelSamples, int channels) {
+    if (!perChannelSamples || channels <= 0) {
+        return;
+    }
+    ensureScopeRingShapeLocked(channels);
+    if (scopeRingChannels <= 0 || scopeRingRaw.empty()) {
+        return;
+    }
+
+    for (int channel = 0; channel < scopeRingChannels; ++channel) {
+        const size_t index =
+                static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                static_cast<size_t>(scopeRingWritePos);
+        scopeRingRaw[index] = perChannelSamples[channel];
+    }
+    scopeRingWritePos = (scopeRingWritePos + 1) % ChannelScopeSharedState::kMaxSamples;
+    scopeRingSamples = std::min(scopeRingSamples + 1, ChannelScopeSharedState::kMaxSamples);
+}
+
+void Sc68Decoder::publishScopeSnapshotLocked() {
+    if (!channelScopeState) {
+        return;
+    }
+    if (scopeRingChannels <= 0 || scopeRingRaw.empty() || scopeRingSamples <= 0) {
+        channelScopeState->clear();
+        return;
+    }
+
+    std::vector<float> raw(
+            static_cast<size_t>(scopeRingChannels * ChannelScopeSharedState::kMaxSamples),
+            0.0f
+    );
+    const int filledSamples = std::clamp(scopeRingSamples, 0, ChannelScopeSharedState::kMaxSamples);
+    const int zeroPrefix = ChannelScopeSharedState::kMaxSamples - filledSamples;
+    for (int channel = 0; channel < scopeRingChannels; ++channel) {
+        float* destination =
+                raw.data() + static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples;
+        for (int i = 0; i < filledSamples; ++i) {
+            const int sourceIndex =
+                    (scopeRingWritePos - filledSamples + i + ChannelScopeSharedState::kMaxSamples) %
+                    ChannelScopeSharedState::kMaxSamples;
+            destination[zeroPrefix + i] =
+                    scopeRingRaw[
+                            static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                            static_cast<size_t>(sourceIndex)
+                    ];
+        }
+    }
+
+    const int trailingSamples = std::clamp(sampleRateHz > 0 ? sampleRateHz / 50 : 64, 64, 1024);
+    std::vector<float> vu(static_cast<size_t>(scopeRingChannels), 0.0f);
+    for (int channel = 0; channel < scopeRingChannels; ++channel) {
+        const size_t base = static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples;
+        const int start = std::max(0, ChannelScopeSharedState::kMaxSamples - trailingSamples);
+        float peak = 0.0f;
+        for (int sample = start; sample < ChannelScopeSharedState::kMaxSamples; ++sample) {
+            peak = std::max(peak, std::abs(raw[base + static_cast<size_t>(sample)]));
+        }
+        vu[static_cast<size_t>(channel)] = std::clamp(peak, 0.0f, 1.0f);
+    }
+
+    {
+        std::lock_guard<std::mutex> scopeLock(channelScopeState->mutex);
+        channelScopeState->snapshotRaw = std::move(raw);
+        channelScopeState->snapshotVu = std::move(vu);
+        channelScopeState->snapshotChannels = scopeRingChannels;
+        channelScopeState->snapshotSerial = ++channelScopeSourceSerial;
+    }
+}
+
+void Sc68Decoder::updateScopeTextStateLocked(const sc68_scope_snapshot_t& snapshot) {
+    const int channels = std::min(
+            static_cast<int>(snapshot.channel_count),
+            std::max(0, scopeRingChannels)
+    );
+    if (channels <= 0) {
+        return;
+    }
+    if (static_cast<int>(scopeChannelVolumes.size()) < channels) {
+        scopeChannelVolumes.resize(static_cast<size_t>(channels), 0);
+    }
+    if (static_cast<int>(scopeChannelFlags.size()) < channels) {
+        scopeChannelFlags.resize(static_cast<size_t>(channels), 0);
+    }
+    for (int channel = 0; channel < channels; ++channel) {
+        const auto& source = snapshot.channels[channel];
+        int flags = 0;
+        if ((source.flags & SC68_SCOPE_FLAG_LEFT) != 0u) {
+            flags |= kChannelScopeTextFlagAmigaLeft;
+        }
+        if ((source.flags & SC68_SCOPE_FLAG_RIGHT) != 0u) {
+            flags |= kChannelScopeTextFlagAmigaRight;
+        }
+        scopeChannelFlags[static_cast<size_t>(channel)] = flags;
+        scopeChannelVolumes[static_cast<size_t>(channel)] = static_cast<int>(source.volume);
+    }
+}
+
+void Sc68Decoder::captureChannelScopeBlockLocked(const sc68_scope_snapshot_t& snapshot, int frames) {
+    const int channels = std::clamp(static_cast<int>(snapshot.channel_count), 0, kSc68ScopeMaxChannels);
+    if (channels <= 0 || frames <= 0) {
+        return;
+    }
+
+    ensureScopeRingShapeLocked(channels);
+    sc68_scope_snapshot_t working = snapshot;
+    if (working.output_hz == 0u) {
+        working.output_hz = static_cast<uint32_t>(sampleRateHz > 0 ? sampleRateHz : kDefaultSampleRateHz);
+    }
+
+    std::vector<float> frame(static_cast<size_t>(channels), 0.0f);
+    for (int sample = 0; sample < frames; ++sample) {
+        for (int channel = 0; channel < channels; ++channel) {
+            auto& source = working.channels[channel];
+            switch (source.kind) {
+                case SC68_SCOPE_CHANNEL_YM:
+                    frame[static_cast<size_t>(channel)] =
+                            synthesizeYmScopeSample(source, working.output_hz);
+                    break;
+                case SC68_SCOPE_CHANNEL_STE:
+                    frame[static_cast<size_t>(channel)] =
+                            synthesizeSteScopeSample(source);
+                    break;
+                case SC68_SCOPE_CHANNEL_PAULA:
+                    frame[static_cast<size_t>(channel)] =
+                            synthesizePaulaScopeSample(source);
+                    break;
+                default:
+                    frame[static_cast<size_t>(channel)] = 0.0f;
+                    break;
+            }
+        }
+        appendScopeFrameLocked(frame.data(), channels);
+    }
+}
+
+bool Sc68Decoder::captureChannelScopeFromShadowsLocked(int frames) {
+    if (frames <= 0 || scopeAudioShadows.empty()) {
+        return false;
+    }
+
+    const int channels = static_cast<int>(scopeAudioShadows.size());
+    ensureScopeRingShapeLocked(channels);
+    if (scopeRingChannels <= 0) {
+        return false;
+    }
+
+    std::vector<int16_t> pcm(static_cast<size_t>(frames) * 2u);
+    std::vector<float> mono(
+            static_cast<size_t>(channels * frames),
+            0.0f
+    );
+
+    bool capturedAny = false;
+    for (int channel = 0; channel < channels; ++channel) {
+        if (channel < static_cast<int>(toggleChannelMuted.size()) &&
+            toggleChannelMuted[static_cast<size_t>(channel)]) {
+            continue;
+        }
+
+        auto& shadow = scopeAudioShadows[static_cast<size_t>(channel)];
+        if (!shadow.handle) {
+            continue;
+        }
+
+        int producedFrames = frames;
+        const int status = sc68_process(shadow.handle, pcm.data(), &producedFrames);
+        if (status == SC68_ERROR || producedFrames <= 0) {
+            continue;
+        }
+        capturedAny = true;
+
+        float* destination = mono.data() + static_cast<size_t>(channel * frames);
+        for (int frame = 0; frame < producedFrames; ++frame) {
+            const int left = pcm[static_cast<size_t>(frame) * 2u];
+            const int right = pcm[static_cast<size_t>(frame) * 2u + 1u];
+            destination[frame] = clampScopeSample(
+                    (static_cast<float>(left + right) / 65536.0f) * kSc68ShadowScopeGain
+            );
+        }
+    }
+
+    if (!capturedAny) {
+        return false;
+    }
+
+    std::vector<float> frame(static_cast<size_t>(channels), 0.0f);
+    for (int sample = 0; sample < frames; ++sample) {
+        for (int channel = 0; channel < channels; ++channel) {
+            frame[static_cast<size_t>(channel)] =
+                    mono[static_cast<size_t>(channel * frames + sample)];
+        }
+        appendScopeFrameLocked(frame.data(), channels);
+    }
+    return true;
 }
 
 bool Sc68Decoder::refreshTrackStateLocked() {
@@ -562,16 +1050,23 @@ void Sc68Decoder::applyToggleChannelMutesLocked() {
     }
 }
 
-void Sc68Decoder::applyCoreOptionsLocked() {
-    if (!handle) return;
+void Sc68Decoder::applyCoreOptionsToHandleLocked(sc68_t* target) {
+    if (!target) return;
     const int asidMode = toSc68AsidMode(optionAsid);
-    sc68_cntl(handle, SC68_SET_ASID, asidMode);
-    sc68_cntl(handle, SC68_SET_OPT_INT, "default-time", optionDefaultTimeSeconds);
-    sc68_cntl(handle, SC68_SET_OPT_INT, "ym-engine", optionYmEngine);
-    sc68_cntl(handle, SC68_SET_OPT_INT, "ym-volmodel", optionYmVolModel);
-    sc68_cntl(handle, SC68_SET_OPT_INT, "amiga-filter", optionAmigaFilter ? 1 : 0);
-    sc68_cntl(handle, SC68_SET_OPT_INT, "amiga-blend", optionAmigaBlend);
-    sc68_cntl(handle, SC68_SET_OPT_INT, "amiga-clock", optionAmigaClock);
+    sc68_cntl(target, SC68_SET_ASID, asidMode);
+    sc68_cntl(target, SC68_SET_OPT_INT, "default-time", optionDefaultTimeSeconds);
+    sc68_cntl(target, SC68_SET_OPT_INT, "ym-engine", optionYmEngine);
+    sc68_cntl(target, SC68_SET_OPT_INT, "ym-volmodel", optionYmVolModel);
+    sc68_cntl(target, SC68_SET_OPT_INT, "amiga-filter", optionAmigaFilter ? 1 : 0);
+    sc68_cntl(target, SC68_SET_OPT_INT, "amiga-blend", optionAmigaBlend);
+    sc68_cntl(target, SC68_SET_OPT_INT, "amiga-clock", optionAmigaClock);
+}
+
+void Sc68Decoder::applyCoreOptionsLocked() {
+    applyCoreOptionsToHandleLocked(handle);
+    for (auto& shadow : scopeAudioShadows) {
+        applyCoreOptionsToHandleLocked(shadow.handle);
+    }
 }
 
 void Sc68Decoder::applyCoreDefaultsLocked() {
@@ -590,6 +1085,8 @@ int Sc68Decoder::processIntoLocked(float* buffer, int numFrames) {
         return 0;
     }
 
+    sc68_scope_snapshot_t scopeBefore{};
+    const bool haveScopeBefore = sc68_get_scope_snapshot(handle, &scopeBefore) > 0;
     std::vector<int16_t> pcm(static_cast<size_t>(numFrames) * 2u);
     int requestedFrames = numFrames;
     const int status = sc68_process(handle, pcm.data(), &requestedFrames);
@@ -602,14 +1099,25 @@ int Sc68Decoder::processIntoLocked(float* buffer, int numFrames) {
         buffer[i] = static_cast<float>(pcm[i]) / 32768.0f;
     }
 
+    if (!captureChannelScopeFromShadowsLocked(requestedFrames) && haveScopeBefore) {
+        captureChannelScopeBlockLocked(scopeBefore, requestedFrames);
+    }
+
+    sc68_scope_snapshot_t scopeAfter{};
+    if (sc68_get_scope_snapshot(handle, &scopeAfter) > 0) {
+        updateScopeTextStateLocked(scopeAfter);
+    }
+    publishScopeSnapshotLocked();
+
+    updatePlaybackPositionLocked(requestedFrames);
     if ((status & SC68_CHANGE) != 0) {
         refreshTrackStateLocked();
         refreshMetadataLocked();
         refreshDurationLocked();
         rebuildToggleChannelsLocked();
         applyToggleChannelMutesLocked();
+        refreshScopeAudioShadowsLocked(lastCorePositionMs);
     }
-    updatePlaybackPositionLocked(requestedFrames);
     return requestedFrames;
 }
 
@@ -656,6 +1164,8 @@ void Sc68Decoder::seek(double seconds) {
     if (directSeekPosMs >= 0) {
         playbackPositionSeconds = static_cast<double>(directSeekPosMs) / 1000.0;
         lastCorePositionMs = directSeekPosMs;
+        resetChannelScopeLocked();
+        refreshScopeAudioShadowsLocked(directSeekPosMs);
         return;
     }
 
@@ -724,6 +1234,7 @@ bool Sc68Decoder::setTrackLocked(int track1Based) {
     currentTrack1Based = track1Based;
     playbackPositionSeconds = 0.0;
     lastCorePositionMs = 0;
+    resetChannelScopeLocked();
     // sc68 applies track changes on process calls, so run one minimal pass.
     float scratch[2] = { 0.0f, 0.0f };
     processIntoLocked(scratch, 1);
@@ -732,6 +1243,8 @@ bool Sc68Decoder::setTrackLocked(int track1Based) {
     refreshDurationLocked();
     rebuildToggleChannelsLocked();
     applyToggleChannelMutesLocked();
+    refreshScopeAudioShadowsLocked(lastCorePositionMs);
+    resetChannelScopeLocked();
     return true;
 }
 
@@ -903,6 +1416,7 @@ void Sc68Decoder::setToggleChannelMuted(int channelIndex, bool enabled) {
     }
     toggleChannelMuted[static_cast<size_t>(channelIndex)] = enabled;
     applyToggleChannelMutesLocked();
+    resetChannelScopeLocked();
 }
 
 bool Sc68Decoder::getToggleChannelMuted(int channelIndex) const {
@@ -918,6 +1432,7 @@ void Sc68Decoder::clearToggleChannelMutes() {
     if (toggleChannelMuted.empty()) return;
     std::fill(toggleChannelMuted.begin(), toggleChannelMuted.end(), false);
     applyToggleChannelMutesLocked();
+    resetChannelScopeLocked();
 }
 
 void Sc68Decoder::setOutputSampleRate(int sampleRate) {
@@ -958,6 +1473,66 @@ double Sc68Decoder::getPlaybackPositionSeconds() {
     return playbackPositionSeconds;
 }
 
+std::vector<int32_t> Sc68Decoder::getChannelScopeTextState(int maxChannels) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (scopeRingChannels <= 0 || scopeRingRaw.empty() || scopeRingSamples <= 0) {
+        return {};
+    }
+
+    const int channels = std::min(
+            std::clamp(maxChannels, 1, kSc68ScopeMaxChannels),
+            scopeRingChannels
+    );
+    std::vector<int32_t> flat(static_cast<size_t>(channels * kChannelScopeTextStride), -1);
+    const int trailingSamples = std::clamp(sampleRateHz > 0 ? sampleRateHz / 50 : 64, 64, 1024);
+    const int recentSamples = std::min(scopeRingSamples, trailingSamples);
+
+    for (int channel = 0; channel < channels; ++channel) {
+        float recentPeak = 0.0f;
+        for (int i = 0; i < recentSamples; ++i) {
+            const int ringIndex =
+                    (scopeRingWritePos - recentSamples + i + ChannelScopeSharedState::kMaxSamples) %
+                    ChannelScopeSharedState::kMaxSamples;
+            recentPeak = std::max(
+                    recentPeak,
+                    std::abs(
+                            scopeRingRaw[
+                                    static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                                    static_cast<size_t>(ringIndex)
+                            ]
+                    )
+            );
+        }
+
+        const size_t base = static_cast<size_t>(channel * kChannelScopeTextStride);
+        const int exportedVolume =
+                channel < static_cast<int>(scopeChannelVolumes.size())
+                ? scopeChannelVolumes[static_cast<size_t>(channel)]
+                : 0;
+        const int derivedVolume = static_cast<int>(std::lround(std::clamp(recentPeak, 0.0f, 1.0f) * 64.0f));
+        int flags =
+                channel < static_cast<int>(scopeChannelFlags.size())
+                ? scopeChannelFlags[static_cast<size_t>(channel)]
+                : 0;
+        if (recentPeak > 0.0015f || exportedVolume > 0) {
+            flags |= kChannelScopeTextFlagActive;
+        }
+
+        flat[base + 0] = channel;
+        flat[base + 1] = -1;
+        flat[base + 2] = std::max(exportedVolume, derivedVolume);
+        flat[base + 3] = 0;
+        flat[base + 4] = -1;
+        flat[base + 5] = 0;
+        flat[base + 6] = -1;
+        flat[base + 7] = -1;
+        flat[base + 8] = -1;
+        flat[base + 9] = flags;
+    }
+
+    return flat;
+}
+
 std::vector<std::string> Sc68Decoder::getSupportedExtensions() {
     return { "sc68", "sndh" };
 }
@@ -987,6 +1562,8 @@ void Sc68Decoder::setOption(const char* name, const char* value) {
 
     if (handle) {
         applyCoreOptionsLocked();
+        refreshScopeAudioShadowsLocked(lastCorePositionMs);
+        resetChannelScopeLocked();
     }
     applyToggleChannelMutesLocked();
 }

@@ -98,6 +98,7 @@ fun BasicVisualizationOverlay(
     channelScopeTextStates: List<ChannelScopeChannelTextState>,
     channelScopeInstrumentNamesByIndex: Map<Int, String>,
     channelScopeSampleNamesByIndex: Map<Int, String>,
+    channelScopeChipNamesByChannelIndex: Map<Int, String>,
     channelScopeTriggerModeNative: Int,
     channelScopeTriggerIndices: IntArray,
     channelScopeRenderBackend: VisualizationRenderBackend,
@@ -128,6 +129,7 @@ fun BasicVisualizationOverlay(
     channelScopeTextShowVolume: Boolean,
     channelScopeTextShowEffectPrimary: Boolean,
     channelScopeTextShowEffectSecondary: Boolean,
+    channelScopeTextShowChip: Boolean,
     channelScopeTextShowInstrument: Boolean,
     channelScopeTextShowSample: Boolean,
     channelScopeTextVuEnabled: Boolean,
@@ -400,6 +402,7 @@ fun BasicVisualizationOverlay(
                         channelTextStates = channelScopeTextStates,
                         instrumentNamesByIndex = channelScopeInstrumentNamesByIndex,
                         sampleNamesByIndex = channelScopeSampleNamesByIndex,
+                        chipNamesByChannelIndex = channelScopeChipNamesByChannelIndex,
                         layoutStrategy = channelScopeLayout,
                         anchor = channelScopeTextAnchor,
                         paddingDp = channelScopeTextPaddingDp,
@@ -413,6 +416,7 @@ fun BasicVisualizationOverlay(
                         showVolume = channelScopeTextEnabled && channelScopeTextShowVolume,
                         showEffectPrimary = channelScopeTextEnabled && channelScopeTextShowEffectPrimary,
                         showEffectSecondary = channelScopeTextEnabled && channelScopeTextShowEffectSecondary,
+                        showChip = channelScopeTextEnabled && channelScopeTextShowChip,
                         showInstrument = channelScopeTextEnabled && channelScopeTextShowInstrument,
                         showSample = channelScopeTextEnabled && channelScopeTextShowSample,
                         vuEnabled = channelScopeTextVuEnabled,
@@ -499,6 +503,7 @@ private fun ChannelScopeTextOverlay(
     channelTextStates: List<ChannelScopeChannelTextState>,
     instrumentNamesByIndex: Map<Int, String>,
     sampleNamesByIndex: Map<Int, String>,
+    chipNamesByChannelIndex: Map<Int, String>,
     layoutStrategy: VisualizationChannelScopeLayout,
     anchor: VisualizationChannelScopeTextAnchor,
     paddingDp: Int,
@@ -512,6 +517,7 @@ private fun ChannelScopeTextOverlay(
     showVolume: Boolean,
     showEffectPrimary: Boolean,
     showEffectSecondary: Boolean,
+    showChip: Boolean,
     showInstrument: Boolean,
     showSample: Boolean,
     vuEnabled: Boolean,
@@ -545,6 +551,7 @@ private fun ChannelScopeTextOverlay(
             showNote = showNote,
             showVolume = showVolume,
             effectSlotCount = listOf(showEffectPrimary, showEffectSecondary).count { it },
+            showChip = showChip,
             showInstrument = showInstrument,
             showSample = showSample
         )
@@ -555,6 +562,7 @@ private fun ChannelScopeTextOverlay(
             showNote = showNote,
             showVolume = showVolume,
             effectSlotCount = listOf(showEffectPrimary, showEffectSecondary).count { it },
+            showChip = showChip,
             showInstrument = showInstrument,
             showSample = showSample
         ) <= cellWidth.value
@@ -568,12 +576,14 @@ private fun ChannelScopeTextOverlay(
                         state = channelTextStates.getOrNull(channel),
                         instrumentNamesByIndex = instrumentNamesByIndex,
                         sampleNamesByIndex = sampleNamesByIndex,
+                        chipNamesByChannelIndex = chipNamesByChannelIndex,
                         noteFormat = noteFormat,
                         showChannel = showChannel,
                         showNote = showNote,
                         showVolume = showVolume,
                         showEffectPrimary = showEffectPrimary,
                         showEffectSecondary = showEffectSecondary,
+                        showChip = showChip,
                         showInstrument = showInstrument,
                         showSample = showSample,
                         sideCounts = sideCounts
@@ -584,6 +594,7 @@ private fun ChannelScopeTextOverlay(
                         note = null,
                         volume = null,
                         effects = emptyList(),
+                        chip = null,
                         instrumentOrSample = null
                     )
                 }
@@ -707,6 +718,18 @@ private fun ChannelScopeTextOverlay(
                                 }
                                 hasPrevious = true
                             }
+                            if (content.chip != null) {
+                                if (hasPrevious) Text("•", color = textPalette.separator, style = textStyle)
+                                Text(
+                                    text = content.chip,
+                                    color = textPalette.instrumentOrSample,
+                                    style = textStyle,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(start = 2.dp)
+                                )
+                                hasPrevious = true
+                            }
                             if (content.instrumentOrSample != null) {
                                 if (hasPrevious) Text("•", color = textPalette.separator, style = textStyle)
                                 Text(
@@ -765,6 +788,7 @@ private data class ChannelScopeTextFields(
     val note: String?,
     val volume: String?,
     val effects: List<String>,
+    val chip: String?,
     val instrumentOrSample: String?
 )
 
@@ -773,12 +797,14 @@ private fun buildChannelScopeTextFields(
     state: ChannelScopeChannelTextState?,
     instrumentNamesByIndex: Map<Int, String>,
     sampleNamesByIndex: Map<Int, String>,
+    chipNamesByChannelIndex: Map<Int, String>,
     noteFormat: VisualizationNoteNameFormat,
     showChannel: Boolean,
     showNote: Boolean,
     showVolume: Boolean,
     showEffectPrimary: Boolean,
     showEffectSecondary: Boolean,
+    showChip: Boolean,
     showInstrument: Boolean,
     showSample: Boolean,
     sideCounts: IntArray
@@ -801,6 +827,15 @@ private fun buildChannelScopeTextFields(
         note = if (showNote) (formatNoteName(state?.note ?: -1, noteFormat) ?: "--") else null,
         volume = if (showVolume) formatVolume(state?.volume ?: 0) else null,
         effects = effects,
+        chip = if (showChip) {
+            formatChipName(
+                channel = channel,
+                state = state,
+                chipNamesByChannelIndex = chipNamesByChannelIndex
+            )
+        } else {
+            null
+        },
         instrumentOrSample = if (showInstrument || showSample) {
             formatInstrumentOrSample(
                 state = state,
@@ -890,6 +925,18 @@ private fun formatInstrumentOrSample(
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" / ")
 }
 
+private fun formatChipName(
+    channel: Int,
+    state: ChannelScopeChannelTextState?,
+    chipNamesByChannelIndex: Map<Int, String>
+): String? {
+    val preferredIndex = state?.channelIndex ?: channel
+    val name = chipNamesByChannelIndex[preferredIndex]
+        ?: chipNamesByChannelIndex[channel]
+        ?: return null
+    return name.takeIf { it.isNotBlank() }
+}
+
 private fun computeAutoChannelScopeTextSizeSp(
     selectedTextSizeSp: Int,
     minimumTextSizeSp: Int,
@@ -899,6 +946,7 @@ private fun computeAutoChannelScopeTextSizeSp(
     showNote: Boolean,
     showVolume: Boolean,
     effectSlotCount: Int,
+    showChip: Boolean,
     showInstrument: Boolean,
     showSample: Boolean
 ): Int {
@@ -913,6 +961,7 @@ private fun computeAutoChannelScopeTextSizeSp(
             showNote = showNote,
             showVolume = showVolume,
             effectSlotCount = effectSlotCount,
+            showChip = showChip,
             showInstrument = showInstrument,
             showSample = showSample
         ) <= availableWidth
@@ -929,6 +978,7 @@ private fun computeAutoChannelScopeTextSizeSp(
                 showNote = showNote,
                 showVolume = showVolume,
                 effectSlotCount = effectSlotCount,
+                showChip = showChip,
                 showInstrument = showInstrument,
                 showSample = showSample
             ) > availableWidth
@@ -945,6 +995,7 @@ private fun estimateChannelScopeTextWidthDp(
     showNote: Boolean,
     showVolume: Boolean,
     effectSlotCount: Int,
+    showChip: Boolean,
     showInstrument: Boolean,
     showSample: Boolean
 ): Float {
@@ -965,6 +1016,10 @@ private fun estimateChannelScopeTextWidthDp(
     }
     repeat(effectSlotCount.coerceAtLeast(0)) {
         width += 20f * scale
+        fieldCount++
+    }
+    if (showChip) {
+        width += 60f * scale
         fieldCount++
     }
     if (showInstrument || showSample) {

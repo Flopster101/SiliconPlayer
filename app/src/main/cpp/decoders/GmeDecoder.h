@@ -106,6 +106,7 @@ private:
     std::string dumper;
     std::string sourcePath;
     int voiceCount = 0;
+    std::vector<std::string> rawVoiceNames;
     std::vector<std::string> toggleChannelNames;
     std::vector<bool> toggleChannelMuted;
     std::vector<int> displayToActualVoice;

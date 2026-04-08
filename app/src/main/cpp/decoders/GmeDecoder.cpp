@@ -125,6 +125,30 @@ bool isVrc6SawVoiceName(const std::string& name) {
     return toLowerAscii(name) == "saw wave";
 }
 
+bool isSquareLikeVoiceName(const std::string& name) {
+    const std::string normalized = toLowerAscii(name);
+    return normalized.rfind("square", 0) == 0 || normalized.rfind("pulse", 0) == 0;
+}
+
+bool isVrc6VoiceTripletAt(const std::vector<std::string>& names, size_t index) {
+    if (index + 2 >= names.size()) {
+        return false;
+    }
+    int squareCount = 0;
+    int sawCount = 0;
+    for (size_t offset = 0; offset < 3; ++offset) {
+        const std::string& name = names[index + offset];
+        if (isVrc6SawVoiceName(name)) {
+            ++sawCount;
+        } else if (isSquareLikeVoiceName(name)) {
+            ++squareCount;
+        } else {
+            return false;
+        }
+    }
+    return sawCount == 1 && squareCount == 2;
+}
+
 bool isMmc5VoiceTripletAt(const std::vector<std::string>& names, size_t index) {
     if (index + 2 >= names.size()) {
         return false;
@@ -169,6 +193,132 @@ enum class GmeVoiceChipGroup {
     Vrc7 = 6,
     Unknown = 7,
 };
+
+struct GmeVoiceBlock {
+    GmeVoiceChipGroup group;
+    int start;
+    int length;
+};
+
+std::vector<GmeVoiceBlock> buildNesVoiceBlocks(const std::vector<std::string>& rawVoiceNames) {
+    std::vector<GmeVoiceBlock> blocks;
+    for (int index = 0; index < static_cast<int>(rawVoiceNames.size());) {
+        if (index < 5) {
+            const int remainingBase = 5 - index;
+            blocks.push_back({GmeVoiceChipGroup::Apu2A03, index, remainingBase});
+            index += remainingBase;
+            continue;
+        }
+        if (isVrc6VoiceTripletAt(rawVoiceNames, static_cast<size_t>(index))) {
+            blocks.push_back({GmeVoiceChipGroup::Vrc6, index, 3});
+            index += 3;
+            continue;
+        }
+        if (isMmc5VoiceTripletAt(rawVoiceNames, static_cast<size_t>(index))) {
+            blocks.push_back({GmeVoiceChipGroup::Mmc5, index, 3});
+            index += 3;
+            continue;
+        }
+        if (isNamcoVoiceName(rawVoiceNames[static_cast<size_t>(index)])) {
+            int end = index + 1;
+            while (end < static_cast<int>(rawVoiceNames.size()) &&
+                   isNamcoVoiceName(rawVoiceNames[static_cast<size_t>(end)])) {
+                ++end;
+            }
+            blocks.push_back({GmeVoiceChipGroup::Namco163, index, end - index});
+            index = end;
+            continue;
+        }
+        if (isFme7VoiceTripletAt(rawVoiceNames, static_cast<size_t>(index))) {
+            blocks.push_back({GmeVoiceChipGroup::Fme7, index, 3});
+            index += 3;
+            continue;
+        }
+        if (toLowerAscii(rawVoiceNames[static_cast<size_t>(index)]) == "wave") {
+            blocks.push_back({GmeVoiceChipGroup::Fds, index, 1});
+            ++index;
+            continue;
+        }
+        if (isVrc7VoiceName(rawVoiceNames[static_cast<size_t>(index)])) {
+            int end = index + 1;
+            while (end < static_cast<int>(rawVoiceNames.size()) &&
+                   isVrc7VoiceName(rawVoiceNames[static_cast<size_t>(end)])) {
+                ++end;
+            }
+            blocks.push_back({GmeVoiceChipGroup::Vrc7, index, end - index});
+            index = end;
+            continue;
+        }
+        blocks.push_back({GmeVoiceChipGroup::Unknown, index, 1});
+        ++index;
+    }
+    return blocks;
+}
+
+std::vector<std::string> buildDetailedGmeVoiceNames(
+        const std::vector<std::string>& rawVoiceNames,
+        gme_type_t type
+) {
+    if (!isNesGmeType(type)) {
+        return rawVoiceNames;
+    }
+
+    std::vector<std::string> detailed = rawVoiceNames;
+    const std::vector<GmeVoiceBlock> blocks = buildNesVoiceBlocks(rawVoiceNames);
+    for (const GmeVoiceBlock& block : blocks) {
+        int squareOrdinal = 0;
+        for (int offset = 0; offset < block.length; ++offset) {
+            const size_t voiceIndex = static_cast<size_t>(block.start + offset);
+            const std::string& rawName = rawVoiceNames[voiceIndex];
+            std::string label = rawName;
+            switch (block.group) {
+                case GmeVoiceChipGroup::Apu2A03:
+                    switch (offset) {
+                        case 0: label = "2A03 Pulse 1"; break;
+                        case 1: label = "2A03 Pulse 2"; break;
+                        case 2: label = "2A03 Triangle"; break;
+                        case 3: label = "2A03 Noise"; break;
+                        case 4: label = "2A03 DPCM"; break;
+                        default: break;
+                    }
+                    break;
+                case GmeVoiceChipGroup::Vrc6:
+                    if (isVrc6SawVoiceName(rawName)) {
+                        label = "VRC6 Saw";
+                    } else {
+                        ++squareOrdinal;
+                        label = "VRC6 Pulse " + std::to_string(squareOrdinal);
+                    }
+                    break;
+                case GmeVoiceChipGroup::Mmc5:
+                    if (isDpcmLikeVoiceName(rawName)) {
+                        label = "MMC5 PCM";
+                    } else {
+                        ++squareOrdinal;
+                        label = "MMC5 Pulse " + std::to_string(squareOrdinal);
+                    }
+                    break;
+                case GmeVoiceChipGroup::Namco163:
+                    label = "N163 " + rawName;
+                    break;
+                case GmeVoiceChipGroup::Fme7:
+                    ++squareOrdinal;
+                    label = "FME7 Square " + std::to_string(squareOrdinal);
+                    break;
+                case GmeVoiceChipGroup::Fds:
+                    label = "FDS Wave";
+                    break;
+                case GmeVoiceChipGroup::Vrc7:
+                    label = "VRC7 " + rawName;
+                    break;
+                case GmeVoiceChipGroup::Unknown:
+                    break;
+            }
+            detailed[voiceIndex] = label;
+        }
+    }
+    return detailed;
+}
 }
 
 GmeDecoder::GmeDecoder() : channelScopeState(std::make_shared<ChannelScopeSharedState>()) {}
@@ -906,6 +1056,7 @@ void GmeDecoder::closeInternal() {
     dumper.clear();
     sourcePath.clear();
     voiceCount = 0;
+    rawVoiceNames.clear();
     toggleChannelNames.clear();
     toggleChannelMuted.clear();
     displayToActualVoice.clear();
@@ -1490,14 +1641,17 @@ void GmeDecoder::applyCoreOptionsLocked() {
 
 void GmeDecoder::rebuildToggleChannelsLocked() {
     if (!emu) {
+        rawVoiceNames.clear();
         toggleChannelNames.clear();
         toggleChannelMuted.clear();
         return;
     }
     const int totalVoices = std::max(0, gme_voice_count(emu));
     std::vector<bool> previous = toggleChannelMuted;
+    rawVoiceNames.clear();
     toggleChannelNames.clear();
     toggleChannelMuted.assign(static_cast<size_t>(totalVoices), false);
+    rawVoiceNames.reserve(static_cast<size_t>(totalVoices));
     toggleChannelNames.reserve(static_cast<size_t>(totalVoices));
     for (int voice = 0; voice < totalVoices; ++voice) {
         const char* rawName = gme_voice_name(emu, voice);
@@ -1505,12 +1659,13 @@ void GmeDecoder::rebuildToggleChannelsLocked() {
         if (name.empty()) {
             name = "Voice " + std::to_string(voice + 1);
         }
-        toggleChannelNames.push_back(name);
+        rawVoiceNames.push_back(name);
         if (voice < static_cast<int>(previous.size())) {
             toggleChannelMuted[static_cast<size_t>(voice)] = previous[static_cast<size_t>(voice)];
         }
     }
     rebuildDisplayVoiceOrderLocked();
+    toggleChannelNames = buildDetailedGmeVoiceNames(rawVoiceNames, gme_type(emu));
     rebuildScopeVoiceGainsLocked();
     rebuildScopeVrc6BaseVoiceLocked();
     rebuildScopeMmc5BaseVoiceLocked();
@@ -1518,12 +1673,12 @@ void GmeDecoder::rebuildToggleChannelsLocked() {
 
 void GmeDecoder::rebuildDisplayVoiceOrderLocked() {
     displayToActualVoice.clear();
-    actualToDisplayVoice.assign(toggleChannelNames.size(), -1);
-    if (toggleChannelNames.empty()) {
+    actualToDisplayVoice.assign(rawVoiceNames.size(), -1);
+    if (rawVoiceNames.empty()) {
         return;
     }
     if (!emu || !isNesGmeType(gme_type(emu))) {
-        displayToActualVoice.resize(toggleChannelNames.size());
+        displayToActualVoice.resize(rawVoiceNames.size());
         std::iota(displayToActualVoice.begin(), displayToActualVoice.end(), 0);
         for (size_t i = 0; i < displayToActualVoice.size(); ++i) {
             actualToDisplayVoice[i] = static_cast<int>(i);
@@ -1531,74 +1686,16 @@ void GmeDecoder::rebuildDisplayVoiceOrderLocked() {
         return;
     }
 
-    struct VoiceBlock {
-        GmeVoiceChipGroup group;
-        int start;
-        int length;
-    };
-
-    std::vector<VoiceBlock> blocks;
-    for (int index = 0; index < static_cast<int>(toggleChannelNames.size());) {
-        if (index < 5) {
-            const int remainingBase = 5 - index;
-            blocks.push_back({GmeVoiceChipGroup::Apu2A03, index, remainingBase});
-            index += remainingBase;
-            continue;
-        }
-        if (index + 2 < static_cast<int>(toggleChannelNames.size()) &&
-            isVrc6SawVoiceName(toggleChannelNames[static_cast<size_t>(index)])) {
-            blocks.push_back({GmeVoiceChipGroup::Vrc6, index, 3});
-            index += 3;
-            continue;
-        }
-        if (isMmc5VoiceTripletAt(toggleChannelNames, static_cast<size_t>(index))) {
-            blocks.push_back({GmeVoiceChipGroup::Mmc5, index, 3});
-            index += 3;
-            continue;
-        }
-        if (isNamcoVoiceName(toggleChannelNames[static_cast<size_t>(index)])) {
-            int end = index + 1;
-            while (end < static_cast<int>(toggleChannelNames.size()) &&
-                   isNamcoVoiceName(toggleChannelNames[static_cast<size_t>(end)])) {
-                ++end;
-            }
-            blocks.push_back({GmeVoiceChipGroup::Namco163, index, end - index});
-            index = end;
-            continue;
-        }
-        if (isFme7VoiceTripletAt(toggleChannelNames, static_cast<size_t>(index))) {
-            blocks.push_back({GmeVoiceChipGroup::Fme7, index, 3});
-            index += 3;
-            continue;
-        }
-        if (toLowerAscii(toggleChannelNames[static_cast<size_t>(index)]) == "wave") {
-            blocks.push_back({GmeVoiceChipGroup::Fds, index, 1});
-            ++index;
-            continue;
-        }
-        if (isVrc7VoiceName(toggleChannelNames[static_cast<size_t>(index)])) {
-            int end = index + 1;
-            while (end < static_cast<int>(toggleChannelNames.size()) &&
-                   isVrc7VoiceName(toggleChannelNames[static_cast<size_t>(end)])) {
-                ++end;
-            }
-            blocks.push_back({GmeVoiceChipGroup::Vrc7, index, end - index});
-            index = end;
-            continue;
-        }
-        blocks.push_back({GmeVoiceChipGroup::Unknown, index, 1});
-        ++index;
-    }
-
-    std::stable_sort(blocks.begin(), blocks.end(), [](const VoiceBlock& lhs, const VoiceBlock& rhs) {
+    std::vector<GmeVoiceBlock> blocks = buildNesVoiceBlocks(rawVoiceNames);
+    std::stable_sort(blocks.begin(), blocks.end(), [](const GmeVoiceBlock& lhs, const GmeVoiceBlock& rhs) {
         if (lhs.group != rhs.group) {
             return static_cast<int>(lhs.group) < static_cast<int>(rhs.group);
         }
         return lhs.start < rhs.start;
     });
 
-    displayToActualVoice.reserve(toggleChannelNames.size());
-    for (const VoiceBlock& block : blocks) {
+    displayToActualVoice.reserve(rawVoiceNames.size());
+    for (const GmeVoiceBlock& block : blocks) {
         for (int offset = 0; offset < block.length; ++offset) {
             displayToActualVoice.push_back(block.start + offset);
         }
@@ -1612,13 +1709,13 @@ void GmeDecoder::rebuildDisplayVoiceOrderLocked() {
 }
 
 void GmeDecoder::rebuildScopeVoiceGainsLocked() {
-    scopeVoiceGains.assign(toggleChannelNames.size(), kGmeScopeGain);
+    scopeVoiceGains.assign(rawVoiceNames.size(), kGmeScopeGain);
     if (!emu || !isNesGmeType(gme_type(emu))) {
         return;
     }
 
     for (size_t voice = 0; voice < scopeVoiceGains.size(); ++voice) {
-        scopeVoiceGains[voice] = isDpcmLikeVoiceName(toggleChannelNames[voice])
+        scopeVoiceGains[voice] = isDpcmLikeVoiceName(rawVoiceNames[voice])
                 ? kGmeNesDpcmScopeGain
                 : kGmeNesScopeGain;
     }
@@ -1631,14 +1728,14 @@ void GmeDecoder::rebuildScopeVrc6BaseVoiceLocked() {
     }
 
     auto sawIt = std::find_if(
-            toggleChannelNames.begin(),
-            toggleChannelNames.end(),
+            rawVoiceNames.begin(),
+            rawVoiceNames.end(),
             [](const std::string& name) { return isVrc6SawVoiceName(name); }
     );
-    if (sawIt == toggleChannelNames.end()) {
+    if (sawIt == rawVoiceNames.end()) {
         return;
     }
-    scopeVrc6BaseVoice = static_cast<int>(std::distance(toggleChannelNames.begin(), sawIt));
+    scopeVrc6BaseVoice = static_cast<int>(std::distance(rawVoiceNames.begin(), sawIt));
 }
 
 void GmeDecoder::rebuildScopeMmc5BaseVoiceLocked() {
@@ -1647,8 +1744,8 @@ void GmeDecoder::rebuildScopeMmc5BaseVoiceLocked() {
         return;
     }
 
-    for (size_t index = 0; index < toggleChannelNames.size(); ++index) {
-        if (isMmc5VoiceTripletAt(toggleChannelNames, index)) {
+    for (size_t index = 0; index < rawVoiceNames.size(); ++index) {
+        if (isMmc5VoiceTripletAt(rawVoiceNames, index)) {
             scopeMmc5BaseVoice = static_cast<int>(index);
             return;
         }

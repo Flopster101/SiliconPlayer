@@ -1753,6 +1753,7 @@ private data class ChannelScopeVisualState(
     val channelTextStates: List<ChannelScopeChannelTextState>,
     val instrumentNamesByIndex: Map<Int, String>,
     val sampleNamesByIndex: Map<Int, String>,
+    val chipNamesByChannelIndex: Map<Int, String>,
     val triggerModeNative: Int,
     val triggerIndices: IntArray,
     val renderBackend: VisualizationRenderBackend,
@@ -1782,6 +1783,7 @@ private data class ChannelScopeVisualState(
     val textShowVolume: Boolean,
     val textShowEffectPrimary: Boolean,
     val textShowEffectSecondary: Boolean,
+    val textShowChip: Boolean,
     val textShowInstrument: Boolean,
     val textShowSample: Boolean,
     val textVuEnabled: Boolean,
@@ -1904,6 +1906,7 @@ internal fun AlbumArtPlaceholder(
     var visChannelScopeLastTextPollNs by remember { mutableStateOf(0L) }
     var visChannelScopeInstrumentNamesByIndex by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
     var visChannelScopeSampleNamesByIndex by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
+    var visChannelScopeChipNamesByChannelIndex by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
     var visDebugUpdateFps by remember { mutableIntStateOf(0) }
     var visDebugUpdateFrameMs by remember { mutableIntStateOf(0) }
     var visDebugSourceUniqueFps by remember { mutableIntStateOf(0) }
@@ -1942,6 +1945,7 @@ internal fun AlbumArtPlaceholder(
         if (visualizationMode != VisualizationMode.ChannelScope) {
             visChannelScopeInstrumentNamesByIndex = emptyMap()
             visChannelScopeSampleNamesByIndex = emptyMap()
+            visChannelScopeChipNamesByChannelIndex = emptyMap()
             return@LaunchedEffect
         }
         when (pluginNameForCoreName(decoderName)) {
@@ -1950,20 +1954,32 @@ internal fun AlbumArtPlaceholder(
                     parseIndexedNames(NativeBridge.getOpenMptInstrumentNames())
                 visChannelScopeSampleNamesByIndex =
                     parseIndexedNames(NativeBridge.getOpenMptSampleNames())
+                visChannelScopeChipNamesByChannelIndex = emptyMap()
+            }
+            DecoderNames.GAME_MUSIC_EMU -> {
+                visChannelScopeInstrumentNamesByIndex = emptyMap()
+                visChannelScopeSampleNamesByIndex = emptyMap()
+                visChannelScopeChipNamesByChannelIndex =
+                    NativeBridge.getDecoderToggleChannelNames()
+                        .mapIndexed { index, name -> index to name }
+                        .toMap()
             }
             DecoderNames.KLYSTRACK -> {
                 visChannelScopeInstrumentNamesByIndex =
                     parseIndexedNames(NativeBridge.getKlystrackInstrumentNames())
                 visChannelScopeSampleNamesByIndex = emptyMap()
+                visChannelScopeChipNamesByChannelIndex = emptyMap()
             }
             DecoderNames.HIVELY_TRACKER -> {
                 visChannelScopeInstrumentNamesByIndex =
                     parseIndexedNames(NativeBridge.getHivelyInstrumentNames())
                 visChannelScopeSampleNamesByIndex = emptyMap()
+                visChannelScopeChipNamesByChannelIndex = emptyMap()
             }
             else -> {
                 visChannelScopeInstrumentNamesByIndex = emptyMap()
                 visChannelScopeSampleNamesByIndex = emptyMap()
+                visChannelScopeChipNamesByChannelIndex = emptyMap()
             }
         }
     }
@@ -2222,6 +2238,7 @@ internal fun AlbumArtPlaceholder(
         channelTextStates = visChannelScopeTextStates,
         instrumentNamesByIndex = visChannelScopeInstrumentNamesByIndex,
         sampleNamesByIndex = visChannelScopeSampleNamesByIndex,
+        chipNamesByChannelIndex = visChannelScopeChipNamesByChannelIndex,
         triggerModeNative = channelScopePrefs.triggerModeNative,
         triggerIndices = visChannelScopeTriggerIndices,
         renderBackend = channelScopePrefs.renderBackend,
@@ -2262,6 +2279,11 @@ internal fun AlbumArtPlaceholder(
             selectedStorageKeys = channelScopePrefs.textVisibleElementSelection,
             decoderName = decoderName,
             elementId = ChannelScopeVisibleElementId.EffectSecondary
+        ),
+        textShowChip = isChannelScopeVisibleElementEnabled(
+            selectedStorageKeys = channelScopePrefs.textVisibleElementSelection,
+            decoderName = decoderName,
+            elementId = ChannelScopeVisibleElementId.Chip
         ),
         textShowInstrument = isChannelScopeVisibleElementEnabled(
             selectedStorageKeys = channelScopePrefs.textVisibleElementSelection,
@@ -2511,6 +2533,7 @@ internal fun AlbumArtPlaceholder(
                     channelScopeTextStates = channelScopeState.channelTextStates,
                     channelScopeInstrumentNamesByIndex = channelScopeState.instrumentNamesByIndex,
                     channelScopeSampleNamesByIndex = channelScopeState.sampleNamesByIndex,
+                    channelScopeChipNamesByChannelIndex = channelScopeState.chipNamesByChannelIndex,
                     channelScopeTriggerModeNative = channelScopeState.triggerModeNative,
                     channelScopeTriggerIndices = channelScopeState.triggerIndices,
                     channelScopeRenderBackend = channelScopeState.renderBackend,
@@ -2541,6 +2564,7 @@ internal fun AlbumArtPlaceholder(
                     channelScopeTextShowVolume = channelScopeState.textShowVolume,
                     channelScopeTextShowEffectPrimary = channelScopeState.textShowEffectPrimary,
                     channelScopeTextShowEffectSecondary = channelScopeState.textShowEffectSecondary,
+                    channelScopeTextShowChip = channelScopeState.textShowChip,
                     channelScopeTextShowInstrument = channelScopeState.textShowInstrument,
                     channelScopeTextShowSample = channelScopeState.textShowSample,
                     channelScopeTextVuEnabled = channelScopeState.textVuEnabled,

@@ -10,6 +10,7 @@ internal enum class ChannelScopeVisibleElementId(
     Volume("volume", "Volume", "Vol"),
     EffectPrimary("effect_primary", "Effect", "FX"),
     EffectSecondary("effect_secondary", "Effect 2", "FX2"),
+    Chip("chip", "Chip", "Chip"),
     Instrument("instrument", "Instrument", "Inst"),
     Sample("sample", "Sample", "Sample")
 }
@@ -50,6 +51,11 @@ internal fun channelScopeVisibleElementOptions(): List<ChannelScopeVisibleElemen
             coreId = "gme",
             coreLabel = "Game Music Emu",
             elementId = ChannelScopeVisibleElementId.Volume
+        ),
+        ChannelScopeVisibleElementOption(
+            coreId = "gme",
+            coreLabel = "Game Music Emu",
+            elementId = ChannelScopeVisibleElementId.Chip
         ),
         ChannelScopeVisibleElementOption(
             coreId = "klystrack",

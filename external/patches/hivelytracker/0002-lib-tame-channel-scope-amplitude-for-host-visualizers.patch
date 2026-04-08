@@ -1,0 +1,25 @@
+From b7123f83a19b0765e267969de723e0a201a83f47 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Wed, 8 Apr 2026 13:40:09 -0300
+Subject: [PATCH] lib: tame channel scope amplitude for host visualizers
+
+---
+ Replayer_Windows/hvl_replay.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/Replayer_Windows/hvl_replay.c b/Replayer_Windows/hvl_replay.c
+index 5932a29..4e41d6e 100644
+--- a/Replayer_Windows/hvl_replay.c
++++ b/Replayer_Windows/hvl_replay.c
+@@ -1816,7 +1816,7 @@ void hvl_mixchunk( struct hvl_tune *ht, uint32 samples, int8 *buf1, int8 *buf2,
+           j = src[i][pos[i]>>16]*vol[i];
+         }
+ 
+-        normalized = (float) j / (64.0f * 128.0f);
++        normalized = (float) j / 32768.0f;
+         if( normalized < -1.0f ) normalized = -1.0f;
+         if( normalized > 1.0f ) normalized = 1.0f;
+         ht->ht_ChannelScopeHistory[(i * HVL_CHANNEL_SCOPE_HISTORY_SAMPLES) + scope_write_pos] = normalized;
+-- 
+2.53.0
+

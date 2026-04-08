@@ -1,0 +1,274 @@
+From 7c9e4e80026fac845c73bc9790aef99a158bf5c4 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Wed, 8 Apr 2026 12:52:12 -0300
+Subject: [PATCH] lib: expose channel scope and pattern state for host
+ visualizers
+
+---
+ Replayer_Windows/hvl_replay.c | 127 ++++++++++++++++++++++++++++++++++
+ Replayer_Windows/hvl_replay.h |  43 +++++++-----
+ 2 files changed, 154 insertions(+), 16 deletions(-)
+
+diff --git a/Replayer_Windows/hvl_replay.c b/Replayer_Windows/hvl_replay.c
+index a56b45d..5932a29 100644
+--- a/Replayer_Windows/hvl_replay.c
++++ b/Replayer_Windows/hvl_replay.c
+@@ -12,6 +12,7 @@
+ 
+ 
+ #include <stdio.h>
++#include <stddef.h>
+ #include <string.h>
+ #include <stdlib.h>
+ 
+@@ -23,6 +24,37 @@
+ ** Waves
+ */
+ 
++static void hvl_reset_channel_visual_state( struct hvl_tune *ht )
++{
++  ht->ht_ChannelScopeWritePos = 0;
++  memset( ht->ht_ChannelScopeHistory, 0, sizeof( ht->ht_ChannelScopeHistory ) );
++  memset( ht->ht_ChannelPatternNote, 0, sizeof( ht->ht_ChannelPatternNote ) );
++  memset( ht->ht_ChannelPatternInstrument, 0, sizeof( ht->ht_ChannelPatternInstrument ) );
++  memset( ht->ht_ChannelPatternFx1, 0xff, sizeof( ht->ht_ChannelPatternFx1 ) );
++  memset( ht->ht_ChannelPatternFx1Param, 0, sizeof( ht->ht_ChannelPatternFx1Param ) );
++  memset( ht->ht_ChannelPatternFx2, 0xff, sizeof( ht->ht_ChannelPatternFx2 ) );
++  memset( ht->ht_ChannelPatternFx2Param, 0, sizeof( ht->ht_ChannelPatternFx2Param ) );
++}
++
++static int hvl_has_visible_effect( uint8 fx, uint8 param )
++{
++  return fx != 0 || param != 0;
++}
++
++static int hvl_resolve_active_instrument_index( const struct hvl_tune *ht, const struct hvl_voice *voice )
++{
++  ptrdiff_t index;
++
++  if( !ht || !voice || !voice->vc_Instrument || !ht->ht_Instruments )
++    return 0;
++
++  index = voice->vc_Instrument - ht->ht_Instruments;
++  if( index < 1 || index > ht->ht_InstrumentNr )
++    return 0;
++
++  return (int) index;
++}
++
+ void hvl_reset_some_stuff( struct hvl_tune *ht )
+ {
+   uint32 i;
+@@ -62,6 +94,8 @@ void hvl_reset_some_stuff( struct hvl_tune *ht )
+     ht->ht_Voices[i].vc_TrackOn           = 1;
+     ht->ht_Voices[i].vc_MixSource         = ht->ht_Voices[i].vc_VoiceBuffer;
+   }
++
++  hvl_reset_channel_visual_state( ht );
+ }
+ 
+ BOOL hvl_InitSubsong( struct hvl_tune *ht, uint32 nr )
+@@ -814,6 +848,7 @@ void hvl_process_stepfx_3( struct hvl_tune *ht, struct hvl_voice *voice, int32 F
+ void hvl_process_step( struct hvl_tune *ht, struct hvl_voice *voice )
+ {
+   int32  Note, Instr, donenotedel;
++  int32  channel, active_instr;
+   const struct hvl_step *Step;
+   
+   if( voice->vc_TrackOn == 0 )
+@@ -825,6 +860,18 @@ void hvl_process_step( struct hvl_tune *ht, struct hvl_voice *voice )
+   
+   Note    = Step->stp_Note;
+   Instr   = Step->stp_Instrument;
++  channel = voice->vc_VoiceNum;
++
++  ht->ht_ChannelPatternNote[channel] = (uint8) Note;
++  active_instr = Instr;
++  if( ( active_instr <= 0 ) || ( active_instr > ht->ht_InstrumentNr ) )
++    active_instr = hvl_resolve_active_instrument_index( ht, voice );
++  if( active_instr > 0 )
++    ht->ht_ChannelPatternInstrument[channel] = (uint8) active_instr;
++  ht->ht_ChannelPatternFx1[channel] = hvl_has_visible_effect( Step->stp_FX & 0x0f, Step->stp_FXParam ) ? (int8) ( Step->stp_FX & 0x0f ) : (int8) -1;
++  ht->ht_ChannelPatternFx1Param[channel] = Step->stp_FXParam;
++  ht->ht_ChannelPatternFx2[channel] = hvl_has_visible_effect( Step->stp_FXb & 0x0f, Step->stp_FXbParam ) ? (int8) ( Step->stp_FXb & 0x0f ) : (int8) -1;
++  ht->ht_ChannelPatternFx2Param[channel] = Step->stp_FXbParam;
+   
+   // --------- 1.6: from here --------------
+ 
+@@ -1710,9 +1757,12 @@ void hvl_mixchunk( struct hvl_tune *ht, uint32 samples, int8 *buf1, int8 *buf2,
+   int32   panr[MAX_CHANNELS];
+ //  uint32  vu[MAX_CHANNELS];
+   int32   a=0, b=0, j;
++  float   normalized;
+   uint32  i, chans, loops;
++  uint32  scope_write_pos;
+   
+   chans = ht->ht_Channels;
++  scope_write_pos = ht->ht_ChannelScopeWritePos;
+   for( i=0; i<chans; i++ )
+   {
+     delta[i] = ht->ht_Voices[i].vc_Delta;
+@@ -1765,6 +1815,11 @@ void hvl_mixchunk( struct hvl_tune *ht, uint32 samples, int8 *buf1, int8 *buf2,
+         } else {
+           j = src[i][pos[i]>>16]*vol[i];
+         }
++
++        normalized = (float) j / (64.0f * 128.0f);
++        if( normalized < -1.0f ) normalized = -1.0f;
++        if( normalized > 1.0f ) normalized = 1.0f;
++        ht->ht_ChannelScopeHistory[(i * HVL_CHANNEL_SCOPE_HISTORY_SAMPLES) + scope_write_pos] = normalized;
+         
+ //        if( abs( j ) > vu[i] ) vu[i] = abs( j );
+ 
+@@ -1772,6 +1827,7 @@ void hvl_mixchunk( struct hvl_tune *ht, uint32 samples, int8 *buf1, int8 *buf2,
+         b += (j * panr[i]) >> 7;
+         pos[i] += delta[i];
+       }
++      scope_write_pos = (scope_write_pos + 1) & (HVL_CHANNEL_SCOPE_HISTORY_SAMPLES - 1);
+       
+       a = (a*ht->ht_mixgain)>>8;
+       b = (b*ht->ht_mixgain)>>8;
+@@ -1797,6 +1853,7 @@ void hvl_mixchunk( struct hvl_tune *ht, uint32 samples, int8 *buf1, int8 *buf2,
+     ht->ht_Voices[i].vc_RingSamplePos = rpos[i];
+ //    ht->ht_Voices[i].vc_VUMeter = vu[i];
+   }
++  ht->ht_ChannelScopeWritePos = scope_write_pos;
+ }
+ 
+ void hvl_DecodeFrame( struct hvl_tune *ht, int8 *buf1, int8 *buf2, int32 bufmod )
+@@ -1815,3 +1872,73 @@ void hvl_DecodeFrame( struct hvl_tune *ht, int8 *buf1, int8 *buf2, int32 bufmod
+     loops--;
+   } while( loops );
+ }
++
++int hvl_GetChannelScopeSamples( const struct hvl_tune *ht, float *scope, int samples_per_channel, int n_channels )
++{
++  int available, channels, padding, channel, sample;
++  uint32 start;
++  float *dst;
++
++  if( !ht || !scope || samples_per_channel <= 0 || n_channels <= 0 )
++    return 0;
++
++  channels = ht->ht_Channels;
++  if( channels > MAX_CHANNELS ) channels = MAX_CHANNELS;
++  if( channels > n_channels ) channels = n_channels;
++  if( channels <= 0 ) return 0;
++
++  available = samples_per_channel;
++  if( available > HVL_CHANNEL_SCOPE_HISTORY_SAMPLES )
++    available = HVL_CHANNEL_SCOPE_HISTORY_SAMPLES;
++  padding = samples_per_channel - available;
++  start = ( ht->ht_ChannelScopeWritePos + HVL_CHANNEL_SCOPE_HISTORY_SAMPLES - available ) & (HVL_CHANNEL_SCOPE_HISTORY_SAMPLES - 1);
++
++  for( channel = 0; channel < channels; ++channel )
++  {
++    dst = scope + ( channel * samples_per_channel );
++    if( padding > 0 )
++      memset( dst, 0, (size_t) padding * sizeof( float ) );
++    for( sample = 0; sample < available; ++sample )
++      dst[padding + sample] = ht->ht_ChannelScopeHistory[(channel * HVL_CHANNEL_SCOPE_HISTORY_SAMPLES) + ((start + sample) & (HVL_CHANNEL_SCOPE_HISTORY_SAMPLES - 1))];
++  }
++
++  return channels;
++}
++
++int hvl_GetChannelPatternState( const struct hvl_tune *ht, int *state, int stride, int n_channels )
++{
++  int channels, channel, note, instrument, fx1, fx2, active;
++
++  if( !ht || !state || stride < 8 || n_channels <= 0 )
++    return 0;
++
++  channels = ht->ht_Channels;
++  if( channels > MAX_CHANNELS ) channels = MAX_CHANNELS;
++  if( channels > n_channels ) channels = n_channels;
++  if( channels <= 0 ) return 0;
++
++  for( channel = 0; channel < channels; ++channel )
++  {
++    note = ht->ht_ChannelPatternNote[channel];
++    if( !note )
++      note = ht->ht_Voices[channel].vc_TrackPeriod;
++    instrument = ht->ht_ChannelPatternInstrument[channel];
++    if( instrument <= 0 )
++      instrument = hvl_resolve_active_instrument_index( ht, &ht->ht_Voices[channel] );
++    fx1 = ht->ht_ChannelPatternFx1[channel];
++    fx2 = ht->ht_ChannelPatternFx2[channel];
++    active = ( ht->ht_Voices[channel].vc_TrackOn != 0 ) &&
++      ( ht->ht_Voices[channel].vc_VoiceVolume > 0 || note > 0 || instrument > 0 || fx1 >= 0 || fx2 >= 0 );
++
++    state[(channel * stride) + 0] = note > 0 ? note : -1;
++    state[(channel * stride) + 1] = ht->ht_Voices[channel].vc_VoiceVolume;
++    state[(channel * stride) + 2] = fx1;
++    state[(channel * stride) + 3] = fx1 >= 0 ? ht->ht_ChannelPatternFx1Param[channel] : -1;
++    state[(channel * stride) + 4] = fx2;
++    state[(channel * stride) + 5] = fx2 >= 0 ? ht->ht_ChannelPatternFx2Param[channel] : -1;
++    state[(channel * stride) + 6] = instrument > 0 ? instrument : -1;
++    state[(channel * stride) + 7] = active;
++  }
++
++  return channels;
++}
+diff --git a/Replayer_Windows/hvl_replay.h b/Replayer_Windows/hvl_replay.h
+index e96213c..f081e0d 100644
+--- a/Replayer_Windows/hvl_replay.h
++++ b/Replayer_Windows/hvl_replay.h
+@@ -12,11 +12,12 @@ typedef int BOOL;
+ #define TRUE 1
+ #define FALSE 0
+ 
+-// Woohoo!
+-#define MAX_CHANNELS 16
+-
+-// Some handy constants. Thanks eightbitbubsy.
+-#define AMIGA_PAL_XTAL            28375160
++// Woohoo!
++#define MAX_CHANNELS 16
++#define HVL_CHANNEL_SCOPE_HISTORY_SAMPLES 32768
++
++// Some handy constants. Thanks eightbitbubsy.
++#define AMIGA_PAL_XTAL            28375160
+ #define AMIGA_NTSC_XTAL           28636360
+ #define AMIGA_CPU_PAL_CLK         ((AMIGA_PAL_XTAL / 4))
+ #define AMIGA_CPU_NTSC_CLK        ((AMIGA_NTSC_XTAL / 4))
+@@ -220,15 +221,25 @@ struct hvl_tune
+   struct hvl_voice       ht_Voices[MAX_CHANNELS];
+   int32                  ht_defstereo;
+   int32                  ht_defpanleft;
+-  int32                  ht_defpanright;
+-  int32                  ht_mixgain;
+-  uint8                  ht_Version;
+-};
+-
+-void hvl_DecodeFrame( struct hvl_tune *ht, int8 *buf1, int8 *buf2, int32 bufmod );
+-void hvl_InitReplayer( void );
+-BOOL hvl_InitSubsong( struct hvl_tune *ht, uint32 nr );
+-struct hvl_tune *hvl_LoadTune( const TEXT *name, uint32 freq, uint32 defstereo );
+-struct hvl_tune *hvl_ParseTune(const uint8 *buf, uint32 buflen, uint32 freq, uint32 defstereo );
+-void hvl_FreeTune( struct hvl_tune *ht );
++  int32                  ht_defpanright;
++  int32                  ht_mixgain;
++  uint8                  ht_Version;
++  uint32                 ht_ChannelScopeWritePos;
++  float                  ht_ChannelScopeHistory[MAX_CHANNELS * HVL_CHANNEL_SCOPE_HISTORY_SAMPLES];
++  uint8                  ht_ChannelPatternNote[MAX_CHANNELS];
++  uint8                  ht_ChannelPatternInstrument[MAX_CHANNELS];
++  int8                   ht_ChannelPatternFx1[MAX_CHANNELS];
++  uint8                  ht_ChannelPatternFx1Param[MAX_CHANNELS];
++  int8                   ht_ChannelPatternFx2[MAX_CHANNELS];
++  uint8                  ht_ChannelPatternFx2Param[MAX_CHANNELS];
++};
++
++void hvl_DecodeFrame( struct hvl_tune *ht, int8 *buf1, int8 *buf2, int32 bufmod );
++void hvl_InitReplayer( void );
++BOOL hvl_InitSubsong( struct hvl_tune *ht, uint32 nr );
++struct hvl_tune *hvl_LoadTune( const TEXT *name, uint32 freq, uint32 defstereo );
++struct hvl_tune *hvl_ParseTune(const uint8 *buf, uint32 buflen, uint32 freq, uint32 defstereo );
++void hvl_FreeTune( struct hvl_tune *ht );
++int hvl_GetChannelScopeSamples( const struct hvl_tune *ht, float *scope, int samples_per_channel, int n_channels );
++int hvl_GetChannelPatternState( const struct hvl_tune *ht, int *state, int stride, int n_channels );
+ 
+-- 
+2.53.0
+

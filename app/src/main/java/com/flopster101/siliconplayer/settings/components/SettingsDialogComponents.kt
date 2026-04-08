@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +37,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -49,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -317,6 +320,7 @@ internal fun SettingsSearchableMultiSelectDialog(
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 internal fun <T> SettingsGroupedToggleDialog(
     title: String,
     options: List<SettingsGroupedToggleOption<T>>,
@@ -325,59 +329,61 @@ internal fun <T> SettingsGroupedToggleDialog(
     onApply: (Set<T>) -> Unit,
     emptyGroupLabels: List<String> = emptyList(),
     selectAllValues: Set<T>? = null,
-    topDescription: String? = null
+    topDescription: String? = null,
+    compactRows: Boolean = false,
+    groupSpacing: Dp = 6.dp,
+    optionSpacing: Dp = 6.dp,
+    rowVerticalPadding: Dp = 2.dp
 ) {
     var pendingSelected by remember(title, selectedValues) { mutableStateOf(selectedValues) }
     val groupedOptions = options.groupBy { it.groupLabel }
     val scrollState = rememberScrollState()
     val dragToFraction = rememberScrollStateScrollbarDragHandler(scrollState)
     var scrollViewportHeightPx by remember { mutableFloatStateOf(0f) }
-
-    AlertDialog(
-        modifier = adaptiveDialogModifier(),
-        properties = adaptiveDialogProperties(),
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Box(
+    val dialogContent: @Composable () -> Unit = {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 420.dp)
+                .onSizeChanged { scrollViewportHeightPx = it.height.toFloat() }
+        ) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 420.dp)
-                    .onSizeChanged { scrollViewportHeightPx = it.height.toFloat() }
+                    .padding(end = 10.dp)
+                    .verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(groupSpacing)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(end = 10.dp)
-                        .verticalScroll(scrollState),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (selectAllValues != null) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            OutlinedButton(onClick = { pendingSelected = selectAllValues }) {
-                                Text("All")
-                            }
-                            OutlinedButton(onClick = { pendingSelected = emptySet() }) {
-                                Text("None")
-                            }
+                if (selectAllValues != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(onClick = { pendingSelected = selectAllValues }) {
+                            Text("All")
+                        }
+                        OutlinedButton(onClick = { pendingSelected = emptySet() }) {
+                            Text("None")
                         }
                     }
-                    if (!topDescription.isNullOrBlank()) {
-                        Text(
-                            text = topDescription,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                }
+                if (!topDescription.isNullOrBlank()) {
+                    Text(
+                        text = topDescription,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-                    val orderedGroupLabels = buildList {
-                        addAll(groupedOptions.keys)
-                        emptyGroupLabels.forEach { group ->
-                            if (!contains(group)) add(group)
-                        }
+                val orderedGroupLabels = buildList {
+                    addAll(groupedOptions.keys)
+                    emptyGroupLabels.forEach { group ->
+                        if (!contains(group)) add(group)
                     }
+                }
 
-                    orderedGroupLabels.forEach { groupLabel ->
+                orderedGroupLabels.forEach { groupLabel ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(optionSpacing)
+                    ) {
                         Text(
                             text = groupLabel,
                             style = MaterialTheme.typography.labelLarge,
@@ -404,7 +410,7 @@ internal fun <T> SettingsGroupedToggleDialog(
                                                 pendingSelected + optionValue
                                             }
                                         }
-                                        .padding(vertical = 2.dp),
+                                        .padding(vertical = rowVerticalPadding),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Checkbox(
@@ -417,27 +423,45 @@ internal fun <T> SettingsGroupedToggleDialog(
                                             }
                                         }
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Spacer(modifier = Modifier.width(if (compactRows) 6.dp else 8.dp))
                                     Text(option.label)
                                 }
                             }
                         }
                     }
                 }
-                if (scrollState.maxValue > 0 && scrollViewportHeightPx > 0f) {
-                    val contentHeightPx = scrollViewportHeightPx + scrollState.maxValue.toFloat()
-                    val thumbFraction = (scrollViewportHeightPx / contentHeightPx).coerceIn(0.08f, 1f)
-                    val offsetFraction = (scrollState.value.toFloat() / scrollState.maxValue.toFloat()).coerceIn(0f, 1f)
-                    VerticalScrollbarTrack(
-                        thumbFraction = thumbFraction,
-                        offsetFraction = offsetFraction,
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .width(10.dp)
-                            .fillMaxHeight(),
-                        onDragFractionChanged = dragToFraction
-                    )
+            }
+            if (scrollState.maxValue > 0 && scrollViewportHeightPx > 0f) {
+                val contentHeightPx = scrollViewportHeightPx + scrollState.maxValue.toFloat()
+                val thumbFraction = (scrollViewportHeightPx / contentHeightPx).coerceIn(0.08f, 1f)
+                val offsetFraction = (scrollState.value.toFloat() / scrollState.maxValue.toFloat()).coerceIn(0f, 1f)
+                VerticalScrollbarTrack(
+                    thumbFraction = thumbFraction,
+                    offsetFraction = offsetFraction,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .width(10.dp)
+                        .fillMaxHeight(),
+                    onDragFractionChanged = dragToFraction
+                )
+            }
+        }
+    }
+
+    AlertDialog(
+        modifier = adaptiveDialogModifier(),
+        properties = adaptiveDialogProperties(),
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            if (compactRows) {
+                CompositionLocalProvider(
+                    androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement provides false
+                ) {
+                    dialogContent()
                 }
+            } else {
+                dialogContent()
             }
         },
         dismissButton = {

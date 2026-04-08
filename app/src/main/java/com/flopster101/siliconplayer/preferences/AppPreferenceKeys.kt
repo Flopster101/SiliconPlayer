@@ -167,6 +167,8 @@ internal object AppPreferenceKeys {
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_NOTE = "visualization_channel_scope_text_show_note"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_VOLUME = "visualization_channel_scope_text_show_volume"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_EFFECT = "visualization_channel_scope_text_show_effect"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT = "visualization_channel_scope_text_show_instrument"
+    const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_SAMPLE = "visualization_channel_scope_text_show_sample"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT_SAMPLE = "visualization_channel_scope_text_show_instrument_sample"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_ENABLED = "visualization_channel_scope_text_vu_enabled"
     const val VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_ANCHOR = "visualization_channel_scope_text_vu_anchor"

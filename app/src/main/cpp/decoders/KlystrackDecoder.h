@@ -39,6 +39,7 @@ public:
     int getCurrentRowInfo();
     std::string getInstrumentNamesInfo();
     std::shared_ptr<ChannelScopeSharedState> getChannelScopeSharedState() const override { return channelScopeState; }
+    std::vector<int32_t> getChannelScopeTextState(int maxChannels) override;
     std::vector<std::string> getToggleChannelNames() override;
     std::vector<uint8_t> getToggleChannelAvailability() override;
     void setToggleChannelMuted(int channelIndex, bool enabled) override;

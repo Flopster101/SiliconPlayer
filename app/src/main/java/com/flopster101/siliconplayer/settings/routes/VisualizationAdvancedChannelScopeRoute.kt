@@ -22,6 +22,67 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import java.util.Locale
 
+private enum class ChannelScopeVisibleElement(
+    val label: String,
+    val shortLabel: String
+) {
+    Volume("Volume", "Vol"),
+    Effect("Effect", "FX"),
+    Instrument("Instrument", "Inst"),
+    Sample("Sample", "Sample")
+}
+
+private data class ChannelScopeVisibleElementSection(
+    val label: String,
+    val elements: List<ChannelScopeVisibleElement>
+)
+
+private fun channelScopeVisibleElementSections(): List<ChannelScopeVisibleElementSection> {
+    return listOf(
+        ChannelScopeVisibleElementSection(
+            label = "OpenMPT",
+            elements = listOf(
+                ChannelScopeVisibleElement.Volume,
+                ChannelScopeVisibleElement.Effect,
+                ChannelScopeVisibleElement.Instrument,
+                ChannelScopeVisibleElement.Sample
+            )
+        ),
+        ChannelScopeVisibleElementSection(
+            label = "Klystrack",
+            elements = listOf(
+                ChannelScopeVisibleElement.Volume,
+                ChannelScopeVisibleElement.Effect,
+                ChannelScopeVisibleElement.Instrument
+            )
+        )
+    )
+}
+
+private fun channelScopeVisibleElementOptions(): List<SettingsGroupedToggleOption<ChannelScopeVisibleElement>> {
+    return channelScopeVisibleElementSections().flatMap { section ->
+        section.elements.map { element ->
+            SettingsGroupedToggleOption(
+                groupLabel = section.label,
+                value = element,
+                label = element.label
+            )
+        }
+    }
+}
+
+private fun channelScopeVisibleElementsSummary(
+    selected: Set<ChannelScopeVisibleElement>
+): String {
+    if (selected.isEmpty()) return "None"
+    val ordered = ChannelScopeVisibleElement.entries.filter(selected::contains)
+    return if (ordered.size <= 2) {
+        ordered.joinToString(", ") { it.shortLabel }
+    } else {
+        "${ordered.size} selected"
+    }
+}
+
 @Composable
 internal fun VisualizationAdvancedChannelScopeRouteContent() {
                         val prefsName = "silicon_player_settings"
@@ -62,7 +123,8 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                         val scopeTextShowNoteKey = "visualization_channel_scope_text_show_note"
                         val scopeTextShowVolumeKey = "visualization_channel_scope_text_show_volume"
                         val scopeTextShowEffectKey = "visualization_channel_scope_text_show_effect"
-                        val scopeTextShowInstrumentSampleKey = "visualization_channel_scope_text_show_instrument_sample"
+                        val scopeTextShowInstrumentKey = AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT
+                        val scopeTextShowSampleKey = AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_SAMPLE
                         val scopeTextVuEnabledKey = "visualization_channel_scope_text_vu_enabled"
                         val scopeTextVuAnchorKey = "visualization_channel_scope_text_vu_anchor"
                         val scopeTextVuColorModeKey = "visualization_channel_scope_text_vu_color_mode"
@@ -410,11 +472,19 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                 )
                             )
                         }
-                        var scopeTextShowInstrumentSample by remember {
+                        var scopeTextShowInstrument by remember {
                             mutableStateOf(
                                 prefs.getBoolean(
-                                    scopeTextShowInstrumentSampleKey,
-                                    AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
+                                    scopeTextShowInstrumentKey,
+                                    AppDefaults.Visualization.ChannelScope.textShowInstrument
+                                )
+                            )
+                        }
+                        var scopeTextShowSample by remember {
+                            mutableStateOf(
+                                prefs.getBoolean(
+                                    scopeTextShowSampleKey,
+                                    AppDefaults.Visualization.ChannelScope.textShowSample
                                 )
                             )
                         }
@@ -482,6 +552,7 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                         var showTextVuColorModeDialog by remember { mutableStateOf(false) }
                         var showTextVuCustomColorDialog by remember { mutableStateOf(false) }
                         var showTextNoteFormatDialog by remember { mutableStateOf(false) }
+                        var showVisibleElementsDialog by remember { mutableStateOf(false) }
 
                         PreferenceChangeSyncEffect(
                             prefs = prefs,
@@ -522,7 +593,8 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                 scopeTextShowNoteKey,
                                 scopeTextShowVolumeKey,
                                 scopeTextShowEffectKey,
-                                scopeTextShowInstrumentSampleKey,
+                                scopeTextShowInstrumentKey,
+                                scopeTextShowSampleKey,
                                 scopeTextVuEnabledKey,
                                 scopeTextVuAnchorKey,
                                 scopeTextVuColorModeKey,
@@ -724,9 +796,13 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                 scopeTextShowEffectKey,
                                 AppDefaults.Visualization.ChannelScope.textShowEffect
                             )
-                            scopeTextShowInstrumentSample = prefs.getBoolean(
-                                scopeTextShowInstrumentSampleKey,
-                                AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
+                            scopeTextShowInstrument = prefs.getBoolean(
+                                scopeTextShowInstrumentKey,
+                                AppDefaults.Visualization.ChannelScope.textShowInstrument
+                            )
+                            scopeTextShowSample = prefs.getBoolean(
+                                scopeTextShowSampleKey,
+                                AppDefaults.Visualization.ChannelScope.textShowSample
                             )
                             scopeTextVuEnabled = prefs.getBoolean(
                                 scopeTextVuEnabledKey,
@@ -1046,35 +1122,18 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     prefs.edit().putBoolean(scopeTextShowNoteKey, enabled).apply()
                                 }
                             )
+                            val visibleElementsSelection = buildSet {
+                                if (scopeTextShowVolume) add(ChannelScopeVisibleElement.Volume)
+                                if (scopeTextShowEffect) add(ChannelScopeVisibleElement.Effect)
+                                if (scopeTextShowInstrument) add(ChannelScopeVisibleElement.Instrument)
+                                if (scopeTextShowSample) add(ChannelScopeVisibleElement.Sample)
+                            }
                             SettingsRowSpacer()
-                            PlayerSettingToggleCard(
-                                title = "Show volume",
-                                description = "Show current channel volume value.",
-                                checked = scopeTextShowVolume,
-                                onCheckedChange = { enabled ->
-                                    scopeTextShowVolume = enabled
-                                    prefs.edit().putBoolean(scopeTextShowVolumeKey, enabled).apply()
-                                }
-                            )
-                            SettingsRowSpacer()
-                            PlayerSettingToggleCard(
-                                title = "Show effect",
-                                description = "Show active effect command and parameter.",
-                                checked = scopeTextShowEffect,
-                                onCheckedChange = { enabled ->
-                                    scopeTextShowEffect = enabled
-                                    prefs.edit().putBoolean(scopeTextShowEffectKey, enabled).apply()
-                                }
-                            )
-                            SettingsRowSpacer()
-                            PlayerSettingToggleCard(
-                                title = "Show instrument/sample",
-                                description = "Show active instrument or sample index.",
-                                checked = scopeTextShowInstrumentSample,
-                                onCheckedChange = { enabled ->
-                                    scopeTextShowInstrumentSample = enabled
-                                    prefs.edit().putBoolean(scopeTextShowInstrumentSampleKey, enabled).apply()
-                                }
+                            SettingsValuePickerCard(
+                                title = "Visible elements",
+                                description = "Choose core-specific tracker fields for the channel-scope text overlay.",
+                                value = channelScopeVisibleElementsSummary(visibleElementsSelection),
+                                onClick = { showVisibleElementsDialog = true }
                             )
                             SettingsRowSpacer()
                             PlayerSettingToggleCard(
@@ -1515,6 +1574,36 @@ internal fun VisualizationAdvancedChannelScopeRouteContent() {
                                     prefs.edit().putString(scopeTextNoteFormatKey, entry.storageValue).apply()
                                 },
                                 onDismiss = { showTextNoteFormatDialog = false }
+                            )
+                        }
+                        if (showVisibleElementsDialog) {
+                            SettingsGroupedToggleDialog(
+                                title = "Visible elements",
+                                options = channelScopeVisibleElementOptions(),
+                                selectedValues = buildSet {
+                                    if (scopeTextShowVolume) add(ChannelScopeVisibleElement.Volume)
+                                    if (scopeTextShowEffect) add(ChannelScopeVisibleElement.Effect)
+                                    if (scopeTextShowInstrument) add(ChannelScopeVisibleElement.Instrument)
+                                    if (scopeTextShowSample) add(ChannelScopeVisibleElement.Sample)
+                                },
+                                onDismiss = { showVisibleElementsDialog = false },
+                                onApply = { selected ->
+                                    scopeTextShowVolume = selected.contains(ChannelScopeVisibleElement.Volume)
+                                    scopeTextShowEffect = selected.contains(ChannelScopeVisibleElement.Effect)
+                                    scopeTextShowInstrument = selected.contains(ChannelScopeVisibleElement.Instrument)
+                                    scopeTextShowSample = selected.contains(ChannelScopeVisibleElement.Sample)
+                                    prefs.edit()
+                                        .putBoolean(scopeTextShowVolumeKey, scopeTextShowVolume)
+                                        .putBoolean(scopeTextShowEffectKey, scopeTextShowEffect)
+                                        .putBoolean(scopeTextShowInstrumentKey, scopeTextShowInstrument)
+                                        .putBoolean(scopeTextShowSampleKey, scopeTextShowSample)
+                                        .apply()
+                                },
+                                topDescription = "Channel label and note stay as generic toggles here. Sections are listed per core on purpose, so shared elements repeat wherever they are supported.",
+                                compactRows = true,
+                                groupSpacing = 8.dp,
+                                optionSpacing = 0.dp,
+                                rowVerticalPadding = 0.dp
                             )
                         }
 }

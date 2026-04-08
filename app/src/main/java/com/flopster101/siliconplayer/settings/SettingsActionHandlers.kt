@@ -667,9 +667,14 @@ internal fun resetVisualizationChannelScopeSettingsAction(
             AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_EFFECT,
             AppDefaults.Visualization.ChannelScope.textShowEffect
         )
+        .remove(AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT_SAMPLE)
         .putBoolean(
-            AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT_SAMPLE,
-            AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
+            AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_INSTRUMENT,
+            AppDefaults.Visualization.ChannelScope.textShowInstrument
+        )
+        .putBoolean(
+            AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_SHOW_SAMPLE,
+            AppDefaults.Visualization.ChannelScope.textShowSample
         )
         .putBoolean(
             AppPreferenceKeys.VISUALIZATION_CHANNEL_SCOPE_TEXT_VU_ENABLED,

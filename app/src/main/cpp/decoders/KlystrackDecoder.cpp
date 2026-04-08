@@ -16,9 +16,24 @@ void KSND_SetChannelMute(KPlayer* player, int channel, int muted);
 __attribute__((weak))
 #endif
 int KSND_GetChannelScopeSamples(KPlayer* player, float* scope, int samples_per_channel, int n_channels);
+#if defined(__GNUC__)
+__attribute__((weak))
+#endif
+int KSND_GetChannelPatternState(KPlayer* player, int* state, int stride, int n_channels);
 }
 
 namespace {
+constexpr int kChannelScopeTextStride = 8;
+constexpr int kKlystrackPatternStateStride = 7;
+constexpr int kChannelScopeTextFlagActive = 1 << 0;
+constexpr int kKlystrackEffectCodeSentinel = 0x100;
+constexpr int kKlystrackNoteNone = 0xFF;
+constexpr int kKlystrackNoteRelease = 0xFE;
+constexpr int kKlystrackNoteCut = 0xFD;
+constexpr int kKlystrackNoteMacroRelease = 0xFC;
+constexpr int kKlystrackNoteReleaseWithoutMacro = 0xFB;
+constexpr int kKlystrackNoteBase = 12 * 5;
+
 int clampSampleRate(int sampleRateHz) {
     return std::clamp(sampleRateHz, 8000, 192000);
 }
@@ -35,6 +50,27 @@ int parseIntOptionString(const char* value, int fallback) {
         return fallback;
     }
     return static_cast<int>(parsed);
+}
+
+int normalizeKlystrackDisplayNote(int rawNote, int noteOffset) {
+    if (rawNote < 0 || rawNote >= 0xF0) {
+        return -1;
+    }
+    const int effectiveNote = rawNote + noteOffset;
+    const int displayNote = effectiveNote - kKlystrackNoteBase + 1;
+    return displayNote > 0 ? displayNote : -1;
+}
+
+int normalizeKlystrackInstrumentIndex(int rawInstrument) {
+    return rawInstrument >= 0 && rawInstrument < 0xFF ? rawInstrument + 1 : -1;
+}
+
+bool isKlystrackSpecialNote(int rawNote) {
+    return rawNote == kKlystrackNoteNone ||
+            rawNote == kKlystrackNoteRelease ||
+            rawNote == kKlystrackNoteCut ||
+            rawNote == kKlystrackNoteMacroRelease ||
+            rawNote == kKlystrackNoteReleaseWithoutMacro;
 }
 }
 
@@ -259,6 +295,62 @@ void KlystrackDecoder::captureChannelScopeSnapshotLocked() {
         channelScopeState->snapshotChannels = capturedChannels;
         channelScopeState->snapshotSerial = ++channelScopeSourceSerial;
     }
+}
+
+std::vector<int32_t> KlystrackDecoder::getChannelScopeTextState(int maxChannels) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!player || KSND_GetChannelPatternState == nullptr) {
+        return {};
+    }
+
+    const int totalChannels = std::clamp(trackCount, 0, 64);
+    if (totalChannels <= 0) {
+        return {};
+    }
+
+    const int requestedChannels = std::clamp(maxChannels, 1, 64);
+    const int channels = std::min(totalChannels, requestedChannels);
+    std::vector<int> nativeState(static_cast<size_t>(channels * kKlystrackPatternStateStride), -1);
+    const int writtenChannels = std::max(
+            0,
+            KSND_GetChannelPatternState(
+                    player,
+                    nativeState.data(),
+                    kKlystrackPatternStateStride,
+                    channels
+            )
+    );
+    if (writtenChannels <= 0) {
+        return {};
+    }
+
+    std::vector<int32_t> flat(static_cast<size_t>(writtenChannels * kChannelScopeTextStride), -1);
+    for (int channel = 0; channel < writtenChannels; ++channel) {
+        const size_t nativeBase = static_cast<size_t>(channel * kKlystrackPatternStateStride);
+        const size_t base = static_cast<size_t>(channel * kChannelScopeTextStride);
+        const int rawNote = nativeState[nativeBase + 2];
+        const int noteOffset = nativeState[nativeBase + 3];
+        const int volume = std::clamp(nativeState[nativeBase + 4], 0, 255);
+        const int rawEffect = nativeState[nativeBase + 5];
+        const int rawInstrument = nativeState[nativeBase + 6];
+        const int note = normalizeKlystrackDisplayNote(rawNote, noteOffset);
+        const int instrument = normalizeKlystrackInstrumentIndex(rawInstrument);
+
+        int flags = 0;
+        if (note > 0 || volume > 0 || rawEffect >= 0 || instrument > 0 || isKlystrackSpecialNote(rawNote)) {
+            flags |= kChannelScopeTextFlagActive;
+        }
+
+        flat[base + 0] = channel;
+        flat[base + 1] = note;
+        flat[base + 2] = volume;
+        flat[base + 3] = rawEffect >= 0 ? (kKlystrackEffectCodeSentinel | ((rawEffect >> 8) & 0xFF)) : 0;
+        flat[base + 4] = rawEffect >= 0 ? (rawEffect & 0xFF) : -1;
+        flat[base + 5] = instrument;
+        flat[base + 6] = -1;
+        flat[base + 7] = flags;
+    }
+    return flat;
 }
 
 int KlystrackDecoder::read(float* buffer, int numFrames) {

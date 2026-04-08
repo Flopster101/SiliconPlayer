@@ -963,7 +963,7 @@ private fun parseChannelScopeTextStates(
     }
 }
 
-private fun parseOpenMptIndexedNames(raw: String): Map<Int, String> {
+private fun parseIndexedNames(raw: String): Map<Int, String> {
     if (raw.isBlank()) return emptyMap()
     val out = LinkedHashMap<Int, String>()
     raw.lineSequence().forEach { lineRaw ->
@@ -1337,7 +1337,8 @@ internal data class ChannelScopePrefs(
     val textShowNote: Boolean,
     val textShowVolume: Boolean,
     val textShowEffect: Boolean,
-    val textShowInstrumentSample: Boolean,
+    val textShowInstrument: Boolean,
+    val textShowSample: Boolean,
     val textVuEnabled: Boolean,
     val textVuAnchor: VisualizationVuAnchor,
     val textVuColorMode: VisualizationChannelScopeTextColorMode,
@@ -1380,7 +1381,8 @@ internal data class ChannelScopePrefs(
         private const val KEY_TEXT_SHOW_NOTE = "visualization_channel_scope_text_show_note"
         private const val KEY_TEXT_SHOW_VOLUME = "visualization_channel_scope_text_show_volume"
         private const val KEY_TEXT_SHOW_EFFECT = "visualization_channel_scope_text_show_effect"
-        private const val KEY_TEXT_SHOW_INSTRUMENT_SAMPLE = "visualization_channel_scope_text_show_instrument_sample"
+        private const val KEY_TEXT_SHOW_INSTRUMENT = "visualization_channel_scope_text_show_instrument"
+        private const val KEY_TEXT_SHOW_SAMPLE = "visualization_channel_scope_text_show_sample"
         private const val KEY_TEXT_VU_ENABLED = "visualization_channel_scope_text_vu_enabled"
         private const val KEY_TEXT_VU_ANCHOR = "visualization_channel_scope_text_vu_anchor"
         private const val KEY_TEXT_VU_COLOR_MODE = "visualization_channel_scope_text_vu_color_mode"
@@ -1585,9 +1587,13 @@ internal data class ChannelScopePrefs(
                     KEY_TEXT_SHOW_EFFECT,
                     AppDefaults.Visualization.ChannelScope.textShowEffect
                 ),
-                textShowInstrumentSample = sharedPrefs.getBoolean(
-                    KEY_TEXT_SHOW_INSTRUMENT_SAMPLE,
-                    AppDefaults.Visualization.ChannelScope.textShowInstrumentSample
+                textShowInstrument = sharedPrefs.getBoolean(
+                    KEY_TEXT_SHOW_INSTRUMENT,
+                    AppDefaults.Visualization.ChannelScope.textShowInstrument
+                ),
+                textShowSample = sharedPrefs.getBoolean(
+                    KEY_TEXT_SHOW_SAMPLE,
+                    AppDefaults.Visualization.ChannelScope.textShowSample
                 ),
                 textVuEnabled = sharedPrefs.getBoolean(
                     KEY_TEXT_VU_ENABLED,
@@ -1670,7 +1676,8 @@ private data class ChannelScopeVisualState(
     val textShowNote: Boolean,
     val textShowVolume: Boolean,
     val textShowEffect: Boolean,
-    val textShowInstrumentSample: Boolean,
+    val textShowInstrument: Boolean,
+    val textShowSample: Boolean,
     val textVuEnabled: Boolean,
     val textVuAnchor: VisualizationVuAnchor,
     val textVuColorMode: VisualizationChannelScopeTextColorMode,
@@ -1789,8 +1796,8 @@ internal fun AlbumArtPlaceholder(
     var visChannelScopeTextStates by remember { mutableStateOf<List<ChannelScopeChannelTextState>>(emptyList()) }
     var visChannelScopeTextRawCache by remember { mutableStateOf(IntArray(0)) }
     var visChannelScopeLastTextPollNs by remember { mutableStateOf(0L) }
-    var visOpenMptInstrumentNamesByIndex by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
-    var visOpenMptSampleNamesByIndex by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
+    var visChannelScopeInstrumentNamesByIndex by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
+    var visChannelScopeSampleNamesByIndex by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
     var visDebugUpdateFps by remember { mutableIntStateOf(0) }
     var visDebugUpdateFrameMs by remember { mutableIntStateOf(0) }
     var visDebugSourceUniqueFps by remember { mutableIntStateOf(0) }
@@ -1826,16 +1833,28 @@ internal fun AlbumArtPlaceholder(
     }
 
     LaunchedEffect(file?.absolutePath, decoderName, visualizationMode) {
-        if (
-            visualizationMode != VisualizationMode.ChannelScope ||
-            pluginNameForCoreName(decoderName) != DecoderNames.LIB_OPEN_MPT
-        ) {
-            visOpenMptInstrumentNamesByIndex = emptyMap()
-            visOpenMptSampleNamesByIndex = emptyMap()
+        if (visualizationMode != VisualizationMode.ChannelScope) {
+            visChannelScopeInstrumentNamesByIndex = emptyMap()
+            visChannelScopeSampleNamesByIndex = emptyMap()
             return@LaunchedEffect
         }
-        visOpenMptInstrumentNamesByIndex = parseOpenMptIndexedNames(NativeBridge.getOpenMptInstrumentNames())
-        visOpenMptSampleNamesByIndex = parseOpenMptIndexedNames(NativeBridge.getOpenMptSampleNames())
+        when (pluginNameForCoreName(decoderName)) {
+            DecoderNames.LIB_OPEN_MPT -> {
+                visChannelScopeInstrumentNamesByIndex =
+                    parseIndexedNames(NativeBridge.getOpenMptInstrumentNames())
+                visChannelScopeSampleNamesByIndex =
+                    parseIndexedNames(NativeBridge.getOpenMptSampleNames())
+            }
+            DecoderNames.KLYSTRACK -> {
+                visChannelScopeInstrumentNamesByIndex =
+                    parseIndexedNames(NativeBridge.getKlystrackInstrumentNames())
+                visChannelScopeSampleNamesByIndex = emptyMap()
+            }
+            else -> {
+                visChannelScopeInstrumentNamesByIndex = emptyMap()
+                visChannelScopeSampleNamesByIndex = emptyMap()
+            }
+        }
     }
     LaunchedEffect(
         visualizationMode,
@@ -2088,8 +2107,8 @@ internal fun AlbumArtPlaceholder(
     val channelScopeState = ChannelScopeVisualState(
         channelHistories = visChannelScopeHistories,
         channelTextStates = visChannelScopeTextStates,
-        instrumentNamesByIndex = visOpenMptInstrumentNamesByIndex,
-        sampleNamesByIndex = visOpenMptSampleNamesByIndex,
+        instrumentNamesByIndex = visChannelScopeInstrumentNamesByIndex,
+        sampleNamesByIndex = visChannelScopeSampleNamesByIndex,
         triggerModeNative = channelScopePrefs.triggerModeNative,
         triggerIndices = visChannelScopeTriggerIndices,
         renderBackend = channelScopePrefs.renderBackend,
@@ -2118,7 +2137,8 @@ internal fun AlbumArtPlaceholder(
         textShowNote = channelScopePrefs.textShowNote,
         textShowVolume = channelScopePrefs.textShowVolume,
         textShowEffect = channelScopePrefs.textShowEffect,
-        textShowInstrumentSample = channelScopePrefs.textShowInstrumentSample,
+        textShowInstrument = channelScopePrefs.textShowInstrument,
+        textShowSample = channelScopePrefs.textShowSample,
         textVuEnabled = channelScopePrefs.textVuEnabled,
         textVuAnchor = channelScopePrefs.textVuAnchor,
         textVuColorMode = channelScopePrefs.textVuColorMode,
@@ -2386,7 +2406,8 @@ internal fun AlbumArtPlaceholder(
                     channelScopeTextShowNote = channelScopeState.textShowNote,
                     channelScopeTextShowVolume = channelScopeState.textShowVolume,
                     channelScopeTextShowEffect = channelScopeState.textShowEffect,
-                    channelScopeTextShowInstrumentSample = channelScopeState.textShowInstrumentSample,
+                    channelScopeTextShowInstrument = channelScopeState.textShowInstrument,
+                    channelScopeTextShowSample = channelScopeState.textShowSample,
                     channelScopeTextVuEnabled = channelScopeState.textVuEnabled,
                     channelScopeTextVuAnchor = channelScopeState.textVuAnchor,
                     channelScopeTextVuColorMode = channelScopeState.textVuColorMode,

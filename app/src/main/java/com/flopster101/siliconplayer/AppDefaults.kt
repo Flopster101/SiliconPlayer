@@ -132,7 +132,8 @@ object AppDefaults {
             const val textShowNote = true
             const val textShowVolume = true
             const val textShowEffect = true
-            const val textShowInstrumentSample = true
+            const val textShowInstrument = true
+            const val textShowSample = true
             const val textVuEnabled = false
             val textVuAnchor = VisualizationVuAnchor.Bottom
             val textVuColorMode = VisualizationChannelScopeTextColorMode.OpenMptInspired

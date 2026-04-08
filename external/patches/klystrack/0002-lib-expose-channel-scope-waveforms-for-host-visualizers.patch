@@ -1,0 +1,416 @@
+From 7c1e5d6f9e6e9eab9bcb75d8a0b2fd339559d0a1 Mon Sep 17 00:00:00 2001
+From: Flopster101 <nahuelgomez329@gmail.com>
+Date: Wed, 8 Apr 2026 17:20:00 -0300
+Subject: [PATCH] lib: expose channel scope waveforms for host visualizers
+
+Capture recent per-channel waveform history inside the replay core and expose
+it through KSND_GetChannelScopeSamples() so host integrations can render live
+channel scopes without depending on editor-only buffers.
+---
+ src/lib/ksnd.c |  77 +++++++++++++++++++++++---------
+ src/lib/ksnd.h |  33 +++++++++++---
+ src/snd/cyd.c  | 139 +++++++++++++++++++++++++++++++++++++++------------------
+ src/snd/cyd.h  |  35 ++++++++-------
+ 4 files changed, 198 insertions(+), 86 deletions(-)
+
+diff --git a/src/lib/ksnd.c b/src/lib/ksnd.c
+index 6a73706..e9b1544 100644
+--- a/src/lib/ksnd.c
++++ b/src/lib/ksnd.c
+@@ -184,17 +184,18 @@ KLYSAPI void KSND_FreePlayer(KPlayer *player)
+ }
+ 
+ 
+-KLYSAPI void KSND_PlaySong(KPlayer *player, KSong *song, int start_position)
+-{
+-	player->cyd.wavetable_entries = song->wavetable_entries;
+-	cyd_set_callback(&player->cyd, mus_advance_tick, &player->mus, song->song.song_rate);
+-	mus_set_fx(&player->mus, &song->song);
+-	
+-	if (song->song.num_channels > player->cyd.n_channels)
+-		cyd_reserve_channels(&player->cyd, song->song.num_channels);
++KLYSAPI void KSND_PlaySong(KPlayer *player, KSong *song, int start_position)
++{
++	player->cyd.wavetable_entries = song->wavetable_entries;
++	cyd_set_callback(&player->cyd, mus_advance_tick, &player->mus, song->song.song_rate);
++	mus_set_fx(&player->mus, &song->song);
+ 	
+-	mus_set_song(&player->mus, &song->song, start_position);
+-}
++	if (song->song.num_channels > player->cyd.n_channels)
++		cyd_reserve_channels(&player->cyd, song->song.num_channels);
++	
++	mus_set_song(&player->mus, &song->song, start_position);
++	cyd_clear_scope_buffer(&player->cyd);
++}
+ 
+ 
+ KLYSAPI int KSND_FillBuffer(KPlayer *player, short int *buffer, int buffer_length)
+@@ -209,12 +210,13 @@ KLYSAPI int KSND_FillBuffer(KPlayer *player, short int *buffer, int buffer_lengt
+ }
+ 
+ 
+-KLYSAPI void KSND_Stop(KPlayer *player)
+-{
+-	mus_set_song(&player->mus, NULL, 0);
+-	cyd_set_callback(&player->cyd, NULL, NULL, 1);
+-	player->cyd.wavetable_entries = NULL;
+-}
++KLYSAPI void KSND_Stop(KPlayer *player)
++{
++	mus_set_song(&player->mus, NULL, 0);
++	cyd_set_callback(&player->cyd, NULL, NULL, 1);
++	player->cyd.wavetable_entries = NULL;
++	cyd_clear_scope_buffer(&player->cyd);
++}
+ 
+ 
+ KLYSAPI void KSND_Pause(KPlayer *player, int state)
+@@ -255,10 +257,45 @@ KLYSAPI void KSND_SetChannelMute(KPlayer *player, int channel, int muted)
+ 
+ KLYSAPI void KSND_GetVUMeters(KPlayer *player, int *dest, int n_channels)
+ {
+-	int temp[MUS_MAX_CHANNELS];
+-	mus_poll_status(&player->mus, NULL, NULL, NULL, NULL, temp, NULL, NULL);
+-	memcpy(dest, temp, sizeof(dest[0]) * n_channels);
+-}
++	int temp[MUS_MAX_CHANNELS];
++	mus_poll_status(&player->mus, NULL, NULL, NULL, NULL, temp, NULL, NULL);
++	memcpy(dest, temp, sizeof(dest[0]) * n_channels);
++}
++
++KLYSAPI int KSND_GetChannelScopeSamples(KPlayer *player, float *scope, int samples_per_channel, int n_channels)
++{
++	if (player == NULL || scope == NULL || samples_per_channel <= 0)
++		return 0;
++	if (player->cyd.scope_buffer == NULL || player->cyd.scope_buffer_samples <= 0)
++		return 0;
++
++	const int available_channels = player->mus.song != NULL ? player->mus.song->num_channels : player->cyd.n_channels;
++	const int channels = my_min(my_min(available_channels, player->cyd.n_channels), n_channels);
++	if (channels <= 0)
++		return 0;
++
++	const int copied_samples = my_min(samples_per_channel, player->cyd.scope_buffer_samples);
++	const int pad_offset = samples_per_channel - copied_samples;
++	memset(scope, 0, sizeof(*scope) * (size_t) samples_per_channel * (size_t) channels);
++
++	cyd_lock(&player->cyd, 1);
++	const int start =
++			(player->cyd.scope_write_position - copied_samples + player->cyd.scope_buffer_samples) %
++			player->cyd.scope_buffer_samples;
++	for (int channel = 0; channel < channels; ++channel)
++	{
++		const float *channel_scope = player->cyd.scope_buffer + (size_t) channel * (size_t) player->cyd.scope_buffer_samples;
++		float *dest = scope + (size_t) channel * (size_t) samples_per_channel;
++		for (int i = 0; i < copied_samples; ++i)
++		{
++			const int source_index = (start + i) % player->cyd.scope_buffer_samples;
++			dest[pad_offset + i] = channel_scope[source_index];
++		}
++	}
++	cyd_lock(&player->cyd, 0);
++
++	return channels;
++}
+ 
+ 
+ KLYSAPI const KSongInfo * KSND_GetSongInfo(KSong *song, KSongInfo *data)
+diff --git a/src/lib/ksnd.h b/src/lib/ksnd.h
+index ae1be66..d4b457f 100644
+--- a/src/lib/ksnd.h
++++ b/src/lib/ksnd.h
+@@ -215,18 +215,37 @@ KLYSAPI extern void KSND_SetLooping(KPlayer *player, int looping);
+  * @param player player context which is currently playing a song set with KSND_PlaySong()
+  * @return current playback position measured in pattern rows
+  */
+-KLYSAPI extern int KSND_GetPlayPosition(KPlayer* player);
+-
+-/**
+- * Get the current envelope values for each player channel.
++KLYSAPI extern int KSND_GetPlayPosition(KPlayer* player);
++
++/**
++ * Get the current envelope values for each player channel.
+  *
+  * Envelope values range from 0 (no audio) to 128 (full volume).
+  *
+  * @param player player context which is currently playing a song set with KSND_PlaySong()
+  * @param[out] envelope array of 32-bit signed integers, should contain @c n_channel items
+- * @param[in] n_channels get envelope values for @c n_channel first channels
+- */
+-KLYSAPI extern void KSND_GetVUMeters(KPlayer *player, int *envelope, int n_channels);
++ * @param[in] n_channels get envelope values for @c n_channel first channels
++ */
++KLYSAPI extern void KSND_GetVUMeters(KPlayer *player, int *envelope, int n_channels);
++
++/**
++ * Copy recent per-channel waveform history into a host-provided buffer.
++ *
++ * Samples are returned oldest-to-newest for each channel, flattened channel-major:
++ * `[ch0 samples][ch1 samples]...`
++ *
++ * @param player player context which is currently playing a song set with KSND_PlaySong()
++ * @param[out] scope destination float buffer sized for @c samples_per_channel * @c n_channels
++ * @param samples_per_channel requested history length per channel
++ * @param n_channels maximum number of channels to copy
++ * @return number of channels written
++ */
++KLYSAPI extern int KSND_GetChannelScopeSamples(
++	KPlayer *player,
++	float *scope,
++	int samples_per_channel,
++	int n_channels
++);
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/src/snd/cyd.c b/src/snd/cyd.c
+index 2a7dbbd..0017638 100644
+--- a/src/snd/cyd.c
++++ b/src/snd/cyd.c
+@@ -344,15 +344,43 @@ void createCombinedWF(Uint16 wfarray[], float bitmul, float bitstrength, float t
+ 	}
+ }
+ 
+-Uint64 map_Arduino(Uint64 x, Uint64 in_min, Uint64 in_max, Uint64 out_min, Uint64 out_max)
+-{
+-	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min; //don't ask me just easiest wavegen+oscview setup involved arduino
+-}
+-
+-
+-void cyd_init(CydEngine *cyd, Uint32 sample_rate, int channels)
+-{
+-	memset(cyd, 0, sizeof(*cyd));
++Uint64 map_Arduino(Uint64 x, Uint64 in_min, Uint64 in_max, Uint64 out_min, Uint64 out_max)
++{
++	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min; //don't ask me just easiest wavegen+oscview setup involved arduino
++}
++
++static inline float cyd_scope_normalize_sample(Sint32 sample)
++{
++	const float scaled = (float) sample / (32768.0f * PRE_GAIN_DIVISOR);
++	if (scaled < -1.0f) return -1.0f;
++	if (scaled > 1.0f) return 1.0f;
++	return scaled;
++}
++
++static inline void cyd_capture_scope_sample(CydEngine *cyd, int channel, Sint32 sample)
++{
++	if (cyd == NULL || cyd->scope_buffer == NULL || cyd->scope_buffer_samples <= 0)
++		return;
++	if (channel < 0 || channel >= CYD_MAX_CHANNELS)
++		return;
++
++	const size_t offset = (size_t) channel * (size_t) cyd->scope_buffer_samples + (size_t) cyd->scope_write_position;
++	cyd->scope_buffer[offset] = cyd_scope_normalize_sample(sample);
++}
++
++void cyd_clear_scope_buffer(CydEngine *cyd)
++{
++	if (cyd == NULL || cyd->scope_buffer == NULL || cyd->scope_buffer_samples <= 0)
++		return;
++
++	memset(cyd->scope_buffer, 0, sizeof(*cyd->scope_buffer) * (size_t) CYD_MAX_CHANNELS * (size_t) cyd->scope_buffer_samples);
++	cyd->scope_write_position = 0;
++}
++
++
++void cyd_init(CydEngine *cyd, Uint32 sample_rate, int channels)
++{
++	memset(cyd, 0, sizeof(*cyd));
+ 	
+ 	cyd->sample_rate = sample_rate;
+ 	cyd->lookup_table = calloc(1, sizeof(*cyd->lookup_table) * LUT_SIZE);
+@@ -386,14 +414,17 @@ void cyd_init(CydEngine *cyd, Uint32 sample_rate, int channels)
+ 	{
+ 		cydfx_init(&cyd->fx[i], sample_rate);
+ 	}
+-#ifndef CYD_DISABLE_WAVETABLE
+-
+-	cyd->wavetable_entries = calloc(sizeof(cyd->wavetable_entries[0]), CYD_WAVE_MAX_ENTRIES);
+-	
+-	cyd_reset_wavetable(cyd);
+-#endif
+-	
+-	cyd_reserve_channels(cyd, channels);
++#ifndef CYD_DISABLE_WAVETABLE
++
++	cyd->wavetable_entries = calloc(sizeof(cyd->wavetable_entries[0]), CYD_WAVE_MAX_ENTRIES);
++	
++	cyd_reset_wavetable(cyd);
++#endif
++	cyd->scope_buffer_samples = CYD_SCOPE_BUFFER_SAMPLES;
++	cyd->scope_buffer = calloc((size_t) CYD_MAX_CHANNELS * (size_t) cyd->scope_buffer_samples, sizeof(*cyd->scope_buffer));
++	cyd_clear_scope_buffer(cyd);
++	
++	cyd_reserve_channels(cyd, channels);
+ 	
+ 	for (int i = 0; i < channels; ++i) //wasn't there
+ 	{
+@@ -457,14 +488,22 @@ void cyd_deinit(CydEngine *cyd)
+ 	}
+ #endif
+ 
+-	if (cyd->channel)
+-	{
+-		free(cyd->channel);
+-		cyd->channel = NULL;
+-	}
+-	
+-	for (int i = 0; i < CYD_MAX_FX_CHANNELS; ++i)
+-		cydfx_deinit(&cyd->fx[i]);
++	if (cyd->channel)
++	{
++		free(cyd->channel);
++		cyd->channel = NULL;
++	}
++
++	if (cyd->scope_buffer)
++	{
++		free(cyd->scope_buffer);
++		cyd->scope_buffer = NULL;
++		cyd->scope_buffer_samples = 0;
++		cyd->scope_write_position = 0;
++	}
++	
++	for (int i = 0; i < CYD_MAX_FX_CHANNELS; ++i)
++		cydfx_deinit(&cyd->fx[i]);
+ 	
+ #ifndef USENATIVEAPIS
+ 
+@@ -496,12 +535,13 @@ void cyd_deinit(CydEngine *cyd)
+ }
+ 
+ 
+-void cyd_reset(CydEngine *cyd)
+-{
+-	for (int i = 0; i < cyd->n_channels; ++i)
+-	{
+-		cyd_init_channel(cyd, &cyd->channel[i]);
+-		cyd->channel[i].sync_source = i;
++void cyd_reset(CydEngine *cyd)
++{
++	cyd_clear_scope_buffer(cyd);
++	for (int i = 0; i < cyd->n_channels; ++i)
++	{
++		cyd_init_channel(cyd, &cyd->channel[i]);
++		cyd->channel[i].sync_source = i;
+ 	}
+ }
+ 
+@@ -2495,23 +2535,34 @@ static Sint32 cyd_output(CydEngine *cyd)
+ 			}
+ 		}
+ 		
+-#ifndef STANDALONE_COMPILE
+-		
+-		if(mused.flags2 & SHOW_OSCILLOSCOPES_PATTERN_EDITOR) //oscilloscopes in patterns
+-		{
+-			mused.channels_output_buffers[i][mused.channels_output_buffer_counters[i]] = o;
++#ifndef STANDALONE_COMPILE
++		
++		if(mused.flags2 & SHOW_OSCILLOSCOPES_PATTERN_EDITOR) //oscilloscopes in patterns
++		{
++			mused.channels_output_buffers[i][mused.channels_output_buffer_counters[i]] = o;
+ 			mused.channels_output_buffer_counters[i]++;
+ 			
+ 			if(mused.channels_output_buffer_counters[i] >= 8192)
+ 			{
+-				mused.channels_output_buffer_counters[i] = 0;
+-			}
+-		}
+-#endif
+-	}
+-	
+-	for (int i = 0; i < CYD_MAX_FX_CHANNELS; ++i)
+-	{
++				mused.channels_output_buffer_counters[i] = 0;
++			}
++		}
++#endif
++
++		cyd_capture_scope_sample(cyd, i, o);
++	}
++
++	if (cyd->scope_buffer && cyd->scope_buffer_samples > 0)
++	{
++		cyd->scope_write_position++;
++		if (cyd->scope_write_position >= cyd->scope_buffer_samples)
++		{
++			cyd->scope_write_position = 0;
++		}
++	}
++	
++	for (int i = 0; i < CYD_MAX_FX_CHANNELS; ++i)
++	{
+ #ifdef STEREOOUTPUT
+ 		Sint32 l, r;
+ 		cydfx_output(&cyd->fx[i], fx_l[i], fx_r[i], &l, &r);
+diff --git a/src/snd/cyd.h b/src/snd/cyd.h
+index 2f027b8..4098084 100644
+--- a/src/snd/cyd.h
++++ b/src/snd/cyd.h
+@@ -261,10 +261,11 @@ enum
+ #define YM_LUT_SIZE 16
+ #define EXP_LUT_SIZE 8192
+ 
+-#define CYD_NUM_WO_BUFFER_SIZE 2000
+-#define CYD_NUM_WO_BUFFERS 4
+-
+-#define CYD_NUM_LFSR 16
++#define CYD_NUM_WO_BUFFER_SIZE 2000
++#define CYD_NUM_WO_BUFFERS 4
++
++#define CYD_NUM_LFSR 16
++#define CYD_SCOPE_BUFFER_SAMPLES 8192
+ 
+ extern Uint16 PulseTri_8580[8192];
+ 
+@@ -289,11 +290,14 @@ typedef struct CydEngine_t
+ 	volatile sig_atomic_t lock_request;
+ 	volatile sig_atomic_t lock_locked;
+ #endif
+-	size_t samples_output; // bytes in last cyd_output_buffer
+-	CydWavetableEntry *wavetable_entries;
+-#ifdef USENATIVEAPIS
+-# ifdef WIN32
+-	BOOL thread_running;
++	size_t samples_output; // bytes in last cyd_output_buffer
++	CydWavetableEntry *wavetable_entries;
++	float *scope_buffer;
++	int scope_buffer_samples;
++	int scope_write_position;
++#ifdef USENATIVEAPIS
++# ifdef WIN32
++	BOOL thread_running;
+ 	DWORD thread_handle, cb_handle;
+ 	CRITICAL_SECTION thread_lock;
+ 	int buffers_available;
+@@ -348,11 +352,12 @@ void cyd_set_waveform(CydChannel *chn, Uint32 wave);
+ void cyd_set_wave_entry(CydChannel *chn, const CydWavetableEntry * entry);
+ void cyd_set_filter_coeffs(CydEngine * cyd, CydChannel *chn, Uint16 cutoff, Uint8 resonance);
+ void cyd_pause(CydEngine *cyd, Uint8 enable);
+-void cyd_set_callback(CydEngine *cyd, int (*callback)(void*), void*param, Uint16 period);
+-void cyd_set_callback_rate(CydEngine *cyd, Uint16 period);
+-#ifdef NOSDL_MIXER
+-int cyd_register(CydEngine * cyd, int buffer_length);
+-#else
++void cyd_set_callback(CydEngine *cyd, int (*callback)(void*), void*param, Uint16 period);
++void cyd_set_callback_rate(CydEngine *cyd, Uint16 period);
++void cyd_clear_scope_buffer(CydEngine *cyd);
++#ifdef NOSDL_MIXER
++int cyd_register(CydEngine * cyd, int buffer_length);
++#else
+ int cyd_register(CydEngine * cyd);
+ #endif
+ int cyd_unregister(CydEngine * cyd);
+@@ -380,4 +385,4 @@ Uint32 cyd_cycle_fm_op_adsr(const CydEngine *eng, Uint32 flags, Uint32 ym_env_sh
+ #endif
+ 
+ Uint64 map_Arduino(Uint64 x, Uint64 in_min, Uint64 in_max, Uint64 out_min, Uint64 out_max);
+-void createCombinedWF(Uint16 wfarray[], float bitmul, float bitstrength, float treshold); //from jsSID emulator
+\ No newline at end of file
++void createCombinedWF(Uint16 wfarray[], float bitmul, float bitstrength, float treshold); //from jsSID emulator
+-- 
+2.53.0

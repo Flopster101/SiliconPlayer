@@ -1866,7 +1866,11 @@ internal fun AlbumArtPlaceholder(
     } else {
         placeholderIcon
     }
-    if (visualizationMode == VisualizationMode.Off || file == null || !isPlaying) {
+    if (
+        visualizationMode == VisualizationMode.Off ||
+            file == null ||
+            (!isPlaying && visualizationMode != VisualizationMode.ChannelScope)
+    ) {
         SwipeableArtworkContainer(
             currentTrackKey = currentTrackKey,
             swipePreviewState = artworkSwipePreviewState,
@@ -2041,6 +2045,13 @@ internal fun AlbumArtPlaceholder(
             val localChannelScopeTriggerStates = mutableListOf<ChannelScopeTriggerState>()
             while (true) {
                 coroutineContext.ensureActive()
+                if (visualizationMode == VisualizationMode.ChannelScope && !isPlaying) {
+                    val nowNs = System.nanoTime()
+                    nextFrameTickNs = nowNs + 90_000_000L
+                    lastPollIntervalNs = 90_000_000L
+                    sleepUntilTickNs(nextFrameTickNs)
+                    continue
+                }
                 val frameStartNs = System.nanoTime()
                 val textPollIntervalNs = 120_000_000L
                 val shouldPollText =

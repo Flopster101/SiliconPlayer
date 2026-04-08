@@ -82,6 +82,11 @@ internal fun channelScopeVisibleElementOptions(): List<ChannelScopeVisibleElemen
             coreId = "hivelytracker",
             coreLabel = "HivelyTracker",
             elementId = ChannelScopeVisibleElementId.Instrument
+        ),
+        ChannelScopeVisibleElementOption(
+            coreId = "uade",
+            coreLabel = "UADE",
+            elementId = ChannelScopeVisibleElementId.Volume
         )
     )
 }
@@ -127,6 +132,7 @@ internal fun channelScopeCoreIdForDecoderName(decoderName: String?): String? {
         DecoderNames.LIB_OPEN_MPT -> "openmpt"
         DecoderNames.KLYSTRACK -> "klystrack"
         DecoderNames.HIVELY_TRACKER -> "hivelytracker"
+        DecoderNames.UADE -> "uade"
         else -> null
     }
 }

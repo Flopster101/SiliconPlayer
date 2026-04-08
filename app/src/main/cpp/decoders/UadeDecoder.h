@@ -1,11 +1,14 @@
 #ifndef SILICONPLAYER_UADEDECODER_H
 #define SILICONPLAYER_UADEDECODER_H
 
+#include "../ChannelScopeSharedState.h"
 #include "AudioDecoder.h"
 
+#include <array>
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 struct uade_state;
@@ -68,6 +71,8 @@ public:
     int getPlaybackCapabilities() const override;
     double getPlaybackPositionSeconds() override;
     TimelineMode getTimelineMode() const override { return TimelineMode::ContinuousLinear; }
+    std::shared_ptr<ChannelScopeSharedState> getChannelScopeSharedState() const override { return channelScopeState; }
+    std::vector<int32_t> getChannelScopeTextState(int maxChannels) override;
 
     const char* getName() const override { return "UADE"; }
     static std::vector<std::string> getSupportedExtensions();
@@ -114,6 +119,23 @@ private:
     std::vector<int16_t> pcmScratch;
     std::vector<std::string> toggleChannelNames;
     std::vector<bool> toggleChannelMuted;
+    std::shared_ptr<ChannelScopeSharedState> channelScopeState;
+    mutable std::mutex scopeMutex;
+    int scopeReadFd = -1;
+    int scopeWriteFd = -1;
+    std::thread scopeReaderThread;
+    std::atomic<bool> scopeReaderStop { false };
+    bool scopeHeaderParsed = false;
+    std::vector<uint8_t> scopeParseBuffer;
+    int scopeCurrentOutputByVoice[4] = { 0, 0, 0, 0 };
+    int scopeVolumeByUiChannel[4] = { 0, 0, 0, 0 };
+    std::vector<float> scopeRingRaw;
+    int scopeRingWritePos = 0;
+    int scopeRingSamples = 0;
+    double scopeTickAccumulator = 0.0;
+    double scopeTicksPerOutputSample = 0.0;
+    bool scopeUsesNtscClock = false;
+    uint64_t channelScopeSourceSerial = 0;
 
     void closeInternalLocked();
     uade_state* createStateLocked();
@@ -121,6 +143,19 @@ private:
     uint32_t getToggleMuteMaskLocked() const;
     void applyToggleMutesLocked();
     void ensureToggleChannelsLocked();
+    bool openScopePipeLocked();
+    void closeScopePipeLocked();
+    void resetScopeTrackingLocked();
+    void startScopeReaderLocked();
+    void stopScopeReaderLocked();
+    void scopeReaderLoop();
+    bool parseScopeBytesLocked(const uint8_t* data, size_t size);
+    bool tryConsumeScopeFrameLocked();
+    void handleScopeAdvanceLocked(uint32_t ticks);
+    void handleScopeOutputFrameLocked(const uint8_t* frameBytes);
+    void handleScopeEventFrameLocked(const uint8_t* frameBytes);
+    void appendScopeSampleLocked(const float* uiOrderedSamples);
+    void publishScopeSnapshotLocked();
 };
 
 #endif // SILICONPLAYER_UADEDECODER_H

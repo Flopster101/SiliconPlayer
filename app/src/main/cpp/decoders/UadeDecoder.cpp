@@ -2,14 +2,19 @@
 
 #include <algorithm>
 #include <android/log.h>
+#include <array>
 #include <cctype>
 #include <cerrno>
+#include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fcntl.h>
 #include <mutex>
+#include <thread>
 #include <unistd.h>
 
 extern "C" {
@@ -25,9 +30,33 @@ namespace {
 std::mutex gRuntimeConfigMutex;
 std::string gRuntimeBaseDir;
 std::string gUadeCorePath;
+constexpr int kUadeScopeChannelCount = 4;
+constexpr int kChannelScopeTextStride = 10;
+constexpr int kChannelScopeTextFlagActive = 1 << 0;
+constexpr int kChannelScopeTextFlagAmigaLeft = 1 << 1;
+constexpr int kChannelScopeTextFlagAmigaRight = 1 << 2;
+constexpr float kUadeScopeVisualGain = 0.4f;
+constexpr double kUadeSoundTicksPal = 3546895.0;
+constexpr double kUadeSoundTicksNtsc = 3579545.0;
+constexpr size_t kUadeWriteAudioHeaderSize = 16;
+constexpr size_t kUadeWriteAudioFrameSize = 12;
+constexpr unsigned char kUadeWriteAudioMagic[kUadeWriteAudioHeaderSize] = {
+        'u', 'a', 'd', 'e', '_', 'o', 's', 'c', '_', '0', '\0', 0xEC, 0x17, 0x31, 0x03, 0x09
+};
 
 std::string safeString(const char* value) {
     return value ? std::string(value) : std::string();
+}
+
+uint16_t readBe16(const uint8_t* bytes) {
+    return static_cast<uint16_t>((static_cast<uint16_t>(bytes[0]) << 8) | static_cast<uint16_t>(bytes[1]));
+}
+
+uint32_t readBe32(const uint8_t* bytes) {
+    return (static_cast<uint32_t>(bytes[0]) << 24) |
+           (static_cast<uint32_t>(bytes[1]) << 16) |
+           (static_cast<uint32_t>(bytes[2]) << 8) |
+           static_cast<uint32_t>(bytes[3]);
 }
 
 int clampSubsong(int subsong, int minSubsong, int maxSubsong) {
@@ -105,9 +134,28 @@ int uadeVoiceBitForUiIndex(int uiIndex) {
         default: return uiIndex;
     }
 }
+
+int uadeUiIndexForVoiceBit(int voiceBit) {
+    switch (voiceBit) {
+        case 0: return 0; // L1
+        case 3: return 1; // L2
+        case 1: return 2; // R1
+        case 2: return 3; // R2
+        default: return -1;
+    }
 }
 
-UadeDecoder::UadeDecoder() = default;
+bool isUadeUiLeftChannel(int uiIndex) {
+    return uiIndex == 0 || uiIndex == 1;
+}
+
+float normalizeUadeScopeSample(int sample) {
+    const float normalized = static_cast<float>(sample) / (64.0f * 128.0f);
+    return std::clamp(normalized * kUadeScopeVisualGain, -1.0f, 1.0f);
+}
+}
+
+UadeDecoder::UadeDecoder() : channelScopeState(std::make_shared<ChannelScopeSharedState>()) {}
 
 UadeDecoder::~UadeDecoder() {
     close();
@@ -131,6 +179,7 @@ bool UadeDecoder::open(const char* path) {
     state = createStateLocked();
     if (!state) {
         LOGE("uade_new_state failed");
+        closeInternalLocked();
         return false;
     }
 
@@ -149,83 +198,95 @@ bool UadeDecoder::open(const char* path) {
     pcmScratch.clear();
     applyToggleMutesLocked();
     refreshSongInfoLocked();
+    resetScopeTrackingLocked();
+    if (const auto* effectiveConfig = uade_get_const_effective_config(state)) {
+        scopeUsesNtscClock = effectiveConfig->use_ntsc != 0;
+    }
+    scopeTicksPerOutputSample =
+            (scopeUsesNtscClock ? kUadeSoundTicksNtsc : kUadeSoundTicksPal) /
+            static_cast<double>(sampleRateHz);
+    startScopeReaderLocked();
     return true;
 }
 
 uade_state* UadeDecoder::createStateLocked() {
-    uade_config* config = nullptr;
+    uade_config* config = uade_new_config();
     const std::string runtimeBaseDir = getRuntimeBaseDir();
     const std::string runtimeUadeCorePath = getRuntimeUadeCorePath();
+    if (!config) {
+        LOGE("uade_new_config failed; falling back to default config");
+        return uade_new_state(nullptr);
+    }
+
     if (!runtimeBaseDir.empty()) {
-        config = uade_new_config();
-        if (!config) {
-            LOGE("uade_new_config failed; falling back to default config");
-        } else {
-            const std::string uadeCorePath =
-                    !runtimeUadeCorePath.empty() ? runtimeUadeCorePath : (runtimeBaseDir + "/uadecore");
-            const std::string scorePath = runtimeBaseDir + "/score";
-            const std::string uaercPath = runtimeBaseDir + "/uaerc";
-            const int coreExecCheck = access(uadeCorePath.c_str(), X_OK);
-            const int coreErrno = (coreExecCheck != 0) ? errno : 0;
-            const int scoreReadCheck = access(scorePath.c_str(), R_OK);
-            const int scoreErrno = (scoreReadCheck != 0) ? errno : 0;
-            const int uaercReadCheck = access(uaercPath.c_str(), R_OK);
-            const int uaercErrno = (uaercReadCheck != 0) ? errno : 0;
-            ensureToggleChannelsLocked();
-            const std::string muteMaskOption = buildUadeMuteMaskOption(getToggleMuteMaskLocked());
-            uade_config_set_option(config, UC_BASE_DIR, runtimeBaseDir.c_str());
-            uade_config_set_option(config, UC_UADECORE_FILE, uadeCorePath.c_str());
-            uade_config_set_option(config, UC_SCORE_FILE, scorePath.c_str());
-            uade_config_set_option(config, UC_UAE_CONFIG_FILE, uaercPath.c_str());
-            uade_config_set_option(config, UC_ONE_SUBSONG, nullptr);
-            uade_config_set_option(config, UC_MUTEMASK, muteMaskOption.c_str());
-            uade_config_set_option(config, UC_FREQUENCY, std::to_string(requestedSampleRateHz).c_str());
-            if (optionFilterEnabled) {
-                uade_config_set_option(config, UC_FILTER_TYPE, "a500");
-            } else {
-                uade_config_set_option(config, UC_NO_FILTER, nullptr);
-            }
-            if (optionNtscMode) {
-                uade_config_set_option(config, UC_NTSC, nullptr);
-            } else {
-                uade_config_set_option(config, UC_PAL, nullptr);
-            }
-            if (optionPanningMode >= 4) {
-                uade_config_set_option(config, UC_NO_PANNING, nullptr);
-            } else {
-                char panningValue[16];
-                std::snprintf(
-                        panningValue,
-                        sizeof(panningValue),
-                        "%.2f",
-                        panningAmountForMode(optionPanningMode)
-                );
-                uade_config_set_option(config, UC_PANNING_VALUE, panningValue);
-            }
-            // Keep UADE running internally; app repeat modes enforce end/restart semantics.
-            uade_config_set_option(config, UC_NO_EP_END, nullptr);
-            uade_config_set_option(config, UC_DISABLE_TIMEOUTS, nullptr);
-            if (coreExecCheck != 0 || scoreReadCheck != 0 || uaercReadCheck != 0) {
-                LOGE(
-                        "UADE runtime assets missing/inaccessible: base=%s core=%s "
-                        "(coreX=%d errno=%d:%s scoreR=%d errno=%d:%s uaercR=%d errno=%d:%s)",
-                        runtimeBaseDir.c_str(),
-                        uadeCorePath.c_str(),
-                        coreExecCheck,
-                        coreErrno,
-                        std::strerror(coreErrno),
-                        scoreReadCheck,
-                        scoreErrno,
-                        std::strerror(scoreErrno),
-                        uaercReadCheck,
-                        uaercErrno,
-                        std::strerror(uaercErrno)
-                );
-            }
+        const std::string uadeCorePath =
+                !runtimeUadeCorePath.empty() ? runtimeUadeCorePath : (runtimeBaseDir + "/uadecore");
+        const std::string scorePath = runtimeBaseDir + "/score";
+        const std::string uaercPath = runtimeBaseDir + "/uaerc";
+        const int coreExecCheck = access(uadeCorePath.c_str(), X_OK);
+        const int coreErrno = (coreExecCheck != 0) ? errno : 0;
+        const int scoreReadCheck = access(scorePath.c_str(), R_OK);
+        const int scoreErrno = (scoreReadCheck != 0) ? errno : 0;
+        const int uaercReadCheck = access(uaercPath.c_str(), R_OK);
+        const int uaercErrno = (uaercReadCheck != 0) ? errno : 0;
+        uade_config_set_option(config, UC_BASE_DIR, runtimeBaseDir.c_str());
+        uade_config_set_option(config, UC_UADECORE_FILE, uadeCorePath.c_str());
+        uade_config_set_option(config, UC_SCORE_FILE, scorePath.c_str());
+        uade_config_set_option(config, UC_UAE_CONFIG_FILE, uaercPath.c_str());
+        if (coreExecCheck != 0 || scoreReadCheck != 0 || uaercReadCheck != 0) {
+            LOGE(
+                    "UADE runtime assets missing/inaccessible: base=%s core=%s "
+                    "(coreX=%d errno=%d:%s scoreR=%d errno=%d:%s uaercR=%d errno=%d:%s)",
+                    runtimeBaseDir.c_str(),
+                    uadeCorePath.c_str(),
+                    coreExecCheck,
+                    coreErrno,
+                    std::strerror(coreErrno),
+                    scoreReadCheck,
+                    scoreErrno,
+                    std::strerror(scoreErrno),
+                    uaercReadCheck,
+                    uaercErrno,
+                    std::strerror(uaercErrno)
+            );
         }
     } else {
         LOGE("UADE runtime base dir is not configured; default compiled paths will be used");
     }
+
+    ensureToggleChannelsLocked();
+    const std::string muteMaskOption = buildUadeMuteMaskOption(getToggleMuteMaskLocked());
+    uade_config_set_option(config, UC_ONE_SUBSONG, nullptr);
+    uade_config_set_option(config, UC_MUTEMASK, muteMaskOption.c_str());
+    uade_config_set_option(config, UC_FREQUENCY, std::to_string(requestedSampleRateHz).c_str());
+    if (optionFilterEnabled) {
+        uade_config_set_option(config, UC_FILTER_TYPE, "a500");
+    } else {
+        uade_config_set_option(config, UC_NO_FILTER, nullptr);
+    }
+    if (optionNtscMode) {
+        uade_config_set_option(config, UC_NTSC, nullptr);
+    } else {
+        uade_config_set_option(config, UC_PAL, nullptr);
+    }
+    if (optionPanningMode >= 4) {
+        uade_config_set_option(config, UC_NO_PANNING, nullptr);
+    } else {
+        char panningValue[16];
+        std::snprintf(
+                panningValue,
+                sizeof(panningValue),
+                "%.2f",
+                panningAmountForMode(optionPanningMode)
+        );
+        uade_config_set_option(config, UC_PANNING_VALUE, panningValue);
+    }
+    if (openScopePipeLocked()) {
+        uade_config_set_option(config, UC_WRITE_AUDIO_FD, std::to_string(scopeWriteFd).c_str());
+    }
+    // Keep UADE running internally; app repeat modes enforce end/restart semantics.
+    uade_config_set_option(config, UC_NO_EP_END, nullptr);
+    uade_config_set_option(config, UC_DISABLE_TIMEOUTS, nullptr);
 
     uade_state* created = uade_new_state(config);
     if (config) {
@@ -236,11 +297,13 @@ uade_state* UadeDecoder::createStateLocked() {
 }
 
 void UadeDecoder::closeInternalLocked() {
+    scopeReaderStop.store(true);
     if (state) {
         uade_stop(state);
         uade_cleanup_state(state);
         state = nullptr;
     }
+    stopScopeReaderLocked();
     sourcePath.clear();
     title.clear();
     artist.clear();
@@ -273,11 +336,334 @@ void UadeDecoder::closeInternalLocked() {
     playbackPositionSeconds = 0.0;
     pcmScratch.clear();
     toggleChannelMuted.clear();
+    resetScopeTrackingLocked();
+    closeScopePipeLocked();
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
 }
 
 void UadeDecoder::close() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     closeInternalLocked();
+}
+
+bool UadeDecoder::openScopePipeLocked() {
+    closeScopePipeLocked();
+    int fds[2] = { -1, -1 };
+    if (pipe(fds) != 0) {
+        LOGE("openScopePipeLocked: pipe failed (%d:%s)", errno, std::strerror(errno));
+        return false;
+    }
+    const int readFlags = fcntl(fds[0], F_GETFL, 0);
+    if (readFlags >= 0) {
+        fcntl(fds[0], F_SETFL, readFlags | O_NONBLOCK);
+    }
+    scopeReadFd = fds[0];
+    scopeWriteFd = fds[1];
+    return true;
+}
+
+void UadeDecoder::closeScopePipeLocked() {
+    if (scopeReadFd >= 0) {
+        ::close(scopeReadFd);
+        scopeReadFd = -1;
+    }
+    if (scopeWriteFd >= 0) {
+        ::close(scopeWriteFd);
+        scopeWriteFd = -1;
+    }
+    std::lock_guard<std::mutex> scopeLock(scopeMutex);
+    scopeHeaderParsed = false;
+    scopeParseBuffer.clear();
+}
+
+void UadeDecoder::resetScopeTrackingLocked() {
+    std::lock_guard<std::mutex> scopeLock(scopeMutex);
+    scopeHeaderParsed = false;
+    scopeParseBuffer.clear();
+    std::fill(std::begin(scopeCurrentOutputByVoice), std::end(scopeCurrentOutputByVoice), 0);
+    std::fill(std::begin(scopeVolumeByUiChannel), std::end(scopeVolumeByUiChannel), 0);
+    scopeRingRaw.clear();
+    scopeRingWritePos = 0;
+    scopeRingSamples = 0;
+    scopeTickAccumulator = 0.0;
+    scopeTicksPerOutputSample = 0.0;
+    scopeUsesNtscClock = false;
+    channelScopeSourceSerial = 0;
+}
+
+void UadeDecoder::startScopeReaderLocked() {
+    if (scopeReadFd < 0 || scopeReaderThread.joinable()) {
+        return;
+    }
+    scopeReaderStop.store(false);
+    scopeReaderThread = std::thread(&UadeDecoder::scopeReaderLoop, this);
+}
+
+void UadeDecoder::stopScopeReaderLocked() {
+    scopeReaderStop.store(true);
+    if (scopeReaderThread.joinable()) {
+        scopeReaderThread.join();
+    }
+}
+
+void UadeDecoder::scopeReaderLoop() {
+    std::array<uint8_t, 4096> readBuffer {};
+    while (!scopeReaderStop.load()) {
+        const int readFd = scopeReadFd;
+        if (readFd < 0) {
+            break;
+        }
+        bool parsedAny = false;
+        while (!scopeReaderStop.load()) {
+            const ssize_t bytesRead = ::read(readFd, readBuffer.data(), readBuffer.size());
+            if (bytesRead > 0) {
+                std::lock_guard<std::mutex> scopeLock(scopeMutex);
+                parsedAny = parseScopeBytesLocked(readBuffer.data(), static_cast<size_t>(bytesRead)) || parsedAny;
+                continue;
+            }
+            if (bytesRead == 0) {
+                break;
+            }
+            if (errno == EINTR) {
+                continue;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                break;
+            }
+            LOGE("scopeReaderLoop: read failed (%d:%s)", errno, std::strerror(errno));
+            return;
+        }
+        if (parsedAny) {
+            std::lock_guard<std::mutex> scopeLock(scopeMutex);
+            publishScopeSnapshotLocked();
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(4));
+        }
+    }
+}
+
+bool UadeDecoder::parseScopeBytesLocked(const uint8_t* data, size_t size) {
+    if (!data || size == 0) {
+        return false;
+    }
+    scopeParseBuffer.insert(scopeParseBuffer.end(), data, data + size);
+    bool consumed = false;
+    while (true) {
+        if (!scopeHeaderParsed) {
+            if (scopeParseBuffer.size() < kUadeWriteAudioHeaderSize) {
+                break;
+            }
+            if (!std::equal(
+                        std::begin(kUadeWriteAudioMagic),
+                        std::end(kUadeWriteAudioMagic),
+                        scopeParseBuffer.begin()
+                )) {
+                LOGE("parseScopeBytesLocked: invalid UADE write-audio header");
+                scopeParseBuffer.clear();
+                break;
+            }
+            scopeParseBuffer.erase(
+                    scopeParseBuffer.begin(),
+                    scopeParseBuffer.begin() + static_cast<std::ptrdiff_t>(kUadeWriteAudioHeaderSize)
+            );
+            scopeHeaderParsed = true;
+            consumed = true;
+        }
+        if (!tryConsumeScopeFrameLocked()) {
+            break;
+        }
+        consumed = true;
+    }
+    return consumed;
+}
+
+bool UadeDecoder::tryConsumeScopeFrameLocked() {
+    if (!scopeHeaderParsed || scopeParseBuffer.size() < kUadeWriteAudioFrameSize) {
+        return false;
+    }
+    const uint8_t* frameBytes = scopeParseBuffer.data();
+    const uint32_t tdeltaWhole = readBe32(frameBytes);
+    handleScopeAdvanceLocked(tdeltaWhole & 0x00FFFFFFu);
+    const uint8_t control = static_cast<uint8_t>(tdeltaWhole >> 24);
+    if (control == 0x00) {
+        handleScopeOutputFrameLocked(frameBytes);
+    } else if (control == 0x80) {
+        handleScopeEventFrameLocked(frameBytes);
+    }
+    scopeParseBuffer.erase(
+            scopeParseBuffer.begin(),
+            scopeParseBuffer.begin() + static_cast<std::ptrdiff_t>(kUadeWriteAudioFrameSize)
+    );
+    return true;
+}
+
+void UadeDecoder::handleScopeAdvanceLocked(uint32_t ticks) {
+    if (ticks == 0 || scopeTicksPerOutputSample <= 0.0) {
+        return;
+    }
+    std::array<float, kUadeScopeChannelCount> uiOrderedSamples { 0.0f, 0.0f, 0.0f, 0.0f };
+    for (int voiceBit = 0; voiceBit < kUadeScopeChannelCount; ++voiceBit) {
+        const int uiIndex = uadeUiIndexForVoiceBit(voiceBit);
+        if (uiIndex >= 0 && uiIndex < kUadeScopeChannelCount) {
+            uiOrderedSamples[static_cast<size_t>(uiIndex)] =
+                    normalizeUadeScopeSample(scopeCurrentOutputByVoice[voiceBit]);
+        }
+    }
+    scopeTickAccumulator += static_cast<double>(ticks);
+    while (scopeTickAccumulator + 1.0e-9 >= scopeTicksPerOutputSample) {
+        appendScopeSampleLocked(uiOrderedSamples.data());
+        scopeTickAccumulator -= scopeTicksPerOutputSample;
+    }
+}
+
+void UadeDecoder::handleScopeOutputFrameLocked(const uint8_t* frameBytes) {
+    for (int voiceBit = 0; voiceBit < kUadeScopeChannelCount; ++voiceBit) {
+        scopeCurrentOutputByVoice[voiceBit] = static_cast<int16_t>(
+                readBe16(frameBytes + 4 + static_cast<size_t>(voiceBit * 2))
+        );
+    }
+}
+
+void UadeDecoder::handleScopeEventFrameLocked(const uint8_t* frameBytes) {
+    const int voiceBit = static_cast<int>(frameBytes[4]);
+    const int uiIndex = uadeUiIndexForVoiceBit(voiceBit);
+    if (uiIndex < 0 || uiIndex >= kUadeScopeChannelCount) {
+        return;
+    }
+    const int eventType = static_cast<int>(frameBytes[5]);
+    const int eventValue = static_cast<int>(readBe16(frameBytes + 6));
+    switch (eventType) {
+        case 1: // PET_VOL
+            scopeVolumeByUiChannel[uiIndex] = std::clamp(eventValue, 0, 64);
+            break;
+        default:
+            break;
+    }
+}
+
+void UadeDecoder::appendScopeSampleLocked(const float* uiOrderedSamples) {
+    if (!uiOrderedSamples) {
+        return;
+    }
+    if (scopeRingRaw.size() != static_cast<size_t>(kUadeScopeChannelCount * ChannelScopeSharedState::kMaxSamples)) {
+        scopeRingRaw.assign(
+                static_cast<size_t>(kUadeScopeChannelCount * ChannelScopeSharedState::kMaxSamples),
+                0.0f
+        );
+    }
+    for (int channel = 0; channel < kUadeScopeChannelCount; ++channel) {
+        const size_t index =
+                static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                static_cast<size_t>(scopeRingWritePos);
+        scopeRingRaw[index] = uiOrderedSamples[channel];
+    }
+    scopeRingWritePos = (scopeRingWritePos + 1) % ChannelScopeSharedState::kMaxSamples;
+    scopeRingSamples = std::min(scopeRingSamples + 1, ChannelScopeSharedState::kMaxSamples);
+}
+
+void UadeDecoder::publishScopeSnapshotLocked() {
+    if (!channelScopeState) {
+        return;
+    }
+    if (scopeRingRaw.empty() || scopeRingSamples <= 0) {
+        channelScopeState->clear();
+        return;
+    }
+
+    std::vector<float> raw(
+            static_cast<size_t>(kUadeScopeChannelCount * ChannelScopeSharedState::kMaxSamples),
+            0.0f
+    );
+    const int filledSamples = std::clamp(scopeRingSamples, 0, ChannelScopeSharedState::kMaxSamples);
+    const int zeroPrefix = ChannelScopeSharedState::kMaxSamples - filledSamples;
+    for (int channel = 0; channel < kUadeScopeChannelCount; ++channel) {
+        float* destination =
+                raw.data() + static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples;
+        for (int i = 0; i < filledSamples; ++i) {
+            const int sourceIndex =
+                    (scopeRingWritePos - filledSamples + i + ChannelScopeSharedState::kMaxSamples) %
+                    ChannelScopeSharedState::kMaxSamples;
+            destination[zeroPrefix + i] =
+                    scopeRingRaw[
+                            static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                            static_cast<size_t>(sourceIndex)
+                    ];
+        }
+    }
+
+    const int trailingSamples = std::clamp(sampleRateHz > 0 ? sampleRateHz / 50 : 64, 64, 1024);
+    std::vector<float> vu(static_cast<size_t>(kUadeScopeChannelCount), 0.0f);
+    for (int channel = 0; channel < kUadeScopeChannelCount; ++channel) {
+        const size_t base = static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples;
+        float peak = 0.0f;
+        const int start = std::max(0, ChannelScopeSharedState::kMaxSamples - trailingSamples);
+        for (int i = start; i < ChannelScopeSharedState::kMaxSamples; ++i) {
+            peak = std::max(peak, std::abs(raw[base + static_cast<size_t>(i)]));
+        }
+        vu[static_cast<size_t>(channel)] = std::clamp(peak, 0.0f, 1.0f);
+    }
+
+    {
+        std::lock_guard<std::mutex> channelScopeLock(channelScopeState->mutex);
+        channelScopeState->snapshotRaw = std::move(raw);
+        channelScopeState->snapshotVu = std::move(vu);
+        channelScopeState->snapshotChannels = kUadeScopeChannelCount;
+        channelScopeState->snapshotSerial = ++channelScopeSourceSerial;
+    }
+}
+
+std::vector<int32_t> UadeDecoder::getChannelScopeTextState(int maxChannels) {
+    std::lock_guard<std::mutex> scopeLock(scopeMutex);
+    if (scopeRingSamples <= 0 || scopeRingRaw.empty()) {
+        return {};
+    }
+
+    const int channels = std::min(kUadeScopeChannelCount, std::clamp(maxChannels, 1, kUadeScopeChannelCount));
+    std::vector<int32_t> flat(static_cast<size_t>(channels * kChannelScopeTextStride), -1);
+    const int trailingSamples = std::clamp(sampleRateHz > 0 ? sampleRateHz / 50 : 64, 64, 1024);
+    const int recentSamples = std::min(scopeRingSamples, trailingSamples);
+    for (int channel = 0; channel < channels; ++channel) {
+        float recentPeak = 0.0f;
+        for (int i = 0; i < recentSamples; ++i) {
+            const int ringIndex =
+                    (scopeRingWritePos - recentSamples + i + ChannelScopeSharedState::kMaxSamples) %
+                    ChannelScopeSharedState::kMaxSamples;
+            recentPeak = std::max(
+                    recentPeak,
+                    std::abs(
+                            scopeRingRaw[
+                                    static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                                    static_cast<size_t>(ringIndex)
+                            ]
+                    )
+            );
+        }
+
+        const size_t base = static_cast<size_t>(channel * kChannelScopeTextStride);
+        int flags = 0;
+        if (recentPeak > 0.0015f || scopeVolumeByUiChannel[channel] > 0) {
+            flags |= kChannelScopeTextFlagActive;
+        }
+        if (isUadeUiLeftChannel(channel)) {
+            flags |= kChannelScopeTextFlagAmigaLeft;
+        } else {
+            flags |= kChannelScopeTextFlagAmigaRight;
+        }
+
+        flat[base + 0] = channel;
+        flat[base + 1] = -1;
+        flat[base + 2] = std::clamp(scopeVolumeByUiChannel[channel], 0, 64);
+        flat[base + 3] = 0;
+        flat[base + 4] = -1;
+        flat[base + 5] = 0;
+        flat[base + 6] = -1;
+        flat[base + 7] = -1;
+        flat[base + 8] = -1;
+        flat[base + 9] = flags;
+    }
+    return flat;
 }
 
 bool UadeDecoder::refreshSongInfoLocked() {
@@ -468,12 +854,30 @@ bool UadeDecoder::selectSubtune(int index) {
     if (index < 0 || index >= (subtuneMax - subtuneMin + 1)) return false;
 
     const int targetSubsong = subtuneMin + index;
+    stopScopeReaderLocked();
+    closeScopePipeLocked();
+    if (openScopePipeLocked()) {
+        state->config.write_audio_fd = scopeWriteFd;
+        state->config.write_audio_fd_set = 1;
+    } else {
+        state->config.write_audio_fd = -1;
+        state->config.write_audio_fd_set = 1;
+    }
     if (uade_stop(state) < 0) return false;
     const int playRc = uade_play(sourcePath.c_str(), targetSubsong, state);
     if (playRc != 1) return false;
 
+    sampleRateHz = std::max(8000, uade_get_sampling_rate(state));
     playbackPositionSeconds = 0.0;
     renderedFrames = 0;
+    resetScopeTrackingLocked();
+    if (const auto* effectiveConfig = uade_get_const_effective_config(state)) {
+        scopeUsesNtscClock = effectiveConfig->use_ntsc != 0;
+    }
+    scopeTicksPerOutputSample =
+            (scopeUsesNtscClock ? kUadeSoundTicksNtsc : kUadeSoundTicksPal) /
+            static_cast<double>(std::max(sampleRateHz, 1));
+    startScopeReaderLocked();
     refreshSongInfoLocked();
     return true;
 }

@@ -166,7 +166,13 @@ internal object SmbAvioBridge {
                 transport = SmbProgressiveRandomAccessTransport(
                     spec = spec,
                     remotePath = remotePath
-                )
+                ),
+                prefetchTransportFactory = {
+                    SmbProgressiveRandomAccessTransport(
+                        spec = spec,
+                        remotePath = remotePath
+                    )
+                }
             )
         )
         return handleId

@@ -3,11 +3,22 @@ package com.flopster101.siliconplayer
 import android.content.Context
 import java.io.File
 import java.io.RandomAccessFile
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlin.math.min
 
 internal const val PROGRESSIVE_REMOTE_SOURCE_CACHE_DIR = "progressive_remote_sources"
 private const val PROGRESSIVE_REMOTE_SOURCE_CACHE_VERSION = 1
 private const val DEFAULT_PROGRESSIVE_CACHE_CHUNK_SIZE_BYTES = 64 * 1024
+private const val CHUNK_STATE_UNCACHED: Byte = 0
+private const val CHUNK_STATE_CACHED: Byte = 1
+private const val CHUNK_STATE_FETCHING: Byte = 2
 
 internal interface ProgressiveRandomAccessTransport {
     val sourceId: String
@@ -65,20 +76,23 @@ private fun progressiveRandomAccessMetaMatches(
 internal class ProgressiveRandomAccessCache(
     context: Context,
     private val transport: ProgressiveRandomAccessTransport,
-    private val chunkSizeBytes: Int = DEFAULT_PROGRESSIVE_CACHE_CHUNK_SIZE_BYTES
+    private val chunkSizeBytes: Int = DEFAULT_PROGRESSIVE_CACHE_CHUNK_SIZE_BYTES,
+    private val prefetchTransportFactory: (() -> ProgressiveRandomAccessTransport)? = null
 ) {
-    private val lock = Any()
+    private val lock = Object()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val files = progressiveRandomAccessCacheFiles(context, transport.sourceId)
     private val chunkCount = when {
         transport.sizeBytes <= 0L -> 0
         else -> ((transport.sizeBytes + chunkSizeBytes - 1L) / chunkSizeBytes).toInt()
     }
-    private val chunkScratchBuffer = ByteArray(chunkSizeBytes)
     private var closed = false
+    private var prefetchJob: Job? = null
+    private var prefetchTransport: ProgressiveRandomAccessTransport? = null
 
     private val dataFileRaf: RandomAccessFile
     private val chunkMapRaf: RandomAccessFile
-    private val cachedChunks: ByteArray
+    private val chunkStates: ByteArray
 
     val sizeBytes: Long
         get() = transport.sizeBytes
@@ -104,7 +118,7 @@ internal class ProgressiveRandomAccessCache(
         if (transport.sizeBytes <= 0L) {
             dataFileRaf.setLength(0L)
         }
-        cachedChunks = ByteArray(chunkCount)
+        chunkStates = ByteArray(chunkCount)
         if (chunkCount > 0) {
             val chunkMapLength = chunkMapRaf.length()
             if (chunkMapLength > chunkCount.toLong()) {
@@ -113,8 +127,26 @@ internal class ProgressiveRandomAccessCache(
             chunkMapRaf.seek(0L)
             val toRead = min(chunkCount, chunkMapLength.toInt())
             if (toRead > 0) {
-                chunkMapRaf.readFully(cachedChunks, 0, toRead)
+                val persistedStates = ByteArray(toRead)
+                chunkMapRaf.readFully(persistedStates, 0, toRead)
+                for (chunkIndex in 0 until toRead) {
+                    chunkStates[chunkIndex] =
+                        if (persistedStates[chunkIndex].toInt() != 0 && isChunkPersistedLocked(chunkIndex)) {
+                            CHUNK_STATE_CACHED
+                        } else {
+                            CHUNK_STATE_UNCACHED
+                        }
+                }
             }
+            for (chunkIndex in 0 until chunkCount) {
+                if (chunkStates[chunkIndex] == CHUNK_STATE_CACHED) continue
+                chunkStates[chunkIndex] = CHUNK_STATE_UNCACHED
+            }
+            sanitizePersistedChunkStateLocked()
+        }
+
+        if (chunkCount > 0 && prefetchTransportFactory != null && hasUncachedChunksLocked()) {
+            startBackgroundPrefetch(prefetchTransportFactory)
         }
     }
 
@@ -124,65 +156,200 @@ internal class ProgressiveRandomAccessCache(
         if (clampedLength <= 0) return 0
         if (offset >= transport.sizeBytes) return 0
 
-        synchronized(lock) {
-            check(!closed) { "Progressive cache is closed" }
+        var remaining = min(clampedLength.toLong(), transport.sizeBytes - offset).toInt()
+        var outputOffset = 0
+        var currentOffset = offset
 
-            var remaining = min(clampedLength.toLong(), transport.sizeBytes - offset).toInt()
-            var outputOffset = 0
-            var currentOffset = offset
+        while (remaining > 0) {
+            val chunkIndex = (currentOffset / chunkSizeBytes).toInt()
+            if (chunkIndex !in 0 until chunkCount) break
+            ensureChunkCached(chunkIndex, transport)
 
-            while (remaining > 0) {
-                val chunkIndex = (currentOffset / chunkSizeBytes).toInt()
-                if (chunkIndex !in 0 until chunkCount) break
-                ensureChunkCachedLocked(chunkIndex)
-
-                val chunkStartOffset = chunkIndex.toLong() * chunkSizeBytes.toLong()
-                val offsetInsideChunk = (currentOffset - chunkStartOffset).toInt()
-                val bytesFromChunk = min(
-                    remaining,
-                    currentChunkSizeBytes(chunkIndex) - offsetInsideChunk
-                )
-                if (bytesFromChunk <= 0) {
-                    break
-                }
-
-                dataFileRaf.seek(currentOffset)
-                dataFileRaf.readFully(buffer, outputOffset, bytesFromChunk)
-
-                outputOffset += bytesFromChunk
-                currentOffset += bytesFromChunk
-                remaining -= bytesFromChunk
+            val chunkStartOffset = chunkIndex.toLong() * chunkSizeBytes.toLong()
+            val offsetInsideChunk = (currentOffset - chunkStartOffset).toInt()
+            val bytesFromChunk = min(
+                remaining,
+                currentChunkSizeBytes(chunkIndex) - offsetInsideChunk
+            )
+            if (bytesFromChunk <= 0) {
+                break
             }
 
-            return outputOffset
+            synchronized(lock) {
+                check(!closed) { "Progressive cache is closed" }
+                dataFileRaf.seek(currentOffset)
+                dataFileRaf.readFully(buffer, outputOffset, bytesFromChunk)
+            }
+
+            outputOffset += bytesFromChunk
+            currentOffset += bytesFromChunk
+            remaining -= bytesFromChunk
         }
+
+        return outputOffset
     }
 
     fun close() {
+        var activePrefetchTransport: ProgressiveRandomAccessTransport? = null
+        var activePrefetchJob: Job? = null
+        val alreadyClosed = synchronized(lock) {
+            if (closed) {
+                true
+            } else {
+                closed = true
+                activePrefetchTransport = prefetchTransport
+                prefetchTransport = null
+                activePrefetchJob = prefetchJob
+                prefetchJob = null
+                lock.notifyAll()
+                false
+            }
+        }
+        if (alreadyClosed) return
+        runCatching { activePrefetchTransport?.close() }
+        activePrefetchJob?.cancel()
+        scope.cancel()
         synchronized(lock) {
-            if (closed) return
-            closed = true
             runCatching { dataFileRaf.close() }
             runCatching { chunkMapRaf.close() }
             runCatching { transport.close() }
         }
     }
 
-    private fun ensureChunkCachedLocked(chunkIndex: Int) {
+    private fun startBackgroundPrefetch(
+        backgroundTransportFactory: () -> ProgressiveRandomAccessTransport
+    ) {
+        prefetchJob = scope.launch {
+            val backgroundTransport = try {
+                backgroundTransportFactory()
+            } catch (_: Throwable) {
+                return@launch
+            }
+            synchronized(lock) {
+                if (closed) {
+                    runCatching { backgroundTransport.close() }
+                    return@launch
+                }
+                prefetchTransport = backgroundTransport
+            }
+            try {
+                if (backgroundTransport.sizeBytes != transport.sizeBytes) {
+                    return@launch
+                }
+                for (chunkIndex in 0 until chunkCount) {
+                    ensureActive()
+                    if (isClosed()) break
+                    try {
+                        ensureChunkCached(chunkIndex, backgroundTransport)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Throwable) {
+                        break
+                    }
+                }
+            } finally {
+                synchronized(lock) {
+                    if (prefetchTransport === backgroundTransport) {
+                        prefetchTransport = null
+                    }
+                }
+                runCatching { backgroundTransport.close() }
+            }
+        }
+    }
+
+    private fun currentChunkSizeBytes(chunkIndex: Int): Int {
+        val chunkOffset = chunkIndex.toLong() * chunkSizeBytes.toLong()
+        val remainingBytes = (transport.sizeBytes - chunkOffset).coerceAtLeast(0L)
+        return min(chunkSizeBytes.toLong(), remainingBytes).toInt()
+    }
+
+    private fun currentChunkEndOffset(chunkIndex: Int): Long {
+        return chunkIndex.toLong() * chunkSizeBytes.toLong() + currentChunkSizeBytes(chunkIndex)
+    }
+
+    private fun hasUncachedChunksLocked(): Boolean {
+        return chunkStates.any { it == CHUNK_STATE_UNCACHED }
+    }
+
+    private fun isChunkPersistedLocked(chunkIndex: Int): Boolean {
+        return currentChunkEndOffset(chunkIndex) <= dataFileRaf.length()
+    }
+
+    private fun sanitizePersistedChunkStateLocked() {
+        for (chunkIndex in 0 until chunkCount) {
+            if (chunkStates[chunkIndex] != CHUNK_STATE_CACHED) continue
+            if (isChunkPersistedLocked(chunkIndex)) continue
+            chunkStates[chunkIndex] = CHUNK_STATE_UNCACHED
+            chunkMapRaf.seek(chunkIndex.toLong())
+            chunkMapRaf.write(0)
+        }
+    }
+
+    private fun ensureChunkCached(
+        chunkIndex: Int,
+        activeTransport: ProgressiveRandomAccessTransport
+    ) {
         if (chunkIndex !in 0 until chunkCount) {
             throw IllegalArgumentException("Invalid progressive cache chunk index: $chunkIndex")
         }
-        if (cachedChunks[chunkIndex].toInt() != 0) {
-            return
-        }
 
+        while (true) {
+            synchronized(lock) {
+                check(!closed) { "Progressive cache is closed" }
+                when (chunkStates[chunkIndex]) {
+                    CHUNK_STATE_CACHED -> return
+                    CHUNK_STATE_FETCHING -> {
+                        lock.wait()
+                        continue
+                    }
+                    else -> {
+                        chunkStates[chunkIndex] = CHUNK_STATE_FETCHING
+                    }
+                }
+            }
+
+            try {
+                val chunkData = readChunkData(chunkIndex, activeTransport)
+                synchronized(lock) {
+                    if (closed) {
+                        chunkStates[chunkIndex] = CHUNK_STATE_UNCACHED
+                        lock.notifyAll()
+                        return
+                    }
+                    val chunkOffset = chunkIndex.toLong() * chunkSizeBytes.toLong()
+                    dataFileRaf.seek(chunkOffset)
+                    dataFileRaf.write(chunkData)
+                    chunkStates[chunkIndex] = CHUNK_STATE_CACHED
+                    chunkMapRaf.seek(chunkIndex.toLong())
+                    chunkMapRaf.write(1)
+                    lock.notifyAll()
+                    return
+                }
+            } catch (t: Throwable) {
+                synchronized(lock) {
+                    if (chunkStates[chunkIndex] == CHUNK_STATE_FETCHING) {
+                        chunkStates[chunkIndex] = CHUNK_STATE_UNCACHED
+                    }
+                    lock.notifyAll()
+                }
+                throw t
+            }
+        }
+    }
+
+    private fun readChunkData(
+        chunkIndex: Int,
+        activeTransport: ProgressiveRandomAccessTransport
+    ): ByteArray {
         val chunkOffset = chunkIndex.toLong() * chunkSizeBytes.toLong()
         val chunkSize = currentChunkSizeBytes(chunkIndex)
+        val chunkBuffer = ByteArray(chunkSize)
         var totalRead = 0
         while (totalRead < chunkSize) {
-            val read = transport.readAt(
+            val read = activeTransport.readAt(
                 offset = chunkOffset + totalRead,
-                buffer = chunkScratchBuffer,
+                buffer = chunkBuffer,
                 bufferOffset = totalRead,
                 length = chunkSize - totalRead
             )
@@ -196,17 +363,12 @@ internal class ProgressiveRandomAccessCache(
                 "Progressive cache short read for source=${transport.sourceId} chunk=$chunkIndex expected=$chunkSize actual=$totalRead"
             )
         }
-
-        dataFileRaf.seek(chunkOffset)
-        dataFileRaf.write(chunkScratchBuffer, 0, chunkSize)
-        cachedChunks[chunkIndex] = 1
-        chunkMapRaf.seek(chunkIndex.toLong())
-        chunkMapRaf.write(1)
+        return chunkBuffer
     }
 
-    private fun currentChunkSizeBytes(chunkIndex: Int): Int {
-        val chunkOffset = chunkIndex.toLong() * chunkSizeBytes.toLong()
-        val remainingBytes = (transport.sizeBytes - chunkOffset).coerceAtLeast(0L)
-        return min(chunkSizeBytes.toLong(), remainingBytes).toInt()
+    private fun isClosed(): Boolean {
+        synchronized(lock) {
+            return closed
+        }
     }
 }

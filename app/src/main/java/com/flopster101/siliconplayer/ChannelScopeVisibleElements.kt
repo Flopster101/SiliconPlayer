@@ -48,6 +48,31 @@ internal fun channelScopeVisibleElementOptions(): List<ChannelScopeVisibleElemen
             elementId = ChannelScopeVisibleElementId.Sample
         ),
         ChannelScopeVisibleElementOption(
+            coreId = "furnace",
+            coreLabel = "Furnace",
+            elementId = ChannelScopeVisibleElementId.Volume
+        ),
+        ChannelScopeVisibleElementOption(
+            coreId = "furnace",
+            coreLabel = "Furnace",
+            elementId = ChannelScopeVisibleElementId.EffectPrimary
+        ),
+        ChannelScopeVisibleElementOption(
+            coreId = "furnace",
+            coreLabel = "Furnace",
+            elementId = ChannelScopeVisibleElementId.EffectSecondary
+        ),
+        ChannelScopeVisibleElementOption(
+            coreId = "furnace",
+            coreLabel = "Furnace",
+            elementId = ChannelScopeVisibleElementId.Instrument
+        ),
+        ChannelScopeVisibleElementOption(
+            coreId = "furnace",
+            coreLabel = "Furnace",
+            elementId = ChannelScopeVisibleElementId.Sample
+        ),
+        ChannelScopeVisibleElementOption(
             coreId = "gme",
             coreLabel = "Game Music Emu",
             elementId = ChannelScopeVisibleElementId.Volume
@@ -146,6 +171,7 @@ internal fun channelScopeVisibleElementsSummary(selectedStorageKeys: Set<String>
 internal fun channelScopeCoreIdForDecoderName(decoderName: String?): String? {
     return when (pluginNameForCoreName(decoderName)) {
         DecoderNames.LIB_OPEN_MPT -> "openmpt"
+        DecoderNames.FURNACE -> "furnace"
         DecoderNames.GAME_MUSIC_EMU -> "gme"
         DecoderNames.SC68 -> "sc68"
         DecoderNames.KLYSTRACK -> "klystrack"

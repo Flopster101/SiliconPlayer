@@ -2,6 +2,7 @@
 #define SILICONPLAYER_FURNACEDECODER_H
 
 #include "AudioDecoder.h"
+#include "../ChannelScopeSharedState.h"
 
 #include <atomic>
 #include <memory>
@@ -66,6 +67,10 @@ public:
     int getCurrentSpeedInfo();
     int getGrooveLengthInfo();
     float getCurrentHzInfo();
+    std::string getInstrumentNamesInfo();
+    std::string getSampleNamesInfo();
+    std::shared_ptr<ChannelScopeSharedState> getChannelScopeSharedState() const override { return channelScopeState; }
+    std::vector<int32_t> getChannelScopeTextState(int maxChannels) override;
 
     const char* getName() const override { return "Furnace"; }
     static std::vector<std::string> getSupportedExtensions();
@@ -116,6 +121,8 @@ private:
     std::vector<double> subtuneDurations;
     std::vector<float> leftScratch;
     std::vector<float> rightScratch;
+    std::shared_ptr<ChannelScopeSharedState> channelScopeState;
+    uint64_t channelScopeSourceSerial = 0;
 
     void closeInternalLocked();
     void refreshMetadataLocked();
@@ -124,6 +131,7 @@ private:
     void applyToggleChannelMutesLocked();
     void applyCoreOptionsLocked(DivEngine* targetEngine) const;
     void applyRepeatModeLocked();
+    void captureChannelScopeSnapshotLocked();
     double normalizeTimelinePositionLocked(double seconds) const;
     double normalizeSeekTargetLocked(double seconds) const;
     bool seekToTimelineLocked(double targetSeconds);

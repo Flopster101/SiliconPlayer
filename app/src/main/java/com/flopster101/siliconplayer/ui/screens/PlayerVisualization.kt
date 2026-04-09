@@ -1960,6 +1960,13 @@ internal fun AlbumArtPlaceholder(
                     parseIndexedNames(NativeBridge.getOpenMptSampleNames())
                 visChannelScopeChipNamesByChannelIndex = emptyMap()
             }
+            DecoderNames.FURNACE -> {
+                visChannelScopeInstrumentNamesByIndex =
+                    parseIndexedNames(NativeBridge.getFurnaceInstrumentNames())
+                visChannelScopeSampleNamesByIndex =
+                    parseIndexedNames(NativeBridge.getFurnaceSampleNames())
+                visChannelScopeChipNamesByChannelIndex = emptyMap()
+            }
             DecoderNames.GAME_MUSIC_EMU -> {
                 visChannelScopeInstrumentNamesByIndex = emptyMap()
                 visChannelScopeSampleNamesByIndex = emptyMap()

@@ -988,6 +988,20 @@ std::string AudioEngine::getKlystrackInstrumentNames() {
     return klystrackDecoder ? klystrackDecoder->getInstrumentNamesInfo() : "";
 }
 
+std::string AudioEngine::getFurnaceInstrumentNames() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getInstrumentNamesInfo() : "";
+}
+
+std::string AudioEngine::getFurnaceSampleNames() {
+    std::lock_guard<std::mutex> lock(decoderMutex);
+    if (!decoder) return "";
+    auto* furnaceDecoder = dynamic_cast<FurnaceDecoder*>(decoder.get());
+    return furnaceDecoder ? furnaceDecoder->getSampleNamesInfo() : "";
+}
+
 std::string AudioEngine::getFurnaceFormatName() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";

@@ -15,6 +15,19 @@
 namespace {
 constexpr double kSeekEpsilonSeconds = 0.000001;
 constexpr double kLoopEpsilonSeconds = 0.000001;
+constexpr int kChannelScopeTextStride = 10;
+constexpr int kChannelScopeTextFlagActive = 1 << 0;
+constexpr int kFurnaceEffectCodeSentinel = 0x100;
+constexpr short kFurnacePatternNoteNull = 252;
+constexpr short kFurnacePatternNoteOff = 253;
+constexpr short kFurnacePatternNoteRelease = 254;
+constexpr short kFurnacePatternNoteMacroRelease = 255;
+constexpr short kFurnaceFirstVisibleNote = 60;
+constexpr short kFurnaceLastVisibleNote = 179;
+constexpr short kFurnaceOscResetSample = static_cast<short>(0xfffe);
+constexpr int kMaxChannelScopeChannels = 64;
+constexpr float kFurnaceDefaultScopeGain = 0.5f;
+constexpr float kFurnaceTsuScopeGain = 1.0f;
 
 std::vector<unsigned char> readBinaryFile(const std::string& path) {
     std::ifstream stream(path, std::ios::binary | std::ios::ate);
@@ -55,9 +68,74 @@ int parseIntOptionString(const char* value, int fallback) {
     }
     return static_cast<int>(parsed);
 }
+
+int normalizeFurnaceDisplayNote(int rawNote) {
+    if (rawNote < kFurnaceFirstVisibleNote || rawNote > kFurnaceLastVisibleNote) {
+        return -1;
+    }
+    return rawNote - kFurnaceFirstVisibleNote + 1;
+}
+
+bool isFurnaceSpecialNote(int rawNote) {
+    return rawNote == kFurnacePatternNoteNull ||
+            rawNote == kFurnacePatternNoteOff ||
+            rawNote == kFurnacePatternNoteRelease ||
+            rawNote == kFurnacePatternNoteMacroRelease;
+}
+
+int normalizeFurnaceAssetIndex(int rawIndex) {
+    return rawIndex >= 0 ? rawIndex + 1 : -1;
+}
+
+float furnaceChannelScopeGain(DivSystem system) {
+    return system == DIV_SYSTEM_SOUND_UNIT ? kFurnaceTsuScopeGain : kFurnaceDefaultScopeGain;
+}
+
+void captureFurnaceOscBufferWindow(
+        const DivDispatchOscBuffer* oscBuffer,
+        int sampleRateHz,
+        float* destination,
+        int samplesPerChannel
+) {
+    if (!destination || samplesPerChannel <= 0) {
+        return;
+    }
+    std::fill_n(destination, samplesPerChannel, 0.0f);
+    if (!oscBuffer || sampleRateHz <= 0) {
+        return;
+    }
+
+    const int windowSize = std::clamp(
+            static_cast<int>(std::lround(
+                    65536.0 * static_cast<double>(samplesPerChannel) / static_cast<double>(sampleRateHz)
+            )),
+            1,
+            65535
+    );
+    const unsigned short needle = static_cast<unsigned short>(oscBuffer->needle >> OSCBUF_PREC);
+    const unsigned short start = static_cast<unsigned short>(needle - windowSize);
+    float currentSample = 0.0f;
+
+    for (int i = 0; i < samplesPerChannel; ++i) {
+        const int sourceOffset = (i * windowSize) / samplesPerChannel;
+        const unsigned short sourceIndex = static_cast<unsigned short>(start + sourceOffset);
+        const short rawSample = oscBuffer->data[sourceIndex];
+        if (rawSample == -1) {
+            destination[i] = currentSample;
+            continue;
+        }
+        if (rawSample == kFurnaceOscResetSample) {
+            currentSample = 0.0f;
+        } else {
+            currentSample = static_cast<float>(rawSample) / 32768.0f;
+        }
+        destination[i] = currentSample;
+    }
+}
 } // namespace
 
-FurnaceDecoder::FurnaceDecoder() = default;
+FurnaceDecoder::FurnaceDecoder()
+    : channelScopeState(std::make_shared<ChannelScopeSharedState>()) {}
 
 FurnaceDecoder::~FurnaceDecoder() {
     close();
@@ -172,6 +250,10 @@ void FurnaceDecoder::closeInternalLocked() {
     subtuneDurations.clear();
     leftScratch.clear();
     rightScratch.clear();
+    channelScopeSourceSerial = 0;
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
 }
 
 void FurnaceDecoder::close() {
@@ -527,6 +609,10 @@ int FurnaceDecoder::read(float* buffer, int numFrames) {
         }
     }
 
+    if (numFrames > 0) {
+        captureChannelScopeSnapshotLocked();
+    }
+
     return numFrames;
 }
 
@@ -829,6 +915,61 @@ AudioDecoder::TimelineMode FurnaceDecoder::getTimelineMode() const {
     return TimelineMode::Discontinuous;
 }
 
+void FurnaceDecoder::captureChannelScopeSnapshotLocked() {
+    if (!engine || !channelScopeState) {
+        return;
+    }
+
+    const int totalChannels = std::clamp(engine->song.chans, 0, kMaxChannelScopeChannels);
+    if (totalChannels <= 0) {
+        channelScopeState->clear();
+        return;
+    }
+
+    std::vector<float> raw(
+            static_cast<size_t>(totalChannels) * ChannelScopeSharedState::kMaxSamples,
+            0.0f
+    );
+    std::vector<float> vu(static_cast<size_t>(totalChannels), 0.0f);
+    const int trailingSamples = std::clamp(sampleRateHz / 50, 64, 2048);
+
+    for (int channel = 0; channel < totalChannels; ++channel) {
+        const size_t channelOffset =
+                static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples;
+        captureFurnaceOscBufferWindow(
+                engine->getOscBuffer(channel),
+                sampleRateHz,
+                raw.data() + channelOffset,
+                ChannelScopeSharedState::kMaxSamples
+        );
+
+        const float gain = furnaceChannelScopeGain(engine->song.sysOfChan[channel]);
+        if (gain != 1.0f) {
+            for (int sample = 0; sample < ChannelScopeSharedState::kMaxSamples; ++sample) {
+                raw[channelOffset + static_cast<size_t>(sample)] *= gain;
+            }
+        }
+
+        float peak = 0.0f;
+        const int start = std::max(0, ChannelScopeSharedState::kMaxSamples - trailingSamples);
+        for (int sample = start; sample < ChannelScopeSharedState::kMaxSamples; ++sample) {
+            peak = std::max(
+                    peak,
+                    std::abs(raw[channelOffset + static_cast<size_t>(sample)])
+            );
+        }
+        vu[static_cast<size_t>(channel)] = std::clamp(peak, 0.0f, 1.0f);
+    }
+
+    {
+        std::lock_guard<std::mutex> scopeLock(channelScopeState->mutex);
+        channelScopeState->snapshotRaw = std::move(raw);
+        channelScopeState->snapshotVu = std::move(vu);
+        channelScopeState->snapshotChannels = totalChannels;
+        channelScopeState->snapshotSerial = ++channelScopeSourceSerial;
+    }
+}
+
 std::string FurnaceDecoder::getFormatNameInfo() {
     std::lock_guard<std::mutex> lock(decodeMutex);
     return formatName;
@@ -1000,6 +1141,163 @@ float FurnaceDecoder::getCurrentHzInfo() {
         return 0.0f;
     }
     return hz;
+}
+
+std::string FurnaceDecoder::getInstrumentNamesInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return "";
+    }
+
+    std::string names;
+    const int count = std::max(
+            std::max(0, engine->song.insLen),
+            static_cast<int>(engine->song.ins.size())
+    );
+    for (int i = 0; i < count; ++i) {
+        if (!names.empty()) {
+            names.push_back('\n');
+        }
+        names.append(std::to_string(i + 1));
+        names.append(". ");
+        if (i < static_cast<int>(engine->song.ins.size()) && engine->song.ins[static_cast<size_t>(i)] != nullptr) {
+            names.append(engine->song.ins[static_cast<size_t>(i)]->name);
+        }
+    }
+    return names;
+}
+
+std::string FurnaceDecoder::getSampleNamesInfo() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine) {
+        return "";
+    }
+
+    std::string names;
+    const int count = std::max(
+            std::max(0, engine->song.sampleLen),
+            static_cast<int>(engine->song.sample.size())
+    );
+    for (int i = 0; i < count; ++i) {
+        if (!names.empty()) {
+            names.push_back('\n');
+        }
+        names.append(std::to_string(i + 1));
+        names.append(". ");
+        if (i < static_cast<int>(engine->song.sample.size()) &&
+            engine->song.sample[static_cast<size_t>(i)] != nullptr) {
+            names.append(engine->song.sample[static_cast<size_t>(i)]->name);
+        }
+    }
+    return names;
+}
+
+std::vector<int32_t> FurnaceDecoder::getChannelScopeTextState(int maxChannels) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (!engine || !engine->curSubSong) {
+        return {};
+    }
+
+    const int totalChannels = std::clamp(engine->song.chans, 0, kMaxChannelScopeChannels);
+    if (totalChannels <= 0) {
+        return {};
+    }
+
+    const int requestedChannels = std::clamp(maxChannels, 1, kMaxChannelScopeChannels);
+    const int channelsToWrite = std::min(totalChannels, requestedChannels);
+    std::vector<int32_t> flat(static_cast<size_t>(channelsToWrite * kChannelScopeTextStride), -1);
+
+    int order = 0;
+    int row = 0;
+    int tick = 0;
+    int speed = 0;
+    engine->getPlayPosTick(order, row, tick, speed);
+    const int currentOrder = std::clamp(order, 0, std::max(0, engine->curSubSong->ordersLen - 1));
+    const int currentRow = std::clamp(row, 0, std::max(0, engine->curSubSong->patLen - 1));
+
+    for (int channel = 0; channel < channelsToWrite; ++channel) {
+        const size_t base = static_cast<size_t>(channel * kChannelScopeTextStride);
+        const DivChannelState* channelState = engine->getChanState(channel);
+
+        int patternNote = -1;
+        int patternInstrument = -1;
+        int patternEffectPrimary = -1;
+        int patternEffectPrimaryParam = -1;
+        int patternEffectSecondary = -1;
+        int patternEffectSecondaryParam = -1;
+
+        if (currentOrder < engine->curSubSong->ordersLen && currentRow < engine->curSubSong->patLen) {
+            const int patternIndex = engine->curSubSong->orders.ord[channel][currentOrder];
+            DivPattern* pattern = engine->curSubSong->pat[channel].getPattern(patternIndex, false);
+            if (pattern != nullptr) {
+                patternNote = pattern->newData[currentRow][DIV_PAT_NOTE];
+                patternInstrument = pattern->newData[currentRow][DIV_PAT_INS];
+                const int effectCols = std::clamp(
+                        static_cast<int>(engine->curSubSong->pat[channel].effectCols),
+                        0,
+                        8
+                );
+                if (effectCols > 0) {
+                    patternEffectPrimary = pattern->newData[currentRow][DIV_PAT_FX(0)];
+                    patternEffectPrimaryParam = pattern->newData[currentRow][DIV_PAT_FXVAL(0)];
+                    if (patternEffectPrimary >= 0 && patternEffectPrimaryParam < 0) {
+                        patternEffectPrimaryParam = 0;
+                    }
+                }
+                if (effectCols > 1) {
+                    patternEffectSecondary = pattern->newData[currentRow][DIV_PAT_FX(1)];
+                    patternEffectSecondaryParam = pattern->newData[currentRow][DIV_PAT_FXVAL(1)];
+                    if (patternEffectSecondary >= 0 && patternEffectSecondaryParam < 0) {
+                        patternEffectSecondaryParam = 0;
+                    }
+                }
+            }
+        }
+
+        const int note = normalizeFurnaceDisplayNote(
+                patternNote >= 0 ? patternNote : (channelState != nullptr ? channelState->note : -1)
+        );
+        const int instrument = normalizeFurnaceAssetIndex(
+                patternInstrument >= 0 ? patternInstrument : (channelState != nullptr ? channelState->lastIns : -1)
+        );
+        const DivSamplePos samplePos = engine->getSamplePos(channel);
+        const int sample = normalizeFurnaceAssetIndex(samplePos.sample);
+
+        int volume = 0;
+        if (channelState != nullptr) {
+            const int rawVolume = std::max(0, channelState->volume >> 8);
+            const int maxVolume = std::max(1, engine->getMaxVolumeChan(channel));
+            volume = std::clamp((rawVolume * 255) / maxVolume, 0, 255);
+        }
+
+        int flags = 0;
+        if ((channelState != nullptr && (channelState->keyOn || channelState->releasing || channelState->doNote)) ||
+            note > 0 ||
+            instrument > 0 ||
+            sample > 0 ||
+            volume > 0 ||
+            patternEffectPrimary >= 0 ||
+            patternEffectSecondary >= 0 ||
+            isFurnaceSpecialNote(patternNote)) {
+            flags |= kChannelScopeTextFlagActive;
+        }
+
+        flat[base + 0] = channel;
+        flat[base + 1] = note;
+        flat[base + 2] = volume;
+        flat[base + 3] = patternEffectPrimary >= 0
+                ? (kFurnaceEffectCodeSentinel | (patternEffectPrimary & 0xFF))
+                : 0;
+        flat[base + 4] = patternEffectPrimary >= 0 ? (patternEffectPrimaryParam & 0xFF) : -1;
+        flat[base + 5] = patternEffectSecondary >= 0
+                ? (kFurnaceEffectCodeSentinel | (patternEffectSecondary & 0xFF))
+                : 0;
+        flat[base + 6] = patternEffectSecondary >= 0 ? (patternEffectSecondaryParam & 0xFF) : -1;
+        flat[base + 7] = instrument;
+        flat[base + 8] = sample;
+        flat[base + 9] = flags;
+    }
+    return flat;
 }
 
 std::vector<std::string> FurnaceDecoder::getSupportedExtensions() {

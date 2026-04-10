@@ -2,7 +2,10 @@
 
 #include <android/log.h>
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <sstream>
@@ -34,6 +37,9 @@ constexpr int kSidGlobalMinSampleRateHz = 8000;
 constexpr int kSidGlobalMaxSampleRateHz = 192000;
 constexpr int kSidToggleChannelsPerChip = 4;
 constexpr int kSidMaxToggleChipCount = 3;
+constexpr float kSidVoiceScopeGain = 1.20f;
+constexpr float kSidDigiScopeGain = 6.05f;
+constexpr float kSidScopeDcFollow = 0.0025f;
 
 std::string safeString(const char* value) {
     return value ? std::string(value) : "";
@@ -213,12 +219,112 @@ std::string sidBaseAddressToString(uint_least16_t address) {
     out << "0x" << std::hex << std::uppercase << static_cast<int>(address);
     return out.str();
 }
+
+int sidScopeChannelCount(int chipCount) {
+    return std::clamp(chipCount, 1, kSidMaxToggleChipCount) * kSidToggleChannelsPerChip;
 }
 
-LibSidPlayFpDecoder::LibSidPlayFpDecoder() = default;
+float applySidScopeDcBlock(int16_t sample, float& dcEstimate, float gain) {
+    const float normalized = static_cast<float>(sample) / 32768.0f;
+    dcEstimate += (normalized - dcEstimate) * kSidScopeDcFollow;
+    return std::clamp((normalized - dcEstimate) * gain, -1.0f, 1.0f);
+}
+
+void applySidBackendOptionsToBuilder(
+        sidbuilder* builder,
+        SidBackend backend,
+        double filterCurve6581,
+        double filterRange6581,
+        double filterCurve8580,
+        SidConfig::sid_cw_t combinedWaveformsStrength
+) {
+    if (backend != SidBackend::ReSIDfp || builder == nullptr) {
+        return;
+    }
+    auto* reSidBuilder = static_cast<ReSIDfpBuilder*>(builder);
+    if (!reSidBuilder) {
+        return;
+    }
+    reSidBuilder->filter6581Curve(filterCurve6581);
+    reSidBuilder->filter6581Range(filterRange6581);
+    reSidBuilder->filter8580Curve(filterCurve8580);
+    reSidBuilder->combinedWaveformsStrength(combinedWaveformsStrength);
+}
+
+void applySidFilterOptionsToPlayer(
+        sidplayfp* targetPlayer,
+        const SidTune* targetTune,
+        SidModelMode sidModelMode,
+        bool filter6581Enabled,
+        bool filter8580Enabled
+) {
+    if (!targetPlayer || !targetTune) {
+        return;
+    }
+
+    const SidTuneInfo* info = targetTune->getInfo();
+    const int sidCount = std::max(1, static_cast<int>(targetPlayer->info().numberOfSIDs()));
+    for (int sidIndex = 0; sidIndex < sidCount; ++sidIndex) {
+        SidConfig::sid_model_t model = SidConfig::MOS8580;
+        bool hasForcedModel = false;
+        if (sidModelMode == SidModelMode::Mos6581) {
+            model = SidConfig::MOS6581;
+            hasForcedModel = true;
+        } else if (sidModelMode == SidModelMode::Mos8580) {
+            model = SidConfig::MOS8580;
+            hasForcedModel = true;
+        }
+        if (!hasForcedModel && info != nullptr) {
+            const auto tuneModel = info->sidModel(static_cast<unsigned int>(sidIndex));
+            if (tuneModel == SidTuneInfo::SIDMODEL_6581) {
+                model = SidConfig::MOS6581;
+            } else if (tuneModel == SidTuneInfo::SIDMODEL_8580) {
+                model = SidConfig::MOS8580;
+            }
+        }
+        const bool enabled = (model == SidConfig::MOS6581) ? filter6581Enabled : filter8580Enabled;
+        targetPlayer->filter(static_cast<unsigned int>(sidIndex), enabled);
+    }
+}
+}
+
+struct LibSidPlayFpDecoder::ScopeConfigSnapshot {
+    bool valid = false;
+    std::string sourcePath;
+    int subtuneIndex = 0;
+    int sampleRate = 48000;
+    int chipCount = 1;
+    SidBackend backend = SidBackend::ReSIDfp;
+    SidClockMode clockMode = SidClockMode::Auto;
+    SidModelMode modelMode = SidModelMode::Auto;
+    bool filter6581Enabled = true;
+    bool filter8580Enabled = true;
+    bool digiBoost8580 = false;
+    double filterCurve6581 = 0.5;
+    double filterRange6581 = 0.5;
+    double filterCurve8580 = 0.5;
+    bool reSidFpFastSampling = true;
+    SidConfig::sid_cw_t combinedWaveformsStrength = SidConfig::AVERAGE;
+    std::vector<bool> toggleChannelMuted;
+};
+
+struct LibSidPlayFpDecoder::ScopeShadow {
+    std::unique_ptr<sidplayfp> player;
+    std::unique_ptr<sidbuilder> sidBuilder;
+    std::unique_ptr<SidTune> tune;
+    std::unique_ptr<SidConfig> config;
+    std::array<short*, kSidMaxToggleChipCount> chipBuffers { nullptr, nullptr, nullptr };
+    float dcEstimate = 0.0f;
+    int soloChannel = -1;
+    int soloChip = 0;
+};
+
+LibSidPlayFpDecoder::LibSidPlayFpDecoder()
+    : channelScopeState(std::make_shared<ChannelScopeSharedState>()) {}
 
 LibSidPlayFpDecoder::~LibSidPlayFpDecoder() {
     close();
+    stopScopeWorker();
 }
 
 std::vector<std::string> LibSidPlayFpDecoder::getSupportedExtensions() {
@@ -281,41 +387,531 @@ bool LibSidPlayFpDecoder::applyConfigLocked() {
 }
 
 void LibSidPlayFpDecoder::applySidBackendOptionsLocked() {
-    if (!sidBuilder) return;
-    if (activeBackend != SidBackend::ReSIDfp) return;
-    auto* reSidBuilder = static_cast<ReSIDfpBuilder*>(sidBuilder.get());
-    if (!reSidBuilder) return;
-    reSidBuilder->filter6581Curve(reSidFpFilterCurve6581);
-    reSidBuilder->filter6581Range(reSidFpFilterRange6581);
-    reSidBuilder->filter8580Curve(reSidFpFilterCurve8580);
-    reSidBuilder->combinedWaveformsStrength(reSidFpCombinedWaveformsStrength);
+    applySidBackendOptionsToBuilder(
+            sidBuilder.get(),
+            activeBackend,
+            reSidFpFilterCurve6581,
+            reSidFpFilterRange6581,
+            reSidFpFilterCurve8580,
+            reSidFpCombinedWaveformsStrength
+    );
 }
 
 void LibSidPlayFpDecoder::applySidFilterOptionsLocked() {
-    if (!player || !tune) return;
-    const SidTuneInfo* info = tune->getInfo();
-    const int sidCount = std::max(1, static_cast<int>(player->info().numberOfSIDs()));
-    for (int sidIndex = 0; sidIndex < sidCount; ++sidIndex) {
-        SidConfig::sid_model_t model = SidConfig::MOS8580;
-        bool hasForcedModel = false;
-        if (sidModelMode == SidModelMode::Mos6581) {
-            model = SidConfig::MOS6581;
-            hasForcedModel = true;
-        } else if (sidModelMode == SidModelMode::Mos8580) {
-            model = SidConfig::MOS8580;
-            hasForcedModel = true;
-        }
-        if (!hasForcedModel && info != nullptr) {
-            const auto tuneModel = info->sidModel(static_cast<unsigned int>(sidIndex));
-            if (tuneModel == SidTuneInfo::SIDMODEL_6581) {
-                model = SidConfig::MOS6581;
-            } else if (tuneModel == SidTuneInfo::SIDMODEL_8580) {
-                model = SidConfig::MOS8580;
-            }
-        }
-        const bool enabled = (model == SidConfig::MOS6581) ? filter6581Enabled : filter8580Enabled;
-        player->filter(static_cast<unsigned int>(sidIndex), enabled);
+    applySidFilterOptionsToPlayer(
+            player.get(),
+            tune.get(),
+            sidModelMode,
+            filter6581Enabled,
+            filter8580Enabled
+    );
+}
+
+LibSidPlayFpDecoder::ScopeConfigSnapshot LibSidPlayFpDecoder::captureScopeConfigSnapshotLocked() const {
+    ScopeConfigSnapshot snapshot;
+    if (!scopeCaptureEnabled || sourcePath.empty() || !player || !tune) {
+        return snapshot;
     }
+
+    snapshot.valid = true;
+    snapshot.sourcePath = sourcePath;
+    snapshot.subtuneIndex = currentSubtuneIndex;
+    snapshot.sampleRate = activeSampleRate;
+    snapshot.chipCount = std::clamp(sidChipCount, 1, kSidMaxToggleChipCount);
+    snapshot.backend = activeBackend;
+    snapshot.clockMode = sidClockMode;
+    snapshot.modelMode = sidModelMode;
+    snapshot.filter6581Enabled = filter6581Enabled;
+    snapshot.filter8580Enabled = filter8580Enabled;
+    snapshot.digiBoost8580 = digiBoost8580;
+    snapshot.filterCurve6581 = reSidFpFilterCurve6581;
+    snapshot.filterRange6581 = reSidFpFilterRange6581;
+    snapshot.filterCurve8580 = reSidFpFilterCurve8580;
+    snapshot.reSidFpFastSampling = reSidFpFastSampling;
+    snapshot.combinedWaveformsStrength = reSidFpCombinedWaveformsStrength;
+    snapshot.toggleChannelMuted = toggleChannelMuted;
+    return snapshot;
+}
+
+void LibSidPlayFpDecoder::ensureScopeWorkerStartedLocked() {
+    if (scopeWorkerThread.joinable()) {
+        return;
+    }
+    scopeWorkerStop.store(false);
+    scopeWorkerThread = std::thread(&LibSidPlayFpDecoder::scopeWorkerLoop, this);
+}
+
+void LibSidPlayFpDecoder::stopScopeWorker() {
+    scopeWorkerStop.store(true);
+    scopeWorkerCv.notify_all();
+    if (scopeWorkerThread.joinable()) {
+        scopeWorkerThread.join();
+    }
+}
+
+void LibSidPlayFpDecoder::markScopeConfigDirtyLocked(bool clearPublishedSnapshot) {
+    scopeCaptureDirty = scopeCaptureEnabled;
+    scopeConfigGeneration += 1;
+    if (player) {
+        scopeTargetPositionMs.store(player->timeMs(), std::memory_order_relaxed);
+    } else {
+        scopeTargetPositionMs.store(0, std::memory_order_relaxed);
+    }
+    if (clearPublishedSnapshot && channelScopeState) {
+        channelScopeState->clear();
+    }
+    if (scopeCaptureEnabled && player && tune && !sourcePath.empty()) {
+        ensureScopeWorkerStartedLocked();
+    }
+    scopeWorkerCv.notify_all();
+}
+
+bool LibSidPlayFpDecoder::applyConfigToScopeShadowLocked(
+        const ScopeConfigSnapshot& snapshot,
+        ScopeShadow& shadow
+) const {
+    if (!shadow.player) {
+        return false;
+    }
+
+    shadow.sidBuilder = createBuilderForBackend(snapshot.backend);
+    if (!shadow.sidBuilder) {
+        return false;
+    }
+    shadow.config = std::make_unique<SidConfig>(shadow.player->config());
+    applySidBackendOptionsToBuilder(
+            shadow.sidBuilder.get(),
+            snapshot.backend,
+            snapshot.filterCurve6581,
+            snapshot.filterRange6581,
+            snapshot.filterCurve8580,
+            snapshot.combinedWaveformsStrength
+    );
+
+    const int normalizedSampleRate = clampSampleRateForBackend(snapshot.sampleRate, snapshot.backend);
+    shadow.config->frequency = static_cast<uint_least32_t>(normalizedSampleRate);
+    shadow.config->playback = SidConfig::MONO;
+    switch (snapshot.clockMode) {
+        case SidClockMode::Pal:
+            shadow.config->defaultC64Model = SidConfig::PAL;
+            shadow.config->forceC64Model = true;
+            break;
+        case SidClockMode::Ntsc:
+            shadow.config->defaultC64Model = SidConfig::NTSC;
+            shadow.config->forceC64Model = true;
+            break;
+        case SidClockMode::Auto:
+        default:
+            shadow.config->defaultC64Model = SidConfig::PAL;
+            shadow.config->forceC64Model = false;
+            break;
+    }
+    switch (snapshot.modelMode) {
+        case SidModelMode::Mos6581:
+            shadow.config->defaultSidModel = SidConfig::MOS6581;
+            shadow.config->forceSidModel = true;
+            break;
+        case SidModelMode::Mos8580:
+            shadow.config->defaultSidModel = SidConfig::MOS8580;
+            shadow.config->forceSidModel = true;
+            break;
+        case SidModelMode::Auto:
+        default:
+            shadow.config->defaultSidModel = SidConfig::MOS8580;
+            shadow.config->forceSidModel = false;
+            break;
+    }
+    const bool force8580Model = (snapshot.modelMode == SidModelMode::Mos8580);
+    const bool allowFastSampling = !(snapshot.backend == SidBackend::ReSID && force8580Model);
+    shadow.config->samplingMethod =
+            (snapshot.reSidFpFastSampling && allowFastSampling)
+            ? SidConfig::INTERPOLATE
+            : SidConfig::RESAMPLE_INTERPOLATE;
+    shadow.config->digiBoost = snapshot.digiBoost8580;
+    shadow.config->sidEmulation = shadow.sidBuilder.get();
+    return shadow.player->config(*shadow.config);
+}
+
+void LibSidPlayFpDecoder::closeScopeCaptureLocked() {
+    scopeVoiceShadows.clear();
+}
+
+void LibSidPlayFpDecoder::resetChannelScopeLocked() {
+    scopeRingRaw.clear();
+    scopeFrameScratch.clear();
+    scopeRingChannels = 0;
+    scopeRingWritePos = 0;
+    scopeRingSamples = 0;
+    channelScopeSourceSerial = 0;
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
+}
+
+void LibSidPlayFpDecoder::ensureScopeRingShapeLocked(int channelsToKeep) {
+    const int clampedChannels = std::clamp(
+            channelsToKeep,
+            0,
+            kSidMaxToggleChipCount * kSidToggleChannelsPerChip
+    );
+    if (clampedChannels <= 0) {
+        scopeRingRaw.clear();
+        scopeFrameScratch.clear();
+        scopeRingChannels = 0;
+        scopeRingWritePos = 0;
+        scopeRingSamples = 0;
+        return;
+    }
+
+    const size_t requiredSize =
+            static_cast<size_t>(clampedChannels) * ChannelScopeSharedState::kMaxSamples;
+    if (scopeRingChannels == clampedChannels && scopeRingRaw.size() == requiredSize) {
+        if (scopeFrameScratch.size() != static_cast<size_t>(clampedChannels)) {
+            scopeFrameScratch.assign(static_cast<size_t>(clampedChannels), 0.0f);
+        }
+        return;
+    }
+
+    scopeRingRaw.assign(requiredSize, 0.0f);
+    scopeFrameScratch.assign(static_cast<size_t>(clampedChannels), 0.0f);
+    scopeRingChannels = clampedChannels;
+    scopeRingWritePos = 0;
+    scopeRingSamples = 0;
+}
+
+void LibSidPlayFpDecoder::appendScopeFrameLocked(const float* perVoiceSamples, int channelsToWrite) {
+    if (!perVoiceSamples || channelsToWrite <= 0) {
+        return;
+    }
+    ensureScopeRingShapeLocked(channelsToWrite);
+    if (scopeRingChannels <= 0 || scopeRingRaw.empty()) {
+        return;
+    }
+
+    const int storedChannels = std::min(scopeRingChannels, channelsToWrite);
+    for (int channel = 0; channel < storedChannels; ++channel) {
+        scopeRingRaw[
+                static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                static_cast<size_t>(scopeRingWritePos)
+        ] = std::clamp(perVoiceSamples[channel], -1.0f, 1.0f);
+    }
+    for (int channel = storedChannels; channel < scopeRingChannels; ++channel) {
+        scopeRingRaw[
+                static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                static_cast<size_t>(scopeRingWritePos)
+        ] = 0.0f;
+    }
+    scopeRingWritePos = (scopeRingWritePos + 1) % ChannelScopeSharedState::kMaxSamples;
+    scopeRingSamples = std::min(scopeRingSamples + 1, ChannelScopeSharedState::kMaxSamples);
+}
+
+void LibSidPlayFpDecoder::publishScopeSnapshotLocked() {
+    if (!channelScopeState) {
+        return;
+    }
+    if (scopeRingChannels <= 0 || scopeRingRaw.empty() || scopeRingSamples <= 0) {
+        channelScopeState->clear();
+        return;
+    }
+
+    std::vector<float> raw(
+            static_cast<size_t>(scopeRingChannels) * ChannelScopeSharedState::kMaxSamples,
+            0.0f
+    );
+    std::vector<float> vu(static_cast<size_t>(scopeRingChannels), 0.0f);
+    const int filledSamples = std::clamp(scopeRingSamples, 0, ChannelScopeSharedState::kMaxSamples);
+    const int zeroPrefix = ChannelScopeSharedState::kMaxSamples - filledSamples;
+    const int trailingSamples = std::clamp(activeSampleRate > 0 ? activeSampleRate / 50 : 64, 64, 1024);
+
+    for (int channel = 0; channel < scopeRingChannels; ++channel) {
+        float* dst = raw.data() + static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples;
+        for (int i = 0; i < filledSamples; ++i) {
+            const int ringIndex =
+                    (scopeRingWritePos - filledSamples + i + ChannelScopeSharedState::kMaxSamples) %
+                    ChannelScopeSharedState::kMaxSamples;
+            dst[zeroPrefix + i] = scopeRingRaw[
+                    static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                    static_cast<size_t>(ringIndex)
+            ];
+        }
+
+        float peak = 0.0f;
+        const int start = std::max(0, ChannelScopeSharedState::kMaxSamples - trailingSamples);
+        for (int i = start; i < ChannelScopeSharedState::kMaxSamples; ++i) {
+            peak = std::max(peak, std::abs(dst[i]));
+        }
+        vu[static_cast<size_t>(channel)] = std::clamp(peak, 0.0f, 1.0f);
+    }
+
+    std::lock_guard<std::mutex> scopeLock(channelScopeState->mutex);
+    channelScopeState->snapshotRaw = std::move(raw);
+    channelScopeState->snapshotVu = std::move(vu);
+    channelScopeState->snapshotChannels = scopeRingChannels;
+    channelScopeState->snapshotSerial = ++channelScopeSourceSerial;
+}
+
+void LibSidPlayFpDecoder::applyToggleChannelMutesToScopeShadowLocked(
+        const ScopeConfigSnapshot& snapshot,
+        ScopeShadow& shadow,
+        int soloChannel
+) const {
+    if (!shadow.player) {
+        return;
+    }
+
+    const int chipCount = std::clamp(snapshot.chipCount, 1, kSidMaxToggleChipCount);
+    for (int chip = 0; chip < chipCount; ++chip) {
+        for (int voice = 0; voice < kSidToggleChannelsPerChip; ++voice) {
+            const int channelIndex = (chip * kSidToggleChannelsPerChip) + voice;
+            bool muted =
+                    channelIndex < 0 ||
+                    channelIndex >= static_cast<int>(snapshot.toggleChannelMuted.size()) ||
+                    snapshot.toggleChannelMuted[static_cast<size_t>(channelIndex)];
+            if (soloChannel >= 0 && channelIndex != soloChannel) {
+                muted = true;
+            }
+            shadow.player->mute(
+                    static_cast<unsigned int>(chip),
+                    static_cast<unsigned int>(voice),
+                    muted
+            );
+        }
+    }
+}
+
+bool LibSidPlayFpDecoder::recreateScopeCaptureLocked(const ScopeConfigSnapshot& snapshot) {
+    closeScopeCaptureLocked();
+    resetChannelScopeLocked();
+
+    if (!snapshot.valid) {
+        scopeCaptureDirty = false;
+        return false;
+    }
+
+    const int chipCount = std::clamp(snapshot.chipCount, 1, kSidMaxToggleChipCount);
+    const int totalChannels = sidScopeChannelCount(chipCount);
+    ensureScopeRingShapeLocked(totalChannels);
+    scopeVoiceShadows.reserve(static_cast<size_t>(totalChannels));
+
+    for (int shadowIndex = 0; shadowIndex < totalChannels; ++shadowIndex) {
+        auto shadow = std::make_unique<ScopeShadow>();
+        shadow->soloChannel = shadowIndex;
+        shadow->soloChip = shadowIndex / kSidToggleChannelsPerChip;
+        shadow->player = std::make_unique<sidplayfp>();
+        if (!applyConfigToScopeShadowLocked(snapshot, *shadow)) {
+            LOGE("sidplayfp scope config failed: %s", shadow->player ? shadow->player->error() : "n/a");
+            closeScopeCaptureLocked();
+            resetChannelScopeLocked();
+            scopeCaptureDirty = false;
+            return false;
+        }
+
+        shadow->tune = std::make_unique<SidTune>(snapshot.sourcePath.c_str());
+        if (!shadow->tune->getStatus()) {
+            LOGE("SidTune scope open failed: %s", shadow->tune->statusString());
+            closeScopeCaptureLocked();
+            resetChannelScopeLocked();
+            scopeCaptureDirty = false;
+            return false;
+        }
+        shadow->tune->selectSong(static_cast<unsigned int>(snapshot.subtuneIndex + 1));
+        if (!shadow->player->load(shadow->tune.get())) {
+            LOGE("sidplayfp scope load failed: %s", shadow->player->error());
+            closeScopeCaptureLocked();
+            resetChannelScopeLocked();
+            scopeCaptureDirty = false;
+            return false;
+        }
+        if (!shadow->player->reset()) {
+            LOGE("sidplayfp scope reset failed: %s", shadow->player->error());
+            closeScopeCaptureLocked();
+            resetChannelScopeLocked();
+            scopeCaptureDirty = false;
+            return false;
+        }
+        shadow->player->initMixer(false);
+        applySidFilterOptionsToPlayer(
+                shadow->player.get(),
+                shadow->tune.get(),
+                snapshot.modelMode,
+                snapshot.filter6581Enabled,
+                snapshot.filter8580Enabled
+        );
+        applyToggleChannelMutesToScopeShadowLocked(snapshot, *shadow, shadow->soloChannel);
+        shadow->dcEstimate = 0.0f;
+        scopeVoiceShadows.push_back(std::move(shadow));
+    }
+
+    scopeCaptureDirty = false;
+    return !scopeVoiceShadows.empty();
+}
+
+bool LibSidPlayFpDecoder::captureChannelScopeBlockLocked(unsigned int renderCycles) {
+    if (scopeVoiceShadows.empty()) {
+        return false;
+    }
+
+    const int totalChannels = std::min(
+            scopeRingChannels,
+            static_cast<int>(scopeVoiceShadows.size())
+    );
+    ensureScopeRingShapeLocked(totalChannels);
+    if (scopeFrameScratch.size() < static_cast<size_t>(totalChannels)) {
+        scopeFrameScratch.assign(static_cast<size_t>(totalChannels), 0.0f);
+    }
+
+    std::vector<int> producedFrames(static_cast<size_t>(totalChannels), 0);
+    int maxProducedFrames = 0;
+    for (int channel = 0; channel < totalChannels; ++channel) {
+        auto& shadow = scopeVoiceShadows[static_cast<size_t>(channel)];
+        if (!shadow || !shadow->player) {
+            continue;
+        }
+        const int produced = shadow->player->play(renderCycles);
+        if (produced <= 0) {
+            continue;
+        }
+        shadow->chipBuffers.fill(nullptr);
+        shadow->player->buffers(shadow->chipBuffers.data());
+        const short* chipBuffer =
+                (shadow->soloChip >= 0 && shadow->soloChip < kSidMaxToggleChipCount)
+                ? shadow->chipBuffers[static_cast<size_t>(shadow->soloChip)]
+                : nullptr;
+        if (!chipBuffer) {
+            continue;
+        }
+        producedFrames[static_cast<size_t>(channel)] = produced;
+        maxProducedFrames = std::max(maxProducedFrames, produced);
+    }
+
+    if (maxProducedFrames <= 0) {
+        return false;
+    }
+
+    for (int frame = 0; frame < maxProducedFrames; ++frame) {
+        std::fill(scopeFrameScratch.begin(), scopeFrameScratch.end(), 0.0f);
+        for (int channel = 0; channel < totalChannels; ++channel) {
+            auto& shadow = scopeVoiceShadows[static_cast<size_t>(channel)];
+            if (!shadow || frame >= producedFrames[static_cast<size_t>(channel)]) {
+                continue;
+            }
+            const short* chipBuffer =
+                    (shadow->soloChip >= 0 && shadow->soloChip < kSidMaxToggleChipCount)
+                    ? shadow->chipBuffers[static_cast<size_t>(shadow->soloChip)]
+                    : nullptr;
+            if (!chipBuffer) {
+                continue;
+            }
+            const float gain =
+                    ((channel % kSidToggleChannelsPerChip) == (kSidToggleChannelsPerChip - 1))
+                    ? kSidDigiScopeGain
+                    : kSidVoiceScopeGain;
+            scopeFrameScratch[static_cast<size_t>(channel)] = applySidScopeDcBlock(
+                    chipBuffer[frame],
+                    shadow->dcEstimate,
+                    gain
+            );
+        }
+        appendScopeFrameLocked(scopeFrameScratch.data(), totalChannels);
+    }
+
+    publishScopeSnapshotLocked();
+    return true;
+}
+
+uint32_t LibSidPlayFpDecoder::getScopePlaybackPositionMsLocked() const {
+    for (const auto& shadow : scopeVoiceShadows) {
+        if (shadow && shadow->player) {
+            return shadow->player->timeMs();
+        }
+    }
+    return 0;
+}
+
+void LibSidPlayFpDecoder::scopeWorkerLoop() {
+    uint64_t appliedGeneration = 0;
+
+    while (!scopeWorkerStop.load(std::memory_order_relaxed)) {
+        ScopeConfigSnapshot snapshot;
+        uint64_t generation = 0;
+        uint32_t targetMs = 0;
+        {
+            std::lock_guard<std::mutex> decodeLock(decodeMutex);
+            snapshot = captureScopeConfigSnapshotLocked();
+            generation = scopeConfigGeneration;
+            targetMs = scopeTargetPositionMs.load(std::memory_order_relaxed);
+        }
+
+        if (!snapshot.valid) {
+            if (!scopeVoiceShadows.empty() || scopeRingSamples > 0) {
+                closeScopeCaptureLocked();
+                resetChannelScopeLocked();
+            }
+            appliedGeneration = generation;
+            std::unique_lock<std::mutex> waitLock(scopeWorkerMutex);
+            scopeWorkerCv.wait_for(waitLock, std::chrono::milliseconds(64));
+            continue;
+        }
+
+        if (generation != appliedGeneration || scopeVoiceShadows.empty()) {
+            recreateScopeCaptureLocked(snapshot);
+            appliedGeneration = generation;
+        }
+
+        if (scopeVoiceShadows.empty()) {
+            std::unique_lock<std::mutex> waitLock(scopeWorkerMutex);
+            scopeWorkerCv.wait_for(waitLock, std::chrono::milliseconds(16));
+            continue;
+        }
+
+        uint32_t shadowMs = getScopePlaybackPositionMsLocked();
+        if (shadowMs > targetMs + 250) {
+            recreateScopeCaptureLocked(snapshot);
+            shadowMs = getScopePlaybackPositionMsLocked();
+        }
+
+        const uint32_t lagMs = targetMs > shadowMs ? (targetMs - shadowMs) : 0u;
+        int maxBlocks = 0;
+        int blockFrames = 1024;
+        if (lagMs > 20000u) {
+            maxBlocks = 32;
+            blockFrames = 4096;
+        } else if (lagMs > 5000u) {
+            maxBlocks = 24;
+            blockFrames = 4096;
+        } else if (lagMs > 1000u) {
+            maxBlocks = 16;
+            blockFrames = 2048;
+        } else if (lagMs > 200u) {
+            maxBlocks = 8;
+            blockFrames = 1024;
+        } else if (lagMs > 0u) {
+            maxBlocks = 4;
+            blockFrames = 512;
+        }
+
+        bool advanced = false;
+        while (!scopeWorkerStop.load(std::memory_order_relaxed) && maxBlocks-- > 0) {
+            shadowMs = getScopePlaybackPositionMsLocked();
+            if (shadowMs >= targetMs) {
+                break;
+            }
+            const unsigned int renderCycles = computeRenderCyclesForFrames(blockFrames, snapshot.sampleRate);
+            if (!captureChannelScopeBlockLocked(renderCycles)) {
+                break;
+            }
+            advanced = true;
+        }
+
+        std::unique_lock<std::mutex> waitLock(scopeWorkerMutex);
+        scopeWorkerCv.wait_for(
+                waitLock,
+                std::chrono::milliseconds(advanced ? 1 : 8)
+        );
+    }
+
+    closeScopeCaptureLocked();
+    resetChannelScopeLocked();
 }
 
 void LibSidPlayFpDecoder::refreshMetadataLocked() {
@@ -324,7 +920,7 @@ void LibSidPlayFpDecoder::refreshMetadataLocked() {
     composer.clear();
     genre.clear();
     sidChipCount = 1;
-    sidVoiceCount = 3;
+    sidVoiceCount = sidScopeChannelCount(1);
     sidFormatName.clear();
     sidClockName.clear();
     sidSpeedName.clear();
@@ -347,7 +943,7 @@ void LibSidPlayFpDecoder::refreshMetadataLocked() {
         sidChipCount = std::max(sidChipCount, static_cast<int>(player->info().numberOfSIDs()));
         sidSpeedName = safeString(player->info().speedString());
     }
-    sidVoiceCount = std::max(1, sidChipCount * 3);
+    sidVoiceCount = sidScopeChannelCount(sidChipCount);
     sidFormatName = safeString(info->formatString());
     sidClockName = sidClockToString(info->clockSpeed());
     sidCompatibilityName = sidCompatibilityToString(info->compatibility());
@@ -442,7 +1038,7 @@ bool LibSidPlayFpDecoder::selectSubtuneLocked(int index) {
     outputChannels = std::clamp(static_cast<int>(info.channels()), 1, 2);
     const int runtimeSidChips = std::max(1, static_cast<int>(info.numberOfSIDs()));
     sidChipCount = runtimeSidChips;
-    sidVoiceCount = std::max(1, runtimeSidChips * 3);
+    sidVoiceCount = sidScopeChannelCount(runtimeSidChips);
     sidSpeedName = safeString(info.speedString());
     applySidFilterOptionsLocked();
     rebuildToggleChannelsLocked();
@@ -459,11 +1055,13 @@ bool LibSidPlayFpDecoder::selectSubtuneLocked(int index) {
         currentSubtuneDurationSecondsAtomic.store(fallbackDurationSeconds, std::memory_order_relaxed);
     }
     currentSubtuneIndex = index;
+    markScopeConfigDirtyLocked(true);
     return true;
 }
 
 bool LibSidPlayFpDecoder::openInternalLocked(const char* path) {
     if (!path) return false;
+    sourcePath = path;
 
     player = std::make_unique<sidplayfp>();
     sidBuilder = createBuilderForBackend(selectedBackend);
@@ -500,6 +1098,10 @@ bool LibSidPlayFpDecoder::openInternalLocked(const char* path) {
         return false;
     }
     refreshMetadataLocked();
+    if (scopeCaptureEnabled) {
+        ensureScopeWorkerStartedLocked();
+        markScopeConfigDirtyLocked(true);
+    }
 
     return true;
 }
@@ -514,6 +1116,7 @@ bool LibSidPlayFpDecoder::open(const char* path) {
     artist.clear();
     composer.clear();
     genre.clear();
+    sourcePath.clear();
     subtuneTitles.clear();
     subtuneArtists.clear();
     subtuneDurationsSeconds.clear();
@@ -521,7 +1124,7 @@ bool LibSidPlayFpDecoder::open(const char* path) {
     currentSubtuneIndex = 0;
     outputChannels = 2;
     sidChipCount = 1;
-    sidVoiceCount = 3;
+    sidVoiceCount = sidScopeChannelCount(1);
     sidFormatName.clear();
     sidClockName.clear();
     sidSpeedName.clear();
@@ -538,6 +1141,7 @@ bool LibSidPlayFpDecoder::open(const char* path) {
     mixedScratchSamples.clear();
     toggleChannelNames.clear();
     toggleChannelMuted.clear();
+    markScopeConfigDirtyLocked(true);
     return openInternalLocked(path);
 }
 
@@ -551,6 +1155,7 @@ void LibSidPlayFpDecoder::close() {
     artist.clear();
     composer.clear();
     genre.clear();
+    sourcePath.clear();
     subtuneTitles.clear();
     subtuneArtists.clear();
     subtuneDurationsSeconds.clear();
@@ -558,7 +1163,7 @@ void LibSidPlayFpDecoder::close() {
     currentSubtuneIndex = 0;
     outputChannels = 2;
     sidChipCount = 1;
-    sidVoiceCount = 3;
+    sidVoiceCount = sidScopeChannelCount(1);
     sidFormatName.clear();
     sidClockName.clear();
     sidSpeedName.clear();
@@ -574,6 +1179,7 @@ void LibSidPlayFpDecoder::close() {
     mixedScratchSamples.clear();
     toggleChannelNames.clear();
     toggleChannelMuted.clear();
+    markScopeConfigDirtyLocked(true);
 }
 
 int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
@@ -685,10 +1291,15 @@ int LibSidPlayFpDecoder::read(float* buffer, int numFrames) {
         );
     }
 
+    const uint32_t playbackTimeMs = player->timeMs();
     playbackPositionSecondsAtomic.store(
-            static_cast<double>(player->timeMs()) / 1000.0,
+            static_cast<double>(playbackTimeMs) / 1000.0,
             std::memory_order_relaxed
     );
+    if (scopeCaptureEnabled) {
+        scopeTargetPositionMs.store(playbackTimeMs, std::memory_order_relaxed);
+        scopeWorkerCv.notify_all();
+    }
     return framesWritten;
 }
 
@@ -715,6 +1326,7 @@ void LibSidPlayFpDecoder::seek(double seconds) {
             static_cast<double>(player->timeMs()) / 1000.0,
             std::memory_order_relaxed
     );
+    markScopeConfigDirtyLocked(true);
 }
 
 double LibSidPlayFpDecoder::getDuration() {
@@ -744,6 +1356,18 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     const std::string optionName(name);
     const std::string optionValue(value);
+    if (optionName == "visualization.channel_scope_active") {
+        const bool enabled = parseBoolString(optionValue, scopeCaptureEnabled);
+        if (scopeCaptureEnabled == enabled) {
+            return;
+        }
+        scopeCaptureEnabled = enabled;
+        if (scopeCaptureEnabled) {
+            ensureScopeWorkerStartedLocked();
+        }
+        markScopeConfigDirtyLocked(true);
+        return;
+    }
     if (optionName == "sidplayfp.backend") {
         selectedBackend = parseSidBackend(optionValue);
         if (!player) {
@@ -759,6 +1383,7 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
         sidModelMode = parseSidModelMode(optionValue, sidModelMode);
         if (player && tune) {
             applySidFilterOptionsLocked();
+            markScopeConfigDirtyLocked(false);
         }
         return;
     }
@@ -767,6 +1392,7 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
         sidModelMode = forceModel ? SidModelMode::Mos8580 : SidModelMode::Auto;
         if (player && tune) {
             applySidFilterOptionsLocked();
+            markScopeConfigDirtyLocked(false);
         }
         return;
     }
@@ -775,6 +1401,7 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
         sidModelMode = (legacyModel == SidConfig::MOS6581) ? SidModelMode::Mos6581 : SidModelMode::Mos8580;
         if (player && tune) {
             applySidFilterOptionsLocked();
+            markScopeConfigDirtyLocked(false);
         }
         return;
     }
@@ -782,6 +1409,7 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
         filter6581Enabled = parseBoolString(optionValue, filter6581Enabled);
         if (player && tune) {
             applySidFilterOptionsLocked();
+            markScopeConfigDirtyLocked(false);
         }
         return;
     }
@@ -789,11 +1417,13 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
         filter8580Enabled = parseBoolString(optionValue, filter8580Enabled);
         if (player && tune) {
             applySidFilterOptionsLocked();
+            markScopeConfigDirtyLocked(false);
         }
         return;
     }
     if (optionName == "sidplayfp.digiboost_8580") {
         digiBoost8580 = parseBoolString(optionValue, digiBoost8580);
+        markScopeConfigDirtyLocked(false);
         return;
     }
     if (optionName == "sidplayfp.filter_curve_6581") {
@@ -801,6 +1431,7 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
         reSidFpFilterCurve6581 = std::clamp(parsed, 0.0, 1.0);
         if (player && activeBackend == SidBackend::ReSIDfp) {
             applySidBackendOptionsLocked();
+            markScopeConfigDirtyLocked(false);
         }
         return;
     }
@@ -809,6 +1440,7 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
         reSidFpFilterRange6581 = std::clamp(parsed, 0.0, 1.0);
         if (player && activeBackend == SidBackend::ReSIDfp) {
             applySidBackendOptionsLocked();
+            markScopeConfigDirtyLocked(false);
         }
         return;
     }
@@ -817,11 +1449,13 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
         reSidFpFilterCurve8580 = std::clamp(parsed, 0.0, 1.0);
         if (player && activeBackend == SidBackend::ReSIDfp) {
             applySidBackendOptionsLocked();
+            markScopeConfigDirtyLocked(false);
         }
         return;
     }
     if (optionName == "sidplayfp.residfp_fast_sampling") {
         reSidFpFastSampling = parseBoolString(optionValue, reSidFpFastSampling);
+        markScopeConfigDirtyLocked(false);
         return;
     }
     if (optionName == "sidplayfp.residfp_combined_waveforms_strength") {
@@ -831,6 +1465,7 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
         );
         if (player && activeBackend == SidBackend::ReSIDfp) {
             applySidBackendOptionsLocked();
+            markScopeConfigDirtyLocked(false);
         }
         return;
     }
@@ -849,6 +1484,9 @@ void LibSidPlayFpDecoder::setOption(const char* name, const char* value) {
 int LibSidPlayFpDecoder::getOptionApplyPolicy(const char* name) const {
     if (!name) return OPTION_APPLY_LIVE;
     const std::string optionName(name);
+    if (optionName == "visualization.channel_scope_active") {
+        return OPTION_APPLY_LIVE;
+    }
     if (optionName == "sidplayfp.backend") {
         return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
     }
@@ -1090,7 +1728,7 @@ void LibSidPlayFpDecoder::rebuildToggleChannelsLocked() {
         toggleChannelNames.push_back(chipPrefix + "Voice 1");
         toggleChannelNames.push_back(chipPrefix + "Voice 2");
         toggleChannelNames.push_back(chipPrefix + "Voice 3");
-        toggleChannelNames.push_back(chipPrefix + "Sample");
+        toggleChannelNames.push_back(chipPrefix + "Digi");
     }
 
     toggleChannelMuted.assign(static_cast<size_t>(totalChannels), false);
@@ -1116,5 +1754,8 @@ void LibSidPlayFpDecoder::applyToggleChannelMutesLocked() {
                     muted
             );
         }
+    }
+    if (scopeCaptureEnabled) {
+        markScopeConfigDirtyLocked(false);
     }
 }

@@ -3142,6 +3142,17 @@ private fun AppNavigation(
     val activeCoreNameForUi = lastUsedCoreName
     val currentCorePluginName = pluginNameForCoreName(activeCoreNameForUi)
     val canOpenCurrentCoreSettings = currentCorePluginName != null
+    LaunchedEffect(activeCoreNameForUi, currentCorePluginName, visualizationMode, isPlayerSurfaceVisible) {
+        if (currentCorePluginName != DecoderNames.LIB_SID_PLAY_FP) return@LaunchedEffect
+        val coreName = activeCoreNameForUi?.trim().takeIf { !it.isNullOrEmpty() } ?: return@LaunchedEffect
+        val channelScopeActive =
+            isPlayerSurfaceVisible && visualizationMode == VisualizationMode.ChannelScope
+        NativeBridge.setCoreOption(
+            coreName,
+            "visualization.channel_scope_active",
+            if (channelScopeActive) "true" else "false"
+        )
+    }
     val visualizationCoordinator = rememberVisualizationModeCoordinator(
         enabledModes = enabledVisualizationModes,
         activeCoreName = activeCoreNameForUi,

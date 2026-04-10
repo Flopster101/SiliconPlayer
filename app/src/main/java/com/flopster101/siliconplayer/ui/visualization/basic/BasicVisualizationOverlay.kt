@@ -823,7 +823,16 @@ private fun buildChannelScopeTextFields(
         )
     }
     return ChannelScopeTextFields(
-        channel = if (showChannel) resolveChannelLabel(channel, state, sideCounts) else null,
+        channel = if (showChannel) {
+            resolveChannelLabel(
+                channel = channel,
+                state = state,
+                sideCounts = sideCounts,
+                channelNamesByChannelIndex = chipNamesByChannelIndex
+            )
+        } else {
+            null
+        },
         note = if (showNote) (formatNoteName(state?.note ?: -1, noteFormat) ?: "--") else null,
         volume = if (showVolume) formatVolume(state?.volume ?: 0) else null,
         effects = effects,
@@ -853,8 +862,15 @@ private fun buildChannelScopeTextFields(
 private fun resolveChannelLabel(
     channel: Int,
     state: ChannelScopeChannelTextState?,
-    sideCounts: IntArray
+    sideCounts: IntArray,
+    channelNamesByChannelIndex: Map<Int, String>
 ): String {
+    val preferredIndex = state?.channelIndex ?: channel
+    val explicitName = channelNamesByChannelIndex[preferredIndex]
+        ?: channelNamesByChannelIndex[channel]
+    if (!explicitName.isNullOrBlank()) {
+        return explicitName
+    }
     val flags = state?.flags ?: 0
     val isLeft = (flags and NativeBridge.CHANNEL_SCOPE_TEXT_FLAG_AMIGA_LEFT) != 0
     val isRight = (flags and NativeBridge.CHANNEL_SCOPE_TEXT_FLAG_AMIGA_RIGHT) != 0

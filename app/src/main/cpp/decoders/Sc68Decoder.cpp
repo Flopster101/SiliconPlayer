@@ -434,7 +434,7 @@ bool Sc68Decoder::open(const char* path) {
     refreshDurationLocked();
     rebuildToggleChannelsLocked();
     applyToggleChannelMutesLocked();
-    refreshScopeAudioShadowsLocked(0);
+    refreshScopeCaptureStateLocked(0);
     return true;
 }
 
@@ -528,8 +528,59 @@ bool Sc68Decoder::createScopeAudioShadowLocked(ScopeAudioShadow& shadow, int pos
 
     sc68_cntl(shadow.handle, SC68_SET_OPT_INT, "ym-chans", shadow.ymMask);
     sc68_cntl(shadow.handle, SC68_SET_OPT_INT, "ste-enable", shadow.steEnable);
-    if (positionMs > 0) {
-        sc68_cntl(shadow.handle, SC68_SET_POS, positionMs);
+    if (positionMs > 0 && !fastForwardScopeHandleLocked(shadow.handle, positionMs)) {
+        sc68_close(shadow.handle);
+        sc68_destroy(shadow.handle);
+        shadow.handle = nullptr;
+        return false;
+    }
+    return true;
+}
+
+int Sc68Decoder::processScopeHandleChunkLocked(sc68_t* target, int16_t* pcm, int requestedFrames) {
+    if (!target || !pcm || requestedFrames <= 0) {
+        return 0;
+    }
+
+    for (int retry = 0; retry < 4; ++retry) {
+        int producedFrames = requestedFrames;
+        const int status = sc68_process(target, pcm, &producedFrames);
+        if (status == SC68_ERROR) {
+            return -1;
+        }
+        if (producedFrames > 0) {
+            return producedFrames;
+        }
+    }
+
+    return 0;
+}
+
+bool Sc68Decoder::fastForwardScopeHandleLocked(sc68_t* target, int positionMs) {
+    if (!target || positionMs <= 0) {
+        return true;
+    }
+
+    const int effectiveSampleRate =
+            sampleRateHz > 0
+                    ? sampleRateHz
+                    : (requestedSampleRateHz > 0 ? requestedSampleRateHz : kDefaultSampleRateHz);
+    int64_t framesToSkip =
+            static_cast<int64_t>(std::llround(
+                    (static_cast<double>(positionMs) / 1000.0) * static_cast<double>(effectiveSampleRate)
+            ));
+    if (framesToSkip <= 0) {
+        return true;
+    }
+
+    std::vector<int16_t> discard(static_cast<size_t>(kSeekDiscardChunkFrames) * 2u);
+    while (framesToSkip > 0) {
+        int chunk = static_cast<int>(std::min<int64_t>(kSeekDiscardChunkFrames, framesToSkip));
+        const int producedFrames = processScopeHandleChunkLocked(target, discard.data(), chunk);
+        if (producedFrames <= 0) {
+            return false;
+        }
+        framesToSkip -= producedFrames;
     }
     return true;
 }
@@ -560,7 +611,14 @@ void Sc68Decoder::refreshScopeAudioShadowsLocked(int positionMs) {
         return;
     }
 
-    const int seekPositionMs = positionMs >= 0 ? positionMs : std::max(0, lastCorePositionMs);
+    const int seekPositionMs = positionMs >= 0
+            ? positionMs
+            : std::max(
+                    0,
+                    lastCorePositionMs >= 0
+                            ? lastCorePositionMs
+                            : static_cast<int>(std::llround(playbackPositionSeconds * 1000.0))
+            );
     for (auto& shadow : shadows) {
         if (!createScopeAudioShadowLocked(shadow, seekPositionMs)) {
             for (auto& created : shadows) {
@@ -576,6 +634,15 @@ void Sc68Decoder::refreshScopeAudioShadowsLocked(int positionMs) {
 
     scopeAudioShadows = std::move(shadows);
     applyToggleChannelMutesLocked();
+}
+
+void Sc68Decoder::refreshScopeCaptureStateLocked(int positionMs) {
+    if (!scopeCaptureEnabled) {
+        closeScopeAudioShadowsLocked();
+        resetChannelScopeLocked();
+        return;
+    }
+    refreshScopeAudioShadowsLocked(positionMs);
 }
 
 void Sc68Decoder::resetChannelScopeLocked() {
@@ -782,9 +849,8 @@ bool Sc68Decoder::captureChannelScopeFromShadowsLocked(int frames) {
             continue;
         }
 
-        int producedFrames = frames;
-        const int status = sc68_process(shadow.handle, pcm.data(), &producedFrames);
-        if (status == SC68_ERROR || producedFrames <= 0) {
+        const int producedFrames = processScopeHandleChunkLocked(shadow.handle, pcm.data(), frames);
+        if (producedFrames <= 0) {
             continue;
         }
         capturedAny = true;
@@ -1086,7 +1152,8 @@ int Sc68Decoder::processIntoLocked(float* buffer, int numFrames) {
     }
 
     sc68_scope_snapshot_t scopeBefore{};
-    const bool haveScopeBefore = sc68_get_scope_snapshot(handle, &scopeBefore) > 0;
+    const bool haveScopeBefore = scopeCaptureEnabled &&
+            sc68_get_scope_snapshot(handle, &scopeBefore) > 0;
     std::vector<int16_t> pcm(static_cast<size_t>(numFrames) * 2u);
     int requestedFrames = numFrames;
     const int status = sc68_process(handle, pcm.data(), &requestedFrames);
@@ -1099,15 +1166,17 @@ int Sc68Decoder::processIntoLocked(float* buffer, int numFrames) {
         buffer[i] = static_cast<float>(pcm[i]) / 32768.0f;
     }
 
-    if (!captureChannelScopeFromShadowsLocked(requestedFrames) && haveScopeBefore) {
-        captureChannelScopeBlockLocked(scopeBefore, requestedFrames);
-    }
+    if (scopeCaptureEnabled) {
+        if (!captureChannelScopeFromShadowsLocked(requestedFrames) && haveScopeBefore) {
+            captureChannelScopeBlockLocked(scopeBefore, requestedFrames);
+        }
 
-    sc68_scope_snapshot_t scopeAfter{};
-    if (sc68_get_scope_snapshot(handle, &scopeAfter) > 0) {
-        updateScopeTextStateLocked(scopeAfter);
+        sc68_scope_snapshot_t scopeAfter{};
+        if (sc68_get_scope_snapshot(handle, &scopeAfter) > 0) {
+            updateScopeTextStateLocked(scopeAfter);
+        }
+        publishScopeSnapshotLocked();
     }
-    publishScopeSnapshotLocked();
 
     updatePlaybackPositionLocked(requestedFrames);
     if ((status & SC68_CHANGE) != 0) {
@@ -1116,7 +1185,7 @@ int Sc68Decoder::processIntoLocked(float* buffer, int numFrames) {
         refreshDurationLocked();
         rebuildToggleChannelsLocked();
         applyToggleChannelMutesLocked();
-        refreshScopeAudioShadowsLocked(lastCorePositionMs);
+        refreshScopeCaptureStateLocked(lastCorePositionMs);
     }
     return requestedFrames;
 }
@@ -1165,7 +1234,7 @@ void Sc68Decoder::seek(double seconds) {
         playbackPositionSeconds = static_cast<double>(directSeekPosMs) / 1000.0;
         lastCorePositionMs = directSeekPosMs;
         resetChannelScopeLocked();
-        refreshScopeAudioShadowsLocked(directSeekPosMs);
+        refreshScopeCaptureStateLocked(directSeekPosMs);
         return;
     }
 
@@ -1243,7 +1312,7 @@ bool Sc68Decoder::setTrackLocked(int track1Based) {
     refreshDurationLocked();
     rebuildToggleChannelsLocked();
     applyToggleChannelMutesLocked();
-    refreshScopeAudioShadowsLocked(lastCorePositionMs);
+    refreshScopeCaptureStateLocked(lastCorePositionMs);
     resetChannelScopeLocked();
     return true;
 }
@@ -1542,7 +1611,15 @@ void Sc68Decoder::setOption(const char* name, const char* value) {
     if (!name) return;
 
     const std::string optionName(name);
-    if (optionName == "sc68.asid") {
+    if (optionName == "visualization.channel_scope_active") {
+        const bool enabled = parseBoolString(value, scopeCaptureEnabled);
+        if (scopeCaptureEnabled == enabled) {
+            return;
+        }
+        scopeCaptureEnabled = enabled;
+        refreshScopeCaptureStateLocked(lastCorePositionMs);
+        return;
+    } else if (optionName == "sc68.asid") {
         optionAsid = std::clamp(parseIntString(value, optionAsid), 0, 2);
     } else if (optionName == "sc68.default_time_seconds") {
         optionDefaultTimeSeconds = std::clamp(parseIntString(value, optionDefaultTimeSeconds), 0, 24 * 60 * 60 - 1);
@@ -1562,8 +1639,10 @@ void Sc68Decoder::setOption(const char* name, const char* value) {
 
     if (handle) {
         applyCoreOptionsLocked();
-        refreshScopeAudioShadowsLocked(lastCorePositionMs);
-        resetChannelScopeLocked();
+        refreshScopeCaptureStateLocked(lastCorePositionMs);
+        if (scopeCaptureEnabled) {
+            resetChannelScopeLocked();
+        }
     }
     applyToggleChannelMutesLocked();
 }
@@ -1571,6 +1650,9 @@ void Sc68Decoder::setOption(const char* name, const char* value) {
 int Sc68Decoder::getOptionApplyPolicy(const char* name) const {
     if (!name) return OPTION_APPLY_LIVE;
     const std::string optionName(name);
+    if (optionName == "visualization.channel_scope_active") {
+        return OPTION_APPLY_LIVE;
+    }
     if (optionName == "sc68.asid" ||
         optionName == "sc68.default_time_seconds" ||
         optionName == "sc68.ym_engine" ||

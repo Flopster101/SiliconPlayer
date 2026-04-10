@@ -134,11 +134,15 @@ private:
     int scopeRingSamples = 0;
     uint64_t channelScopeSourceSerial = 0;
     std::vector<ScopeAudioShadow> scopeAudioShadows;
+    bool scopeCaptureEnabled = false;
 
     void closeInternalLocked();
     void closeScopeAudioShadowsLocked();
+    int processScopeHandleChunkLocked(sc68_t* target, int16_t* pcm, int requestedFrames);
+    bool fastForwardScopeHandleLocked(sc68_t* target, int positionMs);
     bool createScopeAudioShadowLocked(ScopeAudioShadow& shadow, int positionMs);
     void refreshScopeAudioShadowsLocked(int positionMs = -1);
+    void refreshScopeCaptureStateLocked(int positionMs = -1);
     bool refreshTrackStateLocked();
     void refreshMetadataLocked();
     void refreshDurationLocked();

@@ -124,12 +124,14 @@ private:
     int scopeRingWritePos = 0;
     int scopeRingSamples = 0;
     uint64_t channelScopeSourceSerial = 0;
+    bool scopeCaptureEnabled = false;
 
     void closeInternal();
     bool applyTrackInfoLocked(int trackIndex);
     void closeScopeCaptureLocked();
     Music_Emu* createScopeShadowLocked(bool multiChannel);
     bool createScopeCaptureLocked();
+    void refreshScopeCaptureStateLocked(int positionMs = -1, bool forceRecreate = false);
     bool syncScopeCaptureLocked(int positionMs = 0);
     void resetChannelScopeLocked();
     void ensureScopeRingShapeLocked(int channels);

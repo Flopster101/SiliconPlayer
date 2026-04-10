@@ -399,7 +399,7 @@ bool GmeDecoder::open(const char* path) {
 
     applyRepeatBehaviorLocked();
     applyCoreOptionsLocked();
-    createScopeCaptureLocked();
+    refreshScopeCaptureStateLocked(0, true);
     return true;
 }
 
@@ -853,6 +853,36 @@ bool GmeDecoder::createScopeCaptureLocked() {
     return syncScopeCaptureLocked(0);
 }
 
+void GmeDecoder::refreshScopeCaptureStateLocked(int positionMs, bool forceRecreate) {
+    if (!scopeCaptureEnabled || !emu) {
+        closeScopeCaptureLocked();
+        resetChannelScopeLocked();
+        return;
+    }
+
+    const bool hasScopeCapture =
+            scopeMultiEmu != nullptr ||
+            scopeApuEmu != nullptr ||
+            scopeVrc6Emu != nullptr ||
+            scopeMmc5Emu != nullptr ||
+            !scopeVoiceEmus.empty();
+
+    if (forceRecreate || !hasScopeCapture) {
+        if (!createScopeCaptureLocked()) {
+            closeScopeCaptureLocked();
+            resetChannelScopeLocked();
+            return;
+        }
+    }
+
+    const int targetMs = positionMs >= 0
+            ? positionMs
+            : std::max(0, lastTellMs);
+    if (targetMs > 0) {
+        syncScopeCaptureLocked(targetMs);
+    }
+}
+
 void GmeDecoder::captureChannelScopeBlockLocked(int frames) {
     const int totalVoices = std::min(std::max(0, voiceCount), kGmeScopeMaxVoices);
     if (frames <= 0 || totalVoices <= 0 || (!scopeMultiEmu && scopeApuEmu == nullptr && scopeVrc6Emu == nullptr &&
@@ -1109,7 +1139,9 @@ int GmeDecoder::read(float* buffer, int numFrames) {
         for (int i = 0; i < samplesToRead; ++i) {
             buffer[(framesRead * channels) + i] = static_cast<float>(pcmBlock[i]) / 32768.0f;
         }
-        captureChannelScopeBlockLocked(framesToRead);
+        if (scopeCaptureEnabled) {
+            captureChannelScopeBlockLocked(framesToRead);
+        }
         framesRead += framesToRead;
 
         if (gme_track_ended(emu)) {
@@ -1205,7 +1237,9 @@ void GmeDecoder::seek(double seconds) {
     playbackPositionSeconds = static_cast<double>(targetMs) / 1000.0;
     lastTellMs = targetMs;
     pendingTerminalEnd = false;
-    syncScopeCaptureLocked(targetMs);
+    if (scopeCaptureEnabled) {
+        refreshScopeCaptureStateLocked(targetMs);
+    }
 }
 
 double GmeDecoder::getDuration() {
@@ -1269,7 +1303,7 @@ bool GmeDecoder::selectSubtune(int index) {
     voiceCount = std::max(0, gme_voice_count(emu));
     rebuildToggleChannelsLocked();
     applyToggleChannelMutesLocked();
-    createScopeCaptureLocked();
+    refreshScopeCaptureStateLocked(0, true);
     return true;
 }
 
@@ -1457,7 +1491,15 @@ void GmeDecoder::setOption(const char* name, const char* value) {
     const std::string optionName(name);
     const std::string optionValue(value);
 
-    if (optionName == "gme.tempo") {
+    if (optionName == "visualization.channel_scope_active") {
+        const bool enabled = parseBoolString(optionValue, scopeCaptureEnabled);
+        if (scopeCaptureEnabled == enabled) {
+            return;
+        }
+        scopeCaptureEnabled = enabled;
+        refreshScopeCaptureStateLocked();
+        return;
+    } else if (optionName == "gme.tempo") {
         tempo = std::clamp(parseDoubleString(optionValue, tempo), 0.5, 2.0);
     } else if (optionName == "gme.stereo_separation") {
         stereoDepth = std::clamp(parseDoubleString(optionValue, stereoDepth), 0.0, 1.0);
@@ -1490,6 +1532,9 @@ void GmeDecoder::setOption(const char* name, const char* value) {
 int GmeDecoder::getOptionApplyPolicy(const char* name) const {
     if (!name) return OPTION_APPLY_LIVE;
     const std::string optionName(name);
+    if (optionName == "visualization.channel_scope_active") {
+        return OPTION_APPLY_LIVE;
+    }
     if (optionName == "gme.tempo" ||
         optionName == "gme.stereo_separation" ||
         optionName == "gme.echo_enabled" ||

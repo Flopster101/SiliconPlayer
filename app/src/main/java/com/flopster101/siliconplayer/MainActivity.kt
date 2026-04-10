@@ -3143,7 +3143,9 @@ private fun AppNavigation(
     val currentCorePluginName = pluginNameForCoreName(activeCoreNameForUi)
     val canOpenCurrentCoreSettings = currentCorePluginName != null
     LaunchedEffect(activeCoreNameForUi, currentCorePluginName, visualizationMode, isPlayerSurfaceVisible) {
-        if (currentCorePluginName != DecoderNames.LIB_SID_PLAY_FP) return@LaunchedEffect
+        if (currentCorePluginName != DecoderNames.LIB_SID_PLAY_FP &&
+            currentCorePluginName != DecoderNames.GAME_MUSIC_EMU &&
+            currentCorePluginName != DecoderNames.SC68) return@LaunchedEffect
         val coreName = activeCoreNameForUi?.trim().takeIf { !it.isNullOrEmpty() } ?: return@LaunchedEffect
         val channelScopeActive =
             isPlayerSurfaceVisible && visualizationMode == VisualizationMode.ChannelScope

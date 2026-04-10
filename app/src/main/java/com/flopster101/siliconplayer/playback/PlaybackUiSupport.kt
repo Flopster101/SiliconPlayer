@@ -129,6 +129,16 @@ internal fun supportsChannelScopeVisualization(coreNameForUi: String?): Boolean 
     }
 }
 
+internal fun supportsChannelScopeNoteText(coreNameForUi: String?): Boolean {
+    return when (pluginNameForCoreName(coreNameForUi)) {
+        DecoderNames.LIB_OPEN_MPT,
+        DecoderNames.FURNACE,
+        DecoderNames.KLYSTRACK,
+        DecoderNames.HIVELY_TRACKER -> true
+        else -> false
+    }
+}
+
 internal fun isVisualizationModeSelectable(
     mode: VisualizationMode,
     enabledModes: Set<VisualizationMode>,

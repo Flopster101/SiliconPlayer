@@ -92,6 +92,8 @@ internal object AppPreferenceKeys {
     const val END_FADE_DURATION_MS = "end_fade_duration_ms"
     const val END_FADE_CURVE = "end_fade_curve"
     const val VISUALIZATION_MODE = "visualization_mode"
+    const val VISUALIZATION_REQUESTED_MODE = "visualization_requested_mode"
+    const val VISUALIZATION_LAST_BASIC_MODE = "visualization_last_basic_mode"
     const val VISUALIZATION_ENABLED_MODES = "visualization_enabled_modes"
     const val VISUALIZATION_SHOW_DEBUG_INFO = "visualization_show_debug_info"
     const val VISUALIZATION_BAR_COUNT = "visualization_bar_count"

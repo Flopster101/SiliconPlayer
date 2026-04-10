@@ -17,6 +17,26 @@ enum class VisualizationMode(
     }
 }
 
+enum class VisualizationModeCategory {
+    Basic,
+    Advanced
+}
+
+val VisualizationMode.category: VisualizationModeCategory?
+    get() = when (this) {
+        VisualizationMode.Bars,
+        VisualizationMode.Oscilloscope,
+        VisualizationMode.VuMeters -> VisualizationModeCategory.Basic
+        VisualizationMode.ChannelScope -> VisualizationModeCategory.Advanced
+        VisualizationMode.Off -> null
+    }
+
+fun VisualizationMode.isBasicVisualizationMode(): Boolean =
+    category == VisualizationModeCategory.Basic
+
+fun VisualizationMode.isAdvancedVisualizationMode(): Boolean =
+    category == VisualizationModeCategory.Advanced
+
 enum class VisualizationRenderBackend(
     val storageValue: String,
     val label: String

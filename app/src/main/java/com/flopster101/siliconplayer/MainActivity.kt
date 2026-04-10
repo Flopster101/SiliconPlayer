@@ -123,7 +123,7 @@ import com.flopster101.siliconplayer.playback.applyTrackSelectionAction
 import com.flopster101.siliconplayer.session.exportCachedFilesToTree
 import com.flopster101.siliconplayer.ui.screens.PlaylistEntrySortMode
 import com.flopster101.siliconplayer.ui.screens.sortPlaylistEntries
-import com.flopster101.siliconplayer.ui.visualization.rememberVisualizationModeCoordinator
+import com.flopster101.siliconplayer.ui.visualization.rememberVisualizationUiState
 import com.flopster101.siliconplayer.ui.theme.SiliconPlayerTheme
 import java.io.BufferedInputStream
 import java.io.File
@@ -1711,20 +1711,6 @@ private fun AppNavigation(
             )
         )
     }
-    var visualizationMode by remember {
-        mutableStateOf(
-            VisualizationMode.fromStorage(
-                prefs.getString(AppPreferenceKeys.VISUALIZATION_MODE, VisualizationMode.Off.storageValue)
-            )
-        )
-    }
-    var enabledVisualizationModes by remember {
-        mutableStateOf(
-            parseEnabledVisualizationModes(
-                prefs.getString(AppPreferenceKeys.VISUALIZATION_ENABLED_MODES, null)
-            )
-        )
-    }
     var visualizationShowDebugInfo by remember {
         mutableStateOf(
             prefs.getBoolean(
@@ -2273,21 +2259,6 @@ private fun AppNavigation(
                 runtimeDelegates.scheduleRecentTrackMetadataRefresh(sourceId, locationId)
             }
         }
-
-    LaunchedEffect(visualizationMode) {
-        prefs.edit()
-            .putString(AppPreferenceKeys.VISUALIZATION_MODE, visualizationMode.storageValue)
-            .apply()
-    }
-
-    LaunchedEffect(enabledVisualizationModes) {
-        prefs.edit()
-            .putString(
-                AppPreferenceKeys.VISUALIZATION_ENABLED_MODES,
-                serializeEnabledVisualizationModes(enabledVisualizationModes)
-            )
-            .apply()
-    }
 
     LaunchedEffect(recentPlayedFiles, recentFilesLimit) {
         runtimeDelegates.scheduleRecentPlayedMetadataBackfill()
@@ -3142,30 +3113,17 @@ private fun AppNavigation(
     val activeCoreNameForUi = lastUsedCoreName
     val currentCorePluginName = pluginNameForCoreName(activeCoreNameForUi)
     val canOpenCurrentCoreSettings = currentCorePluginName != null
-    LaunchedEffect(activeCoreNameForUi, currentCorePluginName, visualizationMode, isPlayerSurfaceVisible) {
-        if (currentCorePluginName != DecoderNames.LIB_SID_PLAY_FP &&
-            currentCorePluginName != DecoderNames.GAME_MUSIC_EMU &&
-            currentCorePluginName != DecoderNames.SC68) return@LaunchedEffect
-        val coreName = activeCoreNameForUi?.trim().takeIf { !it.isNullOrEmpty() } ?: return@LaunchedEffect
-        val channelScopeActive =
-            isPlayerSurfaceVisible && visualizationMode == VisualizationMode.ChannelScope
-        NativeBridge.setCoreOption(
-            coreName,
-            "visualization.channel_scope_active",
-            if (channelScopeActive) "true" else "false"
-        )
-    }
-    val visualizationCoordinator = rememberVisualizationModeCoordinator(
-        enabledModes = enabledVisualizationModes,
+    val visualizationUiState = rememberVisualizationUiState(
+        prefs = prefs,
         activeCoreName = activeCoreNameForUi,
-        currentMode = visualizationMode,
-        onModeChanged = { visualizationMode = it },
-        onEnabledModesChanged = { enabledVisualizationModes = it }
+        isPlayerSurfaceVisible = isPlayerSurfaceVisible
     )
-    val availableVisualizationModes = visualizationCoordinator.availableModes
-    val cycleVisualizationMode = visualizationCoordinator.onCycleMode
-    val setVisualizationMode = visualizationCoordinator.onSelectMode
-    val setEnabledVisualizationModes = visualizationCoordinator.onSetEnabledModes
+    val visualizationMode = visualizationUiState.mode
+    val enabledVisualizationModes = visualizationUiState.enabledModes
+    val availableVisualizationModes = visualizationUiState.availableModes
+    val cycleVisualizationMode = visualizationUiState.onCycleMode
+    val setVisualizationMode = visualizationUiState.onSelectMode
+    val setEnabledVisualizationModes = visualizationUiState.onSetEnabledModes
     val settingsNavigationCoordinator = buildSettingsNavigationCoordinator(
         currentView = currentView,
         settingsRoute = settingsRoute,
@@ -4099,8 +4057,8 @@ private fun AppNavigation(
                                 onEndFadeApplyToAllTracksChanged = { endFadeApplyToAllTracks = it },
                                 onEndFadeDurationMsChanged = { endFadeDurationMs = it },
                                 onEndFadeCurveChanged = { endFadeCurve = it },
-                                onVisualizationModeChanged = { visualizationMode = it },
-                                onEnabledVisualizationModesChanged = { enabledVisualizationModes = it },
+                                onVisualizationModeChanged = { setVisualizationMode(it) },
+                                onEnabledVisualizationModesChanged = { setEnabledVisualizationModes(it) },
                                 onVisualizationShowDebugInfoChanged = { visualizationShowDebugInfo = it },
                                 onVisualizationBarCountChanged = { visualizationBarCount = it },
                                 onVisualizationBarSmoothingPercentChanged = { visualizationBarSmoothingPercent = it },

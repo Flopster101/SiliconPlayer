@@ -46,6 +46,7 @@
 #include "emu68/ioplug68.h"
 #include "io68/io68.h"
 #include "io68/mwemul.h"
+#include "io68/paulaemul.h"
 #include "io68/ym_io.h"
 
 /* file68 includes */
@@ -69,6 +70,8 @@
 #endif
 
 #define MK4CC(A,B,C,D) (((int)(A)<<24)|((int)(B)<<16)|((int)(C)<<8)|((int)(D)))
+
+extern const u16 * ym_envelops[16];
 
 
 /* Bunch of constant use by sc68
@@ -239,6 +242,184 @@ struct _sc68_s {
   const char   * errstr;	 /**< Last error message.                */
   char		 errbuf[ERRMAX]; /**< For non-static error message.      */
 };
+
+static int sc68_scope_paula_is_right(const int voice)
+{
+  static const u32 msw = 0x1234u;
+  const int msw_first = !(*(const u8 *)&msw);
+  return (voice ^ (voice >> 1) ^ msw_first) & 1;
+}
+
+static unsigned int sc68_scope_ym_current_volume(const ym_t * const ym,
+                                                 const int voice)
+{
+  int value;
+  if (!ym || voice < 0 || voice > 2) {
+    return 0;
+  }
+
+  value = ym->reg.index[8 + voice] & 0x1F;
+  if (!(value & 0x10)) {
+    return (unsigned int)(((value & 0x0F) << 1) | 1);
+  }
+
+  if (ym->engine == YM_ENGINE_BLEP) {
+    return (unsigned int)((ym->emu.blep.env_output >> (voice * 5)) & 0x1F);
+  }
+
+  if (ym->engine == YM_ENGINE_PULS) {
+    const u16 * const waveform = ym_envelops[ym->reg.name.env_shape & 0x0F];
+    int env_index = ym->emu.puls.envel_idx;
+    if (env_index < 0) env_index = 0;
+    if (env_index > 95) env_index = 95;
+    return (unsigned int)((waveform[env_index] >> (voice * 5)) & 0x1F);
+  }
+
+  return 31u;
+}
+
+static void sc68_scope_fill_ym_channel(const sc68_t * const sc68,
+                                       sc68_scope_channel_t * const channel,
+                                       const int voice)
+{
+  const ym_t * const ym = sc68->ym;
+  const unsigned int raw_period =
+    (unsigned int)(
+      ym->reg.index[voice << 1]
+      | ((ym->reg.index[(voice << 1) + 1] & 0x0F) << 8)
+    );
+  const unsigned int raw_noise = (unsigned int)(ym->reg.name.per_noise & 0x1F);
+  const unsigned int tone_active =
+    ((ym->reg.name.ctl_mixer >> voice) & 1) ? 0u : 1u;
+  const unsigned int noise_active =
+    ((ym->reg.name.ctl_mixer >> (voice + 3)) & 1) ? 0u : 1u;
+  const unsigned int voice_active =
+    ((ym->voice_mute >> (voice * 5)) & 1) ? 1u : 0u;
+
+  memset(channel, 0, sizeof(*channel));
+  channel->kind = SC68_SCOPE_CHANNEL_YM;
+  channel->volume = sc68_scope_ym_current_volume(ym, voice);
+  channel->period =
+    ym->engine == YM_ENGINE_BLEP
+    ? (uint32_t)(((raw_period ? raw_period : 1u) << 3))
+    : (uint32_t)(raw_period ? raw_period : 1u);
+  channel->aux_period =
+    ym->engine == YM_ENGINE_BLEP
+    ? (uint32_t)(((raw_noise ? raw_noise : 1u) << 4))
+    : (uint32_t)(((raw_noise ? raw_noise : 1u) << 1));
+  channel->rate_hz =
+    (uint32_t)(
+      ym->engine == YM_ENGINE_BLEP
+      ? ym->clock
+      : (ym->clock >> 3)
+    );
+  channel->aux_rate_hz = channel->rate_hz;
+  channel->flags = 0;
+  if (voice_active && channel->volume > 0 && (tone_active || noise_active)) {
+    channel->flags |= SC68_SCOPE_FLAG_ACTIVE;
+  }
+  if (tone_active) {
+    channel->flags |= SC68_SCOPE_FLAG_TONE;
+  }
+  if (noise_active) {
+    channel->flags |= SC68_SCOPE_FLAG_NOISE;
+  }
+
+  if (ym->engine == YM_ENGINE_BLEP) {
+    channel->state = ym->emu.blep.tonegen[voice].flip_flop ? 1u : 0u;
+    channel->aux_state = ym->emu.blep.noise_output ? 1u : 0u;
+    channel->cursor = (uint64_t)ym->emu.blep.tonegen[voice].count;
+    channel->aux_cursor = (uint64_t)ym->emu.blep.noise_count;
+  } else {
+    switch (voice) {
+      case 0:
+        channel->state = (ym->emu.puls.levels & YM_OUT_MSK_A) ? 1u : 0u;
+        channel->cursor = (uint64_t)ym->emu.puls.voice_ctA;
+        break;
+      case 1:
+        channel->state = (ym->emu.puls.levels & YM_OUT_MSK_B) ? 1u : 0u;
+        channel->cursor = (uint64_t)ym->emu.puls.voice_ctB;
+        break;
+      default:
+        channel->state = (ym->emu.puls.levels & YM_OUT_MSK_C) ? 1u : 0u;
+        channel->cursor = (uint64_t)ym->emu.puls.voice_ctC;
+        break;
+    }
+    channel->aux_state = (ym->emu.puls.noise_bit & 1) ? 1u : 0u;
+    channel->aux_cursor = (uint64_t)ym->emu.puls.noise_ct;
+  }
+}
+
+static void sc68_scope_fill_ste_channel(const sc68_t * const sc68,
+                                        sc68_scope_channel_t * const channel)
+{
+  const mw_t * const mw = sc68->mw;
+  const mwct_t base = mw_counter_read(mw, MW_BASH);
+  const mwct_t end2 = mw_counter_read(mw, MW_ENDH);
+  const int mono = (mw->map[MW_MODE] >> 7) & 1;
+  const uint_t frq = 50066u >> ((mw->map[MW_MODE] & 3) ^ 3);
+  const mwct_t step =
+    ((mwct_t)frq << (mw->ct_fix + 1 - mono)) / mw->hz;
+
+  memset(channel, 0, sizeof(*channel));
+  channel->kind = SC68_SCOPE_CHANNEL_STE;
+  channel->flags = 0;
+  if (mw->map[MW_ACTI] & 1) {
+    channel->flags |= SC68_SCOPE_FLAG_ACTIVE;
+  }
+  if (mw->map[MW_ACTI] & 2) {
+    channel->flags |= SC68_SCOPE_FLAG_LOOP;
+  }
+  if (!mono) {
+    channel->flags |= SC68_SCOPE_FLAG_STEREO;
+  }
+  channel->volume = (mw->map[MW_ACTI] & 1) ? 32u : 0u;
+  channel->fixed_shift = (uint32_t)mw->ct_fix;
+  channel->cursor = (uint64_t)mw->ct;
+  channel->start = (uint64_t)base;
+  channel->end = (uint64_t)end2;
+  channel->loop_start = (uint64_t)base;
+  channel->loop_end = (uint64_t)end2;
+  channel->step = (uint64_t)step;
+  channel->memory = mw->mem;
+}
+
+static void sc68_scope_fill_paula_channel(const sc68_t * const sc68,
+                                          sc68_scope_channel_t * const channel,
+                                          const int voice)
+{
+  const paula_t * const paula = sc68->paula;
+  const paulav_t * const w = paula->voice + voice;
+  const u8 * const p = paula->map + PAULA_VOICE(voice);
+  const int pl_mask = paula->chansptr ? *paula->chansptr : 15;
+  const unsigned int enabled =
+    ((paula->dmacon >> 9) & ((pl_mask & paula->dmacon) >> voice) & 1) ? 1u : 0u;
+  const unsigned int period =
+    (unsigned int)(((p[6] << 8) + p[7]) ? ((p[6] << 8) + p[7]) : 1);
+  const unsigned int volume = p[9] >= 64 ? 64u : (unsigned int)p[9];
+
+  memset(channel, 0, sizeof(*channel));
+  channel->kind = SC68_SCOPE_CHANNEL_PAULA;
+  channel->flags = 0;
+  if (enabled && volume > 0 && w->end > w->adr) {
+    channel->flags |= SC68_SCOPE_FLAG_ACTIVE;
+  }
+  if (sc68_scope_paula_is_right(voice)) {
+    channel->flags |= SC68_SCOPE_FLAG_RIGHT;
+  } else {
+    channel->flags |= SC68_SCOPE_FLAG_LEFT;
+  }
+  channel->volume = volume;
+  channel->period = period;
+  channel->fixed_shift = (uint32_t)paula->ct_fix;
+  channel->cursor = (uint64_t)w->adr;
+  channel->start = (uint64_t)w->start;
+  channel->end = (uint64_t)w->end;
+  channel->loop_start = (uint64_t)w->start;
+  channel->loop_end = (uint64_t)w->end;
+  channel->step = (uint64_t)(paula->clkperspl / period);
+  channel->memory = paula->mem;
+}
 
 #ifndef DEBUG_SC68_O
 # ifndef DEBUG
@@ -2047,6 +2228,47 @@ int sc68_process(sc68_t * sc68, void * buf16st, int * _n)
     *_n -= n;
   }
   return ret;
+}
+
+int sc68_get_scope_snapshot(const sc68_t * sc68, sc68_scope_snapshot_t * scope)
+{
+  uint32_t channel_count = 0;
+
+  if (!scope) {
+    return -1;
+  }
+  memset(scope, 0, sizeof(*scope));
+
+  if (!sc68 || !sc68->mus) {
+    return -1;
+  }
+
+  scope->output_hz = (uint32_t)(sc68->mix.spr ? sc68->mix.spr : SPR_DEF);
+
+  if ((sc68->mus->hwflags & SC68_AGA) && sc68->paula) {
+    int i;
+    for (i = 0; i < 4 && channel_count < SC68_SCOPE_MAX_CHANNELS; ++i) {
+      sc68_scope_fill_paula_channel(sc68, &scope->channels[channel_count], i);
+      ++channel_count;
+    }
+  } else {
+    if ((sc68->mus->hwflags & SC68_PSG) && sc68->ym) {
+      int i;
+      for (i = 0; i < 3 && channel_count < SC68_SCOPE_MAX_CHANNELS; ++i) {
+        sc68_scope_fill_ym_channel(sc68, &scope->channels[channel_count], i);
+        ++channel_count;
+      }
+    }
+    if ((sc68->mus->hwflags & (SC68_DMA|SC68_LMC)) &&
+        sc68->mw &&
+        channel_count < SC68_SCOPE_MAX_CHANNELS) {
+      sc68_scope_fill_ste_channel(sc68, &scope->channels[channel_count]);
+      ++channel_count;
+    }
+  }
+
+  scope->channel_count = channel_count;
+  return channel_count ? (int)channel_count : -1;
 }
 
 int sc68_is_our_uri(const char * uri, const char *exts, int * is_remote)

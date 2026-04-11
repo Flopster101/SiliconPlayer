@@ -11,6 +11,8 @@
 #ifndef SC68_SC68_H
 #define SC68_SC68_H
 
+#include <stdint.h>
+
 #ifndef SC68_EXTERN
 # ifdef __cplusplus
 #  define SC68_EXTERN extern "C"
@@ -227,6 +229,62 @@ typedef struct {
 
 /** Alias type for sc68_music_info_t. */
 typedef sc68_music_info_t sc68_minfo_t;
+
+/**
+ * SC68 channel-scope helper.
+ *
+ *  This helper exposes enough live chip state for host applications to
+ *  synthesize per-channel scopes without depending on libsc68 private
+ *  internals.
+ */
+enum sc68_scope_channel_kind_e {
+  SC68_SCOPE_CHANNEL_NONE  = 0,
+  SC68_SCOPE_CHANNEL_YM    = 1,
+  SC68_SCOPE_CHANNEL_STE   = 2,
+  SC68_SCOPE_CHANNEL_PAULA = 3
+};
+
+enum sc68_scope_channel_flag_e {
+  SC68_SCOPE_FLAG_ACTIVE = 1 << 0,
+  SC68_SCOPE_FLAG_LEFT   = 1 << 1,
+  SC68_SCOPE_FLAG_RIGHT  = 1 << 2,
+  SC68_SCOPE_FLAG_TONE   = 1 << 3,
+  SC68_SCOPE_FLAG_NOISE  = 1 << 4,
+  SC68_SCOPE_FLAG_STEREO = 1 << 5,
+  SC68_SCOPE_FLAG_LOOP   = 1 << 6
+};
+
+enum {
+  SC68_SCOPE_MAX_CHANNELS = 8
+};
+
+typedef struct {
+  uint32_t kind;           /**< @ref sc68_scope_channel_kind_e.           */
+  uint32_t flags;          /**< @ref sc68_scope_channel_flag_e bitmask.   */
+  uint32_t volume;         /**< Current channel volume / amplitude hint.  */
+  uint32_t aux_volume;     /**< Optional secondary volume hint.           */
+  uint32_t period;         /**< Primary generator period / unit span.     */
+  uint32_t aux_period;     /**< Secondary generator period / unit span.   */
+  uint32_t rate_hz;        /**< Primary counter rate in Hz.               */
+  uint32_t aux_rate_hz;    /**< Secondary counter rate in Hz.             */
+  uint32_t fixed_shift;    /**< Fixed-point shift for cursor/step fields. */
+  uint32_t state;          /**< Primary generator state (layout-specific).*/
+  uint32_t aux_state;      /**< Secondary generator state.                */
+  uint64_t cursor;         /**< Primary cursor / counter position.        */
+  uint64_t aux_cursor;     /**< Secondary cursor / counter position.      */
+  uint64_t start;          /**< Current segment start.                    */
+  uint64_t end;            /**< Current segment end.                      */
+  uint64_t loop_start;     /**< Loop segment start.                       */
+  uint64_t loop_end;       /**< Loop segment end.                         */
+  uint64_t step;           /**< Fixed-point cursor step per output frame. */
+  const uint8_t * memory;  /**< Backing chip/sample memory when relevant. */
+} sc68_scope_channel_t;
+
+typedef struct {
+  uint32_t output_hz;      /**< Current output sampling rate.             */
+  uint32_t channel_count;  /**< Number of populated channels.             */
+  sc68_scope_channel_t channels[SC68_SCOPE_MAX_CHANNELS];
+} sc68_scope_snapshot_t;
 
 /**
  * Flags returned eturn codeby the sc68_process() functions.
@@ -663,6 +721,17 @@ SC68_API
  * @note   Can be safely call with null sc68 or if no disk has been loaded.
  */
 void sc68_close(sc68_t * sc68);
+
+SC68_API
+/**
+ * Snapshot current per-channel chip state for host visualizers.
+ *
+ * @param  sc68   sc68 instance
+ * @param  scope  Destination snapshot
+ *
+ * @return number of populated channels, or -1 on error/unavailable data
+ */
+int sc68_get_scope_snapshot(const sc68_t * sc68, sc68_scope_snapshot_t * scope);
 
 /**
  * @}

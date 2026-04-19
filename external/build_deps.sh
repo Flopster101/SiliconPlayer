@@ -1508,6 +1508,60 @@ build_libsidplayfp() {
 }
 
 # -----------------------------------------------------------------------------
+# Function: Build cRSID static library
+# -----------------------------------------------------------------------------
+build_crsid() {
+    local ABI=$1
+    echo "Building cRSID for $ABI..."
+
+    local INSTALL_DIR="$ABSOLUTE_PATH/../app/src/main/cpp/prebuilt/$ABI"
+    local PROJECT_PATH="$ABSOLUTE_PATH/cRSID"
+    local LIBCRSID_DIR="$PROJECT_PATH/libcRSID"
+    local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
+    local TARGET_CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang"
+    local CRSID_STAMP="$INSTALL_DIR/lib/.crsid_build_stamp"
+    local CRSID_STAMP_EXPECTED="api=$ANDROID_API;layout=v1"
+
+    if [ ! -d "$PROJECT_PATH" ]; then
+        echo "cRSID source not found at $PROJECT_PATH (skipping)."
+        return 0
+    fi
+
+    if [ ! -f "$LIBCRSID_DIR/libcRSID.c" ] || [ ! -f "$LIBCRSID_DIR/libcRSID.h" ] || \
+       [ ! -f "$LIBCRSID_DIR/Config.h" ] || [ ! -f "$LIBCRSID_DIR/Optimize.h" ]; then
+        echo "Error: cRSID library sources not found in $LIBCRSID_DIR."
+        return 1
+    fi
+
+    if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libcRSID.a" ] && \
+       [ -f "$INSTALL_DIR/include/crsid/libcRSID.h" ] && \
+       [ -f "$INSTALL_DIR/include/crsid/Config.h" ] && \
+       [ -f "$INSTALL_DIR/include/crsid/Optimize.h" ] && \
+       [ -f "$CRSID_STAMP" ] && \
+       [ "$(cat "$CRSID_STAMP" 2>/dev/null)" = "$CRSID_STAMP_EXPECTED" ]; then
+        echo "cRSID already built for $ABI -> skipping"
+        return 0
+    fi
+
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR" "$INSTALL_DIR/lib" "$INSTALL_DIR/include/crsid"
+
+    "$TARGET_CC" -c "$LIBCRSID_DIR/libcRSID.c" \
+        -o "$BUILD_DIR/libcRSID.o" \
+        -I"$LIBCRSID_DIR" \
+        -fPIC $DEP_OPT_FLAGS \
+        -DCRSID_LIBRARY
+
+    "$TOOLCHAIN/bin/llvm-ar" rcs "$INSTALL_DIR/lib/libcRSID.a" "$BUILD_DIR/libcRSID.o"
+    "$TOOLCHAIN/bin/llvm-ranlib" "$INSTALL_DIR/lib/libcRSID.a"
+
+    cp "$LIBCRSID_DIR/libcRSID.h" "$INSTALL_DIR/include/crsid/"
+    cp "$LIBCRSID_DIR/Config.h" "$INSTALL_DIR/include/crsid/"
+    cp "$LIBCRSID_DIR/Optimize.h" "$INSTALL_DIR/include/crsid/"
+    printf '%s\n' "$CRSID_STAMP_EXPECTED" > "$CRSID_STAMP"
+}
+
+# -----------------------------------------------------------------------------
 # Function: Build sc68 stack (unice68 + file68 + libsc68)
 # -----------------------------------------------------------------------------
 build_sc68() {
@@ -2489,9 +2543,9 @@ build_furnace() {
 usage() {
     echo "Usage: $0 <abi|all> <lib|all[,lib2,...]> [clean]"
     echo "  ABI: all, all_legacy, arm64-v8a, armeabi-v7a, x86_64 (x86 supported explicitly or via all_legacy)"
-    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, lazyusf2, psflib, vio2sf, fluidsynth, sc68, libbinio, adplug, libzakalwe, bencodetools, vasm, uade, hivelytracker, klystrack, furnace"
+    echo "  LIB: all, libsoxr, openssl, ffmpeg, libopenmpt, libvgm, libgme, libresid, libresidfp, libsidplayfp, crsid, lazyusf2, psflib, vio2sf, fluidsynth, sc68, libbinio, adplug, libzakalwe, bencodetools, vasm, uade, hivelytracker, klystrack, furnace"
     echo "  clean (optional): force rebuild (bypass already-built skip checks)"
-    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68, binio, libadplug, zakalwe, bencode, assembler/vasm, libuade, hvl/hively, kly/kt, fur"
+    echo "  Aliases: sox/soxr, gme, resid/residfp, sid/sidplayfp, crsid/cRSID/libcrsid, usf/lazyusf, psf, 2sf/twosf, fluid/libfluidsynth, libsc68, binio, libadplug, zakalwe, bencode, assembler/vasm, libuade, hvl/hively, kly/kt, fur"
 }
 
 if [ "$#" -eq 1 ]; then
@@ -2543,6 +2597,9 @@ normalize_lib_name() {
             ;;
         sid|sidplayfp)
             echo "libsidplayfp"
+            ;;
+        crsid|cRSID|libcrsid|libcRSID)
+            echo "crsid"
             ;;
         usf|lazyusf|lazyusf2)
             echo "lazyusf2"
@@ -2627,7 +2684,7 @@ is_valid_abi() {
 is_valid_lib() {
     local lib="$1"
     case "$lib" in
-        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|lazyusf2|psflib|vio2sf|fluidsynth|sc68|libbinio|adplug|libzakalwe|bencodetools|vasm|uade|hivelytracker|klystrack|furnace)
+        all|libsoxr|openssl|ffmpeg|libopenmpt|libvgm|libgme|libresid|libresidfp|libsidplayfp|crsid|lazyusf2|psflib|vio2sf|fluidsynth|sc68|libbinio|adplug|libzakalwe|bencodetools|vasm|uade|hivelytracker|klystrack|furnace)
             return 0
             ;;
         *)
@@ -2803,6 +2860,10 @@ for ABI in "${ABIS[@]}"; do
 
     if target_has_lib "libsidplayfp"; then
         build_libsidplayfp "$ABI"
+    fi
+
+    if target_has_lib "crsid"; then
+        build_crsid "$ABI"
     fi
 
     if target_has_lib "lazyusf2"; then

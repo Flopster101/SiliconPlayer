@@ -190,6 +190,13 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/furnace/extern/libs
     add_library(libresid STATIC IMPORTED)
     set_target_properties(libresid PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libresid.a")
 
+    set(HAS_CRSID_PREBUILT FALSE)
+    if (EXISTS "${PREBUILT_DIR}/lib/libcRSID.a")
+        add_library(libcRSID STATIC IMPORTED)
+        set_target_properties(libcRSID PROPERTIES IMPORTED_LOCATION "${PREBUILT_DIR}/lib/libcRSID.a")
+        set(HAS_CRSID_PREBUILT TRUE)
+    endif()
+
     set(HAS_OPENSSL_PREBUILT FALSE)
     if (EXISTS "${PREBUILT_DIR}/lib/libssl.a" AND EXISTS "${PREBUILT_DIR}/lib/libcrypto.a")
         add_library(libssl STATIC IMPORTED)
@@ -240,6 +247,10 @@ include_directories(${CMAKE_SOURCE_DIR}/../../../../external/furnace/extern/libs
             m # libbinio can require libm symbols on some toolchains
             ${dl-lib}
     )
+
+    if (HAS_CRSID_PREBUILT)
+        target_link_libraries(siliconplayer libcRSID)
+    endif()
 
     if (HAS_OPENSSL_PREBUILT)
         target_link_libraries(siliconplayer libssl libcrypto)

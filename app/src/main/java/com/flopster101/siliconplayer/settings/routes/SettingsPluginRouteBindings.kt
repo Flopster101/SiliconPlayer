@@ -10,6 +10,7 @@ internal fun SettingsScreenState.toPluginDetailRouteState(): PluginDetailRouteSt
         vgmPlaySampleRateHz = pluginCore.vgmPlaySampleRateHz,
         vgmPlayCapabilities = pluginCore.vgmPlayCapabilities,
         gmeSampleRateHz = pluginCore.gmeSampleRateHz,
+        crsidSampleRateHz = pluginCore.crsidSampleRateHz,
         sidPlayFpSampleRateHz = pluginCore.sidPlayFpSampleRateHz,
         lazyUsf2SampleRateHz = pluginCore.lazyUsf2SampleRateHz,
         adPlugSampleRateHz = pluginCore.adPlugSampleRateHz,
@@ -75,7 +76,9 @@ internal fun SettingsScreenState.toPluginDetailRouteState(): PluginDetailRouteSt
         furnaceC64Core = pluginCore.furnaceC64Core,
         furnaceGbQuality = pluginCore.furnaceGbQuality,
         furnaceDsidQuality = pluginCore.furnaceDsidQuality,
-        furnaceAyCore = pluginCore.furnaceAyCore
+        furnaceAyCore = pluginCore.furnaceAyCore,
+        crsidSidModelMode = pluginCore.crsidSidModelMode,
+        crsidQualityMode = pluginCore.crsidQualityMode
     )
 
 internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRouteActions =
@@ -87,6 +90,7 @@ internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRou
         onOpenMptSampleRateChanged = pluginCoreActions.onOpenMptSampleRateChanged,
         onVgmPlaySampleRateChanged = pluginCoreActions.onVgmPlaySampleRateChanged,
         onGmeSampleRateChanged = pluginCoreActions.onGmeSampleRateChanged,
+        onCrsidSampleRateChanged = pluginCoreActions.onCrsidSampleRateChanged,
         onSidPlayFpSampleRateChanged = pluginCoreActions.onSidPlayFpSampleRateChanged,
         onLazyUsf2SampleRateChanged = pluginCoreActions.onLazyUsf2SampleRateChanged,
         onAdPlugSampleRateChanged = pluginCoreActions.onAdPlugSampleRateChanged,
@@ -153,5 +157,7 @@ internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRou
         onFurnaceC64CoreChanged = pluginCoreActions.onFurnaceC64CoreChanged,
         onFurnaceGbQualityChanged = pluginCoreActions.onFurnaceGbQualityChanged,
         onFurnaceDsidQualityChanged = pluginCoreActions.onFurnaceDsidQualityChanged,
-        onFurnaceAyCoreChanged = pluginCoreActions.onFurnaceAyCoreChanged
+        onFurnaceAyCoreChanged = pluginCoreActions.onFurnaceAyCoreChanged,
+        onCrsidSidModelModeChanged = pluginCoreActions.onCrsidSidModelModeChanged,
+        onCrsidQualityModeChanged = pluginCoreActions.onCrsidQualityModeChanged
     )

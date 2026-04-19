@@ -107,8 +107,9 @@ internal fun TrackInfoCoreSections(
             if (metadata.vio2sf.comment.isNotBlank()) TrackInfoDetailsRow("Comment", metadata.vio2sf.comment)
         }
 
-        decoderName.equals(DecoderNames.LIB_SID_PLAY_FP, ignoreCase = true) -> {
-            TrackInfoSectionHeader(DecoderNames.LIB_SID_PLAY_FP)
+        decoderName.equals(DecoderNames.C_RSID, ignoreCase = true) ||
+            decoderName.equals(DecoderNames.LIB_SID_PLAY_FP, ignoreCase = true) -> {
+            TrackInfoSectionHeader(decoderName ?: DecoderNames.C_RSID)
             if (metadata.sid.backendName.isNotBlank()) TrackInfoDetailsRow("Engine", metadata.sid.backendName)
             if (metadata.sid.formatName.isNotBlank()) TrackInfoDetailsRow("Format name", metadata.sid.formatName)
             if (metadata.sid.clockName.isNotBlank()) TrackInfoDetailsRow("Declared clock", metadata.sid.clockName)
@@ -309,8 +310,9 @@ internal fun appendCoreTrackInfoCopyRows(
             if (metadata.vio2sf.comment.isNotBlank()) row("Comment", metadata.vio2sf.comment)
         }
 
-        decoderName.equals(DecoderNames.LIB_SID_PLAY_FP, ignoreCase = true) -> {
-            builder.append('\n').append("[LibSIDPlayFP]").append('\n')
+        decoderName.equals(DecoderNames.C_RSID, ignoreCase = true) ||
+            decoderName.equals(DecoderNames.LIB_SID_PLAY_FP, ignoreCase = true) -> {
+            builder.append('\n').append('[').append(decoderName ?: DecoderNames.C_RSID).append(']').append('\n')
             if (metadata.sid.backendName.isNotBlank()) row("Engine", metadata.sid.backendName)
             if (metadata.sid.formatName.isNotBlank()) row("Format name", metadata.sid.formatName)
             if (metadata.sid.clockName.isNotBlank()) row("Declared clock", metadata.sid.clockName)

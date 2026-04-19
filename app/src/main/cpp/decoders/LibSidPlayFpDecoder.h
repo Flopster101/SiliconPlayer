@@ -3,6 +3,7 @@
 
 #include "../ChannelScopeSharedState.h"
 #include "AudioDecoder.h"
+#include "SidMetadataProvider.h"
 #include <sidplayfp/SidConfig.h>
 #include <atomic>
 #include <condition_variable>
@@ -35,7 +36,7 @@ enum class SidModelMode {
     Mos8580
 };
 
-class LibSidPlayFpDecoder : public AudioDecoder {
+class LibSidPlayFpDecoder : public AudioDecoder, public SidMetadataProvider {
 public:
     LibSidPlayFpDecoder();
     ~LibSidPlayFpDecoder() override;
@@ -60,16 +61,16 @@ public:
     std::string getArtist() override;
     std::string getComposer() override;
     std::string getGenre() override;
-    std::string getSidFormatName();
-    std::string getSidClockName();
-    std::string getSidSpeedName();
-    std::string getSidCompatibilityName();
-    std::string getSidBackendName();
-    int getSidChipCountInfo();
-    std::string getSidModelSummary();
-    std::string getSidCurrentModelSummary();
-    std::string getSidBaseAddressSummary();
-    std::string getSidCommentSummary();
+    std::string getSidFormatName() override;
+    std::string getSidClockName() override;
+    std::string getSidSpeedName() override;
+    std::string getSidCompatibilityName() override;
+    std::string getSidBackendName() override;
+    int getSidChipCountInfo() override;
+    std::string getSidModelSummary() override;
+    std::string getSidCurrentModelSummary() override;
+    std::string getSidBaseAddressSummary() override;
+    std::string getSidCommentSummary() override;
     std::vector<std::string> getToggleChannelNames() override;
     void setToggleChannelMuted(int channelIndex, bool enabled) override;
     bool getToggleChannelMuted(int channelIndex) const override;

@@ -5,6 +5,7 @@
 #include "decoders/VGMDecoder.h"
 #include "decoders/GmeDecoder.h"
 #include "decoders/LibSidPlayFpDecoder.h"
+#include "decoders/SidMetadataProvider.h"
 #include "decoders/LazyUsf2Decoder.h"
 #include "decoders/Vio2sfDecoder.h"
 #include "decoders/Sc68Decoder.h"
@@ -620,70 +621,70 @@ std::string AudioEngine::getVio2sfFadeTag() {
 std::string AudioEngine::getSidFormatName() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";
-    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    auto* sidDecoder = dynamic_cast<SidMetadataProvider*>(decoder.get());
     return sidDecoder ? sidDecoder->getSidFormatName() : "";
 }
 
 std::string AudioEngine::getSidClockName() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";
-    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    auto* sidDecoder = dynamic_cast<SidMetadataProvider*>(decoder.get());
     return sidDecoder ? sidDecoder->getSidClockName() : "";
 }
 
 std::string AudioEngine::getSidSpeedName() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";
-    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    auto* sidDecoder = dynamic_cast<SidMetadataProvider*>(decoder.get());
     return sidDecoder ? sidDecoder->getSidSpeedName() : "";
 }
 
 std::string AudioEngine::getSidCompatibilityName() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";
-    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    auto* sidDecoder = dynamic_cast<SidMetadataProvider*>(decoder.get());
     return sidDecoder ? sidDecoder->getSidCompatibilityName() : "";
 }
 
 std::string AudioEngine::getSidBackendName() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";
-    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    auto* sidDecoder = dynamic_cast<SidMetadataProvider*>(decoder.get());
     return sidDecoder ? sidDecoder->getSidBackendName() : "";
 }
 
 int AudioEngine::getSidChipCount() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return 0;
-    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    auto* sidDecoder = dynamic_cast<SidMetadataProvider*>(decoder.get());
     return sidDecoder ? sidDecoder->getSidChipCountInfo() : 0;
 }
 
 std::string AudioEngine::getSidModelSummary() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";
-    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    auto* sidDecoder = dynamic_cast<SidMetadataProvider*>(decoder.get());
     return sidDecoder ? sidDecoder->getSidModelSummary() : "";
 }
 
 std::string AudioEngine::getSidCurrentModelSummary() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";
-    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    auto* sidDecoder = dynamic_cast<SidMetadataProvider*>(decoder.get());
     return sidDecoder ? sidDecoder->getSidCurrentModelSummary() : "";
 }
 
 std::string AudioEngine::getSidBaseAddressSummary() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";
-    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    auto* sidDecoder = dynamic_cast<SidMetadataProvider*>(decoder.get());
     return sidDecoder ? sidDecoder->getSidBaseAddressSummary() : "";
 }
 
 std::string AudioEngine::getSidCommentSummary() {
     std::lock_guard<std::mutex> lock(decoderMutex);
     if (!decoder) return "";
-    auto* sidDecoder = dynamic_cast<LibSidPlayFpDecoder*>(decoder.get());
+    auto* sidDecoder = dynamic_cast<SidMetadataProvider*>(decoder.get());
     return sidDecoder ? sidDecoder->getSidCommentSummary() : "";
 }
 

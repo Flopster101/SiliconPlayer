@@ -6,6 +6,7 @@ object CorePreferenceKeys {
     const val CORE_RATE_OPENMPT = "core_rate_openmpt"
     const val CORE_RATE_VGMPLAY = "core_rate_vgmplay"
     const val CORE_RATE_GME = "core_rate_gme"
+    const val CORE_RATE_CRSID = "core_rate_crsid"
     const val CORE_RATE_SIDPLAYFP = "core_rate_sidplayfp"
     const val CORE_RATE_LAZYUSF2 = "core_rate_lazyusf2"
     const val CORE_RATE_ADPLUG = "core_rate_adplug"
@@ -39,6 +40,8 @@ object CorePreferenceKeys {
     const val GME_SPC_USE_BUILTIN_FADE = "gme_spc_use_builtin_fade"
     const val GME_SPC_INTERPOLATION = "gme_spc_interpolation"
     const val GME_SPC_USE_NATIVE_SAMPLE_RATE = "gme_spc_use_native_sample_rate"
+    const val CRSID_SID_MODEL_MODE = "crsid_sid_model_mode"
+    const val CRSID_QUALITY_MODE = "crsid_quality_mode"
     const val SIDPLAYFP_BACKEND = "sidplayfp_backend"
     const val SIDPLAYFP_CLOCK_MODE = "sidplayfp_clock_mode"
     const val SIDPLAYFP_SID_MODEL_MODE = "sidplayfp_sid_model_mode"
@@ -115,6 +118,12 @@ object GmeDefaults {
     const val spcInterpolation = 0
     const val spcUseNativeSampleRate = true
     const val unknownDurationSeconds = 180
+}
+
+object CrsidDefaults {
+    const val coreSampleRateHz = 0
+    const val sidModelMode = 0 // 0 Auto, 1 MOS6581, 2 MOS8580
+    const val qualityMode = 1 // 0 Light, 1 High, 2 Sinc
 }
 
 object SidPlayFpDefaults {

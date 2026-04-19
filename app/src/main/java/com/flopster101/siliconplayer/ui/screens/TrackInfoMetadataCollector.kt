@@ -326,7 +326,8 @@ private fun queryTrackInfoLiveMetadata(decoderName: String?): TrackInfoLiveMetad
             )
         )
 
-        decoderName.equals(DecoderNames.LIB_SID_PLAY_FP, ignoreCase = true) -> common.copy(
+        decoderName.equals(DecoderNames.C_RSID, ignoreCase = true) ||
+            decoderName.equals(DecoderNames.LIB_SID_PLAY_FP, ignoreCase = true) -> common.copy(
             sid = SidMetadata(
                 formatName = NativeBridge.getSidFormatName(),
                 clockName = NativeBridge.getSidClockName(),

@@ -38,6 +38,7 @@ add_library(
         decoders/LibOpenMPTDecoder.cpp
         decoders/VGMDecoder.cpp
         decoders/GmeDecoder.cpp
+        decoders/CRSIDDecoder.cpp
         decoders/LibSidPlayFpDecoder.cpp
         decoders/LazyUsf2Decoder.cpp
         decoders/Vio2sfDecoder.cpp

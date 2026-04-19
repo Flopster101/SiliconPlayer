@@ -5,6 +5,7 @@ internal object DecoderNames {
     const val LIB_OPEN_MPT = "LibOpenMPT"
     const val VGM_PLAY = "VGMPlay"
     const val GAME_MUSIC_EMU = "Game Music Emu"
+    const val C_RSID = "cRSID"
     const val LIB_SID_PLAY_FP = "LibSIDPlayFP"
     const val LAZY_USF2 = "LazyUSF2"
     const val VIO2_SF = "Vio2SF"
@@ -18,6 +19,7 @@ internal object DecoderNames {
     val trackedFileDecoders: Set<String> = setOf(
         LIB_OPEN_MPT,
         VGM_PLAY,
+        C_RSID,
         LIB_SID_PLAY_FP,
         SC68,
         AD_PLUG,
@@ -40,7 +42,8 @@ internal fun canonicalDecoderNameForAlias(coreName: String?): String? {
         "libopenmpt", "openmpt" -> DecoderNames.LIB_OPEN_MPT
         "vgmplay" -> DecoderNames.VGM_PLAY
         "game music emu", "libgme", "gme" -> DecoderNames.GAME_MUSIC_EMU
-        "libsidplayfp", "sidplayfp", "sid" -> DecoderNames.LIB_SID_PLAY_FP
+        "crsid", "c-rsid", "c rsid", "sid" -> DecoderNames.C_RSID
+        "libsidplayfp", "sidplayfp" -> DecoderNames.LIB_SID_PLAY_FP
         "lazyusf2", "lazyusf", "usf" -> DecoderNames.LAZY_USF2
         "vio2sf", "2sf", "mini2sf" -> DecoderNames.VIO2_SF
         "sc68", "sndh" -> DecoderNames.SC68

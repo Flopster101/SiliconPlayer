@@ -20,6 +20,7 @@ internal data class AppNavigationSettingsStates(
     val openMptCoreSampleRateHz: MutableIntState,
     val vgmPlayCoreSampleRateHz: MutableIntState,
     val gmeCoreSampleRateHz: MutableIntState,
+    val crsidCoreSampleRateHz: MutableIntState,
     val sidPlayFpCoreSampleRateHz: MutableIntState,
     val lazyUsf2CoreSampleRateHz: MutableIntState,
     val adPlugCoreSampleRateHz: MutableIntState,
@@ -51,6 +52,8 @@ internal data class AppNavigationSettingsStates(
     val furnaceGbQuality: MutableIntState,
     val furnaceDsidQuality: MutableIntState,
     val furnaceAyCore: MutableIntState,
+    val crsidSidModelMode: MutableIntState,
+    val crsidQualityMode: MutableIntState,
     val sidPlayFpBackend: MutableIntState,
     val sidPlayFpClockMode: MutableIntState,
     val sidPlayFpSidModelMode: MutableIntState,
@@ -139,6 +142,9 @@ internal fun rememberAppNavigationSettingsStates(
     }
     val gmeCoreSampleRateHz = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CORE_RATE_GME, GmeDefaults.coreSampleRateHz))
+    }
+    val crsidCoreSampleRateHz = remember {
+        mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CORE_RATE_CRSID, CrsidDefaults.coreSampleRateHz))
     }
     val sidPlayFpCoreSampleRateHz = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CORE_RATE_SIDPLAYFP, SidPlayFpDefaults.coreSampleRateHz))
@@ -302,6 +308,12 @@ internal fun rememberAppNavigationSettingsStates(
                 FurnaceDefaults.ayCore
             )
         )
+    }
+    val crsidSidModelMode = remember {
+        mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CRSID_SID_MODEL_MODE, CrsidDefaults.sidModelMode))
+    }
+    val crsidQualityMode = remember {
+        mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CRSID_QUALITY_MODE, CrsidDefaults.qualityMode))
     }
     val sidPlayFpBackend = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.SIDPLAYFP_BACKEND, SidPlayFpDefaults.backend))
@@ -571,6 +583,7 @@ internal fun rememberAppNavigationSettingsStates(
         openMptCoreSampleRateHz = openMptCoreSampleRateHz,
         vgmPlayCoreSampleRateHz = vgmPlayCoreSampleRateHz,
         gmeCoreSampleRateHz = gmeCoreSampleRateHz,
+        crsidCoreSampleRateHz = crsidCoreSampleRateHz,
         sidPlayFpCoreSampleRateHz = sidPlayFpCoreSampleRateHz,
         lazyUsf2CoreSampleRateHz = lazyUsf2CoreSampleRateHz,
         adPlugCoreSampleRateHz = adPlugCoreSampleRateHz,
@@ -602,6 +615,8 @@ internal fun rememberAppNavigationSettingsStates(
         furnaceGbQuality = furnaceGbQuality,
         furnaceDsidQuality = furnaceDsidQuality,
         furnaceAyCore = furnaceAyCore,
+        crsidSidModelMode = crsidSidModelMode,
+        crsidQualityMode = crsidQualityMode,
         sidPlayFpBackend = sidPlayFpBackend,
         sidPlayFpClockMode = sidPlayFpClockMode,
         sidPlayFpSidModelMode = sidPlayFpSidModelMode,

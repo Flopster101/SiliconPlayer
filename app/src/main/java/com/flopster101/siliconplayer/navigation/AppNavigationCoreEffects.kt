@@ -13,6 +13,7 @@ internal fun AppNavigationCoreEffects(
     openMptCoreSampleRateHz: Int,
     vgmPlayCoreSampleRateHz: Int,
     gmeCoreSampleRateHz: Int,
+    crsidCoreSampleRateHz: Int,
     sidPlayFpCoreSampleRateHz: Int,
     lazyUsf2CoreSampleRateHz: Int,
     adPlugCoreSampleRateHz: Int,
@@ -44,6 +45,8 @@ internal fun AppNavigationCoreEffects(
     furnaceGbQuality: Int,
     furnaceDsidQuality: Int,
     furnaceAyCore: Int,
+    crsidSidModelMode: Int,
+    crsidQualityMode: Int,
     sidPlayFpBackend: Int,
     sidPlayFpClockMode: Int,
     sidPlayFpSidModelMode: Int,
@@ -128,6 +131,12 @@ internal fun AppNavigationCoreEffects(
     LaunchedEffect(gmeCoreSampleRateHz) {
         prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_GME, gmeCoreSampleRateHz).apply()
         NativeBridge.setCoreOutputSampleRate(DecoderNames.GAME_MUSIC_EMU, gmeCoreSampleRateHz)
+    }
+
+    LaunchedEffect(crsidCoreSampleRateHz) {
+        val normalized = if (crsidCoreSampleRateHz <= 0) 0 else crsidCoreSampleRateHz
+        prefs.edit().putInt(CorePreferenceKeys.CORE_RATE_CRSID, normalized).apply()
+        NativeBridge.setCoreOutputSampleRate(DecoderNames.C_RSID, normalized)
     }
 
     LaunchedEffect(sidPlayFpCoreSampleRateHz) {
@@ -466,6 +475,30 @@ internal fun AppNavigationCoreEffects(
         )
     }
 
+    LaunchedEffect(crsidSidModelMode) {
+        val normalized = crsidSidModelMode.coerceIn(0, 2)
+        prefs.edit().putInt(CorePreferenceKeys.CRSID_SID_MODEL_MODE, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = DecoderNames.C_RSID,
+            optionName = CrsidOptionKeys.SID_MODEL_MODE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "SID model"
+        )
+    }
+
+    LaunchedEffect(crsidQualityMode) {
+        val normalized = crsidQualityMode.coerceIn(0, 2)
+        prefs.edit().putInt(CorePreferenceKeys.CRSID_QUALITY_MODE, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = DecoderNames.C_RSID,
+            optionName = CrsidOptionKeys.QUALITY_MODE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Emulation quality"
+        )
+    }
+
     LaunchedEffect(sidPlayFpBackend) {
         val normalized = sidPlayFpBackend.coerceIn(0, 2)
         prefs.edit().putInt(CorePreferenceKeys.SIDPLAYFP_BACKEND, normalized).apply()
@@ -720,6 +753,13 @@ internal fun AppNavigationCoreEffects(
             optionLabel = "Unknown track duration"
         )
         applyCoreOptionWithPolicy(
+            coreName = DecoderNames.C_RSID,
+            optionName = CrsidOptionKeys.UNKNOWN_DURATION_SECONDS,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.Live,
+            optionLabel = "Unknown track duration"
+        )
+        applyCoreOptionWithPolicy(
             coreName = DecoderNames.UADE,
             optionName = UadeOptionKeys.UNKNOWN_DURATION_SECONDS,
             optionValue = normalized.toString(),
@@ -936,6 +976,7 @@ internal fun AppNavigationCoreEffectsFromSettingsStates(
         openMptCoreSampleRateHz = settingsStates.openMptCoreSampleRateHz.intValue,
         vgmPlayCoreSampleRateHz = settingsStates.vgmPlayCoreSampleRateHz.intValue,
         gmeCoreSampleRateHz = settingsStates.gmeCoreSampleRateHz.intValue,
+        crsidCoreSampleRateHz = settingsStates.crsidCoreSampleRateHz.intValue,
         sidPlayFpCoreSampleRateHz = settingsStates.sidPlayFpCoreSampleRateHz.intValue,
         lazyUsf2CoreSampleRateHz = settingsStates.lazyUsf2CoreSampleRateHz.intValue,
         adPlugCoreSampleRateHz = settingsStates.adPlugCoreSampleRateHz.intValue,
@@ -967,6 +1008,8 @@ internal fun AppNavigationCoreEffectsFromSettingsStates(
         furnaceGbQuality = settingsStates.furnaceGbQuality.intValue,
         furnaceDsidQuality = settingsStates.furnaceDsidQuality.intValue,
         furnaceAyCore = settingsStates.furnaceAyCore.intValue,
+        crsidSidModelMode = settingsStates.crsidSidModelMode.intValue,
+        crsidQualityMode = settingsStates.crsidQualityMode.intValue,
         sidPlayFpBackend = settingsStates.sidPlayFpBackend.intValue,
         sidPlayFpClockMode = settingsStates.sidPlayFpClockMode.intValue,
         sidPlayFpSidModelMode = settingsStates.sidPlayFpSidModelMode.intValue,

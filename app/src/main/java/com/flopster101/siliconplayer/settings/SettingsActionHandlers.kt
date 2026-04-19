@@ -707,6 +707,7 @@ internal fun clearAllSettingsAction(
     openMptCoreSampleRateHz: Int,
     vgmPlayCoreSampleRateHz: Int,
     gmeCoreSampleRateHz: Int,
+    crsidCoreSampleRateHz: Int,
     sidPlayFpCoreSampleRateHz: Int,
     lazyUsf2CoreSampleRateHz: Int,
     adPlugCoreSampleRateHz: Int,
@@ -773,6 +774,8 @@ internal fun clearAllSettingsAction(
     furnaceGbQuality: Int,
     furnaceDsidQuality: Int,
     furnaceAyCore: Int,
+    crsidSidModelMode: Int,
+    crsidQualityMode: Int,
     vgmPlayChipCoreSelections: Map<String, Int>,
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
@@ -864,6 +867,7 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.CORE_RATE_OPENMPT to openMptCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_VGMPLAY to vgmPlayCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_GME to gmeCoreSampleRateHz,
+        CorePreferenceKeys.CORE_RATE_CRSID to crsidCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_SIDPLAYFP to sidPlayFpCoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_LAZYUSF2 to lazyUsf2CoreSampleRateHz,
         CorePreferenceKeys.CORE_RATE_ADPLUG to adPlugCoreSampleRateHz,
@@ -891,6 +895,8 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.FURNACE_GB_QUALITY to furnaceGbQuality,
         CorePreferenceKeys.FURNACE_DSID_QUALITY to furnaceDsidQuality,
         CorePreferenceKeys.FURNACE_AY_CORE to furnaceAyCore,
+        CorePreferenceKeys.CRSID_SID_MODEL_MODE to crsidSidModelMode,
+        CorePreferenceKeys.CRSID_QUALITY_MODE to crsidQualityMode,
         CorePreferenceKeys.VGMPLAY_LOOP_COUNT to vgmPlayLoopCount,
         CorePreferenceKeys.VGMPLAY_VSYNC_RATE to vgmPlayVsyncRate,
         CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE to vgmPlayResampleMode,
@@ -1057,6 +1063,7 @@ internal fun clearAllPluginSettingsAction(
     onOpenMptCoreSampleRateHzChanged: (Int) -> Unit,
     onVgmPlayCoreSampleRateHzChanged: (Int) -> Unit,
     onGmeCoreSampleRateHzChanged: (Int) -> Unit,
+    onCrsidCoreSampleRateHzChanged: (Int) -> Unit,
     onSidPlayFpCoreSampleRateHzChanged: (Int) -> Unit,
     onLazyUsf2CoreSampleRateHzChanged: (Int) -> Unit,
     onAdPlugCoreSampleRateHzChanged: (Int) -> Unit,
@@ -1088,6 +1095,8 @@ internal fun clearAllPluginSettingsAction(
     onFurnaceGbQualityChanged: (Int) -> Unit,
     onFurnaceDsidQualityChanged: (Int) -> Unit,
     onFurnaceAyCoreChanged: (Int) -> Unit,
+    onCrsidSidModelModeChanged: (Int) -> Unit,
+    onCrsidQualityModeChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
     onSidPlayFpSidModelModeChanged: (Int) -> Unit,
@@ -1130,6 +1139,7 @@ internal fun clearAllPluginSettingsAction(
     onOpenMptCoreSampleRateHzChanged(OpenMptDefaults.coreSampleRateHz)
     onVgmPlayCoreSampleRateHzChanged(VgmPlayDefaults.coreSampleRateHz)
     onGmeCoreSampleRateHzChanged(GmeDefaults.coreSampleRateHz)
+    onCrsidCoreSampleRateHzChanged(CrsidDefaults.coreSampleRateHz)
     onSidPlayFpCoreSampleRateHzChanged(SidPlayFpDefaults.coreSampleRateHz)
     onLazyUsf2CoreSampleRateHzChanged(LazyUsf2Defaults.coreSampleRateHz)
     onAdPlugCoreSampleRateHzChanged(AdPlugDefaults.coreSampleRateHz)
@@ -1161,6 +1171,8 @@ internal fun clearAllPluginSettingsAction(
     onFurnaceGbQualityChanged(FurnaceDefaults.gbQuality)
     onFurnaceDsidQualityChanged(FurnaceDefaults.dsidQuality)
     onFurnaceAyCoreChanged(FurnaceDefaults.ayCore)
+    onCrsidSidModelModeChanged(CrsidDefaults.sidModelMode)
+    onCrsidQualityModeChanged(CrsidDefaults.qualityMode)
     onSidPlayFpBackendChanged(SidPlayFpDefaults.backend)
     onSidPlayFpClockModeChanged(SidPlayFpDefaults.clockMode)
     onSidPlayFpSidModelModeChanged(SidPlayFpDefaults.sidModelMode)
@@ -1204,6 +1216,7 @@ internal fun clearAllPluginSettingsAction(
         remove(CorePreferenceKeys.CORE_RATE_OPENMPT)
         remove(CorePreferenceKeys.CORE_RATE_VGMPLAY)
         remove(CorePreferenceKeys.CORE_RATE_GME)
+        remove(CorePreferenceKeys.CORE_RATE_CRSID)
         remove(CorePreferenceKeys.CORE_RATE_SIDPLAYFP)
         remove(CorePreferenceKeys.CORE_RATE_LAZYUSF2)
         remove(CorePreferenceKeys.CORE_RATE_ADPLUG)
@@ -1235,6 +1248,8 @@ internal fun clearAllPluginSettingsAction(
         remove(CorePreferenceKeys.FURNACE_GB_QUALITY)
         remove(CorePreferenceKeys.FURNACE_DSID_QUALITY)
         remove(CorePreferenceKeys.FURNACE_AY_CORE)
+        remove(CorePreferenceKeys.CRSID_SID_MODEL_MODE)
+        remove(CorePreferenceKeys.CRSID_QUALITY_MODE)
         remove(CorePreferenceKeys.SIDPLAYFP_BACKEND)
         remove(CorePreferenceKeys.SIDPLAYFP_CLOCK_MODE)
         remove(CorePreferenceKeys.SIDPLAYFP_SID_MODEL_MODE)
@@ -1343,6 +1358,9 @@ internal fun resetPluginSettingsAction(
     onFurnaceGbQualityChanged: (Int) -> Unit,
     onFurnaceDsidQualityChanged: (Int) -> Unit,
     onFurnaceAyCoreChanged: (Int) -> Unit,
+    onCrsidCoreSampleRateHzChanged: (Int) -> Unit,
+    onCrsidSidModelModeChanged: (Int) -> Unit,
+    onCrsidQualityModeChanged: (Int) -> Unit,
     onSidPlayFpCoreSampleRateHzChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
@@ -1395,6 +1413,11 @@ internal fun resetPluginSettingsAction(
             GmeOptionKeys.SPC_USE_BUILTIN_FADE,
             GmeOptionKeys.SPC_INTERPOLATION,
             GmeOptionKeys.SPC_USE_NATIVE_SAMPLE_RATE
+        )
+
+        DecoderNames.C_RSID -> listOf(
+            CrsidOptionKeys.SID_MODEL_MODE,
+            CrsidOptionKeys.QUALITY_MODE
         )
 
         DecoderNames.LIB_SID_PLAY_FP -> listOf(
@@ -1545,6 +1568,18 @@ internal fun resetPluginSettingsAction(
                 remove(CorePreferenceKeys.GME_SPC_USE_BUILTIN_FADE)
                 remove(CorePreferenceKeys.GME_SPC_INTERPOLATION)
                 remove(CorePreferenceKeys.GME_SPC_USE_NATIVE_SAMPLE_RATE)
+                apply()
+            }
+        }
+
+        DecoderNames.C_RSID -> {
+            onCrsidCoreSampleRateHzChanged(CrsidDefaults.coreSampleRateHz)
+            onCrsidSidModelModeChanged(CrsidDefaults.sidModelMode)
+            onCrsidQualityModeChanged(CrsidDefaults.qualityMode)
+            prefs.edit().apply {
+                remove(CorePreferenceKeys.CORE_RATE_CRSID)
+                remove(CorePreferenceKeys.CRSID_SID_MODEL_MODE)
+                remove(CorePreferenceKeys.CRSID_QUALITY_MODE)
                 apply()
             }
         }

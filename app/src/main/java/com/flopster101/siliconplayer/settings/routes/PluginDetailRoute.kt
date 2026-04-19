@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.flopster101.siliconplayer.pluginsettings.AdPlugSettings
+import com.flopster101.siliconplayer.pluginsettings.CrsidSettings
 import com.flopster101.siliconplayer.pluginsettings.FfmpegSettings
 import com.flopster101.siliconplayer.pluginsettings.FurnaceSettings
 import com.flopster101.siliconplayer.pluginsettings.GmeSettings
@@ -38,6 +39,7 @@ internal data class PluginDetailRouteState(
     val vgmPlaySampleRateHz: Int,
     val vgmPlayCapabilities: Int,
     val gmeSampleRateHz: Int,
+    val crsidSampleRateHz: Int,
     val sidPlayFpSampleRateHz: Int,
     val lazyUsf2SampleRateHz: Int,
     val adPlugSampleRateHz: Int,
@@ -103,7 +105,9 @@ internal data class PluginDetailRouteState(
     val furnaceC64Core: Int,
     val furnaceGbQuality: Int,
     val furnaceDsidQuality: Int,
-    val furnaceAyCore: Int
+    val furnaceAyCore: Int,
+    val crsidSidModelMode: Int,
+    val crsidQualityMode: Int
 )
 
 internal data class PluginDetailRouteActions(
@@ -114,6 +118,7 @@ internal data class PluginDetailRouteActions(
     val onOpenMptSampleRateChanged: (Int) -> Unit,
     val onVgmPlaySampleRateChanged: (Int) -> Unit,
     val onGmeSampleRateChanged: (Int) -> Unit,
+    val onCrsidSampleRateChanged: (Int) -> Unit,
     val onSidPlayFpSampleRateChanged: (Int) -> Unit,
     val onLazyUsf2SampleRateChanged: (Int) -> Unit,
     val onAdPlugSampleRateChanged: (Int) -> Unit,
@@ -180,7 +185,9 @@ internal data class PluginDetailRouteActions(
     val onFurnaceC64CoreChanged: (Int) -> Unit,
     val onFurnaceGbQualityChanged: (Int) -> Unit,
     val onFurnaceDsidQualityChanged: (Int) -> Unit,
-    val onFurnaceAyCoreChanged: (Int) -> Unit
+    val onFurnaceAyCoreChanged: (Int) -> Unit,
+    val onCrsidSidModelModeChanged: (Int) -> Unit,
+    val onCrsidQualityModeChanged: (Int) -> Unit
 )
 
 @Composable
@@ -255,6 +262,7 @@ internal fun PluginDetailRouteContent(
         DecoderNames.LIB_OPEN_MPT -> state.openMptSampleRateHz
         DecoderNames.VGM_PLAY -> state.vgmPlaySampleRateHz
         DecoderNames.GAME_MUSIC_EMU -> state.gmeSampleRateHz
+        DecoderNames.C_RSID -> state.crsidSampleRateHz
         DecoderNames.LIB_SID_PLAY_FP -> state.sidPlayFpSampleRateHz
         DecoderNames.LAZY_USF2 -> state.lazyUsf2SampleRateHz
         DecoderNames.AD_PLUG -> state.adPlugSampleRateHz
@@ -270,6 +278,7 @@ internal fun PluginDetailRouteContent(
         DecoderNames.LIB_OPEN_MPT -> actions.onOpenMptSampleRateChanged
         DecoderNames.VGM_PLAY -> actions.onVgmPlaySampleRateChanged
         DecoderNames.GAME_MUSIC_EMU -> actions.onGmeSampleRateChanged
+        DecoderNames.C_RSID -> actions.onCrsidSampleRateChanged
         DecoderNames.LIB_SID_PLAY_FP -> actions.onSidPlayFpSampleRateChanged
         DecoderNames.LAZY_USF2 -> actions.onLazyUsf2SampleRateChanged
         DecoderNames.AD_PLUG -> actions.onAdPlugSampleRateChanged
@@ -373,6 +382,13 @@ internal fun PluginDetailRouteContent(
             onSpcUseBuiltInFadeChanged = actions.onGmeSpcUseBuiltInFadeChanged,
             onSpcInterpolationChanged = actions.onGmeSpcInterpolationChanged,
             onSpcUseNativeSampleRateChanged = actions.onGmeSpcUseNativeSampleRateChanged
+        )
+
+        DecoderNames.C_RSID -> CrsidSettings(
+            sidModelMode = state.crsidSidModelMode,
+            qualityMode = state.crsidQualityMode,
+            onSidModelModeChanged = actions.onCrsidSidModelModeChanged,
+            onQualityModeChanged = actions.onCrsidQualityModeChanged
         )
 
         DecoderNames.LIB_SID_PLAY_FP -> SidPlayFpSettings(

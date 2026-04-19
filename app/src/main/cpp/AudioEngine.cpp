@@ -5,6 +5,7 @@
 #include "decoders/LibOpenMPTDecoder.h"
 #include "decoders/VGMDecoder.h"
 #include "decoders/GmeDecoder.h"
+#include "decoders/CRSIDDecoder.h"
 #include "decoders/LibSidPlayFpDecoder.h"
 #include "decoders/LazyUsf2Decoder.h"
 #include "decoders/Vio2sfDecoder.h"
@@ -33,6 +34,10 @@ namespace {
             DecoderRegistry::getInstance().registerDecoder("Game Music Emu", GmeDecoder::getSupportedExtensions(), []() {
                 return std::make_unique<GmeDecoder>();
             }, 6);
+
+            DecoderRegistry::getInstance().registerDecoder("cRSID", CRSIDDecoder::getSupportedExtensions(), []() {
+                return std::make_unique<CRSIDDecoder>();
+            }, 4);
 
             DecoderRegistry::getInstance().registerDecoder("LibSIDPlayFP", LibSidPlayFpDecoder::getSupportedExtensions(), []() {
                 return std::make_unique<LibSidPlayFpDecoder>();

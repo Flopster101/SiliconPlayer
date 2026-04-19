@@ -70,6 +70,17 @@ internal object AboutCatalog {
             )
         ),
         AboutEntity(
+            id = "core.crsid",
+            kind = AboutEntityKind.Core,
+            name = DecoderNames.C_RSID,
+            description = "Integer-focused Commodore 64 SID playback core based on the cRSID engine.",
+            author = "Hermit (Mihaly Horvath)",
+            license = "Upstream custom permissive notice",
+            links = listOf(
+                AboutEntityLink("Project", "https://csdb.dk/release/?id=261057")
+            )
+        ),
+        AboutEntity(
             id = "core.libsidplayfp",
             kind = AboutEntityKind.Core,
             name = DecoderNames.LIB_SID_PLAY_FP,
@@ -282,6 +293,7 @@ internal object AboutCatalog {
         DecoderNames.LIB_OPEN_MPT to "core.libopenmpt",
         DecoderNames.VGM_PLAY to "core.vgmplay",
         DecoderNames.GAME_MUSIC_EMU to "core.gme",
+        DecoderNames.C_RSID to "core.crsid",
         DecoderNames.LIB_SID_PLAY_FP to "core.libsidplayfp",
         DecoderNames.LAZY_USF2 to "core.lazyusf2",
         DecoderNames.VIO2_SF to "core.vio2sf",

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=cRSID
+Comment=C64 SID-music player (GUI/CLI)
+Icon=/usr/share/icons/cRSID-icon.png
+Exec=/usr/bin/crsid %f
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+MimeType=application/x-cRSID-sid;application/x-cRSID-sil;

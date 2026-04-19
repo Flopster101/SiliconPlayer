@@ -1,0 +1,5 @@
+#!/bin/sh
+
+make alsa
+
+

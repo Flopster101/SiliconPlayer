@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+ <mime-type type="application/x-cRSID-sid">
+  <comment>SID-file for cRSID</comment>
+  <glob pattern="*.sid"/>
+  <icon name="cRSID-icon"/>
+ </mime-type>
+</mime-info>

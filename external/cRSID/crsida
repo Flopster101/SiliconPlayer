@@ -1,0 +1,33 @@
+#!/bin/sh
+#linux sh-script for playing all .sid & .SID files in a directory with crsid
+#By Hermit (Mihaly Horvath) Year 2024
+
+CSID_CMD="crsid -cli -autoexit -info -playtime 600"
+
+echo ""
+
+if [ $# -eq 0 ] ; then
+ echo "Play all .sid files in a folder, Usage: "
+ echo " crsida [ skip_amount [crsid-parameters] ]"
+ echo "(Give '-' as skip_amount to start from beginning.)"
+fi
+
+STARTPOS=1
+COUNTER=1
+
+if [ "$1" != "-" ] && [ "$1" != "" ] ; then
+ STARTPOS=$1
+fi
+
+for f in *.[Ss][Ii][Dd] ; do
+
+ if [ $COUNTER -ge $STARTPOS ] ; then
+  echo ; echo "Tune $COUNTER: $f"
+  $CSID_CMD  "$2" "$3" "$4" "$5" "$6"  "$f"  1
+ fi
+
+ COUNTER=$((COUNTER + 1))
+ #sleep 1
+
+done
+

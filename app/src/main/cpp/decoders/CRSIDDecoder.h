@@ -77,6 +77,13 @@ private:
         Ntsc = 2
     };
 
+    enum class Filter6581Preset {
+        Stock = 0,
+        R4ar = 1,
+        R3 = 2,
+        R2 = 3
+    };
+
     mutable std::mutex decodeMutex;
 
     std::vector<unsigned char> fileData;
@@ -97,6 +104,7 @@ private:
     ClockMode clockMode = ClockMode::Auto;
     SidModelMode sidModelMode = SidModelMode::Auto;
     QualityMode qualityMode = QualityMode::High;
+    Filter6581Preset filter6581Preset = Filter6581Preset::Stock;
     bool durationReliable = false;
     bool endReached = false;
     double currentDurationSeconds = 0.0;

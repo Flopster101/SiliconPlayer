@@ -618,6 +618,8 @@ void CRSIDDecoder::applyPlaybackOptionsLocked() {
             cRSID.ForcedVideoStandard = CRSID_VIDEOSTANDARD_AUTO;
             break;
     }
+
+    cRSID_set6581FilterPreset(static_cast<unsigned char>(filter6581Preset));
 }
 
 void CRSIDDecoder::refreshHeaderMetadataLocked(const cRSID_SIDheader* header) {
@@ -741,6 +743,26 @@ void CRSIDDecoder::setOption(const char* name, const char* value) {
         return;
     }
 
+    if (optionName == "crsid.filter_6581_preset") {
+        const int parsed = parseIntString(optionValue, static_cast<int>(filter6581Preset));
+        switch (parsed) {
+            case 1:
+                filter6581Preset = Filter6581Preset::R4ar;
+                break;
+            case 2:
+                filter6581Preset = Filter6581Preset::R3;
+                break;
+            case 3:
+                filter6581Preset = Filter6581Preset::R2;
+                break;
+            case 0:
+            default:
+                filter6581Preset = Filter6581Preset::Stock;
+                break;
+        }
+        return;
+    }
+
     if (optionName == "crsid.stereo") {
         const bool enabled = parseBoolString(optionValue, true);
         cRSID.Stereo = enabled ? CRSID_CHANNELMODE_STEREO : CRSID_CHANNELMODE_MONO;
@@ -777,6 +799,9 @@ int CRSIDDecoder::getOptionApplyPolicy(const char* name) const {
         return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
     }
     if (optionName == "crsid.quality_mode") {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
+    if (optionName == "crsid.filter_6581_preset") {
         return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
     }
     if (optionName == "crsid.stereo") {

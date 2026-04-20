@@ -108,7 +108,8 @@ internal data class PluginDetailRouteState(
     val furnaceAyCore: Int,
     val crsidClockMode: Int,
     val crsidSidModelMode: Int,
-    val crsidQualityMode: Int
+    val crsidQualityMode: Int,
+    val crsidFilter6581Preset: Int
 )
 
 internal data class PluginDetailRouteActions(
@@ -189,7 +190,8 @@ internal data class PluginDetailRouteActions(
     val onFurnaceAyCoreChanged: (Int) -> Unit,
     val onCrsidClockModeChanged: (Int) -> Unit,
     val onCrsidSidModelModeChanged: (Int) -> Unit,
-    val onCrsidQualityModeChanged: (Int) -> Unit
+    val onCrsidQualityModeChanged: (Int) -> Unit,
+    val onCrsidFilter6581PresetChanged: (Int) -> Unit
 )
 
 @Composable
@@ -390,9 +392,11 @@ internal fun PluginDetailRouteContent(
             clockMode = state.crsidClockMode,
             sidModelMode = state.crsidSidModelMode,
             qualityMode = state.crsidQualityMode,
+            filter6581Preset = state.crsidFilter6581Preset,
             onClockModeChanged = actions.onCrsidClockModeChanged,
             onSidModelModeChanged = actions.onCrsidSidModelModeChanged,
-            onQualityModeChanged = actions.onCrsidQualityModeChanged
+            onQualityModeChanged = actions.onCrsidQualityModeChanged,
+            onFilter6581PresetChanged = actions.onCrsidFilter6581PresetChanged
         )
 
         DecoderNames.LIB_SID_PLAY_FP -> SidPlayFpSettings(

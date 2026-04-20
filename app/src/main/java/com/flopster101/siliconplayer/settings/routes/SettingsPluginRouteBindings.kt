@@ -79,7 +79,8 @@ internal fun SettingsScreenState.toPluginDetailRouteState(): PluginDetailRouteSt
         furnaceAyCore = pluginCore.furnaceAyCore,
         crsidClockMode = pluginCore.crsidClockMode,
         crsidSidModelMode = pluginCore.crsidSidModelMode,
-        crsidQualityMode = pluginCore.crsidQualityMode
+        crsidQualityMode = pluginCore.crsidQualityMode,
+        crsidFilter6581Preset = pluginCore.crsidFilter6581Preset
     )
 
 internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRouteActions =
@@ -161,5 +162,6 @@ internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRou
         onFurnaceAyCoreChanged = pluginCoreActions.onFurnaceAyCoreChanged,
         onCrsidClockModeChanged = pluginCoreActions.onCrsidClockModeChanged,
         onCrsidSidModelModeChanged = pluginCoreActions.onCrsidSidModelModeChanged,
-        onCrsidQualityModeChanged = pluginCoreActions.onCrsidQualityModeChanged
+        onCrsidQualityModeChanged = pluginCoreActions.onCrsidQualityModeChanged,
+        onCrsidFilter6581PresetChanged = pluginCoreActions.onCrsidFilter6581PresetChanged
     )

@@ -777,6 +777,7 @@ internal fun clearAllSettingsAction(
     crsidClockMode: Int,
     crsidSidModelMode: Int,
     crsidQualityMode: Int,
+    crsidFilter6581Preset: Int,
     vgmPlayChipCoreSelections: Map<String, Int>,
     onAutoPlayOnTrackSelectChanged: (Boolean) -> Unit,
     onOpenPlayerOnTrackSelectChanged: (Boolean) -> Unit,
@@ -899,6 +900,7 @@ internal fun clearAllSettingsAction(
         CorePreferenceKeys.CRSID_CLOCK_MODE to crsidClockMode,
         CorePreferenceKeys.CRSID_SID_MODEL_MODE to crsidSidModelMode,
         CorePreferenceKeys.CRSID_QUALITY_MODE to crsidQualityMode,
+        CorePreferenceKeys.CRSID_FILTER_6581_PRESET to crsidFilter6581Preset,
         CorePreferenceKeys.VGMPLAY_LOOP_COUNT to vgmPlayLoopCount,
         CorePreferenceKeys.VGMPLAY_VSYNC_RATE to vgmPlayVsyncRate,
         CorePreferenceKeys.VGMPLAY_RESAMPLE_MODE to vgmPlayResampleMode,
@@ -1100,6 +1102,7 @@ internal fun clearAllPluginSettingsAction(
     onCrsidClockModeChanged: (Int) -> Unit,
     onCrsidSidModelModeChanged: (Int) -> Unit,
     onCrsidQualityModeChanged: (Int) -> Unit,
+    onCrsidFilter6581PresetChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
     onSidPlayFpSidModelModeChanged: (Int) -> Unit,
@@ -1177,6 +1180,7 @@ internal fun clearAllPluginSettingsAction(
     onCrsidClockModeChanged(CrsidDefaults.clockMode)
     onCrsidSidModelModeChanged(CrsidDefaults.sidModelMode)
     onCrsidQualityModeChanged(CrsidDefaults.qualityMode)
+    onCrsidFilter6581PresetChanged(CrsidDefaults.filter6581Preset)
     onSidPlayFpBackendChanged(SidPlayFpDefaults.backend)
     onSidPlayFpClockModeChanged(SidPlayFpDefaults.clockMode)
     onSidPlayFpSidModelModeChanged(SidPlayFpDefaults.sidModelMode)
@@ -1367,6 +1371,7 @@ internal fun resetPluginSettingsAction(
     onCrsidClockModeChanged: (Int) -> Unit,
     onCrsidSidModelModeChanged: (Int) -> Unit,
     onCrsidQualityModeChanged: (Int) -> Unit,
+    onCrsidFilter6581PresetChanged: (Int) -> Unit,
     onSidPlayFpCoreSampleRateHzChanged: (Int) -> Unit,
     onSidPlayFpBackendChanged: (Int) -> Unit,
     onSidPlayFpClockModeChanged: (Int) -> Unit,
@@ -1424,7 +1429,8 @@ internal fun resetPluginSettingsAction(
         DecoderNames.C_RSID -> listOf(
             CrsidOptionKeys.CLOCK_MODE,
             CrsidOptionKeys.SID_MODEL_MODE,
-            CrsidOptionKeys.QUALITY_MODE
+            CrsidOptionKeys.QUALITY_MODE,
+            CrsidOptionKeys.FILTER_6581_PRESET
         )
 
         DecoderNames.LIB_SID_PLAY_FP -> listOf(
@@ -1584,11 +1590,13 @@ internal fun resetPluginSettingsAction(
             onCrsidClockModeChanged(CrsidDefaults.clockMode)
             onCrsidSidModelModeChanged(CrsidDefaults.sidModelMode)
             onCrsidQualityModeChanged(CrsidDefaults.qualityMode)
+            onCrsidFilter6581PresetChanged(CrsidDefaults.filter6581Preset)
             prefs.edit().apply {
                 remove(CorePreferenceKeys.CORE_RATE_CRSID)
                 remove(CorePreferenceKeys.CRSID_CLOCK_MODE)
                 remove(CorePreferenceKeys.CRSID_SID_MODEL_MODE)
                 remove(CorePreferenceKeys.CRSID_QUALITY_MODE)
+                remove(CorePreferenceKeys.CRSID_FILTER_6581_PRESET)
                 apply()
             }
         }

@@ -8,9 +8,11 @@ internal class CrsidSettings(
     private val clockMode: Int,
     private val sidModelMode: Int,
     private val qualityMode: Int,
+    private val filter6581Preset: Int,
     private val onClockModeChanged: (Int) -> Unit,
     private val onSidModelModeChanged: (Int) -> Unit,
-    private val onQualityModeChanged: (Int) -> Unit
+    private val onQualityModeChanged: (Int) -> Unit,
+    private val onFilter6581PresetChanged: (Int) -> Unit
 ) : PluginSettings {
 
     @Composable
@@ -43,6 +45,16 @@ internal class CrsidSettings(
                     selectedValue = qualityMode,
                     options = CrsidConfig.qualityChoices,
                     onSelected = onQualityModeChanged
+                )
+            }
+            spacer()
+            custom {
+                CoreChoiceSelectorCard(
+                    title = "6581 filter preset",
+                    description = "Choose the 6581 filter tuning. Stock keeps upstream cRSID behavior, while R4AR, R3, and R2 use revision-style presets.",
+                    selectedValue = filter6581Preset,
+                    options = CrsidConfig.filter6581PresetChoices,
+                    onSelected = onFilter6581PresetChanged
                 )
             }
         }

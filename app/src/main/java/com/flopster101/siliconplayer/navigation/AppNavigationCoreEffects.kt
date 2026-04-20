@@ -48,6 +48,7 @@ internal fun AppNavigationCoreEffects(
     crsidClockMode: Int,
     crsidSidModelMode: Int,
     crsidQualityMode: Int,
+    crsidFilter6581Preset: Int,
     sidPlayFpBackend: Int,
     sidPlayFpClockMode: Int,
     sidPlayFpSidModelMode: Int,
@@ -509,6 +510,18 @@ internal fun AppNavigationCoreEffects(
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
             optionLabel = "Emulation quality"
+        )
+    }
+
+    LaunchedEffect(crsidFilter6581Preset) {
+        val normalized = crsidFilter6581Preset.coerceIn(0, 3)
+        prefs.edit().putInt(CorePreferenceKeys.CRSID_FILTER_6581_PRESET, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = DecoderNames.C_RSID,
+            optionName = CrsidOptionKeys.FILTER_6581_PRESET,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "6581 filter preset"
         )
     }
 
@@ -1024,6 +1037,7 @@ internal fun AppNavigationCoreEffectsFromSettingsStates(
         crsidClockMode = settingsStates.crsidClockMode.intValue,
         crsidSidModelMode = settingsStates.crsidSidModelMode.intValue,
         crsidQualityMode = settingsStates.crsidQualityMode.intValue,
+        crsidFilter6581Preset = settingsStates.crsidFilter6581Preset.intValue,
         sidPlayFpBackend = settingsStates.sidPlayFpBackend.intValue,
         sidPlayFpClockMode = settingsStates.sidPlayFpClockMode.intValue,
         sidPlayFpSidModelMode = settingsStates.sidPlayFpSidModelMode.intValue,

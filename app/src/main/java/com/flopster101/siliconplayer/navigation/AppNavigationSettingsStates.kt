@@ -55,6 +55,7 @@ internal data class AppNavigationSettingsStates(
     val crsidClockMode: MutableIntState,
     val crsidSidModelMode: MutableIntState,
     val crsidQualityMode: MutableIntState,
+    val crsidFilter6581Preset: MutableIntState,
     val sidPlayFpBackend: MutableIntState,
     val sidPlayFpClockMode: MutableIntState,
     val sidPlayFpSidModelMode: MutableIntState,
@@ -318,6 +319,11 @@ internal fun rememberAppNavigationSettingsStates(
     }
     val crsidQualityMode = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CRSID_QUALITY_MODE, CrsidDefaults.qualityMode))
+    }
+    val crsidFilter6581Preset = remember {
+        mutableIntStateOf(
+            prefs.getInt(CorePreferenceKeys.CRSID_FILTER_6581_PRESET, CrsidDefaults.filter6581Preset)
+        )
     }
     val sidPlayFpBackend = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.SIDPLAYFP_BACKEND, SidPlayFpDefaults.backend))
@@ -622,6 +628,7 @@ internal fun rememberAppNavigationSettingsStates(
         crsidClockMode = crsidClockMode,
         crsidSidModelMode = crsidSidModelMode,
         crsidQualityMode = crsidQualityMode,
+        crsidFilter6581Preset = crsidFilter6581Preset,
         sidPlayFpBackend = sidPlayFpBackend,
         sidPlayFpClockMode = sidPlayFpClockMode,
         sidPlayFpSidModelMode = sidPlayFpSidModelMode,

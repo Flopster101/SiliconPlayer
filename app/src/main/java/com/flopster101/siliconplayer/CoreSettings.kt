@@ -43,6 +43,7 @@ object CorePreferenceKeys {
     const val CRSID_CLOCK_MODE = "crsid_clock_mode"
     const val CRSID_SID_MODEL_MODE = "crsid_sid_model_mode"
     const val CRSID_QUALITY_MODE = "crsid_quality_mode"
+    const val CRSID_FILTER_6581_PRESET = "crsid_filter_6581_preset"
     const val SIDPLAYFP_BACKEND = "sidplayfp_backend"
     const val SIDPLAYFP_CLOCK_MODE = "sidplayfp_clock_mode"
     const val SIDPLAYFP_SID_MODEL_MODE = "sidplayfp_sid_model_mode"
@@ -126,6 +127,7 @@ object CrsidDefaults {
     const val clockMode = 0 // 0 Auto, 1 PAL, 2 NTSC
     const val sidModelMode = 0 // 0 Auto, 1 MOS6581, 2 MOS8580
     const val qualityMode = 1 // 0 Light, 1 High, 2 Sinc
+    const val filter6581Preset = 2 // 0 Stock, 1 R4AR, 2 R3, 3 R2
 }
 
 object SidPlayFpDefaults {

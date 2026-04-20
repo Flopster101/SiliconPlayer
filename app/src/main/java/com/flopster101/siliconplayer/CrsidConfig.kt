@@ -4,6 +4,7 @@ internal object CrsidOptionKeys {
     const val CLOCK_MODE = "crsid.clock_mode"
     const val SID_MODEL_MODE = "crsid.sid_model_mode"
     const val QUALITY_MODE = "crsid.quality_mode"
+    const val FILTER_6581_PRESET = "crsid.filter_6581_preset"
     const val UNKNOWN_DURATION_SECONDS = "crsid.unknown_duration_seconds"
 }
 
@@ -24,5 +25,12 @@ internal object CrsidConfig {
         IntChoice(1, "High"),
         IntChoice(2, "Sinc"),
         IntChoice(0, "Light")
+    )
+
+    val filter6581PresetChoices = listOf(
+        IntChoice(0, "Stock"),
+        IntChoice(1, "R4AR"),
+        IntChoice(2, "R3"),
+        IntChoice(3, "R2")
     )
 }

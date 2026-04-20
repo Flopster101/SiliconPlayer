@@ -101,7 +101,15 @@ void cRSID_setC64 () {   //set hardware-parameters (Models, SIDs) for playback o
  };
  /*short SIDmodel;*/ char SIDchannel;
 
- cRSID.VideoStandard = ( (cRSID.SIDheader->ModelFormatStandard & 0x0C) >> 2 ) != 2;
+ if (cRSID.ForcedVideoStandard == CRSID_VIDEOSTANDARD_PAL) {
+  cRSID.VideoStandard = 1;
+ }
+ else if (cRSID.ForcedVideoStandard == CRSID_VIDEOSTANDARD_NTSC) {
+  cRSID.VideoStandard = 0;
+ }
+ else {
+  cRSID.VideoStandard = ( (cRSID.SIDheader->ModelFormatStandard & 0x0C) >> 2 ) != 2;
+ }
  if (cRSID_C64.SampleRate==0) cRSID_C64.SampleRate = 44100;
  cRSID_C64.CPUfrequency = CPUspeeds[ cRSID.VideoStandard ];
  cRSID_C64.SampleClockRatio = (cRSID_C64.CPUfrequency << CRSID_CLOCK_FRACTIONAL_BITS) / cRSID_C64.SampleRate; //shifting (multiplication) enhances SampleClockRatio precision
@@ -281,6 +289,5 @@ cRSID_Output* cRSID_emulateC64 () {
 
  return Output;
 }
-
 
 

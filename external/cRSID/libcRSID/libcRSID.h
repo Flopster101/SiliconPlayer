@@ -25,6 +25,7 @@ enum cRSID_Limitations    { CRSID_SUBTUNE_AMOUNT_MAX=256, //32,
                             CRSID_PLAYLIST_ENTRY_SIZE=CRSID_PATH_LENGTH_MAX+2
                           };
 enum cRSID_ChannelModes { CRSID_CHANNELMODE_MONO = 0, CRSID_CHANNELMODE_STEREO = 1, CRSID_CHANNELMODE_NARROW = 3 };
+enum cRSID_VideoStandardModes { CRSID_VIDEOSTANDARD_AUTO = 0, CRSID_VIDEOSTANDARD_PAL = 1, CRSID_VIDEOSTANDARD_NTSC = 2 };
 
 
 typedef struct cRSID_SIDheader {              //Offset:   default/info:
@@ -76,7 +77,8 @@ typedef struct cRSID_Interface { //public API variables aimed for being used fro
  unsigned char     PlaybackSpeed; //(1x is the default playback, 4x is a good choice for fast-forward)
  unsigned char     Paused; //boolean to pause SID-playback
  //C64-machine related:
- unsigned char     VideoStandard; //0:NTSC, 1:PAL (based on the SID-header field)
+ unsigned char     VideoStandard; //0:NTSC, 1:PAL (current effective standard used for playback)
+ unsigned char     ForcedVideoStandard; //0:Auto/header, 1:PAL, 2:NTSC
  unsigned short    SelectedSIDmodel; //can be set to 6581 or 8580, if set, this model will be used for every SID, no matter what
  unsigned char     MainVolume; //Sets the volume for the final audio output
  //SID-file related:

@@ -41,6 +41,7 @@ void* cRSID_init (unsigned short samplerate, unsigned short buflen) {
  cRSID.HighQualityResampler = 0; //1;  //was problematic (noisy) with lowpass-filtered triangles on all SID-channels
  cRSID_C64.RealSIDmode = cRSID.RealSIDmode; cRSID_C64.Stereo = cRSID.Stereo; //init shadow-variables to defaults for audio-thread as well
  cRSID_C64.HighQualitySID = cRSID.HighQualitySID; cRSID_C64.HighQualityResampler = cRSID.HighQualityResampler;
+ cRSID.ForcedVideoStandard = CRSID_VIDEOSTANDARD_AUTO;
  cRSID.SelectedSIDmodel = 0; //default model and mode selections
  cRSID.PlaybackSpeed = 1;
  cRSID.MainVolume = 255; //230; //255; //230; //204; //255;

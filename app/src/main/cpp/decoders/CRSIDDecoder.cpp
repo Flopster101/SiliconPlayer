@@ -220,10 +220,15 @@ int CRSIDDecoder::read(float* buffer, int numFrames) {
         return 0;
     }
 
-    const bool canRepeatCurrent = repeatMode.load() == 1 || repeatMode.load() == 3;
+    const int mode = repeatMode.load();
+    const bool loopPointRepeatActive = mode == 2;
+    const bool canRepeatCurrent = mode == 1 || mode == 3;
     int framesWritten = 0;
     while (framesWritten < numFrames) {
-        if (durationReliable && currentDurationSeconds > 0.0 && playbackPositionSeconds >= currentDurationSeconds) {
+        if (!loopPointRepeatActive &&
+            durationReliable &&
+            currentDurationSeconds > 0.0 &&
+            playbackPositionSeconds >= currentDurationSeconds) {
             if (canRepeatCurrent) {
                 if (!startSubtuneLocked(currentSubtuneIndex)) {
                     break;
@@ -523,7 +528,7 @@ bool CRSIDDecoder::startSubtuneLocked(int subtuneIndex) {
     currentSubtuneIndex = subtuneIndex;
     playbackPositionSeconds = 0.0;
     currentDurationSeconds = subtuneDurationsSeconds[static_cast<size_t>(subtuneIndex)];
-    durationReliable = currentDurationSeconds > 0.0;
+    durationReliable = declaredSubtuneDurationsSeconds[static_cast<size_t>(subtuneIndex)] > 0.0;
     endReached = false;
     refreshRuntimeMetadataLocked(header);
     return true;
@@ -745,7 +750,7 @@ void CRSIDDecoder::setOption(const char* name, const char* value) {
         }
         if (currentSubtuneIndex >= 0 && currentSubtuneIndex < static_cast<int>(subtuneDurationsSeconds.size())) {
             currentDurationSeconds = subtuneDurationsSeconds[static_cast<size_t>(currentSubtuneIndex)];
-            durationReliable = currentDurationSeconds > 0.0;
+            durationReliable = declaredSubtuneDurationsSeconds[static_cast<size_t>(currentSubtuneIndex)] > 0.0;
         }
         return;
     }

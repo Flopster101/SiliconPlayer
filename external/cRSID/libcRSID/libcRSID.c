@@ -82,7 +82,7 @@ void cRSID_initSIDtune (cRSID_SIDheader* SIDheader, char subtune) { //subtune: 1
  else if (subtune > SIDheader->SubtuneAmount) subtune = SIDheader->SubtuneAmount;    //printf( "Subtune: %d\n", subtune );
  cRSID.SubTune = subtune; C64->SecondCnt = cRSID.PlayTime = 0; cRSID.PlaybackSpeed=1; //cRSID.Paused = 0; //don't unpause this early, before init!
 
- cRSID_setC64(C64); cRSID_initC64(C64); //cRSID_writeMemC64(C64,0xD418,0xF); //set C64 hardware and init (reset) it
+ cRSID_setC64(); cRSID_initC64(); //cRSID_writeMemC64(C64,0xD418,0xF); //set C64 hardware and init (reset) it
  //cRSID.Paused = 0;
 
  //determine init-address:
@@ -110,12 +110,7 @@ void cRSID_initSIDtune (cRSID_SIDheader* SIDheader, char subtune) { //subtune: 1
 
  //determine playaddress:
  cRSID.PlayAddress = (SIDheader->PlayAddressH<<8) + SIDheader->PlayAddressL;
- if (cRSID.PlayAddress) { //normal play-address called with JSR
-  if (C64->RAMbank[1] == 0x37) { //are there SIDs with routine under IO area?
-   if (0xA000 <= cRSID.PlayAddress && cRSID.PlayAddress < 0xC000) C64->RAMbank[1] = 0x36;
-  }
-  else if (cRSID.PlayAddress >= 0xE000) C64->RAMbank[1] = 0x35; //player under KERNAL (e.g. Crystal Kingdom Dizzy)
- }
+ if (cRSID.PlayAddress) cRSID_setPSIDplayBank(); //normal play-address called with JSR
  else { //IRQ-playaddress for multispeed-tunes set by init-routine (some tunes turn off KERNAL ROM but doesn't set IRQ-vector!)
   cRSID.PlayAddress = (C64->RAMbank[1] & 3) < 2 ? cRSID_readMem(0xFFFE) + (cRSID_readMem(0xFFFF)<<8) //cRSID_readMemC64(C64,0xFFFE) + (cRSID_readMemC64(C64,0xFFFF)<<8) //for PSID
                                                  : cRSID_readMem(0x314) + (cRSID_readMem(0x315)<<8); //: cRSID_readMemC64(C64,0x314) + (cRSID_readMemC64(C64,0x315)<<8);
@@ -127,6 +122,9 @@ void cRSID_initSIDtune (cRSID_SIDheader* SIDheader, char subtune) { //subtune: 1
 
  if (!cRSID.RealSIDmode) {  //prepare (PSID) play-routine playback:
   cRSID_initCPU( cRSID.PlayAddress ); //point CPU to play-routine
+  C64->RAMbank[0x1FF] = (unsigned char) ((CRSID_PSID_RETURN_SENTINEL - 1u) >> 8);
+  C64->RAMbank[0x1FE] = (unsigned char) ((CRSID_PSID_RETURN_SENTINEL - 1u) & 0xFF);
+  C64->CPU.SP = 0xFD;
   C64->FrameCycleCnt=0; C64->Finished=1; C64->SampleCycleCnt=0; //C64->CIAisSet=0;
  }
  else { C64->Finished=0; C64->Returned=0; }

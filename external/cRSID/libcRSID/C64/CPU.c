@@ -473,6 +473,11 @@ unsigned char cRSID_emulateCPU (void) { //the CPU emulation for SID/PRG playback
 
  //storeReg();
 
+ if ( CALMLY (!cRSID_C64.RealSIDmode && cRSID_C64.CPU.PC == CRSID_PSID_RETURN_SENTINEL) ) {
+  cRSID_C64.Returned=1;
+  return 0xFF;
+ }
+
 
  if ( CALMLY (!cRSID_C64.RealSIDmode) ) { //substitute KERNAL IRQ-return in PSID (e.g. Microprose Soccer)
   if ( RARELY ( (cRSID_C64.RAMbank[1]&3)>1 && PrevPC<0xE000 && (cRSID_C64.CPU.PC==0xEA31 || cRSID_C64.CPU.PC==0xEA81 || cRSID_C64.CPU.PC==0xEA7E) ) ) return 0xFE;

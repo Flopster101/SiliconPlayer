@@ -12,6 +12,15 @@
 
 #include "C64_SIDrouting.c"
 
+static INLINE void cRSID_setPSIDplayBank () {
+ if (cRSID.PlayAddress == 0) return;
+
+ if (cRSID.PlayAddress >= 0xE000) cRSID_C64.RAMbank[1] = 0x35;
+ else if (cRSID.PlayAddress >= 0xD000) cRSID_C64.RAMbank[1] = 0x34;
+ else if (cRSID.PlayAddress >= 0xA000) cRSID_C64.RAMbank[1] = 0x36;
+ else cRSID_C64.RAMbank[1] = 0x37;
+}
+
 
 
 cRSID_C64instance* cRSID_createC64 (unsigned short samplerate) { //init a basic PAL C64 instance
@@ -207,6 +216,7 @@ cRSID_Output* cRSID_emulateC64 () {
    if ( RARELY (cRSID_C64.FrameCycleCnt >= cRSID.FrameCycles) ) {
     cRSID_C64.FrameCycleCnt -= cRSID.FrameCycles;
     if ( RARELY (cRSID_C64.Finished) ) { //some tunes (e.g. Barbarian, A-Maze-Ing) don't always finish in 1 frame
+     cRSID_setPSIDplayBank(); // PSID calls are expected to start with a sane bank for the play routine region.
      cRSID_initCPU( cRSID.PlayAddress ); //(PSID docs say bank-register should always be set for each call's region)
      cRSID_C64.Finished=0; //cRSID_C64.SampleCycleCnt=0; //PSID workaround for some tunes (e.g. Galdrumway):
      if ( LIKELY (cRSID.TimerSource==0) ) cRSID_C64.IObankRD[0xD019] = 0x81; //always simulate to player-calls that VIC-IRQ happened
@@ -290,4 +300,3 @@ cRSID_Output* cRSID_emulateC64 () {
 
  return Output;
 }
-

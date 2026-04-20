@@ -206,6 +206,7 @@ void               cRSID_emulateADSRs  (FASTVAR cRSID_SIDinstance *const FASTPTR
 int             cRSID_emulateSID_light (FASTVAR cRSID_SIDinstance *const FASTPTR SID); //calls output-stage too
 cRSID_SIDwavOutput cRSID_emulateHQwaves(FASTVAR cRSID_SIDinstance *const FASTPTR SID, FASTVAR char cycles); //, FASTVAR char filter);
 // C64/SID_Outputs.c
+void                cRSID_configure6581FilterPreset (unsigned char preset);
 static INLINE int  cRSID_emulateSIDoutputStage (FASTVAR cRSID_SIDinstance *const FASTPTR SID); //, FASTVAR char nofilter);
 static INLINE void cRSID_precalculateHQoutputParameters (FASTVAR cRSID_SIDinstance *const FASTPTR SID); //for faster oversampled filter & attenuation
 static INLINE int  cRSID_emulateHQresampledSIDoutputStage (FASTVAR cRSID_SIDinstance *const FASTPTR SID, FASTVAR cRSID_SIDwavOutput waves);

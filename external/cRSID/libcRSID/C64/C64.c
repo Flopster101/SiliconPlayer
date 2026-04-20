@@ -122,6 +122,7 @@ void cRSID_setC64 () {   //set hardware-parameters (Models, SIDs) for playback o
 
  cRSID_C64.PrevRasterLine=-1; //so if $d012 is set once only don't disturb FrameCycleCnt
 
+ cRSID_configure6581FilterPreset( cRSID.Filter6581Preset );
  cRSID_setSIDmodels();
 
  if (cRSID.SIDheader->Version != CRSID_FILEVERSION_WEBSID) {
@@ -289,5 +290,4 @@ cRSID_Output* cRSID_emulateC64 () {
 
  return Output;
 }
-
 

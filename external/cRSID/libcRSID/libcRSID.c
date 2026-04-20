@@ -43,6 +43,7 @@ void* cRSID_init (unsigned short samplerate, unsigned short buflen) {
  cRSID_C64.HighQualitySID = cRSID.HighQualitySID; cRSID_C64.HighQualityResampler = cRSID.HighQualityResampler;
  cRSID.ForcedVideoStandard = CRSID_VIDEOSTANDARD_AUTO;
  cRSID.SelectedSIDmodel = 0; //default model and mode selections
+ cRSID.Filter6581Preset = CRSID_FILTER6581_PRESET_STOCK;
  cRSID.PlaybackSpeed = 1;
  cRSID.MainVolume = 255; //230; //255; //230; //204; //255;
  cRSID.CLImode = 0; cRSID.AutoExit = cRSID.BuiltInMusic = cRSID.BuiltInMusicSize = 0; cRSID.BuiltInMusicData = NULL;
@@ -56,6 +57,7 @@ void* cRSID_init (unsigned short samplerate, unsigned short buflen) {
  cRSID_setCallBack__autoAdvance( cRSID_autoAdvance_Dummy_callBack, NULL ); //to prevent segfault if not assigned by user
 //#endif
 
+ cRSID_configure6581FilterPreset( cRSID.Filter6581Preset );
  C64 = cRSID_createC64( samplerate );
 #ifdef CRSID_PLATFORM_PC
  cRSID.ChangingDirectory=0;

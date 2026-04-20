@@ -1,5 +1,116 @@
 
 #include "SID_FilterCurves.h" //"SIDfilter.h"
+#include <math.h>
+
+
+typedef struct cRSID_Filter6581PresetConfig {
+ double base;
+ double max;
+ double steepness;
+ double xOffset;
+ double kink;
+} cRSID_Filter6581PresetConfig;
+
+static const cRSID_Filter6581PresetConfig cRSID_Filter6581PresetConfigs[] = {
+ { 0.0, 0.0, 0.0, 0.0, 0.0 },
+ { 0.036,   0.892, 144.856, 1473.75, 325.0 }, // R4AR
+ { 0.02387, 0.92,  236.0,   1149.75, 325.0 }, // R3
+ { 0.02387, 0.92,  360.0,    957.0,  325.0 }  // R2
+};
+
+static enum {
+ CRSID_6581_FILTER_TABLE_ENTRY_COUNT = 0x800
+} cRSID_6581FilterTableSpecs;
+
+static unsigned short cRSID_CutoffMul6581_44100Hz_Custom [CRSID_6581_FILTER_TABLE_ENTRY_COUNT + 1];
+static unsigned short cRSID_CutoffMul6581_OverSampleRate_Custom [CRSID_6581_FILTER_TABLE_ENTRY_COUNT + 1];
+static const unsigned short* cRSID_ActiveCutoffMul6581_44100Hz = cRSID_CutoffMul6581_44100Hz_Stock;
+static const unsigned short* cRSID_ActiveCutoffMul6581_OverSampleRate = cRSID_CutoffMul6581_OverSampleRate_Stock;
+static unsigned char cRSID_Active6581FilterPreset = 0xFF;
+
+
+static double cRSID_calculate6581PresetKink (int cutoffLevel) {
+ int i, divisor;
+ double kink = 0.0;
+
+ for (i=1; i<=5; ++i) {
+  divisor = CRSID_6581_FILTER_TABLE_ENTRY_COUNT >> i;
+  kink += (((double)(cutoffLevel % divisor)) / divisor) * (0.05 / i);
+ }
+
+ return kink;
+}
+
+
+static double cRSID_calculate6581PresetAlpha (int cutoffLevel, const cRSID_Filter6581PresetConfig* config) {
+ double x;
+ double alpha;
+
+ x = ( ((cutoffLevel << 1) - config->xOffset) + (config->kink * cRSID_calculate6581PresetKink(cutoffLevel)) ) / config->steepness;
+ alpha = (config->max * (config->max - config->base)) / (1.0 + exp(-x)) + config->base;
+
+ if (alpha < 0.0) alpha = 0.0;
+ else if (alpha > 0.999999) alpha = 0.999999;
+
+ return alpha;
+}
+
+
+static double cRSID_convert6581PresetAlphaToOversampled (double alpha) {
+ double oversampled;
+
+ oversampled = 1.0 - pow(1.0 - alpha, ((double)CRSID_DEFAULT_SAMPLERATE) / CRSID_PAL_AUDIO_CLOCK);
+ if (oversampled < 0.0) oversampled = 0.0;
+ else if (oversampled > 0.999999) oversampled = 0.999999;
+
+ return oversampled;
+}
+
+
+static unsigned short cRSID_quantize6581PresetAlpha (double alpha, int magnitude) {
+ int quantized = (int)(alpha * magnitude + 0.5);
+
+ if (quantized < 0) quantized = 0;
+ else if (quantized > magnitude - 1) quantized = magnitude - 1;
+
+ return (unsigned short) quantized;
+}
+
+
+void cRSID_configure6581FilterPreset (unsigned char preset) {
+ int i;
+ int magnitude;
+ int oversamplingMagnitude;
+ const cRSID_Filter6581PresetConfig* config;
+ unsigned char normalizedPreset = preset;
+
+ if (normalizedPreset > CRSID_FILTER6581_PRESET_R2) normalizedPreset = CRSID_FILTER6581_PRESET_STOCK;
+ if (cRSID_Active6581FilterPreset == normalizedPreset) return;
+
+ if (normalizedPreset == CRSID_FILTER6581_PRESET_STOCK) {
+  cRSID_ActiveCutoffMul6581_44100Hz = cRSID_CutoffMul6581_44100Hz_Stock;
+  cRSID_ActiveCutoffMul6581_OverSampleRate = cRSID_CutoffMul6581_OverSampleRate_Stock;
+  cRSID_Active6581FilterPreset = normalizedPreset;
+  return;
+ }
+
+ magnitude = (1 << CRSID_FILTERTABLE_RESOLUTION);
+ oversamplingMagnitude = (1 << CRSID_OVERSAMPLING_FILTERTABLE_RESOLUTION);
+ config = &cRSID_Filter6581PresetConfigs[normalizedPreset];
+
+ for (i=0; i<CRSID_6581_FILTER_TABLE_ENTRY_COUNT; ++i) {
+  double alpha = cRSID_calculate6581PresetAlpha(i, config);
+  cRSID_CutoffMul6581_44100Hz_Custom[i] = cRSID_quantize6581PresetAlpha(alpha, magnitude);
+  cRSID_CutoffMul6581_OverSampleRate_Custom[i] =
+   cRSID_quantize6581PresetAlpha(cRSID_convert6581PresetAlphaToOversampled(alpha), oversamplingMagnitude);
+ }
+
+ cRSID_CutoffMul6581_44100Hz_Custom[CRSID_6581_FILTER_TABLE_ENTRY_COUNT] = 0;
+ cRSID_CutoffMul6581_OverSampleRate_Custom[CRSID_6581_FILTER_TABLE_ENTRY_COUNT] = 0;
+ cRSID_ActiveCutoffMul6581_44100Hz = cRSID_CutoffMul6581_44100Hz_Custom;
+ cRSID_ActiveCutoffMul6581_OverSampleRate = cRSID_CutoffMul6581_OverSampleRate_Custom;
+ cRSID_Active6581FilterPreset = normalizedPreset;
+}
 
 
 
@@ -37,7 +148,7 @@ static INLINE int cRSID_emulateSIDoutputStage (FASTVAR cRSID_SIDinstance *const 
   else { //6581
    Cutoff += (FilterInput*105)>>16; //MOSFET-VCR control-voltage calculation (resistance-modulation aka 6581 filter distortion) emulation
     if ( RARELY (Cutoff > SID_CUTOFF_MAX) ) Cutoff=SID_CUTOFF_MAX; else if ( RARELY(Cutoff<0) ) Cutoff=0;  //can really go below 0 when FilterInput is negative
-   Cutoff = cRSID_CutoffMul6581_44100Hz[Cutoff];
+   Cutoff = cRSID_ActiveCutoffMul6581_44100Hz[Cutoff];
    Resonance = cRSID_Resonances6581[Resonance];
   }
   //shifting negative integers in C is implementation-dependent, so using normal division by power of 2, that might luckily be optimized as arithmetic-shift by the compiler
@@ -95,7 +206,7 @@ static INLINE void cRSID_precalculateHQoutputParameters (FASTVAR cRSID_SIDinstan
   SID->Resonance = cRSID_Resonances8580[ SID->BasePtr[0x17] >> 4 ];
  }
  else { //6581
-  SID->Cutoff = cRSID_CutoffMul6581_OverSampleRate[ Cutoff ];
+  SID->Cutoff = cRSID_ActiveCutoffMul6581_OverSampleRate[ Cutoff ];
   SID->Resonance = cRSID_Resonances6581[ SID->BasePtr[0x17] >> 4 ];
  }
 
@@ -184,5 +295,4 @@ static INLINE void cRSID_emulateHQresampledSIDdigi (FASTVAR cRSID_SIDinstance *c
  }
 
 }
-
 

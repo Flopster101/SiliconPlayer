@@ -17,6 +17,13 @@ unsigned short cRSID_setSIDmodel (int sid_number, unsigned short value) {
  return ( cRSID_C64.SID[ sid_number ].ChipModel = value );
 }
 
+unsigned char cRSID_set6581FilterPreset (unsigned char preset) {
+ if (preset > CRSID_FILTER6581_PRESET_R2) preset = CRSID_FILTER6581_PRESET_STOCK;
+ cRSID.Filter6581Preset = preset;
+ cRSID_configure6581FilterPreset(preset);
+ return cRSID.Filter6581Preset;
+}
+
 unsigned char cRSID_getSIDchannel (int sid_number) { //channel in stereo field (left/right/middle)
  return cRSID_C64.SID[ sid_number ].Channel;
 }
@@ -61,4 +68,3 @@ static INLINE int cRSID_emulateHQresampledSID (FASTVAR cRSID_SIDinstance *const 
  SID->Output = cRSID_emulateHQresampledSIDoutputStage( SID, cRSID_emulateHQwaves( SID, cycles ) );  // * SID->Volume;
  return SID->Output;
 }
-

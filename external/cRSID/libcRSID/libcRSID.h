@@ -26,6 +26,12 @@ enum cRSID_Limitations    { CRSID_SUBTUNE_AMOUNT_MAX=256, //32,
                           };
 enum cRSID_ChannelModes { CRSID_CHANNELMODE_MONO = 0, CRSID_CHANNELMODE_STEREO = 1, CRSID_CHANNELMODE_NARROW = 3 };
 enum cRSID_VideoStandardModes { CRSID_VIDEOSTANDARD_AUTO = 0, CRSID_VIDEOSTANDARD_PAL = 1, CRSID_VIDEOSTANDARD_NTSC = 2 };
+enum cRSID_Filter6581PresetModes {
+ CRSID_FILTER6581_PRESET_STOCK = 0,
+ CRSID_FILTER6581_PRESET_R4AR = 1,
+ CRSID_FILTER6581_PRESET_R3 = 2,
+ CRSID_FILTER6581_PRESET_R2 = 3
+};
 
 
 typedef struct cRSID_SIDheader {              //Offset:   default/info:
@@ -80,6 +86,7 @@ typedef struct cRSID_Interface { //public API variables aimed for being used fro
  unsigned char     VideoStandard; //0:NTSC, 1:PAL (current effective standard used for playback)
  unsigned char     ForcedVideoStandard; //0:Auto/header, 1:PAL, 2:NTSC
  unsigned short    SelectedSIDmodel; //can be set to 6581 or 8580, if set, this model will be used for every SID, no matter what
+ unsigned char     Filter6581Preset; //0:stock cRSID curve, 1:R4AR, 2:R3, 3:R2
  unsigned char     MainVolume; //Sets the volume for the final audio output
  //SID-file related:
  int               SIDfileSize; //Read-Only
@@ -159,6 +166,7 @@ unsigned short     cRSID_getSIDbase     (int sid_number); //argument values: 1..
 unsigned short     cRSID_getSIDmodel    (int sid_number); //value: 6581 or 8580 (or 0/etc.)
 unsigned short     cRSID_setSIDmodel    (int sid_number, unsigned short value); //value: 6581 or 8580 (or 0/etc.)
 void               cRSID_setSIDmodels   (); //based on SIDheader-data
+unsigned char      cRSID_set6581FilterPreset (unsigned char preset);
 unsigned char      cRSID_getSIDchannel  (int sid_number); //channel in stereo field (left/right/middle)
 int                cRSID_getSIDlevel    (int sid_number); //average level (for VU-meter display)
 

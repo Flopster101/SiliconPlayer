@@ -377,7 +377,7 @@ void CRSIDDecoder::setRepeatMode(int mode) {
 }
 
 int CRSIDDecoder::getRepeatModeCapabilities() const {
-    return REPEAT_CAP_TRACK;
+    return REPEAT_CAP_TRACK | REPEAT_CAP_LOOP_POINT;
 }
 
 int CRSIDDecoder::getPlaybackCapabilities() const {

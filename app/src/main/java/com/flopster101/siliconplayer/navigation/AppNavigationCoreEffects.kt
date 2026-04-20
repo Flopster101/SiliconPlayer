@@ -45,6 +45,7 @@ internal fun AppNavigationCoreEffects(
     furnaceGbQuality: Int,
     furnaceDsidQuality: Int,
     furnaceAyCore: Int,
+    crsidClockMode: Int,
     crsidSidModelMode: Int,
     crsidQualityMode: Int,
     sidPlayFpBackend: Int,
@@ -472,6 +473,18 @@ internal fun AppNavigationCoreEffects(
             optionValue = normalized.toString(),
             policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
             optionLabel = "AY core"
+        )
+    }
+
+    LaunchedEffect(crsidClockMode) {
+        val normalized = crsidClockMode.coerceIn(0, 2)
+        prefs.edit().putInt(CorePreferenceKeys.CRSID_CLOCK_MODE, normalized).apply()
+        applyCoreOptionWithPolicy(
+            coreName = DecoderNames.C_RSID,
+            optionName = CrsidOptionKeys.CLOCK_MODE,
+            optionValue = normalized.toString(),
+            policy = CoreOptionApplyPolicy.RequiresPlaybackRestart,
+            optionLabel = "Timing standard"
         )
     }
 
@@ -1008,6 +1021,7 @@ internal fun AppNavigationCoreEffectsFromSettingsStates(
         furnaceGbQuality = settingsStates.furnaceGbQuality.intValue,
         furnaceDsidQuality = settingsStates.furnaceDsidQuality.intValue,
         furnaceAyCore = settingsStates.furnaceAyCore.intValue,
+        crsidClockMode = settingsStates.crsidClockMode.intValue,
         crsidSidModelMode = settingsStates.crsidSidModelMode.intValue,
         crsidQualityMode = settingsStates.crsidQualityMode.intValue,
         sidPlayFpBackend = settingsStates.sidPlayFpBackend.intValue,

@@ -71,6 +71,12 @@ private:
         Sinc = 2
     };
 
+    enum class ClockMode {
+        Auto = 0,
+        Pal = 1,
+        Ntsc = 2
+    };
+
     mutable std::mutex decodeMutex;
 
     std::vector<unsigned char> fileData;
@@ -88,6 +94,7 @@ private:
     int currentSubtuneIndex = 0;
     int subtuneCount = 1;
     int sidChipCount = 1;
+    ClockMode clockMode = ClockMode::Auto;
     SidModelMode sidModelMode = SidModelMode::Auto;
     QualityMode qualityMode = QualityMode::High;
     bool durationReliable = false;

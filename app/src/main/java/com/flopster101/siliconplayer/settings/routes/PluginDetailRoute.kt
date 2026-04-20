@@ -106,6 +106,7 @@ internal data class PluginDetailRouteState(
     val furnaceGbQuality: Int,
     val furnaceDsidQuality: Int,
     val furnaceAyCore: Int,
+    val crsidClockMode: Int,
     val crsidSidModelMode: Int,
     val crsidQualityMode: Int
 )
@@ -186,6 +187,7 @@ internal data class PluginDetailRouteActions(
     val onFurnaceGbQualityChanged: (Int) -> Unit,
     val onFurnaceDsidQualityChanged: (Int) -> Unit,
     val onFurnaceAyCoreChanged: (Int) -> Unit,
+    val onCrsidClockModeChanged: (Int) -> Unit,
     val onCrsidSidModelModeChanged: (Int) -> Unit,
     val onCrsidQualityModeChanged: (Int) -> Unit
 )
@@ -385,8 +387,10 @@ internal fun PluginDetailRouteContent(
         )
 
         DecoderNames.C_RSID -> CrsidSettings(
+            clockMode = state.crsidClockMode,
             sidModelMode = state.crsidSidModelMode,
             qualityMode = state.crsidQualityMode,
+            onClockModeChanged = actions.onCrsidClockModeChanged,
             onSidModelModeChanged = actions.onCrsidSidModelModeChanged,
             onQualityModeChanged = actions.onCrsidQualityModeChanged
         )

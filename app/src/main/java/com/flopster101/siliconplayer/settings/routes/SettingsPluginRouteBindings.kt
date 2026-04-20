@@ -77,6 +77,7 @@ internal fun SettingsScreenState.toPluginDetailRouteState(): PluginDetailRouteSt
         furnaceGbQuality = pluginCore.furnaceGbQuality,
         furnaceDsidQuality = pluginCore.furnaceDsidQuality,
         furnaceAyCore = pluginCore.furnaceAyCore,
+        crsidClockMode = pluginCore.crsidClockMode,
         crsidSidModelMode = pluginCore.crsidSidModelMode,
         crsidQualityMode = pluginCore.crsidQualityMode
     )
@@ -158,6 +159,7 @@ internal fun SettingsScreenActions.toPluginDetailRouteActions(): PluginDetailRou
         onFurnaceGbQualityChanged = pluginCoreActions.onFurnaceGbQualityChanged,
         onFurnaceDsidQualityChanged = pluginCoreActions.onFurnaceDsidQualityChanged,
         onFurnaceAyCoreChanged = pluginCoreActions.onFurnaceAyCoreChanged,
+        onCrsidClockModeChanged = pluginCoreActions.onCrsidClockModeChanged,
         onCrsidSidModelModeChanged = pluginCoreActions.onCrsidSidModelModeChanged,
         onCrsidQualityModeChanged = pluginCoreActions.onCrsidQualityModeChanged
     )

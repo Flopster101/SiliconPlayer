@@ -52,6 +52,7 @@ internal data class AppNavigationSettingsStates(
     val furnaceGbQuality: MutableIntState,
     val furnaceDsidQuality: MutableIntState,
     val furnaceAyCore: MutableIntState,
+    val crsidClockMode: MutableIntState,
     val crsidSidModelMode: MutableIntState,
     val crsidQualityMode: MutableIntState,
     val sidPlayFpBackend: MutableIntState,
@@ -308,6 +309,9 @@ internal fun rememberAppNavigationSettingsStates(
                 FurnaceDefaults.ayCore
             )
         )
+    }
+    val crsidClockMode = remember {
+        mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CRSID_CLOCK_MODE, CrsidDefaults.clockMode))
     }
     val crsidSidModelMode = remember {
         mutableIntStateOf(prefs.getInt(CorePreferenceKeys.CRSID_SID_MODEL_MODE, CrsidDefaults.sidModelMode))
@@ -615,6 +619,7 @@ internal fun rememberAppNavigationSettingsStates(
         furnaceGbQuality = furnaceGbQuality,
         furnaceDsidQuality = furnaceDsidQuality,
         furnaceAyCore = furnaceAyCore,
+        crsidClockMode = crsidClockMode,
         crsidSidModelMode = crsidSidModelMode,
         crsidQualityMode = crsidQualityMode,
         sidPlayFpBackend = sidPlayFpBackend,

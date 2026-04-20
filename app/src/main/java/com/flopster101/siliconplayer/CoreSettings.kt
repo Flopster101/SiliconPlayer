@@ -40,6 +40,7 @@ object CorePreferenceKeys {
     const val GME_SPC_USE_BUILTIN_FADE = "gme_spc_use_builtin_fade"
     const val GME_SPC_INTERPOLATION = "gme_spc_interpolation"
     const val GME_SPC_USE_NATIVE_SAMPLE_RATE = "gme_spc_use_native_sample_rate"
+    const val CRSID_CLOCK_MODE = "crsid_clock_mode"
     const val CRSID_SID_MODEL_MODE = "crsid_sid_model_mode"
     const val CRSID_QUALITY_MODE = "crsid_quality_mode"
     const val SIDPLAYFP_BACKEND = "sidplayfp_backend"
@@ -122,6 +123,7 @@ object GmeDefaults {
 
 object CrsidDefaults {
     const val coreSampleRateHz = 0
+    const val clockMode = 0 // 0 Auto, 1 PAL, 2 NTSC
     const val sidModelMode = 0 // 0 Auto, 1 MOS6581, 2 MOS8580
     const val qualityMode = 1 // 0 Light, 1 High, 2 Sinc
 }

@@ -103,6 +103,18 @@ std::string sidClockFromHeader(const cRSID_SIDheader* header) {
     }
 }
 
+std::string sidClockFromRuntime() {
+    return cRSID.VideoStandard ? "PAL" : "NTSC";
+}
+
+std::string sidClockOverrideLabel(int mode) {
+    switch (mode) {
+        case 1: return "PAL";
+        case 2: return "NTSC";
+        default: return "";
+    }
+}
+
 std::string sidCompatibilityFromHeader(const cRSID_SIDheader* header) {
     if (!header) return "";
     if (header->MagicString[0] == 'R') {
@@ -580,6 +592,19 @@ void CRSIDDecoder::applyPlaybackOptionsLocked() {
             cRSID.SelectedSIDmodel = 0;
             break;
     }
+
+    switch (clockMode) {
+        case ClockMode::Pal:
+            cRSID.ForcedVideoStandard = CRSID_VIDEOSTANDARD_PAL;
+            break;
+        case ClockMode::Ntsc:
+            cRSID.ForcedVideoStandard = CRSID_VIDEOSTANDARD_NTSC;
+            break;
+        case ClockMode::Auto:
+        default:
+            cRSID.ForcedVideoStandard = CRSID_VIDEOSTANDARD_AUTO;
+            break;
+    }
 }
 
 void CRSIDDecoder::refreshHeaderMetadataLocked(const cRSID_SIDheader* header) {
@@ -604,6 +629,19 @@ void CRSIDDecoder::refreshHeaderMetadataLocked(const cRSID_SIDheader* header) {
 
 void CRSIDDecoder::refreshRuntimeMetadataLocked(const cRSID_SIDheader* header) {
     sidSpeedName = sidSpeedFromRuntime();
+    const std::string declaredClock = sidClockFromHeader(header);
+    const std::string effectiveClock = sidClockFromRuntime();
+    const std::string forcedClock = sidClockOverrideLabel(static_cast<int>(clockMode));
+
+    if (forcedClock.empty()) {
+        sidClockName = (declaredClock.empty() || declaredClock == "Unknown" || declaredClock == "Any")
+                ? effectiveClock
+                : declaredClock;
+    } else if (declaredClock.empty() || declaredClock == "Unknown" || declaredClock == "Any" || declaredClock == forcedClock) {
+        sidClockName = forcedClock + " (forced)";
+    } else {
+        sidClockName = forcedClock + " (forced; header: " + declaredClock + ")";
+    }
 
     sidChipCount = 0;
     std::vector<std::string> declaredModels;
@@ -656,6 +694,23 @@ void CRSIDDecoder::setOption(const char* name, const char* value) {
         return;
     }
 
+    if (optionName == "crsid.clock_mode") {
+        const int parsed = parseIntString(optionValue, static_cast<int>(clockMode));
+        switch (parsed) {
+            case 1:
+                clockMode = ClockMode::Pal;
+                break;
+            case 2:
+                clockMode = ClockMode::Ntsc;
+                break;
+            case 0:
+            default:
+                clockMode = ClockMode::Auto;
+                break;
+        }
+        return;
+    }
+
     if (optionName == "crsid.quality_mode") {
         const int parsed = parseIntString(optionValue, static_cast<int>(qualityMode));
         switch (parsed) {
@@ -702,6 +757,9 @@ int CRSIDDecoder::getOptionApplyPolicy(const char* name) const {
     }
 
     const std::string optionName(name);
+    if (optionName == "crsid.clock_mode") {
+        return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
+    }
     if (optionName == "crsid.sid_model_mode") {
         return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
     }

@@ -371,9 +371,17 @@ std::string CRSIDDecoder::getComment() {
 
 void CRSIDDecoder::setOutputSampleRate(int sampleRateHz) {
     std::lock_guard<std::mutex> lock(decodeMutex);
-    requestedSampleRate = clampSampleRate(sampleRateHz);
-    if (!fileData.empty()) {
-        initializeEngineLocked(currentSubtuneIndex);
+    const int normalizedRate = clampSampleRate(sampleRateHz);
+    if (requestedSampleRate == normalizedRate) {
+        return;
+    }
+
+    requestedSampleRate = normalizedRate;
+    // cRSID sample-rate changes are restart-required.
+    // Keep the requested value and apply it on the next open()/reinitialize path
+    // instead of restarting playback on every resume.
+    if (fileData.empty()) {
+        activeSampleRate = normalizedRate;
     }
 }
 

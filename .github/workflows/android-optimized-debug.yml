@@ -88,10 +88,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SUBMODULE_STATE_HASH="$(git submodule status --recursive external | sha256sum | cut -d' ' -f1)"
-          BUILD_SCRIPT_HASH="$(sha256sum external/build_deps.sh | cut -d' ' -f1)"
-          PATCH_HASH="$(find external/patches -type f -name '*.patch' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)"
-          echo "key=native-deps-${{ runner.os }}-ndk29-api21-all_legacy-${SUBMODULE_STATE_HASH}-${BUILD_SCRIPT_HASH}-${PATCH_HASH}" >> "${GITHUB_OUTPUT}"
+          EXTERNAL_TREE_HASH="$(git rev-parse HEAD:external)"
+          echo "key=native-deps-${{ runner.os }}-ndk29-api21-all_legacy-${EXTERNAL_TREE_HASH}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore native deps cache
         id: deps-cache

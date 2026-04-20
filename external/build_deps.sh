@@ -1519,8 +1519,6 @@ build_crsid() {
     local LIBCRSID_DIR="$PROJECT_PATH/libcRSID"
     local BUILD_DIR="$PROJECT_PATH/build_android_${ABI}"
     local TARGET_CC="$TOOLCHAIN/bin/${TRIPLE}${ANDROID_API}-clang"
-    local CRSID_STAMP="$INSTALL_DIR/lib/.crsid_build_stamp"
-    local CRSID_STAMP_EXPECTED="api=$ANDROID_API;layout=v1"
 
     if [ ! -d "$PROJECT_PATH" ]; then
         echo "cRSID source not found at $PROJECT_PATH (skipping)."
@@ -1531,16 +1529,6 @@ build_crsid() {
        [ ! -f "$LIBCRSID_DIR/Config.h" ] || [ ! -f "$LIBCRSID_DIR/Optimize.h" ]; then
         echo "Error: cRSID library sources not found in $LIBCRSID_DIR."
         return 1
-    fi
-
-    if [ "$FORCE_CLEAN" -ne 1 ] && [ -f "$INSTALL_DIR/lib/libcRSID.a" ] && \
-       [ -f "$INSTALL_DIR/include/crsid/libcRSID.h" ] && \
-       [ -f "$INSTALL_DIR/include/crsid/Config.h" ] && \
-       [ -f "$INSTALL_DIR/include/crsid/Optimize.h" ] && \
-       [ -f "$CRSID_STAMP" ] && \
-       [ "$(cat "$CRSID_STAMP" 2>/dev/null)" = "$CRSID_STAMP_EXPECTED" ]; then
-        echo "cRSID already built for $ABI -> skipping"
-        return 0
     fi
 
     rm -rf "$BUILD_DIR"
@@ -1558,7 +1546,6 @@ build_crsid() {
     cp "$LIBCRSID_DIR/libcRSID.h" "$INSTALL_DIR/include/crsid/"
     cp "$LIBCRSID_DIR/Config.h" "$INSTALL_DIR/include/crsid/"
     cp "$LIBCRSID_DIR/Optimize.h" "$INSTALL_DIR/include/crsid/"
-    printf '%s\n' "$CRSID_STAMP_EXPECTED" > "$CRSID_STAMP"
 }
 
 # -----------------------------------------------------------------------------

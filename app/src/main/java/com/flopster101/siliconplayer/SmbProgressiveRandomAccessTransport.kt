@@ -9,6 +9,7 @@ import com.hierynomus.smbj.session.Session
 import com.hierynomus.smbj.share.DiskShare
 import com.hierynomus.smbj.share.File as SmbFile
 import java.io.IOException
+import kotlin.concurrent.thread
 
 private data class OpenedSmbProgressiveTransportFile(
     val connection: Connection,
@@ -87,12 +88,25 @@ internal class SmbProgressiveRandomAccessTransport(
     @Volatile
     private var cancelled = false
     @Volatile
+    private var closeDispatched = false
+    @Volatile
     private var openedFile = openSmbProgressiveTransportFile(spec, remotePath)
+    private val openedSizeBytes = openedFile.sizeBytes
 
     override val sourceId: String = buildSmbSourceId(spec)
 
     override val sizeBytes: Long
-        get() = synchronized(lock) { openedFile.sizeBytes }
+        get() = openedSizeBytes
+
+    private fun dispatchClose(opened: OpenedSmbProgressiveTransportFile) {
+        if (closeDispatched) {
+            return
+        }
+        closeDispatched = true
+        thread(start = true, isDaemon = true, name = "smb-avio-close") {
+            closeOpenedSmbProgressiveTransportFile(opened)
+        }
+    }
 
     override fun readAt(offset: Long, buffer: ByteArray, bufferOffset: Int, length: Int): Int {
         if (offset < 0L) {
@@ -139,7 +153,7 @@ internal class SmbProgressiveRandomAccessTransport(
 
     override fun cancel() {
         cancelled = true
-        closeOpenedSmbProgressiveTransportFile(openedFile)
+        dispatchClose(openedFile)
     }
 
     override fun close() {

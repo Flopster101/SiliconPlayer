@@ -83,6 +83,11 @@ internal fun channelScopeVisibleElementOptions(): List<ChannelScopeVisibleElemen
             elementId = ChannelScopeVisibleElementId.Chip
         ),
         ChannelScopeVisibleElementOption(
+            coreId = "crsid",
+            coreLabel = "cRSID",
+            elementId = ChannelScopeVisibleElementId.Chip
+        ),
+        ChannelScopeVisibleElementOption(
             coreId = "klystrack",
             coreLabel = "Klystrack",
             elementId = ChannelScopeVisibleElementId.Volume
@@ -173,6 +178,7 @@ internal fun channelScopeCoreIdForDecoderName(decoderName: String?): String? {
         DecoderNames.LIB_OPEN_MPT -> "openmpt"
         DecoderNames.FURNACE -> "furnace"
         DecoderNames.GAME_MUSIC_EMU -> "gme"
+        DecoderNames.C_RSID -> "crsid"
         DecoderNames.SC68 -> "sc68"
         DecoderNames.KLYSTRACK -> "klystrack"
         DecoderNames.HIVELY_TRACKER -> "hivelytracker"

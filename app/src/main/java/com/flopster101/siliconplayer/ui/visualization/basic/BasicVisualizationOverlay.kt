@@ -822,29 +822,31 @@ private fun buildChannelScopeTextFields(
             effectParam = state?.effectSecondaryParam ?: -1
         )
     }
+    val channelLabel = if (showChannel) {
+        resolveChannelLabel(
+            channel = channel,
+            state = state,
+            sideCounts = sideCounts,
+            channelNamesByChannelIndex = chipNamesByChannelIndex
+        )
+    } else {
+        null
+    }
+    val chipLabel = if (showChip) {
+        formatChipName(
+            channel = channel,
+            state = state,
+            chipNamesByChannelIndex = chipNamesByChannelIndex
+        )
+    } else {
+        null
+    }
     return ChannelScopeTextFields(
-        channel = if (showChannel) {
-            resolveChannelLabel(
-                channel = channel,
-                state = state,
-                sideCounts = sideCounts,
-                channelNamesByChannelIndex = chipNamesByChannelIndex
-            )
-        } else {
-            null
-        },
+        channel = channelLabel,
         note = if (showNote) (formatNoteName(state?.note ?: -1, noteFormat) ?: "--") else null,
         volume = if (showVolume) formatVolume(state?.volume ?: 0) else null,
         effects = effects,
-        chip = if (showChip) {
-            formatChipName(
-                channel = channel,
-                state = state,
-                chipNamesByChannelIndex = chipNamesByChannelIndex
-            )
-        } else {
-            null
-        },
+        chip = chipLabel?.takeUnless { it == channelLabel },
         instrumentOrSample = if (showInstrument || showSample) {
             formatInstrumentOrSample(
                 state = state,

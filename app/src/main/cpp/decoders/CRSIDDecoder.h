@@ -1,6 +1,7 @@
 #ifndef SILICONPLAYER_CRSIDDECODER_H
 #define SILICONPLAYER_CRSIDDECODER_H
 
+#include "../ChannelScopeSharedState.h"
 #include "AudioDecoder.h"
 #include "SidMetadataProvider.h"
 #include <atomic>
@@ -43,6 +44,12 @@ public:
     TimelineMode getTimelineMode() const override;
     void setOption(const char* name, const char* value) override;
     int getOptionApplyPolicy(const char* name) const override;
+    std::vector<std::string> getToggleChannelNames() override;
+    void setToggleChannelMuted(int channelIndex, bool enabled) override;
+    bool getToggleChannelMuted(int channelIndex) const override;
+    void clearToggleChannelMutes() override;
+    std::shared_ptr<ChannelScopeSharedState> getChannelScopeSharedState() const override { return channelScopeState; }
+    std::vector<int32_t> getChannelScopeTextState(int maxChannels) override;
 
     std::string getSidFormatName() override;
     std::string getSidClockName() override;
@@ -120,12 +127,31 @@ private:
     std::string sidCurrentModelSummary;
     std::string sidBaseAddressSummary;
     std::string sidCommentSummary;
+    std::vector<std::string> toggleChannelNames;
+    std::vector<bool> toggleChannelMuted;
+    std::vector<int> toggleChannelSidNumbers;
+    std::vector<int> toggleChannelVoiceNumbers;
+    std::shared_ptr<ChannelScopeSharedState> channelScopeState;
+    std::vector<float> scopeRingRaw;
+    std::vector<float> scopeFrameScratch;
+    int scopeRingChannels = 0;
+    int scopeRingWritePos = 0;
+    int scopeRingSamples = 0;
+    uint64_t channelScopeSourceSerial = 0;
+    bool scopeCaptureEnabled = false;
 
     bool loadFileLocked(const char* path);
     bool initializeEngineLocked(int subtuneIndex);
     bool startSubtuneLocked(int subtuneIndex);
     void closeLocked();
     void applyPlaybackOptionsLocked();
+    void rebuildToggleChannelsLocked();
+    void applyToggleChannelMutesLocked();
+    void resetChannelScopeLocked();
+    void ensureScopeRingShapeLocked(int channelsToKeep);
+    void appendScopeFrameLocked(const float* perVoiceSamples, int channelsToWrite);
+    void publishScopeSnapshotLocked();
+    void captureChannelScopeFrameLocked();
     void refreshHeaderMetadataLocked(const cRSID_SIDheader* header);
     void refreshRuntimeMetadataLocked(const cRSID_SIDheader* header);
 };

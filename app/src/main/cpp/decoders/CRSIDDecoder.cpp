@@ -4,6 +4,7 @@
 #include <array>
 #include <cctype>
 #include <cstdint>
+#include <cmath>
 #include <fstream>
 #include <iterator>
 #include <sstream>
@@ -25,6 +26,12 @@ constexpr int kCrsidMaxSampleRateHz = 65535;
 constexpr int kCrsidOutputChannels = 2;
 constexpr int kCrsidBufferFrames = 2048;
 constexpr int kCrsidSeekDiscardChunkFrames = 4096;
+constexpr int kCrsidChannelScopeTextStride = 10;
+constexpr int kCrsidChannelScopeTextFlagActive = 1 << 0;
+constexpr int kCrsidVoicesPerSid = 3;
+constexpr int kCrsidChannelsPerSid = 4;
+constexpr int kCrsidMaxSidCount = 4;
+constexpr int kCrsidMaxScopeVoices = kCrsidChannelsPerSid * kCrsidMaxSidCount;
 constexpr unsigned char kCrsidFileVersionWebSid = 0x4E;
 
 int clampSampleRate(int sampleRateHz) {
@@ -187,9 +194,13 @@ std::string joinStringParts(const std::vector<std::string>& parts) {
     }
     return out.str();
 }
+
+float normalizeVoiceLevel(signed int level) {
+    return std::clamp((static_cast<float>(level) / 32768.0f) * 1.10f, -1.0f, 1.0f);
+}
 }
 
-CRSIDDecoder::CRSIDDecoder() = default;
+CRSIDDecoder::CRSIDDecoder() : channelScopeState(std::make_shared<ChannelScopeSharedState>()) {}
 
 CRSIDDecoder::~CRSIDDecoder() {
     close();
@@ -212,6 +223,208 @@ void CRSIDDecoder::close() {
     closeLocked();
     fileData.clear();
     sourcePath.clear();
+}
+
+void CRSIDDecoder::resetChannelScopeLocked() {
+    scopeRingRaw.clear();
+    scopeFrameScratch.clear();
+    scopeRingChannels = 0;
+    scopeRingWritePos = 0;
+    scopeRingSamples = 0;
+    if (channelScopeState) {
+        channelScopeState->clear();
+    }
+}
+
+void CRSIDDecoder::ensureScopeRingShapeLocked(int channelsToKeep) {
+    const int clampedChannels = std::clamp(channelsToKeep, 0, kCrsidMaxScopeVoices);
+    if (clampedChannels <= 0) {
+        scopeRingRaw.clear();
+        scopeRingChannels = 0;
+        scopeRingWritePos = 0;
+        scopeRingSamples = 0;
+        return;
+    }
+    const size_t requiredSize =
+            static_cast<size_t>(clampedChannels) * ChannelScopeSharedState::kMaxSamples;
+    if (scopeRingChannels == clampedChannels && scopeRingRaw.size() == requiredSize) {
+        return;
+    }
+    scopeRingRaw.assign(requiredSize, 0.0f);
+    scopeRingChannels = clampedChannels;
+    scopeRingWritePos = 0;
+    scopeRingSamples = 0;
+}
+
+void CRSIDDecoder::appendScopeFrameLocked(const float* perVoiceSamples, int channelsToWrite) {
+    if (!perVoiceSamples || channelsToWrite <= 0) {
+        return;
+    }
+    ensureScopeRingShapeLocked(channelsToWrite);
+    if (scopeRingChannels <= 0 || scopeRingRaw.empty()) {
+        return;
+    }
+    const int storedChannels = std::min(scopeRingChannels, channelsToWrite);
+    for (int channel = 0; channel < storedChannels; ++channel) {
+        scopeRingRaw[
+                static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                static_cast<size_t>(scopeRingWritePos)
+        ] = std::clamp(perVoiceSamples[channel], -1.0f, 1.0f);
+    }
+    for (int channel = storedChannels; channel < scopeRingChannels; ++channel) {
+        scopeRingRaw[
+                static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                static_cast<size_t>(scopeRingWritePos)
+        ] = 0.0f;
+    }
+    scopeRingWritePos = (scopeRingWritePos + 1) % ChannelScopeSharedState::kMaxSamples;
+    scopeRingSamples = std::min(scopeRingSamples + 1, ChannelScopeSharedState::kMaxSamples);
+}
+
+void CRSIDDecoder::publishScopeSnapshotLocked() {
+    if (!channelScopeState) {
+        return;
+    }
+    if (scopeRingChannels <= 0 || scopeRingRaw.empty() || scopeRingSamples <= 0) {
+        channelScopeState->clear();
+        return;
+    }
+
+    std::vector<float> raw(
+            static_cast<size_t>(scopeRingChannels) * ChannelScopeSharedState::kMaxSamples,
+            0.0f
+    );
+    std::vector<float> vu(static_cast<size_t>(scopeRingChannels), 0.0f);
+    const int filledSamples = std::clamp(scopeRingSamples, 0, ChannelScopeSharedState::kMaxSamples);
+    const int zeroPrefix = ChannelScopeSharedState::kMaxSamples - filledSamples;
+    const int trailingSamples = std::clamp(activeSampleRate > 0 ? activeSampleRate / 50 : 64, 64, 1024);
+
+    for (int channel = 0; channel < scopeRingChannels; ++channel) {
+        float* dst = raw.data() + static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples;
+        for (int i = 0; i < filledSamples; ++i) {
+            const int ringIndex =
+                    (scopeRingWritePos - filledSamples + i + ChannelScopeSharedState::kMaxSamples) %
+                    ChannelScopeSharedState::kMaxSamples;
+            dst[zeroPrefix + i] = scopeRingRaw[
+                    static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                    static_cast<size_t>(ringIndex)
+            ];
+        }
+
+        float peak = 0.0f;
+        const int start = std::max(0, ChannelScopeSharedState::kMaxSamples - trailingSamples);
+        for (int i = start; i < ChannelScopeSharedState::kMaxSamples; ++i) {
+            peak = std::max(peak, std::abs(dst[i]));
+        }
+        vu[static_cast<size_t>(channel)] = std::clamp(peak, 0.0f, 1.0f);
+    }
+
+    std::lock_guard<std::mutex> channelScopeLock(channelScopeState->mutex);
+    channelScopeState->snapshotRaw = std::move(raw);
+    channelScopeState->snapshotVu = std::move(vu);
+    channelScopeState->snapshotChannels = scopeRingChannels;
+    channelScopeState->snapshotSerial = ++channelScopeSourceSerial;
+}
+
+void CRSIDDecoder::captureChannelScopeFrameLocked() {
+    if (!scopeCaptureEnabled || toggleChannelNames.empty()) {
+        return;
+    }
+
+    const int totalChannels = std::min(static_cast<int>(toggleChannelNames.size()), kCrsidMaxScopeVoices);
+    if (totalChannels <= 0) {
+        return;
+    }
+
+    if (static_cast<int>(scopeFrameScratch.size()) < totalChannels) {
+        scopeFrameScratch.resize(static_cast<size_t>(totalChannels), 0.0f);
+    }
+
+    std::array<signed int, kCrsidVoicesPerSid> voiceLevels {};
+    int lastSidNumber = -1;
+    for (int channel = 0; channel < totalChannels; ++channel) {
+        const int sidNumber = toggleChannelSidNumbers[static_cast<size_t>(channel)];
+        const int voiceNumber = toggleChannelVoiceNumbers[static_cast<size_t>(channel)];
+        if (sidNumber != lastSidNumber) {
+            cRSID_getVoiceLevels(sidNumber, voiceLevels.data());
+            lastSidNumber = sidNumber;
+        }
+        scopeFrameScratch[static_cast<size_t>(channel)] = (voiceNumber < kCrsidVoicesPerSid)
+                ? normalizeVoiceLevel(voiceLevels[static_cast<size_t>(voiceNumber)])
+                : normalizeVoiceLevel(cRSID_getDigiLevel(sidNumber));
+    }
+    appendScopeFrameLocked(scopeFrameScratch.data(), totalChannels);
+}
+
+void CRSIDDecoder::rebuildToggleChannelsLocked() {
+    const std::vector<bool> previousMuted = toggleChannelMuted;
+    const std::vector<int> previousSidNumbers = toggleChannelSidNumbers;
+    const std::vector<int> previousVoiceNumbers = toggleChannelVoiceNumbers;
+
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
+    toggleChannelSidNumbers.clear();
+    toggleChannelVoiceNumbers.clear();
+
+    int activeSidCount = 0;
+    for (int sidNumber = 1; sidNumber <= kCrsidMaxSidCount; ++sidNumber) {
+        if (cRSID_getSIDbase(sidNumber) != 0) {
+            ++activeSidCount;
+        }
+    }
+
+    for (int sidNumber = 1; sidNumber <= kCrsidMaxSidCount; ++sidNumber) {
+        if (cRSID_getSIDbase(sidNumber) == 0) {
+            continue;
+        }
+        for (int voiceNumber = 0; voiceNumber < kCrsidChannelsPerSid; ++voiceNumber) {
+            toggleChannelSidNumbers.push_back(sidNumber);
+            toggleChannelVoiceNumbers.push_back(voiceNumber);
+            if (activeSidCount <= 1) {
+                toggleChannelNames.push_back(
+                        voiceNumber < kCrsidVoicesPerSid
+                        ? ("Voice " + std::to_string(voiceNumber + 1))
+                        : "Digi"
+                );
+            } else {
+                toggleChannelNames.push_back(
+                        voiceNumber < kCrsidVoicesPerSid
+                        ? ("SID " + std::to_string(sidNumber) + " Voice " + std::to_string(voiceNumber + 1))
+                        : ("SID " + std::to_string(sidNumber) + " Digi")
+                );
+            }
+
+            bool muted = false;
+            for (size_t previousIndex = 0; previousIndex < previousMuted.size(); ++previousIndex) {
+                if (previousIndex < previousSidNumbers.size() &&
+                    previousIndex < previousVoiceNumbers.size() &&
+                    previousSidNumbers[previousIndex] == sidNumber &&
+                    previousVoiceNumbers[previousIndex] == voiceNumber) {
+                    muted = previousMuted[previousIndex];
+                    break;
+                }
+            }
+            toggleChannelMuted.push_back(muted);
+        }
+    }
+}
+
+void CRSIDDecoder::applyToggleChannelMutesLocked() {
+    std::array<unsigned char, kCrsidMaxSidCount + 1> muteMasks {};
+    for (size_t index = 0; index < toggleChannelMuted.size(); ++index) {
+        if (!toggleChannelMuted[index]) {
+            continue;
+        }
+        const int sidNumber = toggleChannelSidNumbers[index];
+        const int voiceNumber = toggleChannelVoiceNumbers[index];
+        if (sidNumber >= 1 && sidNumber <= kCrsidMaxSidCount &&
+            voiceNumber >= 0 && voiceNumber < kCrsidChannelsPerSid) {
+            muteMasks[static_cast<size_t>(sidNumber)] |= static_cast<unsigned char>(1 << voiceNumber);
+        }
+    }
+    for (int sidNumber = 1; sidNumber <= kCrsidMaxSidCount; ++sidNumber) {
+        cRSID_setVoiceMuteMask(sidNumber, muteMasks[static_cast<size_t>(sidNumber)]);
+    }
 }
 
 int CRSIDDecoder::read(float* buffer, int numFrames) {
@@ -242,8 +455,13 @@ int CRSIDDecoder::read(float* buffer, int numFrames) {
         const cRSID_Output output = cRSID_generateSample();
         buffer[framesWritten * 2] = static_cast<float>(output.L) / 32768.0f;
         buffer[(framesWritten * 2) + 1] = static_cast<float>(output.R) / 32768.0f;
+        captureChannelScopeFrameLocked();
         ++framesWritten;
         playbackPositionSeconds += 1.0 / static_cast<double>(activeSampleRate);
+    }
+
+    if (framesWritten > 0 && scopeCaptureEnabled) {
+        publishScopeSnapshotLocked();
     }
 
     return framesWritten;
@@ -278,6 +496,7 @@ void CRSIDDecoder::seek(double seconds) {
 
     playbackPositionSeconds = static_cast<double>(discardedFrames) / static_cast<double>(activeSampleRate);
     endReached = durationReliable && currentDurationSeconds > 0.0 && playbackPositionSeconds >= currentDurationSeconds;
+    resetChannelScopeLocked();
 }
 
 double CRSIDDecoder::getDuration() {
@@ -406,6 +625,81 @@ double CRSIDDecoder::getPlaybackPositionSeconds() {
 
 AudioDecoder::TimelineMode CRSIDDecoder::getTimelineMode() const {
     return TimelineMode::Discontinuous;
+}
+
+std::vector<std::string> CRSIDDecoder::getToggleChannelNames() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    return toggleChannelNames;
+}
+
+void CRSIDDecoder::setToggleChannelMuted(int channelIndex, bool enabled) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return;
+    }
+    toggleChannelMuted[static_cast<size_t>(channelIndex)] = enabled;
+    applyToggleChannelMutesLocked();
+    resetChannelScopeLocked();
+}
+
+bool CRSIDDecoder::getToggleChannelMuted(int channelIndex) const {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (channelIndex < 0 || channelIndex >= static_cast<int>(toggleChannelMuted.size())) {
+        return false;
+    }
+    return toggleChannelMuted[static_cast<size_t>(channelIndex)];
+}
+
+void CRSIDDecoder::clearToggleChannelMutes() {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    std::fill(toggleChannelMuted.begin(), toggleChannelMuted.end(), false);
+    applyToggleChannelMutesLocked();
+    resetChannelScopeLocked();
+}
+
+std::vector<int32_t> CRSIDDecoder::getChannelScopeTextState(int maxChannels) {
+    std::lock_guard<std::mutex> lock(decodeMutex);
+    if (scopeRingChannels <= 0 || scopeRingSamples <= 0 || scopeRingRaw.empty()) {
+        return {};
+    }
+
+    const int channelsToExport = std::min(scopeRingChannels, std::clamp(maxChannels, 1, kCrsidMaxScopeVoices));
+    std::vector<int32_t> flat(static_cast<size_t>(channelsToExport * kCrsidChannelScopeTextStride), -1);
+    const int trailingSamples = std::clamp(activeSampleRate > 0 ? activeSampleRate / 50 : 64, 64, 1024);
+    const int recentSamples = std::min(scopeRingSamples, trailingSamples);
+    for (int channel = 0; channel < channelsToExport; ++channel) {
+        float recentPeak = 0.0f;
+        for (int i = 0; i < recentSamples; ++i) {
+            const int ringIndex =
+                    (scopeRingWritePos - recentSamples + i + ChannelScopeSharedState::kMaxSamples) %
+                    ChannelScopeSharedState::kMaxSamples;
+            recentPeak = std::max(
+                    recentPeak,
+                    std::abs(scopeRingRaw[
+                            static_cast<size_t>(channel) * ChannelScopeSharedState::kMaxSamples +
+                            static_cast<size_t>(ringIndex)
+                    ])
+            );
+        }
+
+        const size_t base = static_cast<size_t>(channel * kCrsidChannelScopeTextStride);
+        int flags = 0;
+        if (recentPeak > 0.0015f) {
+            flags |= kCrsidChannelScopeTextFlagActive;
+        }
+
+        flat[base + 0] = channel;
+        flat[base + 1] = -1;
+        flat[base + 2] = std::clamp(static_cast<int>(std::lround(recentPeak * 64.0f)), 0, 64);
+        flat[base + 3] = 0;
+        flat[base + 4] = -1;
+        flat[base + 5] = 0;
+        flat[base + 6] = -1;
+        flat[base + 7] = -1;
+        flat[base + 8] = -1;
+        flat[base + 9] = flags;
+    }
+    return flat;
 }
 
 std::string CRSIDDecoder::getSidFormatName() {
@@ -539,6 +833,9 @@ bool CRSIDDecoder::startSubtuneLocked(int subtuneIndex) {
     durationReliable = declaredSubtuneDurationsSeconds[static_cast<size_t>(subtuneIndex)] > 0.0;
     endReached = false;
     refreshRuntimeMetadataLocked(header);
+    rebuildToggleChannelsLocked();
+    applyToggleChannelMutesLocked();
+    resetChannelScopeLocked();
     return true;
 }
 
@@ -559,6 +856,10 @@ void CRSIDDecoder::closeLocked() {
     sidCurrentModelSummary.clear();
     sidBaseAddressSummary.clear();
     sidCommentSummary.clear();
+    toggleChannelNames.clear();
+    toggleChannelMuted.clear();
+    toggleChannelSidNumbers.clear();
+    toggleChannelVoiceNumbers.clear();
     currentSubtuneIndex = 0;
     subtuneCount = 1;
     sidChipCount = 1;
@@ -566,6 +867,7 @@ void CRSIDDecoder::closeLocked() {
     endReached = false;
     currentDurationSeconds = 0.0;
     playbackPositionSeconds = 0.0;
+    resetChannelScopeLocked();
 }
 
 void CRSIDDecoder::applyPlaybackOptionsLocked() {
@@ -692,6 +994,15 @@ void CRSIDDecoder::setOption(const char* name, const char* value) {
     std::lock_guard<std::mutex> lock(decodeMutex);
     const std::string optionName(name);
     const std::string optionValue(value);
+    if (optionName == "visualization.channel_scope_active") {
+        const bool enabled = parseBoolString(optionValue, scopeCaptureEnabled);
+        if (scopeCaptureEnabled == enabled) {
+            return;
+        }
+        scopeCaptureEnabled = enabled;
+        resetChannelScopeLocked();
+        return;
+    }
     if (optionName == "crsid.sid_model_mode") {
         const int parsed = parseIntString(optionValue, static_cast<int>(sidModelMode));
         switch (parsed) {
@@ -792,6 +1103,9 @@ int CRSIDDecoder::getOptionApplyPolicy(const char* name) const {
     }
 
     const std::string optionName(name);
+    if (optionName == "visualization.channel_scope_active") {
+        return OPTION_APPLY_LIVE;
+    }
     if (optionName == "crsid.clock_mode") {
         return OPTION_APPLY_REQUIRES_PLAYBACK_RESTART;
     }

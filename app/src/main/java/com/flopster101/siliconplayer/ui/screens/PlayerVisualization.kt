@@ -1976,6 +1976,14 @@ internal fun AlbumArtPlaceholder(
                         .mapIndexed { index, name -> index to name }
                         .toMap()
             }
+            DecoderNames.C_RSID -> {
+                visChannelScopeInstrumentNamesByIndex = emptyMap()
+                visChannelScopeSampleNamesByIndex = emptyMap()
+                visChannelScopeChipNamesByChannelIndex =
+                    NativeBridge.getDecoderToggleChannelNames()
+                        .mapIndexed { index, name -> index to name }
+                        .toMap()
+            }
             DecoderNames.LIB_SID_PLAY_FP -> {
                 visChannelScopeInstrumentNamesByIndex = emptyMap()
                 visChannelScopeSampleNamesByIndex = emptyMap()

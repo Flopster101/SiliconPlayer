@@ -89,6 +89,7 @@ typedef struct cRSID_SIDinstance {
  unsigned int       PrevWavGenOut[15];
  unsigned char      PrevWavData[15];
  //Filter-related:
+ unsigned char      VoiceMuteMask;
  int                PrevLowPass;
  int                PrevBandPass;
  unsigned char      Volume; //pre-calculated once, used by oversampled/HQ output-emulation many times
@@ -100,6 +101,11 @@ typedef struct cRSID_SIDinstance {
  int                FilterInputSample;
  int                PrevNonFiltedSample;
  int                PrevFilterInputSample;
+ int                ScopeVoicePrevLowPass[3];
+ int                ScopeVoicePrevBandPass[3];
+ int                ScopeVoiceNonFiltered[3];
+ int                ScopeVoiceFilterInput[3];
+ int                ScopeVoiceOutput[4];
  signed int         PrevVolume; //lowpass-filtered version of Volume-band register
  int                Output;     //not attenuated (range:0..0xFFFFF depending on SID's main-volume)
  int                Level;      //filtered version, good for VU-meter display

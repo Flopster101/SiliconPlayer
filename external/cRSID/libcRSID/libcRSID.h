@@ -170,6 +170,10 @@ void               cRSID_setSIDmodels   (); //based on SIDheader-data
 unsigned char      cRSID_set6581FilterPreset (unsigned char preset);
 unsigned char      cRSID_getSIDchannel  (int sid_number); //channel in stereo field (left/right/middle)
 int                cRSID_getSIDlevel    (int sid_number); //average level (for VU-meter display)
+int                cRSID_getDigiLevel   (int sid_number);
+unsigned char      cRSID_getVoiceMuteMask (int sid_number); //bit0..3 = muted voices 1..3 plus digi for the given SID
+unsigned char      cRSID_setVoiceMuteMask (int sid_number, unsigned char mute_mask); //bit0..3 = muted voices 1..3 plus digi for the given SID
+void               cRSID_getVoiceLevels (int sid_number, signed int* out_voice_levels); //per-voice waveform*envelope (3 values written to out_voice_levels)
 
 #ifdef CRSID_PLATFORM_PC
 cRSID_SIDheader*   cRSID_playSIDfile    (char* filename, char subtune); //simple single-call SID playback

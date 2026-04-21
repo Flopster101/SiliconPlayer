@@ -32,6 +32,28 @@ int cRSID_getSIDlevel (int sid_number) {
  return cRSID_C64.SID[ sid_number ].Level;
 }
 
+int cRSID_getDigiLevel (int sid_number) {
+ return cRSID_C64.SID[ sid_number ].ScopeVoiceOutput[3];
+}
+
+unsigned char cRSID_getVoiceMuteMask (int sid_number) {
+ return cRSID_C64.SID[ sid_number ].VoiceMuteMask;
+}
+
+unsigned char cRSID_setVoiceMuteMask (int sid_number, unsigned char mute_mask) {
+ return ( cRSID_C64.SID[ sid_number ].VoiceMuteMask = (mute_mask & 0x0F) );
+}
+
+void cRSID_getVoiceLevels (int sid_number, signed int* out_voice_levels) {
+ enum { CRSID_VOICE_COUNT = 3 };
+ cRSID_SIDinstance* SID = &cRSID_C64.SID[ sid_number ];
+ int v;
+ if (out_voice_levels == NULL) return;
+ for (v = 0; v < CRSID_VOICE_COUNT; ++v) {
+  out_voice_levels[v] = SID->ScopeVoiceOutput[v];
+ }
+}
+
 
 void cRSID_createSIDchip (cRSID_SIDinstance* SID, unsigned short model, char channel, unsigned short baseaddress) {
  //static cRSID_C64instance* C64 = &cRSID_C64;
@@ -58,6 +80,12 @@ void cRSID_initSIDchip (cRSID_SIDinstance* SID) {
   SID->PrevSounDemonDigiWF[Channel] = 0x00;
  }
  SID->SyncSourceMSBrise = 0; SID->RingSourceMSB = 0;
+ SID->VoiceMuteMask = 0;
+ SID->ScopeVoicePrevLowPass[0] = SID->ScopeVoicePrevLowPass[1] = SID->ScopeVoicePrevLowPass[2] = 0;
+ SID->ScopeVoicePrevBandPass[0] = SID->ScopeVoicePrevBandPass[1] = SID->ScopeVoicePrevBandPass[2] = 0;
+ SID->ScopeVoiceNonFiltered[0] = SID->ScopeVoiceNonFiltered[1] = SID->ScopeVoiceNonFiltered[2] = 0;
+ SID->ScopeVoiceFilterInput[0] = SID->ScopeVoiceFilterInput[1] = SID->ScopeVoiceFilterInput[2] = 0;
+ SID->ScopeVoiceOutput[0] = SID->ScopeVoiceOutput[1] = SID->ScopeVoiceOutput[2] = SID->ScopeVoiceOutput[3] = 0;
  SID->PrevLowPass = SID->PrevBandPass = SID->PrevVolume = 0;
 }
 

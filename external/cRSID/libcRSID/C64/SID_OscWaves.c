@@ -60,13 +60,14 @@ INLINE int cRSID_emulateSID_light (FASTVAR cRSID_SIDinstance *const FASTPTR SID)
  static const unsigned char FilterSwitchVal[] = {1,1,1,1,1,1,1,2,2,2,2,2,2,2,4};
 
  FASTVAR unsigned char Channel;
+ FASTVAR unsigned char VoiceIndex;
  FASTVAR unsigned char * FASTPTR ChannelPtr;
  //static char MainVolume;
  FASTVAR unsigned char WF, FilterSwitchReso, VolumeBand;
  static unsigned char TestBit, Envelope;
  FASTVAR unsigned int Utmp, WavGenOut, PW;
  static unsigned int PhaseAccuStep, MSB;
- FASTVAR int Tmp, Feedback;
+ FASTVAR int Tmp, Feedback, VoiceSample;
  static int Steepness, PulsePeak;
  //static int FilterInput, Cutoff, Resonance, FilterOutput, NonFilted, Output;
  FASTVAR int * FASTPTR PhaseAccuPtr;
@@ -75,6 +76,8 @@ INLINE int cRSID_emulateSID_light (FASTVAR cRSID_SIDinstance *const FASTPTR SID)
  //if ( RARELY (cRSID.Paused || SID->BasePtr == NULL) ) return 0; //avoid some segfaults when NULL-ing SID4
 
  SID->NonFiltedSample = SID->FilterInputSample = 0;
+ SID->ScopeVoiceNonFiltered[0] = SID->ScopeVoiceNonFiltered[1] = SID->ScopeVoiceNonFiltered[2] = 0;
+ SID->ScopeVoiceFilterInput[0] = SID->ScopeVoiceFilterInput[1] = SID->ScopeVoiceFilterInput[2] = 0;
  FilterSwitchReso = SID->BasePtr[0x17]; VolumeBand=SID->BasePtr[0x18];
 
  //Waveform-generator //(phase accumulator and waveform-selector)
@@ -173,8 +176,6 @@ INLINE int cRSID_emulateSID_light (FASTVAR cRSID_SIDinstance *const FASTPTR SID)
     break;
    default: WavGenOut = CRSID_WAVE_MIN; break; //noise plus pulse/saw/triangle mostly yields silence
   }
-  //SID->PrevSounDemonDigiWF[Channel] = WF;
-
   WavGenOut &= CRSID_WAVE_MASK; //0xFFFF;
   /*if (WF&0xF0)*/ SID->PrevWavGenOut[Channel] = WavGenOut; //emulate waveform 00 floating wave-DAC (utilized by SounDemon digis)
   //else WavGenOut = SID->PrevWavGenOut[Channel];  //(on real SID waveform00 decays, we just simply keep the value to avoid clicks)
@@ -182,12 +183,19 @@ INLINE int cRSID_emulateSID_light (FASTVAR cRSID_SIDinstance *const FASTPTR SID)
   SID->RingSourceMSB = MSB;
 
   //routing the channel signal to either the filter or the unfiltered master output depending on filter-switch SID-registers
+  VoiceIndex = (Channel / SID_CHANNEL_SPACING);
+  if (SID->VoiceMuteMask & (1 << VoiceIndex)) {
+   continue;
+  }
   Envelope = MOSTLY (SID->ChipModel==8580) ?  SID->EnvelopeCounter[Channel] : cRSID_ADSR_DAC_6581[SID->EnvelopeCounter[Channel]];
+  VoiceSample = ( ((int)WavGenOut-CRSID_WAVE_MID) * Envelope ) / ENVELOPE_MAGNITUDE_DIV;
   if ( RARELY (FilterSwitchReso & FilterSwitchVal[Channel]) ) {
-   SID->FilterInputSample += ( ((int)WavGenOut-CRSID_WAVE_MID) * Envelope ) / ENVELOPE_MAGNITUDE_DIV; // >> 8;
+   SID->FilterInputSample += VoiceSample;
+   SID->ScopeVoiceFilterInput[VoiceIndex] = VoiceSample;
   }
   else if ( MOSTLY (Channel!=14 || !(VolumeBand & OFF3_BITVAL)) ) {
-   SID->NonFiltedSample += ( ((int)WavGenOut-CRSID_WAVE_MID) * Envelope ) / ENVELOPE_MAGNITUDE_DIV; // >> 8;
+   SID->NonFiltedSample += VoiceSample;
+   SID->ScopeVoiceNonFiltered[VoiceIndex] = VoiceSample;
   }
 
  }
@@ -238,24 +246,27 @@ INLINE cRSID_SIDwavOutput cRSID_emulateHQwaves (FASTVAR cRSID_SIDinstance *const
   ENVELOPE_MAGNITUDE_DIV = (SID_ENVELOPE_MAGNITUDE * CRSID_WAVGEN_PREDIV) //256 * 1..16 = 256..4096
  } Specs;
 
- //#include "SIDwaves.h"
+ static const unsigned char FilterSwitchVal[] = {1,1,1,1,1,1,1,2,2,2,2,2,2,2,4};
 
- FASTVAR unsigned char Channel, WF, FilterSwitchReso, VolumeBand;
+ FASTVAR unsigned char Channel;
+ FASTVAR unsigned char VoiceIndex;
+ FASTVAR unsigned char * FASTPTR ChannelPtr;
+ //static char MainVolume;
+ FASTVAR unsigned char WF, FilterSwitchReso, VolumeBand;
  static unsigned char TestBit, Envelope;
  FASTVAR unsigned int Utmp, WavGenOut, PW;
  static unsigned int PhaseAccuStep, MSB;
- FASTVAR int Tmp, Feedback;
+ FASTVAR int Tmp, Feedback, VoiceSample;
  //static int FilterInput, Cutoff, Resonance; //, FilterOutput, NonFilted, Output;
- FASTVAR unsigned char * FASTPTR ChannelPtr;
  FASTVAR int * FASTPTR PhaseAccuPtr;
  static cRSID_SIDwavOutput SIDwavOutput;
-
- static const unsigned char FilterSwitchVal[] = {1,1,1,1,1,1,1,2,2,2,2,2,2,2,4};
 
  //'Paused' causes immediate stopping in audio-buffer thread, so SID-baseaddress changes during tune-switching won't give segfaults
  //if ( RARELY (cRSID.Paused || SID->BasePtr == NULL) ) return (cRSID_SIDwavOutput) {0,0}; //{{0},0}; //avoid some segfaults when NULL-ing SID4
 
  SIDwavOutput.FilterInput = SIDwavOutput.NonFilted = 0;
+ SID->ScopeVoiceNonFiltered[0] = SID->ScopeVoiceNonFiltered[1] = SID->ScopeVoiceNonFiltered[2] = 0;
+ SID->ScopeVoiceFilterInput[0] = SID->ScopeVoiceFilterInput[1] = SID->ScopeVoiceFilterInput[2] = 0;
  FilterSwitchReso = SID->BasePtr[0x17]; VolumeBand=SID->BasePtr[0x18];
 
  for (Channel=0; Channel < SID_CHANNELS_RANGE; Channel += SID_CHANNEL_SPACING) {
@@ -333,12 +344,19 @@ INLINE cRSID_SIDwavOutput cRSID_emulateHQwaves (FASTVAR cRSID_SIDinstance *const
   SID->RingSourceMSB = MSB;
 
   //routing the channel signal to either the filter or the unfiltered master output depending on filter-switch SID-registers
+  VoiceIndex = (Channel / SID_CHANNEL_SPACING);
+  if (SID->VoiceMuteMask & (1 << VoiceIndex)) {
+   continue;
+  }
   Envelope = MOSTLY (SID->ChipModel==8580) ?  SID->EnvelopeCounter[Channel] : cRSID_ADSR_DAC_6581[SID->EnvelopeCounter[Channel]];
+  VoiceSample = ( ((int)WavGenOut-CRSID_WAVE_MID) * Envelope ) / ENVELOPE_MAGNITUDE_DIV;
   if ( RARELY (FilterSwitchReso & FilterSwitchVal[Channel]) ) {
-   SIDwavOutput.FilterInput += ( ((int)WavGenOut-CRSID_WAVE_MID) * Envelope ) / ENVELOPE_MAGNITUDE_DIV; // >> 8;
+   SIDwavOutput.FilterInput += VoiceSample;
+   SID->ScopeVoiceFilterInput[VoiceIndex] = VoiceSample;
   }
   else if ( MOSTLY (Channel!=14 || !(VolumeBand & OFF3_BITVAL)) ) {
-   SIDwavOutput.NonFilted += ( ((int)WavGenOut-CRSID_WAVE_MID) * Envelope ) / ENVELOPE_MAGNITUDE_DIV; // >> 8;
+   SIDwavOutput.NonFilted += VoiceSample;
+   SID->ScopeVoiceNonFiltered[VoiceIndex] = VoiceSample;
   }
 
  }

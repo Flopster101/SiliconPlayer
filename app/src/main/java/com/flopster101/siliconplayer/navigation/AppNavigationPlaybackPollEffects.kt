@@ -288,6 +288,10 @@ internal fun AppNavigationPlaybackPollEffects(
                         if (moved) {
                             continue
                         }
+                        if (repeatMode == RepeatMode.Track || repeatMode == RepeatMode.Subtune) {
+                            onRestartCurrentTrack()
+                            continue
+                        }
                         if (repeatMode == RepeatMode.None) {
                             onStopPlaybackAndUnload()
                         }

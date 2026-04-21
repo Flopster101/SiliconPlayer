@@ -12,6 +12,10 @@ private class SmbAvioHandle(
 
     fun sizeBytes(): Long = cache.sizeBytes
 
+    fun cancel() {
+        cache.cancel()
+    }
+
     fun close() {
         cache.close()
     }
@@ -71,5 +75,13 @@ internal object SmbAvioBridge {
     fun closeHandle(handleId: Long) {
         val handle = activeHandles.remove(handleId) ?: return
         handle.close()
+    }
+
+    fun cancelAllHandles() {
+        val handles = activeHandles.values.toList()
+        activeHandles.clear()
+        handles.forEach { handle ->
+            runCatching { handle.cancel() }
+        }
     }
 }

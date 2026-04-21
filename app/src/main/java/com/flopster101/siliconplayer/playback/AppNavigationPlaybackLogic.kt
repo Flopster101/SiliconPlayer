@@ -305,7 +305,7 @@ internal fun loadTrackSnapshotForSelection(
     path: String,
     initialSubtuneIndex: Int?
 ): LoadedTrackSelectionState {
-    NativeBridge.loadAudio(path)
+    NativeBridge.replaceCurrentAudio(path)
     val subtuneCount = NativeBridge.getSubtuneCount().coerceAtLeast(0)
     val initialSubtuneApplied = initialSubtuneIndex
         ?.takeIf { subtuneCount > 0 && it in 0 until subtuneCount }

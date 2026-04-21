@@ -28,6 +28,10 @@ internal interface ProgressiveRandomAccessTransport {
 
     fun readAt(offset: Long, buffer: ByteArray, bufferOffset: Int, length: Int): Int
 
+    fun cancel() {
+        close()
+    }
+
     fun close()
 }
 
@@ -221,6 +225,8 @@ internal class ProgressiveRandomAccessCache(
             }
         }
         if (alreadyClosed) return
+        runCatching { activePrefetchTransport?.cancel() }
+        runCatching { transport.cancel() }
         runCatching { activePrefetchTransport?.close() }
         activePrefetchJob?.cancel()
         scope.cancel()
@@ -229,6 +235,12 @@ internal class ProgressiveRandomAccessCache(
             runCatching { chunkMapRaf.close() }
             runCatching { transport.close() }
         }
+    }
+
+    fun cancel() {
+        val activePrefetchTransport = synchronized(lock) { prefetchTransport }
+        runCatching { activePrefetchTransport?.cancel() }
+        runCatching { transport.cancel() }
     }
 
     private fun startBackgroundPrefetch(

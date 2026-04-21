@@ -58,6 +58,11 @@ object NativeBridge {
     }
 
     @JvmStatic
+    fun cancelActiveSmbAvioHandles() {
+        SmbAvioBridge.cancelAllHandles()
+    }
+
+    @JvmStatic
     fun createAudioTrackOutput(
         sampleRate: Int,
         bufferFrames: Int,
@@ -97,6 +102,12 @@ object NativeBridge {
     external fun stopEngineWithPauseResumeFade()
     external fun isEnginePlaying(): Boolean
     external fun loadAudio(path: String)
+
+    fun replaceCurrentAudio(path: String) {
+        cancelActiveSmbAvioHandles()
+        loadAudio(path)
+    }
+
     external fun setFastTrackSwitchStartupHint(enabled: Boolean)
     external fun getSupportedExtensions(): Array<String>
     external fun getDuration(): Double

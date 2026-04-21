@@ -427,7 +427,7 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
                     if (sourceScheme != "http" && sourceScheme != "https" && sourceScheme != "smb") {
                         loadSongVolumeForFile(restoreTarget.displayFile.absolutePath)
                     }
-                    NativeBridge.loadAudio(restoreOpenPath)
+                    NativeBridge.replaceCurrentAudio(restoreOpenPath)
                     readNativeTrackSnapshot()
                 }
             }
@@ -462,7 +462,7 @@ internal suspend fun restorePlayerStateFromSessionAndNativeAction(
                 if (sourceScheme != "http" && sourceScheme != "https" && sourceScheme != "smb") {
                     loadSongVolumeForFile(restoreTarget.displayFile.absolutePath)
                 }
-                NativeBridge.loadAudio(restoreOpenPath)
+                NativeBridge.replaceCurrentAudio(restoreOpenPath)
             }
         }
         Triple(

@@ -45,7 +45,7 @@ internal fun AppNavigationPendingOpenEffects(
                 if (autoPlayOnTrackSelect) {
                     onLoadSongVolumeForFile(file.absolutePath)
                     runWithNativeAudioSession {
-                        NativeBridge.loadAudio(file.absolutePath)
+                        NativeBridge.replaceCurrentAudio(file.absolutePath)
                     }
                     onApplyRepeatModeToNative()
                     onStartEngine()

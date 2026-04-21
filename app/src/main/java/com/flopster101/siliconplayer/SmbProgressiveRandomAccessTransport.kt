@@ -8,6 +8,7 @@ import com.hierynomus.smbj.connection.Connection
 import com.hierynomus.smbj.session.Session
 import com.hierynomus.smbj.share.DiskShare
 import com.hierynomus.smbj.share.File as SmbFile
+import java.io.IOException
 
 private data class OpenedSmbProgressiveTransportFile(
     val connection: Connection,
@@ -83,6 +84,9 @@ internal class SmbProgressiveRandomAccessTransport(
     private val remotePath: String
 ) : ProgressiveRandomAccessTransport {
     private val lock = Any()
+    @Volatile
+    private var cancelled = false
+    @Volatile
     private var openedFile = openSmbProgressiveTransportFile(spec, remotePath)
 
     override val sourceId: String = buildSmbSourceId(spec)
@@ -98,18 +102,30 @@ internal class SmbProgressiveRandomAccessTransport(
         if (clampedLength <= 0) return 0
 
         synchronized(lock) {
+            check(!cancelled) { "SMB AVIO transport cancelled" }
             if (offset >= openedFile.sizeBytes) {
                 return 0
             }
             return try {
                 openedFile.file.read(buffer, offset, bufferOffset, clampedLength).coerceAtLeast(0)
             } catch (t: Throwable) {
+                if (cancelled) {
+                    closeOpenedSmbProgressiveTransportFile(openedFile)
+                    throw IOException("SMB AVIO transport cancelled", t)
+                }
                 if (!isRetryableSmbTransportFailure(t)) {
                     closeOpenedSmbProgressiveTransportFile(openedFile)
                     throw t
                 }
                 closeOpenedSmbProgressiveTransportFile(openedFile)
+                if (cancelled) {
+                    throw IOException("SMB AVIO transport cancelled", t)
+                }
                 val reopened = openSmbProgressiveTransportFile(spec, remotePath)
+                if (cancelled) {
+                    closeOpenedSmbProgressiveTransportFile(reopened)
+                    throw IOException("SMB AVIO transport cancelled", t)
+                }
                 openedFile = reopened
                 try {
                     reopened.file.read(buffer, offset, bufferOffset, clampedLength).coerceAtLeast(0)
@@ -121,9 +137,12 @@ internal class SmbProgressiveRandomAccessTransport(
         }
     }
 
+    override fun cancel() {
+        cancelled = true
+        closeOpenedSmbProgressiveTransportFile(openedFile)
+    }
+
     override fun close() {
-        synchronized(lock) {
-            closeOpenedSmbProgressiveTransportFile(openedFile)
-        }
+        cancel()
     }
 }

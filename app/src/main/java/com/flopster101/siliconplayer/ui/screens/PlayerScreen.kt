@@ -94,7 +94,6 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -146,6 +145,7 @@ import com.flopster101.siliconplayer.ui.visualization.basic.BasicVisualizationOv
 import java.io.File
 import kotlin.math.roundToInt
 import kotlin.math.pow
+import com.flopster101.siliconplayer.PlaybackIo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -757,9 +757,13 @@ internal fun PlayerScreen(
             panelOffsetAnim.snapTo(downwardDragPx)
         }
     }
-    val panelOffsetPx = panelOffsetAnim.value
-    val dragFadeProgress = (panelOffsetPx / (collapseThresholdPx * 1.4f)).coerceIn(0f, 1f)
-    val panelAlpha = 1f - (0.22f * dragFadeProgress)
+    // NOTE: do not read panelOffsetAnim.value in the composition body.
+    // The drag/collapse animation updates the value every frame; reading it
+    // here would force the entire PlayerScreen to recompose every frame and
+    // is the primary source of the "start of pull-down hitches" jank. The
+    // value is read inside the graphicsLayer/offset lambdas below instead,
+    // which only invalidate the draw/placement phases.
+    val panelFadeDenom = collapseThresholdPx * 1.4f
     val topArrowFocusRequester = remember { FocusRequester() }
     val primaryContentFocusRequester = remember { FocusRequester() }
     var showRemainingTime by rememberSaveable { mutableStateOf(false) }
@@ -779,19 +783,17 @@ internal fun PlayerScreen(
         }
     }
     val displayArtist = artist.ifBlank { if (hasTrack) "Unknown Artist" else "Unknown" }
-    val rawAlbum = if (hasTrack) {
-        NativeBridge.getTrackAlbum().trim()
-    } else {
-        ""
-    }
     var displayAlbum by remember { mutableStateOf("") }
     var lastAlbumTrackKey by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(file?.absolutePath, rawAlbum, hasTrack) {
+    LaunchedEffect(file?.absolutePath, hasTrack, title) {
         val trackKey = file?.absolutePath
         if (!hasTrack || trackKey == null) {
             lastAlbumTrackKey = null
             displayAlbum = ""
             return@LaunchedEffect
+        }
+        val rawAlbum = withContext(Dispatchers.PlaybackIo) {
+            NativeBridge.getTrackAlbum().trim()
         }
         val trackChanged = trackKey != lastAlbumTrackKey
         lastAlbumTrackKey = trackKey
@@ -802,7 +804,10 @@ internal fun PlayerScreen(
             trackChanged && displayAlbum.isNotBlank() -> {
                 displayAlbum = "Unknown album"
                 delay(420)
-                if (lastAlbumTrackKey == trackKey && NativeBridge.getTrackAlbum().trim().isBlank()) {
+                val retryAlbum = withContext(Dispatchers.PlaybackIo) {
+                    NativeBridge.getTrackAlbum().trim()
+                }
+                if (lastAlbumTrackKey == trackKey && retryAlbum.isBlank()) {
                     displayAlbum = ""
                 }
             }
@@ -903,8 +908,12 @@ internal fun PlayerScreen(
                     onStopAndClear = onStopAndClear
                 )
             }
-            .offset { IntOffset(0, panelOffsetPx.roundToInt()) }
-            .graphicsLayer(alpha = panelAlpha)
+            .graphicsLayer {
+                val px = panelOffsetAnim.value
+                translationY = px
+                val drag = (px / panelFadeDenom).coerceIn(0f, 1f)
+                alpha = 1f - (0.22f * drag)
+            }
             .then(
                 if (enableCollapseGesture) {
                     Modifier.pointerInput(collapseThresholdPx, isTimelineTouchActive) {

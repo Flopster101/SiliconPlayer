@@ -82,6 +82,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -1591,44 +1592,75 @@ internal fun BrowserSearchNoResultsCard(
     }
 }
 
+private data class BrowserScrollbarSnapshot(
+    val totalItems: Int,
+    val visibleCount: Int,
+    val averageItemSizePx: Float,
+    val firstVisibleItemIndex: Int,
+    val firstVisibleItemScrollOffset: Int,
+    val canScrollBackward: Boolean,
+    val canScrollForward: Boolean
+)
+
 @Composable
 internal fun BrowserLazyListScrollbar(
     listState: LazyListState,
     modifier: Modifier = Modifier,
     onDragActiveChanged: ((Boolean) -> Unit)? = null
 ) {
-    val layoutInfo = listState.layoutInfo
-    val visibleItems = layoutInfo.visibleItemsInfo
-    val totalItems = layoutInfo.totalItemsCount
-    if (visibleItems.isEmpty() || totalItems <= 0) return
+    val snapshot by remember(listState) {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val visibleItems = layoutInfo.visibleItemsInfo
+            val totalItems = layoutInfo.totalItemsCount
+            if (visibleItems.isEmpty() || totalItems <= 0) {
+                null
+            } else {
+                val averageItemSizePx = visibleItems
+                    .firstOrNull { it.size > 0 }
+                    ?.size
+                    ?.toFloat()
+                    ?.coerceAtLeast(1f)
+                    ?: 1f
+                BrowserScrollbarSnapshot(
+                    totalItems = totalItems,
+                    visibleCount = visibleItems.size,
+                    averageItemSizePx = averageItemSizePx,
+                    firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                    firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset,
+                    canScrollBackward = listState.canScrollBackward,
+                    canScrollForward = listState.canScrollForward
+                )
+            }
+        }
+    }
 
-    val visibleCount = visibleItems.size
-    if (!listState.canScrollBackward && !listState.canScrollForward && visibleCount >= totalItems) {
+    val current = snapshot ?: return
+    if (
+        !current.canScrollBackward &&
+        !current.canScrollForward &&
+        current.visibleCount >= current.totalItems
+    ) {
         return
     }
 
-    val averageItemSizePx = visibleItems
-        .firstOrNull { it.size > 0 }
-        ?.size
-        ?.toFloat()
-        ?.coerceAtLeast(1f)
-        ?: 1f
     val dragToFraction = rememberLazyListScrollbarDragHandler(
         listState = listState,
-        totalItems = totalItems,
-        visibleCount = visibleCount,
-        averageItemSizePx = averageItemSizePx
+        totalItems = current.totalItems,
+        visibleCount = current.visibleCount,
+        averageItemSizePx = current.averageItemSizePx
     )
 
     BoxWithConstraints(
         modifier = modifier
     ) {
         val viewportPx = with(LocalDensity.current) { maxHeight.toPx() }.coerceAtLeast(1f)
-        val estimatedContentPx = (averageItemSizePx * totalItems.toFloat()).coerceAtLeast(viewportPx)
+        val estimatedContentPx =
+            (current.averageItemSizePx * current.totalItems.toFloat()).coerceAtLeast(viewportPx)
         val thumbHeightFraction = (viewportPx / estimatedContentPx).coerceIn(0.08f, 1f)
         val absoluteScrollPx = (
-            (listState.firstVisibleItemIndex.toFloat() * averageItemSizePx) +
-                listState.firstVisibleItemScrollOffset.toFloat()
+            (current.firstVisibleItemIndex.toFloat() * current.averageItemSizePx) +
+                current.firstVisibleItemScrollOffset.toFloat()
             ).coerceAtLeast(0f)
         val maxScrollPx = (estimatedContentPx - viewportPx).coerceAtLeast(1f)
         val offsetFraction = (absoluteScrollPx / maxScrollPx).coerceIn(0f, 1f)

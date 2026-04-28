@@ -22,7 +22,7 @@ private suspend fun readPlaybackPollSnapshot(
     durationRefreshCountdown: Int,
     activeSourceId: String?,
     deferredPlaybackSeek: DeferredPlaybackSeek?
-): PlaybackPollSnapshot = withContext(Dispatchers.Default) {
+): PlaybackPollSnapshot = withContext(Dispatchers.PlaybackIo) {
     val nextSeekInProgress = NativeBridge.isSeekInProgress()
     val nextIsPlaying = NativeBridge.isEnginePlaying()
     val nextDuration = if (nextSeekInProgress) {
@@ -63,6 +63,7 @@ internal fun AppNavigationPlaybackPollEffects(
     selectedFile: File?,
     isPlayingProvider: () -> Boolean,
     selectedFileProvider: () -> File?,
+    isAnimatingProvider: () -> Boolean,
     deferredPlaybackSeekProvider: () -> DeferredPlaybackSeek?,
     seekInProgress: Boolean,
     seekStartedAtMs: Long,
@@ -127,7 +128,9 @@ internal fun AppNavigationPlaybackPollEffects(
             )
             val nextSeekInProgress = snapshot.seekInProgress
             val nextIsPlaying = snapshot.isPlaying
+            val isAnimating = isAnimatingProvider()
             val pollDelayMs = when {
+                isAnimating -> 500L
                 nextSeekInProgress -> 120L
                 nextIsPlaying -> 180L
                 else -> 320L
@@ -179,10 +182,10 @@ internal fun AppNavigationPlaybackPollEffects(
             localSeekInProgress = nextSeekInProgress
             localDuration = nextDuration
             onSeekInProgressChanged(nextSeekInProgress)
-            if (abs(nextDuration - previousDuration) > 0.0001) {
+            if (!isAnimating && abs(nextDuration - previousDuration) > 0.0001) {
                 onDurationChanged(nextDuration)
             }
-            if (!hasPublishedPosition || abs(nextPosition - localPosition) > 0.001) {
+            if (!isAnimating && (!hasPublishedPosition || abs(nextPosition - localPosition) > 0.001)) {
                 onPositionChanged(nextPosition)
                 localPosition = nextPosition
                 hasPublishedPosition = true
@@ -192,7 +195,7 @@ internal fun AppNavigationPlaybackPollEffects(
                 localIsPlaying = nextIsPlaying
             }
 
-            if (!nextSeekInProgress) {
+            if (!nextSeekInProgress && !isAnimating) {
                 val suppressTrackEndEvents = nowMs < suppressTrackEndEventsUntilMs
                 val durationOverrideThreshold = latestDurationOverrideSeconds.value
                     ?.takeIf { it.isFinite() && it > 0.0 }
@@ -212,7 +215,7 @@ internal fun AppNavigationPlaybackPollEffects(
                 val subtunePollIntervalMs = if (nextIsPlaying) 360L else 900L
                 if (subtunePollElapsedMs >= subtunePollIntervalMs) {
                     subtunePollElapsedMs = 0L
-                    val nativeSubtuneCursor = withContext(Dispatchers.Default) {
+                    val nativeSubtuneCursor = withContext(Dispatchers.PlaybackIo) {
                         readNativeSubtuneCursor()
                     }
                     if (hasNativeSubtuneCursorChanged(
@@ -302,7 +305,7 @@ internal fun AppNavigationPlaybackPollEffects(
                 val currentMetadataArtist = metadataArtistProvider()
                 if (shouldPollTrackMetadata(metadataPollElapsedMs, currentMetadataTitle, currentMetadataArtist)) {
                     metadataPollElapsedMs = 0L
-                    val (nextTitle, nextArtist) = withContext(Dispatchers.Default) {
+                    val (nextTitle, nextArtist) = withContext(Dispatchers.PlaybackIo) {
                         sanitizeRemoteCachedMetadataTitle(
                             rawTitle = NativeBridge.getTrackTitle(),
                             selectedFile = currentFile

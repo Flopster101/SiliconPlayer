@@ -287,6 +287,14 @@ internal fun BoxScope.MiniPlayerOverlayHost(
             Modifier
         }
 
+        // Quantize the position handed to the mini player to whole seconds.
+        // The mini progress indicator is only a few hundred pixels wide and
+        // the time label is rendered at MM:SS precision, so anything finer
+        // than 1 Hz is invisible. Snapping to integer seconds collapses the
+        // ~5 Hz playback poll into ~1 Hz of meaningful change for child
+        // composables (Text labels, LinearProgressIndicator), letting them
+        // skip recomposition between integer-second transitions.
+        val miniPlayerDisplayPositionSeconds = positionSeconds.toLong().toDouble()
         val miniPlayerContent: @Composable () -> Unit = {
             val sanitizedTitle = sanitizeRemoteCachedMetadataTitle(metadataTitle, selectedFile)
             MiniPlayerBar(
@@ -306,7 +314,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
                 playbackStartInProgress = playbackStartInProgress,
                 seekInProgress = seekUiBusy,
                 canResumeStoppedTrack = canResumeStoppedTrack,
-                positionSeconds = positionSeconds,
+                positionSeconds = miniPlayerDisplayPositionSeconds,
                 durationSeconds = durationSeconds,
                 hasReliableDuration = hasReliableDuration(playbackCapabilitiesFlags),
                 previousRestartsAfterThreshold = previousRestartsAfterThreshold,

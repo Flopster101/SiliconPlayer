@@ -1395,6 +1395,8 @@ private fun AppNavigation(
     var seekStartedAtMs by remember { mutableLongStateOf(0L) }
     var seekRequestedAtMs by remember { mutableLongStateOf(0L) }
     var isPlayerExpanded by remember { mutableStateOf(false) }
+    val playerTransition = remember { PlayerTransitionStateHolder() }
+    playerTransition.DriveTapTransition(isPlayerExpanded = isPlayerExpanded)
     var isPlayerSurfaceVisible by remember { mutableStateOf(false) }
     var restoreMiniPlayerFocusOnCollapse by remember { mutableStateOf(false) }
     var preferredRepeatMode by remember {
@@ -2914,6 +2916,7 @@ private fun AppNavigation(
         selectedFile = selectedFile,
         isPlayingProvider = { isPlaying },
         selectedFileProvider = { selectedFile },
+        isAnimatingProvider = { playerTransition.isAnyAnimating },
         deferredPlaybackSeekProvider = { deferredPlaybackSeek },
         seekInProgress = seekInProgress,
         seekStartedAtMs = seekStartedAtMs,
@@ -3079,12 +3082,6 @@ private fun AppNavigation(
         currentView = currentView,
         isPlayerSurfaceVisible = isPlayerSurfaceVisible
     )
-    var miniExpandPreviewProgress by remember { mutableFloatStateOf(0f) }
-    var expandFromMiniDrag by remember { mutableStateOf(false) }
-    var collapseFromSwipe by remember { mutableStateOf(false) }
-    var collapseDragInProgress by remember { mutableStateOf(false) }
-    var expandedOverlayCurrentVisible by remember { mutableStateOf(false) }
-    var expandedOverlaySettledVisible by remember { mutableStateOf(false) }
     val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val miniPreviewLiftPx = with(LocalDensity.current) { 28.dp.toPx() }
     val stopAndEmptyTrackBase = buildStopAndEmptyTrackDelegate(
@@ -3154,13 +3151,21 @@ private fun AppNavigation(
         isPlayerExpanded = isPlayerExpanded,
         playerArtworkCornerRadiusDp = playerArtworkCornerRadiusDp,
         onPlayerArtworkCornerRadiusChanged = { playerArtworkCornerRadiusDp = it },
-        onMiniExpandPreviewProgressChanged = { miniExpandPreviewProgress = it },
-        onExpandFromMiniDragChanged = { expandFromMiniDrag = it },
-        onCollapseFromSwipeChanged = { collapseFromSwipe = it }
+        onMiniExpandPreviewProgressChanged = { playerTransition.miniExpandPreviewProgress = it },
+        onExpandFromMiniDragChanged = { playerTransition.expandFromMiniDrag = it },
+        onCollapseFromSwipeChanged = { playerTransition.collapseFromSwipe = it }
     )
-    LaunchedEffect(expandedOverlaySettledVisible, isPlayerExpanded, expandFromMiniDrag) {
-        if (expandedOverlaySettledVisible && isPlayerExpanded && expandFromMiniDrag) {
-            expandFromMiniDrag = false
+    LaunchedEffect(
+        playerTransition.expandedOverlaySettledVisible,
+        isPlayerExpanded,
+        playerTransition.expandFromMiniDrag
+    ) {
+        if (
+            playerTransition.expandedOverlaySettledVisible &&
+            isPlayerExpanded &&
+            playerTransition.expandFromMiniDrag
+        ) {
+            playerTransition.expandFromMiniDrag = false
         }
     }
 
@@ -3193,8 +3198,8 @@ private fun AppNavigation(
         showMiniPlayerFocusHighlight = showMiniPlayerFocusHighlight,
         onRestoreMiniPlayerFocusOnCollapseChanged = { restoreMiniPlayerFocusOnCollapse = it },
         onPlayerExpandedChanged = { isPlayerExpanded = it },
-        onCollapseDragInProgressChanged = { collapseDragInProgress = it },
-        onExpandedOverlaySettledVisibleChanged = { expandedOverlaySettledVisible = it },
+        onCollapseDragInProgressChanged = { playerTransition.collapseDragInProgress = it },
+        onExpandedOverlaySettledVisibleChanged = { playerTransition.expandedOverlaySettledVisible = it },
         popSettingsRoute = popSettingsRoute,
         exitSettingsToReturnView = exitSettingsToReturnView,
         onCurrentViewChanged = { currentView = it }
@@ -3320,15 +3325,15 @@ private fun AppNavigation(
             miniPlayerFocusRequester = miniPlayerFocusRequester,
             isPlayerSurfaceVisible = isPlayerSurfaceVisible,
             isPlayerExpanded = isPlayerExpanded,
-            miniExpandPreviewProgress = miniExpandPreviewProgress,
-            onMiniExpandPreviewProgressChanged = { miniExpandPreviewProgress = it },
-            expandFromMiniDrag = expandFromMiniDrag,
-            onExpandFromMiniDragChanged = { expandFromMiniDrag = it },
-            collapseFromSwipe = collapseFromSwipe,
-            onCollapseFromSwipeChanged = { collapseFromSwipe = it },
-            onCollapseDragProgressChanged = { collapseDragInProgress = it },
-            onExpandedOverlayCurrentVisibleChanged = { expandedOverlayCurrentVisible = it },
-            onExpandedOverlaySettledVisibleChanged = { expandedOverlaySettledVisible = it },
+            miniExpandPreviewProgress = playerTransition.miniExpandPreviewProgress,
+            onMiniExpandPreviewProgressChanged = { playerTransition.miniExpandPreviewProgress = it },
+            expandFromMiniDrag = playerTransition.expandFromMiniDrag,
+            onExpandFromMiniDragChanged = { playerTransition.expandFromMiniDrag = it },
+            collapseFromSwipe = playerTransition.collapseFromSwipe,
+            onCollapseFromSwipeChanged = { playerTransition.collapseFromSwipe = it },
+            onCollapseDragProgressChanged = { playerTransition.collapseDragInProgress = it },
+            onExpandedOverlayCurrentVisibleChanged = { playerTransition.expandedOverlayCurrentVisible = it },
+            onExpandedOverlaySettledVisibleChanged = { playerTransition.expandedOverlaySettledVisible = it },
             onPlayerExpandedChanged = { expanded ->
                 if (
                     isPlayerExpanded &&
@@ -3340,8 +3345,8 @@ private fun AppNavigation(
                 }
                 isPlayerExpanded = expanded
                 if (!expanded) {
-                    collapseDragInProgress = false
-                    expandedOverlaySettledVisible = false
+                    playerTransition.collapseDragInProgress = false
+                    playerTransition.expandedOverlaySettledVisible = false
                 }
             },
             screenHeightPx = screenHeightPx,
@@ -4100,7 +4105,9 @@ private fun AppNavigation(
 
     Box(modifier = Modifier.fillMaxSize()) {
         val shouldComposeBackgroundContent =
-            collapseDragInProgress || !expandedOverlayCurrentVisible || !expandedOverlaySettledVisible
+            playerTransition.collapseDragInProgress ||
+                !playerTransition.expandedOverlayCurrentVisible ||
+                !playerTransition.expandedOverlaySettledVisible
         val backgroundContentStateHolder = rememberSaveableStateHolder()
         val openBrowser: (BrowserOpenRequest) -> Unit = { request ->
             browserNavigator.open(
@@ -4111,12 +4118,12 @@ private fun AppNavigation(
         val openPlayerSurfaceAction: () -> Unit = {
             isPlayerSurfaceVisible = true
             isPlayerExpanded = true
-            collapseFromSwipe = false
-            collapseDragInProgress = false
-            expandedOverlayCurrentVisible = false
-            expandedOverlaySettledVisible = false
-            expandFromMiniDrag = false
-            miniExpandPreviewProgress = 0f
+            playerTransition.collapseFromSwipe = false
+            playerTransition.collapseDragInProgress = false
+            playerTransition.expandedOverlayCurrentVisible = false
+            playerTransition.expandedOverlaySettledVisible = false
+            playerTransition.expandFromMiniDrag = false
+            playerTransition.miniExpandPreviewProgress = 0f
         }
         val sortedFavoriteEntries = remember(playlistLibraryState.favorites, favoritesSortMode) {
             sortPlaylistEntries(
@@ -4124,7 +4131,9 @@ private fun AppNavigation(
                 sortMode = favoritesSortMode
             )
         }
-        val favoritesPlaybackPlaylist = buildFavoritesPlaybackPlaylist(sortedFavoriteEntries)
+        val favoritesPlaybackPlaylist = remember(sortedFavoriteEntries) {
+            buildFavoritesPlaybackPlaylist(sortedFavoriteEntries)
+        }
         val syncActiveFavoritesContextAfterMutation: (List<PlaylistTrackEntry>) -> Unit = { favorites ->
             val sortedFavorites = sortPlaylistEntries(
                 entries = favorites,

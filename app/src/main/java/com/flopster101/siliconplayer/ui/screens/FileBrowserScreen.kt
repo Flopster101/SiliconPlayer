@@ -1136,6 +1136,14 @@ internal fun FileBrowserScreen(
                 LOCAL_BROWSER_THUMBNAIL_PREVIEW_MAX_ITEMS
             }
         )
+    // Pre-hash the favorite paths so the per-row "is this favorited?" check is
+    // an O(1) HashSet lookup instead of an O(N) scan calling samePath() (which
+    // resolves canonical paths via blocking File.canonicalFile syscalls). With
+    // hundreds of visible rows recomposing on scroll start/stop this previously
+    // ran thousands of stat() calls on the UI thread.
+    val favoriteSourcePathSet = remember(favoriteSourcePaths) {
+        favoriteSourcePaths.toHashSet()
+    }
 
     Scaffold(
         topBar = {
@@ -1696,9 +1704,7 @@ internal fun FileBrowserScreen(
                                         item = item,
                                         isPlaying = item.file == playingFile,
                                         isPlayingPlaylist = item.file == playingPlaylistFile,
-                                        isFavorited = favoriteSourcePaths.any { favoritePath ->
-                                            samePath(favoritePath, entryKey)
-                                        },
+                                        isFavorited = favoriteSourcePathSet.contains(entryKey),
                                         isSelected = isSelected,
                                         hasSelectedAbove = hasSelectedAbove,
                                         hasSelectedBelow = hasSelectedBelow,
@@ -2351,30 +2357,55 @@ fun FileItemRow(
     onToggleFavorite: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val selectionShape = RoundedCornerShape(
-        topStart = if (hasSelectedAbove) 0.dp else 18.dp,
-        topEnd = if (hasSelectedAbove) 0.dp else 18.dp,
-        bottomStart = if (hasSelectedBelow) 0.dp else 18.dp,
-        bottomEnd = if (hasSelectedBelow) 0.dp else 18.dp
-    )
-    val isVideoFile = !item.isDirectory && isLikelyVideoFile(item.file)
-    val previewKind = if (item.isDirectory) null else browserPreviewKindForName(item.name)
-    val decoderArtworkHint = if (item.isDirectory || isVideoFile) {
-        null
-    } else {
-        resolveDecoderArtworkHintForFileName(item.file.name, decoderExtensionArtworkHints)
+    // Cache per-row derived values that depend only on the FileItem identity.
+    // Without these `remember`s, every row recomposition (e.g. when scroll
+    // start/stop flips allowThumbnailPreviewLoads) re-ran filename parsing,
+    // MimeTypeMap lookups and shape allocation across every visible row.
+    val selectionShape = remember(hasSelectedAbove, hasSelectedBelow) {
+        RoundedCornerShape(
+            topStart = if (hasSelectedAbove) 0.dp else 18.dp,
+            topEnd = if (hasSelectedAbove) 0.dp else 18.dp,
+            bottomStart = if (hasSelectedBelow) 0.dp else 18.dp,
+            bottomEnd = if (hasSelectedBelow) 0.dp else 18.dp
+        )
+    }
+    val isVideoFile = remember(item.file.absolutePath, item.isDirectory) {
+        !item.isDirectory && isLikelyVideoFile(item.file)
+    }
+    val previewKind = remember(item.name, item.isDirectory) {
+        if (item.isDirectory) null else browserPreviewKindForName(item.name)
+    }
+    val decoderArtworkHint = remember(
+        item.file.absolutePath,
+        item.isDirectory,
+        isVideoFile,
+        decoderExtensionArtworkHints
+    ) {
+        if (item.isDirectory || isVideoFile) {
+            null
+        } else {
+            resolveDecoderArtworkHintForFileName(item.file.name, decoderExtensionArtworkHints)
+        }
     }
     val shouldShowThumbnailPreview = showLocalThumbnailPreviews &&
         item.kind == FileItem.Kind.AudioFile &&
         !item.isDirectory &&
         !isVideoFile &&
         previewKind == null
+    // Cache the lastModified syscall for the lifetime of this row composition
+    // (until the file path changes). Reading File.lastModified() directly as a
+    // produceState key forced a stat() call on the UI thread on every
+    // recomposition, which spiked frame times when scroll start/stop or playback
+    // poll updates rippled through the visible rows.
+    val itemLastModified = remember(item.file.absolutePath) {
+        item.file.lastModified()
+    }
     val thumbnailPreview by produceState<ImageBitmap?>(
         initialValue = null,
         shouldShowThumbnailPreview,
         allowThumbnailPreviewLoads,
         item.file.absolutePath,
-        item.file.lastModified(),
+        itemLastModified,
         item.size
     ) {
         if (!shouldShowThumbnailPreview) {

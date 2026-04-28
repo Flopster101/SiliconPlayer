@@ -14,7 +14,6 @@ import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,7 +62,6 @@ internal fun MainNavigationScaffold(
             currentView != MainView.Network &&
             currentView != MainView.Playlists
     var lastVisibleTopBarView by remember { mutableStateOf(currentView) }
-    var previousContentView by remember { mutableStateOf(currentView) }
     val viewTransition = updateTransition(targetState = currentView, label = "mainViewTopBarTransition")
     val displayedTopBarView = if (isMainTopBarVisible) currentView else lastVisibleTopBarView
     val shouldShowBrowserHomeAction =
@@ -72,8 +70,6 @@ internal fun MainNavigationScaffold(
             displayedTopBarView == MainView.Playlists
     val shouldShowSettingsAction = displayedTopBarView != MainView.Settings
     val homeScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val browserInvolvedInContentTransition =
-        previousContentView == MainView.Browser || currentView == MainView.Browser
 
     LaunchedEffect(currentView, viewTransition.currentState, viewTransition.targetState) {
         if (isMainTopBarVisible) {
@@ -86,10 +82,6 @@ internal fun MainNavigationScaffold(
             homeScrollBehavior.state.contentOffset = 0f
         }
     }
-    LaunchedEffect(currentView) {
-        previousContentView = currentView
-    }
-
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
@@ -222,21 +214,6 @@ internal fun MainNavigationScaffold(
             }
         }
     ) { mainPadding ->
-            val routePadding = if (
-                currentView == MainView.Settings ||
-                currentView == MainView.Network ||
-                currentView == MainView.Playlists
-            ) {
-                PaddingValues(0.dp)
-            } else {
-                mainPadding
-            }
-            if (browserInvolvedInContentTransition) {
-                Box(modifier = mainContentModifier) {
-                    content(routePadding, currentView)
-                }
-                return@Scaffold
-            }
             AnimatedContent(
                 targetState = currentView,
                 transitionSpec = {

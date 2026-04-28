@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.Dp
@@ -778,6 +779,19 @@ internal fun AppNavigationMainContentHost(
             )
         },
         browserContent = { mainPadding ->
+            // Cache the derived favorite-source-path list so it has stable
+            // identity across recompositions. Recomputing this on every poll
+            // tick (or any other parent recomposition) marks the
+            // List<String> parameter as changed, defeating Compose's skip
+            // logic and forcing the entire browser content tree to recompose
+            // ~5x per second while playback is active.
+            val derivedFavoriteSourcePaths = remember(playlistLibraryState.favorites) {
+                playlistLibraryState.favorites
+                    .asSequence()
+                    .filter { it.subtuneIndex == null }
+                    .map { it.source }
+                    .toList()
+            }
             AppNavigationBrowserContentSection(
                 mainPadding = mainPadding,
                 prefs = prefs,
@@ -794,9 +808,7 @@ internal fun AppNavigationMainContentHost(
                 isPlayerExpanded = isPlayerExpanded,
                 selectedFile = selectedFile,
                 playingPlaylistFile = playingPlaylistFile,
-                favoriteSourcePaths = playlistLibraryState.favorites
-                    .filter { it.subtuneIndex == null }
-                    .map { it.source },
+                favoriteSourcePaths = derivedFavoriteSourcePaths,
                 networkNodes = networkNodes,
                 autoPlayOnTrackSelect = autoPlayOnTrackSelect,
                 openPlayerOnTrackSelect = openPlayerOnTrackSelect,

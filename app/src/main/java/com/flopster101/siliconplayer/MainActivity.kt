@@ -1386,7 +1386,10 @@ private fun AppNavigation(
     var lastStoppedFile by remember { mutableStateOf<File?>(null) }
     var lastStoppedSourceId by remember { mutableStateOf<String?>(null) }
     var duration by remember { mutableDoubleStateOf(0.0) }
-    var position by remember { mutableDoubleStateOf(0.0) }
+    // Pass to overlays as a stable State reference so AppNavigation's body
+    // does not subscribe to the playback poll.
+    val positionState = remember { mutableDoubleStateOf(0.0) }
+    var position by positionState
     var deferredPlaybackSeek by remember { mutableStateOf<DeferredPlaybackSeek?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     var seekInProgress by remember { mutableStateOf(false) }
@@ -3356,7 +3359,7 @@ private fun AppNavigation(
             playbackStartInProgress = playbackStartInProgress,
             seekUiBusy = seekUiBusy,
             durationSeconds = effectiveDuration,
-            positionSeconds = position,
+            positionSecondsState = positionState,
             metadataTitle = effectiveMetadataTitle,
             metadataArtist = effectiveMetadataArtist,
             metadataSampleRate = metadataSampleRate,

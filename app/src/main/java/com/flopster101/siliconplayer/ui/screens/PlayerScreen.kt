@@ -757,12 +757,6 @@ internal fun PlayerScreen(
             panelOffsetAnim.snapTo(downwardDragPx)
         }
     }
-    // NOTE: do not read panelOffsetAnim.value in the composition body.
-    // The drag/collapse animation updates the value every frame; reading it
-    // here would force the entire PlayerScreen to recompose every frame and
-    // is the primary source of the "start of pull-down hitches" jank. The
-    // value is read inside the graphicsLayer/offset lambdas below instead,
-    // which only invalidate the draw/placement phases.
     val panelFadeDenom = collapseThresholdPx * 1.4f
     val topArrowFocusRequester = remember { FocusRequester() }
     val primaryContentFocusRequester = remember { FocusRequester() }

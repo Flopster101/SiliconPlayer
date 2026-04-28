@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -55,7 +56,7 @@ internal fun ExpandedPlayerOverlayHost(
     onPause: () -> Unit,
     onStopAndClear: () -> Unit,
     durationSeconds: Double,
-    positionSeconds: Double,
+    positionSecondsState: State<Double>,
     canPreviousTrack: Boolean,
     canNextTrack: Boolean,
     title: String,
@@ -256,7 +257,9 @@ internal fun ExpandedPlayerOverlayHost(
                     onPause = if (expandedOverlayVisible) onPause else noOp,
                     onStopAndClear = if (expandedOverlayVisible) onStopAndClear else noOp,
                     durationSeconds = durationSeconds,
-                    positionSeconds = positionSeconds,
+                    // Read inside AnimatedVisibility so this host only subscribes
+                    // to position updates while the expanded overlay is composing.
+                    positionSeconds = positionSecondsState.value,
                     canPreviousTrack = canPreviousTrack,
                     canNextTrack = canNextTrack,
                     title = title,

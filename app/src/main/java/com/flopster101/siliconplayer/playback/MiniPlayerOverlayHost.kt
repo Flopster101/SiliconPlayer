@@ -23,6 +23,8 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,7 +68,7 @@ internal fun BoxScope.MiniPlayerOverlayHost(
     playbackStartInProgress: Boolean,
     seekUiBusy: Boolean,
     durationSeconds: Double,
-    positionSeconds: Double,
+    positionSecondsState: State<Double>,
     metadataTitle: String,
     metadataArtist: String,
     metadataSampleRate: Int,
@@ -294,7 +296,9 @@ internal fun BoxScope.MiniPlayerOverlayHost(
         // ~5 Hz playback poll into ~1 Hz of meaningful change for child
         // composables (Text labels, LinearProgressIndicator), letting them
         // skip recomposition between integer-second transitions.
-        val miniPlayerDisplayPositionSeconds = positionSeconds.toLong().toDouble()
+        val miniPlayerDisplayPositionSeconds by remember(positionSecondsState) {
+            derivedStateOf { positionSecondsState.value.toLong().toDouble() }
+        }
         val miniPlayerContent: @Composable () -> Unit = {
             val sanitizedTitle = sanitizeRemoteCachedMetadataTitle(metadataTitle, selectedFile)
             MiniPlayerBar(

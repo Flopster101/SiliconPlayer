@@ -401,15 +401,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        if (PlaybackService.isPlaybackServiceAlive()) {
-            NativeBridge.setBackgroundPlaybackMode(false)
-        }
+        // Activity lifecycle is the source of truth for fg/bg state; service
+        // liveness can lag behind it across pause+background cycles.
+        NativeBridge.setBackgroundPlaybackMode(false)
     }
 
     override fun onStop() {
-        if (PlaybackService.isPlaybackServiceAlive()) {
-            NativeBridge.setBackgroundPlaybackMode(true)
-        }
+        NativeBridge.setBackgroundPlaybackMode(true)
         super.onStop()
     }
 

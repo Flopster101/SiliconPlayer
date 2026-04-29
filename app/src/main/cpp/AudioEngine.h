@@ -382,6 +382,9 @@ private:
     static constexpr uint32_t kVisualizationFeatureBars = 1u << 1;
     static constexpr uint32_t kVisualizationFeatureVu = 1u << 2;
     static constexpr uint32_t kVisualizationFeatureChannelCount = 1u << 3;
+    // Declares vis demand without gating the waveform/bars/VU work; the
+    // per-chunk timestamp refresh stays alive for channel-scope-only sessions.
+    static constexpr uint32_t kVisualizationFeatureChannelScope = 1u << 4;
 
     int resolveOutputSampleRateForCore(const std::string& coreName) const;
     void reconfigureStream(bool resumePlayback);

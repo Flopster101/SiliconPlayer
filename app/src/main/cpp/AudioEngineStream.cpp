@@ -809,15 +809,20 @@ bool AudioEngine::requestStreamStart() {
             std::this_thread::sleep_for(std::chrono::milliseconds(kAudioTrackStartupPollIntervalMs));
         }
 
+        // Drain any prior render loop before (re)starting the Java AudioTrack
+        // so a new render thread is not spawned on top of an existing one.
+        if (audioTrackWriteThread.joinable()) {
+            audioTrackStopRequested.store(true, std::memory_order_relaxed);
+            stopAudioTrackOutput();
+            audioTrackWriteThread.join();
+        }
+
         audioTrackStopRequested.store(false, std::memory_order_relaxed);
         if (!startAudioTrackOutput()) {
             LOGE("AudioTrack start request failed");
             return false;
         }
 
-        if (audioTrackWriteThread.joinable()) {
-            audioTrackWriteThread.join();
-        }
         audioTrackWriteThread = std::thread([this]() { audioTrackRenderLoop(); });
         return true;
     }

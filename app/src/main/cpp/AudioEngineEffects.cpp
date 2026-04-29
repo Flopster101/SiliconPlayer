@@ -604,7 +604,10 @@ void AudioEngine::updateVisualizationDataFromOutputCallback(
     const bool needsBars = (requestedFeatures & kVisualizationFeatureBars) != 0u;
     const bool needsVu = (requestedFeatures & kVisualizationFeatureVu) != 0u;
     const bool needsChannelCount = (requestedFeatures & kVisualizationFeatureChannelCount) != 0u;
-    if (!needsWaveform && !needsBars && !needsVu && !needsChannelCount) {
+    // Let channel-scope-only demand through so the per-chunk timestamp
+    // refresh below stays alive for `getChannelScopeSamples`.
+    const bool needsChannelScope = (requestedFeatures & kVisualizationFeatureChannelScope) != 0u;
+    if (!needsWaveform && !needsBars && !needsVu && !needsChannelCount && !needsChannelScope) {
         return;
     }
 

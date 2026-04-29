@@ -689,11 +689,11 @@ void AudioEngine::renderWorkerLoop() {
         bool needsFill = false;
         int bufferedFramesBeforeFill = 0;
 
-        // Check vis demand early so we can adjust the target queue depth.
-        // When visualization is active, a higher target creates a larger deficit
-        // that the worker fills with multiple small decode iterations, producing
-        // more frequent vis captures and channel-scope serial increments.
-        const bool visualizationDemand = shouldUpdateVisualization(nullptr);
+        // Vis demand bumps queue headroom only; CPU-heavy 1/4-chunk burst
+        // stays gated on basic vis (channel scope captures per-sample anyway).
+        uint32_t demandFeaturesEarly = 0u;
+        const bool visualizationDemand = shouldUpdateVisualization(&demandFeaturesEarly);
+        (void)demandFeaturesEarly;
         const int visualizationHeadroom =
                 (visualizationDemand && !recoveryBoostActive && !backgroundHeadroomActive)
                 ? std::max(baseChunkFrames * 8, 2048) : 0;
@@ -725,6 +725,8 @@ void AudioEngine::renderWorkerLoop() {
         uint32_t requestedVisualizationFeatures = 0u;
         const bool visualizationActive = shouldUpdateVisualization(&requestedVisualizationFeatures);
         const bool visualizeFromRenderWorker = visualizationActive;
+        const bool basicVisualizationActive =
+                (requestedVisualizationFeatures & ~kVisualizationFeatureChannelScope) != 0u;
         int chunkFrames = baseChunkFrames;
         const int deficitFrames = std::max(0, effectiveTarget - bufferedFramesBeforeFill);
         if (recoveryBoostActive || backgroundHeadroomActive ||
@@ -738,11 +740,8 @@ void AudioEngine::renderWorkerLoop() {
                     backgroundHeadroomActive ? 8192 : 4096
             );
         }
-        // When visualization is active, force small decode chunks so the loop
-        // iterates many times per wake-up.  Each iteration triggers a new
-        // decoder read (incrementing the channel-scope serial) and a fresh
-        // visualization capture, keeping all visualizations at a high refresh rate.
-        if (visualizeFromRenderWorker && !recoveryBoostActive && !backgroundHeadroomActive) {
+        // Force small decode chunks so each wake-up captures many vis frames.
+        if (basicVisualizationActive && !recoveryBoostActive && !backgroundHeadroomActive) {
             chunkFrames = std::min(chunkFrames, std::max(64, baseChunkFrames / 4));
         }
         {

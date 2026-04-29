@@ -269,6 +269,9 @@ std::vector<float> AudioEngine::getOpenMptChannelVuLevels() {
 }
 
 std::vector<float> AudioEngine::getChannelScopeSamples(int samplesPerChannel) {
+    // Declare vis demand so the render worker bumps the snapshot serial
+    // frequently and keeps `visualizationLastCallbackNs` fresh.
+    markVisualizationRequested(kVisualizationFeatureChannelScope);
     std::shared_ptr<ChannelScopeSharedState> state;
     int decoderSampleRate = 0;
     {
@@ -287,22 +290,41 @@ std::vector<float> AudioEngine::getChannelScopeSamples(int samplesPerChannel) {
         callbackNs = visualizationLastCallbackNs;
     }
 
+    // Decoder-output -> ear FIFO drained at outputSampleRate so the window
+    // slides smoothly between callbacks across all backends.
+    const int outputBackend = activeOutputBackend.load(std::memory_order_relaxed);
+    int backendBufferedFrames = 0;
+    switch (outputBackend) {
+        case 1:
+            backendBufferedFrames = std::max(aaudioBufferFrames, 0);
+            break;
+        case 2:
+            backendBufferedFrames = std::max(openSlBufferFrames, 0);
+            break;
+        case 3:
+            backendBufferedFrames = std::max(audioTrackBufferFrames, 0);
+            break;
+        default:
+            break;
+    }
+
     double presentationDelayOutputFrames = static_cast<double>(renderQueueFrames());
-    if (callbackFrames > 0 && outputSampleRate > 0 && callbackNs > 0) {
+    if (outputSampleRate > 0 && callbackNs > 0) {
         const int64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()
         ).count();
         const int64_t elapsedNs = std::max<int64_t>(0, nowNs - callbackNs);
-        const double elapsedFrames = std::clamp(
-                (static_cast<double>(elapsedNs) * static_cast<double>(outputSampleRate)) / 1.0e9,
-                0.0,
-                static_cast<double>(callbackFrames)
-        );
-        presentationDelayOutputFrames +=
-                std::max(0.0, static_cast<double>(callbackFrames) - elapsedFrames);
-    }
-    if (activeOutputBackend.load(std::memory_order_relaxed) == 1) {
-        presentationDelayOutputFrames += static_cast<double>(std::max(aaudioBufferFrames, 0));
+        const double elapsedFrames =
+                (static_cast<double>(elapsedNs) * static_cast<double>(outputSampleRate)) / 1.0e9;
+        const double bufferedAheadFrames =
+                static_cast<double>(callbackFrames) +
+                static_cast<double>(backendBufferedFrames);
+        presentationDelayOutputFrames += std::max(0.0, bufferedAheadFrames - elapsedFrames);
+    } else {
+        // No callback timestamp yet (cold start). Fall back to the static
+        // backend buffer size so we still report a sane delay on the first
+        // poll.
+        presentationDelayOutputFrames += static_cast<double>(backendBufferedFrames);
     }
     double presentationDelayDecoderFrames = presentationDelayOutputFrames;
     if (decoderSampleRate > 0 && outputSampleRate > 0 && decoderSampleRate != outputSampleRate) {

@@ -284,6 +284,9 @@ private:
     int openSlBufferFrames = 4096;
     std::atomic<bool> openSlStopAfterCurrentBuffer { false };
     std::thread audioTrackWriteThread;
+    // Serializes join/start/swap of audioTrackWriteThread so concurrent
+    // callers cannot both reach pthread_join on the same handle.
+    std::mutex audioTrackThreadMutex;
     std::vector<float> audioTrackFloatBuffer;
     std::vector<int16_t> audioTrackPcmBuffer;
     int audioTrackBufferFrames = 4096;

@@ -811,6 +811,7 @@ bool AudioEngine::requestStreamStart() {
 
         // Drain any prior render loop before (re)starting the Java AudioTrack
         // so a new render thread is not spawned on top of an existing one.
+        std::lock_guard<std::mutex> threadLock(audioTrackThreadMutex);
         if (audioTrackWriteThread.joinable()) {
             audioTrackStopRequested.store(true, std::memory_order_relaxed);
             stopAudioTrackOutput();
@@ -854,6 +855,7 @@ void AudioEngine::requestStreamStop() {
         return;
     }
     if (backend == 3) {
+        std::lock_guard<std::mutex> threadLock(audioTrackThreadMutex);
         audioTrackStopRequested.store(true, std::memory_order_relaxed);
         stopAudioTrackOutput();
         if (audioTrackWriteThread.joinable()) {
@@ -1056,6 +1058,7 @@ void AudioEngine::audioTrackRenderLoop() {
 }
 
 void AudioEngine::closeAudioTrackStream() {
+    std::lock_guard<std::mutex> threadLock(audioTrackThreadMutex);
     audioTrackStopRequested.store(true, std::memory_order_relaxed);
     stopAudioTrackOutput();
     if (audioTrackWriteThread.joinable()) {

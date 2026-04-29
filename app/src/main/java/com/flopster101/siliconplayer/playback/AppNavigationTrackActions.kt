@@ -57,6 +57,9 @@ internal suspend fun applyTrackSelectionAction(
     onSelectedFileChanged(loadFile)
     onCurrentPlaybackSourceIdChanged(sourceId)
     onPlayerSurfaceVisibleChanged(true)
+    // Apply before the decoder suspends so a manual expand/collapse during
+    // the load is not stomped on by the override on completion.
+    expandOverride?.let { onPlayerExpandedChanged(it) }
     if (useSongVolumeLookup) {
         loadSongVolumeForFile(loadFile.absolutePath)
     } else {
@@ -97,7 +100,6 @@ internal suspend fun applyTrackSelectionAction(
         onIsPlayingChanged(true)
         scheduleRecentTrackMetadataRefresh(sourceId, locationIdOverride)
     }
-    expandOverride?.let { onPlayerExpandedChanged(it) }
     syncPlaybackService()
 }
 

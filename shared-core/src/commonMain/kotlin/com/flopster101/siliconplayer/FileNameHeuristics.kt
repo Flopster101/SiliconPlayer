@@ -1,26 +1,34 @@
 package com.flopster101.siliconplayer
 
-import java.io.File
-import java.util.LinkedHashSet
-import java.util.Locale
+private val remoteCacheHashPrefixRegex = Regex("^[0-9a-fA-F]{40}_(.+)$")
 
 private fun isLikelyExtensionToken(token: String): Boolean {
     if (token.isBlank() || token.length > 16) return false
     return token.all { it.isLetterOrDigit() || it == '+' || it == '-' || it == '_' }
 }
 
-internal fun extensionCandidatesForName(name: String): List<String> {
+fun stripRemoteCacheHashPrefix(rawName: String): String {
+    val normalized = rawName.trim()
+    if (normalized.isEmpty()) return rawName
+    return remoteCacheHashPrefixRegex.matchEntire(normalized)
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.takeIf { it.isNotBlank() }
+        ?: normalized
+}
+
+fun extensionCandidatesForName(name: String): List<String> {
     val baseName = name.substringAfterLast('/').substringAfterLast('\\').trim()
     if (baseName.isBlank()) return emptyList()
 
-    val candidates = LinkedHashSet<String>()
+    val candidates = linkedSetOf<String>()
     val firstDot = baseName.indexOf('.')
     val lastDot = baseName.lastIndexOf('.')
 
     if (lastDot in 1 until baseName.lastIndex) {
         val suffix = baseName.substring(lastDot + 1).trim()
         if (isLikelyExtensionToken(suffix)) {
-            candidates += suffix.lowercase(Locale.ROOT)
+            candidates += suffix.lowercase()
         }
     }
 
@@ -29,7 +37,7 @@ internal fun extensionCandidatesForName(name: String): List<String> {
         if (secondLastDot in 0 until lastDot) {
             val middle = baseName.substring(secondLastDot + 1, lastDot).trim()
             if (isLikelyExtensionToken(middle)) {
-                candidates += middle.lowercase(Locale.ROOT)
+                candidates += middle.lowercase()
             }
         }
     }
@@ -37,25 +45,25 @@ internal fun extensionCandidatesForName(name: String): List<String> {
     if (firstDot > 0) {
         val prefix = baseName.substring(0, firstDot).trim()
         if (isLikelyExtensionToken(prefix)) {
-            candidates += prefix.lowercase(Locale.ROOT)
+            candidates += prefix.lowercase()
         }
     }
 
     return candidates.toList()
 }
 
-internal fun inferredPrimaryExtensionForName(name: String): String? {
+fun inferredPrimaryExtensionForName(name: String): String? {
     return extensionCandidatesForName(name).firstOrNull()
 }
 
-internal fun fileMatchesSupportedExtensions(file: File, supportedExtensions: Set<String>): Boolean {
+fun nameMatchesSupportedExtensions(name: String, supportedExtensions: Set<String>): Boolean {
     if (supportedExtensions.isEmpty()) return false
-    return extensionCandidatesForName(file.name).any { candidate ->
+    return extensionCandidatesForName(name).any { candidate ->
         candidate in supportedExtensions || supportedExtensions.any { it.equals(candidate, ignoreCase = true) }
     }
 }
 
-internal fun inferredDisplayTitleForName(name: String): String {
+fun inferredDisplayTitleForName(name: String): String {
     val baseName = stripRemoteCacheHashPrefix(
         name.substringAfterLast('/').substringAfterLast('\\').trim()
     )
